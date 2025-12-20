@@ -58,6 +58,7 @@
     "PYTHONUNBUFFERED": "1",
     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
     "UV_LINK_MODE": "copy",
+    "UV_VENV_CLEAR": "1",
     "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
   },
   "postCreateCommand": ".devcontainer/post-create.sh",
