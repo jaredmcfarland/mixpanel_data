@@ -1,0 +1,352 @@
+openapi: 3.0.2
+x-readme-deploy-id: feature-flags-api
+info:
+  title: Feature Flags API
+  description: >-
+    Use the Feature Flags API to evaluate feature flags for users and retrieve feature flag definitions.
+  contact:
+    url: 'https://mixpanel.com/get-support'
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  version: 1.0.0
+servers:
+  - $ref: ./common/feature-flags-api.yaml#/server
+tags:
+  - name: Get Variant Assignments
+    description: Evaluate feature flags for a specific user
+  - name: Get Flag Definitions
+    description: Retrieve feature flag definitions
+paths:
+  /flags:
+    get:
+      operationId: get-variant-assignments
+      security:
+        - ProjectSecret: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectToken'
+        - name: context
+          in: query
+          description: 'URL-encoded JSON object containing evaluation context with distinct_id (required) and optional device_id and custom_properties object'
+          required: true
+          schema:
+            type: string
+          example: '%7B++%22distinct_id%22%3A%22user123%22%2C++%22device_id%22%3A%22device456%22%2C++%22custom_properties%22%3A+%7B++++%22some_key%22%3A+%22some_value%22%2C++++%22another_key%22%3A+32++%7D%7D%22'
+      tags:
+        - Get Variant Assignments
+      summary: Evaluate Feature Flags (GET)
+      description: Evaluate all enabled feature flags for a user with the provided context. Returns selected variants for flags the user is eligible for.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluateFlagsResponse'
+        '400':
+          $ref: ./common/responses.yaml#/400BadRequest
+        '401':
+          $ref: ./common/responses.yaml#/401Unauthorized
+        '403':
+          $ref: ./common/responses.yaml#/403Forbidden
+  /flags/definitions:
+    get:
+      operationId: get-flag-definitions
+      security:
+        - ProjectSecret: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectToken'
+      tags:
+        - Get Flag Definitions
+      summary: Get Feature Flag Definitions
+      description: Retrieve all enabled feature flag definitions for the authenticated project. Returns complete flag metadata including rulesets, variants, and rollout configurations.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlagDefinitionsResponse'
+        '401':
+          $ref: ./common/responses.yaml#/401Unauthorized
+        '403':
+          $ref: ./common/responses.yaml#/403Forbidden
+components:
+  securitySchemes:
+    $ref: ./common/securitySchemes.yaml
+  parameters:
+    ProjectToken:
+      name: token
+      in: query
+      schema:
+        type: string
+      description: 'Your project token'
+      required: true
+  schemas:
+    EvaluateFlagsRequest:
+      title: EvaluateFlagsRequest
+      description: Request body for feature flag evaluation
+      type: object
+      required:
+        - context
+      properties:
+        context:
+          $ref: '#/components/schemas/EvaluationContext'
+    EvaluationContext:
+      title: EvaluationContext
+      description: Context object containing user information and properties for flag evaluation
+      type: object
+      required:
+        - distinct_id
+      properties:
+        distinct_id:
+          type: string
+          description: The distinct ID of the user to evaluate flags for
+          example: 'user123'
+        device_id:
+          type: string
+          description: Optional device ID. If not provided, distinct_id will be used
+          example: 'device456'
+        custom_properties:
+          type: object
+          description: Optional runtime parameters for evaluation by runtime_evaluation_rule in rollout definitions
+          additionalProperties: true
+          example:
+            country: 'US'
+            platform: 'web'
+    EvaluateFlagsResponse:
+      title: EvaluateFlagsResponse
+      description: Response containing evaluated feature flags for the user
+      type: object
+      required:
+        - flags
+      properties:
+        flags:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SelectedVariant'
+          description: Map of flag keys to their selected variants
+          example:
+            new_checkout_flow:
+              variant_key: 'treatment'
+              variant_value: true
+              experiment_id: 'exp_123'
+              is_experiment_active: true
+    SelectedVariant:
+      title: SelectedVariant
+      description: The selected variant for a feature flag
+      type: object
+      required:
+        - variant_key
+        - variant_value
+      properties:
+        variant_key:
+          type: string
+          description: The key of the selected variant
+          example: 'treatment'
+        variant_value:
+          description: The value of the selected variant (can be any type)
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+            - type: object
+          example: true
+        experiment_id:
+          type: string
+          description: The ID of the associated experiment, if any
+          example: 'exp_123'
+        is_experiment_active:
+          type: boolean
+          description: Whether the associated experiment is currently active
+          example: true
+        is_qa_tester:
+          type: boolean
+          description: Whether the user was identified as a QA tester
+          example: false
+    FlagDefinitionsResponse:
+      title: FlagDefinitionsResponse
+      description: Response containing all enabled feature flag definitions
+      type: object
+      required:
+        - flags
+      properties:
+        flags:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperimentationFlagMetadata'
+          description: Array of enabled feature flag definitions
+    ExperimentationFlagMetadata:
+      title: ExperimentationFlagMetadata
+      description: Complete metadata for a feature flag
+      type: object
+      required:
+        - id
+        - name
+        - key
+        - status
+        - project_id
+        - workspace_id
+        - ruleset
+        - context
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the flag
+          example: 'flag_abc123'
+        name:
+          type: string
+          description: Human-readable name of the flag
+          example: 'New Checkout Flow'
+        key:
+          type: string
+          description: Unique key used to reference the flag
+          example: 'new_checkout_flow'
+        status:
+          type: string
+          enum: ['enabled', 'disabled', 'archived']
+          description: Current status of the flag
+          example: 'enabled'
+        project_id:
+          type: integer
+          format: int32
+          description: ID of the project this flag belongs to
+          example: 12345
+        workspace_id:
+          type: integer
+          format: int64
+          description: ID of the workspace (dataview) this flag belongs to
+          example: 67890
+        ruleset:
+          $ref: '#/components/schemas/RuleSet'
+        context:
+          type: string
+          description: The context variable used for flag evaluation (e.g., distinct_id, device_id)
+          example: 'device_id'
+        experiment_id:
+          type: string
+          description: ID of the associated experiment, if any
+          example: 'exp_123'
+        is_experiment_active:
+          type: boolean
+          description: Whether the associated experiment is currently active
+          example: true
+    RuleSet:
+      title: RuleSet
+      description: Complete ruleset for a feature flag including variants and rollout configuration
+      type: object
+      required:
+        - variants
+        - rollout
+      properties:
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'
+          description: Array of variant definitions for this flag
+        rollout:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rollout'
+          description: Array of rollout rules defining how the flag is distributed
+        test:
+          $ref: '#/components/schemas/TestUsers'
+    Variant:
+      title: Variant
+      description: A variant definition for a feature flag
+      type: object
+      required:
+        - key
+        - value
+        - is_control
+        - split
+      properties:
+        key:
+          type: string
+          description: Unique key for this variant
+          example: 'treatment'
+        value:
+          description: The value for this variant (can be any type)
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+            - type: object
+          example: true
+        is_control:
+          type: boolean
+          description: Whether this is the control variant
+          example: false
+        is_sticky:
+          type: boolean
+          description: Whether users should stick to this variant once assigned
+          example: true
+        split:
+          type: number
+          format: double
+          description: The proportion of users that should receive this variant (0.0 to 1.0)
+          example: 0.5
+    Rollout:
+      title: Rollout
+      description: A rollout rule defining how a flag is distributed to a cohort
+      type: object
+      required:
+        - rollout_percentage
+      properties:
+        rollout_percentage:
+          type: number
+          format: double
+          description: The percentage of the cohort that should receive this flag (0.0 to 1.0)
+          example: 0.8
+        cohort_hash:
+          type: string
+          description: Hash of the cohort definition for lookup
+          example: 'cohort_abc123'
+        runtime_evaluation_rule:
+          type: object
+          additionalProperties: true
+          description: JsonLogic rule that's evaluated at request time based on runtime parameters in the request
+          example:
+            platform: 'web'
+        runtime_evaluation_definition:
+          deprecated: true
+          type: object
+          additionalProperties: true
+          description: Key-value pairs that are evaluated at request time for cohort matching, replaced by the more powerful runtime_evaluation_rule
+          example:
+            platform: 'web'
+        variant_splits:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+          description: Dictionary mapping variant keys to their allocation splits within this rollout
+          example:
+            control: 0.5
+            treatment: 0.5
+        variant_override:
+          deprecated: true
+          $ref: '#/components/schemas/VariantOverride'
+    VariantOverride:
+      deprecated: true
+      title: VariantOverride
+      description: Override to force a specific variant for a rollout rule (replaced by variant_splits)
+      type: object
+      properties:
+        key:
+          type: string
+          description: The variant key to force
+          example: 'treatment'
+    TestUsers:
+      title: TestUsers
+      description: Mapping of test users to their assigned variants
+      type: object
+      properties:
+        users:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map of distinct_id to variant_key for QA testing
+          example:
+            qa_user_1: 'treatment'
+            qa_user_2: 'control'

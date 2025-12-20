@@ -1,0 +1,39 @@
+path:
+  projectId:
+    in: path
+    name: projectId
+    schema:
+      type: integer
+    required: true
+    description: 'Your project id (eg: 12345)'
+  organizationId:
+    in: path
+    name: organizationId
+    schema:
+      type: integer
+    required: true
+    description: 'Your organization id (eg: 12345)'
+query:
+  projectId:
+    in: query
+    name: project_id
+    schema:
+      type: integer
+    description: Required if using service account to authenticate request.
+    required: true
+  toDate:
+    in: query
+    name: to_date
+    schema:
+      type: string
+    description: >-
+      The date in yyyy-mm-dd format to query to. This date is inclusive.
+    required: true
+  fromDate:
+    in: query
+    name: from_date
+    schema:
+      type: string
+    description: >-
+      The date in yyyy-mm-dd format to begin querying from. This date is inclusive.
+    required: true

@@ -1,0 +1,12 @@
+ServiceAccount:
+  type: http
+  scheme: basic
+  description: Service Account
+ProjectSecret:
+  type: http
+  scheme: basic
+  description: Project Secret
+OAuthToken:
+  type: http
+  scheme: bearer
+  description: OAuth Token

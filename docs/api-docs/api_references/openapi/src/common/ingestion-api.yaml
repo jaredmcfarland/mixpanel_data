@@ -1,0 +1,66 @@
+OptionalRequestParameter:
+  UseIpAsDistinctId:
+    in: query
+    name: ip
+    required: false
+    schema:
+      $ref: ./schemas.yaml#/IntegerPropertyAsBooleanFlag
+    description: >-
+      If present and equal to 1, Mixpanel will use the ip address
+      of the incoming request and compute a distinct_id using a hash
+      function if no distinct_id is provided. This is different from
+      providing a `properties.ip` value in the Event Object.
+  Strict:
+    type: object
+    properties:
+      strict:
+        allOf:
+          - $ref: ./schemas.yaml#/IntegerPropertyAsBooleanFlag
+          - description: >-
+              If present and equal to 1, Mixpanel will validate the provided records and return a JSON object with per-record error messages for records that fail validation.
+  ResponseType:
+    Verbose:
+      in: query
+      name: verbose
+      required: false
+      schema:
+        $ref: ./schemas.yaml#/IntegerPropertyAsBooleanFlag
+      description: >-
+        If present and equal to 1, Mixpanel will respond with a JSON
+        Object describing the success or failure of the tracking
+        call. The returned object will have two keys: `status`,
+        with the value 1 on success and 0 on failure, and `error`,
+        with a string-valued error message if the request wasn't
+        successful. This is useful for debugging during
+        implementation.
+    Redirect:
+      in: query
+      name: redirect
+      required: false
+      schema:
+          type: string
+      description: >-
+        If present, Mixpanel will serve a redirect to the given url
+        as a response to the request. This is useful to add link tracking
+        in notifications.
+    PNGPixel:
+      in: query
+      name: img
+      required: false
+      schema:
+        $ref: ./schemas.yaml#/IntegerPropertyAsBooleanFlag
+      description: >-
+        If present and equal to 1, Mixpanel will serve a 1x1
+        transparent pixel image as a response to the request. This
+        is useful for adding [Pixel Tracking](https://en.wikipedia.org/wiki/Web_beacon)
+        in places that javascript is not supported.
+    JavascriptWithCallback:
+      in: query
+      name: callback
+      required: false
+      schema:
+          type: string
+      description: >-
+        If present, Mixpanel will return a `content-type: text/javascript`
+        with a body that calls a function by value provided. This is useful
+        for creating local callbacks to a successful track call in JavaScript.

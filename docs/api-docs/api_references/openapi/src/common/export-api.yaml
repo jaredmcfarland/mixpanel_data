@@ -1,0 +1,13 @@
+server:
+  url: https://{server}.mixpanel.com/api/2.0
+  description: Mixpanel's data export server.
+  variables:
+    server:
+      default: 'data'
+      enum:
+        - 'data'
+        - 'data-eu'
+      description: >
+        The server location to be used:
+          * `data` - The default (US) servers used for most projects
+          * `data-eu` - EU servers if you are enrolled in EU Data Residency

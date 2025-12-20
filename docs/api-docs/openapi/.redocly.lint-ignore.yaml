@@ -1,0 +1,7 @@
+# This file instructs Redocly's linter to ignore the rules contained for specific parts of your API.
+# See https://redoc.ly/docs/cli/ for more information.
+src/connectors.openapi.yaml:
+  no-unused-components:
+    - '#/components/schemas/connectorsStatusRequest'
+    - '#/components/schemas/connectorsStatus'
+    - '#/components/schemas/actionResponse'

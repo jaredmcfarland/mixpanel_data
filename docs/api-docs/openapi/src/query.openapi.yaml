@@ -1,0 +1,1747 @@
+openapi: 3.0.3
+x-readme-deploy-id: query
+info:
+  title: Query API
+  description: query api
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  contact:
+    url: https://mixpanel.com/get-support
+  version: 1.0.0
+servers:
+  - url: https://{regionAndDomain}.com/api/query
+    description: Mixpanel's calculated data API
+    variables:
+      regionAndDomain:
+        default: 'mixpanel'
+        enum:
+          - 'mixpanel'
+          - 'eu.mixpanel'
+          - 'in.mixpanel'
+        description: >
+          The server location to be used:
+            * `mixpanel` - The default (US) servers used for most projects
+            * `eu.mixpanel` - EU servers if you are enrolled in EU Data Residency
+            * `in.mixpanel` - India servers if you are enrolled in India Data Residency
+
+security:
+  - ServiceAccount: []
+  - ProjectSecret: []
+tags:
+  - name: Activity Feed
+    description: See a profiles recent events history
+  - name: Cohorts
+    description: Understand what defines a cohort and how many profiles qualify
+  - name: Engage
+    description: Query for profile information
+  - name: Event Breakdown
+    description: Breakdowns on the most common events in your project
+  - name: Funnels
+    description: Query data shown in your Funnels reports
+  - name: Insights
+    description: Query data shown in your Insights reports
+  - name: JQL
+    description: Write a custom query on your data
+  - name: Retention
+    description: Query data shown in your Retention reports
+  - name: Segmentation
+    description: Query data shown in your Segmenation reports
+paths:
+  /insights:
+    get:
+      operationId: insights-query
+      summary: Query Saved Report
+      tags:
+        - Insights
+      description: Get data from your Insights reports. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - in: query
+          name: bookmark_id
+          schema:
+            type: integer
+          description: >-
+            The ID of your Insights report can be found from the url:
+            `https://mixpanel.com/project/<YOUR_PROJECT_ID>/view/<YOUR_WORKSPACE_ID>/app/boards#id=12345&editor-card-id=%22report-<YOUR_BOOKMARK_ID>%22`
+          required: true
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    computed_at: '2020-09-21T16:35:41.252314+00:00'
+                    date_range:
+                      from_date: '2020-08-31T00:00:00-07:00'
+                      to_date: '2020-09-12T23:59:59.999000-07:00'
+                    headers:
+                      - $event
+                    series:
+                      Logged in:
+                        '2020-08-31T00:00:00-07:00': 9852
+                        '2020-09-07T00:00:00-07:00': 4325
+                      Viewed page:
+                        '2020-08-31T00:00:00-07:00': 10246
+                        '2020-09-07T00:00:00-07:00': 11432
+              schema:
+                type: object
+                properties:
+                  computed_at:
+                    type: string
+                  date_range:
+                    type: object
+                    properties:
+                      from_date:
+                        type: string
+                      to_date:
+                        type: string
+                  headers:
+                    type: array
+                    description: Explanation of what the nested keys mean in `series`.
+                    items:
+                      type: string
+                  series:
+                    type: object
+                    description: >
+                      Maps event name of event to an object with dates as keys
+                      and number of instances as values. For example:
+
+
+                      ```json
+
+                      {
+                        'Viewed page': {
+                          '2020-08-17T00:00:00-07:00': 7832,
+                          '2020-08-24T00:00:00-07:00': 6234,
+                        }
+                      }
+
+                      ```
+  /funnels:
+    get:
+      operationId: funnels-query
+      summary: Query Saved Report
+      tags:
+        - Funnels
+      description: Get data for a funnel. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - in: query
+          name: funnel_id
+          schema:
+            type: integer
+          description: The funnel that you wish to get data for.
+          required: true
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - in: query
+          name: length
+          schema:
+            type: integer
+          description: >-
+            The number of units (defined by length_unit) each user has to
+            complete the funnel, starting from the time they triggered the first
+            step in the funnel. May not be greater than 90 days. Note that we
+            will query for events past the end of to_date to look for funnel
+            completions. This defaults to the value that was previously saved in
+            the UI for this funnel.
+        - in: query
+          name: length_unit
+          schema:
+            type: string
+            enum:
+              - day
+              - hour
+              - minute
+              - second
+            description: >-
+              The unit applied to the length parameter can be "second",
+              "minute", "hour", or "day". Defaults to the value that was
+              previously saved in the UI for this funnel.
+            example: day
+        - in: query
+          name: interval
+          schema:
+            type: integer
+          description: >-
+            The number of days you want each bucket to contain. The default
+            value is 1.
+        - in: query
+          name: unit
+          schema:
+            type: string
+            enum:
+              - day
+              - week
+              - month
+          description: >-
+            This is an alternate way of specifying interval and can be "day",
+            "week", or "month".
+        - $ref: '#/components/parameters/on'
+        - $ref: '#/components/parameters/where'
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: >-
+            Return the top property values. Defaults to 255 if not explicitly
+            included. Maximum value 10,000. This parameter does nothing if
+            \"on\" is not specified.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    meta:
+                      dates:
+                        - '2016-09-12'
+                        - '2016-09-19'
+                        - '2016-09-26'
+                    data:
+                      '2016-09-12':
+                        steps:
+                          - count: 32688
+                            avg_time: 2
+                            avg_time_from_start: 5
+                            step_conv_ratio: 1
+                            goal: App Open
+                            overall_conv_ratio: 1
+                            event: App Open
+                          - count: 20524
+                            avg_time: 133
+                            avg_time_from_start: 133
+                            step_conv_ratio: 0.627875673029858
+                            goal: '$custom_event:12345'
+                            step_label: Game Played
+                            custom_event: true
+                            custom_event_id: 12345
+                            overall_conv_ratio: 0.627875673029858
+                            event: '$custom_event:12345'
+                        analysis:
+                          completion: 20524
+                          starting_amount: 32688
+                          steps: 2
+                          worst: 1
+                      '2016-09-19':
+                        steps:
+                          - count: 32486
+                            avg_time: 10
+                            avg_time_from_start: 10
+                            step_conv_ratio: 1
+                            goal: App Open
+                            overall_conv_ratio: 1
+                            event: App Open
+                          - count: 20809
+                            avg_time: 75
+                            avg_time_from_start: 75
+                            step_conv_ratio: 0.6405528535369082
+                            goal: '$custom_event:12345'
+                            step_label: Game Played
+                            custom_event: true
+                            custom_event_id: 12345
+                            overall_conv_ratio: 0.6405528535369082
+                            event: '$custom_event:12345'
+                        analysis:
+                          completion: 20809
+                          starting_amount: 32486
+                          steps: 2
+                          worst: 1
+                      '2016-09-26':
+                        steps:
+                          - count: 16103
+                            avg_time: 10
+                            avg_time_from_start: 5
+                            step_conv_ratio: 1
+                            goal: App Open
+                            overall_conv_ratio: 1
+                            event: App Open
+                          - count: 12679
+                            avg_time: 571
+                            avg_time_from_start: 571
+                            step_conv_ratio: 0.7873688132646091
+                            goal: '$custom_event:12345'
+                            step_label: Game Played
+                            custom_event: true
+                            custom_event_id: 12345
+                            overall_conv_ratio: 0.7873688132646091
+                            event: '$custom_event:12345'
+                        analysis:
+                          completion: 12679
+                          starting_amount: 16103
+                          steps: 2
+                          worst: 1
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    properties:
+                      dates:
+                        type: array
+                        items:
+                          type: string
+                          description: Date in YYYY-mm-dd format
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        steps:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              count:
+                                type: integer
+                                description: Number of conversions.
+                              goal:
+                                type: string
+                                description: The name of the event
+                              step_conv_ratio:
+                                type: number
+                                format: float
+                                description: Conversion from previous step
+                              overall_conv_ratio:
+                                type: number
+                                format: float
+                                description: Conversion from start of funnel
+                              avg_time:
+                                type: integer
+                                description: mean time to convert; null for step 0.
+                              avg_time_from_start:
+                                type: integer
+                                description: time to convert from first step.
+                              event:
+                                type: string
+                                description: The name of the event
+                              step_label:
+                                type: string
+                                description: same as event OR custom event name
+                              custom_event:
+                                type: boolean
+                                description: >-
+                                  `true` if the event is a custom event,
+                                  otherwise key is not present
+                              custom_event_id:
+                                type: integer
+                                description: Only present if the event is a custom event.
+                        analysis:
+                          type: object
+                          properties:
+                            completion:
+                              type: integer
+                              description: Count in final step
+                            starting_amount:
+                              type: integer
+                              description: Count in first step
+                            steps:
+                              type: integer
+                              description: Number of steps
+                            worst:
+                              type: integer
+                              description: Step with highest drop off
+  /funnels/list:
+    get:
+      operationId: funnels-list-saved
+      summary: List Saved Funnels
+      tags:
+        - Funnels
+      description: Get the names and funnel_ids of your funnels.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    - funnel_id: 7509
+                      name: Signup funnel
+                    - funnel_id: 9070
+                      name: Funnel tutorial
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    funnel_id:
+                      type: integer
+                      description: The id of the funnel.
+                    name:
+                      type: string
+                      description: The name of the funnel
+  /retention:
+    get:
+      operationId: retention-query
+      summary: Query Retention Report
+      tags:
+        - Retention
+      description: ''
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - in: query
+          name: retention_type
+          schema:
+            type: string
+            enum:
+              - birth
+              - compounded
+            example: birth
+          description: >-
+            Must be either "birth" or "compounded". Defaults to "birth". The
+            “birth” retention type corresponds to first time retention. The
+            “compounded” retention type corresponds to recurring retention. See
+            the [Types of
+            Retention](https://help.mixpanel.com/hc/en-us/articles/360001370146)
+            article for more information.
+        - in: query
+          name: born_event
+          schema:
+            type: string
+            example: Added to cart
+          description: >-
+            The first event a user must do to be counted in a birth retention
+            cohort. Required when retention_type is "birth"; ignored otherwise.
+        - in: query
+          name: event
+          schema:
+            type: string
+            example: Viewed report
+          description: >-
+            The event to generate returning counts for. Applies to both birth
+            and compounded retention. If not specified, we look across all
+            events.
+        - in: query
+          name: born_where
+          schema:
+            type: string
+            example: 'properties["$os"]=="Linux"'
+          description: >-
+            An expression to filter born_events by. See the [expressions
+            section](ref:segmentation-expressions)
+            above.
+        - in: query
+          name: where
+          schema:
+            type: string
+            example: 'properties["$os"]=="Linux"'
+          description: >-
+            An expression to filter born_events by. See the [expressions
+            section](ref:segmentation-expressions)
+            above.
+        - in: query
+          name: interval
+          schema:
+            type: integer
+            example: 1
+          description: >-
+            The number of units (can be specified in either days, weeks, or
+            months) that you want per individual bucketed interval. May not be
+            greater than 90 days if days is the specified unit. The default
+            value is 1.
+        - in: query
+          name: interval_count
+          schema:
+            type: integer
+            example: 1
+          description: >-
+            The number of individual buckets, or intervals, that are returned;
+            defaults to 1. Note that we include a "0th" interval for events that
+            take place less than one interval after the initial event.
+        - in: query
+          name: unit
+          schema:
+            type: string
+            enum:
+              - day
+              - week
+              - month
+            example: day
+          description: >-
+            The interval unit. It can be "day", "week", or "month". Default is
+            "day".
+        - in: query
+          name: unbounded_retention
+          schema:
+            type: boolean
+            default: false
+            example: false
+          description: >-
+            A counting method for retention queries where retention values accumulate from right to left, i.e. day N is equal to users who retained on day N and any day after. The default value of false does not perform this accumulation.
+            [Learn more about Counting Method](https://help.mixpanel.com/hc/en-us/articles/360045484191).
+        - $ref: '#/components/parameters/retentionOn'
+        - $ref: '#/components/parameters/retentionLimit'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    '2012-01-01':
+                      counts:
+                        - 2
+                        - 1
+                        - 2
+                      first: 2
+                    '2012-01-02':
+                      counts:
+                        - 9
+                        - 7
+                        - 6
+                      first: 10
+                    '2012-01-03':
+                      counts:
+                        - 9
+                        - 6
+                        - 4
+                      first: 10
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    counts:
+                      type: array
+                      items:
+                        type: integer
+                    first:
+                      type: integer
+  /retention/addiction:
+    get:
+      operationId: retention-frequency-query
+      summary: Query Frequency Report
+      tags:
+        - Retention
+      description: ''
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - in: query
+          name: unit
+          schema:
+            type: string
+            enum:
+              - day
+              - week
+              - month
+          description: >-
+            The overall time period to return frequency of actions for can be
+            "day", "week", or "month".
+          required: true
+        - in: query
+          name: addiction_unit
+          schema:
+            type: string
+            enum:
+              - hour
+              - day
+          description: >-
+            The granularity to return frequency of actions at can be "hour" or
+            "day".
+          required: true
+        - in: query
+          name: event
+          schema:
+            type: string
+          description: The event to generate returning counts for.
+        - in: query
+          name: where
+          schema:
+            type: string
+          description: >-
+            An expression to filter the returning events by. See the
+            [expressions
+            section](ref:segmentation-expressions)
+            above.
+        - $ref: '#/components/parameters/retentionOn'
+        - $ref: '#/components/parameters/retentionLimit'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    data:
+                      '2012-01-01':
+                        - 305
+                        - 107
+                        - 60
+                        - 41
+                        - 32
+                        - 20
+                        - 12
+                        - 7
+                        - 4
+                        - 3
+                        - 3
+                        - 3
+                        - 2
+                        - 2
+                        - 2
+                        - 1
+                        - 1
+                        - 1
+                        - 1
+                        - 1
+                        - 1
+                        - 1
+                        - 1
+                        - 1
+                      '2012-01-02':
+                        - 495
+                        - 204
+                        - 117
+                        - 77
+                        - 53
+                        - 36
+                        - 26
+                        - 20
+                        - 12
+                        - 7
+                        - 4
+                        - 3
+                        - 3
+                        - 1
+                        - 1
+                        - 1
+                        - 1
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+                        - 0
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: integer
+  /segmentation:
+    get:
+      operationId: segmentation-query
+      summary: Query Segmentation Report
+      tags:
+        - Segmentation
+      description: 'Get data for an event, segmented and filtered by properties. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.'
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/eventName'
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - $ref: '#/components/parameters/on'
+        - in: query
+          name: unit
+          schema:
+            type: string
+            enum:
+              - minute
+              - hour
+              - day
+              - month
+          description: >-
+            This can be "minute", "hour", "day", or "month". This determines the
+            buckets into which the property values that you segment on are
+            placed. The default value is "day".
+        - in: query
+          name: interval
+          schema:
+            type: integer
+          description: >-
+            Optional parameter in lieu of 'unit' when 'type' is not 'general'.
+            Determines the number of days your results are bucketed into can be
+            used with or without 'from_date' and 'to_date' parameters.
+        - $ref: '#/components/parameters/where'
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: >-
+            Return the top property values. Defaults to 60. Maximum value
+            10,000. This parameter does nothing if "on" is not specified.
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum:
+              - general
+              - unique
+              - average
+          description: >-
+            This can be "general", "unique", or "average". If this is set to
+            "unique", we return the unique count of events or property values.
+            If set to "general", we return the total, including repeats. If set
+            to "average", we return the average count. The default value is
+            "general".
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum:
+              - csv
+            description: Can be set to "csv".
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    data:
+                      series:
+                        - '2011-08-08'
+                        - '2011-08-09'
+                        - '2011-08-06'
+                        - '2011-08-07'
+                      values:
+                        Signed up:
+                          '2011-08-06': 147
+                          '2011-08-07': 146
+                          '2011-08-08': 776
+                          '2011-08-09': 1376
+                    legend_size: 1
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      series:
+                        $ref: '#/components/schemas/series'
+                      values:
+                        type: object
+                        additionalProperties:
+                          description: >-
+                            A mapping of the date to the number of specified
+                            events that took place. (ex. {"2010-05-30": 6})
+                  legend_size:
+                    type: integer
+                    description: List of all dates.
+  /segmentation/numeric:
+    get:
+      operationId: segmentation-numeric-query
+      summary: Numerically Bucket
+      tags:
+        - Segmentation
+      description: >-
+        Get data for an event, segmented and filtered by properties, with values
+        placed into numeric buckets.
+
+        The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/eventName'
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - in: query
+          name: 'on'
+          schema:
+            type: string
+          description: >-
+            The property expression to segment the event on. This expression
+            must be a numeric property. See the [expressions
+            section](ref:segmentation-expressions)
+            below.
+          required: true
+        - in: query
+          name: unit
+          schema:
+            type: string
+            enum:
+              - hour
+              - day
+          description: >-
+            This can be "hour" or "day". This determines the buckets into which
+            the property values that you segment on are placed. The default
+            value is "day".
+        - $ref: '#/components/parameters/where'
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum:
+              - general
+              - unique
+              - average
+          description: >-
+            This can be "hour" or "day". This determines the buckets into which
+            the property values that you segment on are placed. The default
+            value is "day".
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    data:
+                      series:
+                        - '2011-08-08'
+                        - '2011-08-09'
+                        - '2011-08-06'
+                        - '2011-08-07'
+                      values:
+                        '2,000 - 2,100':
+                          '2011-08-06': 1
+                          '2011-08-07': 5
+                          '2011-08-08': 4
+                          '2011-08-09': 15
+                        '2,100 - 2,200':
+                          '2011-08-07': 2
+                          '2011-08-08': 7
+                          '2011-08-09': 15
+                        '2,200 - 2,300':
+                          '2011-08-06': 1
+                          '2011-08-08': 6
+                          '2011-08-09': 5
+                        '2,300 - 2,400':
+                          '2011-08-06': 4
+                          '2011-08-08': 1
+                          '2011-08-09': 12
+                        '2,400 - 2,500':
+                          '2011-08-08': 2
+                          '2011-08-09': 5
+                    legend_size: 5
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      series:
+                        $ref: '#/components/schemas/series'
+                      values:
+                        type: object
+                        additionalProperties:
+                          type: object
+                          description: The range of the bucket
+                          additionalProperties:
+                            type: integer
+                            description: >-
+                              A mapping of the date of each unit to the number
+                              of specified events that took place. (ex.
+                              {"2010-05-30": 6})
+                  legend_size:
+                    type: integer
+                    description: List of all dates.
+  /segmentation/sum:
+    get:
+      operationId: segmentation-sum-query
+      summary: Numerically Sum
+      tags:
+        - Segmentation
+      description: Sums an expression for events per unit time. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/eventName'
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - in: query
+          name: 'on'
+          schema:
+            type: string
+          description: >-
+            The expression to sum per unit time. The result of the expression
+            should be a numeric value. If the expression is not numeric, a value
+            of 0.0 is assumed. See the [expressions
+            section](ref:segmentation-expressions)
+            below.
+          required: true
+        - in: query
+          name: unit
+          schema:
+            type: string
+            enum:
+              - hour
+              - day
+          description: >-
+            This can be "hour" or "day". This determines the buckets into which
+            the property values that you segment on are placed. The default
+            value is "day".
+        - $ref: '#/components/parameters/where'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    status: ok
+                    computed_at: '2019-10-07T23:02:11.666218+00:00'
+                    results:
+                      '2019-10-07': 4
+                      '2019-10-06': 7
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  computed_at:
+                    type: string
+                  results:
+                    type: object
+                    additionalProperties:
+                      type: integer
+  /segmentation/average:
+    get:
+      operationId: segmentation-query-average
+      summary: Numerically Average
+      tags:
+        - Segmentation
+      description: Averages an expression for events per unit time. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/eventName'
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - in: query
+          name: 'on'
+          schema:
+            type: string
+          description: >-
+            The expression to sum per unit time. The result of the expression
+            should be a numeric value. If the expression is not numeric, a value
+            of 0.0 is assumed. See the [expressions
+            section](ref:segmentation-expressions)
+            below.
+          required: true
+        - in: query
+          name: unit
+          schema:
+            type: string
+            enum:
+              - hour
+              - day
+          description: >-
+            This can be "hour" or "day". This determines the buckets into which
+            the property values that you segment on are placed. The default
+            value is "day".
+        - $ref: '#/components/parameters/where'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    results:
+                      '2011-08-06': 8.64705882352939
+                      '2011-08-07': 4.640625
+                      '2011-08-08': 3.6230899830221
+                      '2011-08-09': 7.3353658536585
+                    status: ok
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: object
+                    additionalProperties:
+                      type: number
+                      format: float
+                  status:
+                    type: string
+  /stream/query:
+    get:
+      operationId: activity-stream-query
+      summary: Profile Event Activity
+      tags:
+        - Activity Feed
+      description: This endpoint returns the activity feed for specified users. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - in: query
+          name: distinct_ids
+          schema:
+            type: string
+          description: >-
+            A JSON array as a string representing the `distinct_ids` to return
+            activity feeds for. For example:
+            `["12a34aa567eb8d-9ab1c26f345b67-89123c45-6aeaa7-89f12af345f678"]`
+          required: true
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    status: ok
+                    results:
+                      events:
+                        - event: Game Played
+                          properties:
+                            time: 1599589453
+                            $distinct_id: >-
+                              12a34aa567eb8d-9ab1c26f345b67-89123c45-6aeaa7-89f12af345f678
+                            $browser: Chrome
+                            $city: Austin
+                            $region: Texas
+                            report_name: insights
+                        - event: Viewed Page
+                          properties:
+                            time: 1599589470
+                            distinct_id: >-
+                              12a34aa567eb8d-9ab1c26f345b67-89123c45-6aeaa7-89f12af345f678
+                            $browser: Chrome
+                            $city: Austin
+                            $region: Texas
+                            report_name: funnels
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  results:
+                    type: object
+                    properties:
+                      events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            event:
+                              type: string
+                            properties:
+                              type: object
+  /cohorts/list:
+    post:
+      operationId: cohorts-list
+      summary: List Saved Cohorts
+      tags:
+        - Cohorts
+      description: >
+        The list endpoint returns all of the cohorts in a given project. The
+        JSON formatted return contains the cohort name, id, count, description,
+        creation date, and visibility for every cohort in the project.
+
+
+        If you're trying to get a list of users in a cohort, you can use the
+        [`/engage` endpoint with the `filter_by_cohort`
+        parameter](ref:engage#engage-query).
+
+        The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    - count: 150
+                      is_visible: 1
+                      description: >-
+                        This cohort is visible, has an id = 1000, and currently
+                        has 150 users.
+                      created: '2019-03-19 23:49:51'
+                      project_id: 1
+                      id: 1000
+                      name: Cohort One
+                    - count: 25
+                      is_visible: 0
+                      description: >-
+                        This cohort isn't visible, has an id = 2000, and
+                        currently has 25 users.
+                      created: '2019-04-02 23:22:01'
+                      project_id: 1
+                      id: 2000
+                      name: Cohort Two
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    count:
+                      type: integer
+                    is_visible:
+                      type: integer
+                      description: 0 if not visible. 1 if visible
+                    description:
+                      type: string
+                    created:
+                      type: string
+                    project_id:
+                      type: integer
+                    id:
+                      type: integer
+                    name:
+                      type: string
+  /engage:
+    post:
+      operationId: engage-query
+      summary: Query Profiles
+      tags:
+        - Engage
+      description: ''
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              properties:
+                distinct_id:
+                  type: string
+                  description: >-
+                    A unique identifier used to distinguish an individual
+                    profile.
+                distinct_ids:
+                  type: string
+                  description: >
+                    A JSON array of distinct_ids to retrieve profiles for.
+
+                    Example: `distinct_ids=["id1", "id2"]`
+                data_group_id:
+                  type: string
+                  description: >-
+                    The ID of the group key, used when querying group profiles, click [here](https://docs.mixpanel.com/docs/data-structure/group-analytics#exporting-group-profiles-via-api) for more info.
+                where:
+                  type: string
+                  description: >-
+                    An expression to filter users (or groups) by. See the [expressions
+                    section](ref:segmentation-expressions)
+                    above.
+                output_properties:
+                  type: array
+                  items:
+                    type: string
+                  description: >
+                    A JSON array of names of properties you want returned.
+
+                    Example: `output_properties=["$last_name", "$email", "Total
+                    Spent"]`
+
+
+                    This parameter can drastically reduce the amount of data
+                    returned by the API when you're not interested in all
+                    properties and can speed up queries significantly.
+                session_id:
+                  type: string
+                  description: >-
+                    A string id provided in the results of a previous query.
+                    Using a session_id speeds up api response, and allows paging
+                    through results.
+                page:
+                  type: integer
+                  description: >-
+                    Which page of the results to retrieve. Pages start at zero.
+                    If the "page" parameter is provided and above 0, the session_id
+                    parameter must also be provided.
+                behaviors:
+                  type: integer
+                  description: >-
+                    If you are exporting user profiles using an event selector,
+                    you use a `behaviors` parameter in your request. `behaviors`
+                    and `filter_by_cohort` are mutually exclusive.
+                as_of_timestamp:
+                  type: integer
+                  description: >
+                    This parameter is only useful when also using `behaviors`.
+
+                    If you try to export more than 1k profiles using a
+                    `behaviors` parameter and you don't included the parameter
+                    `as_of_timestamp`, you'll see the following error:
+
+
+                    `request for page in uncached query for params`
+                filter_by_cohort:
+                  type: string
+                  description: >
+                    Takes a JSON object with a single key called `id` whose
+                    value is the cohort ID. `behaviors` and `filter_by_cohort`
+                    are mutually exclusive.
+
+
+                    Example: `filter_by_cohort='{"id":12345}'`
+                include_all_users:
+                  type: boolean
+                  description: >
+                    *\*only applicable with `filter_by_cohort` parameter*
+
+
+                    `include_all_users=true` (default) include all distinct_ids even if they don’t have a user (or group) profile.
+
+
+                    `include_all_users=false` include only distinct_ids with user (or group) profile.
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    page: 0
+                    page_size: 1000
+                    results:
+                      - $distinct_id: 4
+                        $properties:
+                          $created: '2008-12-12T11:20:47'
+                          $email: example@mixpanel.com
+                          $first_name: Example
+                          $last_name: Name
+                          $last_seen: '2008-06-09T23:08:40'
+                    session_id: 1234567890-EXAMPL
+                    status: ok
+                    total: 1
+              schema:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                    description: The page number of the results
+                  page_size:
+                    type: integer
+                    description: The max number of results in a single page.
+                  session_id:
+                    type: string
+                  status:
+                    type: string
+                    description: Indicates whether the request was successful
+                  total:
+                    type: integer
+                    description: The number of users in the results payload.
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        $distinct_id:
+                          type: integer
+                          description: The ID of the user
+                        $properties:
+                          type: object
+                          description: The properties associated with the user
+  /events:
+    get:
+      operationId: list-recent-events
+      summary: Aggregate Event Counts
+      tags:
+        - Event Breakdown
+      description: >-
+        Get unique, total, or average data for a set of events over N days,
+        weeks, or months.
+
+        The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - in: query
+          name: event
+          schema:
+            type: string
+          description: >-
+            The event or events that you wish to get data for, encoded as a JSON
+            array. Example format: "["play song", "log in", "add playlist"]".
+          required: true
+        - $ref: '#/components/parameters/type'
+        - $ref: '#/components/parameters/unit'
+        - $ref: '#/components/parameters/interval'
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - $ref: '#/components/parameters/format'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    data:
+                      series:
+                        - '2010-05-29'
+                        - '2010-05-30'
+                        - '2010-05-31'
+                      values:
+                        account-page:
+                          '2010-05-30': 1
+                        splash features:
+                          '2010-05-29': 6
+                          '2010-05-30': 4
+                          '2010-05-31': 5
+                    legend_size: 2
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      series:
+                        type: array
+                        items:
+                          type: string
+                          description: All dates included in `values`
+                      values:
+                        type: object
+                        additionalProperties:
+                          type: object
+                          description: >-
+                            A mapping of the date of each unit to the number of
+                            events. (ex. {"2010-05-30": 6})
+                        description: Keys are the names of events
+                  legend_size:
+                    type: integer
+                    description: The number of events defined in `values`
+  /events/top:
+    get:
+      operationId: query-top-events
+      summary: Today's Top Events
+      tags:
+        - Event Breakdown
+      description: >-
+        Get the top events for today, with their counts and the normalized
+        percent change from yesterday.
+
+        The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/type'
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: The maximum number of events to return. Defaults to 100.
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    events:
+                      - amount: 2
+                        event: funnel
+                        percent_change: -0.35635745999582824
+                      - amount: 75
+                        event: pages
+                        percent_change: -0.20209602478821687
+                      - amount: 2
+                        event: projects
+                        percent_change: 1
+                    type: unique
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        amount:
+                          type: integer
+                          description: Number of events
+                        event:
+                          type: string
+                          description: The name of the event
+                        percent_change:
+                          type: number
+                          format: float
+                          description: The percent change from yesterday
+                  type:
+                    type: string
+  /events/names:
+    get:
+      operationId: query-months-top-event-names
+      summary: Top Events
+      tags:
+        - Event Breakdown
+      description: Get a list of the most common events over the last 31 days. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/type'
+        - $ref: '#/components/parameters/limit255'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    - battle
+                    - click signup button
+                    - View homepage
+              schema:
+                type: array
+                description: List of names in descending alphabetical order.
+                items:
+                  type: string
+                  description: Event name
+                  example: Viewed page
+  /events/properties:
+    get:
+      operationId: query-event-properties
+      summary: Aggregrated Event Property Values
+      tags:
+        - Event Breakdown
+      description: >-
+        Get unique, total, or average data for of a single event and property
+        over days, weeks, or months.
+
+        The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - in: query
+          name: event
+          schema:
+            type: string
+          description: >-
+            The event that you wish to get data for. Note: this is a single
+            event name, not an array.
+          required: true
+        - $ref: '#/components/parameters/propertyName'
+        - in: query
+          name: values
+          schema:
+            type: array
+            items:
+              type: string
+          description: >-
+            The specific property values that you would like to get data for,
+            encoded as a JSON array. Example: If you have a property "gender"
+            you may have values "male", "female" and "unknown". If you just want
+            data for female and unknown users, you can include a values property
+            that looks like "["female", "unknown"]".
+        - $ref: '#/components/parameters/type'
+        - $ref: '#/components/parameters/unit'
+        - $ref: '#/components/parameters/interval'
+        - $ref: ./common/parameters.yaml#/query/fromDate
+        - $ref: ./common/parameters.yaml#/query/toDate
+        - $ref: '#/components/parameters/format'
+        - $ref: '#/components/parameters/limit255'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    data:
+                      series:
+                        - '2010-05-29'
+                        - '2010-05-30'
+                        - '2010-05-31'
+                      values:
+                        splash features:
+                          '2010-05-29': 6
+                          '2010-05-30': 4
+                          '2010-05-31': 5
+                    legend_size: 2
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      series:
+                        $ref: '#/components/schemas/series'
+                      values:
+                        type: object
+                        additionalProperties:
+                          description: >-
+                            A mapping of the date of each unit to the number of
+                            events with that property value. (ex. {"2010-05-30":
+                            6})
+                  legend_size:
+                    type: integer
+  /events/properties/top:
+    get:
+      operationId: query-events-top-properties
+      summary: Top Event Properties
+      tags:
+        - Event Breakdown
+      description: Get the top property names for an event. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/eventName'
+        - $ref: '#/components/parameters/limit10'
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    ad version:
+                      count: 295
+                    user type:
+                      count: 91
+              schema:
+                type: object
+                description: The keys are the name of the properties
+                additionalProperties:
+                  type: object
+                  properties:
+                    count:
+                      type: integer
+                      description: The number of events with that property
+  /events/properties/values:
+    get:
+      operationId: query-events-top-property-values
+      summary: Top Event Property Values
+      tags:
+        - Event Breakdown
+      description: Get the top values for a property. The Query API has a rate limit of 60 queries per hour and a maximum of 5 concurrent queries.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+        - $ref: '#/components/parameters/eventName'
+        - $ref: '#/components/parameters/propertyName'
+        - $ref: '#/components/parameters/limit255'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    - cat
+                    - dog
+                    - rabbit
+                    - gecko
+              schema:
+                type: array
+                description: Property values for the specified event property
+                items:
+                  type: string
+  /jql:
+    post:
+      operationId: query-jql
+      summary: Custom JQL Query
+      tags:
+        - JQL
+      description: ''
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - $ref: '#/components/parameters/workspaceId'
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              required:
+                - script
+              example:
+                script: |
+                  function main(){
+                    return Events(params)
+                      .groupBy(
+                        ["name"],
+                        mixpanel.reducer.count()
+                      )
+                  }
+                params: |
+                  {
+                    "from_date": 2016-01-01T00:00:00.000Z,
+                    "to_date": 2016-01-07T00:00:00.000Z
+                  }
+              properties:
+                script:
+                  type: string
+                  default: |
+                    function main(){
+                      return Events(params)
+                        .groupBy(
+                          ["name"],
+                          mixpanel.reducer.count()
+                        )
+                    }
+                  description: The script to run.
+                params:
+                  type: string
+                  format: blob
+                  default: |
+                    {
+                      "scriptParam": "paramValue"
+                    }
+                  description: >-
+                    A JSON-encoded object that will be made available to the
+                    script as the params global variable.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+components:
+  securitySchemes:
+    $ref: ./common/securitySchemes.yaml
+  parameters:
+    workspaceId:
+      in: query
+      name: workspace_id
+      schema:
+        type: integer
+      description: The id of the workspace if applicable.
+    'on':
+      in: query
+      name: 'on'
+      schema:
+        type: string
+      description: >-
+        The property expression to segment the event on. See the [expression to
+        segment](ref:segmentation-expressions)
+        below.
+    where:
+      in: query
+      name: where
+      schema:
+        type: string
+      description: >-
+        An expression to filter events by. See the [expression to
+        segment](ref:segmentation-expressions)
+        below.
+    retentionOn:
+      in: query
+      name: 'on'
+      schema:
+        type: string
+      description: >-
+        The property expression to segment the second event on. See the
+        [expressions
+        section](ref:segmentation-expressions)
+        above.
+    retentionLimit:
+      in: query
+      name: limit
+      schema:
+        type: integer
+      description: >-
+        Return the top limit segmentation values. This parameter does nothing if
+        "on" is not specified.
+    eventName:
+      in: query
+      name: event
+      schema:
+        type: string
+      description: >-
+        The event that you wish to get data for. Note: this is a single event
+        name, not an array.
+      required: true
+    type:
+      in: query
+      name: type
+      schema:
+        type: string
+        enum:
+          - general
+          - unique
+          - average
+      description: >-
+        The analysis type you would like to get data for - such as general,
+        unique, or average events. Valid values: "general", "unique", or
+        "average".
+      required: true
+    unit:
+      in: query
+      name: unit
+      schema:
+        type: string
+        enum:
+          - minute
+          - hour
+          - day
+          - week
+          - month
+      description: >-
+        This can be "minute", "hour", "day", "week", or "month". It determines
+        the level of granularity of the data you get back. Note that you cannot
+        get hourly uniques.
+      required: true
+    interval:
+      in: query
+      name: interval
+      schema:
+        type: integer
+      description: >-
+        The number of "units" to return data for - minutes, hours, days, weeks,
+        or months. 1 will return data for the current unit (minute, hour, day,
+        week or month). 2 will return the current and previous units, and so on.
+        Specify either interval or from_date and to_date.
+    format:
+      in: query
+      name: format
+      schema:
+        type: string
+        enum:
+          - json
+          - csv
+      description: >-
+        The data return format, such as JSON or CSV. Options: "json" (default),
+        "csv".
+    limit255:
+      in: query
+      name: limit
+      schema:
+        type: integer
+      description: The maximum number of values to return. Defaults to 255.
+    propertyName:
+      in: query
+      name: name
+      schema:
+        type: string
+      description: The name of the property you would like to get data for.
+      required: true
+    limit10:
+      in: query
+      name: limit
+      schema:
+        type: integer
+      description: The maximum number of properties to return. Defaults to 10.
+  schemas:
+    series:
+      type: array
+      items:
+        type: string
+        description: All dates we have data for in the response.

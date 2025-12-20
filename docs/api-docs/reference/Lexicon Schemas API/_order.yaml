@@ -1,0 +1,6 @@
+- lexicon-schemas-api
+- lexicon-schemas-api-authentication
+- create-schemas
+- delete-schemas
+- retrieve-schemas
+- limits

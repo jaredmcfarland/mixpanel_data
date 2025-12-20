@@ -1,0 +1,1750 @@
+openapi: 3.0.2
+x-readme-deploy-id: data-pipelines-api
+info:
+  title: Data Pipelines API
+  description: Create and manage a continious pipeline with an external warehouse.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  version: 1.0.0
+  contact:
+    url: https://mixpanel.com/get-support
+servers:
+  - $ref: ./common/export-api.yaml#/server
+security:
+  - ServiceAccount: []
+  - ProjectSecret: []
+tags:
+  - name: Create Pipelines
+    description: Operations to add schemas to a project
+  - name: Delete Pipelines
+    description: Remove a pipeline from a project
+  - name: Edit Pipelines
+    description: Edit the params for a pipeline from a project
+  - name: Pause Pipelines
+    description: Pause a running pipeline
+  - name: Resume Pipelines
+    description: Resume a paused pipeline
+  - name: Retrieve Pipelines
+    description: Get information about Pipelines
+paths:
+  /nessie/pipeline/jobs:
+    get:
+      operationId: list-warehouse-pipeline-jobs
+      tags:
+        - Retrieve Pipelines
+      summary: List Pipelines
+      description: >-
+        This API endpoint returns the list of all the pipelines scheduled for a
+        project.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    '9876543210':
+                      - name: events-daily-bigquery-monoschema
+                        Dispatcher: backfill
+                        last_dispatched: '2019-02-01 12:00:00 US/Pacific'
+                        frequency: hourly
+                        sync_enabled: 'true'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /nessie/pipeline/create:
+    post:
+      tags:
+        - Create Pipelines
+      operationId: create-warehouse-pipeline
+      summary: Create Pipeline
+      description: ''
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/RawGCSPipeline'
+                - $ref: '#/components/schemas/RawAmazonS3Pipeline'
+                - $ref: '#/components/schemas/RawAzurePipeline'
+                - $ref: '#/components/schemas/SchematizedBigQueryPipeline'
+                - $ref: '#/components/schemas/SchematizedSnowflakePipeline'
+                - $ref: '#/components/schemas/SchematizedAWSPipeline'
+                - $ref: '#/components/schemas/SchematizedAzurePipeline'
+                - $ref: '#/components/schemas/SchematizedGCSPipeline'
+              discriminator:
+                propertyName: type
+                mapping:
+                  gcs-raw: '#/components/schemas/RawGCSPipeline'
+                  s3-raw: '#/components/schemas/RawAmazonS3Pipeline'
+                  azure-raw: '#/components/schemas/RawAzurePipeline'
+                  bigquery: '#/components/schemas/SchematizedBigQueryPipeline'
+                  snowflake: '#/components/schemas/SchematizedSnowflakePipeline'
+                  aws: '#/components/schemas/SchematizedAWSPipeline'
+                  azure-blob: '#/components/schemas/SchematizedAzurePipeline'
+                  gcs-schema: '#/components/schemas/SchematizedGCSPipeline'
+      responses:
+        '200':
+          description: >-
+            Returns the name of the pipeline created. Use the name of the
+            pipeline to check the status of or cancel the pipeline.
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    pipeline_names:
+                      - trial-events-daily-bigquery-monoschema
+                      - trial-people-daily-bigquery-monoschema
+                    bigquery_dataset_name: >-
+                      https://bigquery.cloud.google.com/dataset/mixpanel-prod-1:sample_dataset_name
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /nessie/pipeline/edit:
+    post:
+      tags:
+        - Edit Pipelines
+      operationId: edit-warehouse-pipeline
+      summary: Edit Pipeline
+      description: >
+        This request edit the params for an export pipeline.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              oneOf:
+                - title: Raw GCS Pipeline
+                  $ref: '#/components/schemas/RawEditParams'
+                - title: Raw Amazon S3 Pipeline
+                  $ref: '#/components/schemas/RawEditParams'
+                - title: Raw Azure Pipeline
+                  $ref: '#/components/schemas/RawAzureEditParams'
+                - title: Schematized BigQuery Pipeline
+                  $ref: '#/components/schemas/BigQueryEditParams'
+                - title: Schematized Snowflake Pipeline
+                  $ref: '#/components/schemas/SchematizedEditParams'
+                - title: Schematized AWS Pipeline
+                  $ref: '#/components/schemas/SchematizedAWSEditParams'
+                - title: Schematized Azure Pipeline
+                  $ref: '#/components/schemas/SchematizedAzureEditParams'
+                - title: Schematized GCS Pipeline
+                  $ref: '#/components/schemas/SchematizedEditParams'
+      responses:
+        '200':
+          description: Success
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /nessie/pipeline/cancel:
+    post:
+      tags:
+        - Delete Pipelines
+      summary: Delete Pipeline
+      operationId: cancel-warehouse-pipeline
+      description: >-
+        For a given pipeline name, this request deletes the pipeline and stops
+        any future jobs to be scheduled for the pipeline. 
+        Deleting the pipeline will result in the loss of all its historical data. If you wish to retain the history, it is recommended to pause the pipeline instead.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name that uniquely identifies the pipeline.
+                project_id:
+                  $ref: '#/components/schemas/ProjectId'
+              required:
+                - name
+      responses:
+        '200':
+          description: Success
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /nessie/pipeline/pause:
+    post:
+      tags:
+        - Pause Pipelines
+      summary: Pause Pipeline
+      operationId: pause-warehouse-pipeline
+      description: >-
+        For a given pipeline name, this request pauses the pipeline which stops the ongoing jobs and
+        prevents any future jobs to be scheduled for the pipeline
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name that uniquely identifies the pipeline.
+                project_id:
+                  $ref: '#/components/schemas/ProjectId'
+              required:
+                - name
+      responses:
+        '200':
+          description: Success
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /nessie/pipeline/resume:
+    post:
+      tags:
+        - Resume Pipelines
+      summary: Resume Pipeline
+      operationId: resume-warehouse-pipeline
+      description: >-
+        For a given pipeline name, this request resumes the pipeline if it's paused
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name that uniquely identifies the pipeline.
+                project_id:
+                  $ref: '#/components/schemas/ProjectId'
+              required:
+                - name
+      responses:
+        '200':
+          description: Success
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /nessie/pipeline/status:
+    get:
+      operationId: get-warehouse-pipeline-status
+      summary: Get Pipeline
+      tags:
+        - Retrieve Pipelines
+      description: ''
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: The name that uniquely identifies the pipeline.
+          required: true
+        - in: query
+          name: summary
+          schema:
+            type: string
+          description: 'Default: `false`. Only lists task count by status and no details.'
+        - in: query
+          name: status
+          schema:
+            type: array
+            items:
+              type: string
+          description: |
+            Filters the tasks by the given status. Valid options for status are `pending`, `running`, `retried`, `failed`, `canceled`, and `timed_out`.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /nessie/pipeline/timeline:
+    get:
+      operationId: list-warehouse-pipeline-sync-dates
+      tags:
+        - Retrieve Pipelines
+      summary: List Pipeline Logs
+      description: This endpoint returns the timestamps of all syncs grouped by date.
+      parameters:
+        - $ref: ./common/parameters.yaml#/query/projectId
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: The name that uniquely identifies the pipeline.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              examples:
+                example:
+                  value:
+                    day_syncs:
+                      - date: '2019-08-19'
+                        sync_times:
+                          - '2019-08-19 14:27:46.044605 -0700 PDT'
+                        status: synced
+                      - date: '2019-08-20'
+                        sync_times:
+                          - ' 2019-08-20 14:33:09.315098 -0700 PDT'
+                        status: synced
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+components:
+  securitySchemes:
+    $ref: ./common/securitySchemes.yaml
+  schemas:
+    PipelineType:
+      type: string
+      enum:
+        - gcs-raw
+        - s3-raw
+        - azure-raw
+        - bigquery
+        - snowflake
+        - aws
+        - azure-blob
+        - gcs-schema
+    ProjectId:
+      type: number
+      description: Your project id (must be specified when using service account based authentication)
+    RawGCSPipeline:
+      title: Raw GCS Pipeline
+      type: object
+      properties:
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        type:
+          type: string
+          default: gcs-raw
+        trial:
+          type: boolean
+          default: false
+          description: >
+            **Default**: `false`
+
+
+            A trial pipeline will be created if value is true.
+
+
+            The trial exports all of your events and user data for thirty
+            calendar days, starting from one day before the API call was made. A
+            trial pipeline has default values for the following parameters:
+
+
+            **data_source**: `events`
+
+            **from_date**: `<defaults to previous day>`
+
+            **to_date**: `<no value>`
+
+            **frequency**: `daily`
+
+            **events**: `<no value>`
+        data_source:
+          type: string
+          enum:
+            - events
+          default: events
+          description: >
+            **Default**: `events`
+
+
+            **data_source** In this type of pipeline it can only be `events` which exports
+            Mixpanel event data.
+        from_date:
+          type: string
+          format: date
+          description: >
+            The starting date of the export window. It is formatted as
+            `YYYY-MM-DD` and cannot be more than six months in the past.
+
+
+            If **trial** is set to `true` this will default to the previous day;
+            otherwise, it is a required parameter.
+        to_date:
+          type: string
+          format: date
+          description: >-
+            The ending date of the export window. It is formatted as
+            `YYYY-MM-DD`. The export will continue indefinitely if **to_date**
+            is empty.
+        frequency:
+          type: string
+          default: daily
+          enum:
+           - daily
+           - hourly
+          description: >
+            **Default**: `daily`
+
+
+            **frequency** can be either `hourly` or `daily`. `hourly` exports
+            the data every hour. `daily` exports the data at midnight (based on
+            the projects timezone). **frequency** should only be passed if your
+            export window is indefinite.
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+
+
+            All events in the project will be exported if no events are
+            specified.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event
+            properties. Learn more about how to construct event selector
+            expressions [here](ref:segmentation-expressions).
+        data_format:
+          type: string
+          default: json
+          enum:
+           - json
+          description: >
+            **Default**: `json`
+
+
+            The file format of the exported data. **data_format** for this pipeline type can be only
+            `json` .
+        gcs_bucket:
+          type: string
+          description: |
+            The GCS bucket to export the Mixpanel data to.
+        gcs_prefix:
+          type: string
+          description: |
+            The GCS path prefix of the bucket.
+        gcs_region:
+          type: string
+          description: |
+            The GCS region for the bucket.
+          enum:
+            - northamerica-northeast1
+            - us-central1
+            - us-east1
+            - us-east4
+            - us-west1
+            - us-west2
+            - southamerica-east1
+            - europe-north1
+            - europe-west1
+            - europe-west2
+            - europe-west3
+            - europe-west4
+            - europe-west6
+            - asia-east1
+            - asia-east2
+            - asia-northeast1
+            - asia-northeast2
+            - asia-northeast3
+            - asia-south1
+            - asia-southeast1
+            - australia-southeast1
+      required:
+        - type
+        - from_date
+        - gcs_bucket
+        - gcs_region
+
+    RawAmazonS3Pipeline:
+      title: Raw Amazon S3 Pipeline
+      type: object
+      properties:
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        type:
+          type: string
+          default: s3-raw
+        trial:
+          type: boolean
+          default: false
+          description: >
+            **Default**: `false`
+
+
+            A trial pipeline will be created if value is true.
+
+
+            The trial exports all of your events and user data for thirty
+            calendar days, starting from one day before the API call was made. A
+            trial pipeline has default values for the following parameters:
+
+
+            **data_source**: `events`
+
+
+            **from_date**: `<defaults to previous day>`
+
+            **to_date**: `<no value>`
+
+            **frequency**: `daily`
+
+            **events**: `<no value>`
+        data_source:
+          type: string
+          enum:
+            - events
+          default: events
+          description: >
+            **Default**: `events`
+
+
+            **data_source** In this type of pipeline it can only be `events` which exports
+            Mixpanel event data.
+        from_date:
+          type: string
+          format: date
+          description: >
+            The starting date of the export window. It is formatted as
+            `YYYY-MM-DD` and cannot be more than six months in the past.
+
+
+            If **trial** is set to `true` this will default to the previous day;
+            otherwise, it is a required parameter.
+        to_date:
+          type: string
+          format: date
+          description: >-
+            The ending date of the export window. It is formatted as
+            `YYYY-MM-DD`. The export will continue indefinitely if **to_date**
+            is empty.
+        frequency:
+          type: string
+          default: daily
+          enum:
+           - daily
+           - hourly
+          description: >
+            **Default**: `daily`
+
+
+            **frequency** can be either `hourly` or `daily`. `hourly` exports
+            the data every hour. `daily` exports the data at midnight (based on
+            the projects timezone). **frequency** should only be passed if your
+            export window is indefinite.
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+
+
+            All events in the project will be exported if no events are
+            specified.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event
+            properties. Learn more about how to construct event selector
+            expressions [here](ref:segmentation-expressions).
+        data_format:
+          type: string
+          default: json
+          enum:
+           - json
+          description: >
+            **Default**: `json`
+
+
+            The file format of the exported data. **data_format** for this pipeline type can be only
+            `json` .
+
+        s3_bucket:
+          type: string
+          description: The S3 bucket to which the data needs to be exported.
+        s3_region:
+          type: string
+          enum:
+            - us-east-1
+            - us-east-2
+            - us-west-1
+            - us-west-2
+            - ap-northeast-1
+            - ap-northeast-2
+            - ap-northeast-3
+            - ap-southeast-1
+            - ap-southeast-2
+            - ap-south-1
+            - ca-central-1
+            - cn-north-1
+            - cn-northwest-1
+            - eu-central-1
+            - eu-north-1
+            - eu-west-1
+            - eu-west-2
+            - eu-west-3
+            - sa-east-1
+            - me-south-1
+          description: The valid S3 region for the bucket.
+        s3_role:
+          type: string
+          description: >-
+            There is no default value. AWS Role the writer should assume when
+            writing to s3 e.g. arn:aws:iam::<account-id>:role/example-s3-role
+        s3_prefix:
+          type: string
+          description: There is no default value. The path prefix for the export. e.g. example_custom_prefix
+        s3_encryption:
+          type: string
+          default: none
+          enum:
+           - none
+           - aes
+           - kms
+          description: >
+            At rest encryption used by the
+            s3 bucket.
+        s3_kms_key_id:
+          type: string
+          description: >-
+            There is no default value. If s3_encryption is set to kms, this can
+            specify the custom key id you desire to use.
+      required:
+        - type
+        - from_date
+        - s3_bucket
+        - s3_region
+        - s3_role
+
+    RawAzurePipeline:
+      title: Raw Azure Pipeline
+      type: object
+      properties:
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        type:
+          type: string
+          default: azure-raw
+        trial:
+          type: boolean
+          default: false
+          description: >
+            **Default**: `false`
+
+
+            A trial pipeline will be created if value is true.
+
+
+            The trial exports all of your events and user data for thirty
+            calendar days, starting from one day before the API call was made. A
+            trial pipeline has default values for the following parameters:
+
+
+            **data_source**: `events`
+
+            **from_date**: `<defaults to previous day>`
+
+            **to_date**: `<no value>`
+
+            **frequency**: `daily`
+
+            **events**: `<no value>`
+        data_source:
+          type: string
+          enum:
+            - events
+          default: events
+          description: >
+            **Default**: `events`
+
+
+            **data_source** In this type of pipeline it is `events` which exports
+            Mixpanel event data.
+        from_date:
+          type: string
+          format: date
+          description: >
+            The starting date of the export window. It is formatted as
+            `YYYY-MM-DD` and cannot be more than six months in the past.
+
+
+            If **trial** is set to `true` this will default to the previous day;
+            otherwise, it is a required parameter.
+        to_date:
+          type: string
+          format: date
+          description: >-
+            The ending date of the export window. It is formatted as
+            `YYYY-MM-DD`. The export will continue indefinitely if **to_date**
+            is empty.
+        frequency:
+          type: string
+          default: daily
+          enum:
+           - daily
+           - hourly
+          description: >
+            **Default**: `daily`
+
+
+            **frequency** can be either `hourly` or `daily`. `hourly` exports
+            the data every hour. `daily` exports the data at midnight (based on
+            the projects timezone). **frequency** should only be passed if your
+            export window is indefinite.
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+
+
+            All events in the project will be exported if no events are
+            specified.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event
+            properties. Learn more about how to construct event selector
+            expressions [here](ref:segmentation-expressions).
+        data_format:
+          type: string
+          default: json
+          enum:
+           - json
+          description: >
+            **Default**: `json`
+
+
+            The file format of the exported data. **data_format** for this pipeline type can be only
+            `json` .
+        storage_account:
+          type: string
+          description: Blob Storage Account where the data will be exported.
+        container_name:
+          type: string
+          description: The Blob Container within the account where data will be exported.
+        prefix:
+          type: string
+          description: A custom prefix for all the data being exported to the container.
+        client_id:
+          type: string
+          description: |
+            `clientId` from the Service Principal credentials.
+        client_secret:
+          type: string
+          description: |
+            `clientSecret` from the Service Principal credentials.
+        tenant_id:
+          type: string
+          description: >
+            `tenantId` from the Service Principal credentials. This is specific
+            to the Active Directory instance where the Service Principal
+            resides.
+      required:
+        - type
+        - from_date
+        - storage_account
+        - container_name
+        - client_id
+        - client_secret
+        - tenant_id
+    SchematizedBigQueryPipeline:
+      title: Schematized BigQuery Pipeline
+      type: object
+      properties:
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        type:
+          type: string
+          default: bigquery
+        trial:
+          type: boolean
+          default: false
+          description: >
+            **Default**: `false`
+
+
+            A trial pipeline will be created if value is true.
+
+
+            The trial exports all of your events and user data for thirty
+            calendar days, starting from one day before the API call was made. A
+            trial pipeline has default values for the following parameters:
+
+
+            **data_source**: `events and people`
+
+            **sync**: `false`
+
+            **from_date**: `<defaults to previous day>`
+
+            **to_date**: `<no value>`
+
+            **frequency**: `daily`
+
+            **events**: `<no value>`
+        schema_type:
+          type: string
+          enum:
+            - monoschema
+            - multischema
+          default: monoschema
+          description: >
+            **Default**: `monoschema`
+
+
+            Allowed options are `monoschema` and `multischema`. `monoschema`
+            loads all events into a single table. `multischema` loads every
+            event into its own dedicated table. All user data is exported as
+            `monoschema`. This param is not supported for people data_source.
+        data_source:
+          type: string
+          enum:
+            - events
+            - people
+          default: events
+          description: >
+            **Default**: `events`
+
+
+            **data_source** can be either `events` or `people`. `events` exports
+            Mixpanel event data. `people` exports Mixpanel user data.
+        sync:
+          type: boolean
+          enum:
+            - true
+          default: true
+          description: >
+            A value of `true` updates exported data with any changes that occur
+            in your Mixpanel dataset. These changes include deletions, late
+            data, and imports that fall into your export window.
+        from_date:
+          type: string
+          format: date
+          description: >
+            The starting date of the export window. It is formatted as
+            `YYYY-MM-DD` and cannot be more than six months in the past.
+
+
+            If **trial** is set to `true` this will default to the previous day;
+            otherwise, it is a required parameter.
+        to_date:
+          type: string
+          format: date
+          description: >-
+            The ending date of the export window. It is formatted as
+            `YYYY-MM-DD`. The export will continue indefinitely if **to_date**
+            is empty.
+        frequency:
+          type: string
+          default: daily
+          enum:
+            - daily
+            - hourly
+          description: >
+            **Default**: `daily`
+
+
+            **frequency** can be either `hourly` or `daily`. `hourly` exports
+            the data every hour. `daily` exports the data at midnight (based on
+            the projects timezone). **frequency** should only be passed if your
+            export window is indefinite.
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+
+
+            All events in the project will be exported if no events are
+            specified.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event
+            properties. Learn more about how to construct event selector
+            expressions [here](ref:segmentation-expressions). This parameter is only valid when **data_source**
+            is `events`.
+        bq_region:
+          type: string
+          enum:
+            - US
+            - US_CENTRAL_1
+            - US_EAST_1
+            - US_WEST_1
+            - US_WEST_2
+            - US_EAST_4
+            - NORTH_AMERICA_NORTHEAST_1
+            - SOUTH_AMERICA_EAST_1
+            - EU
+            - EUROPE_NORTH_1
+            - EUROPE_WEST_2
+            - EUROPE_WEST_3
+            - EUROPE_WEST_4
+            - EUROPE_WEST_6
+            - ASIA_SOUTH_1
+            - ASIA_EAST_1
+            - ASIA_EAST_2
+            - ASIA_NORTHEAST_1
+            - ASIA_NORTHEAST_2
+            - ASIA_NORTHEAST_3
+            - ASIA_SOUTHEAST_1
+            - ASIA_SOUTHEAST_2
+            - AUSTRALIA_SOUTHEAST_1
+          description: The region used for BigQuery.
+        bq_share_with_group:
+          type: string
+          description: Group account email address to share the data-set with if managed by mixpanel. e.g. bq-access-alias@somecompany.com
+        bq_prefix:
+          type: string
+          description: The table prefix to be added to all the tables exported as part of the this pipeline. Only alphanumeric characters and underscores can be used.
+        gcp_project:
+          type: string
+          description: Customer's project id where bigquery dataset is present. If this field isn't provided the default dataset will be created on mixpanel managed bigquery.
+        bq_dataset_name:
+          type: string
+          description: Dataset created by customer on their own gcp project to which mixpanel needs to export data.
+      required:
+        - type
+        - from_date
+        - bq_region
+        - sync
+        - schema_type
+
+    SchematizedSnowflakePipeline:
+      title: Schematized Snowflake Pipeline
+      type: object
+      properties:
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        type:
+          type: string
+          default: snowflake
+        trial:
+          type: boolean
+          default: false
+          description: >
+            **Default**: `false`
+
+
+            A trial pipeline will be created if value is true.
+
+
+            The trial exports all of your events and user data for thirty
+            calendar days, starting from one day before the API call was made. A
+            trial pipeline has default values for the following parameters:
+
+
+            **data_source**: `events and people`
+
+            **sync**: `false`
+
+            **from_date**: `<defaults to previous day>`
+
+            **to_date**: `<no value>`
+
+            **frequency**: `daily`
+
+            **events**: `<no value>`
+        schema_type:
+          type: string
+          enum:
+            - monoschema
+            - multischema
+          default: monoschema
+          description: >
+            **Default**: `monoschema`
+
+
+            Allowed options are `monoschema` and `multischema`. `monoschema`
+            loads all events into a single table. `multischema` loads every
+            event into its own dedicated table. All user data is exported as
+            `monoschema`. This param is not supported for people data_source.
+        data_source:
+          type: string
+          enum:
+            - events
+            - people
+          default: events
+          description: >
+            **Default**: `events`
+
+
+            **data_source** can be either `events` or `people`. `events` exports
+            Mixpanel event data. `people` exports Mixpanel user data.
+        sync:
+          type: boolean
+          enum:
+            - true
+          default: true
+          description: >
+            A value of `true` updates exported data with any changes that occur
+            in your Mixpanel dataset. These changes include deletions, late
+            data, and imports that fall into your export window.
+        from_date:
+          type: string
+          format: date
+          description: >
+            The starting date of the export window. It is formatted as
+            `YYYY-MM-DD` and cannot be more than six months in the past.
+
+
+            If **trial** is set to `true` this will default to the previous day;
+            otherwise, it is a required parameter.
+        to_date:
+          type: string
+          format: date
+          description: >-
+            The ending date of the export window. It is formatted as
+            `YYYY-MM-DD`. The export will continue indefinitely if **to_date**
+            is empty.
+        frequency:
+          type: string
+          default: daily
+          enum:
+            - daily
+            - hourly
+          description: >
+            **Default**: `daily`
+
+
+            **frequency** can be either `hourly` or `daily`. `hourly` exports
+            the data every hour. `daily` exports the data at midnight (based on
+            the projects timezone). **frequency** should only be passed if your
+            export window is indefinite.
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+
+
+            All events in the project will be exported if no events are
+            specified.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event
+            properties. Learn more about how to construct event selector
+            expressions [here](ref:segmentation-expressions). This parameter is only valid when **data_source**
+            is `events`.
+        snowflake_prefix:
+          type: string
+          description: prefix for created views and tables
+        snowflake_share_with:
+          type: string
+          description: Name of the account with which the data-set should be shared. e.g. mysnowflakeaccountname
+        region:
+          type: string
+          enum:
+            - us-west-aws
+            - us-east-aws
+            - us-east-2-aws
+            - eu-west-1-aws
+            - eu-central-1-aws
+            - ap-southeast-2-aws
+          description: The valid region for the Snowflake instance
+      required:
+        - type
+        - from_date
+        - snowflake_share_with
+        - region
+        - sync
+        - schema_type
+
+    SchematizedAWSPipeline:
+      title: Schematized AWS Pipeline
+      type: object
+      properties:
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        type:
+          type: string
+          default: aws
+        trial:
+          type: boolean
+          default: false
+          description: >
+            **Default**: `false`
+
+
+            A trial pipeline will be created if value is true.
+
+
+            The trial exports all of your events and user data for thirty
+            calendar days, starting from one day before the API call was made. A
+            trial pipeline has default values for the following parameters:
+
+
+            **data_source**: `events and people`
+
+            **sync**: `false`
+
+            **from_date**: `<defaults to previous day>`
+
+            **to_date**: `<no value>`
+
+            **frequency**: `daily`
+
+            **events**: `<no value>`
+        schema_type:
+          type: string
+          enum:
+            - monoschema
+            - multischema
+          default: monoschema
+          description: >
+            **Default**: `monoschema`
+
+
+            Allowed options are `monoschema` and `multischema`. `monoschema`
+            loads all events into a single table. `multischema` loads every
+            event into its own dedicated table. All user data is exported as
+            `monoschema`. This param is not supported for people data_source.
+        data_source:
+          type: string
+          enum:
+            - events
+            - people
+          default: events
+          description: >
+            **Default**: `events`
+
+
+            **data_source** can be either `events` or `people`. `events` exports
+            Mixpanel event data. `people` exports Mixpanel user data.
+        sync:
+          type: boolean
+          enum:
+            - true
+          default: true
+          description: >
+            A value of `true` updates exported data with any changes that occur
+            in your Mixpanel dataset. These changes include deletions, late
+            data, and imports that fall into your export window.
+        from_date:
+          type: string
+          format: date
+          description: >
+            The starting date of the export window. It is formatted as
+            `YYYY-MM-DD` and cannot be more than six months in the past.
+
+
+            If **trial** is set to `true` this will default to the previous day;
+            otherwise, it is a required parameter.
+        to_date:
+          type: string
+          format: date
+          description: >-
+            The ending date of the export window. It is formatted as
+            `YYYY-MM-DD`. The export will continue indefinitely if **to_date**
+            is empty.
+        frequency:
+          type: string
+          default: daily
+          enum:
+            - daily
+            - hourly
+          description: >
+            **Default**: `daily`
+
+
+            **frequency** can be either `hourly` or `daily`. `hourly` exports
+            the data every hour. `daily` exports the data at midnight (based on
+            the projects timezone). **frequency** should only be passed if your
+            export window is indefinite.
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+
+
+            All events in the project will be exported if no events are
+            specified.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event
+            properties. Learn more about how to construct event selector
+            expressions [here](ref:segmentation-expressions). This parameter is only valid when **data_source**
+            is `events`.
+        data_format:
+          type: string
+          default: json
+          enum:
+            - json
+            - parquet
+          description: >
+            **Default**: `json`
+
+
+            The file format of the exported data. **data_format** can be either
+            `json` or `parquet`.
+        s3_bucket:
+          type: string
+          description: The S3 bucket to which the data needs to be exported.
+        s3_region:
+          type: string
+          enum:
+            - us-east-1
+            - us-east-2
+            - us-west-1
+            - us-west-2
+            - ap-northeast-1
+            - ap-northeast-2
+            - ap-northeast-3
+            - ap-southeast-1
+            - ap-southeast-2
+            - ap-south-1
+            - ca-central-1
+            - cn-north-1
+            - cn-northwest-1
+            - eu-central-1
+            - eu-north-1
+            - eu-west-1
+            - eu-west-2
+            - eu-west-3
+            - sa-east-1
+          description: The valid S3 region for the bucket.
+        s3_role:
+          type: string
+          description: >-
+            There is no default value. AWS Role the writer should assume when
+            writing to s3 e.g. arn:aws:iam::<account-id>:role/example-s3-role.
+        s3_prefix:
+          type: string
+          description: There is no default value. The path prefix for the export.
+        s3_encryption:
+          type: string
+          default: none
+          enum:
+            - none
+            - aes
+            - kms
+          description: >
+            At rest encryption used by the s3 bucket.
+        s3_kms_key_id:
+          type: string
+          description: >-
+            There is no default value. If s3_encryption is set to kms, this can
+            specify the custom key id you desire to use.
+        use_glue:
+          type: boolean
+          default: false
+          description: |
+            **Default**: `false`
+
+            Use glue schema export.
+        glue_database:
+          type: string
+          description: |
+            Required if **use_glue** is `true`.
+
+            The glue database to which the schema needs to be exported.
+        glue_role:
+          type: string
+          description: >
+            Required if **use_glue** is `true`. e.g. arn:aws:iam::<account-id>:role/example-glue-role
+
+
+            There is no default value. The role that needs to be assumed for
+            updating glue.
+        glue_table_prefix:
+          type: string
+          description: >-
+            There is no default value. Prefix to add to table names when
+            creating them.
+      required:
+        - type
+        - from_date
+        - s3_bucket
+        - s3_region
+        - s3_role
+        - sync
+        - schema_type
+
+    SchematizedAzurePipeline:
+      title: Schematized Azure Pipeline
+      type: object
+      properties:
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        type:
+          type: string
+          default: azure-blob
+        trial:
+          type: boolean
+          default: false
+          description: >
+            **Default**: `false`
+
+
+            A trial pipeline will be created if value is true.
+
+
+            The trial exports all of your events and user data for thirty
+            calendar days, starting from one day before the API call was made. A
+            trial pipeline has default values for the following parameters:
+
+
+            **data_source**: `events and people`
+
+            **sync**: `false`
+
+            **from_date**: `<defaults to previous day>`
+
+            **to_date**: `<no value>`
+
+            **frequency**: `daily`
+
+            **events**: `<no value>`
+        schema_type:
+          type: string
+          enum:
+            - monoschema
+            - multischema
+          default: monoschema
+          description: >
+            **Default**: `monoschema`
+
+
+            Allowed options are `monoschema` and `multischema`. `monoschema`
+            loads all events into a single table. `multischema` loads every
+            event into its own dedicated table. All user data is exported as
+            `monoschema`. This param is not supported for people data_source.
+        data_source:
+          type: string
+          enum:
+            - events
+            - people
+          default: events
+          description: >
+            **Default**: `events`
+
+
+            **data_source** can be either `events` or `people`. `events` exports
+            Mixpanel event data. `people` exports Mixpanel user data.
+        sync:
+          type: boolean
+          enum:
+            - true
+          default: true
+          description: >
+            A value of `true` updates exported data with any changes that occur
+            in your Mixpanel dataset. These changes include deletions, late
+            data, and imports that fall into your export window.
+        from_date:
+          type: string
+          format: date
+          description: >
+            The starting date of the export window. It is formatted as
+            `YYYY-MM-DD` and cannot be more than six months in the past.
+
+
+            If **trial** is set to `true` this will default to the previous day;
+            otherwise, it is a required parameter.
+        to_date:
+          type: string
+          format: date
+          description: >-
+            The ending date of the export window. It is formatted as
+            `YYYY-MM-DD`. The export will continue indefinitely if **to_date**
+            is empty.
+        frequency:
+          type: string
+          default: daily
+          enum:
+           - daily
+           - hourly
+          description: >
+            **Default**: `daily`
+
+
+            **frequency** can be either `hourly` or `daily`. `hourly` exports
+            the data every hour. `daily` exports the data at midnight (based on
+            the projects timezone). **frequency** should only be passed if your
+            export window is indefinite.
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+
+
+            All events in the project will be exported if no events are
+            specified.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event
+            properties. Learn more about how to construct event selector
+            expressions [here](ref:segmentation-expressions). This parameter is only valid when **data_source**
+            is `events`.
+        data_format:
+          type: string
+          default: json
+          enum:
+           - json
+           - parquet
+          description: >
+            **Default**: `json`
+
+
+            The file format of the exported data. **data_format** can be either
+            `json` or `parquet`.
+        storage_account:
+          type: string
+          description: Blob Storage Account where the data will be exported.
+        container_name:
+          type: string
+          description: The Blob Container within the account where data will be exported.
+        prefix:
+          type: string
+          description: A custom prefix for all the data being exported to the container.
+        client_id:
+          type: string
+          description: |
+            `clientId` from the Service Principal credentials.
+        client_secret:
+          type: string
+          description: |
+            `clientSecret` from the Service Principal credentials.
+        tenant_id:
+          type: string
+          description: >
+            `tenantId` from the Service Principal credentials. This is specific
+            to the Active Directory instance where the Service Principal
+            resides.
+      required:
+        - type
+        - from_date
+        - storage_account
+        - container_name
+        - client_id
+        - client_secret
+        - tenant_id
+        - sync
+        - schema_type
+
+    SchematizedGCSPipeline:
+      title: Schematized GCS Pipeline
+      type: object
+      properties:
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        type:
+          type: string
+          default: gcs-schema
+        trial:
+          type: boolean
+          default: false
+          description: >
+            **Default**: `false`
+            A trial pipeline will be created if value is true.
+            The trial exports all of your events and user data for thirty
+            calendar days, starting from one day before the API call was made. A
+            trial pipeline has default values for the following parameters:
+            **data_source**: `events and people`
+            **sync**: `false`
+            **from_date**: `<defaults to previous day>`
+            **to_date**: `<no value>`
+            **frequency**: `daily`
+            **events**: `<no value>`
+        schema_type:
+          type: string
+          enum:
+            - monoschema
+            - multischema
+          default: monoschema
+          description: >
+            **Default**: `monoschema`
+            Allowed options are `monoschema` and `multischema`. `monoschema`
+            loads all events into a single table. `multischema` loads every
+            event into its own dedicated table. All user data is exported as
+            `monoschema`. This param is not supported for people data_source.
+        data_source:
+          type: string
+          enum:
+            - events
+            - people
+          default: events
+          description: >
+            **Default**: `events`
+            **data_source** can be either `events` or `people`. `events` exports
+            Mixpanel event data. `people` exports Mixpanel user data.
+        sync:
+          type: boolean
+          enum:
+            - true
+          default: true
+          description: >
+            A value of `true` updates exported data with any changes that occur
+            in your Mixpanel dataset. These changes include deletions, late
+            data, and imports that fall into your export window.
+        from_date:
+          type: string
+          format: date
+          description: >
+            The starting date of the export window. It is formatted as
+            `YYYY-MM-DD` and cannot be more than six months in the past.
+
+
+            If **trial** is set to `true` this will default to the previous day;
+            otherwise, it is a required parameter.
+        to_date:
+          type: string
+          format: date
+          description: >-
+            The ending date of the export window. It is formatted as
+            `YYYY-MM-DD`. The export will continue indefinitely if **to_date**
+            is empty.
+        frequency:
+          type: string
+          default: daily
+          enum:
+           - daily
+           - hourly
+          description: >
+            **Default**: `daily`
+            **frequency** can be either `hourly` or `daily`. `hourly` exports
+            the data every hour. `daily` exports the data at midnight (based on
+            the projects timezone). **frequency** should only be passed if your
+            export window is indefinite.
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+            
+            All events in the project will be exported if no events are
+            specified.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event
+            properties. Learn more about how to construct event selector
+            expressions [here](ref:segmentation-expressions). This parameter is only valid when **data_source**
+            is `events`.
+        data_format:
+          type: string
+          default: json
+          enum:
+           - json
+           - parquet
+          description: >
+            **Default**: `json`
+            The file format of the exported data. **data_format** can be either
+            `json` or `parquet`.
+        gcs_bucket:
+          type: string
+          description: |
+            *Required if **type** is `gcs-schema`
+            The GCS bucket to export the Mixpanel data to.
+        gcs_prefix:
+          type: string
+          description: |
+            *Required if **type** is `gcs-schema`
+            The GCS path prefix of the bucket.
+        gcs_region:
+          type: string
+          description: |
+            *Required if **type** is `gcs-schema`
+            The GCS region for the bucket.
+          enum:
+            - northamerica-northeast1
+            - us-central1
+            - us-east1
+            - us-east4
+            - us-west1
+            - us-west2
+            - southamerica-east1
+            - europe-north1
+            - europe-west1
+            - europe-west2
+            - europe-west3
+            - europe-west4
+            - europe-west6
+            - asia-east1
+            - asia-east2
+            - asia-northeast1
+            - asia-northeast2
+            - asia-northeast3
+            - asia-south1
+            - asia-southeast1
+            - australia-southeast1
+      required:
+        - type
+        - from_date
+        - gcs_bucket
+        - gcs_region
+        - sync
+        - schema_type
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        status:
+          type: string
+          enum:
+            - error
+    RawEditParams:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The name that uniquely identifies the pipeline.
+        project_id:
+          $ref: '#/components/schemas/ProjectId'
+        events:
+          type: string
+          description: |
+            A whitelist for the event(s) you intend to export. For multiple events, you will need to pass in each event name as separate `events` parameters like so: `--data 'events=event1' \ --data 'events=event2'`
+
+
+            Please note that after this update, the sync of older dates to your data warehouse
+            (if enabled) will only contain the new set of whitelisted events.
+        where:
+          type: string
+          description: >-
+            A selector expression used to filter by events data, such as event properties.
+
+
+            Please note that after this update, the sync of older dates to your data warehouse
+            (if enabled) will only contain events matching your new where clause.
+      required:
+        - name
+    SchematizedEditParams:
+      allOf:
+        - $ref: '#/components/schemas/RawEditParams'
+    AzureCommonEditParams:
+      type: object
+      properties:
+        azure_client_id:
+          type: string
+          description: |
+            `clientId` from the Service Principal credentials.
+        azure_client_secret:
+          type: string
+          description: |
+            `clientSecret` from the Service Principal credentials.
+        azure_tenant_id:
+          type: string
+          description: >
+            `tenantId` from the Service Principal credentials. This is specific
+            to the Active Directory instance where the Service Principal
+            resides.
+    RawAzureEditParams:
+      allOf:
+        - $ref: '#/components/schemas/RawEditParams'
+        - $ref: '#/components/schemas/AzureCommonEditParams'
+    SchematizedAzureEditParams:
+      allOf:
+        - $ref: '#/components/schemas/SchematizedEditParams'
+        - $ref: '#/components/schemas/AzureCommonEditParams'
+    BigQueryEditParams:
+      allOf:
+        - $ref: '#/components/schemas/SchematizedEditParams'
+        - type: object
+          properties:
+            bq_share_with_group:
+              type: array
+              description: >
+                Group account email addresses to share the data-set with if managed by mixpanel. e.g. bq-access-alias@somecompany.com.
+
+
+                Please note that this will only add new shares and won't remove the old ones.
+              items:
+                type: string
+    SchematizedAWSEditParams:
+      allOf:
+        - $ref: '#/components/schemas/SchematizedEditParams'
+        - type: object
+          properties:
+            glue_database:
+              type: string
+              description: >
+                The glue database to which the schema needs to be exported.
+            glue_role:
+              type: string
+              description: >
+                There is no default value. The role that needs to be assumed for
+                updating glue  e.g. arn:aws:iam::<account-id>:role/example-glue-role
+            glue_table_prefix:
+              type: string
+              description: >
+                Prefix to add to table names when creating them.
+
+    PipelineStatusJobList:
+      type: array
+      items:
+        type: object
+        properties:
+          project_id:
+            $ref: '#/components/schemas/ProjectId'
+          name:
+            type: string
+          state:
+            type: string
+          last_finish:
+            type: string
+          run_at:
+            type: string
+          from_date:
+            type: string
+          to_date:
+            type: string
+    PipelineStatusResponse:
+      type: object
+      properties:
+        canceled:
+          $ref: '#/components/schemas/PipelineStatusJobList'
+        retried:
+          $ref: '#/components/schemas/PipelineStatusJobList'
+        succeeded:
+          $ref: '#/components/schemas/PipelineStatusJobList'
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+x-explorer-enabled: true
+x-proxy-enabled: true
+x-samples-enabled: true
+x-samples-languages:
+  - curl
+  - node
+  - ruby
+  - javascript
+  - python

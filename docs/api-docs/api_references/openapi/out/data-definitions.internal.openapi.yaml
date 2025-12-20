@@ -1,0 +1,193 @@
+openapi: 3.0.2
+info:
+  title: App API - Data Definitions
+  description: Used to populate the lexicon application
+  contact:
+    url: 'https://mixpanel.com/get-support'
+  version: 1.0.0
+servers:
+  - url: 'https://{regionAndDomain}.com/api/app'
+    description: Mixpanel's application API server.
+    variables:
+      regionAndDomain:
+        default: mixpanel
+        enum:
+          - mixpanel
+          - eu.mixpanel
+        description: |
+          The server location to be used:
+            * `mixpanel` - The default (US) servers used for most projects
+            * `eu.mixpanel` - EU servers if you are enrolled in EU Data Residency
+security:
+  - ServiceAccount: []
+tags:
+  - name: Data Definition
+    description: Operations to add schemas to a project
+paths:
+  '/projects/{projectId}/events/{eventName}/history':
+    parameters:
+      - $ref: '#/components/parameters/projectId'
+      - in: path
+        name: eventName
+        schema:
+          type: string
+        required: true
+        description: The name of the event definition
+    get:
+      operationId: list-all-history-for-event-definition
+      tags:
+        - Data Definition
+      summary: Event Definition History
+      description: Get all History for an Event Definition
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryResponse'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+  '/projects/{projectId}/properties/{propertyName}/history':
+    parameters:
+      - $ref: '#/components/parameters/projectId'
+      - in: path
+        name: propertyName
+        schema:
+          type: string
+        required: true
+        description: The name of the property definition
+      - in: query
+        name: entity_type
+        schema:
+          type: string
+          enum:
+            - event
+            - userprofile
+        required: true
+        description: The type of entity it is tied to
+    get:
+      operationId: list-all-history-for-property-definition
+      tags:
+        - Data Definition
+      summary: Event Definition History
+      description: Get all History for an Event Definition
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryResponse'
+        '401':
+          $ref: '#/components/responses/401Unauthorized'
+        '403':
+          $ref: '#/components/responses/403Forbidden'
+components:
+  securitySchemes:
+    ServiceAccount:
+      type: http
+      scheme: basic
+      description: Service Account
+    ProjectSecret:
+      type: http
+      scheme: basic
+      description: Project Secret
+  schemas:
+    UserDetails:
+      type: object
+      description: Information about the user who made a change
+      properties:
+        name:
+          type: string
+          description: The user's full name
+          example: Michael Scott
+        id:
+          type: number
+          description: The id of the user entry in app db
+          example: 33
+        email:
+          type: string
+          description: The user's email address
+          example: michael@dundermifflinity.com
+    HistoryEntry:
+      allOf:
+        - type: object
+          properties:
+            timestamp:
+              type: number
+              description: UTC Timestamp of when the change was made
+            user:
+              $ref: '#/components/schemas/UserDetails'
+            history_id:
+              type: string
+              description: The UUID of the historical entry
+        - oneOf:
+            - type: object
+              properties:
+                history_type:
+                  type: string
+                  enum:
+                    - deleted
+            - type: object
+              properties:
+                has_unrecorded_history:
+                  type: boolean
+                history_type:
+                  type: string
+                  enum:
+                    - created
+                    - changed
+                field:
+                  type: string
+                value:
+                  type: object
+                  properties:
+                    from:
+                      description: original value
+                    to:
+                      description: new value
+    HistoryResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEntry'
+        status:
+          type: string
+          enum:
+            - ok
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Details about the error that occurred
+        status:
+          type: string
+          enum:
+            - error
+  parameters:
+    projectId:
+      in: path
+      name: projectId
+      schema:
+        type: integer
+      required: true
+      description: 'Your project id (eg: 12345)'
+  responses:
+    401Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    403Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

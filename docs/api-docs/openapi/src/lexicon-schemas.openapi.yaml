@@ -1,0 +1,412 @@
+openapi: 3.0.2
+info:
+  title: Lexicon Schemas API
+  description: >-
+    Use schemas to sync your data dictionary with Mixpanel. Schemas can be
+    used to populate Lexicon and provide additional context for your data.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  contact:
+    url: "https://mixpanel.com/get-support"
+  version: 1.0.0
+servers:
+  - $ref: ./common/app-api.yaml#/server
+security:
+  - ServiceAccount: []
+tags:
+  - name: Create Schemas
+    description: Operations to add schemas to a project
+  - name: Delete Schemas
+    description: Remove a schema from a project
+  - name: Retrieve Schemas
+    description: Get additional information about schemas
+  - name: Update Schemas
+    description: Make changes to an existing Schema
+paths:
+  /projects/{projectId}/schemas:
+    parameters:
+      - $ref: ./common/parameters.yaml#/path/projectId
+    get:
+      operationId: list-all-schemas-for-project
+      tags:
+        - Retrieve Schemas
+      summary: List Schemas
+      description: List all schemas in a project
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSchemasResponse"
+        "401":
+          $ref: ./common/responses.yaml#/401Unauthorized
+        "403":
+          $ref: ./common/responses.yaml#/403Forbidden
+    post:
+      operationId: upload-schemas-for-project
+      tags:
+        - Create Schemas
+      summary: Create/Replace Multiple
+      description: ""
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entries:
+                  type: array
+                  description: The list of schema entries to upload
+                  items:
+                    $ref: "#/components/schemas/SchemaEntry"
+                truncate:
+                  type: boolean
+                  description: >-
+                    If true, delete your entire data dictionary before inserting
+                    these entries. This is primarily useful if you want to
+                    upload a single file that represents your entire data
+                    dictionary.
+                  default: false
+              required:
+                - entries
+              additionalProperties: false
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchUploadSchemasResponse"
+        "401":
+          $ref: ./common/responses.yaml#/401Unauthorized
+        "403":
+          $ref: ./common/responses.yaml#/403Forbidden
+    delete:
+      operationId: delete-all-schemas-in-project
+      tags:
+        - Delete Schemas
+      summary: Delete all Schemas
+      description: Delete all schemas in a project
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteSchemasResponse"
+        "401":
+          $ref: ./common/responses.yaml#/401Unauthorized
+        "403":
+          $ref: ./common/responses.yaml#/403Forbidden
+  /projects/{projectId}/schemas/{entityType}:
+    parameters:
+      - $ref: ./common/parameters.yaml#/path/projectId
+      - $ref: "#/components/parameters/schemaEntityType"
+      - $ref: "#/components/parameters/schemaEntityNameQuery"
+    get:
+      operationId: list-schemas-for-entity
+      tags:
+        - Retrieve Schemas
+      summary: List for Entity
+      description: Get all schemas for a specific entity type
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSchemasResponse"
+        "401":
+          $ref: ./common/responses.yaml#/401Unauthorized
+        "403":
+          $ref: ./common/responses.yaml#/403Forbidden
+    delete:
+      operationId: delete-schemas-for-entity
+      tags:
+        - Delete Schemas
+      summary: Delete for Entity
+      description: Delete all schemas of a specific entity type
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteSchemasResponse"
+        "401":
+          $ref: ./common/responses.yaml#/401Unauthorized
+        "403":
+          $ref: ./common/responses.yaml#/403Forbidden
+  /projects/{projectId}/schemas/{entityType}/{name}:
+    parameters:
+      - $ref: ./common/parameters.yaml#/path/projectId
+      - $ref: "#/components/parameters/schemaEntityType"
+      - $ref: "#/components/parameters/schemaEntityName"
+    get:
+      operationId: list-schemas-by-entity-and-name
+      tags:
+        - Retrieve Schemas
+      summary: List for Entity and Name
+      description: Get the schema for a specific entity type and entity name
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schema"
+        "401":
+          $ref: ./common/responses.yaml#/401Unauthorized
+        "403":
+          $ref: ./common/responses.yaml#/403Forbidden
+    delete:
+      operationId: delete-schema-by-entity-and-name
+      tags:
+        - Delete Schemas
+      summary: Delete for Entity and Name
+      description: Delete schema for an entity type and entity name
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteSchemasResponse"
+        "401":
+          $ref: ./common/responses.yaml#/401Unauthorized
+        "403":
+          $ref: ./common/responses.yaml#/403Forbidden
+    post:
+      operationId: upload-schema-by-entity-and-name
+      summary: Create/Replace One
+      tags:
+        - Create Schemas
+      description: ""
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Schema"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadSchemasResponse"
+        "400":
+          $ref: ./common/responses.yaml#/400BadRequest
+        "401":
+          $ref: ./common/responses.yaml#/401Unauthorized
+        "403":
+          $ref: ./common/responses.yaml#/403Forbidden
+components:
+  securitySchemes:
+    $ref: ./common/securitySchemes.yaml
+  schemas:
+    SchemaEntityType:
+      type: string
+      enum:
+        - event
+        - profile
+
+    Schema:
+      type: object
+      description: The schema for the entity
+      properties:
+        description:
+          type: string
+          description: The entity description
+        properties:
+          type: object
+          description: >-
+            The list of properties that should be included on an instance of
+            this entity
+          additionalProperties:
+            type: object
+            description: The name and definition for a property. E.g. "item_id"
+            required:
+              - type
+            properties:
+              type:
+                enum:
+                  - array
+                  - boolean
+                  - integer
+                  - "null"
+                  - number
+                  - object
+                  - string
+              description:
+                type: string
+                description: The property description
+              metadata:
+                type: object
+                properties:
+                  com.mixpanel:
+                    type: object
+                    description: Metadata that is specific to Mixpanel
+                    properties:
+                      displayName:
+                        type: string
+                        description: >-
+                          If set, this name will be used in the Mixpanel UI instead
+                          of the entity name
+                      hidden:
+                        type: boolean
+                        description: "If true, this property will be hidden in the Mixpanel UI"
+                        default: false
+                      dropped:
+                        type: boolean
+                        description: >-
+                          [Events only] If true, the property will be dropped at
+                          ingestion time.
+                        default: false
+                    additionalProperties: false
+            additionalProperties: false
+        metadata:
+          type: object
+          properties:
+            com.mixpanel:
+              type: object
+              description: Metadata about this entity that is specific to Mixpanel
+              properties:
+                $source:
+                  type: string
+                  description: >-
+                    The source of this schema. Used by partners to identify
+                    themselves
+                displayName:
+                  type: string
+                  description: >-
+                    If set, this name will be used in the Mixpanel UI instead of
+                    the entity name
+                tags:
+                  type: array
+                  description: >-
+                    A list of tags to associate to this entity that can be used
+                    in the Mixpanel UI for filtering
+                  items:
+                    type: string
+                hidden:
+                  type: boolean
+                  description: "If true, this entity will be hidden in the Mixpanel UI"
+                  default: false
+                dropped:
+                  type: boolean
+                  description: >-
+                    [Events only] If true, the event will be dropped at
+                    ingestion time.
+                  default: false
+                contacts:
+                  type: array
+                  description: >-
+                    A list of emails belonging to users responsible for this
+                    entity.
+                  items:
+                    type: string
+                    additionalProperties: false
+                teamContacts:
+                  type: array
+                  description: >-
+                    A list of team names responsible for this
+                    entity.
+                  items:
+                    type: string
+              additionalProperties: false
+    SchemaEntry:
+      type: object
+      properties:
+        entityType:
+          $ref: "#/components/schemas/SchemaEntityType"
+        name:
+          type: string
+          description: "The entity name (eg: Added To Cart)"
+        schemaJson:
+          $ref: "#/components/schemas/Schema"
+      required:
+        - name
+        - entityType
+        - schemaJson
+      additionalProperties: false
+    ListSchemasResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchemaEntry"
+        status:
+          type: string
+          enum:
+            - ok
+    BatchUploadSchemasResponse:
+      type: object
+      properties:
+        results:
+          type: object
+          properties:
+            added:
+              type: integer
+              description: The number of entries that were inserted
+            deleted:
+              type: integer
+              description: >-
+                The number of entries that were deleted (on applicable if
+                `truncate: true`)
+        status:
+          type: string
+          enum:
+            - ok
+    DeleteSchemasResponse:
+      type: object
+      properties:
+        results:
+          type: object
+          properties:
+            delete_count:
+              type: integer
+        status:
+          type: string
+          enum:
+            - ok
+    UploadSchemasResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+  parameters:
+    schemaEntityType:
+      in: path
+      name: entityType
+      schema:
+        $ref: "#/components/schemas/SchemaEntityType"
+      required: true
+      description: "The entity type (eg: event)"
+    schemaEntityName:
+      in: path
+      name: name
+      schema:
+        type: string
+      required: true
+      description: "The entity name (eg: Added To Cart)"
+    schemaEntityNameQuery:
+      in: query
+      name: entity_name
+      schema:
+        type: string
+      required: false
+      description: "The entity name (eg: Added To Cart)"
+x-explorer-enabled: true
+x-proxy-enabled: true
+x-samples-enabled: true
+x-samples-languages:
+  - curl
+  - node
+  - ruby
+  - javascript
+  - python

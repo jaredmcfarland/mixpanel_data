@@ -1,0 +1,40 @@
+400BadRequest:
+  description: Bad request
+  content:
+    application/json:
+      schema:
+        $ref: '#/ErrorResponse'
+401Unauthorized:
+  description: Unauthorized
+  content:
+    application/json:
+      schema:
+        $ref: '#/ErrorResponse'
+403Forbidden:
+  description: Forbidden
+  content:
+    application/json:
+      schema:
+        $ref: '#/ErrorResponse'
+404NotFound:
+  description: Not Found
+  content:
+    application/json:
+      schema:
+        $ref: '#/ErrorResponse'
+ErrorResponse:
+  type: object
+  properties:
+    error:
+      type: string
+      description: Details about the error that occurred
+    status:
+      type: string
+      enum:
+        - error
+ResponseStatusOk:
+  type: string
+  description: '"ok" if the request succeeded, "error" otherwise.'
+  example: ok
+  enum:
+    - ok

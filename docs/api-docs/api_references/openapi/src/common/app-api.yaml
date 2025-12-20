@@ -1,0 +1,13 @@
+server:
+  url: https://{regionAndDomain}.com/api/app
+  description: Mixpanel's application API server.
+  variables:
+    regionAndDomain:
+      default: 'mixpanel'
+      enum:
+        - 'mixpanel'
+        - 'eu.mixpanel'
+      description: >
+        The server location to be used:
+          * `mixpanel` - The default (US) servers used for most projects
+          * `eu.mixpanel` - EU servers if you are enrolled in EU Data Residency

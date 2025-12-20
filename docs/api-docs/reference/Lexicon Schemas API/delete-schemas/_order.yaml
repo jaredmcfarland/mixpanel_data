@@ -1,0 +1,3 @@
+- delete-all-schemas-in-project
+- delete-schemas-for-entity
+- delete-schema-by-entity-and-name

@@ -1,0 +1,1337 @@
+openapi: 3.0.2
+x-readme-deploy-id: ingestion
+info:
+  title: Ingestion API
+  description: APIs allowing for event-based tracking and user profile handling.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  version: 1.0.0
+  contact:
+    url: "https://mixpanel.com/get-support"
+servers:
+  - url: https://{region}.mixpanel.com
+    description: Mixpanel's data collection server.
+    variables:
+      region:
+        default: api
+        enum:
+          - api
+          - api-eu
+          - api-in
+        description: >
+          The server location to be used:
+            * `api` - The default (US) servers used for most projects
+            * `api-eu` - EU servers if you are enrolled in EU Data Residency
+            * `api-in` - India servers if you are enrolled in India Data Residency
+
+tags:
+  - name: Events
+    description: Track events.
+  - name: Group Profiles
+    description: Manage groups and their properties
+  - name: Identities
+    description: Register or merge users with a new identity.
+  - name: Lookup Tables
+    description: Enrich existing event and profile properties
+  - name: User Profiles
+    description: Manage profiles and their properties
+paths:
+  /import:
+    post:
+      tags:
+        - Events
+      operationId: import-events
+      security:
+        - ServiceAccount: []
+        - ProjectSecret: []
+        - OAuthToken: []
+      summary: Import Events
+      description: ""
+      parameters:
+        - in: query
+          name: strict
+          required: true
+          schema:
+            type: string
+            default: "1"
+            enum:
+              - "0"
+              - "1"
+          description: When set to 1 (recommended), Mixpanel will validate the batch and return errors per event that failed.
+        - in: query
+          name: project_id
+          required: True
+          schema:
+            default: "<YOUR_PROJECT_ID>"
+            type: string
+          description: The Mixpanel project_id, used to authenticate service account credentials.
+        - in: header
+          name: Content-Type
+          schema:
+            type: string
+            default: "application/json"
+            enum:
+              - "application/json"
+              - "application/x-ndjson"
+        - in: header
+          name: Content-Encoding
+          schema:
+            type: string
+            enum:
+              - "gzip"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required:
+                  - event
+                  - properties
+                properties:
+                  event:
+                    type: string
+                    title: event
+                    description: The name of the event.
+                  properties:
+                    type: object
+                    title: properties
+                    description: A JSON object containing properties of the event.
+                    required: [time, "$insert_id", distinct_id]
+                    properties:
+                      time:
+                        type: integer
+                        title: time
+                        description: The time at which the event occurred, in seconds or milliseconds since UTC epoch. If the time value is set in the future, it will be overwritten with the current present time at ingestion.
+                      distinct_id:
+                        type: string
+                        title: distinct_id
+                        description: The unique identifier of the user who performed the event.
+                      "$insert_id":
+                        type: string
+                        title: "$insert_id"
+                        description: A unique identifier for the event, used for deduplication. Events with identical values for (event, time, distinct_id, $insert_id) are considered duplicates; only the latest ingested one will be considered in queries.
+                    additionalProperties: true
+                additionalProperties: false
+      responses:
+        "200":
+          $ref: "#/components/responses/StrictReceived"
+        "400":
+          $ref: "#/components/responses/StrictInvalid"
+        "401":
+          $ref: "#/components/responses/StrictUnauthorized"
+        "413":
+          $ref: "#/components/responses/StrictTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
+  /track:
+    post:
+      operationId: track-event
+      tags:
+        - Events
+      summary: "Track Events"
+      description: ""
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/UseIpAsDistinctId
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/PNGPixel
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required:
+                  - event
+                  - properties
+                properties:
+                  event:
+                    type: string
+                    title: event
+                    description: The name of the event.
+                  properties:
+                    type: object
+                    title: properties
+                    description: A JSON object containing properties of the event.
+                    properties:
+                      "token":
+                        type: string
+                        title: token
+                        description: Project token.
+                      time:
+                        type: integer
+                        title: time
+                        description: The time at which the event occurred, in seconds or milliseconds since UTC epoch. If the time value is set in the future, it will be overwritten with the current present time at ingestion.
+                      distinct_id:
+                        type: string
+                        title: distinct_id
+                        description: The unique identifier of the user who performed the event.
+                      "$insert_id":
+                        type: string
+                        title: "$insert_id"
+                        description: A unique identifier for the event, used for deduplication. Events with identical values for (event, time, distinct_id, $insert_id) are considered duplicates; only the latest ingested one will be considered in queries.
+                    additionalProperties: true
+                additionalProperties: false
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-set:
+    post:
+      operationId: profile-set
+      tags:
+        - User Profiles
+      summary: Set Property
+      description: >-
+        Takes a JSON object containing names and values of profile properties.
+        If the profile does not exist, it creates it with these properties. If
+        it does exist, it sets the properties to these values, overwriting
+        existing values.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $distinct_id, and $set operation object.
+                required:
+                  - "$token"
+                  - "$distinct_id"
+                  - "$set"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$distinct_id":
+                    type: string
+                    default: "13793"
+                  "$set":
+                    type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-set-once:
+    post:
+      operationId: profile-set-property-once
+      tags:
+        - User Profiles
+      summary: Set Property Once
+      description: >-
+        Works just like "$set", except it will not overwrite existing property
+        values. This is useful for properties like "First login date".
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $distinct_id, and $set_once operation object.
+                required:
+                  - "$token"
+                  - "$distinct_id"
+                  - "$set_once"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$distinct_id":
+                    type: string
+                    default: "13793"
+                  "$set_once":
+                    type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-numerical-add:
+    post:
+      operationId: profile-numerical-add
+      tags:
+        - User Profiles
+      summary: Increment Numerical Property
+      description: >-
+        Takes a JSON object containing keys and numerical values. $add will
+        increment the value of a user profile property. When processed, the
+        property values are added to the existing values of the properties on
+        the profile. If the property is not present on the profile, the value
+        will be added to 0. It is possible to decrement by calling "$add" with
+        negative values. This is useful for maintaining the values of properties
+        like "Number of Logins" or "Files Uploaded".
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $distinct_id, and $add operation object.
+                required:
+                  - "$token"
+                  - "$distinct_id"
+                  - "$add"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$distinct_id":
+                    type: string
+                    default: "13793"
+                  "$add":
+                    type: object
+                    additionalProperties:
+                      type: number
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-union:
+    post:
+      operationId: user-profile-union
+      tags:
+        - User Profiles
+      summary: Union To List Property
+      description: >-
+        Adds the specified values to a list property on a user profile and
+        ensures that those values only appear once. The profile is created if it does not exist.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: >-
+                  A JSON update object, with a $token, $distinct_id, and a $union
+                  operation object.
+                required:
+                  - "$token"
+                  - "$distinct_id"
+                  - "$union"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$distinct_id":
+                    type: string
+                    default: "13793"
+                  "$union":
+                    type: object
+                    minProperties: 1
+                    additionalProperties:
+                      type: array
+                      minItems: 1
+                      items:
+                        oneOf:
+                          # TODO: add more oneOf of array and objects but it's curently erroring out
+                          - type: number
+                          - type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-list-append:
+    post:
+      operationId: profile-append-to-list-property
+      tags:
+        - User Profiles
+      summary: Append to List Property
+      description: >-
+        Takes a JSON object containing keys and values, and appends each to a
+        list associated with the corresponding property name. Appending to a
+        property that doesn't exist will result in assigning a list with one
+        element to that property.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $distinct_id, and $append operation object.
+                required:
+                  - "$token"
+                  - "$distinct_id"
+                  - "$append"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$distinct_id":
+                    type: string
+                    default: "13793"
+                  "$append":
+                    type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-list-remove:
+    post:
+      operationId: profile-remove-from-list-property
+      tags:
+        - User Profiles
+      summary: Remove from List Property
+      description: >-
+        Takes a JSON object containing keys and values. The value in the request
+        is removed from the existing list on the user profile. If it does not
+        exist, no updates are made.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $distinct_id, and $remove operation object.
+                required:
+                  - "$token"
+                  - "$distinct_id"
+                  - "$remove"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$distinct_id":
+                    type: string
+                    default: "13793"
+                  "$remove":
+                    type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-unset:
+    post:
+      operationId: profile-delete-property
+      tags:
+        - User Profiles
+      summary: Delete Property
+      description: >-
+        Takes a JSON list of string property names, and permanently removes the
+        properties and their values from a profile.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $distinct_id, and $unset operation object.
+                required:
+                  - "$token"
+                  - "$distinct_id"
+                  - "$unset"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$distinct_id":
+                    type: string
+                    default: "13793"
+                  "$unset":
+                    type: array
+                    minItems: 1
+                    description: Profile properties to be removed.
+                    items:
+                      type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-batch-update:
+    post:
+      operationId: profile-batch-update
+      tags:
+        - User Profiles
+      summary: Update Multiple Profiles
+      description: >-
+        Send a batch of profile updates. Instead of sending a single JSON object
+        as the data query parameter, send a JSON list of objects as the data
+        parameter of an application/json POST or GET request
+        body.
+
+
+        Refer to the respective user profile update commands ($set, $set_once, $add, $union, $append, $remove, $unset, and $delete) on syntax for their parameters.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+              format: blob
+              description: >-
+                A JSON list of update objects, each with a $token, $distinct_id, and an
+                operation.
+              default: |
+                [
+                    {
+                        "$token": "YOUR_PROJECT_TOKEN",
+                        "$distinct_id": "13793",
+                        "$set": { "$email": "user1@mail.com" }
+                    },
+                    {
+                        "$token": "YOUR_PROJECT_TOKEN",
+                        "$distinct_id": "13794",
+                        "$add": { "Coins Gathered": 13 }
+                    },
+                    {
+                        "$token": "YOUR_PROJECT_TOKEN",
+                        "$distinct_id": "13795",
+                        "$unset": ["$email"]
+                    }
+                ]
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /engage#profile-delete:
+    post:
+      operationId: delete-profile
+      tags:
+        - User Profiles
+      summary: Delete Profile
+      description: >
+        Permanently delete the profile from Mixpanel, along with all of its
+        properties. The $delete object value is ignored - the profile is determined by the
+        $distinct_id from the request itself.
+
+
+        If you have duplicate profiles, use property $ignore_alias set to true
+        so that you don't delete the original profile when trying to delete the
+        duplicate (as they pass in the alias as the distinct_id).
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/JavascriptWithCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: >-
+                  A JSON update object, with a $token, $distinct_id, $ignore_alias and a $delete operation object.
+                required:
+                  - "$token"
+                  - "$distinct_id"
+                  - "$delete"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$distinct_id":
+                    type: string
+                    default: "13793"
+                  "$delete":
+                    type: string
+                    nullable: true
+                    default: "null"
+                  "$ignore_alias":
+                    type: boolean
+                    default: false
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /groups#group-set:
+    post:
+      operationId: group-set-property
+      tags:
+        - Group Profiles
+      summary: Update Property
+      description: Updates or adds properties to a group profile. The profile is created if it does not exist.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $group_key, $group_id, and $set operation object.
+                required:
+                  - "$token"
+                  - "$group_key"
+                  - "$group_id"
+                  - "$set"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$group_key":
+                    type: string
+                    default: "Company"
+                  "$group_id":
+                    type: string
+                    default: "Mixpanel"
+                  "$set":
+                    type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /groups#group-set-once:
+    post:
+      operationId: group-set-property-once
+      tags:
+        - Group Profiles
+      summary: Set Property Once
+      description: Adds properties to a group only if the property is not already set. The profile is created if it does not exist.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $group_key, $group_id, and $set_once operation object.
+                required:
+                  - "$token"
+                  - "$group_key"
+                  - "$group_id"
+                  - "$set_once"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$group_key":
+                    type: string
+                    default: "Company"
+                  "$group_id":
+                    type: string
+                    default: "Mixpanel"
+                  "$set_once":
+                    type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /groups#group-unset:
+    post:
+      operationId: group-delete-property
+      tags:
+        - Group Profiles
+      summary: Delete Property
+      description: Unsets specific properties on the group profile.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $group_key, $group_id, and $unset operation list.
+                required:
+                  - "$token"
+                  - "$group_key"
+                  - "$group_id"
+                  - "$unset"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$group_key":
+                    type: string
+                    default: "Company"
+                  "$group_id":
+                    type: string
+                    default: "Mixpanel"
+                  "$unset":
+                    type: array
+                    minItems: 1
+                    description: Profile properties to be removed.
+                    items:
+                      type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /groups#group-remove-from-list:
+    post:
+      operationId: group-remove-from-list-property
+      tags:
+        - Group Profiles
+      summary: Remove from List Property
+      description: Removes a specific value in a list property.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with a $token, $group_key, $group_id, and $remove operation object.
+                required:
+                  - "$token"
+                  - "$group_key"
+                  - "$group_id"
+                  - "$remove"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$group_key":
+                    type: string
+                    default: "Company"
+                  "$group_id":
+                    type: string
+                    default: "Mixpanel"
+                  "$remove":
+                    type: object
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /groups#group-union:
+    post:
+      operationId: group-union
+      tags:
+        - Group Profiles
+      summary: Union To List Property
+      description: >-
+        Adds the specified values to a list property on a group profile and
+        ensures that those values only appear once. The profile is created if it does not exist.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: >-
+                  A JSON update object, with a $token, $group_key, $group_id, and a union
+                  operation object.
+                required:
+                  - "$token"
+                  - "$group_key"
+                  - "$group_id"
+                  - "$unset"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$group_key":
+                    type: string
+                    default: "Company"
+                  "$group_id":
+                    type: string
+                    default: "Mixpanel"
+                  "$union":
+                    type: object
+                    minProperties: 1
+                    additionalProperties:
+                      type: array
+                      minItems: 1
+                      items:
+                        oneOf:
+                          # TODO: add more oneOf of array and objects but it's curently erroring out
+                          - type: number
+                          - type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /groups#group-batch-update:
+    post:
+      operationId: group-batch-update
+      tags:
+        - Group Profiles
+      summary: Batch Update Group Profiles
+      description: >-
+        Send a batch of group profile updates. Instead of sending a single JSON object
+        as the data query parameter, send a JSON list of objects as the data
+        parameter of an application/x-www-form-urlencoded POST or GET request
+        body.
+
+
+        Refer to the respective group profile update commands ($set, $set_once, $add, $union, $remove, $unset, and $delete) on syntax for their parameters.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/IP
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Strict
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+              format: blob
+              description: >-
+                A JSON list of update objects, each with a $token, $group_key, $group_id, and an
+                operation.
+              default: |
+                [
+                    {
+                        "$token": "YOUR_PROJECT_TOKEN",
+                        "$group_key": "Company",
+                        "$group_id": "Mixpanel",
+                        "$set": {
+                            "Address": "1313 Mockingbird Lane"
+                        }
+                    },
+                    {
+                        "$token": "YOUR_PROJECT_TOKEN",
+                        "$group_key": "Company",
+                        "$group_id": "Wayne Enterprises",
+                        "$set_once": {
+                            "Address": "Wayne Tower, Gotham City"
+                        }
+                    }
+                ]
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /groups#group-delete:
+    post:
+      operationId: delete-group
+      tags:
+        - Group Profiles
+      summary: Delete Group
+      description: Deletes a group profile from Mixpanel.
+      security:
+        - {}
+      parameters:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/ResponseType/Verbose
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                description: A JSON update object, with $token, $group_key, and $group_id values and a $delete key.
+                required:
+                  - "$token"
+                  - "$group_key"
+                  - "$group_id"
+                  - "$set"
+                properties:
+                  "$token":
+                    type: string
+                    default: "YOUR_PROJECT_TOKEN"
+                  "$group_key":
+                    type: string
+                    default: "Company"
+                  "$group_id":
+                    type: string
+                    default: "Mixpanel"
+                  "$delete":
+                    type: string
+                    nullable: true
+                    default: "null"
+      responses:
+        "200":
+          $ref: "#/components/responses/Received"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /lookup-tables:
+    get:
+      operationId: list-lookup-tables
+      tags:
+        - Lookup Tables
+      security:
+        - ServiceAccount: []
+      summary: List Lookup Tables
+      parameters:
+        - in: query
+          name: project_id
+          required: True
+          schema:
+            default: "<YOUR_PROJECT_ID>"
+            type: string
+          description: The Mixpanel project_id, used to authenticate service account credentials.
+      description: Get a list of Lookup Tables defined in the project.
+      responses:
+        "200":
+          $ref: "#/components/responses/LookupTableList"
+        "401":
+          $ref: "#/components/responses/StrictUnauthorized"
+  /lookup-tables/{id}:
+    put:
+      operationId: replace-lookup-table
+      tags:
+        - Lookup Tables
+      security:
+        - ServiceAccount: []
+        - ProjectSecret: []
+      summary: Replace a Lookup Table
+      description: ""
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the lookup table to replace which can be retreived from Lexicon under the lookup table's details, click [here](https://docs.mixpanel.com/docs/data-structure/lookup-tables#where-can-i-find-the-id-of-the-lookup-table-for-apis-path-params) for more info.
+        - in: query
+          name: project_id
+          required: True
+          schema:
+            default: "<YOUR_PROJECT_ID>"
+            type: string
+          description: The Mixpanel project_id, used to authenticate service account credentials.
+        - in: header
+          name: Content-Type
+          schema:
+            type: string
+            default: "text/csv"
+            enum:
+              - "text/csv"
+      requestBody:
+        content:
+          text/csv:
+            schema:
+              type: string
+              format: blob
+              default: |
+                id,field1,field2
+                key1,v1,z1
+                key2,z1,z2
+      responses:
+        "200":
+          $ref: "#/components/responses/LookupTableReceived"
+        "400":
+          $ref: "#/components/responses/LookupTableInvalid"
+        "401":
+          $ref: "#/components/responses/StrictUnauthorized"
+        "404":
+          $ref: "#/components/responses/StrictNotFound"
+        "413":
+          $ref: "#/components/responses/StrictTooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
+components:
+  securitySchemes:
+    $ref: ./common/securitySchemes.yaml
+  schemas:
+    ImportRequestParameters:
+      allOf:
+        - $ref: ./common/ingestion-api.yaml#/OptionalRequestParameter/Strict
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        status:
+          type: string
+          enum:
+            - error
+  responses:
+    LookupTableList:
+      description: "The list of Lookup Tables."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: number
+              status:
+                type: string
+              results:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+            example:
+              code: 200
+              status: "OK"
+              results:
+                - id: "55b4fb2b-e8de-466c-930f-8b36640b9b5e"
+                  name: "Accounts"
+                - id: "1297297a-43a7-4cac-82b0-635d2bd88aac"
+                  name: "Product Catalog"
+    LookupTableReceived:
+      description: "A 200 response indicates all records were successfully ingested."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+              status:
+                type: string
+            example:
+              code: 200
+              status: "OK"
+    LookupTableInvalid:
+      description: "A 400 response indicates that some records failed validation."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+              error:
+                type: string
+              status:
+                type: string
+              failed_records:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    index:
+                      type: number
+                    message:
+                      type: string
+            example:
+              code: 400
+              error: "Some data points in the request failed validation."
+              status: "Bad Request"
+              failed_records:
+                - index: 2
+                  message: "primary key is required and cannot be blank"
+                - index: 3
+                  message: "invalid row: wrong number of fields"
+    StrictReceived:
+      description: "A 200 response indicates all records were successfully ingested."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+              num_records_imported:
+                type: integer
+              status:
+                type: string
+            example:
+              code: 200
+              num_records_imported: 2000
+              status: "OK"
+    StrictInvalid:
+      description: "A 400 response indicates that some records failed validation."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+              error:
+                type: string
+              status:
+                type: string
+              num_records_imported:
+                type: integer
+              failed_records:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    index:
+                      type: number
+                    insert_id:
+                      type: string
+                    field:
+                      type: string
+                    message:
+                      type: string
+            example:
+              code: 400
+              num_records_imported: 999
+              status: "Bad Request"
+              failed_records:
+                - index: 0
+                  insert_id: "13c0b661-f48b-51cd-ba54-97c5999169c0"
+                  field: "properties.time"
+                  message: "'properties.time' is invalid: must be specified as seconds since epoch"
+    StrictUnauthorized:
+      description: "A 401 response indicates invalid credentials."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+              error:
+                type: string
+              status:
+                type: string
+            example:
+              code: 401
+              error: "Invalid credentials"
+              status: "Unauthorized"
+    StrictNotFound:
+      description: "A 404 response indicates that the entity to replace was not found."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+              error:
+                type: string
+              status:
+                type: string
+            example:
+              code: 200
+              error: "Lookup table with id 'f077cb07-008a-4955-8a4a-b4c163db3a87' was not found."
+              status: "Not Found"
+    StrictTooLarge:
+      description: "A 413 response indicates that the payload is too large."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+              error:
+                type: string
+              status:
+                type: string
+            example:
+              code: 413
+              error: "request exceeds max limit of 2097152 bytes"
+              status: "Request Entity Too Large"
+    RateLimitExceeded:
+      description: "A 429 response indicates rate limits have been exceeded."
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code:
+                type: integer
+              error:
+                type: string
+              status:
+                type: string
+            example:
+              code: 429
+              error: "Project exceeded rate limits. Please retry the request with exponential backoff."
+              status: "Too Many Requests"
+    Received:
+      # TODO: Add oneOf based on response type
+      content:
+        text/plain:
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 0
+          examples:
+            Valid Data:
+              value: 1
+            Invalid Data:
+              value: 0
+      description: |
+
+        * `1` - One or more objects provided are valid. This does not signify a valid project token or secret.
+        * `0` - No data objects in the body are valid.
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+x-explorer-enabled: true
+x-proxy-enabled: true
+x-samples-enabled: true
+x-samples-languages:
+  - curl
+  - node
+  - ruby
+  - javascript
+  - python
