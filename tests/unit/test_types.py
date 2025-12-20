@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import datetime
 
@@ -50,7 +51,7 @@ class TestFetchResult:
             fetched_at=datetime.now(),
         )
 
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(dataclasses.FrozenInstanceError):
             result.rows = 200  # type: ignore[misc]
 
     def test_df_returns_dataframe(self) -> None:
@@ -405,10 +406,12 @@ class TestJQLResult:
 
     def test_df_from_dict_list(self) -> None:
         """df should convert list of dicts to DataFrame."""
-        result = JQLResult(_raw=[
-            {"name": "Alice", "count": 10},
-            {"name": "Bob", "count": 20},
-        ])
+        result = JQLResult(
+            _raw=[
+                {"name": "Alice", "count": 10},
+                {"name": "Bob", "count": 20},
+            ]
+        )
 
         df = result.df
         assert isinstance(df, pd.DataFrame)
@@ -448,23 +451,36 @@ class TestResultTypeImmutability:
         """All result types should be frozen dataclasses."""
         results: list[object] = [
             FetchResult(
-                table="t", rows=0, type="events",
-                duration_seconds=0, date_range=None,
-                fetched_at=datetime.now()
+                table="t",
+                rows=0,
+                type="events",
+                duration_seconds=0,
+                date_range=None,
+                fetched_at=datetime.now(),
             ),
             SegmentationResult(
-                event="e", from_date="2024-01-01", to_date="2024-01-31",
-                unit="day", segment_property=None, total=0
+                event="e",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                unit="day",
+                segment_property=None,
+                total=0,
             ),
             FunnelResult(
-                funnel_id=1, funnel_name="f",
-                from_date="2024-01-01", to_date="2024-01-31",
-                conversion_rate=0, steps=[]
+                funnel_id=1,
+                funnel_name="f",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                conversion_rate=0,
+                steps=[],
             ),
             RetentionResult(
-                born_event="b", return_event="r",
-                from_date="2024-01-01", to_date="2024-01-31",
-                unit="day", cohorts=[]
+                born_event="b",
+                return_event="r",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                unit="day",
+                cohorts=[],
             ),
             JQLResult(),
             FunnelStep(event="e", count=0, conversion_rate=0),
@@ -475,5 +491,5 @@ class TestResultTypeImmutability:
             # Get any attribute name from the object
             attrs = [a for a in dir(result) if not a.startswith("_")]
             if attrs:
-                with pytest.raises(Exception):
+                with pytest.raises((TypeError, dataclasses.FrozenInstanceError)):
                     setattr(result, attrs[0], "modified")

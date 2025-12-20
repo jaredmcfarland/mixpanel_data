@@ -159,9 +159,7 @@ class TestEnvironmentVariableIntegration:
             assert creds.project_id == "env_project"
             assert creds.region == "eu"
 
-    def test_partial_env_vars_use_file(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_partial_env_vars_use_file(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Partial env vars should fall back to config file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "config.toml"

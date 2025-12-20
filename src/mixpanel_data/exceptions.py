@@ -71,7 +71,9 @@ class MixpanelDataError(Exception):
 
     def __repr__(self) -> str:
         """Return detailed string representation."""
-        return f"{self.__class__.__name__}(message={self._message!r}, code={self._code!r})"
+        return (
+            f"{self.__class__.__name__}(message={self._message!r}, code={self._code!r})"
+        )
 
 
 # Configuration Exceptions

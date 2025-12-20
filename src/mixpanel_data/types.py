@@ -128,11 +128,13 @@ class SegmentationResult:
 
         for segment_name, date_counts in self.series.items():
             for date_str, count in date_counts.items():
-                rows.append({
-                    "date": date_str,
-                    "segment": segment_name,
-                    "count": count,
-                })
+                rows.append(
+                    {
+                        "date": date_str,
+                        "segment": segment_name,
+                        "count": count,
+                    }
+                )
 
         result_df = (
             pd.DataFrame(rows)
@@ -214,12 +216,14 @@ class FunnelResult:
         rows: list[dict[str, Any]] = []
 
         for i, step in enumerate(self.steps, start=1):
-            rows.append({
-                "step": i,
-                "event": step.event,
-                "count": step.count,
-                "conversion_rate": step.conversion_rate,
-            })
+            rows.append(
+                {
+                    "step": i,
+                    "event": step.event,
+                    "count": step.count,
+                    "conversion_rate": step.conversion_rate,
+                }
+            )
 
         result_df = (
             pd.DataFrame(rows)

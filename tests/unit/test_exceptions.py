@@ -192,9 +192,9 @@ class TestExceptionHierarchy:
         ]
 
         for exc in exceptions:
-            assert isinstance(exc, MixpanelDataError), (
-                f"{exc.__class__.__name__} should inherit from MixpanelDataError"
-            )
+            assert isinstance(
+                exc, MixpanelDataError
+            ), f"{exc.__class__.__name__} should inherit from MixpanelDataError"
             assert isinstance(exc, Exception)
 
     def test_config_exceptions_inherit_from_config_error(self) -> None:
@@ -218,7 +218,7 @@ class TestExceptionHierarchy:
 
             assert caught.value.code is not None
             assert caught.value.to_dict() is not None
-            
+
     def test_error_codes_match_expected(self) -> None:
         """Verify all error codes match expected values."""
         expected_codes = {
@@ -240,6 +240,6 @@ class TestExceptionHierarchy:
             else:
                 exc = exc_class("test message")
 
-            assert exc.code == expected_code, (
-                f"{exc_class.__name__} should have code {expected_code}, got {exc.code}"
-            )
+            assert (
+                exc.code == expected_code
+            ), f"{exc_class.__name__} should have code {expected_code}, got {exc.code}"

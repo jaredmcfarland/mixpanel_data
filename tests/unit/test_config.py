@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from mixpanel_data._internal.config import (
     AccountInfo,
@@ -101,7 +103,7 @@ class TestCredentials:
             region="us",
         )
 
-        with pytest.raises(Exception):  # ValidationError for frozen model
+        with pytest.raises(ValidationError):  # Frozen Pydantic model
             creds.username = "different"  # type: ignore[misc]
 
 
@@ -134,7 +136,7 @@ class TestAccountInfo:
             is_default=False,
         )
 
-        with pytest.raises(Exception):
+        with pytest.raises(dataclasses.FrozenInstanceError):
             info.name = "different"  # type: ignore[misc]
 
 
@@ -288,9 +290,7 @@ class TestConfigManager:
         assert account.name == "test_account"
         assert account.username == "sa_test_user"
 
-    def test_get_account_not_found_raises(
-        self, config_manager: ConfigManager
-    ) -> None:
+    def test_get_account_not_found_raises(self, config_manager: ConfigManager) -> None:
         """Getting non-existent account should raise AccountNotFoundError."""
         with pytest.raises(AccountNotFoundError):
             config_manager.get_account("nonexistent")
@@ -335,9 +335,7 @@ class TestCredentialResolution:
         assert creds.username == "sa_test_user"
         assert creds.project_id == "12345"
 
-    def test_resolve_named_account(
-        self, config_manager: ConfigManager
-    ) -> None:
+    def test_resolve_named_account(self, config_manager: ConfigManager) -> None:
         """Should resolve specific named account."""
         config_manager.add_account(
             name="production",
@@ -372,9 +370,7 @@ class TestCredentialResolution:
         assert "nonexistent" in str(exc_info.value)
         assert "test_account" in exc_info.value.available_accounts
 
-    def test_resolve_no_credentials_raises(
-        self, config_manager: ConfigManager
-    ) -> None:
+    def test_resolve_no_credentials_raises(self, config_manager: ConfigManager) -> None:
         """No credentials available should raise ConfigError."""
         with pytest.raises(ConfigError) as exc_info:
             config_manager.resolve_credentials()

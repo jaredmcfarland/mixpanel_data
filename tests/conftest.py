@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -26,7 +27,7 @@ def config_path(temp_dir: Path) -> Path:
 
 
 @pytest.fixture
-def config_manager(config_path: Path) -> "ConfigManager":
+def config_manager(config_path: Path) -> ConfigManager:
     """Create a ConfigManager with a temporary config file."""
     from mixpanel_data._internal.config import ConfigManager
 

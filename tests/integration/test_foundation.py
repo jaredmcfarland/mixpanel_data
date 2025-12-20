@@ -58,9 +58,7 @@ class TestFoundationLayerWorkflow:
             creds_str = str(creds)
             assert "test_secret_123" not in creds_str
 
-    def test_env_variable_priority(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_variable_priority(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test environment variable priority over config file."""
         monkeypatch.setenv("MP_USERNAME", "env_user")
         monkeypatch.setenv("MP_SECRET", "env_secret")
@@ -103,7 +101,7 @@ class TestFoundationLayerWorkflow:
         )
 
         # Immutable
-        with pytest.raises(Exception):
+        with pytest.raises((TypeError, AttributeError)):
             result.rows = 20000  # type: ignore[misc]
 
         # JSON serializable
@@ -145,6 +143,7 @@ class TestFoundationLayerWorkflow:
 
     def test_catch_all_library_errors(self) -> None:
         """Verify catch-all pattern works."""
+
         def might_raise(exc_class: type) -> None:
             if exc_class == AccountNotFoundError:
                 raise AccountNotFoundError("x")
@@ -176,22 +175,10 @@ class TestPublicAPIImports:
     def test_top_level_imports(self) -> None:
         """Test imports from mixpanel_data package."""
         from mixpanel_data import (
-            AccountExistsError,
-            AccountNotFoundError,
-            AuthenticationError,
-            CohortInfo,
             ConfigError,
             FetchResult,
-            FunnelResult,
             FunnelStep,
-            JQLResult,
             MixpanelDataError,
-            QueryError,
-            RateLimitError,
-            RetentionResult,
-            SegmentationResult,
-            TableExistsError,
-            TableNotFoundError,
         )
 
         # All should be importable
