@@ -1,6 +1,6 @@
 # Mixpanel API Documentation
 
-This directory contains comprehensive Mixpanel API documentation in multiple formats, serving as the **primary reference for building mixpanel-data**.
+This directory contains comprehensive Mixpanel API documentation in multiple formats, serving as the **primary reference for building mixpanel_data**.
 
 ## Directory Structure
 
@@ -22,7 +22,7 @@ api-docs/
 | OpenAPI specs | [openapi/src/](openapi/src/) |
 | Markdown docs | [reference/](reference/) |
 
-## Key APIs for mixpanel-data
+## Key APIs for mixpanel_data
 
 ### Primary (Must Implement)
 
@@ -75,7 +75,7 @@ npm run api:lint     # Validate specs
 npm run api:build    # Compile YAML → JSON
 ```
 
-## For mixpanel-data Development
+## For mixpanel_data Development
 
 ### Event Export API
 Read [reference/Event Export API/](reference/Event%20Export%20API/) for:

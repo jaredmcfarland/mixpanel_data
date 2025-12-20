@@ -8,7 +8,7 @@
 
 ```python
 class MixpanelDataError(Exception):
-    """Base exception for all mixpanel-data errors."""
+    """Base exception for all mixpanel_data errors."""
 
     def __init__(
         self,

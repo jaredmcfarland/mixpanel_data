@@ -48,7 +48,7 @@ privacy:
 ---
 ```
 
-## Key APIs for mixpanel-data Project
+## Key APIs for mixpanel_data Project
 
 ### Query API (Most Relevant)
 Primary target for live queries. Subdirectories:

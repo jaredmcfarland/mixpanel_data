@@ -1,4 +1,4 @@
-# mixpanel-data Project Design Document
+# mixpanel_data Project Design Document
 
 > A Python library for working with Mixpanel data, designed for AI coding agents and data analysis workflows.
 
@@ -10,7 +10,7 @@ AI coding agents consume context window tokens when receiving Mixpanel API respo
 
 ### Solution
 
-`mixpanel-data` enables agents to fetch data once, store it locally in DuckDB, and query repeatedly without consuming additional context. Data lives outside the context window; only precise answers flow back in.
+`mixpanel_data` enables agents to fetch data once, store it locally in DuckDB, and query repeatedly without consuming additional context. Data lives outside the context window; only precise answers flow back in.
 
 ### Core Capabilities
 

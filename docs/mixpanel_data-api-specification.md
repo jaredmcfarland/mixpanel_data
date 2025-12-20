@@ -1,4 +1,4 @@
-# mixpanel-data API Specification
+# mixpanel_data API Specification
 
 > Version: 0.2.0 (Draft)  
 > Status: Design Phase  
@@ -6,7 +6,7 @@
 
 ## Overview
 
-`mixpanel-data` is a Python library for working with Mixpanel data, designed for AI coding agents and data analysis workflows. The library enables users to fetch data from Mixpanel into a local analytical database (DuckDB), query it with SQL, and run live Mixpanel reports—all through a single, consistent API.
+`mixpanel_data` is a Python library for working with Mixpanel data, designed for AI coding agents and data analysis workflows. The library enables users to fetch data from Mixpanel into a local analytical database (DuckDB), query it with SQL, and run live Mixpanel reports—all through a single, consistent API.
 
 ## Design Principles
 
@@ -29,7 +29,7 @@ The API is built around these core principles:
 ## Installation
 
 ```bash
-pip install mixpanel-data
+pip install mixpanel_data
 ```
 
 ---
@@ -62,9 +62,9 @@ mp auth switch production
 
 ### Overview
 
-`mixpanel-data` uses Mixpanel Service Accounts for authentication. Service accounts provide secure, programmatic access to Mixpanel APIs without requiring user OAuth flows.
+`mixpanel_data` uses Mixpanel Service Accounts for authentication. Service accounts provide secure, programmatic access to Mixpanel APIs without requiring user OAuth flows.
 
-A service account can be granted access to multiple projects within an organization. Each configured account in `mixpanel-data` ties a service account to a specific project, allowing you to maintain named profiles for different environments (production, staging, etc.).
+A service account can be granted access to multiple projects within an organization. Each configured account in `mixpanel_data` ties a service account to a specific project, allowing you to maintain named profiles for different environments (production, staging, etc.).
 
 ### Config File
 
@@ -152,7 +152,7 @@ Service accounts are created in the Mixpanel UI:
 3. Assign a name and select the appropriate role for each project
 4. Copy the username and secret (the secret is only shown once)
 
-For `mixpanel-data`, the service account needs read access to the projects you want to query. The "Analyst" role is typically sufficient.
+For `mixpanel_data`, the service account needs read access to the projects you want to query. The "Analyst" role is typically sufficient.
 
 ---
 
@@ -333,7 +333,7 @@ class Workspace:
             project_id: Override project ID from config
             region: Override region from config
             path: Path to DuckDB database file. If None, uses
-                  ~/.mixpanel-data/{project_id}.db
+                  ~/.mixpanel_data/{project_id}.db
 
         Raises:
             AuthenticationError: If no valid credentials found
@@ -1035,7 +1035,7 @@ class ColumnInfo:
 
 ```python
 class MixpanelDataError(Exception):
-    """Base exception for all mixpanel-data errors."""
+    """Base exception for all mixpanel_data errors."""
 
 class TableExistsError(MixpanelDataError):
     """Raised when attempting to create a table that already exists."""
@@ -1307,4 +1307,4 @@ ws.fetch_events(from_date="2024-01-01", to_date="2024-01-15")
 
 ---
 
-*This specification defines the public API surface for mixpanel-data. Implementation details may vary, but the external interface should match this document.*
+*This specification defines the public API surface for mixpanel_data. Implementation details may vary, but the external interface should match this document.*

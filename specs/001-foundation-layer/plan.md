@@ -5,7 +5,7 @@
 
 ## Summary
 
-Implement the foundational infrastructure layer for mixpanel-data including:
+Implement the foundational infrastructure layer for mixpanel_data including:
 
 1. **ConfigManager** - Credential storage, resolution (env vars → named account → default), and validation using TOML configuration files
 2. **Exceptions** - Typed exception hierarchy with a common base class for all library errors

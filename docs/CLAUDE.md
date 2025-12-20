@@ -1,15 +1,15 @@
-# mixpanel-data Documentation
+# mixpanel_data Documentation
 
-This directory contains all design documentation, specifications, and reference materials for building the `mixpanel-data` library.
+This directory contains all design documentation, specifications, and reference materials for building the `mixpanel_data` library.
 
 ## Document Hierarchy
 
 ```
 docs/
 ├── CLAUDE.md                              # This file
-├── mixpanel-data-project-brief.md         # Vision, goals, why we're building this
-├── mixpanel-data-design.md                # Architecture and technical design
-├── mixpanel-data-api-specification.md     # Python library API spec
+├── mixpanel_data-project-brief.md         # Vision, goals, why we're building this
+├── mixpanel_data-design.md                # Architecture and technical design
+├── mixpanel_data-api-specification.md     # Python library API spec
 ├── mp-cli-api-specification.md            # CLI command specification
 ├── mp-cli-project-spec.md                 # Full project specification
 ├── MIXPANEL_DATA_MODEL_REFERENCE.md       # Mixpanel data model (events, profiles)
@@ -21,12 +21,12 @@ docs/
 ## Reading Order
 
 For understanding the project:
-1. **[mixpanel-data-project-brief.md](mixpanel-data-project-brief.md)** - Start here. Vision, goals, design principles
-2. **[mixpanel-data-design.md](mixpanel-data-design.md)** - Architecture, layers, system design
+1. **[mixpanel_data-project-brief.md](mixpanel_data-project-brief.md)** - Start here. Vision, goals, design principles
+2. **[mixpanel_data-design.md](mixpanel_data-design.md)** - Architecture, layers, system design
 3. **[mp-cli-project-spec.md](mp-cli-project-spec.md)** - Full specification with command hierarchy
 
 For implementation:
-1. **[mixpanel-data-api-specification.md](mixpanel-data-api-specification.md)** - Python API design
+1. **[mixpanel_data-api-specification.md](mixpanel_data-api-specification.md)** - Python API design
 2. **[mp-cli-api-specification.md](mp-cli-api-specification.md)** - CLI commands and options
 3. **[MIXPANEL_DATA_MODEL_REFERENCE.md](MIXPANEL_DATA_MODEL_REFERENCE.md)** - Data model for Pydantic/DuckDB mapping
 
@@ -70,7 +70,7 @@ mp Approach:    Agent → fetch once → DuckDB → SQL queries → minimal toke
 
 | Context | Name | Example |
 |---------|------|---------|
-| PyPI | `mixpanel-data` | `pip install mixpanel-data` |
+| PyPI | `mixpanel_data` | `pip install mixpanel_data` |
 | Python | `mixpanel_data` | `import mixpanel_data as mp` |
 | CLI | `mp` | `mp fetch events --from 2024-01-01` |
 
@@ -132,7 +132,7 @@ mp db info/tables/drop            # Database management
 ## When Working in This Directory
 
 ### Adding New Documentation
-- Follow existing naming: `mixpanel-data-*.md` or `mp-cli-*.md`
+- Follow existing naming: `mixpanel_data-*.md` or `mp-cli-*.md`
 - Update this CLAUDE.md with the new file
 - Cross-reference from related documents
 

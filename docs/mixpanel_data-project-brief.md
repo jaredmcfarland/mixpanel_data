@@ -1,4 +1,4 @@
-# mixpanel-data — Project Brief
+# mixpanel_data — Project Brief
 
 > A foundational Python library for working with Mixpanel data, designed for AI coding agents.
 
@@ -22,7 +22,7 @@ This is how humans work with data—we load it into a database or DataFrame, exp
 
 ## The Vision
 
-`mixpanel-data` is a **foundational layer** for working with Mixpanel data. It provides:
+`mixpanel_data` is a **foundational layer** for working with Mixpanel data. It provides:
 
 1. **A local data store** — Fetch events and user data from Mixpanel, store them in an embedded analytical database (DuckDB), query them with SQL
 2. **Live query access** — Run Mixpanel reports (segmentation, funnels, retention) directly when fresh data is needed
@@ -259,7 +259,7 @@ This could become the "Lens runtime"—interactive data exploration without buil
 
 ### Mixpanel MCP Server
 
-The existing MCP server calls Mixpanel APIs and returns results directly into the context window. `mixpanel-data` complements this by offering the local database approach. 
+The existing MCP server calls Mixpanel APIs and returns results directly into the context window. `mixpanel_data` complements this by offering the local database approach. 
 
 We can learn from the MCP server's tool design:
 - `run_segmentation_query`, `run_funnels_query`, etc.
@@ -267,7 +267,7 @@ We can learn from the MCP server's tool design:
 
 ### Lens
 
-The conceptual "Lens" project envisions AI-generated interactive data visualizations. marimo integration positions `mixpanel-data` as a lightweight path to this vision:
+The conceptual "Lens" project envisions AI-generated interactive data visualizations. marimo integration positions `mixpanel_data` as a lightweight path to this vision:
 
 - Agent generates marimo app → Interactive exploration
 - No custom infrastructure needed
@@ -275,7 +275,7 @@ The conceptual "Lens" project envisions AI-generated interactive data visualizat
 
 ### CLI Builder Skill
 
-The `cli-builder` skill provides patterns for building Python CLIs with Typer/Rich. `mixpanel-data` should follow these patterns for consistency.
+The `cli-builder` skill provides patterns for building Python CLIs with Typer/Rich. `mixpanel_data` should follow these patterns for consistency.
 
 ---
 
@@ -322,4 +322,4 @@ The tool should:
 
 ---
 
-*This document captures the spirit and goals of mixpanel-data. Detailed design decisions will be made collaboratively during the development phase.*
+*This document captures the spirit and goals of mixpanel_data. Detailed design decisions will be made collaboratively during the development phase.*
