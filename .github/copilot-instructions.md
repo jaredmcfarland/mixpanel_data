@@ -219,3 +219,75 @@ The codebase currently has 19 ruff findings:
 - `ruff check .`: <1 second
 - `mypy src`: 2-3 seconds
 - `python -m build`: 30 seconds
+
+---
+
+## Code Review Guidelines
+
+When performing code reviews, apply the following project-specific checks:
+
+### Architecture Enforcement
+
+**Layer Boundaries**: This project uses a layered architecture (CLI → Public API → Service → Infrastructure). Flag any code that:
+- Imports from `_internal/` in public modules (only `auth.py` is allowed to re-export)
+- Has CLI code directly accessing storage or API clients (should go through Workspace facade)
+- Has services calling other services horizontally (they should only call infrastructure)
+
+**Private API Leakage**: The `src/mixpanel_data/_internal/` directory is private implementation. Flag any:
+- Direct imports of `_internal` modules in user-facing code
+- Types from `_internal/` appearing in public function signatures
+- `__all__` exports that include `_internal` symbols
+
+### Exception Handling
+
+Use the library's exception hierarchy—never bare exceptions. Flag:
+- `except Exception:` or `except BaseException:` (should be `except MixpanelDataError:`)
+- `raise Exception(...)` (should use a specific subclass like `ConfigError`, `QueryError`, etc.)
+- Missing exception chaining (`raise X from e`)
+
+**Valid exception classes**: `MixpanelDataError`, `ConfigError`, `AccountNotFoundError`, `AccountExistsError`, `AuthenticationError`, `RateLimitError`, `QueryError`, `TableExistsError`, `TableNotFoundError`
+
+### Security: Credential Handling
+
+Flag any code that could expose secrets:
+- Logging or printing `Credentials` objects without going through `__repr__` (which redacts)
+- Using `str(secret)` instead of `secret.get_secret_value()` for SecretStr
+- f-strings or `.format()` that interpolate secret values
+- Secrets in error messages or exception details dicts
+
+### Immutability Patterns
+
+All result types and credentials must be immutable. Flag:
+- Dataclasses without `frozen=True`
+- Pydantic models without `model_config = ConfigDict(frozen=True)`
+- Code that mutates frozen objects (should use `object.__setattr__` for internal caching only)
+- Mutable default arguments (`list` instead of `field(default_factory=list)`)
+
+### Explicit Table Management
+
+This project uses explicit table lifecycle—never implicit overwrites. Flag:
+- Storage methods that silently overwrite existing tables
+- Missing `TableExistsError` checks before table creation
+- Missing `TableNotFoundError` checks when accessing tables
+
+### Streaming and Memory Efficiency
+
+Data should flow through iterators, not be loaded entirely into memory. Flag:
+- Functions returning `list[dict]` when they should return `Iterator[dict]`
+- Collecting all results with `list()` when streaming is possible
+- Large data structures stored in variables when they could be yielded
+
+### Dependency Injection
+
+Services must accept dependencies via constructor for testability. Flag:
+- Services that instantiate their own `MixpanelAPIClient` or `StorageEngine`
+- Direct `ConfigManager()` calls instead of accepting injected config
+- Hardcoded paths or URLs that should be parameters
+
+### Type Annotations
+
+This is a PEP 561 typed package (`py.typed`). Flag:
+- Missing return type annotations
+- `Any` used when a specific type is known
+- Missing type annotations on public function parameters
+- Use of `Optional[X]` instead of `X | None` (project uses modern union syntax)
