@@ -5,11 +5,7 @@ echo "Setting up mixpanel_data development environment..."
 
 cd /workspace
 
-# Create virtual environment
-echo "Creating virtual environment with uv..."
-uv venv .venv
-
-# Install dependencies
+# Install dependencies (uv sync creates venv automatically if needed)
 echo "Installing dependencies..."
 uv sync --all-extras
 
@@ -27,6 +23,7 @@ echo "  uv run ruff check  - Check code style"
 echo "  uv run mypy src    - Type check"
 echo "  mp                 - CLI (once implemented)"
 echo ""
-echo "Claude Code (runs with --dangerously-skip-permissions):"
-echo "  claude             - Start Claude Code CLI"
-echo "  \\claude --version  - Check version (bypass alias)"
+echo "AI Assistants:"
+echo "  claude             - Claude Code (runs with --dangerously-skip-permissions)"
+echo "  copilot            - GitHub Copilot CLI"
+echo "  gh                 - GitHub CLI"

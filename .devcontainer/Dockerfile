@@ -29,8 +29,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Install uv (fast Python package manager)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
-# Install Claude Code globally
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+# Install Claude Code and GitHub Copilot CLI globally
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} @github/copilot
 
 # Set up command history persistence and Claude config directory
 ARG USERNAME=vscode
