@@ -806,3 +806,251 @@ class TestErrorHandling:
             client.get_events()
 
         assert "Invalid query" in str(exc_info.value)
+
+
+# =============================================================================
+# Regression Tests: Request Encoding
+# =============================================================================
+
+
+class TestRequestEncodingRegression:
+    """Regression tests for request encoding.
+
+    These tests verify that request bodies are encoded correctly and would
+    catch issues like double-serialization of JSON data.
+    """
+
+    def test_jql_params_not_double_serialized(
+        self, test_credentials: Credentials
+    ) -> None:
+        """JQL params should be a JSON string, not double-serialized.
+
+        Regression: params were being json.dumps'd then sent via json=data,
+        causing double-serialization. API would receive escaped JSON strings.
+        """
+        from urllib.parse import parse_qs
+
+        captured_content: bytes = b""
+        captured_content_type: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_content, captured_content_type
+            captured_content = request.content
+            captured_content_type = request.headers.get("content-type", "")
+            return httpx.Response(200, json=[])
+
+        with create_mock_client(test_credentials, handler) as client:
+            client.jql(
+                "function main() { return []; }",
+                params={"key": "value", "nested": {"a": 1}},
+            )
+
+        # Verify form-encoded content type
+        assert "application/x-www-form-urlencoded" in captured_content_type
+
+        # Parse the form data
+        parsed = parse_qs(captured_content.decode())
+        params_value = parsed["params"][0]
+
+        # Parse the JSON string - should decode cleanly to original dict
+        parsed_params = json.loads(params_value)
+        assert parsed_params == {"key": "value", "nested": {"a": 1}}
+
+        # Verify it's not double-serialized (would be a string if double-serialized)
+        assert isinstance(parsed_params["nested"], dict)
+        assert not isinstance(parsed_params["nested"], str)
+
+    def test_jql_uses_form_encoding_not_json_body(
+        self, test_credentials: Credentials
+    ) -> None:
+        """JQL should use form-encoded body, not JSON body.
+
+        Regression: Using json= parameter instead of data= for form encoding.
+        """
+        captured_content_type: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_content_type
+            captured_content_type = request.headers.get("content-type", "")
+            return httpx.Response(200, json=[])
+
+        with create_mock_client(test_credentials, handler) as client:
+            client.jql("function main() { return []; }")
+
+        # Must be form-encoded, not JSON
+        assert "application/x-www-form-urlencoded" in captured_content_type
+        assert "application/json" not in captured_content_type
+
+    def test_profile_export_uses_json_body(self, test_credentials: Credentials) -> None:
+        """Profile export should use JSON body (not form-encoded).
+
+        Ensures we correctly distinguish which APIs need which encoding.
+        """
+        captured_content_type: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_content_type
+            captured_content_type = request.headers.get("content-type", "")
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles())
+
+        # Profile export uses JSON body
+        assert "application/json" in captured_content_type
+
+
+# =============================================================================
+# Regression Tests: State Reset in Retry Scenarios
+# =============================================================================
+
+
+class TestRetryStateResetRegression:
+    """Regression tests for state reset during retry scenarios.
+
+    These tests verify that internal state is properly reset between retry
+    attempts, preventing state accumulation bugs.
+    """
+
+    def test_batch_count_resets_on_retry(self, test_credentials: Credentials) -> None:
+        """Batch count should reset to zero on each retry attempt.
+
+        Regression: batch_count was not reset between retries, causing
+        accumulated counts across retry attempts.
+        """
+        attempt = 0
+        batch_counts_per_attempt: list[list[int]] = []
+        current_attempt_counts: list[int] = []
+
+        # Create enough events to trigger on_batch callback
+        events_data = "\n".join(
+            json.dumps({"event": f"E{i}", "properties": {"time": i}})
+            for i in range(1500)
+        )
+        mock_data = events_data.encode() + b"\n"
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal attempt, current_attempt_counts, batch_counts_per_attempt
+            attempt += 1
+
+            # Save counts from previous attempt
+            if current_attempt_counts:
+                batch_counts_per_attempt.append(current_attempt_counts.copy())
+            current_attempt_counts.clear()
+
+            if attempt == 1:
+                # First attempt: rate limited
+                return httpx.Response(429, headers={"Retry-After": "0"})
+            # Second attempt: success
+            return httpx.Response(200, content=mock_data)
+
+        def on_batch(count: int) -> None:
+            current_attempt_counts.append(count)
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=3, _transport=transport
+        )
+
+        with client:
+            list(client.export_events("2024-01-01", "2024-01-31", on_batch=on_batch))
+
+        # Save final attempt counts
+        if current_attempt_counts:
+            batch_counts_per_attempt.append(current_attempt_counts.copy())
+
+        # Verify second attempt counts start from 0, not accumulated
+        assert len(batch_counts_per_attempt) >= 1
+        last_attempt_counts = batch_counts_per_attempt[-1]
+
+        # First batch count should be 1000 (batch size), not accumulated
+        assert 1000 in last_attempt_counts
+        # Final count should be 1500, not 1500 + whatever was counted before
+        assert 1500 in last_attempt_counts
+
+    def test_profile_page_count_resets_on_retry(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Profile page count should reset on retry attempt.
+
+        Verifies that pagination state doesn't accumulate across retries.
+        """
+        attempt = 0
+        page_counts_per_attempt: list[list[int]] = []
+        current_attempt_counts: list[int] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal attempt, current_attempt_counts, page_counts_per_attempt
+            attempt += 1
+
+            if attempt == 1:
+                # First attempt: rate limited
+                return httpx.Response(429, headers={"Retry-After": "0"})
+
+            # Subsequent attempts: paginated response
+            if attempt == 2:
+                return httpx.Response(
+                    200,
+                    json={
+                        "results": [{"$distinct_id": "u1"}],
+                        "session_id": "abc123",
+                    },
+                )
+            return httpx.Response(
+                200,
+                json={"results": [], "session_id": None},
+            )
+
+        def on_batch(count: int) -> None:
+            current_attempt_counts.append(count)
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=3, _transport=transport
+        )
+
+        with client:
+            profiles = list(client.export_profiles(on_batch=on_batch))
+
+        # Should have gotten profiles from retry
+        assert len(profiles) == 1
+
+        # on_batch should have been called with counts starting fresh
+        # If state wasn't reset, counts would be wrong
+        assert current_attempt_counts == [1]
+
+    def test_multiple_retries_dont_accumulate_state(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Multiple retry attempts should each start fresh.
+
+        Verifies no state leakage across multiple retry cycles.
+        """
+        attempts = 0
+
+        # Small event set to keep test fast
+        events_data = "\n".join(
+            json.dumps({"event": f"E{i}", "properties": {"time": i}}) for i in range(5)
+        )
+        mock_data = events_data.encode() + b"\n"
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            if attempts < 3:
+                return httpx.Response(429, headers={"Retry-After": "0"})
+            return httpx.Response(200, content=mock_data)
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=3, _transport=transport
+        )
+
+        with client:
+            events = list(client.export_events("2024-01-01", "2024-01-31"))
+
+        # Should have made 3 attempts (2 rate-limited + 1 success)
+        assert attempts == 3
+
+        # Should have exactly 5 events (not accumulated across attempts)
+        assert len(events) == 5
