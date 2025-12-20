@@ -8,7 +8,7 @@
 
 `mp` is a command-line interface for working with Mixpanel data. It provides commands for fetching data into a local analytical database, querying with SQL, running live Mixpanel reports, and managing authentication credentials.
 
-The CLI is a thin wrapper around the `mixpanel-data` Python library. Every command maps directly to a library method, ensuring consistent behavior between programmatic and command-line usage.
+The CLI is a thin wrapper around the `mixpanel_data` Python library. Every command maps directly to a library method, ensuring consistent behavior between programmatic and command-line usage.
 
 ## Design Principles
 
@@ -27,10 +27,10 @@ The CLI is a thin wrapper around the `mixpanel-data` Python library. Every comma
 ## Installation
 
 ```bash
-pip install mixpanel-data
+pip install mixpanel_data
 ```
 
-This installs both the `mixpanel-data` Python library and the `mp` CLI.
+This installs both the `mixpanel_data` Python library and the `mp` CLI.
 
 ---
 
@@ -717,7 +717,7 @@ mp info
 # Output:
 #   Workspace
 #   ─────────────────────────────
-#   Path:       ~/.mixpanel-data/12345.db
+#   Path:       ~/.mixpanel_data/12345.db
 #   Account:    production
 #   Project:    12345
 #   Region:     us
@@ -1084,7 +1084,7 @@ The CLI respects these environment variables, which take precedence over the con
 | `MP_PROJECT_ID` | Project ID |
 | `MP_REGION` | Data residency region (`us`, `eu`, `in`) |
 | `MP_CONFIG_PATH` | Override config file location (default: `~/.mp/config.toml`) |
-| `MP_DATA_DIR` | Override database directory (default: `~/.mixpanel-data/`) |
+| `MP_DATA_DIR` | Override database directory (default: `~/.mixpanel_data/`) |
 | `MP_FORMAT` | Default output format |
 | `NO_COLOR` | Disable colored output when set |
 
@@ -1129,7 +1129,7 @@ region = "eu"
 
 ### Database Location
 
-Local databases are stored in `~/.mixpanel-data/` by default, with one database file per project ID (e.g., `~/.mixpanel-data/12345.db`).
+Local databases are stored in `~/.mixpanel_data/` by default, with one database file per project ID (e.g., `~/.mixpanel_data/12345.db`).
 
 Override with `MP_DATA_DIR` environment variable.
 
@@ -1264,4 +1264,4 @@ mp sql "
 
 ---
 
-*This specification defines the command-line interface for the `mp` tool. The CLI is a thin wrapper around the `mixpanel-data` Python library.*
+*This specification defines the command-line interface for the `mp` tool. The CLI is a thin wrapper around the `mixpanel_data` Python library.*

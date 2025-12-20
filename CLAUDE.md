@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`mixpanel-data` is a Python library and CLI for working with Mixpanel analytics data, designed for AI coding agents. The core insight: agents should fetch data once into a local DuckDB database, then query it repeatedly with SQL—preserving context window for reasoning rather than consuming it with raw API responses.
+`mixpanel_data` is a Python library and CLI for working with Mixpanel analytics data, designed for AI coding agents. The core insight: agents should fetch data once into a local DuckDB database, then query it repeatedly with SQL—preserving context window for reasoning rather than consuming it with raw API responses.
 
 **Status:** Design phase. Comprehensive specifications exist in `docs/`; no source code has been written yet.
 
@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Context | Name | Example |
 |---------|------|---------|
-| PyPI package | `mixpanel-data` | `pip install mixpanel-data` |
+| PyPI package | `mixpanel_data` | `pip install mixpanel_data` |
 | Python import | `mixpanel_data` | `import mixpanel_data as mp` |
 | CLI command | `mp` | `mp fetch events --from 2024-01-01` |
 
@@ -44,8 +44,8 @@ Infrastructure Layer        → ConfigManager, MixpanelAPIClient, StorageEngine 
 
 Read in this order for implementation:
 
-1. **[docs/mixpanel-data-project-brief.md](docs/mixpanel-data-project-brief.md)** — Vision and goals
-2. **[docs/mixpanel-data-design.md](docs/mixpanel-data-design.md)** — Architecture, component specs, public API
+1. **[docs/mixpanel_data-project-brief.md](docs/mixpanel_data-project-brief.md)** — Vision and goals
+2. **[docs/mixpanel_data-design.md](docs/mixpanel_data-design.md)** — Architecture, component specs, public API
 3. **[docs/mp-cli-project-spec.md](docs/mp-cli-project-spec.md)** — Full CLI specification
 4. **[docs/MIXPANEL_DATA_MODEL_REFERENCE.md](docs/MIXPANEL_DATA_MODEL_REFERENCE.md)** — Mixpanel data model for Pydantic/DuckDB mapping
 

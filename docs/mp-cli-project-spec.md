@@ -1,4 +1,4 @@
-# mixpanel-data — Project Specification
+# mixpanel_data — Project Specification
 
 > A foundational Python library and CLI for working with Mixpanel data, designed for AI coding agents.
 
@@ -10,13 +10,13 @@
 
 ## Executive Summary
 
-`mixpanel-data` is a Python library and command-line tool that enables terminal-based coding agents (Claude Code, Cursor, etc.) to interact with Mixpanel data efficiently. Unlike the Mixpanel MCP server which dumps API responses directly into the context window, `mixpanel-data` takes a **database-first approach**: fetch data once, store it locally in DuckDB, then run unlimited queries against the local database.
+`mixpanel_data` is a Python library and command-line tool that enables terminal-based coding agents (Claude Code, Cursor, etc.) to interact with Mixpanel data efficiently. Unlike the Mixpanel MCP server which dumps API responses directly into the context window, `mixpanel_data` takes a **database-first approach**: fetch data once, store it locally in DuckDB, then run unlimited queries against the local database.
 
 ### Naming
 
 | Context | Name | Example |
 |---------|------|---------|
-| PyPI package | `mixpanel-data` | `pip install mixpanel-data` |
+| PyPI package | `mixpanel_data` | `pip install mixpanel_data` |
 | Python import | `mixpanel_data` (aliased to `mp`) | `import mixpanel_data as mp` |
 | CLI command | `mp` | `mp events fetch --from 2024-01-01` |
 
@@ -109,7 +109,7 @@ This preserves the agent's context window for reasoning and insights rather than
 
 ```toml
 [project]
-name = "mixpanel-data"
+name = "mixpanel_data"
 description = "Python library and CLI for working with Mixpanel data"
 requires-python = ">=3.11"
 dependencies = [
@@ -134,7 +134,7 @@ notebooks = ["marimo", "jupyter", "altair"]
 ## Project Structure
 
 ```
-mixpanel-data/
+mixpanel_data/
 ├── pyproject.toml
 ├── README.md
 ├── LICENSE
@@ -810,7 +810,7 @@ mp db reset
 # mixpanel_data/__init__.py
 
 """
-mixpanel-data - Python library and CLI for working with Mixpanel data.
+mixpanel_data - Python library and CLI for working with Mixpanel data.
 
 Usage as library:
     import mixpanel_data as mp
@@ -983,11 +983,11 @@ marimo becomes the "Lens runtime"—interactive data exploration without buildin
 
 ## Agent Skill Specification
 
-The skill teaches Claude Code (and other agents) how to use `mixpanel-data` effectively.
+The skill teaches Claude Code (and other agents) how to use `mixpanel_data` effectively.
 
 ```markdown
 ---
-name: mixpanel-data
+name: mixpanel_data
 description: Query and analyze Mixpanel data via the mp CLI and Python library. Use for product 
   analytics questions, user behavior analysis, funnel optimization, and retention analysis. 
   Triggers on "mixpanel", "analytics", "funnel", "retention", "user behavior", "event data".
@@ -997,9 +997,9 @@ description: Query and analyze Mixpanel data via the mp CLI and Python library. 
 
 ## Overview
 
-`mixpanel-data` is a Python library and CLI for working with Mixpanel data. 
+`mixpanel_data` is a Python library and CLI for working with Mixpanel data. 
 
-**Install:** `pip install mixpanel-data`
+**Install:** `pip install mixpanel_data`
 **CLI command:** `mp`
 **Python import:** `import mixpanel_data as mp`
 
@@ -1121,7 +1121,7 @@ Run with: `python analysis.py`
 
 ## Notebook Integration
 
-`mixpanel-data` works in any notebook environment.
+`mixpanel_data` works in any notebook environment.
 
 ### Quick Exploration (Jupyter/Colab)
 ```python

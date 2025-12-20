@@ -1,4 +1,4 @@
-# mixpanel-data
+# mixpanel_data
 
 A Python library and CLI for working with Mixpanel analytics data, designed for AI coding agents.
 
@@ -23,7 +23,7 @@ Fetch data once, store it locally in DuckDB, query repeatedly with SQL. Data liv
 ## Installation
 
 ```bash
-pip install mixpanel-data
+pip install mixpanel_data
 ```
 
 ## Quick Start
@@ -142,8 +142,8 @@ SELECT properties->>'$.user.email' as email FROM events
 
 ## Documentation
 
-- [Project Brief](docs/mixpanel-data-project-brief.md) — Vision and goals
-- [Design Document](docs/mixpanel-data-design.md) — Architecture, component specs, public API
+- [Project Brief](docs/mixpanel_data-project-brief.md) — Vision and goals
+- [Design Document](docs/mixpanel_data-design.md) — Architecture, component specs, public API
 - [CLI Specification](docs/mp-cli-project-spec.md) — Full CLI reference
 - [Mixpanel Data Model](docs/MIXPANEL_DATA_MODEL_REFERENCE.md) — Data model reference
 
