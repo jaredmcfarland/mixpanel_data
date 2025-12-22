@@ -1,0 +1,737 @@
+"""Mixpanel API Client.
+
+Low-level HTTP client for all Mixpanel APIs. Handles:
+- Service account authentication via HTTP Basic auth
+- Regional endpoint routing (US, EU, India)
+- Automatic rate limit handling with exponential backoff
+- Streaming JSONL parsing for large exports
+
+This is a private implementation detail. Users should use the Workspace class
+or service layer instead of accessing this module directly.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+import logging
+import random
+import time
+from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING, Any
+
+import httpx
+
+from mixpanel_data._internal.config import Credentials
+from mixpanel_data.exceptions import (
+    AuthenticationError,
+    MixpanelDataError,
+    QueryError,
+    RateLimitError,
+)
+
+if TYPE_CHECKING:
+    from types import TracebackType
+
+logger = logging.getLogger(__name__)
+
+# Regional endpoint configuration
+# Each region has separate URLs for query APIs and export/data APIs
+ENDPOINTS: dict[str, dict[str, str]] = {
+    "us": {
+        "query": "https://mixpanel.com/api/query",
+        "export": "https://data.mixpanel.com/api/2.0",
+        "engage": "https://mixpanel.com/api/2.0/engage",
+    },
+    "eu": {
+        "query": "https://eu.mixpanel.com/api/query",
+        "export": "https://data-eu.mixpanel.com/api/2.0",
+        "engage": "https://eu.mixpanel.com/api/2.0/engage",
+    },
+    "in": {
+        "query": "https://in.mixpanel.com/api/query",
+        "export": "https://data-in.mixpanel.com/api/2.0",
+        "engage": "https://in.mixpanel.com/api/2.0/engage",
+    },
+}
+
+
+class MixpanelAPIClient:
+    """Low-level HTTP client for Mixpanel APIs.
+
+    Handles authentication, rate limiting, and response parsing. Most users
+    won't use this directly—they'll use the Workspace class instead.
+
+    Example:
+        >>> from mixpanel_data._internal.config import ConfigManager
+        >>> from mixpanel_data._internal.api_client import MixpanelAPIClient
+        >>>
+        >>> config = ConfigManager()
+        >>> credentials = config.resolve_credentials()
+        >>>
+        >>> with MixpanelAPIClient(credentials) as client:
+        ...     events = client.get_events()
+        ...     print(events)
+    """
+
+    def __init__(
+        self,
+        credentials: Credentials,
+        *,
+        timeout: float = 30.0,
+        export_timeout: float = 300.0,
+        max_retries: int = 3,
+        _transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        """Initialize the API client.
+
+        Args:
+            credentials: Immutable authentication credentials.
+            timeout: Request timeout in seconds for regular requests.
+            export_timeout: Request timeout for export operations.
+            max_retries: Maximum retry attempts for rate-limited requests.
+            _transport: Internal parameter for testing with MockTransport.
+        """
+        self._credentials = credentials
+        self._timeout = timeout
+        self._export_timeout = export_timeout
+        self._max_retries = max_retries
+        self._client: httpx.Client | None = None
+        self._transport = _transport
+
+    def _get_auth_header(self) -> str:
+        """Generate HTTP Basic auth header value.
+
+        Returns:
+            Base64-encoded "username:secret" prefixed with "Basic ".
+        """
+        secret = self._credentials.secret.get_secret_value()
+        auth_string = f"{self._credentials.username}:{secret}"
+        encoded = base64.b64encode(auth_string.encode()).decode()
+        return f"Basic {encoded}"
+
+    def _build_url(self, api_type: str, path: str) -> str:
+        """Build full URL for the given API type and path.
+
+        Args:
+            api_type: One of "query", "export", or "engage".
+            path: API endpoint path (e.g., "/segmentation").
+
+        Returns:
+            Full URL for the endpoint.
+        """
+        region = self._credentials.region
+        base = ENDPOINTS[region][api_type]
+        # Ensure path starts with /
+        if not path.startswith("/"):
+            path = f"/{path}"
+        return f"{base}{path}"
+
+    def _ensure_client(self) -> httpx.Client:
+        """Ensure HTTP client is initialized.
+
+        Returns:
+            The httpx.Client instance.
+        """
+        if self._client is None:
+            self._client = httpx.Client(
+                timeout=self._timeout,
+                transport=self._transport,
+            )
+        return self._client
+
+    def close(self) -> None:
+        """Close the HTTP client and release resources."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+
+    def __enter__(self) -> MixpanelAPIClient:
+        """Enter context manager."""
+        self._ensure_client()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Exit context manager, closing client."""
+        self.close()
+
+    def _handle_response(self, response: httpx.Response) -> Any:
+        """Handle API response, raising appropriate exceptions.
+
+        Args:
+            response: The HTTP response to handle.
+
+        Returns:
+            Parsed JSON response.
+
+        Raises:
+            AuthenticationError: On 401 response.
+            QueryError: On 400 response.
+            MixpanelDataError: On 5xx response.
+        """
+        if response.status_code == 401:
+            raise AuthenticationError(
+                "Invalid credentials. Check username, secret, and project_id."
+            )
+        if response.status_code == 400:
+            try:
+                body = response.json()
+                error_msg = body.get("error", "Unknown error")
+            except json.JSONDecodeError:
+                error_msg = response.text[:200] if response.text else "Unknown error"
+            raise QueryError(error_msg)
+        if response.status_code >= 500:
+            raise MixpanelDataError(
+                f"Server error: {response.status_code}",
+                code="SERVER_ERROR",
+                details={"status_code": response.status_code},
+            )
+        response.raise_for_status()
+        return response.json()
+
+    def _calculate_backoff(self, attempt: int) -> float:
+        """Calculate backoff delay with jitter.
+
+        Args:
+            attempt: Zero-based attempt number.
+
+        Returns:
+            Delay in seconds.
+        """
+        base = 1.0
+        max_delay = 60.0
+        delay: float = min(base * (2**attempt), max_delay)
+        jitter: float = random.uniform(0, delay * 0.1)  # noqa: S311
+        return delay + jitter
+
+    def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        form_data: dict[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> Any:
+        """Make an authenticated request with retry on rate limit.
+
+        Args:
+            method: HTTP method (GET, POST, etc.).
+            url: Full URL to request.
+            params: Query parameters.
+            data: Request body as JSON (for POST).
+            form_data: Request body as form-encoded (for POST).
+            timeout: Override default timeout.
+
+        Returns:
+            Parsed JSON response.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            RateLimitError: Rate limit exceeded after max retries.
+            QueryError: Invalid parameters.
+        """
+        client = self._ensure_client()
+
+        # Add project_id to all requests
+        if params is None:
+            params = {}
+        params["project_id"] = self._credentials.project_id
+
+        headers = {"Authorization": self._get_auth_header()}
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = client.request(
+                    method,
+                    url,
+                    params=params,
+                    json=data,
+                    data=form_data,
+                    headers=headers,
+                    timeout=timeout or self._timeout,
+                )
+
+                if response.status_code == 429:
+                    if attempt >= self._max_retries:
+                        retry_after = self._parse_retry_after(response)
+                        raise RateLimitError(
+                            "Rate limit exceeded after max retries",
+                            retry_after=retry_after,
+                        )
+                    # Calculate wait time
+                    retry_after = self._parse_retry_after(response)
+                    if retry_after is not None:
+                        wait_time = float(retry_after)
+                    else:
+                        wait_time = self._calculate_backoff(attempt)
+                    logger.warning(
+                        "Rate limited, retrying in %.1f seconds (attempt %d/%d)",
+                        wait_time,
+                        attempt + 1,
+                        self._max_retries,
+                    )
+                    time.sleep(wait_time)
+                    continue
+
+                return self._handle_response(response)
+
+            except httpx.HTTPError as e:
+                # Network/connection errors
+                raise MixpanelDataError(
+                    f"HTTP error: {e}",
+                    code="HTTP_ERROR",
+                    details={"error": str(e)},
+                ) from e
+
+        # Should not reach here, but satisfy type checker
+        raise RateLimitError("Rate limit exceeded after max retries")
+
+    def _parse_retry_after(self, response: httpx.Response) -> int | None:
+        """Parse Retry-After header if present.
+
+        Args:
+            response: HTTP response.
+
+        Returns:
+            Seconds to wait, or None if header not present.
+        """
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is not None:
+            try:
+                return int(retry_after)
+            except ValueError:
+                pass
+        return None
+
+    # =========================================================================
+    # Export API - Streaming
+    # =========================================================================
+
+    def export_events(
+        self,
+        from_date: str,
+        to_date: str,
+        *,
+        events: list[str] | None = None,
+        where: str | None = None,
+        on_batch: Callable[[int], None] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Stream events from the Export API.
+
+        Args:
+            from_date: Start date (YYYY-MM-DD, inclusive).
+            to_date: End date (YYYY-MM-DD, inclusive).
+            events: Optional list of event names to filter.
+            where: Optional filter expression.
+            on_batch: Optional callback invoked with count after each batch.
+
+        Yields:
+            Event dictionaries with 'event' and 'properties' keys.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            RateLimitError: Rate limit exceeded after max retries.
+            QueryError: Invalid parameters.
+        """
+        url = self._build_url("export", "/export")
+
+        params: dict[str, Any] = {
+            "project_id": self._credentials.project_id,
+            "from_date": from_date,
+            "to_date": to_date,
+        }
+        if events:
+            params["event"] = json.dumps(events)
+        if where:
+            params["where"] = where
+
+        client = self._ensure_client()
+        headers = {
+            "Authorization": self._get_auth_header(),
+            "Accept-Encoding": "gzip",
+        }
+
+        # Stream with retry logic
+        for attempt in range(self._max_retries + 1):
+            batch_count = 0  # Reset on each attempt
+            try:
+                with client.stream(
+                    "GET",
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=self._export_timeout,
+                ) as response:
+                    if response.status_code == 429:
+                        if attempt >= self._max_retries:
+                            retry_after = self._parse_retry_after(response)
+                            raise RateLimitError(
+                                "Rate limit exceeded after max retries",
+                                retry_after=retry_after,
+                            )
+                        retry_after = self._parse_retry_after(response)
+                        if retry_after is not None:
+                            wait_time = float(retry_after)
+                        else:
+                            wait_time = self._calculate_backoff(attempt)
+                        time.sleep(wait_time)
+                        continue
+
+                    if response.status_code == 401:
+                        raise AuthenticationError(
+                            "Invalid credentials. Check username, secret, and project_id."
+                        )
+                    if response.status_code == 400:
+                        # Need to read body for error
+                        body = response.read()
+                        try:
+                            error_data = json.loads(body)
+                            error_msg = error_data.get("error", "Unknown error")
+                        except json.JSONDecodeError:
+                            error_msg = body.decode()[:200] if body else "Unknown error"
+                        raise QueryError(error_msg)
+
+                    response.raise_for_status()
+
+                    for line in response.iter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            event = json.loads(line)
+                            yield event
+                            batch_count += 1
+                            if on_batch and batch_count % 1000 == 0:
+                                on_batch(batch_count)
+                        except json.JSONDecodeError:
+                            logger.warning("Skipping malformed line: %s", line[:100])
+
+                    # Call on_batch with final count if there was a partial batch
+                    if on_batch and batch_count % 1000 != 0:
+                        on_batch(batch_count)
+                    return  # Success, exit retry loop
+
+            except httpx.HTTPError as e:
+                # Network/connection errors - retry if attempts remain
+                if attempt >= self._max_retries:
+                    raise MixpanelDataError(
+                        f"HTTP error during export: {e}",
+                        code="HTTP_ERROR",
+                        details={"error": str(e)},
+                    ) from e
+                time.sleep(self._calculate_backoff(attempt))
+
+    def export_profiles(
+        self,
+        *,
+        where: str | None = None,
+        on_batch: Callable[[int], None] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Stream profiles from the Engage API.
+
+        Args:
+            where: Optional filter expression.
+            on_batch: Optional callback invoked with count after each page.
+
+        Yields:
+            Profile dictionaries with '$distinct_id' and '$properties' keys.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            RateLimitError: Rate limit exceeded after max retries.
+        """
+        url = self._build_url("engage", "")
+
+        session_id: str | None = None
+        page = 0
+        total_count = 0
+
+        while True:
+            params: dict[str, Any] = {
+                "project_id": self._credentials.project_id,
+                "page": page,
+            }
+            if session_id:
+                params["session_id"] = session_id
+            if where:
+                params["where"] = where
+
+            response = self._request("POST", url, data=params)
+
+            results = response.get("results", [])
+            if not results:
+                break
+
+            for profile in results:
+                yield profile
+                total_count += 1
+
+            if on_batch:
+                on_batch(total_count)
+
+            session_id = response.get("session_id")
+            if not session_id:
+                break
+            page += 1
+
+    # =========================================================================
+    # Discovery API
+    # =========================================================================
+
+    def get_events(self) -> list[str]:
+        """List all event names in the project.
+
+        Returns:
+            List of event name strings.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+        """
+        url = self._build_url("query", "/events/names")
+        response = self._request("GET", url, params={"type": "general"})
+        # Response is a list of event names
+        if isinstance(response, list):
+            return [str(e) for e in response]
+        return []
+
+    def get_event_properties(self, event: str) -> list[str]:
+        """List properties for a specific event.
+
+        Args:
+            event: Event name.
+
+        Returns:
+            List of property name strings.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid event name.
+        """
+        url = self._build_url("query", "/events/properties/top")
+        response = self._request("GET", url, params={"event": event})
+        # Response is a dict with property names as keys and counts as values
+        if isinstance(response, dict):
+            return list(response.keys())
+        return []
+
+    def get_property_values(
+        self,
+        property_name: str,
+        *,
+        event: str | None = None,
+        limit: int = 255,
+    ) -> list[str]:
+        """List sample values for a property.
+
+        Args:
+            property_name: Property name.
+            event: Optional event name to scope the property.
+            limit: Maximum number of values to return.
+
+        Returns:
+            List of property value strings.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+        """
+        url = self._build_url("query", "/events/properties/values")
+        params: dict[str, Any] = {
+            "name": property_name,
+            "limit": limit,
+        }
+        if event:
+            params["event"] = event
+        response = self._request("GET", url, params=params)
+        if isinstance(response, list):
+            return [str(v) for v in response]
+        return []
+
+    # =========================================================================
+    # Query API - Raw Responses
+    # =========================================================================
+
+    def segmentation(
+        self,
+        event: str,
+        from_date: str,
+        to_date: str,
+        *,
+        on: str | None = None,
+        unit: str = "day",
+        type: str = "general",
+        where: str | None = None,
+    ) -> dict[str, Any]:
+        """Run a segmentation query.
+
+        Args:
+            event: Event name to segment.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            on: Optional property to segment by.
+            unit: Time unit (minute, hour, day, week, month).
+            type: Aggregation type (general, unique, average).
+            where: Optional filter expression.
+
+        Returns:
+            Raw API response dictionary.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid query parameters.
+            RateLimitError: Rate limit exceeded.
+        """
+        url = self._build_url("query", "/segmentation")
+        params: dict[str, Any] = {
+            "event": event,
+            "from_date": from_date,
+            "to_date": to_date,
+            "unit": unit,
+            "type": type,
+        }
+        if on:
+            params["on"] = on
+        if where:
+            params["where"] = where
+        result: dict[str, Any] = self._request("GET", url, params=params)
+        return result
+
+    def funnel(
+        self,
+        funnel_id: int,
+        from_date: str,
+        to_date: str,
+        *,
+        unit: str | None = None,
+        on: str | None = None,
+        where: str | None = None,
+        length: int | None = None,
+        length_unit: str | None = None,
+    ) -> dict[str, Any]:
+        """Run a funnel analysis query.
+
+        Args:
+            funnel_id: Funnel identifier.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            unit: Time unit for grouping.
+            on: Optional property to segment by.
+            where: Optional filter expression.
+            length: Conversion window length.
+            length_unit: Conversion window unit.
+
+        Returns:
+            Raw API response dictionary.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid funnel ID or parameters.
+            RateLimitError: Rate limit exceeded.
+        """
+        url = self._build_url("query", "/funnels")
+        params: dict[str, Any] = {
+            "funnel_id": funnel_id,
+            "from_date": from_date,
+            "to_date": to_date,
+        }
+        if unit:
+            params["unit"] = unit
+        if on:
+            params["on"] = on
+        if where:
+            params["where"] = where
+        if length is not None:
+            params["length"] = length
+        if length_unit:
+            params["length_unit"] = length_unit
+        result: dict[str, Any] = self._request("GET", url, params=params)
+        return result
+
+    def retention(
+        self,
+        born_event: str,
+        event: str,
+        from_date: str,
+        to_date: str,
+        *,
+        retention_type: str = "birth",
+        born_where: str | None = None,
+        where: str | None = None,
+        interval: int = 1,
+        interval_count: int = 8,
+        unit: str = "day",
+    ) -> dict[str, Any]:
+        """Run a retention analysis query.
+
+        Args:
+            born_event: Event that defines cohort membership.
+            event: Event that defines return.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            retention_type: Retention type (birth, compounded).
+            born_where: Optional filter for born event.
+            where: Optional filter for return event.
+            interval: Retention interval size.
+            interval_count: Number of intervals to track.
+            unit: Interval unit (day, week, month).
+
+        Returns:
+            Raw API response dictionary.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid parameters.
+            RateLimitError: Rate limit exceeded.
+        """
+        url = self._build_url("query", "/retention")
+        params: dict[str, Any] = {
+            "born_event": born_event,
+            "event": event,
+            "from_date": from_date,
+            "to_date": to_date,
+            "retention_type": retention_type,
+            "interval": interval,
+            "interval_count": interval_count,
+            "unit": unit,
+        }
+        if born_where:
+            params["born_where"] = born_where
+        if where:
+            params["where"] = where
+        result: dict[str, Any] = self._request("GET", url, params=params)
+        return result
+
+    def jql(
+        self,
+        script: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        """Execute a JQL (JavaScript Query Language) script.
+
+        Args:
+            script: JQL script code.
+            params: Optional parameters to pass to the script.
+
+        Returns:
+            List of results from script execution.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Script execution error.
+            RateLimitError: Rate limit exceeded.
+        """
+        url = self._build_url("query", "/jql")
+        # JQL API expects form-encoded data with params as JSON string
+        form: dict[str, Any] = {"script": script}
+        if params:
+            form["params"] = json.dumps(params)
+        response = self._request("POST", url, form_data=form)
+        if isinstance(response, list):
+            return response
+        return []

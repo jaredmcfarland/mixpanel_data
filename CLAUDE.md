@@ -173,4 +173,9 @@ ruff check src/ tests/
 ```
 
 ## Recent Changes
+- 002-api-client: Added Python 3.11+ (Constitution requirement) + httpx (HTTP client per Constitution), pydantic (validation)
 - 001-foundation-layer: Implemented complete foundation layer (exceptions, types, config, auth)
+
+## Active Technologies
+- Python 3.11+ (Constitution requirement) + httpx (HTTP client per Constitution), pydantic (validation) (002-api-client)
+- N/A (client has no storage responsibility; Phase 003 handles DuckDB) (002-api-client)
