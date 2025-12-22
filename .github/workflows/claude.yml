@@ -54,7 +54,9 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install just
-        run: curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+        uses: extractions/setup-just@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync dependencies
         run: just sync
