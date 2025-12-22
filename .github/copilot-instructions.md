@@ -15,32 +15,26 @@
 ### Prerequisites
 - Python 3.12.3 (or Python 3.11+)
 - [uv](https://docs.astral.sh/uv/) - Python package manager
-- [just](https://github.com/casey/just) - Command runner
 
 ### Development Commands
 
-This project uses `just` as a command runner. **ALWAYS use just commands for development tasks.**
-
-Run `just` to see all available commands:
+This project uses `uv` for dependency management and running tools.
 
 | Command | Description |
 |---------|-------------|
-| `just` | List all available commands |
-| `just check` | Run all checks (lint, typecheck, test) |
-| `just test` | Run tests (supports args: `just test -k foo`) |
-| `just test-cov` | Run tests with coverage |
-| `just lint` | Lint code with ruff |
-| `just lint-fix` | Auto-fix lint errors |
-| `just fmt` | Format code with ruff |
-| `just typecheck` | Type check with mypy |
-| `just sync` | Sync dependencies |
-| `just clean` | Remove caches and build artifacts |
-| `just build` | Build package |
+| `uv sync --all-extras` | Sync all dependencies |
+| `uv run pytest` | Run tests |
+| `uv run pytest --cov=src/mixpanel_data` | Run tests with coverage |
+| `uv run ruff check src/ tests/` | Lint code with ruff |
+| `uv run ruff check --fix src/ tests/` | Auto-fix lint errors |
+| `uv run ruff format src/ tests/` | Format code with ruff |
+| `uv run mypy src/` | Type check with mypy |
+| `uv build` | Build package |
 
 ### Installation & Setup
 **ALWAYS sync dependencies before any development work:**
 ```bash
-just sync
+uv sync --all-extras
 ```
 
 This installs all dependencies including dev extras (pytest, ruff, mypy, pytest-cov, pandas-stubs).
@@ -48,18 +42,18 @@ This installs all dependencies including dev extras (pytest, ruff, mypy, pytest-
 ### Testing
 **Run all tests:**
 ```bash
-just test
+uv run pytest
 ```
 
 **Run tests with coverage (target: 95%+):**
 ```bash
-just test-cov
+uv run pytest --cov=src/mixpanel_data --cov-report=term-missing
 ```
 
 **Run specific tests:**
 ```bash
-just test -k test_name
-just test tests/unit/test_config.py
+uv run pytest -k test_name
+uv run pytest tests/unit/test_config.py
 ```
 
 Tests are organized:
@@ -71,26 +65,26 @@ Tests are organized:
 
 **ALWAYS run all checks before committing:**
 ```bash
-just check
+uv run ruff check src/ tests/
+uv run mypy src/
+uv run pytest
 ```
-
-This runs lint, typecheck, and test in sequence.
 
 **Auto-fix linting issues:**
 ```bash
-just lint-fix
+uv run ruff check --fix src/ tests/
 ```
 
 **Type checking only (must pass with zero errors):**
 ```bash
-just typecheck
+uv run mypy src/
 ```
 Note: Tests are excluded from strict type checking (see pyproject.toml `tool.mypy.overrides`)
 
 ### Building the Package
 **To build distribution packages:**
 ```bash
-just build
+uv build
 ```
 Creates wheel and sdist in `dist/`
 
@@ -219,17 +213,16 @@ Config file: `~/.mp/config.toml` (TOML format)
 
 **These instructions have been validated** by running all commands in the actual environment. If you encounter issues:
 1. First verify you're in the correct directory: `/home/runner/work/mixpanel_data/mixpanel_data`
-2. Check if dependencies are synced: `just sync`
+2. Check if dependencies are synced: `uv sync --all-extras`
 3. Only then search for additional information or report the issue
 
 **Command execution times** (for timeout planning):
-- `just sync`: 30-60 seconds (first run), <5 seconds (subsequent)
-- `just test`: ~1 second
-- `just test-cov`: ~1 second
-- `just lint`: <1 second
-- `just typecheck`: 2-3 seconds
-- `just check`: ~5 seconds (runs lint, typecheck, test)
-- `just build`: ~30 seconds
+- `uv sync --all-extras`: 30-60 seconds (first run), <5 seconds (subsequent)
+- `uv run pytest`: ~1 second
+- `uv run pytest --cov`: ~1 second
+- `uv run ruff check`: <1 second
+- `uv run mypy src/`: 2-3 seconds
+- `uv build`: ~30 seconds
 
 ---
 

@@ -31,27 +31,22 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Install just
-        uses: extractions/setup-just@v3
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Sync dependencies
-        run: just sync
+        run: uv sync --all-extras
 
       - name: Lint with ruff
-        run: just lint
+        run: uv run ruff check src/ tests/
 
       - name: Type check with mypy
-        run: just typecheck
+        run: uv run mypy src/
 
       - name: Run tests with pytest
         if: matrix.python-version != '3.12'
-        run: just test
+        run: uv run pytest
 
       - name: Run tests with coverage (Python 3.12 only)
         if: matrix.python-version == '3.12'
-        run: just test-cov
+        run: uv run pytest --cov=src/mixpanel_data --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage to codecov
         if: matrix.python-version == '3.12'
@@ -61,4 +56,4 @@ jobs:
 
       - name: Build package
         if: matrix.python-version == '3.12'
-        run: just build
+        run: uv build

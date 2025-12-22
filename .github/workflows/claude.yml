@@ -53,13 +53,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Install just
-        uses: extractions/setup-just@v3
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Sync dependencies
-        run: just sync
+        run: uv sync --all-extras
 
       - name: Run Claude Code
         id: claude
@@ -79,4 +74,4 @@ jobs:
           # or https://code.claude.com/docs/en/cli-reference for available options.
           claude_args: >
             --allowed-tools
-            Bash(just *)
+            Bash(uv sync:*),Bash(uv run:*),Bash(uv build:*)
