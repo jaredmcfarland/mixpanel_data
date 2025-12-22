@@ -377,3 +377,126 @@ class JQLResult:
             "raw": self._raw,
             "row_count": len(self._raw),
         }
+
+
+# Storage Types
+
+
+@dataclass(frozen=True)
+class TableMetadata:
+    """Metadata for a data fetch operation.
+
+    This metadata is passed to table creation methods and stored in the
+    database's internal _metadata table for tracking fetch operations.
+    """
+
+    type: Literal["events", "profiles"]
+    """Type of data fetched."""
+
+    fetched_at: datetime
+    """When the fetch completed (UTC)."""
+
+    from_date: str | None = None
+    """Start date for events (YYYY-MM-DD), None for profiles."""
+
+    to_date: str | None = None
+    """End date for events (YYYY-MM-DD), None for profiles."""
+
+    filter_events: list[str] | None = None
+    """Event names filtered (if applicable)."""
+
+    filter_where: str | None = None
+    """WHERE clause filter (if applicable)."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "type": self.type,
+            "fetched_at": self.fetched_at.isoformat(),
+            "from_date": self.from_date,
+            "to_date": self.to_date,
+            "filter_events": self.filter_events,
+            "filter_where": self.filter_where,
+        }
+
+
+@dataclass(frozen=True)
+class TableInfo:
+    """Information about a table in the database.
+
+    Returned by list_tables() to provide summary information about
+    available tables without retrieving full schemas.
+    """
+
+    name: str
+    """Table name."""
+
+    type: Literal["events", "profiles"]
+    """Table type."""
+
+    row_count: int
+    """Number of rows."""
+
+    fetched_at: datetime
+    """When data was fetched (UTC)."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "name": self.name,
+            "type": self.type,
+            "row_count": self.row_count,
+            "fetched_at": self.fetched_at.isoformat(),
+        }
+
+
+@dataclass(frozen=True)
+class ColumnInfo:
+    """Information about a table column.
+
+    Describes a single column's schema, including name, type,
+    nullability constraints, and primary key status.
+    """
+
+    name: str
+    """Column name."""
+
+    type: str
+    """DuckDB type (VARCHAR, TIMESTAMP, JSON, INTEGER, etc.)."""
+
+    nullable: bool
+    """Whether column allows NULL values."""
+
+    primary_key: bool = False
+    """Whether column is a primary key."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "name": self.name,
+            "type": self.type,
+            "nullable": self.nullable,
+            "primary_key": self.primary_key,
+        }
+
+
+@dataclass(frozen=True)
+class TableSchema:
+    """Schema information for a table.
+
+    Returned by get_schema() to describe the structure of a table,
+    including all column definitions.
+    """
+
+    table_name: str
+    """Table name."""
+
+    columns: list[ColumnInfo]
+    """Column definitions."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "table_name": self.table_name,
+            "columns": [col.to_dict() for col in self.columns],
+        }

@@ -1,0 +1,1733 @@
+"""Unit tests for StorageEngine (User Story 1: Persistent Data Storage)."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
+from datetime import UTC
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from mixpanel_data._internal.storage import StorageEngine
+
+# =============================================================================
+# T010: Test __init__ with explicit path
+# =============================================================================
+
+
+def test_init_with_explicit_path_creates_database_file(tmp_path: Path) -> None:
+    """Test that StorageEngine creates database file at specified path."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Database file should exist
+        assert db_path.exists()
+        assert db_path.is_file()
+
+        # Should have a valid DuckDB connection
+        assert storage.connection is not None
+
+        # Path property should return the correct path
+        assert storage.path == db_path
+
+
+def test_init_creates_parent_directories_if_needed(tmp_path: Path) -> None:
+    """Test that StorageEngine creates parent directories automatically."""
+    db_path = tmp_path / "subdir" / "nested" / "test.db"
+    with StorageEngine(path=db_path):
+        # Parent directories should be created
+        assert db_path.parent.exists()
+        assert db_path.exists()
+
+
+def test_init_can_reopen_existing_database(tmp_path: Path) -> None:
+    """Test that StorageEngine can reopen an existing database file."""
+    db_path = tmp_path / "test.db"
+
+    # Create database
+    with StorageEngine(path=db_path):
+        pass
+
+    # Reopen same database
+    with StorageEngine(path=db_path) as storage:
+        assert storage.path == db_path
+        assert storage.connection is not None
+
+
+def test_init_with_invalid_path_raises_error() -> None:
+    """Test that StorageEngine raises error for invalid paths."""
+    # Try to create database in root directory (should fail on permissions)
+    invalid_path = Path("/root/cannot_write_here.db")
+
+    with pytest.raises(OSError):
+        StorageEngine(path=invalid_path)
+
+
+# =============================================================================
+# T011: Test default path resolution
+# =============================================================================
+
+
+def test_init_resolves_default_path_with_project_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Test that default path is ~/.mixpanel_data/{project_id}.db."""
+    # Mock Path.home() to use tmp_path
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    # Create storage without explicit path - should fail because we need project_id
+    # For now, this test documents that we'll need to pass project_id somehow
+    # We'll implement this in User Story 1 when we determine how to get project_id
+    pass  # Placeholder - will implement when we add project_id parameter
+
+
+# =============================================================================
+# T012: Test context manager protocol
+# =============================================================================
+
+
+def test_context_manager_enters_and_exits(tmp_path: Path) -> None:
+    """Test that StorageEngine works as context manager."""
+    db_path = tmp_path / "test.db"
+
+    with StorageEngine(path=db_path) as storage:
+        # Inside context, storage should be usable
+        assert storage.connection is not None
+        assert storage.path == db_path
+
+    # After exiting context, connection should be closed
+    # (We can't directly test if connection is closed, but it should be)
+
+
+def test_context_manager_closes_on_exception(tmp_path: Path) -> None:
+    """Test that context manager closes connection even on exception."""
+    db_path = tmp_path / "test.db"
+
+    with pytest.raises(ValueError), StorageEngine(path=db_path) as storage:
+        assert storage.connection is not None
+        # Raise exception to test cleanup
+        raise ValueError("test exception")
+
+    # Connection should be closed despite exception
+
+
+def test_context_manager_returns_self(tmp_path: Path) -> None:
+    """Test that __enter__ returns self."""
+    db_path = tmp_path / "test.db"
+
+    storage = StorageEngine(path=db_path)
+    try:
+        result = storage.__enter__()
+        assert result is storage
+    finally:
+        storage.close()
+
+
+# =============================================================================
+# T013: Integration test for session persistence (moved to integration tests)
+# =============================================================================
+# This test will be in tests/integration/test_storage_integration.py
+
+
+# =============================================================================
+# T014-T020: Implementation tests (these verify the implementation details)
+# =============================================================================
+
+
+def test_close_can_be_called_multiple_times(tmp_path: Path) -> None:
+    """Test that close() is idempotent."""
+    db_path = tmp_path / "test.db"
+    storage = StorageEngine(path=db_path)
+
+    # Should be safe to call multiple times
+    storage.close()
+    storage.close()
+    storage.close()
+
+
+def test_path_property_returns_path(tmp_path: Path) -> None:
+    """Test that path property returns the database path."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        assert storage.path == db_path
+
+
+def test_connection_property_returns_duckdb_connection(tmp_path: Path) -> None:
+    """Test that connection property returns DuckDB connection."""
+    import duckdb
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        assert isinstance(storage.connection, duckdb.DuckDBPyConnection)
+
+
+def test_cleanup_is_alias_for_close(tmp_path: Path) -> None:
+    """Test that cleanup() calls close()."""
+    db_path = tmp_path / "test.db"
+    storage = StorageEngine(path=db_path)
+
+    # cleanup() should work just like close()
+    storage.cleanup()
+
+    # Should be safe to call again
+    storage.cleanup()
+
+
+# =============================================================================
+# T021: Unit test for create_events_table batch insert logic
+# =============================================================================
+
+
+def test_create_events_table_inserts_all_records(tmp_path: Path) -> None:
+    """Test that create_events_table inserts all records from iterator."""
+    from datetime import datetime
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create sample events
+        events = [
+            {
+                "event_name": "Page View",
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "distinct_id": "user_123",
+                "insert_id": "event_001",
+                "properties": {"page": "/home", "country": "US"},
+            },
+            {
+                "event_name": "Button Click",
+                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "distinct_id": "user_456",
+                "insert_id": "event_002",
+                "properties": {"button": "signup", "country": "EU"},
+            },
+        ]
+
+        from mixpanel_data.types import TableMetadata
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+            from_date="2024-01-15",
+            to_date="2024-01-15",
+        )
+
+        # Create events table
+        row_count = storage.create_events_table("test_events", iter(events), metadata)
+
+        # Verify row count
+        assert row_count == 2
+
+        # Verify data was inserted
+        count_result = storage.connection.execute(
+            "SELECT COUNT(*) FROM test_events"
+        ).fetchone()
+        assert count_result == (2,)
+
+        # Verify schema is correct
+        rows = storage.connection.execute(
+            "SELECT event_name, distinct_id FROM test_events ORDER BY event_time"
+        ).fetchall()
+        assert rows == [("Page View", "user_123"), ("Button Click", "user_456")]
+
+
+def test_create_events_table_handles_large_batches(tmp_path: Path) -> None:
+    """Test that create_events_table handles batches correctly."""
+    from datetime import datetime
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create 5000 events to test batching
+        def event_generator() -> Iterator[dict[str, Any]]:
+            for i in range(5000):
+                yield {
+                    "event_name": "Event",
+                    "event_time": datetime.now(UTC),
+                    "distinct_id": f"user_{i}",
+                    "insert_id": f"event_{i:06d}",
+                    "properties": {"index": i},
+                }
+
+        from mixpanel_data.types import TableMetadata
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+        )
+
+        # Create events table
+        row_count = storage.create_events_table(
+            "large_events", event_generator(), metadata
+        )
+
+        # Verify row count
+        assert row_count == 5000
+
+        # Verify data was inserted
+        result = storage.connection.execute(
+            "SELECT COUNT(*) FROM large_events"
+        ).fetchone()
+        assert result == (5000,)
+
+
+def test_create_events_table_raises_error_if_table_exists(tmp_path: Path) -> None:
+    """Test that create_events_table raises TableExistsError if table exists."""
+    from datetime import datetime
+
+    from mixpanel_data.exceptions import TableExistsError
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Create table first time - should succeed
+        storage.create_events_table("test_events", iter(events), metadata)
+
+        # Try to create again - should raise TableExistsError
+        with pytest.raises(TableExistsError):
+            storage.create_events_table("test_events", iter(events), metadata)
+
+
+def test_create_events_table_validates_table_name(tmp_path: Path) -> None:
+    """Test that create_events_table validates table names."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Invalid: starts with underscore (reserved for internal tables)
+        with pytest.raises(ValueError, match="underscore"):
+            storage.create_events_table("_invalid", iter(events), metadata)
+
+        # Invalid: contains spaces
+        with pytest.raises(ValueError):
+            storage.create_events_table("invalid name", iter(events), metadata)
+
+        # Invalid: contains special characters
+        with pytest.raises(ValueError):
+            storage.create_events_table("invalid-name", iter(events), metadata)
+
+        # Valid names should work
+        storage.create_events_table("valid_name", iter(events), metadata)
+        storage.create_events_table("valid123", iter(events), metadata)
+
+
+def test_create_events_table_validates_required_fields(tmp_path: Path) -> None:
+    """Test that create_events_table validates required fields."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Missing event_name
+        with pytest.raises(ValueError, match="event_name"):
+            storage.create_events_table(
+                "test_events1",
+                iter(
+                    [
+                        {
+                            "event_time": datetime.now(UTC),
+                            "distinct_id": "user_1",
+                            "insert_id": "event_1",
+                            "properties": {},
+                        }
+                    ]
+                ),
+                metadata,
+            )
+
+        # Missing event_time
+        with pytest.raises(ValueError, match="event_time"):
+            storage.create_events_table(
+                "test_events2",
+                iter(
+                    [
+                        {
+                            "event_name": "Event",
+                            "distinct_id": "user_1",
+                            "insert_id": "event_1",
+                            "properties": {},
+                        }
+                    ]
+                ),
+                metadata,
+            )
+
+        # Missing distinct_id
+        with pytest.raises(ValueError, match="distinct_id"):
+            storage.create_events_table(
+                "test_events3",
+                iter(
+                    [
+                        {
+                            "event_name": "Event",
+                            "event_time": datetime.now(UTC),
+                            "insert_id": "event_1",
+                            "properties": {},
+                        }
+                    ]
+                ),
+                metadata,
+            )
+
+        # Missing insert_id
+        with pytest.raises(ValueError, match="insert_id"):
+            storage.create_events_table(
+                "test_events4",
+                iter(
+                    [
+                        {
+                            "event_name": "Event",
+                            "event_time": datetime.now(UTC),
+                            "distinct_id": "user_1",
+                            "properties": {},
+                        }
+                    ]
+                ),
+                metadata,
+            )
+
+        # Missing properties (should be allowed as it can default to empty dict)
+        # Actually, let's require properties
+        with pytest.raises(ValueError, match="properties"):
+            storage.create_events_table(
+                "test_events5",
+                iter(
+                    [
+                        {
+                            "event_name": "Event",
+                            "event_time": datetime.now(UTC),
+                            "distinct_id": "user_1",
+                            "insert_id": "event_1",
+                        }
+                    ]
+                ),
+                metadata,
+            )
+
+
+# =============================================================================
+# T022: Unit test for create_profiles_table batch insert logic
+# =============================================================================
+
+
+def test_create_profiles_table_inserts_all_records(tmp_path: Path) -> None:
+    """Test that create_profiles_table inserts all records from iterator."""
+    from datetime import datetime
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create sample profiles
+        profiles = [
+            {
+                "distinct_id": "user_123",
+                "properties": {"name": "Alice", "email": "alice@example.com"},
+                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+            },
+            {
+                "distinct_id": "user_456",
+                "properties": {"name": "Bob", "email": "bob@example.com"},
+                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+            },
+        ]
+
+        from mixpanel_data.types import TableMetadata
+
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Create profiles table
+        row_count = storage.create_profiles_table(
+            "test_profiles", iter(profiles), metadata
+        )
+
+        # Verify row count
+        assert row_count == 2
+
+        # Verify data was inserted
+        count_result = storage.connection.execute(
+            "SELECT COUNT(*) FROM test_profiles"
+        ).fetchone()
+        assert count_result == (2,)
+
+        # Verify schema is correct
+        rows = storage.connection.execute(
+            "SELECT distinct_id FROM test_profiles ORDER BY distinct_id"
+        ).fetchall()
+        assert rows == [("user_123",), ("user_456",)]
+
+
+def test_create_profiles_table_validates_required_fields(tmp_path: Path) -> None:
+    """Test that create_profiles_table validates required fields."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Missing distinct_id
+        with pytest.raises(ValueError, match="distinct_id"):
+            storage.create_profiles_table(
+                "test_profiles1",
+                iter(
+                    [
+                        {
+                            "properties": {"name": "Alice"},
+                            "last_seen": datetime.now(UTC),
+                        }
+                    ]
+                ),
+                metadata,
+            )
+
+        # Missing properties
+        with pytest.raises(ValueError, match="properties"):
+            storage.create_profiles_table(
+                "test_profiles2",
+                iter(
+                    [
+                        {
+                            "distinct_id": "user_1",
+                            "last_seen": datetime.now(UTC),
+                        }
+                    ]
+                ),
+                metadata,
+            )
+
+        # Missing last_seen (should be allowed - can be NULL)
+        # Actually, let's require last_seen
+        with pytest.raises(ValueError, match="last_seen"):
+            storage.create_profiles_table(
+                "test_profiles3",
+                iter([{"distinct_id": "user_1", "properties": {"name": "Alice"}}]),
+                metadata,
+            )
+
+
+# =============================================================================
+# T023: Unit test for progress callback invocation
+# =============================================================================
+
+
+def test_create_events_table_invokes_progress_callback(tmp_path: Path) -> None:
+    """Test that create_events_table invokes progress callback."""
+    from datetime import datetime
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create events generator
+        def event_generator() -> Iterator[dict[str, Any]]:
+            for i in range(3000):
+                yield {
+                    "event_name": "Event",
+                    "event_time": datetime.now(UTC),
+                    "distinct_id": f"user_{i}",
+                    "insert_id": f"event_{i:06d}",
+                    "properties": {"index": i},
+                }
+
+        from mixpanel_data.types import TableMetadata
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Track progress callbacks
+        callback_invocations = []
+
+        def on_progress(row_count: int) -> None:
+            callback_invocations.append(row_count)
+
+        # Create events table with callback
+        total_rows = storage.create_events_table(
+            "test_events", event_generator(), metadata, progress_callback=on_progress
+        )
+
+        # Verify callback was invoked
+        assert len(callback_invocations) > 0
+
+        # Verify final callback has total row count
+        assert callback_invocations[-1] == total_rows == 3000
+
+        # Verify callback was invoked multiple times (batching)
+        # With batch size of 2000, we should have at least 2 invocations
+        assert len(callback_invocations) >= 2
+
+
+def test_create_profiles_table_invokes_progress_callback(tmp_path: Path) -> None:
+    """Test that create_profiles_table invokes progress callback."""
+    from datetime import datetime
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create profiles generator
+        def profile_generator() -> Iterator[dict[str, Any]]:
+            for i in range(1500):
+                yield {
+                    "distinct_id": f"user_{i}",
+                    "properties": {"name": f"User {i}"},
+                    "last_seen": datetime.now(UTC),
+                }
+
+        from mixpanel_data.types import TableMetadata
+
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Track progress callbacks
+        callback_invocations = []
+
+        def on_progress(row_count: int) -> None:
+            callback_invocations.append(row_count)
+
+        # Create profiles table with callback
+        total_rows = storage.create_profiles_table(
+            "test_profiles",
+            profile_generator(),
+            metadata,
+            progress_callback=on_progress,
+        )
+
+        # Verify callback was invoked
+        assert len(callback_invocations) > 0
+
+        # Verify final callback has total row count
+        assert callback_invocations[-1] == total_rows == 1500
+
+
+# =============================================================================
+# T036: Unit test for ephemeral() classmethod
+# =============================================================================
+
+
+def test_ephemeral_creates_temporary_database() -> None:
+    """Test that ephemeral() creates a temporary database file."""
+    storage = StorageEngine.ephemeral()
+
+    try:
+        # Should have a valid connection
+        assert storage.connection is not None
+
+        # Path should exist but be in a temporary location
+        assert storage.path is not None
+        assert storage.path.exists()
+        assert storage.path.is_file()
+
+        # Should be able to create tables
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage.connection.execute("INSERT INTO test VALUES (1, 'hello')")
+
+        # Should be able to query
+        result = storage.connection.execute("SELECT value FROM test").fetchone()
+        assert result == ("hello",)
+    finally:
+        # Cleanup
+        temp_path = storage.path
+        storage.close()
+        assert temp_path is not None
+
+        # After close, temp file should be deleted
+        assert not temp_path.exists()
+
+
+def test_ephemeral_returns_storage_engine_instance() -> None:
+    """Test that ephemeral() returns a StorageEngine instance."""
+    with StorageEngine.ephemeral() as storage:
+        assert isinstance(storage, StorageEngine)
+
+
+def test_ephemeral_path_is_unique_for_each_instance() -> None:
+    """Test that each ephemeral database gets a unique path."""
+    with StorageEngine.ephemeral() as storage1, StorageEngine.ephemeral() as storage2:
+        assert storage1.path != storage2.path
+
+
+# =============================================================================
+# T037: Unit test for cleanup() method
+# =============================================================================
+
+
+def test_cleanup_deletes_ephemeral_database() -> None:
+    """Test that cleanup() deletes ephemeral database file."""
+    storage = StorageEngine.ephemeral()
+    temp_path = storage.path
+    assert temp_path is not None
+
+    # Before cleanup, file should exist
+    assert temp_path.exists()
+
+    # Call cleanup
+    storage.cleanup()
+
+    # After cleanup, file should be deleted
+    assert not temp_path.exists()
+
+
+def test_cleanup_is_idempotent() -> None:
+    """Test that cleanup() can be called multiple times safely."""
+    storage = StorageEngine.ephemeral()
+    temp_path = storage.path
+    assert temp_path is not None
+
+    # Call cleanup multiple times
+    storage.cleanup()
+    storage.cleanup()
+    storage.cleanup()
+
+    # Should not raise errors
+    assert not temp_path.exists()
+
+
+def test_cleanup_removes_wal_files_if_present() -> None:
+    """Test that cleanup() removes WAL files if they exist."""
+    storage = StorageEngine.ephemeral()
+    temp_path = storage.path
+    assert temp_path is not None
+
+    # Create some data to potentially trigger WAL creation
+    storage.connection.execute("CREATE TABLE test (id INTEGER)")
+    storage.connection.execute("INSERT INTO test VALUES (1)")
+
+    # Get potential WAL path
+    wal_path = Path(str(temp_path) + ".wal")
+
+    # Call cleanup
+    storage.cleanup()
+
+    # Both database and WAL should be gone
+    assert not temp_path.exists()
+    assert not wal_path.exists()
+
+
+def test_cleanup_does_nothing_for_persistent_database(tmp_path: Path) -> None:
+    """Test that cleanup() doesn't delete persistent databases."""
+    db_path = tmp_path / "persistent.db"
+    storage = StorageEngine(path=db_path)
+
+    # Before cleanup, file should exist
+    assert db_path.exists()
+
+    # Call cleanup
+    storage.cleanup()
+
+    # After cleanup, persistent file should still exist
+    assert db_path.exists()
+
+    # Clean up
+    storage.close()
+
+
+# =============================================================================
+# T047: Unit test for open_existing() classmethod
+# =============================================================================
+
+
+def test_open_existing_opens_existing_database(tmp_path: Path) -> None:
+    """Test that open_existing() opens an existing database file."""
+    db_path = tmp_path / "existing.db"
+
+    # Create database first
+    with StorageEngine(path=db_path) as storage1:
+        storage1.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage1.connection.execute("INSERT INTO test VALUES (1, 'data')")
+
+    # Open existing database
+    with StorageEngine.open_existing(db_path) as storage:
+        # Should be able to query existing data
+        result = storage.connection.execute("SELECT value FROM test").fetchone()
+        assert result == ("data",)
+
+
+def test_open_existing_raises_error_if_file_missing(tmp_path: Path) -> None:
+    """Test that open_existing() raises FileNotFoundError if database doesn't exist."""
+    db_path = tmp_path / "nonexistent.db"
+
+    with pytest.raises(FileNotFoundError):
+        StorageEngine.open_existing(db_path)
+
+
+# =============================================================================
+# T059: Unit test for list_tables()
+# =============================================================================
+
+
+def test_list_tables_returns_empty_list_for_new_database(tmp_path: Path) -> None:
+    """Test that list_tables() returns empty list for new database."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # New database should have no user tables
+        tables = storage.list_tables()
+        assert tables == []
+
+
+def test_list_tables_returns_all_user_tables(tmp_path: Path) -> None:
+    """Test that list_tables() returns all user-created tables."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create multiple tables
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+        profiles = [
+            {
+                "distinct_id": "user_1",
+                "properties": {"name": "Alice"},
+                "last_seen": datetime.now(UTC),
+            }
+        ]
+
+        events_metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+        )
+        profiles_metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+
+        storage.create_events_table("events_jan", iter(events), events_metadata)
+        storage.create_profiles_table("profiles_all", iter(profiles), profiles_metadata)
+
+        # List tables
+        tables = storage.list_tables()
+
+        # Should have 2 tables
+        assert len(tables) == 2
+
+        # Tables should be sorted by name
+        assert tables[0].name == "events_jan"
+        assert tables[1].name == "profiles_all"
+
+        # Check table info
+        assert tables[0].type == "events"
+        assert tables[0].row_count == 1
+        assert tables[0].fetched_at is not None
+
+        assert tables[1].type == "profiles"
+        assert tables[1].row_count == 1
+        assert tables[1].fetched_at is not None
+
+
+def test_list_tables_excludes_internal_metadata_table(tmp_path: Path) -> None:
+    """Test that list_tables() excludes internal _metadata table."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create one user table
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+        storage.create_events_table("my_events", iter(events), metadata)
+
+        # List tables
+        tables = storage.list_tables()
+
+        # Should only return user table, not _metadata
+        assert len(tables) == 1
+        assert tables[0].name == "my_events"
+
+        # Verify _metadata table exists in database
+        result = storage.connection.execute(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '_metadata'"
+        ).fetchone()
+        assert result == (1,)
+
+
+# =============================================================================
+# T060: Unit test for get_schema(table)
+# =============================================================================
+
+
+def test_get_schema_returns_events_table_schema(tmp_path: Path) -> None:
+    """Test that get_schema() returns correct schema for events table."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create events table
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+        storage.create_events_table("test_events", iter(events), metadata)
+
+        # Get schema
+        schema = storage.get_schema("test_events")
+
+        # Verify table name
+        assert schema.table_name == "test_events"
+
+        # Verify columns
+        assert len(schema.columns) == 5
+        column_names = [col.name for col in schema.columns]
+        assert "event_name" in column_names
+        assert "event_time" in column_names
+        assert "distinct_id" in column_names
+        assert "insert_id" in column_names
+        assert "properties" in column_names
+
+        # Find insert_id column and verify it's primary key
+        insert_id_col = next(col for col in schema.columns if col.name == "insert_id")
+        assert insert_id_col.primary_key is True
+
+
+def test_get_schema_returns_profiles_table_schema(tmp_path: Path) -> None:
+    """Test that get_schema() returns correct schema for profiles table."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create profiles table
+        profiles = [
+            {
+                "distinct_id": "user_1",
+                "properties": {"name": "Alice"},
+                "last_seen": datetime.now(UTC),
+            }
+        ]
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+        storage.create_profiles_table("test_profiles", iter(profiles), metadata)
+
+        # Get schema
+        schema = storage.get_schema("test_profiles")
+
+        # Verify table name
+        assert schema.table_name == "test_profiles"
+
+        # Verify columns
+        assert len(schema.columns) == 3
+        column_names = [col.name for col in schema.columns]
+        assert "distinct_id" in column_names
+        assert "properties" in column_names
+        assert "last_seen" in column_names
+
+        # Find distinct_id column and verify it's primary key
+        distinct_id_col = next(
+            col for col in schema.columns if col.name == "distinct_id"
+        )
+        assert distinct_id_col.primary_key is True
+
+
+# =============================================================================
+# T061: Unit test for get_metadata(table)
+# =============================================================================
+
+
+def test_get_metadata_returns_table_metadata(tmp_path: Path) -> None:
+    """Test that get_metadata() returns correct metadata for table."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create events table with specific metadata
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+        original_metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+        )
+        storage.create_events_table("test_events", iter(events), original_metadata)
+
+        # Get metadata
+        retrieved_metadata = storage.get_metadata("test_events")
+
+        # Verify metadata matches
+        assert retrieved_metadata.type == "events"
+        assert retrieved_metadata.from_date == "2024-01-01"
+        assert retrieved_metadata.to_date == "2024-01-31"
+        # Note: fetched_at will be datetime object after retrieval
+        assert retrieved_metadata.fetched_at is not None
+
+
+def test_get_metadata_returns_profiles_metadata(tmp_path: Path) -> None:
+    """Test that get_metadata() returns correct metadata for profiles table."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create profiles table
+        profiles = [
+            {
+                "distinct_id": "user_1",
+                "properties": {"name": "Alice"},
+                "last_seen": datetime.now(UTC),
+            }
+        ]
+        original_metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+        storage.create_profiles_table(
+            "test_profiles", iter(profiles), original_metadata
+        )
+
+        # Get metadata
+        retrieved_metadata = storage.get_metadata("test_profiles")
+
+        # Verify metadata
+        assert retrieved_metadata.type == "profiles"
+        assert retrieved_metadata.from_date is None
+        assert retrieved_metadata.to_date is None
+
+
+# =============================================================================
+# T062: Unit test for TableNotFoundError on missing table
+# =============================================================================
+
+
+def test_get_schema_raises_error_for_missing_table(tmp_path: Path) -> None:
+    """Test that get_schema() raises TableNotFoundError for missing table."""
+    from mixpanel_data.exceptions import TableNotFoundError
+
+    db_path = tmp_path / "test.db"
+    with (
+        StorageEngine(path=db_path) as storage,
+        pytest.raises(TableNotFoundError, match="nonexistent_table"),
+    ):
+        storage.get_schema("nonexistent_table")
+
+
+def test_get_metadata_raises_error_for_missing_table(tmp_path: Path) -> None:
+    """Test that get_metadata() raises TableNotFoundError for missing table."""
+    from mixpanel_data.exceptions import TableNotFoundError
+
+    db_path = tmp_path / "test.db"
+    with (
+        StorageEngine(path=db_path) as storage,
+        pytest.raises(TableNotFoundError, match="nonexistent_table"),
+    ):
+        storage.get_metadata("nonexistent_table")
+
+
+# =============================================================================
+# T068: Unit test for table_exists(name)
+# =============================================================================
+
+
+def test_table_exists_returns_true_for_existing_table(tmp_path: Path) -> None:
+    """Test that table_exists() returns True for existing tables."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create a table
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        storage.create_events_table("test_events", iter(events), metadata)
+
+        # Check if table exists
+        assert storage.table_exists("test_events") is True
+
+
+def test_table_exists_returns_false_for_nonexistent_table(tmp_path: Path) -> None:
+    """Test that table_exists() returns False for nonexistent tables."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Check for table that doesn't exist
+        assert storage.table_exists("nonexistent_table") is False
+
+
+def test_table_exists_returns_false_for_metadata_table(tmp_path: Path) -> None:
+    """Test that table_exists() returns True for internal _metadata table."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create a table to trigger _metadata table creation
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        storage.create_events_table("test_events", iter(events), metadata)
+
+        # _metadata is an internal table but should still be detectable
+        assert storage.table_exists("_metadata") is True
+
+
+# =============================================================================
+# T069: Unit test for drop_table(name)
+# =============================================================================
+
+
+def test_drop_table_removes_table_from_database(tmp_path: Path) -> None:
+    """Test that drop_table() removes table from database."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create a table
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        storage.create_events_table("test_events", iter(events), metadata)
+
+        # Verify table exists
+        assert storage.table_exists("test_events") is True
+
+        # Drop table
+        storage.drop_table("test_events")
+
+        # Verify table is gone
+        assert storage.table_exists("test_events") is False
+
+
+def test_drop_table_removes_metadata_entry(tmp_path: Path) -> None:
+    """Test that drop_table() removes metadata entry."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create a table
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        storage.create_events_table("test_events", iter(events), metadata)
+
+        # Verify metadata exists
+        result = storage.connection.execute(
+            "SELECT COUNT(*) FROM _metadata WHERE table_name = ?",
+            ("test_events",),
+        ).fetchone()
+        assert result == (1,)
+
+        # Drop table
+        storage.drop_table("test_events")
+
+        # Verify metadata is gone
+        result = storage.connection.execute(
+            "SELECT COUNT(*) FROM _metadata WHERE table_name = ?",
+            ("test_events",),
+        ).fetchone()
+        assert result == (0,)
+
+
+# =============================================================================
+# T070: Unit test for TableExistsError on duplicate creation
+# =============================================================================
+
+
+def test_create_events_table_raises_table_exists_error_on_duplicate(
+    tmp_path: Path,
+) -> None:
+    """Test that creating duplicate events table raises TableExistsError."""
+    from datetime import datetime
+
+    from mixpanel_data.exceptions import TableExistsError
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Create table first time
+        storage.create_events_table("duplicate_test", iter(events), metadata)
+
+        # Try to create again - should raise TableExistsError
+        with pytest.raises(TableExistsError, match="duplicate_test"):
+            storage.create_events_table("duplicate_test", iter(events), metadata)
+
+
+def test_create_profiles_table_raises_table_exists_error_on_duplicate(
+    tmp_path: Path,
+) -> None:
+    """Test that creating duplicate profiles table raises TableExistsError."""
+    from datetime import datetime
+
+    from mixpanel_data.exceptions import TableExistsError
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        profiles = [
+            {
+                "distinct_id": "user_1",
+                "properties": {"name": "Alice"},
+                "last_seen": datetime.now(UTC),
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+
+        # Create table first time
+        storage.create_profiles_table("duplicate_test", iter(profiles), metadata)
+
+        # Try to create again - should raise TableExistsError
+        with pytest.raises(TableExistsError, match="duplicate_test"):
+            storage.create_profiles_table("duplicate_test", iter(profiles), metadata)
+
+
+# =============================================================================
+# T071: Unit test for TableNotFoundError on drop_table(missing)
+# =============================================================================
+
+
+def test_drop_table_raises_table_not_found_error_for_missing_table(
+    tmp_path: Path,
+) -> None:
+    """Test that dropping nonexistent table raises TableNotFoundError."""
+    from mixpanel_data.exceptions import TableNotFoundError
+
+    db_path = tmp_path / "test.db"
+    with (
+        StorageEngine(path=db_path) as storage,
+        pytest.raises(TableNotFoundError, match="nonexistent_table"),
+    ):
+        # Try to drop table that doesn't exist
+        storage.drop_table("nonexistent_table")
+
+
+def test_drop_table_raises_table_not_found_error_after_drop(tmp_path: Path) -> None:
+    """Test that dropping same table twice raises TableNotFoundError."""
+    from datetime import datetime
+
+    from mixpanel_data.exceptions import TableNotFoundError
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create a table
+        events = [
+            {
+                "event_name": "Event",
+                "event_time": datetime.now(UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        storage.create_events_table("test_events", iter(events), metadata)
+
+        # Drop table once - should succeed
+        storage.drop_table("test_events")
+
+        # Try to drop again - should raise TableNotFoundError
+        with pytest.raises(TableNotFoundError, match="test_events"):
+            storage.drop_table("test_events")
+
+
+# =============================================================================
+# T048: Unit test for execute() returning DuckDB relation
+# =============================================================================
+
+
+def test_execute_returns_duckdb_relation(tmp_path: Path) -> None:
+    """Test that execute() returns a DuckDB relation object."""
+    import duckdb
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create a test table
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage.connection.execute("INSERT INTO test VALUES (1, 'hello'), (2, 'world')")
+
+        # Execute query and get relation
+        relation = storage.execute("SELECT * FROM test ORDER BY id")
+
+        # Should return DuckDB relation
+        assert isinstance(relation, duckdb.DuckDBPyRelation)
+
+        # Relation should be queryable
+        result = relation.fetchall()
+        assert result == [(1, "hello"), (2, "world")]
+
+
+def test_execute_can_be_chained(tmp_path: Path) -> None:
+    """Test that execute() returns a relation that can be chained."""
+    import duckdb
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create test data
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage.connection.execute(
+            "INSERT INTO test VALUES (1, 'a'), (2, 'b'), (3, 'c')"
+        )
+
+        # Execute and chain DuckDB operations
+        relation = storage.execute("SELECT * FROM test")
+
+        # Should be chainable (DuckDB relation API)
+        assert isinstance(relation, duckdb.DuckDBPyRelation)
+
+        # Can call methods on relation
+        filtered = relation.filter("id > 1")
+        result = filtered.fetchall()
+        assert len(result) == 2
+
+
+# =============================================================================
+# T049: Unit test for execute_df() returning DataFrame
+# =============================================================================
+
+
+def test_execute_df_returns_dataframe(tmp_path: Path) -> None:
+    """Test that execute_df() returns a pandas DataFrame."""
+    import pandas as pd
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create test data
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage.connection.execute("INSERT INTO test VALUES (1, 'hello'), (2, 'world')")
+
+        # Execute query and get DataFrame
+        df = storage.execute_df("SELECT * FROM test ORDER BY id")
+
+        # Should return DataFrame
+        assert isinstance(df, pd.DataFrame)
+
+        # Verify data
+        assert len(df) == 2
+        assert list(df.columns) == ["id", "value"]
+        assert df["id"].tolist() == [1, 2]
+        assert df["value"].tolist() == ["hello", "world"]
+
+
+def test_execute_df_returns_empty_dataframe_for_empty_result(tmp_path: Path) -> None:
+    """Test that execute_df() returns empty DataFrame for empty result."""
+    import pandas as pd
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create empty table
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+
+        # Execute query with no results
+        df = storage.execute_df("SELECT * FROM test")
+
+        # Should return empty DataFrame
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 0
+        assert list(df.columns) == ["id", "value"]
+
+
+def test_execute_df_handles_json_columns(tmp_path: Path) -> None:
+    """Test that execute_df() handles JSON columns correctly."""
+    from datetime import datetime
+
+    import pandas as pd
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create events table with JSON properties
+        from mixpanel_data.types import TableMetadata
+
+        events = [
+            {
+                "event_name": "Page View",
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "distinct_id": "user_123",
+                "insert_id": "event_001",
+                "properties": {"page": "/home", "country": "US"},
+            }
+        ]
+
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+        )
+
+        storage.create_events_table("events", iter(events), metadata)
+
+        # Query with JSON extraction
+        df = storage.execute_df("SELECT event_name, properties FROM events")
+
+        # Should return DataFrame
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 1
+        assert df["event_name"].iloc[0] == "Page View"
+
+
+# =============================================================================
+# T050: Unit test for execute_scalar() returning single value
+# =============================================================================
+
+
+def test_execute_scalar_returns_single_value(tmp_path: Path) -> None:
+    """Test that execute_scalar() returns a single scalar value."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create test data
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage.connection.execute("INSERT INTO test VALUES (1, 'hello'), (2, 'world')")
+
+        # Execute scalar query
+        count = storage.execute_scalar("SELECT COUNT(*) FROM test")
+
+        # Should return scalar value
+        assert count == 2
+        assert isinstance(count, int)
+
+
+def test_execute_scalar_returns_different_types(tmp_path: Path) -> None:
+    """Test that execute_scalar() returns correct types for different queries."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create test data
+        storage.connection.execute(
+            "CREATE TABLE test (id INTEGER, price DECIMAL, name VARCHAR)"
+        )
+        storage.connection.execute("INSERT INTO test VALUES (1, 99.99, 'Product A')")
+
+        # Integer
+        max_id = storage.execute_scalar("SELECT MAX(id) FROM test")
+        assert max_id == 1
+        assert isinstance(max_id, int)
+
+        # String
+        name = storage.execute_scalar("SELECT name FROM test WHERE id = 1")
+        assert name == "Product A"
+        assert isinstance(name, str)
+
+        # Decimal/Float (DuckDB returns Decimal for DECIMAL columns)
+        price = storage.execute_scalar("SELECT price FROM test WHERE id = 1")
+        assert float(price) == pytest.approx(99.99)
+
+
+def test_execute_scalar_returns_none_for_null(tmp_path: Path) -> None:
+    """Test that execute_scalar() returns None for NULL values."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create test data with NULL
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage.connection.execute("INSERT INTO test VALUES (1, NULL)")
+
+        # Execute scalar query for NULL
+        value = storage.execute_scalar("SELECT value FROM test WHERE id = 1")
+
+        # Should return None
+        assert value is None
+
+
+# =============================================================================
+# T051: Unit test for execute_rows() returning list of tuples
+# =============================================================================
+
+
+def test_execute_rows_returns_list_of_tuples(tmp_path: Path) -> None:
+    """Test that execute_rows() returns a list of tuples."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create test data
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage.connection.execute(
+            "INSERT INTO test VALUES (1, 'hello'), (2, 'world'), (3, 'test')"
+        )
+
+        # Execute query and get rows
+        rows = storage.execute_rows("SELECT * FROM test ORDER BY id")
+
+        # Should return list of tuples
+        assert isinstance(rows, list)
+        assert len(rows) == 3
+        assert all(isinstance(row, tuple) for row in rows)
+
+        # Verify data
+        assert rows[0] == (1, "hello")
+        assert rows[1] == (2, "world")
+        assert rows[2] == (3, "test")
+
+
+def test_execute_rows_returns_empty_list_for_empty_result(tmp_path: Path) -> None:
+    """Test that execute_rows() returns empty list for empty result."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create empty table
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+
+        # Execute query with no results
+        rows = storage.execute_rows("SELECT * FROM test")
+
+        # Should return empty list
+        assert isinstance(rows, list)
+        assert len(rows) == 0
+
+
+def test_execute_rows_handles_single_column(tmp_path: Path) -> None:
+    """Test that execute_rows() handles single column queries."""
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Create test data
+        storage.connection.execute("CREATE TABLE test (id INTEGER, value VARCHAR)")
+        storage.connection.execute("INSERT INTO test VALUES (1, 'a'), (2, 'b')")
+
+        # Execute single column query
+        rows = storage.execute_rows("SELECT id FROM test ORDER BY id")
+
+        # Should return list of tuples with single value
+        assert isinstance(rows, list)
+        assert len(rows) == 2
+        assert rows[0] == (1,)
+        assert rows[1] == (2,)
+
+
+# =============================================================================
+# T052: Unit test for QueryError wrapping on SQL errors
+# =============================================================================
+
+
+def test_execute_wraps_sql_errors_in_query_error(tmp_path: Path) -> None:
+    """Test that execute() wraps SQL errors in QueryError."""
+    from mixpanel_data.exceptions import QueryError
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Execute invalid SQL
+        with pytest.raises(QueryError) as exc_info:
+            storage.execute("SELECT * FROM nonexistent_table")
+
+        # Should wrap DuckDB error
+        error = exc_info.value
+        assert (
+            "nonexistent_table" in str(error).lower() or "catalog" in str(error).lower()
+        )
+
+        # Should have details
+        assert error.details is not None
+
+
+def test_execute_df_wraps_sql_errors_in_query_error(tmp_path: Path) -> None:
+    """Test that execute_df() wraps SQL errors in QueryError."""
+    from mixpanel_data.exceptions import QueryError
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Execute invalid SQL
+        with pytest.raises(QueryError) as exc_info:
+            storage.execute_df("INVALID SQL SYNTAX")
+
+        # Should wrap DuckDB error
+        error = exc_info.value
+        assert error.details is not None
+
+
+def test_execute_scalar_wraps_sql_errors_in_query_error(tmp_path: Path) -> None:
+    """Test that execute_scalar() wraps SQL errors in QueryError."""
+    from mixpanel_data.exceptions import QueryError
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Execute invalid SQL
+        with pytest.raises(QueryError) as exc_info:
+            storage.execute_scalar("SELECT * FROM missing_table")
+
+        # Should wrap DuckDB error
+        error = exc_info.value
+        assert error.details is not None
+
+
+def test_execute_rows_wraps_sql_errors_in_query_error(tmp_path: Path) -> None:
+    """Test that execute_rows() wraps SQL errors in QueryError."""
+    from mixpanel_data.exceptions import QueryError
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        # Execute invalid SQL
+        with pytest.raises(QueryError) as exc_info:
+            storage.execute_rows("GARBAGE SQL")
+
+        # Should wrap DuckDB error
+        error = exc_info.value
+        assert error.details is not None
+
+
+def test_query_error_includes_query_text(tmp_path: Path) -> None:
+    """Test that QueryError includes the original query text."""
+    from mixpanel_data.exceptions import QueryError
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path) as storage:
+        bad_query = "SELECT * FROM table_does_not_exist"
+
+        # Execute invalid SQL
+        with pytest.raises(QueryError) as exc_info:
+            storage.execute(bad_query)
+
+        # Should include query in error details
+        error = exc_info.value
+        # Query text should be in details or message
+        error_str = str(error) + str(error.details)
+        assert (
+            "table_does_not_exist" in error_str.lower()
+            or "catalog" in error_str.lower()
+        )
