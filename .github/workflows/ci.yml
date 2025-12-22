@@ -11,14 +11,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: read
-    
+
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install just
-        uses: extractions/setup-just@v2
+        uses: extractions/setup-just@v3
 
       - name: Sync dependencies
         run: just sync
@@ -50,7 +50,7 @@ jobs:
       - name: Run tests with coverage (Python 3.12 only)
         if: matrix.python-version == '3.12'
         run: just test-cov
-      
+
       - name: Upload coverage to codecov
         if: matrix.python-version == '3.12'
         uses: codecov/codecov-action@v4
