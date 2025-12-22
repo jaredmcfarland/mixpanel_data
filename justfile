@@ -1,0 +1,56 @@
+# mixpanel_data development commands
+# Run `just` to see available commands
+
+# Default: list available commands
+default:
+    @just --list
+
+# Run all checks (lint, typecheck, test)
+check: lint typecheck test
+
+# Run tests
+test *args:
+    uv run pytest {{ args }}
+
+# Run tests with coverage
+test-cov:
+    uv run pytest --cov=src/mixpanel_data --cov-report=term-missing
+
+# Lint code with ruff
+lint *args:
+    uv run ruff check src/ tests/ {{ args }}
+
+# Fix lint errors automatically
+lint-fix:
+    uv run ruff check --fix src/ tests/
+
+# Format code with ruff
+fmt:
+    uv run ruff format src/ tests/
+
+# Check formatting without applying changes
+fmt-check:
+    uv run ruff format --check src/ tests/
+
+# Type check with mypy
+typecheck:
+    uv run mypy src/
+
+# Sync dependencies
+sync:
+    uv sync --all-extras
+
+# Clean build artifacts and caches
+clean:
+    rm -rf .pytest_cache .mypy_cache .ruff_cache
+    rm -rf dist build *.egg-info
+    rm -rf .coverage htmlcov
+    find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+
+# Build package
+build: clean
+    uv build
+
+# Run the CLI (once implemented)
+mp *args:
+    uv run mp {{ args }}

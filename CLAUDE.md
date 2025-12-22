@@ -39,6 +39,7 @@ Infrastructure Layer        → ConfigManager, MixpanelAPIClient, StorageEngine 
 - Python 3.11+, Typer (CLI), Rich (output), Pydantic (validation)
 - DuckDB (embedded analytical database), httpx (HTTP client)
 - pandas (DataFrame integration)
+- uv (package manager), just (command runner)
 
 ## Design Documents
 
@@ -52,6 +53,7 @@ Read in this order for implementation:
 ## Package Structure
 
 ```
+justfile                     # Development commands (run `just` to see all)
 src/mixpanel_data/
 ├── __init__.py              # ✅ Public API exports (exceptions, result types)
 ├── workspace.py             # ⏳ Workspace facade class
@@ -186,29 +188,44 @@ All frozen dataclasses with lazy `.df` property and `.to_dict()` method:
 - Integration tests for config file CRUD, foundation layer, storage engine
 - Requires Python 3.11+ (use devcontainer or pyenv)
 
+## Development Commands
+
+This project uses [just](https://github.com/casey/just) as a command runner. Run `just` to see all available commands.
+
+| Command | Description |
+|---------|-------------|
+| `just` | List all available commands |
+| `just check` | Run all checks (lint, typecheck, test) |
+| `just test` | Run tests (supports args: `just test -k foo`) |
+| `just test-cov` | Run tests with coverage |
+| `just lint` | Lint code with ruff |
+| `just lint-fix` | Auto-fix lint errors |
+| `just fmt` | Format code with ruff |
+| `just typecheck` | Type check with mypy |
+| `just sync` | Sync dependencies |
+| `just clean` | Remove caches and build artifacts |
+| `just build` | Build package |
+
 ## Development Environment
 
-**Recommended:** Use the devcontainer (Python 3.11, uv, Claude Code pre-installed)
+**Recommended:** Use the devcontainer (Python 3.11, uv, just, Claude Code pre-installed)
 
 ```bash
-# Install dev dependencies
-uv sync --all-extras
+# See all available commands
+just
 
-# Run tests
-pytest
+# Run all checks before committing
+just check
 
-# Type checking
-mypy src/
+# Run specific tests
+just test -k test_name
 
-# Linting
-ruff check src/ tests/
+# Format and lint
+just fmt && just lint
 ```
 
 ## Recent Changes
+- Added `just` command runner with justfile for common development tasks
 - 004-discovery-service: Added Python 3.11+ + httpx (via MixpanelAPIClient from Phase 002)
 - 003-storage-engine: ✅ Complete - Implemented `StorageEngine` with DuckDB lifecycle management, streaming ingestion, query execution, and introspection
 - 002-api-client: ✅ Complete - Implemented `MixpanelAPIClient` with HTTP transport, regional endpoints, rate limiting, and streaming export
-
-## Active Technologies
-- Python 3.11+ + httpx (via MixpanelAPIClient from Phase 002) (004-discovery-service)
-- N/A (read-only service, in-memory cache only) (004-discovery-service)
