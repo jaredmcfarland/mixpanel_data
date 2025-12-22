@@ -63,7 +63,7 @@ src/mixpanel_data/
 │   ├── __init__.py          # ✅
 │   ├── config.py            # ✅ ConfigManager, Credentials, AccountInfo
 │   ├── api_client.py        # ✅ MixpanelAPIClient
-│   ├── storage.py           # ⏳ StorageEngine (DuckDB)
+│   ├── storage.py           # ✅ StorageEngine (DuckDB)
 │   └── services/
 │       ├── discovery.py     # ⏳ DiscoveryService
 │       ├── fetcher.py       # ⏳ FetcherService
@@ -117,15 +117,15 @@ Config file: `~/.mp/config.toml`
 |-------|------|--------|--------|
 | 001 | Foundation Layer | ✅ Complete | `001-foundation-layer` |
 | 002 | API Client | ✅ Complete | `002-api-client` |
-| 003 | Storage Engine | ⏳ Next | `003-storage-engine` |
-| 004 | Discovery Service | ⏳ Pending | `004-discovery-service` |
+| 003 | Storage Engine | ✅ Complete | `003-storage-engine` |
+| 004 | Discovery Service | ⏳ Next | `004-discovery-service` |
 | 005 | Fetch Service | ⏳ Pending | `005-fetch-service` |
 | 006 | Live Queries | ⏳ Pending | `006-live-queries` |
 | 007 | Workspace Facade | ⏳ Pending | `007-workspace` |
 | 008 | CLI Application | ⏳ Pending | `008-cli` |
 | 009 | Polish & Release | ⏳ Pending | `009-polish` |
 
-**Next up:** Phase 003 (Storage Engine) - implements `StorageEngine` with DuckDB database lifecycle, schema management, and query execution.
+**Next up:** Phase 004 (Discovery Service) - implements `DiscoveryService` for retrieving schema information (events, properties, sample values) from Mixpanel APIs.
 
 ## What's Implemented
 
@@ -158,10 +158,23 @@ All frozen dataclasses with lazy `.df` property and `.to_dict()` method:
 - `FunnelResult`, `FunnelStep` — Funnel conversion data
 - `RetentionResult`, `CohortInfo` — Cohort retention data
 - `JQLResult` — Custom JQL query results
+- `TableMetadata` — Fetch operation metadata
+- `TableInfo` — Table summary (name, type, row count, fetched_at)
+- `ColumnInfo` — Column definition (name, type, nullable, primary_key)
+- `TableSchema` — Complete table schema with columns
+
+### Storage Engine (`_internal/storage.py`)
+- `StorageEngine` — DuckDB-based storage with persistent and ephemeral modes
+- Database lifecycle: `__init__()`, `ephemeral()`, `open_existing()`, `close()`, `cleanup()`
+- Table creation: `create_events_table()`, `create_profiles_table()` with streaming batch ingestion
+- Query execution: `execute()`, `execute_df()`, `execute_scalar()`, `execute_rows()`
+- Introspection: `list_tables()`, `get_schema()`, `get_metadata()`, `table_exists()`
+- Table management: `drop_table()` with metadata cleanup
+- Context manager support for resource cleanup
 
 ### Tests
-- Unit tests for exceptions, config, types
-- Integration tests for config file CRUD, foundation layer
+- Unit tests for exceptions, config, types, storage
+- Integration tests for config file CRUD, foundation layer, storage engine
 - Requires Python 3.11+ (use devcontainer or pyenv)
 
 ## Development Environment
@@ -183,10 +196,6 @@ ruff check src/ tests/
 ```
 
 ## Recent Changes
-- 003-storage-engine: Added Python 3.11+ (matches project requirement) + DuckDB 1.0+, pandas 2.0+, Pydantic 2.0 (for TableMetadata validation)
+- 003-storage-engine: ✅ Complete - Implemented `StorageEngine` with DuckDB lifecycle management, streaming ingestion, query execution, and introspection
 - 002-api-client: ✅ Complete - Implemented `MixpanelAPIClient` with HTTP transport, regional endpoints, rate limiting, and streaming export
 - 001-foundation-layer: ✅ Complete - Implemented foundation layer (exceptions, types, config, auth)
-
-## Active Technologies
-- Python 3.11+ (matches project requirement) + DuckDB 1.0+, pandas 2.0+, Pydantic 2.0 (for TableMetadata validation) (003-storage-engine)
-- DuckDB embedded database (single-file, serverless, ACID-compliant) (003-storage-engine)
