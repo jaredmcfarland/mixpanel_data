@@ -5,6 +5,12 @@ echo "Setting up mixpanel_data development environment..."
 
 cd /workspace
 
+# Clean up any stale virtual environment that might cause issues
+if [ -d ".venv" ] && [ ! -f ".venv/bin/python" ]; then
+    echo "Removing incomplete .venv directory..."
+    rm -rf .venv
+fi
+
 # Install dependencies (uv sync creates venv automatically if needed)
 echo "Installing dependencies..."
 uv sync --all-extras

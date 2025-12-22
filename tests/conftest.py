@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 if TYPE_CHECKING:
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -60,7 +61,7 @@ def mock_credentials() -> Credentials:
 
     return Credentials(
         username="test_user",
-        secret="test_secret",
+        secret=SecretStr("test_secret"),
         project_id="12345",
         region="us",
     )
