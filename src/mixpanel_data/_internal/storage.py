@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import logging
 import re
 import tempfile
 from collections.abc import Callable, Iterator
@@ -20,6 +21,26 @@ import pandas as pd
 
 from mixpanel_data.exceptions import QueryError, TableExistsError, TableNotFoundError
 from mixpanel_data.types import ColumnInfo, TableInfo, TableMetadata, TableSchema
+
+# Module-level logger for cleanup operations
+_logger = logging.getLogger(__name__)
+
+
+def _quote_identifier(name: str) -> str:
+    """Quote a SQL identifier to prevent injection.
+
+    Uses DuckDB's double-quote identifier quoting and escapes any
+    embedded double quotes by doubling them.
+
+    Args:
+        name: The identifier to quote.
+
+    Returns:
+        Properly quoted identifier safe for SQL interpolation.
+    """
+    # Escape any embedded double quotes by doubling them
+    escaped = name.replace('"', '""')
+    return f'"{escaped}"'
 
 
 class StorageEngine:
@@ -42,19 +63,37 @@ class StorageEngine:
         # Database automatically cleaned up
     """
 
-    def __init__(self, path: Path | None = None, _ephemeral: bool = False) -> None:
+    def __init__(self, path: Path | None = None, *, _ephemeral: bool = False) -> None:
         """Initialize storage engine with database at specified path.
 
         Args:
             path: Path to database file. If None, creates ephemeral database.
-            _ephemeral: Internal flag to mark database as ephemeral (do not use directly).
+            _ephemeral: Internal flag to mark database as ephemeral.
+                DO NOT USE DIRECTLY - use StorageEngine.ephemeral() instead.
+                This parameter is keyword-only and prefixed with underscore
+                to indicate it's for internal use only.
 
         Raises:
             OSError: If path is invalid or lacks write permissions.
+            ValueError: If _ephemeral is used incorrectly.
         """
         self._path: Path | None = None
         self._conn: duckdb.DuckDBPyConnection | None = None
         self._is_ephemeral = _ephemeral
+        self._closed = False  # Track if close() was explicitly called
+
+        # Validate _ephemeral usage: prevent users from accidentally marking
+        # arbitrary paths as ephemeral (which would delete them on close!)
+        if _ephemeral and path is not None:
+            # Only allow ephemeral flag for paths in temp directory
+            temp_dir = Path(tempfile.gettempdir())
+            try:
+                path.resolve().relative_to(temp_dir.resolve())
+            except ValueError:
+                raise ValueError(
+                    "The _ephemeral parameter is for internal use only. "
+                    "Use StorageEngine.ephemeral() to create ephemeral databases."
+                ) from None
 
         if path is not None:
             # Persistent mode: create database at specified path
@@ -146,9 +185,21 @@ class StorageEngine:
 
         Returns:
             DuckDB connection instance.
+
+        Raises:
+            RuntimeError: If connection was closed or never established.
         """
         if self._conn is None:
-            raise RuntimeError("Database connection not established")
+            if self._closed:
+                raise RuntimeError(
+                    "Database connection has been closed. "
+                    "Create a new StorageEngine instance to reconnect."
+                )
+            else:
+                raise RuntimeError(
+                    "Database connection not established. "
+                    "Ensure the StorageEngine was initialized with a valid path."
+                )
         return self._conn
 
     def _cleanup_ephemeral(self) -> None:
@@ -168,9 +219,9 @@ class StorageEngine:
         if self._conn is not None:
             try:
                 self._conn.close()
-            except Exception:
-                # Suppress errors on close (best-effort cleanup)
-                pass
+            except Exception as e:
+                # Log error but continue cleanup (best-effort)
+                _logger.debug("Failed to close ephemeral database connection: %s", e)
             finally:
                 self._conn = None
 
@@ -178,18 +229,23 @@ class StorageEngine:
         try:
             if self._path.exists():
                 self._path.unlink()
-        except Exception:
-            # Best-effort cleanup
-            pass
+        except Exception as e:
+            # Log error but continue cleanup (best-effort)
+            _logger.warning(
+                "Failed to delete ephemeral database file %s: %s", self._path, e
+            )
 
         # Delete WAL file if it exists
         try:
             wal_path = Path(str(self._path) + ".wal")
             if wal_path.exists():
                 wal_path.unlink()
-        except Exception:
-            # Best-effort cleanup
-            pass
+        except Exception as e:
+            # Log error but continue cleanup (best-effort)
+            _logger.debug("Failed to delete WAL file %s: %s", wal_path, e)
+
+        # Mark as closed for better error messages
+        self._closed = True
 
     def close(self) -> None:
         """Close database connection and cleanup if ephemeral.
@@ -213,11 +269,14 @@ class StorageEngine:
             if self._conn is not None:
                 try:
                     self._conn.close()
-                except Exception:
-                    # Suppress errors on close (best-effort cleanup)
-                    pass
+                except Exception as e:
+                    # Log error but continue (best-effort cleanup)
+                    _logger.debug("Failed to close database connection: %s", e)
                 finally:
                     self._conn = None
+
+        # Mark as closed for better error messages
+        self._closed = True
 
     def cleanup(self) -> None:
         """Cleanup database resources (alias for close).
@@ -296,8 +355,9 @@ class StorageEngine:
         Args:
             name: Table name.
         """
+        quoted_name = _quote_identifier(name)
         sql = f"""
-            CREATE TABLE {name} (
+            CREATE TABLE {quoted_name} (
                 event_name VARCHAR NOT NULL,
                 event_time TIMESTAMP NOT NULL,
                 distinct_id VARCHAR NOT NULL,
@@ -313,8 +373,9 @@ class StorageEngine:
         Args:
             name: Table name.
         """
+        quoted_name = _quote_identifier(name)
         sql = f"""
-            CREATE TABLE {name} (
+            CREATE TABLE {quoted_name} (
                 distinct_id VARCHAR PRIMARY KEY,
                 properties JSON,
                 last_seen TIMESTAMP
@@ -356,6 +417,8 @@ class StorageEngine:
         """
         total_rows = 0
         batch = []
+        quoted_name = _quote_identifier(name)
+        insert_sql = f"INSERT INTO {quoted_name} VALUES (?, ?, ?, ?, ?)"
 
         for record in data:
             # Validate record
@@ -381,9 +444,7 @@ class StorageEngine:
 
             if len(batch) >= batch_size:
                 # Insert batch
-                self.connection.executemany(
-                    f"INSERT INTO {name} VALUES (?, ?, ?, ?, ?)", batch
-                )
+                self.connection.executemany(insert_sql, batch)
                 total_rows += len(batch)
                 batch = []
 
@@ -393,9 +454,7 @@ class StorageEngine:
 
         # Insert remaining records
         if batch:
-            self.connection.executemany(
-                f"INSERT INTO {name} VALUES (?, ?, ?, ?, ?)", batch
-            )
+            self.connection.executemany(insert_sql, batch)
             total_rows += len(batch)
 
             # Final progress callback
@@ -424,6 +483,8 @@ class StorageEngine:
         """
         total_rows = 0
         batch = []
+        quoted_name = _quote_identifier(name)
+        insert_sql = f"INSERT INTO {quoted_name} VALUES (?, ?, ?)"
 
         for record in data:
             # Validate record
@@ -447,9 +508,7 @@ class StorageEngine:
 
             if len(batch) >= batch_size:
                 # Insert batch
-                self.connection.executemany(
-                    f"INSERT INTO {name} VALUES (?, ?, ?)", batch
-                )
+                self.connection.executemany(insert_sql, batch)
                 total_rows += len(batch)
                 batch = []
 
@@ -459,7 +518,7 @@ class StorageEngine:
 
         # Insert remaining records
         if batch:
-            self.connection.executemany(f"INSERT INTO {name} VALUES (?, ?, ?)", batch)
+            self.connection.executemany(insert_sql, batch)
             total_rows += len(batch)
 
             # Final progress callback
@@ -529,16 +588,24 @@ class StorageEngine:
         if self.table_exists(name):
             raise TableExistsError(f"Table '{name}' already exists")
 
-        # Create table schema
-        self._create_events_table_schema(name)
+        # Use transaction to ensure atomicity - if insertion fails,
+        # table is rolled back so user can retry without TableExistsError
+        self.connection.execute("BEGIN TRANSACTION")
+        try:
+            # Create table schema
+            self._create_events_table_schema(name)
 
-        # Batch insert data
-        row_count = self._batch_insert_events(name, data, progress_callback)
+            # Batch insert data
+            row_count = self._batch_insert_events(name, data, progress_callback)
 
-        # Record metadata
-        self._record_metadata(name, metadata, row_count)
+            # Record metadata
+            self._record_metadata(name, metadata, row_count)
 
-        return row_count
+            self.connection.execute("COMMIT")
+            return row_count
+        except Exception:
+            self.connection.execute("ROLLBACK")
+            raise
 
     def create_profiles_table(
         self,
@@ -569,16 +636,24 @@ class StorageEngine:
         if self.table_exists(name):
             raise TableExistsError(f"Table '{name}' already exists")
 
-        # Create table schema
-        self._create_profiles_table_schema(name)
+        # Use transaction to ensure atomicity - if insertion fails,
+        # table is rolled back so user can retry without TableExistsError
+        self.connection.execute("BEGIN TRANSACTION")
+        try:
+            # Create table schema
+            self._create_profiles_table_schema(name)
 
-        # Batch insert data
-        row_count = self._batch_insert_profiles(name, data, progress_callback)
+            # Batch insert data
+            row_count = self._batch_insert_profiles(name, data, progress_callback)
 
-        # Record metadata
-        self._record_metadata(name, metadata, row_count)
+            # Record metadata
+            self._record_metadata(name, metadata, row_count)
 
-        return row_count
+            self.connection.execute("COMMIT")
+            return row_count
+        except Exception:
+            self.connection.execute("ROLLBACK")
+            raise
 
     def execute(self, sql: str) -> duckdb.DuckDBPyRelation:
         """Execute SQL and return DuckDB relation (for chaining).
@@ -834,7 +909,8 @@ class StorageEngine:
 
         # Get column information using PRAGMA table_info
         # Returns: (cid, name, type, notnull, dflt_value, pk)
-        result = self.connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+        quoted_name = _quote_identifier(table_name)
+        result = self.connection.execute(f"PRAGMA table_info({quoted_name})").fetchall()
 
         # Convert to ColumnInfo objects
         columns = []
@@ -945,7 +1021,8 @@ class StorageEngine:
             raise TableNotFoundError(f"Table '{name}' does not exist")
 
         # Drop the table
-        self.connection.execute(f"DROP TABLE {name}")
+        quoted_name = _quote_identifier(name)
+        self.connection.execute(f"DROP TABLE {quoted_name}")
 
         # Remove metadata entry (if it exists)
         self.connection.execute("DELETE FROM _metadata WHERE table_name = ?", (name,))
