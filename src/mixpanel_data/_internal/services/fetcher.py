@@ -191,9 +191,9 @@ class FetcherService:
             metadata=metadata,
         )
 
-        # Calculate final timing
-        fetched_at = datetime.now(UTC)
-        duration_seconds = (fetched_at - start_time).total_seconds()
+        # Calculate final timing (use distinct variable to avoid confusion with metadata timestamp)
+        completed_at = datetime.now(UTC)
+        duration_seconds = (completed_at - start_time).total_seconds()
 
         return FetchResult(
             table=name,
@@ -201,7 +201,7 @@ class FetcherService:
             type="events",
             duration_seconds=duration_seconds,
             date_range=(from_date, to_date),
-            fetched_at=fetched_at,
+            fetched_at=completed_at,
         )
 
     def fetch_profiles(
@@ -264,9 +264,9 @@ class FetcherService:
             metadata=metadata,
         )
 
-        # Calculate final timing
-        fetched_at = datetime.now(UTC)
-        duration_seconds = (fetched_at - start_time).total_seconds()
+        # Calculate final timing (use distinct variable to avoid confusion with metadata timestamp)
+        completed_at = datetime.now(UTC)
+        duration_seconds = (completed_at - start_time).total_seconds()
 
         return FetchResult(
             table=name,
@@ -274,5 +274,5 @@ class FetcherService:
             type="profiles",
             duration_seconds=duration_seconds,
             date_range=None,
-            fetched_at=fetched_at,
+            fetched_at=completed_at,
         )
