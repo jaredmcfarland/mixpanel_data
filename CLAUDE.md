@@ -65,7 +65,8 @@ src/mixpanel_data/
 │   ├── api_client.py        # ✅ MixpanelAPIClient
 │   ├── storage.py           # ✅ StorageEngine (DuckDB)
 │   └── services/
-│       ├── discovery.py     # ⏳ DiscoveryService
+│       ├── __init__.py      # ✅ Services package
+│       ├── discovery.py     # ✅ DiscoveryService
 │       ├── fetcher.py       # ⏳ FetcherService
 │       └── live_query.py    # ⏳ LiveQueryService
 └── cli/
@@ -118,14 +119,14 @@ Config file: `~/.mp/config.toml`
 | 001 | Foundation Layer | ✅ Complete | `001-foundation-layer` |
 | 002 | API Client | ✅ Complete | `002-api-client` |
 | 003 | Storage Engine | ✅ Complete | `003-storage-engine` |
-| 004 | Discovery Service | ⏳ Next | `004-discovery-service` |
-| 005 | Fetch Service | ⏳ Pending | `005-fetch-service` |
+| 004 | Discovery Service | ✅ Complete | `004-discovery-service` |
+| 005 | Fetch Service | ⏳ Next | `005-fetch-service` |
 | 006 | Live Queries | ⏳ Pending | `006-live-queries` |
 | 007 | Workspace Facade | ⏳ Pending | `007-workspace` |
 | 008 | CLI Application | ⏳ Pending | `008-cli` |
 | 009 | Polish & Release | ⏳ Pending | `009-polish` |
 
-**Next up:** Phase 004 (Discovery Service) - implements `DiscoveryService` for retrieving schema information (events, properties, sample values) from Mixpanel APIs.
+**Next up:** Phase 005 (Fetch Service) - implements `FetcherService` for fetching and storing events/profiles in DuckDB.
 
 ## What's Implemented
 
@@ -172,8 +173,16 @@ All frozen dataclasses with lazy `.df` property and `.to_dict()` method:
 - Table management: `drop_table()` with metadata cleanup
 - Context manager support for resource cleanup
 
+### Discovery Service (`_internal/services/discovery.py`)
+- `DiscoveryService` — Schema introspection with session-scoped caching
+- `list_events()` — List all event names (sorted alphabetically, cached)
+- `list_properties(event)` — List properties for an event (sorted, cached per event)
+- `list_property_values(property, event, limit)` — Sample values for a property (cached)
+- `clear_cache()` — Clear all cached discovery results
+- Constructor injection of `MixpanelAPIClient` for testing
+
 ### Tests
-- Unit tests for exceptions, config, types, storage
+- Unit tests for exceptions, config, types, storage, discovery
 - Integration tests for config file CRUD, foundation layer, storage engine
 - Requires Python 3.11+ (use devcontainer or pyenv)
 

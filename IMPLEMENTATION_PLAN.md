@@ -44,7 +44,7 @@ This document defines the complete implementation roadmap for `mixpanel_data`, o
 │  ┌──────────────────┐           ┌──────────────────┐                        │
 │  │  003-Storage     │           │  004-Discovery   │                        │
 │  │  (DuckDB,        │           │  (Event/Property │                        │
-│  │   Schema, I/O)   │ ✅         │   Introspection) │ ⏳ NEXT                 │
+│  │   Schema, I/O)   │ ✅         │   Introspection) │ ✅                      │
 │  └────────┬─────────┘           └────────┬─────────┘                        │
 │           │                              │                                  │
 │           └──────────────┬───────────────┘                                  │
@@ -84,8 +84,8 @@ This document defines the complete implementation roadmap for `mixpanel_data`, o
 | 001 | Foundation Layer | Exceptions, Types, ConfigManager, Auth | ✅ Complete | `001-foundation-layer` |
 | 002 | API Client | MixpanelAPIClient, HTTP, Rate Limiting | ✅ Complete | `002-api-client` |
 | 003 | Storage Engine | StorageEngine, DuckDB, Schema Management | ✅ Complete | `003-storage-engine` |
-| 004 | Discovery Service | DiscoveryService, Event/Property APIs | ⏳ Pending | `004-discovery-service` |
-| 005 | Fetch Service | FetcherService, Events/Profiles Export | ⏳ Pending | `005-fetch-service` |
+| 004 | Discovery Service | DiscoveryService, Event/Property APIs | ✅ Complete | `004-discovery-service` |
+| 005 | Fetch Service | FetcherService, Events/Profiles Export | ⏳ Next | `005-fetch-service` |
 | 006 | Live Queries | LiveQueryService, Segmentation, Funnels, Retention | ⏳ Pending | `006-live-queries` |
 | 007 | Workspace Facade | Workspace class, Lifecycle Management | ⏳ Pending | `007-workspace` |
 | 008 | CLI Application | Typer app, Commands, Formatters | ⏳ Pending | `008-cli` |
@@ -403,60 +403,42 @@ class StorageEngine:
 
 ---
 
-## Phase 004: Discovery Service ⏳
+## Phase 004: Discovery Service ✅
 
-**Status:** PENDING
+**Status:** COMPLETE
 **Branch:** `004-discovery-service`
 **Dependencies:** Phase 002 (API Client)
+**Spec:** [specs/004-discovery-service/](specs/004-discovery-service/)
 
 ### Overview
 
 The `DiscoveryService` retrieves schema information from Mixpanel—event names, properties, and sample values. This enables agents to understand data shape before querying.
 
-### Components to Build
+### Delivered Components
 
 | Component | Location | Description |
 |-----------|----------|-------------|
-| DiscoveryService | `src/mixpanel_data/_internal/services/discovery.py` | Schema discovery |
+| DiscoveryService | `src/mixpanel_data/_internal/services/discovery.py` | Schema discovery with caching |
+| Unit Tests | `tests/unit/test_discovery.py` | 18 tests with mocked API client |
 
-### Design Reference
+### Key Deliverables
 
-```python
-class DiscoveryService:
-    def __init__(self, api_client: MixpanelAPIClient): ...
-    def list_events(self) -> list[str]: ...
-    def list_properties(self, event: str) -> list[str]: ...
-    def list_property_values(self, event: str, prop: str, limit: int = 100) -> list[str]: ...
-```
-
-### User Stories
-
-1. **Discover what events exist** (P1)
-   - List all event names in the project
-   - Cache results for session
-
-2. **Understand event properties** (P1)
-   - List properties for a specific event
-   - Know property types
-
-3. **Sample property values** (P2)
-   - Get sample values for a property
-   - Understand data distribution
-
-### Tasks (Estimated: 15-20)
-
-- [ ] Create `DiscoveryService` class
-- [ ] Implement `list_events()` with caching
-- [ ] Implement `list_properties(event)`
-- [ ] Implement `list_property_values(event, prop, limit)`
-- [ ] Add optional caching layer
-- [ ] Unit tests with mocked API client
+- [x] Create `DiscoveryService` class with API client injection
+- [x] Implement `list_events()` with alphabetical sorting and caching
+- [x] Implement `list_properties(event)` with per-event caching
+- [x] Implement `list_property_values(property, event, limit)` with caching
+- [x] Implement `clear_cache()` for manual cache invalidation
+- [x] Session-scoped in-memory cache (dict-based)
+- [x] Pass-through error handling from API client
+- [x] Unit tests with mocked API client (18 tests)
+- [x] mypy --strict passes
+- [x] ruff check passes
 
 ### Success Criteria
 
-- [ ] All discovery methods return sorted lists
-- [ ] Caching reduces duplicate API calls
-- [ ] 90%+ test coverage
+- [x] All discovery methods return sorted lists (events and properties)
+- [x] Caching reduces duplicate API calls
+- [x] 100% test coverage for DiscoveryService
 
 ---
 

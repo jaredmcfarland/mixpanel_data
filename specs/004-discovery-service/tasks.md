@@ -23,8 +23,8 @@
 
 **Purpose**: Create services directory structure
 
-- [ ] T001 Create services package directory at src/mixpanel_data/_internal/services/
-- [ ] T002 Create package marker at src/mixpanel_data/_internal/services/__init__.py
+- [X] T001 Create services package directory at src/mixpanel_data/_internal/services/
+- [X] T002 Create package marker at src/mixpanel_data/_internal/services/__init__.py
 
 ---
 
@@ -34,13 +34,13 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 Create DiscoveryService class skeleton in src/mixpanel_data/_internal/services/discovery.py with:
+- [X] T003 Create DiscoveryService class skeleton in src/mixpanel_data/_internal/services/discovery.py with:
   - Module docstring and imports
   - Class definition with `__init__(self, api_client: MixpanelAPIClient)`
   - Private `_cache: dict[tuple, list[str]]` attribute
   - Private `_api_client` attribute
   - Module-level logger: `_logger = logging.getLogger(__name__)`
-- [ ] T004 Create test file skeleton at tests/unit/test_discovery.py with:
+- [X] T004 Create test file skeleton at tests/unit/test_discovery.py with:
   - Imports for pytest, httpx.MockTransport, and discovery service
   - Fixtures for mock API client (reuse pattern from tests/unit/test_api_client.py)
   - TestDiscoveryService class placeholder
@@ -57,19 +57,19 @@
 
 ### Tests for User Story 1
 
-- [ ] T005 [P] [US1] Unit test for list_events() returns sorted list in tests/unit/test_discovery.py
-- [ ] T006 [P] [US1] Unit test for list_events() caching behavior in tests/unit/test_discovery.py
-- [ ] T007 [P] [US1] Unit test for list_events() with authentication error in tests/unit/test_discovery.py
-- [ ] T008 [P] [US1] Unit test for list_events() with empty result in tests/unit/test_discovery.py
+- [X] T005 [P] [US1] Unit test for list_events() returns sorted list in tests/unit/test_discovery.py
+- [X] T006 [P] [US1] Unit test for list_events() caching behavior in tests/unit/test_discovery.py
+- [X] T007 [P] [US1] Unit test for list_events() with authentication error in tests/unit/test_discovery.py
+- [X] T008 [P] [US1] Unit test for list_events() with empty result in tests/unit/test_discovery.py
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Implement list_events() method in src/mixpanel_data/_internal/services/discovery.py:
+- [X] T009 [US1] Implement list_events() method in src/mixpanel_data/_internal/services/discovery.py:
   - Check cache for key `("list_events",)`
   - If miss: call `self._api_client.get_events()`
   - Sort result alphabetically with `sorted()`
   - Store in cache and return
-- [ ] T010 [US1] Run tests for User Story 1 and verify all pass
+- [X] T010 [US1] Run tests for User Story 1 and verify all pass
 
 **Checkpoint**: User Story 1 fully functional - can list all events with caching
 
@@ -83,19 +83,19 @@
 
 ### Tests for User Story 2
 
-- [ ] T011 [P] [US2] Unit test for list_properties() returns sorted list in tests/unit/test_discovery.py
-- [ ] T012 [P] [US2] Unit test for list_properties() caching per event in tests/unit/test_discovery.py
-- [ ] T013 [P] [US2] Unit test for list_properties() with QueryError on invalid event in tests/unit/test_discovery.py
-- [ ] T014 [P] [US2] Unit test for list_properties() with empty result in tests/unit/test_discovery.py
+- [X] T011 [P] [US2] Unit test for list_properties() returns sorted list in tests/unit/test_discovery.py
+- [X] T012 [P] [US2] Unit test for list_properties() caching per event in tests/unit/test_discovery.py
+- [X] T013 [P] [US2] Unit test for list_properties() with QueryError on invalid event in tests/unit/test_discovery.py
+- [X] T014 [P] [US2] Unit test for list_properties() with empty result in tests/unit/test_discovery.py
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Implement list_properties(event: str) method in src/mixpanel_data/_internal/services/discovery.py:
+- [X] T015 [US2] Implement list_properties(event: str) method in src/mixpanel_data/_internal/services/discovery.py:
   - Check cache for key `("list_properties", event)`
   - If miss: call `self._api_client.get_event_properties(event)`
   - Sort result alphabetically with `sorted()`
   - Store in cache and return
-- [ ] T016 [US2] Run tests for User Story 2 and verify all pass
+- [X] T016 [US2] Run tests for User Story 2 and verify all pass
 
 **Checkpoint**: User Stories 1 AND 2 both work independently
 
@@ -109,20 +109,20 @@
 
 ### Tests for User Story 3
 
-- [ ] T017 [P] [US3] Unit test for list_property_values() basic call in tests/unit/test_discovery.py
-- [ ] T018 [P] [US3] Unit test for list_property_values() with event scope in tests/unit/test_discovery.py
-- [ ] T019 [P] [US3] Unit test for list_property_values() with custom limit in tests/unit/test_discovery.py
-- [ ] T020 [P] [US3] Unit test for list_property_values() caching per (property, event, limit) in tests/unit/test_discovery.py
-- [ ] T021 [P] [US3] Unit test for list_property_values() with empty result in tests/unit/test_discovery.py
+- [X] T017 [P] [US3] Unit test for list_property_values() basic call in tests/unit/test_discovery.py
+- [X] T018 [P] [US3] Unit test for list_property_values() with event scope in tests/unit/test_discovery.py
+- [X] T019 [P] [US3] Unit test for list_property_values() with custom limit in tests/unit/test_discovery.py
+- [X] T020 [P] [US3] Unit test for list_property_values() caching per (property, event, limit) in tests/unit/test_discovery.py
+- [X] T021 [P] [US3] Unit test for list_property_values() with empty result in tests/unit/test_discovery.py
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Implement list_property_values(property_name: str, *, event: str | None = None, limit: int = 100) method in src/mixpanel_data/_internal/services/discovery.py:
+- [X] T022 [US3] Implement list_property_values(property_name: str, *, event: str | None = None, limit: int = 100) method in src/mixpanel_data/_internal/services/discovery.py:
   - Check cache for key `("list_property_values", property_name, event, limit)`
   - If miss: call `self._api_client.get_property_values(property_name, event=event, limit=limit)`
   - Return result (no sorting per research.md - values are not alphabetically ordered)
   - Store in cache and return
-- [ ] T023 [US3] Run tests for User Story 3 and verify all pass
+- [X] T023 [US3] Run tests for User Story 3 and verify all pass
 
 **Checkpoint**: User Stories 1, 2, AND 3 all work independently
 
@@ -136,15 +136,15 @@
 
 ### Tests for User Story 4
 
-- [ ] T024 [P] [US4] Unit test for clear_cache() clears all cached results in tests/unit/test_discovery.py
-- [ ] T025 [P] [US4] Unit test for clear_cache() on empty cache does not error in tests/unit/test_discovery.py
-- [ ] T026 [P] [US4] Unit test for clear_cache() causes next request to hit API in tests/unit/test_discovery.py
+- [X] T024 [P] [US4] Unit test for clear_cache() clears all cached results in tests/unit/test_discovery.py
+- [X] T025 [P] [US4] Unit test for clear_cache() on empty cache does not error in tests/unit/test_discovery.py
+- [X] T026 [P] [US4] Unit test for clear_cache() causes next request to hit API in tests/unit/test_discovery.py
 
 ### Implementation for User Story 4
 
-- [ ] T027 [US4] Implement clear_cache() method in src/mixpanel_data/_internal/services/discovery.py:
+- [X] T027 [US4] Implement clear_cache() method in src/mixpanel_data/_internal/services/discovery.py:
   - Set `self._cache = {}`
-- [ ] T028 [US4] Run tests for User Story 4 and verify all pass
+- [X] T028 [US4] Run tests for User Story 4 and verify all pass
 
 **Checkpoint**: All user stories now independently functional
 
@@ -154,12 +154,12 @@
 
 **Purpose**: Quality gates and documentation
 
-- [ ] T029 [P] Add module docstring and class docstring to src/mixpanel_data/_internal/services/discovery.py per Google style
-- [ ] T030 [P] Add method docstrings to all public methods (list_events, list_properties, list_property_values, clear_cache)
-- [ ] T031 Run mypy --strict on src/mixpanel_data/_internal/services/discovery.py and fix any type errors
-- [ ] T032 Run ruff check on src/mixpanel_data/_internal/services/discovery.py and fix any linting issues
-- [ ] T033 Run full test suite: pytest tests/unit/test_discovery.py -v
-- [ ] T034 Validate against quickstart.md examples (manual verification)
+- [X] T029 [P] Add module docstring and class docstring to src/mixpanel_data/_internal/services/discovery.py per Google style
+- [X] T030 [P] Add method docstrings to all public methods (list_events, list_properties, list_property_values, clear_cache)
+- [X] T031 Run mypy --strict on src/mixpanel_data/_internal/services/discovery.py and fix any type errors
+- [X] T032 Run ruff check on src/mixpanel_data/_internal/services/discovery.py and fix any linting issues
+- [X] T033 Run full test suite: pytest tests/unit/test_discovery.py -v
+- [X] T034 Validate against quickstart.md examples (manual verification)
 
 ---
 
