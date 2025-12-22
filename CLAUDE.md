@@ -62,7 +62,7 @@ src/mixpanel_data/
 ├── _internal/               # Private implementation
 │   ├── __init__.py          # ✅
 │   ├── config.py            # ✅ ConfigManager, Credentials, AccountInfo
-│   ├── api_client.py        # ⏳ MixpanelAPIClient
+│   ├── api_client.py        # ✅ MixpanelAPIClient
 │   ├── storage.py           # ⏳ StorageEngine (DuckDB)
 │   └── services/
 │       ├── discovery.py     # ⏳ DiscoveryService
@@ -116,8 +116,8 @@ Config file: `~/.mp/config.toml`
 | Phase | Name | Status | Branch |
 |-------|------|--------|--------|
 | 001 | Foundation Layer | ✅ Complete | `001-foundation-layer` |
-| 002 | API Client | ⏳ Next | `002-api-client` |
-| 003 | Storage Engine | ⏳ Pending | `003-storage-engine` |
+| 002 | API Client | ✅ Complete | `002-api-client` |
+| 003 | Storage Engine | ⏳ Next | `003-storage-engine` |
 | 004 | Discovery Service | ⏳ Pending | `004-discovery-service` |
 | 005 | Fetch Service | ⏳ Pending | `005-fetch-service` |
 | 006 | Live Queries | ⏳ Pending | `006-live-queries` |
@@ -125,7 +125,7 @@ Config file: `~/.mp/config.toml`
 | 008 | CLI Application | ⏳ Pending | `008-cli` |
 | 009 | Polish & Release | ⏳ Pending | `009-polish` |
 
-**Next up:** Phase 002 (API Client) - implements `MixpanelAPIClient` with HTTP transport, regional endpoints, rate limiting, and streaming export.
+**Next up:** Phase 003 (Storage Engine) - implements `StorageEngine` with DuckDB database lifecycle, schema management, and query execution.
 
 ## What's Implemented
 
@@ -140,6 +140,16 @@ Config file: `~/.mp/config.toml`
 - `ConfigManager` — TOML-based account management at `~/.mp/config.toml`
 - Credential resolution: env vars → named account → default account
 - Account CRUD: `add_account()`, `remove_account()`, `set_default()`, `list_accounts()`
+
+### API Client (`_internal/api_client.py`)
+- `MixpanelAPIClient` — HTTP client with service account authentication
+- Regional endpoint routing (US, EU, India) for query and export APIs
+- Automatic rate limit handling with exponential backoff and jitter
+- Streaming JSONL parsing for large exports (memory efficient)
+- Low-level HTTP methods: `get()`, `post()`
+- Export APIs: `export_events()`, `export_profiles()` (streaming iterators)
+- Discovery APIs: `get_events()`, `get_event_properties()`, `get_property_values()`
+- Query APIs: `segmentation()`, `funnel()`, `retention()`, `jql()` (raw responses)
 
 ### Result Types (`types.py`)
 All frozen dataclasses with lazy `.df` property and `.to_dict()` method:
@@ -173,9 +183,5 @@ ruff check src/ tests/
 ```
 
 ## Recent Changes
-- 002-api-client: Added Python 3.11+ (Constitution requirement) + httpx (HTTP client per Constitution), pydantic (validation)
-- 001-foundation-layer: Implemented complete foundation layer (exceptions, types, config, auth)
-
-## Active Technologies
-- Python 3.11+ (Constitution requirement) + httpx (HTTP client per Constitution), pydantic (validation) (002-api-client)
-- N/A (client has no storage responsibility; Phase 003 handles DuckDB) (002-api-client)
+- 002-api-client: ✅ Complete - Implemented `MixpanelAPIClient` with HTTP transport, regional endpoints, rate limiting, and streaming export
+- 001-foundation-layer: ✅ Complete - Implemented foundation layer (exceptions, types, config, auth)

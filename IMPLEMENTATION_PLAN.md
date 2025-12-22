@@ -82,7 +82,7 @@ This document defines the complete implementation roadmap for `mixpanel_data`, o
 | Phase | Name | Components | Status | Branch |
 |-------|------|------------|--------|--------|
 | 001 | Foundation Layer | Exceptions, Types, ConfigManager, Auth | ✅ Complete | `001-foundation-layer` |
-| 002 | API Client | MixpanelAPIClient, HTTP, Rate Limiting | ⏳ Pending | `002-api-client` |
+| 002 | API Client | MixpanelAPIClient, HTTP, Rate Limiting | ✅ Complete | `002-api-client` |
 | 003 | Storage Engine | StorageEngine, DuckDB, Schema Management | ⏳ Pending | `003-storage-engine` |
 | 004 | Discovery Service | DiscoveryService, Event/Property APIs | ⏳ Pending | `004-discovery-service` |
 | 005 | Fetch Service | FetcherService, Events/Profiles Export | ⏳ Pending | `005-fetch-service` |
@@ -119,15 +119,30 @@ This document defines the complete implementation roadmap for `mixpanel_data`, o
 
 ---
 
-## Phase 002: API Client ⏳
+## Phase 002: API Client ✅
 
-**Status:** PENDING
+**Status:** COMPLETE
 **Branch:** `002-api-client`
 **Dependencies:** Phase 001
 
 ### Overview
 
 The `MixpanelAPIClient` provides HTTP communication with Mixpanel APIs including authentication, regional endpoint routing, rate limiting, and response parsing. It has no knowledge of local storage.
+
+### Key Deliverables
+
+- [x] HTTP client with httpx supporting GET/POST methods
+- [x] Service account authentication via HTTP Basic auth
+- [x] Regional endpoint routing (US, EU, India) for query and export APIs
+- [x] Automatic rate limit handling with exponential backoff and jitter
+- [x] Streaming JSONL parsing for memory-efficient large exports
+- [x] Export API methods: `export_events()`, `export_profiles()` (streaming iterators)
+- [x] Discovery API methods: `get_events()`, `get_event_properties()`, `get_property_values()`
+- [x] Query API methods: `segmentation()`, `funnel()`, `retention()`, `jql()`
+- [x] Comprehensive error mapping: 401→AuthenticationError, 429→RateLimitError, 400→QueryError
+- [x] Unit tests with 90%+ coverage
+- [x] Integration tests with rate limiting behavior
+- [x] Context manager support for resource cleanup
 
 ### Components to Build
 
