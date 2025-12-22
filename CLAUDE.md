@@ -183,5 +183,10 @@ ruff check src/ tests/
 ```
 
 ## Recent Changes
+- 003-storage-engine: Added Python 3.11+ (matches project requirement) + DuckDB 1.0+, pandas 2.0+, Pydantic 2.0 (for TableMetadata validation)
 - 002-api-client: ✅ Complete - Implemented `MixpanelAPIClient` with HTTP transport, regional endpoints, rate limiting, and streaming export
 - 001-foundation-layer: ✅ Complete - Implemented foundation layer (exceptions, types, config, auth)
+
+## Active Technologies
+- Python 3.11+ (matches project requirement) + DuckDB 1.0+, pandas 2.0+, Pydantic 2.0 (for TableMetadata validation) (003-storage-engine)
+- DuckDB embedded database (single-file, serverless, ACID-compliant) (003-storage-engine)
