@@ -10,7 +10,7 @@ import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import tomli_w
 from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
@@ -246,11 +246,15 @@ class ConfigManager:
 
         # All four must be set to use env vars
         if username and secret and project_id and region:
+            if region not in VALID_REGIONS:
+                raise ConfigError(
+                    f"Invalid MP_REGION: '{region}'. Must be 'us', 'eu', or 'in'."
+                )
             return Credentials(
                 username=username,
                 secret=SecretStr(secret),
                 project_id=project_id,
-                region=region,
+                region=cast(RegionType, region),
             )
         return None
 

@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import ENDPOINTS, MixpanelAPIClient
 from mixpanel_data._internal.config import Credentials
@@ -25,7 +26,7 @@ def test_credentials() -> Credentials:
     """Create test credentials."""
     return Credentials(
         username="test_user",
-        secret="test_secret",
+        secret=SecretStr("test_secret"),
         project_id="12345",
         region="us",
     )
@@ -36,7 +37,7 @@ def eu_credentials() -> Credentials:
     """Create EU region test credentials."""
     return Credentials(
         username="test_user",
-        secret="test_secret",
+        secret=SecretStr("test_secret"),
         project_id="12345",
         region="eu",
     )
@@ -47,7 +48,7 @@ def india_credentials() -> Credentials:
     """Create India region test credentials."""
     return Credentials(
         username="test_user",
-        secret="test_secret",
+        secret=SecretStr("test_secret"),
         project_id="12345",
         region="in",
     )

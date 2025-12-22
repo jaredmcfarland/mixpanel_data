@@ -196,6 +196,10 @@ ruff check src/ tests/
 ```
 
 ## Recent Changes
+- 004-discovery-service: Added Python 3.11+ + httpx (via MixpanelAPIClient from Phase 002)
 - 003-storage-engine: ✅ Complete - Implemented `StorageEngine` with DuckDB lifecycle management, streaming ingestion, query execution, and introspection
 - 002-api-client: ✅ Complete - Implemented `MixpanelAPIClient` with HTTP transport, regional endpoints, rate limiting, and streaming export
-- 001-foundation-layer: ✅ Complete - Implemented foundation layer (exceptions, types, config, auth)
+
+## Active Technologies
+- Python 3.11+ + httpx (via MixpanelAPIClient from Phase 002) (004-discovery-service)
+- N/A (read-only service, in-memory cache only) (004-discovery-service)

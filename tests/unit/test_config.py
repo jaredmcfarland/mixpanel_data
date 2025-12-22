@@ -6,7 +6,7 @@ import dataclasses
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from mixpanel_data._internal.config import (
     AccountInfo,
@@ -27,7 +27,7 @@ class TestCredentials:
         """Test creating valid credentials."""
         creds = Credentials(
             username="sa_test",
-            secret="secret123",
+            secret=SecretStr("secret123"),
             project_id="12345",
             region="us",
         )
@@ -43,7 +43,7 @@ class TestCredentials:
         for region in ("us", "eu", "in", "US", "EU", "IN"):
             creds = Credentials(
                 username="user",
-                secret="secret",
+                secret=SecretStr("secret"),
                 project_id="123",
                 region=region,
             )
@@ -53,7 +53,7 @@ class TestCredentials:
         with pytest.raises(ValueError, match="Region must be one of"):
             Credentials(
                 username="user",
-                secret="secret",
+                secret=SecretStr("secret"),
                 project_id="123",
                 region="invalid",
             )
@@ -63,7 +63,7 @@ class TestCredentials:
         with pytest.raises(ValueError, match="cannot be empty"):
             Credentials(
                 username="",
-                secret="secret",
+                secret=SecretStr("secret"),
                 project_id="123",
                 region="us",
             )
@@ -71,7 +71,7 @@ class TestCredentials:
         with pytest.raises(ValueError, match="cannot be empty"):
             Credentials(
                 username="user",
-                secret="secret",
+                secret=SecretStr("secret"),
                 project_id="   ",
                 region="us",
             )
@@ -80,7 +80,7 @@ class TestCredentials:
         """Secret should never appear in repr/str output."""
         creds = Credentials(
             username="sa_test",
-            secret="my_super_secret_value",
+            secret=SecretStr("my_super_secret_value"),
             project_id="12345",
             region="us",
         )
@@ -98,7 +98,7 @@ class TestCredentials:
         """Credentials should be immutable (frozen)."""
         creds = Credentials(
             username="sa_test",
-            secret="secret123",
+            secret=SecretStr("secret123"),
             project_id="12345",
             region="us",
         )
