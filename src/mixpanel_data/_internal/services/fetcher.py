@@ -40,12 +40,8 @@ def _transform_event(event: dict[str, Any]) -> dict[str, Any]:
     insert_id = remaining_props.pop("$insert_id", None)
 
     # Convert Unix timestamp to datetime
-    # Mixpanel returns time as Unix timestamp in seconds
-    if isinstance(event_time_raw, int | float):
-        event_time = datetime.fromtimestamp(event_time_raw, tz=UTC)
-    else:
-        # Already a datetime or string
-        event_time = event_time_raw
+    # Mixpanel Export API returns time as Unix timestamp in seconds (integer)
+    event_time = datetime.fromtimestamp(event_time_raw, tz=UTC)
 
     # Generate UUID if $insert_id is missing
     if insert_id is None:
