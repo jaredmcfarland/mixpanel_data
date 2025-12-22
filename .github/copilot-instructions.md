@@ -14,33 +14,46 @@
 
 ### Prerequisites
 - Python 3.12.3 (or Python 3.11+)
-- pip 24.0+
+- [uv](https://docs.astral.sh/uv/) - Python package manager
+
+### Development Commands
+
+This project uses `uv` for dependency management and running tools.
+
+| Command | Description |
+|---------|-------------|
+| `uv sync --all-extras` | Sync all dependencies |
+| `uv run pytest` | Run tests |
+| `uv run pytest --cov=src/mixpanel_data` | Run tests with coverage |
+| `uv run ruff check src/ tests/` | Lint code with ruff |
+| `uv run ruff check --fix src/ tests/` | Auto-fix lint errors |
+| `uv run ruff format src/ tests/` | Format code with ruff |
+| `uv run mypy src/` | Type check with mypy |
+| `uv build` | Build package |
 
 ### Installation & Setup
-**ALWAYS run installation before any development work:**
+**ALWAYS sync dependencies before any development work:**
 ```bash
-cd /home/runner/work/mixpanel_data/mixpanel_data
-pip install -e ".[dev]"
+uv sync --all-extras
 ```
 
-This installs the package in editable mode with all dev dependencies (pytest, ruff, mypy, pytest-cov, pandas-stubs). Installation takes ~30-60 seconds.
+This installs all dependencies including dev extras (pytest, ruff, mypy, pytest-cov, pandas-stubs).
 
 ### Testing
-**Run all tests (93 tests, ~1 second):**
+**Run all tests:**
 ```bash
-cd /home/runner/work/mixpanel_data/mixpanel_data
-pytest -v
+uv run pytest
 ```
 
 **Run tests with coverage (target: 95%+):**
 ```bash
-pytest --cov=src/mixpanel_data --cov-report=term
+uv run pytest --cov=src/mixpanel_data --cov-report=term-missing
 ```
 
-**Run specific test files:**
+**Run specific tests:**
 ```bash
-pytest tests/unit/test_config.py -v
-pytest tests/integration/test_foundation.py -v
+uv run pytest -k test_name
+uv run pytest tests/unit/test_config.py
 ```
 
 Tests are organized:
@@ -50,34 +63,30 @@ Tests are organized:
 
 ### Linting & Type Checking
 
-**ALWAYS run linting before committing:**
+**ALWAYS run all checks before committing:**
 ```bash
-cd /home/runner/work/mixpanel_data/mixpanel_data
-ruff check .
+uv run ruff check src/ tests/
+uv run mypy src/
+uv run pytest
 ```
 
-**Auto-fix linting issues (14 of 19 current issues are auto-fixable):**
+**Auto-fix linting issues:**
 ```bash
-ruff check --fix .
+uv run ruff check --fix src/ tests/
 ```
 
-**Known acceptable linting warnings:**
-- B017: Tests use `pytest.raises(Exception)` for frozen dataclass validation - this is intentional
-- Some unused imports in test files that verify public API exports
-
-**Type checking (must pass with zero errors):**
+**Type checking only (must pass with zero errors):**
 ```bash
-mypy src
+uv run mypy src/
 ```
 Note: Tests are excluded from strict type checking (see pyproject.toml `tool.mypy.overrides`)
 
 ### Building the Package
 **To build distribution packages:**
 ```bash
-pip install build --user
-python -m build
+uv build
 ```
-Creates `dist/mixpanel_data-0.1.0.tar.gz` and `dist/mixpanel_data-0.1.0-py3-none-any.whl` (~30 seconds)
+Creates wheel and sdist in `dist/`
 
 ## Project Structure
 
@@ -154,7 +163,7 @@ Config file: `~/.mp/config.toml` (TOML format)
 2. **Test organization**: Group tests in classes by component (e.g., `TestConfigManager`)
 3. **Naming**: `test_<what_is_being_tested>` (e.g., `test_add_account_stores_correctly`)
 4. **Coverage target**: 95%+ (currently 97%)
-5. **Frozen models**: Use `pytest.raises(Exception)` for immutability tests (ignore B017 linting warning)
+5. **Frozen models**: Use `pytest.raises(dataclasses.FrozenInstanceError)` for immutability tests
 
 ### Code Style
 - **Line length**: 88 characters (Black-compatible)
@@ -163,11 +172,6 @@ Config file: `~/.mp/config.toml` (TOML format)
 - **Type hints**: Always use (mypy strict mode enabled)
 
 ## Known Issues & Workarounds
-
-### Linting Issues (Non-Critical)
-The codebase currently has 19 ruff findings:
-- **14 auto-fixable**: Run `ruff check --fix .` to fix import ordering and type annotation quotes
-- **5 non-fixable B017 warnings**: `pytest.raises(Exception)` in tests for frozen model validation - this is intentional and can be ignored
 
 ### Test Execution
 - **All tests pass**: 93/93 tests pass in ~1 second
@@ -209,16 +213,16 @@ The codebase currently has 19 ruff findings:
 
 **These instructions have been validated** by running all commands in the actual environment. If you encounter issues:
 1. First verify you're in the correct directory: `/home/runner/work/mixpanel_data/mixpanel_data`
-2. Check if dependencies are installed: `pip install -e ".[dev]"`
+2. Check if dependencies are synced: `uv sync --all-extras`
 3. Only then search for additional information or report the issue
 
 **Command execution times** (for timeout planning):
-- `pip install -e ".[dev]"`: 30-60 seconds
-- `pytest -v`: 1 second
-- `pytest --cov`: 1 second
-- `ruff check .`: <1 second
-- `mypy src`: 2-3 seconds
-- `python -m build`: 30 seconds
+- `uv sync --all-extras`: 30-60 seconds (first run), <5 seconds (subsequent)
+- `uv run pytest`: ~1 second
+- `uv run pytest --cov`: ~1 second
+- `uv run ruff check`: <1 second
+- `uv run mypy src/`: 2-3 seconds
+- `uv build`: ~30 seconds
 
 ---
 
