@@ -81,10 +81,6 @@ This runs lint, typecheck, and test in sequence.
 just lint-fix
 ```
 
-**Known acceptable linting warnings:**
-- B017: Tests use `pytest.raises(Exception)` for frozen dataclass validation - this is intentional
-- Some unused imports in test files that verify public API exports
-
 **Type checking only (must pass with zero errors):**
 ```bash
 just typecheck
@@ -173,7 +169,7 @@ Config file: `~/.mp/config.toml` (TOML format)
 2. **Test organization**: Group tests in classes by component (e.g., `TestConfigManager`)
 3. **Naming**: `test_<what_is_being_tested>` (e.g., `test_add_account_stores_correctly`)
 4. **Coverage target**: 95%+ (currently 97%)
-5. **Frozen models**: Use `pytest.raises(Exception)` for immutability tests (ignore B017 linting warning)
+5. **Frozen models**: Use `pytest.raises(dataclasses.FrozenInstanceError)` for immutability tests
 
 ### Code Style
 - **Line length**: 88 characters (Black-compatible)
@@ -182,11 +178,6 @@ Config file: `~/.mp/config.toml` (TOML format)
 - **Type hints**: Always use (mypy strict mode enabled)
 
 ## Known Issues & Workarounds
-
-### Linting Issues (Non-Critical)
-The codebase currently has 19 ruff findings:
-- **14 auto-fixable**: Run `ruff check --fix .` to fix import ordering and type annotation quotes
-- **5 non-fixable B017 warnings**: `pytest.raises(Exception)` in tests for frozen model validation - this is intentional and can be ignored
 
 ### Test Execution
 - **All tests pass**: 93/93 tests pass in ~1 second
