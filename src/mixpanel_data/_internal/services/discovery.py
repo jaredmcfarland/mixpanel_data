@@ -38,7 +38,10 @@ class DiscoveryService:
             api_client: Authenticated Mixpanel API client.
         """
         self._api_client = api_client
-        # Cache key can contain str, None, or int values
+        # Cache keys by method:
+        #   ("list_events",)
+        #   ("list_properties", event: str)
+        #   ("list_property_values", property: str, event: str | None, limit: int)
         self._cache: dict[tuple[str | int | None, ...], list[str]] = {}
 
     def list_events(self) -> list[str]:
@@ -120,7 +123,8 @@ class DiscoveryService:
             property_name, event=event, limit=limit
         )
         # Note: values are NOT sorted per research.md
-        self._cache[cache_key] = result
+        # Store a copy to prevent mutation if API client retains reference
+        self._cache[cache_key] = list(result)
         return list(result)
 
     def clear_cache(self) -> None:
