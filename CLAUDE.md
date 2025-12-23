@@ -56,7 +56,7 @@ Read in this order for implementation:
 justfile                     # Development commands (run `just` to see all)
 src/mixpanel_data/
 ├── __init__.py              # ✅ Public API exports (exceptions, result types)
-├── workspace.py             # ⏳ Workspace facade class
+├── workspace.py             # ✅ Workspace facade class
 ├── auth.py                  # ✅ Public auth module (re-exports ConfigManager, Credentials)
 ├── exceptions.py            # ✅ Exception hierarchy (9 exception classes)
 ├── types.py                 # ✅ Result types (FetchResult, SegmentationResult, etc.)
@@ -126,11 +126,11 @@ Config file: `~/.mp/config.toml`
 | 006 | Live Queries | ✅ Complete | `006-live-query-service` |
 | 007 | Discovery Enhancements | ✅ Complete | `007-discovery-enhancements` |
 | 008 | Query Service Enhancements | ✅ Complete | `008-query-service-enhancements` |
-| 009 | Workspace Facade | ⏳ Next | `009-workspace` |
-| 010 | CLI Application | ⏳ Pending | `010-cli` |
+| 009 | Workspace Facade | ✅ Complete | `009-workspace` |
+| 010 | CLI Application | ⏳ Next | `010-cli` |
 | 011 | Polish & Release | ⏳ Pending | `011-polish` |
 
-**Next up:** Phase 009 (Workspace Facade) - implements `Workspace` class as the unified entry point for both live queries and local storage operations.
+**Next up:** Phase 010 (CLI Application) - implements the `mp` command-line interface using Typer.
 
 ## What's Implemented
 
@@ -234,8 +234,22 @@ All frozen dataclasses with lazy `.df` property and `.to_dict()` method:
 - No caching (live queries return fresh data)
 - Constructor injection of `MixpanelAPIClient` for testing
 
+### Workspace Facade (`workspace.py`) [Phase 009]
+- `Workspace` — Unified entry point for all Mixpanel data operations
+- Construction: `__init__(account, project_id, region, path)`, `ephemeral()`, `open(path)`
+- Discovery: `events()`, `properties()`, `property_values()`, `funnels()`, `cohorts()`, `top_events()`, `clear_discovery_cache()`
+- Fetching: `fetch_events()`, `fetch_profiles()` with optional progress bars
+- Local queries: `sql()`, `sql_scalar()`, `sql_rows()` delegating to StorageEngine
+- Live queries: `segmentation()`, `funnel()`, `retention()`, `jql()`, `event_counts()`, `property_counts()`, `activity_feed()`, `insights()`, `frequency()`, `segmentation_numeric()`, `segmentation_sum()`, `segmentation_average()`
+- Introspection: `info()`, `tables()`, `schema()`
+- Table management: `drop()`, `drop_all()`
+- Escape hatches: `.connection` (DuckDB), `.api` (MixpanelAPIClient)
+- Context manager support for resource cleanup
+- Credential resolution: env vars → named account → default account
+- Query-only mode via `Workspace.open(path)` without credentials
+
 ### Tests
-- Unit tests for exceptions, config, types, storage, discovery, fetcher, live_query
+- Unit tests for exceptions, config, types, storage, discovery, fetcher, live_query, workspace
 - Integration tests for config file CRUD, foundation layer, storage engine
 - Requires Python 3.11+ (use devcontainer or pyenv)
 
@@ -261,6 +275,8 @@ This project uses [just](https://github.com/casey/just) as a command runner. Run
 
 **Recommended:** Use the devcontainer (Python 3.11, uv, just, Claude Code pre-installed)
 
+**LSP Integration:** The `pyright-lsp` plugin provides real-time Python type checking and code intelligence. Use this for immediate type error detection, symbol lookup, and hover documentation alongside `just typecheck` for full validation.
+
 ```bash
 # See all available commands
 just
@@ -276,6 +292,10 @@ just fmt && just lint
 ```
 
 ## Recent Changes
+- 009-workspace: Implemented Workspace facade class with 40+ public methods covering discovery (7), fetching (2), local queries (3), live queries (12), introspection (3), table management (2), and escape hatches (2). Added 51 new tests (45 unit, 6 integration)
 - 008-query-service-enhancements: Added 6 new LiveQueryService methods (activity_feed, insights, frequency, segmentation_numeric, segmentation_sum, segmentation_average) with 7 new result types and 61 new tests
 - 007-discovery-enhancements: Added funnels, cohorts, top events discovery; event/property counts queries
-- 006-live-query-service: Added segmentation, funnel, retention, JQL queries with typed results
+
+## Active Technologies
+- Python 3.11+ (per constitution) + DuckDB (storage), httpx (HTTP), Pydantic v2 (validation), Rich (progress bars), pandas (DataFrames)
+- DuckDB embedded database (persistent or ephemeral modes)
