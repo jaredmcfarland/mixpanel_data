@@ -751,10 +751,14 @@ class WorkspaceInfo:
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--account` | `-a` | Use specific named account |
-| `--project` | `-p` | Override project ID |
-| `--format` | `-f` | Output: json (default), table, csv, jsonl |
 | `--quiet` | `-q` | Suppress progress/status |
 | `--verbose` | `-v` | Show detailed output |
+
+### Per-Command Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--format` | `-f` | Output: json (default), table, csv, jsonl, plain |
 
 ### Commands
 

@@ -1,0 +1,58 @@
+"""CLI parameter validators for Literal types.
+
+Validates string inputs from Typer against Literal types before
+passing to Workspace methods, providing early error feedback.
+"""
+
+from __future__ import annotations
+
+from typing import Any, TypeVar, cast, get_args
+
+import typer
+
+from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
+from mixpanel_data.cli.utils import ExitCode, err_console
+
+T = TypeVar("T")
+
+
+def validate_literal(value: str, literal_type: Any, param_name: str) -> Any:
+    """Validate a CLI string against a Literal type.
+
+    Args:
+        value: String value from CLI.
+        literal_type: The Literal type to validate against.
+        param_name: Parameter name for error message.
+
+    Returns:
+        The validated value, cast to the Literal type.
+
+    Raises:
+        typer.Exit: With code 3 (INVALID_ARGS) if invalid.
+    """
+    valid_values = get_args(literal_type)
+    if value not in valid_values:
+        err_console.print(
+            f"[red]Error:[/red] Invalid value for {param_name}: '{value}'"
+        )
+        err_console.print(f"Valid options: {', '.join(valid_values)}")
+        raise typer.Exit(ExitCode.INVALID_ARGS)
+    return value
+
+
+def validate_time_unit(value: str, param_name: str = "--unit") -> TimeUnit:
+    """Validate time unit (day, week, month)."""
+    validate_literal(value, TimeUnit, param_name)
+    return cast(TimeUnit, value)
+
+
+def validate_hour_day_unit(value: str, param_name: str = "--unit") -> HourDayUnit:
+    """Validate hour/day unit."""
+    validate_literal(value, HourDayUnit, param_name)
+    return cast(HourDayUnit, value)
+
+
+def validate_count_type(value: str, param_name: str = "--type") -> CountType:
+    """Validate count type (general, unique, average)."""
+    validate_literal(value, CountType, param_name)
+    return cast(CountType, value)

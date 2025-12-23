@@ -5,6 +5,7 @@ Designed for AI coding agents. Fetch data once into a local DuckDB database,
 then query it repeatedly with SQL.
 """
 
+from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
 from mixpanel_data.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
@@ -52,6 +53,10 @@ __version__ = "0.1.0"
 __all__ = [
     # Core
     "Workspace",
+    # Type aliases
+    "CountType",
+    "HourDayUnit",
+    "TimeUnit",
     # Exceptions
     "MixpanelDataError",
     "APIError",

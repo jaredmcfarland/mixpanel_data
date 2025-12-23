@@ -1187,3 +1187,121 @@ class TestContextManager:
         )
         ws.close()
         mock_api_client.close.assert_called_once()
+
+
+# =============================================================================
+# Test Credentials Tests
+# =============================================================================
+
+
+class TestTestCredentials:
+    """Tests for Workspace.test_credentials() static method."""
+
+    def test_test_credentials_with_env_vars(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test test_credentials() with environment variables."""
+        # Mock the API client
+        from unittest.mock import patch
+
+        monkeypatch.setenv("MP_USERNAME", "test_user")
+        monkeypatch.setenv("MP_SECRET", "test_secret")
+        monkeypatch.setenv("MP_PROJECT_ID", "12345")
+        monkeypatch.setenv("MP_REGION", "us")
+
+        mock_api_client = MagicMock()
+        mock_api_client.get_events.return_value = ["event1", "event2", "event3"]
+
+        with patch("mixpanel_data.workspace.MixpanelAPIClient") as MockAPIClient:
+            MockAPIClient.return_value = mock_api_client
+
+            result = Workspace.test_credentials()
+
+            assert result["success"] is True
+            assert result["project_id"] == "12345"
+            assert result["region"] == "us"
+            assert result["events_found"] == 3
+            mock_api_client.close.assert_called_once()
+
+    def test_test_credentials_with_named_account(
+        self,
+        temp_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test test_credentials() with a named account."""
+        from unittest.mock import patch
+
+        # Clear env vars
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.delenv("MP_PROJECT_ID", raising=False)
+        monkeypatch.delenv("MP_REGION", raising=False)
+
+        # Create config with named account
+        config_path = temp_dir / "config.toml"
+        config_manager = ConfigManager(config_path=config_path)
+        config_manager.add_account(
+            name="prod",
+            username="prod_user",
+            secret="prod_secret",
+            project_id="99999",
+            region="eu",
+        )
+
+        mock_api_client = MagicMock()
+        mock_api_client.get_events.return_value = ["event1"]
+
+        with (
+            patch("mixpanel_data.workspace.MixpanelAPIClient") as MockAPIClient,
+            patch("mixpanel_data.workspace.ConfigManager") as MockConfigManager,
+        ):
+            MockAPIClient.return_value = mock_api_client
+            MockConfigManager.return_value = config_manager
+
+            result = Workspace.test_credentials("prod")
+
+            assert result["success"] is True
+            assert result["account"] == "prod"
+            assert result["project_id"] == "99999"
+            assert result["region"] == "eu"
+            assert result["events_found"] == 1
+
+    def test_test_credentials_returns_account_none_for_env_vars(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+    ) -> None:
+        """Test that test_credentials() returns account=None when using env vars."""
+        from unittest.mock import patch
+
+        # Clear env first and use a config without default account
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.delenv("MP_PROJECT_ID", raising=False)
+        monkeypatch.delenv("MP_REGION", raising=False)
+
+        # Set env vars
+        monkeypatch.setenv("MP_USERNAME", "env_user")
+        monkeypatch.setenv("MP_SECRET", "env_secret")
+        monkeypatch.setenv("MP_PROJECT_ID", "12345")
+        monkeypatch.setenv("MP_REGION", "us")
+
+        # Empty config (no accounts)
+        config_path = temp_dir / "config.toml"
+        config_manager = ConfigManager(config_path=config_path)
+
+        mock_api_client = MagicMock()
+        mock_api_client.get_events.return_value = []
+
+        with (
+            patch("mixpanel_data.workspace.MixpanelAPIClient") as MockAPIClient,
+            patch("mixpanel_data.workspace.ConfigManager") as MockConfigManager,
+        ):
+            MockAPIClient.return_value = mock_api_client
+            MockConfigManager.return_value = config_manager
+
+            result = Workspace.test_credentials()
+
+            assert result["success"] is True
+            assert result["account"] is None  # No named account used
