@@ -680,6 +680,162 @@ class MixpanelAPIClient:
             return [str(v) for v in response]
         return []
 
+    def list_funnels(self) -> list[dict[str, Any]]:
+        """List all saved funnels in the project.
+
+        Returns:
+            List of funnel dictionaries with keys: funnel_id (int), name (str).
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            RateLimitError: Rate limit exceeded after retries.
+        """
+        url = self._build_url("query", "/funnels/list")
+        response = self._request("GET", url)
+        if isinstance(response, list):
+            return response
+        return []
+
+    def list_cohorts(self) -> list[dict[str, Any]]:
+        """List all saved cohorts in the project.
+
+        Returns:
+            List of cohort dictionaries with keys:
+            id (int), name (str), count (int), description (str),
+            created (str), is_visible (int), project_id (int).
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            RateLimitError: Rate limit exceeded after retries.
+        """
+        # Note: POST method is unusual for read-only, but per API spec
+        url = self._build_url("query", "/cohorts/list")
+        response = self._request("POST", url)
+        if isinstance(response, list):
+            return response
+        return []
+
+    def get_top_events(
+        self,
+        *,
+        type: str = "general",
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Get today's top events with counts and trends.
+
+        Args:
+            type: Counting method - "general", "unique", or "average".
+            limit: Maximum events to return (default: 100).
+
+        Returns:
+            Dictionary with keys:
+            - events: list of {amount: int, event: str, percent_change: float}
+            - type: str
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            RateLimitError: Rate limit exceeded after retries.
+        """
+        url = self._build_url("query", "/events/top")
+        params: dict[str, Any] = {"type": type}
+        if limit is not None:
+            params["limit"] = limit
+        response = self._request("GET", url, params=params)
+        if isinstance(response, dict):
+            return response
+        return {"events": [], "type": type}
+
+    def event_counts(
+        self,
+        events: list[str],
+        from_date: str,
+        to_date: str,
+        *,
+        type: str = "general",
+        unit: str = "day",
+    ) -> dict[str, Any]:
+        """Get aggregate counts for multiple events over time.
+
+        Args:
+            events: List of event names to query.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            type: Counting method - "general", "unique", or "average".
+            unit: Time unit - "day", "week", or "month".
+
+        Returns:
+            Dictionary with keys:
+            - data.series: list of date strings
+            - data.values: {event_name: {date: count}}
+            - legend_size: int
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid parameters.
+            RateLimitError: Rate limit exceeded after retries.
+        """
+        url = self._build_url("query", "/events")
+        params: dict[str, Any] = {
+            "event": json.dumps(events),
+            "type": type,
+            "unit": unit,
+            "from_date": from_date,
+            "to_date": to_date,
+        }
+        result: dict[str, Any] = self._request("GET", url, params=params)
+        return result
+
+    def property_counts(
+        self,
+        event: str,
+        property_name: str,
+        from_date: str,
+        to_date: str,
+        *,
+        type: str = "general",
+        unit: str = "day",
+        values: list[str] | None = None,
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        """Get aggregate counts by property values over time.
+
+        Args:
+            event: Event name to query.
+            property_name: Property to segment by.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            type: Counting method - "general", "unique", or "average".
+            unit: Time unit - "day", "week", or "month".
+            values: Optional list of specific property values to include.
+            limit: Maximum property values to return (default: 255).
+
+        Returns:
+            Dictionary with keys:
+            - data.series: list of date strings
+            - data.values: {property_value: {date: count}}
+            - legend_size: int
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid parameters.
+            RateLimitError: Rate limit exceeded after retries.
+        """
+        url = self._build_url("query", "/events/properties")
+        params: dict[str, Any] = {
+            "event": event,
+            "name": property_name,
+            "type": type,
+            "unit": unit,
+            "from_date": from_date,
+            "to_date": to_date,
+        }
+        if values is not None:
+            params["values"] = json.dumps(values)
+        if limit is not None:
+            params["limit"] = limit
+        result: dict[str, Any] = self._request("GET", url, params=params)
+        return result
+
     # =========================================================================
     # Query API - Raw Responses
     # =========================================================================

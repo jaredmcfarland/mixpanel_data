@@ -458,3 +458,427 @@ class TestClearCache:
         # Third call should hit API again
         discovery.list_events()
         assert call_count == 2
+
+
+# =============================================================================
+# User Story 5: list_funnels() Tests
+# =============================================================================
+
+
+class TestListFunnels:
+    """Tests for DiscoveryService.list_funnels()."""
+
+    def test_list_funnels_returns_funnel_info_list(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_funnels() should return list of FunnelInfo objects."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json=[
+                    {"funnel_id": 123, "name": "Checkout Funnel"},
+                    {"funnel_id": 456, "name": "Onboarding Flow"},
+                ],
+            )
+
+        discovery = discovery_factory(handler)
+        funnels = discovery.list_funnels()
+
+        assert len(funnels) == 2
+        assert funnels[0].funnel_id == 123
+        assert funnels[0].name == "Checkout Funnel"
+
+    def test_list_funnels_returns_sorted_by_name(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_funnels() should return funnels sorted alphabetically by name."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json=[
+                    {"funnel_id": 1, "name": "Zebra Funnel"},
+                    {"funnel_id": 2, "name": "Alpha Funnel"},
+                    {"funnel_id": 3, "name": "Beta Funnel"},
+                ],
+            )
+
+        discovery = discovery_factory(handler)
+        funnels = discovery.list_funnels()
+
+        assert funnels[0].name == "Alpha Funnel"
+        assert funnels[1].name == "Beta Funnel"
+        assert funnels[2].name == "Zebra Funnel"
+
+    def test_list_funnels_caching(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_funnels() should cache results."""
+        call_count = 0
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(200, json=[{"funnel_id": 1, "name": "Funnel"}])
+
+        discovery = discovery_factory(handler)
+
+        funnels1 = discovery.list_funnels()
+        assert call_count == 1
+
+        funnels2 = discovery.list_funnels()
+        assert call_count == 1  # Still 1, cached
+
+        assert funnels1 == funnels2
+
+    def test_list_funnels_empty_result(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_funnels() should return empty list when no funnels exist."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=[])
+
+        discovery = discovery_factory(handler)
+        funnels = discovery.list_funnels()
+
+        assert funnels == []
+
+
+# =============================================================================
+# User Story 6: list_cohorts() Tests
+# =============================================================================
+
+
+class TestListCohorts:
+    """Tests for DiscoveryService.list_cohorts()."""
+
+    def test_list_cohorts_returns_saved_cohort_list(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_cohorts() should return list of SavedCohort objects."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": 123,
+                        "name": "Power Users",
+                        "count": 1500,
+                        "description": "Users with 10+ purchases",
+                        "created": "2024-01-15 10:30:00",
+                        "is_visible": 1,
+                        "project_id": 999,
+                    },
+                ],
+            )
+
+        discovery = discovery_factory(handler)
+        cohorts = discovery.list_cohorts()
+
+        assert len(cohorts) == 1
+        assert cohorts[0].id == 123
+        assert cohorts[0].name == "Power Users"
+        assert cohorts[0].count == 1500
+        assert cohorts[0].is_visible is True
+
+    def test_list_cohorts_converts_is_visible_to_bool(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_cohorts() should convert is_visible int to bool."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": 1,
+                        "name": "Visible",
+                        "count": 100,
+                        "description": "",
+                        "created": "2024-01-01 00:00:00",
+                        "is_visible": 1,
+                    },
+                    {
+                        "id": 2,
+                        "name": "Hidden",
+                        "count": 50,
+                        "description": "",
+                        "created": "2024-01-01 00:00:00",
+                        "is_visible": 0,
+                    },
+                ],
+            )
+
+        discovery = discovery_factory(handler)
+        cohorts = discovery.list_cohorts()
+
+        visible = next(c for c in cohorts if c.name == "Visible")
+        hidden = next(c for c in cohorts if c.name == "Hidden")
+
+        assert visible.is_visible is True
+        assert hidden.is_visible is False
+
+    def test_list_cohorts_returns_sorted_by_name(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_cohorts() should return cohorts sorted alphabetically by name."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": 1,
+                        "name": "Zebra Cohort",
+                        "count": 100,
+                        "description": "",
+                        "created": "2024-01-01 00:00:00",
+                        "is_visible": 1,
+                    },
+                    {
+                        "id": 2,
+                        "name": "Alpha Cohort",
+                        "count": 50,
+                        "description": "",
+                        "created": "2024-01-01 00:00:00",
+                        "is_visible": 1,
+                    },
+                ],
+            )
+
+        discovery = discovery_factory(handler)
+        cohorts = discovery.list_cohorts()
+
+        assert cohorts[0].name == "Alpha Cohort"
+        assert cohorts[1].name == "Zebra Cohort"
+
+    def test_list_cohorts_caching(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_cohorts() should cache results."""
+        call_count = 0
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": 1,
+                        "name": "Cohort",
+                        "count": 100,
+                        "description": "",
+                        "created": "2024-01-01 00:00:00",
+                        "is_visible": 1,
+                    }
+                ],
+            )
+
+        discovery = discovery_factory(handler)
+
+        cohorts1 = discovery.list_cohorts()
+        assert call_count == 1
+
+        cohorts2 = discovery.list_cohorts()
+        assert call_count == 1  # Cached
+
+        assert cohorts1 == cohorts2
+
+    def test_list_cohorts_empty_result(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_cohorts() should return empty list when no cohorts exist."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=[])
+
+        discovery = discovery_factory(handler)
+        cohorts = discovery.list_cohorts()
+
+        assert cohorts == []
+
+
+# =============================================================================
+# User Story 7: list_top_events() Tests
+# =============================================================================
+
+
+class TestListTopEvents:
+    """Tests for DiscoveryService.list_top_events()."""
+
+    def test_list_top_events_returns_top_event_list(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_top_events() should return list of TopEvent objects."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "events": [
+                        {"event": "Sign Up", "amount": 1500, "percent_change": 0.25},
+                        {"event": "Purchase", "amount": 500, "percent_change": -0.10},
+                    ],
+                    "type": "general",
+                },
+            )
+
+        discovery = discovery_factory(handler)
+        events = discovery.list_top_events()
+
+        assert len(events) == 2
+        assert events[0].event == "Sign Up"
+        assert events[0].count == 1500
+        assert events[0].percent_change == 0.25
+
+    def test_list_top_events_maps_amount_to_count(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_top_events() should map API 'amount' field to 'count'."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "events": [
+                        {"event": "Test", "amount": 999, "percent_change": 0.0},
+                    ],
+                    "type": "general",
+                },
+            )
+
+        discovery = discovery_factory(handler)
+        events = discovery.list_top_events()
+
+        assert events[0].count == 999  # 'amount' mapped to 'count'
+
+    def test_list_top_events_not_cached(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_top_events() should NOT cache results (real-time data)."""
+        call_count = 0
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(
+                200,
+                json={
+                    "events": [
+                        {"event": "Test", "amount": 100, "percent_change": 0.0},
+                    ],
+                    "type": "general",
+                },
+            )
+
+        discovery = discovery_factory(handler)
+
+        discovery.list_top_events()
+        assert call_count == 1
+
+        discovery.list_top_events()
+        assert call_count == 2  # API called again, not cached
+
+    def test_list_top_events_with_type_parameter(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_top_events() should pass type parameter to API."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert "type=unique" in str(request.url)
+            return httpx.Response(
+                200,
+                json={
+                    "events": [],
+                    "type": "unique",
+                },
+            )
+
+        discovery = discovery_factory(handler)
+        discovery.list_top_events(type="unique")
+
+    def test_list_top_events_with_limit_parameter(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_top_events() should pass limit parameter to API."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert "limit=10" in str(request.url)
+            return httpx.Response(
+                200,
+                json={
+                    "events": [],
+                    "type": "general",
+                },
+            )
+
+        discovery = discovery_factory(handler)
+        discovery.list_top_events(limit=10)
+
+    def test_list_top_events_empty_result(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """list_top_events() should return empty list when no events."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "events": [],
+                    "type": "general",
+                },
+            )
+
+        discovery = discovery_factory(handler)
+        events = discovery.list_top_events()
+
+        assert events == []

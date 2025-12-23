@@ -379,6 +379,235 @@ class JQLResult:
         }
 
 
+# Discovery Types
+
+
+@dataclass(frozen=True)
+class FunnelInfo:
+    """A saved funnel definition.
+
+    Represents a funnel saved in Mixpanel that can be queried
+    using the funnel() method.
+    """
+
+    funnel_id: int
+    """Unique identifier for funnel queries."""
+
+    name: str
+    """Human-readable funnel name."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "funnel_id": self.funnel_id,
+            "name": self.name,
+        }
+
+
+@dataclass(frozen=True)
+class SavedCohort:
+    """A saved cohort definition.
+
+    Represents a user cohort saved in Mixpanel for profile filtering.
+    """
+
+    id: int
+    """Unique identifier for profile filtering."""
+
+    name: str
+    """Human-readable cohort name."""
+
+    count: int
+    """Current number of users in cohort."""
+
+    description: str
+    """Optional description (may be empty string)."""
+
+    created: str
+    """Creation timestamp (YYYY-MM-DD HH:mm:ss)."""
+
+    is_visible: bool
+    """Whether cohort is visible in Mixpanel UI."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "count": self.count,
+            "description": self.description,
+            "created": self.created,
+            "is_visible": self.is_visible,
+        }
+
+
+@dataclass(frozen=True)
+class TopEvent:
+    """Today's event activity data.
+
+    Represents an event's current activity including count and trend.
+    """
+
+    event: str
+    """Event name."""
+
+    count: int
+    """Today's event count."""
+
+    percent_change: float
+    """Change vs yesterday (-1.0 to +infinity)."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "event": self.event,
+            "count": self.count,
+            "percent_change": self.percent_change,
+        }
+
+
+@dataclass(frozen=True)
+class EventCountsResult:
+    """Time-series event count data.
+
+    Contains aggregate counts for multiple events over time with
+    lazy DataFrame conversion support.
+    """
+
+    events: list[str]
+    """Queried event names."""
+
+    from_date: str
+    """Query start date (YYYY-MM-DD)."""
+
+    to_date: str
+    """Query end date (YYYY-MM-DD)."""
+
+    unit: Literal["day", "week", "month"]
+    """Time unit for aggregation."""
+
+    type: Literal["general", "unique", "average"]
+    """Counting method used."""
+
+    series: dict[str, dict[str, int]]
+    """Time series data: {event_name: {date: count}}."""
+
+    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Convert to DataFrame with columns: date, event, count.
+
+        Conversion is lazy - computed on first access and cached.
+        """
+        if self._df_cache is not None:
+            return self._df_cache
+
+        rows: list[dict[str, Any]] = []
+        for event_name, date_counts in self.series.items():
+            for date_str, count in date_counts.items():
+                rows.append(
+                    {
+                        "date": date_str,
+                        "event": event_name,
+                        "count": count,
+                    }
+                )
+
+        result_df = (
+            pd.DataFrame(rows)
+            if rows
+            else pd.DataFrame(columns=["date", "event", "count"])
+        )
+
+        object.__setattr__(self, "_df_cache", result_df)
+        return result_df
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "events": self.events,
+            "from_date": self.from_date,
+            "to_date": self.to_date,
+            "unit": self.unit,
+            "type": self.type,
+            "series": self.series,
+        }
+
+
+@dataclass(frozen=True)
+class PropertyCountsResult:
+    """Time-series property value distribution data.
+
+    Contains aggregate counts by property values over time with
+    lazy DataFrame conversion support.
+    """
+
+    event: str
+    """Queried event name."""
+
+    property_name: str
+    """Property used for segmentation."""
+
+    from_date: str
+    """Query start date (YYYY-MM-DD)."""
+
+    to_date: str
+    """Query end date (YYYY-MM-DD)."""
+
+    unit: Literal["day", "week", "month"]
+    """Time unit for aggregation."""
+
+    type: Literal["general", "unique", "average"]
+    """Counting method used."""
+
+    series: dict[str, dict[str, int]]
+    """Time series data: {property_value: {date: count}}."""
+
+    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Convert to DataFrame with columns: date, value, count.
+
+        Conversion is lazy - computed on first access and cached.
+        """
+        if self._df_cache is not None:
+            return self._df_cache
+
+        rows: list[dict[str, Any]] = []
+        for value, date_counts in self.series.items():
+            for date_str, count in date_counts.items():
+                rows.append(
+                    {
+                        "date": date_str,
+                        "value": value,
+                        "count": count,
+                    }
+                )
+
+        result_df = (
+            pd.DataFrame(rows)
+            if rows
+            else pd.DataFrame(columns=["date", "value", "count"])
+        )
+
+        object.__setattr__(self, "_df_cache", result_df)
+        return result_df
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "event": self.event,
+            "property_name": self.property_name,
+            "from_date": self.from_date,
+            "to_date": self.to_date,
+            "unit": self.unit,
+            "type": self.type,
+            "series": self.series,
+        }
+
+
 # Storage Types
 
 
