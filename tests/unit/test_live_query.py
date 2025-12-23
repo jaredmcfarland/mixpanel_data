@@ -806,3 +806,406 @@ class TestJQL:
 
         with pytest.raises(QueryError):
             live_query.jql(script="invalid javascript {")
+
+
+# =============================================================================
+# User Story 5: Event Counts Tests
+# =============================================================================
+
+
+class TestEventCounts:
+    """Tests for LiveQueryService.event_counts()."""
+
+    def test_event_counts_basic_query(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """event_counts() should return EventCountsResult with correct data."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": ["2024-01-01", "2024-01-02"],
+                        "values": {
+                            "Sign Up": {"2024-01-01": 100, "2024-01-02": 150},
+                            "Purchase": {"2024-01-01": 50, "2024-01-02": 75},
+                        },
+                    },
+                    "legend_size": 2,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        result = live_query.event_counts(
+            events=["Sign Up", "Purchase"],
+            from_date="2024-01-01",
+            to_date="2024-01-02",
+        )
+
+        assert result.events == ["Sign Up", "Purchase"]
+        assert result.from_date == "2024-01-01"
+        assert result.to_date == "2024-01-02"
+        assert result.unit == "day"
+        assert result.type == "general"
+        assert result.series["Sign Up"]["2024-01-01"] == 100
+        assert result.series["Purchase"]["2024-01-02"] == 75
+
+    def test_event_counts_with_type_and_unit(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """event_counts() should pass type and unit parameters."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            assert "type=unique" in url_str
+            assert "unit=week" in url_str
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": ["2024-01-01"],
+                        "values": {"Test": {"2024-01-01": 100}},
+                    },
+                    "legend_size": 1,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        result = live_query.event_counts(
+            events=["Test"],
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            type="unique",
+            unit="week",
+        )
+
+        assert result.type == "unique"
+        assert result.unit == "week"
+
+    def test_event_counts_df_conversion(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """event_counts() result should have working df property."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": ["2024-01-01", "2024-01-02"],
+                        "values": {
+                            "Event A": {"2024-01-01": 100, "2024-01-02": 150},
+                            "Event B": {"2024-01-01": 50, "2024-01-02": 75},
+                        },
+                    },
+                    "legend_size": 2,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        result = live_query.event_counts(
+            events=["Event A", "Event B"],
+            from_date="2024-01-01",
+            to_date="2024-01-02",
+        )
+
+        df = result.df
+        assert "date" in df.columns
+        assert "event" in df.columns
+        assert "count" in df.columns
+        assert len(df) == 4  # 2 events × 2 dates
+
+    def test_event_counts_empty_result(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """event_counts() should handle empty results."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": [],
+                        "values": {},
+                    },
+                    "legend_size": 0,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        result = live_query.event_counts(
+            events=[],
+            from_date="2024-01-01",
+            to_date="2024-01-01",
+        )
+
+        assert result.series == {}
+        assert len(result.df) == 0
+
+    def test_event_counts_propagates_auth_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """event_counts() should propagate AuthenticationError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(AuthenticationError):
+            live_query.event_counts(
+                events=["Test"],
+                from_date="2024-01-01",
+                to_date="2024-01-01",
+            )
+
+
+# =============================================================================
+# User Story 6: Property Counts Tests
+# =============================================================================
+
+
+class TestPropertyCounts:
+    """Tests for LiveQueryService.property_counts()."""
+
+    def test_property_counts_basic_query(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """property_counts() should return PropertyCountsResult with correct data."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": ["2024-01-01", "2024-01-02"],
+                        "values": {
+                            "US": {"2024-01-01": 100, "2024-01-02": 150},
+                            "CA": {"2024-01-01": 50, "2024-01-02": 75},
+                        },
+                    },
+                    "legend_size": 2,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        result = live_query.property_counts(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-02",
+        )
+
+        assert result.event == "Purchase"
+        assert result.property_name == "country"
+        assert result.from_date == "2024-01-01"
+        assert result.to_date == "2024-01-02"
+        assert result.unit == "day"
+        assert result.type == "general"
+        assert result.series["US"]["2024-01-01"] == 100
+        assert result.series["CA"]["2024-01-02"] == 75
+
+    def test_property_counts_with_type_and_unit(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """property_counts() should pass type and unit parameters."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            assert "type=unique" in url_str
+            assert "unit=month" in url_str
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": ["2024-01-01"],
+                        "values": {"US": {"2024-01-01": 100}},
+                    },
+                    "legend_size": 1,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        result = live_query.property_counts(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            type="unique",
+            unit="month",
+        )
+
+        assert result.type == "unique"
+        assert result.unit == "month"
+
+    def test_property_counts_with_values_filter(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """property_counts() should pass values filter to API."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            # Verify values parameter is JSON-encoded
+            assert "values=" in str(request.url)
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": ["2024-01-01"],
+                        "values": {"US": {"2024-01-01": 100}},
+                    },
+                    "legend_size": 1,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        live_query.property_counts(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-01",
+            values=["US", "CA"],
+        )
+
+    def test_property_counts_with_limit(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """property_counts() should pass limit parameter to API."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert "limit=10" in str(request.url)
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": ["2024-01-01"],
+                        "values": {"US": {"2024-01-01": 100}},
+                    },
+                    "legend_size": 1,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        live_query.property_counts(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-01",
+            limit=10,
+        )
+
+    def test_property_counts_df_conversion(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """property_counts() result should have working df property."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": ["2024-01-01", "2024-01-02"],
+                        "values": {
+                            "US": {"2024-01-01": 100, "2024-01-02": 150},
+                            "CA": {"2024-01-01": 50, "2024-01-02": 75},
+                        },
+                    },
+                    "legend_size": 2,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        result = live_query.property_counts(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-02",
+        )
+
+        df = result.df
+        assert "date" in df.columns
+        assert "value" in df.columns
+        assert "count" in df.columns
+        assert len(df) == 4  # 2 values × 2 dates
+
+    def test_property_counts_empty_result(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """property_counts() should handle empty results."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "series": [],
+                        "values": {},
+                    },
+                    "legend_size": 0,
+                },
+            )
+
+        live_query = live_query_factory(handler)
+        result = live_query.property_counts(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-01",
+        )
+
+        assert result.series == {}
+        assert len(result.df) == 0
+
+    def test_property_counts_propagates_query_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """property_counts() should propagate QueryError for invalid params."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid property"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(QueryError):
+            live_query.property_counts(
+                event="Purchase",
+                property_name="invalid_property",
+                from_date="2024-01-01",
+                to_date="2024-01-01",
+            )

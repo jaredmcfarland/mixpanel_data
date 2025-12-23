@@ -11,12 +11,17 @@ import pytest
 
 from mixpanel_data.types import (
     CohortInfo,
+    EventCountsResult,
     FetchResult,
+    FunnelInfo,
     FunnelResult,
     FunnelStep,
     JQLResult,
+    PropertyCountsResult,
     RetentionResult,
+    SavedCohort,
     SegmentationResult,
+    TopEvent,
 )
 
 
@@ -493,3 +498,355 @@ class TestResultTypeImmutability:
             if attrs:
                 with pytest.raises((TypeError, dataclasses.FrozenInstanceError)):
                     setattr(result, attrs[0], "modified")
+
+
+# =============================================================================
+# Discovery Types Tests
+# =============================================================================
+
+
+class TestFunnelInfo:
+    """Tests for FunnelInfo."""
+
+    def test_basic_creation(self) -> None:
+        """Test creating a FunnelInfo."""
+        info = FunnelInfo(funnel_id=12345, name="Checkout Funnel")
+
+        assert info.funnel_id == 12345
+        assert info.name == "Checkout Funnel"
+
+    def test_immutable(self) -> None:
+        """FunnelInfo should be immutable (frozen)."""
+        info = FunnelInfo(funnel_id=12345, name="Checkout Funnel")
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            info.name = "Modified"  # type: ignore[misc]
+
+    def test_to_dict_serializable(self) -> None:
+        """to_dict output should be JSON serializable."""
+        info = FunnelInfo(funnel_id=12345, name="Checkout Funnel")
+
+        data = info.to_dict()
+        json_str = json.dumps(data)
+
+        assert "12345" in json_str
+        assert "Checkout Funnel" in json_str
+        assert data["funnel_id"] == 12345
+        assert data["name"] == "Checkout Funnel"
+
+
+class TestSavedCohort:
+    """Tests for SavedCohort."""
+
+    def test_basic_creation(self) -> None:
+        """Test creating a SavedCohort."""
+        cohort = SavedCohort(
+            id=456,
+            name="Power Users",
+            count=1500,
+            description="Users with 10+ purchases",
+            created="2024-01-15 10:30:00",
+            is_visible=True,
+        )
+
+        assert cohort.id == 456
+        assert cohort.name == "Power Users"
+        assert cohort.count == 1500
+        assert cohort.description == "Users with 10+ purchases"
+        assert cohort.created == "2024-01-15 10:30:00"
+        assert cohort.is_visible is True
+
+    def test_immutable(self) -> None:
+        """SavedCohort should be immutable (frozen)."""
+        cohort = SavedCohort(
+            id=456,
+            name="Power Users",
+            count=1500,
+            description="",
+            created="2024-01-15 10:30:00",
+            is_visible=True,
+        )
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            cohort.count = 2000  # type: ignore[misc]
+
+    def test_to_dict_serializable(self) -> None:
+        """to_dict output should be JSON serializable."""
+        cohort = SavedCohort(
+            id=456,
+            name="Power Users",
+            count=1500,
+            description="Users with 10+ purchases",
+            created="2024-01-15 10:30:00",
+            is_visible=True,
+        )
+
+        data = cohort.to_dict()
+        json_str = json.dumps(data)
+
+        assert "Power Users" in json_str
+        assert data["id"] == 456
+        assert data["count"] == 1500
+        assert data["is_visible"] is True
+
+
+class TestTopEvent:
+    """Tests for TopEvent."""
+
+    def test_basic_creation(self) -> None:
+        """Test creating a TopEvent."""
+        event = TopEvent(
+            event="Sign Up",
+            count=1500,
+            percent_change=0.25,
+        )
+
+        assert event.event == "Sign Up"
+        assert event.count == 1500
+        assert event.percent_change == 0.25
+
+    def test_negative_percent_change(self) -> None:
+        """TopEvent should accept negative percent_change."""
+        event = TopEvent(
+            event="Purchase",
+            count=500,
+            percent_change=-0.15,
+        )
+
+        assert event.percent_change == -0.15
+
+    def test_immutable(self) -> None:
+        """TopEvent should be immutable (frozen)."""
+        event = TopEvent(event="Test", count=100, percent_change=0.0)
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            event.count = 200  # type: ignore[misc]
+
+    def test_to_dict_serializable(self) -> None:
+        """to_dict output should be JSON serializable."""
+        event = TopEvent(
+            event="Sign Up",
+            count=1500,
+            percent_change=0.25,
+        )
+
+        data = event.to_dict()
+        json_str = json.dumps(data)
+
+        assert "Sign Up" in json_str
+        assert data["count"] == 1500
+        assert data["percent_change"] == 0.25
+
+
+class TestEventCountsResult:
+    """Tests for EventCountsResult."""
+
+    def test_basic_creation(self) -> None:
+        """Test creating an EventCountsResult."""
+        result = EventCountsResult(
+            events=["Sign Up", "Purchase"],
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            unit="day",
+            type="general",
+            series={
+                "Sign Up": {"2024-01-01": 100, "2024-01-02": 150},
+                "Purchase": {"2024-01-01": 50, "2024-01-02": 75},
+            },
+        )
+
+        assert result.events == ["Sign Up", "Purchase"]
+        assert result.from_date == "2024-01-01"
+        assert result.unit == "day"
+        assert result.type == "general"
+
+    def test_df_has_expected_columns(self) -> None:
+        """df should have date, event, count columns."""
+        result = EventCountsResult(
+            events=["Sign Up", "Purchase"],
+            from_date="2024-01-01",
+            to_date="2024-01-02",
+            unit="day",
+            type="general",
+            series={
+                "Sign Up": {"2024-01-01": 100, "2024-01-02": 150},
+                "Purchase": {"2024-01-01": 50, "2024-01-02": 75},
+            },
+        )
+
+        df = result.df
+        assert "date" in df.columns
+        assert "event" in df.columns
+        assert "count" in df.columns
+        assert len(df) == 4  # 2 events × 2 dates
+
+    def test_df_empty_series(self) -> None:
+        """df should handle empty series."""
+        result = EventCountsResult(
+            events=[],
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            unit="day",
+            type="general",
+            series={},
+        )
+
+        df = result.df
+        assert len(df) == 0
+        assert "date" in df.columns
+
+    def test_df_cached(self) -> None:
+        """df should be cached on first access."""
+        result = EventCountsResult(
+            events=["Test"],
+            from_date="2024-01-01",
+            to_date="2024-01-01",
+            unit="day",
+            type="general",
+            series={"Test": {"2024-01-01": 100}},
+        )
+
+        df1 = result.df
+        df2 = result.df
+        assert df1 is df2
+
+    def test_immutable(self) -> None:
+        """EventCountsResult should be immutable (frozen)."""
+        result = EventCountsResult(
+            events=["Test"],
+            from_date="2024-01-01",
+            to_date="2024-01-01",
+            unit="day",
+            type="general",
+            series={},
+        )
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            result.events = ["Modified"]  # type: ignore[misc]
+
+    def test_to_dict_serializable(self) -> None:
+        """to_dict output should be JSON serializable."""
+        result = EventCountsResult(
+            events=["Sign Up"],
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            unit="day",
+            type="general",
+            series={"Sign Up": {"2024-01-01": 100}},
+        )
+
+        data = result.to_dict()
+        json_str = json.dumps(data)
+
+        assert "Sign Up" in json_str
+        assert data["unit"] == "day"
+        assert data["type"] == "general"
+
+
+class TestPropertyCountsResult:
+    """Tests for PropertyCountsResult."""
+
+    def test_basic_creation(self) -> None:
+        """Test creating a PropertyCountsResult."""
+        result = PropertyCountsResult(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            unit="day",
+            type="general",
+            series={
+                "US": {"2024-01-01": 100, "2024-01-02": 150},
+                "CA": {"2024-01-01": 50, "2024-01-02": 75},
+            },
+        )
+
+        assert result.event == "Purchase"
+        assert result.property_name == "country"
+        assert result.from_date == "2024-01-01"
+
+    def test_df_has_expected_columns(self) -> None:
+        """df should have date, value, count columns."""
+        result = PropertyCountsResult(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-02",
+            unit="day",
+            type="general",
+            series={
+                "US": {"2024-01-01": 100, "2024-01-02": 150},
+                "CA": {"2024-01-01": 50, "2024-01-02": 75},
+            },
+        )
+
+        df = result.df
+        assert "date" in df.columns
+        assert "value" in df.columns
+        assert "count" in df.columns
+        assert len(df) == 4  # 2 values × 2 dates
+
+    def test_df_empty_series(self) -> None:
+        """df should handle empty series."""
+        result = PropertyCountsResult(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            unit="day",
+            type="general",
+            series={},
+        )
+
+        df = result.df
+        assert len(df) == 0
+        assert "date" in df.columns
+
+    def test_df_cached(self) -> None:
+        """df should be cached on first access."""
+        result = PropertyCountsResult(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-01",
+            unit="day",
+            type="general",
+            series={"US": {"2024-01-01": 100}},
+        )
+
+        df1 = result.df
+        df2 = result.df
+        assert df1 is df2
+
+    def test_immutable(self) -> None:
+        """PropertyCountsResult should be immutable (frozen)."""
+        result = PropertyCountsResult(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-01",
+            unit="day",
+            type="general",
+            series={},
+        )
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            result.event = "Modified"  # type: ignore[misc]
+
+    def test_to_dict_serializable(self) -> None:
+        """to_dict output should be JSON serializable."""
+        result = PropertyCountsResult(
+            event="Purchase",
+            property_name="country",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            unit="day",
+            type="general",
+            series={"US": {"2024-01-01": 100}},
+        )
+
+        data = result.to_dict()
+        json_str = json.dumps(data)
+
+        assert "Purchase" in json_str
+        assert data["property_name"] == "country"

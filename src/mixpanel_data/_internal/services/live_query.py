@@ -9,13 +9,15 @@ analytics data changes frequently and queries should return fresh data.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from mixpanel_data.types import (
     CohortInfo,
+    EventCountsResult,
     FunnelResult,
     FunnelStep,
     JQLResult,
+    PropertyCountsResult,
     RetentionResult,
     SegmentationResult,
 )
@@ -403,3 +405,122 @@ class LiveQueryService:
         """
         raw = self._api_client.jql(script=script, params=params)
         return JQLResult(_raw=raw)
+
+    def event_counts(
+        self,
+        events: list[str],
+        from_date: str,
+        to_date: str,
+        *,
+        type: Literal["general", "unique", "average"] = "general",
+        unit: Literal["day", "week", "month"] = "day",
+    ) -> EventCountsResult:
+        """Query aggregate counts for multiple events over time.
+
+        Executes a multi-event query against the Mixpanel API and returns
+        a typed result with time-series data for each event.
+
+        Args:
+            events: List of event names to query.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            type: Counting method - "general", "unique", or "average".
+            unit: Time unit - "day", "week", or "month".
+
+        Returns:
+            EventCountsResult with time-series data and lazy DataFrame.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid parameters.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            >>> result = live_query.event_counts(
+            ...     events=["Sign Up", "Purchase"],
+            ...     from_date="2024-01-01",
+            ...     to_date="2024-01-31",
+            ... )
+            >>> print(result.series["Sign Up"])
+            >>> print(result.df.head())
+        """
+        raw = self._api_client.event_counts(
+            events=events,
+            from_date=from_date,
+            to_date=to_date,
+            type=type,
+            unit=unit,
+        )
+        return EventCountsResult(
+            events=events,
+            from_date=from_date,
+            to_date=to_date,
+            unit=unit,
+            type=type,
+            series=raw.get("data", {}).get("values", {}),
+        )
+
+    def property_counts(
+        self,
+        event: str,
+        property_name: str,
+        from_date: str,
+        to_date: str,
+        *,
+        type: Literal["general", "unique", "average"] = "general",
+        unit: Literal["day", "week", "month"] = "day",
+        values: list[str] | None = None,
+        limit: int | None = None,
+    ) -> PropertyCountsResult:
+        """Query aggregate counts by property values over time.
+
+        Executes a property breakdown query against the Mixpanel API and returns
+        a typed result with time-series data for each property value.
+
+        Args:
+            event: Event name to query.
+            property_name: Property to segment by.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            type: Counting method - "general", "unique", or "average".
+            unit: Time unit - "day", "week", or "month".
+            values: Optional list of specific property values to include.
+            limit: Maximum property values to return (default: 255).
+
+        Returns:
+            PropertyCountsResult with time-series data and lazy DataFrame.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid parameters.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            >>> result = live_query.property_counts(
+            ...     event="Purchase",
+            ...     property_name="country",
+            ...     from_date="2024-01-01",
+            ...     to_date="2024-01-31",
+            ... )
+            >>> print(result.series["US"])
+            >>> print(result.df.head())
+        """
+        raw = self._api_client.property_counts(
+            event=event,
+            property_name=property_name,
+            from_date=from_date,
+            to_date=to_date,
+            type=type,
+            unit=unit,
+            values=values,
+            limit=limit,
+        )
+        return PropertyCountsResult(
+            event=event,
+            property_name=property_name,
+            from_date=from_date,
+            to_date=to_date,
+            unit=unit,
+            type=type,
+            series=raw.get("data", {}).get("values", {}),
+        )

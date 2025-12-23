@@ -21,12 +21,17 @@ from mixpanel_data.exceptions import (
 )
 from mixpanel_data.types import (
     CohortInfo,
+    EventCountsResult,
     FetchResult,
+    FunnelInfo,
     FunnelResult,
     FunnelStep,
     JQLResult,
+    PropertyCountsResult,
     RetentionResult,
+    SavedCohort,
     SegmentationResult,
+    TopEvent,
 )
 
 __version__ = "0.1.0"
@@ -53,4 +58,10 @@ __all__ = [
     "RetentionResult",
     "CohortInfo",
     "JQLResult",
+    # Discovery types
+    "FunnelInfo",
+    "SavedCohort",
+    "TopEvent",
+    "EventCountsResult",
+    "PropertyCountsResult",
 ]

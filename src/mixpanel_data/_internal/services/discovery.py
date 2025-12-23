@@ -7,7 +7,9 @@ with session-scoped caching to avoid redundant API calls.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from mixpanel_data.types import FunnelInfo, SavedCohort, TopEvent
 
 if TYPE_CHECKING:
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -42,7 +44,7 @@ class DiscoveryService:
         #   ("list_events",)
         #   ("list_properties", event: str)
         #   ("list_property_values", property: str, event: str | None, limit: int)
-        self._cache: dict[tuple[str | int | None, ...], list[str]] = {}
+        self._cache: dict[tuple[str | int | None, ...], list[Any]] = {}
 
     def list_events(self) -> list[str]:
         """List all event names in the project.
@@ -126,6 +128,98 @@ class DiscoveryService:
         # Store a copy to prevent mutation if API client retains reference
         self._cache[cache_key] = list(result)
         return list(result)
+
+    def list_funnels(self) -> list[FunnelInfo]:
+        """List all saved funnels in the project.
+
+        Returns:
+            Alphabetically sorted list of FunnelInfo objects.
+            Empty list if no funnels exist (not an error).
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+
+        Note:
+            Results are cached for the lifetime of this service instance.
+        """
+        cache_key = ("list_funnels",)
+        if cache_key in self._cache:
+            return list(self._cache[cache_key])
+
+        raw = self._api_client.list_funnels()
+        funnels = sorted(
+            [FunnelInfo(funnel_id=f["funnel_id"], name=f["name"]) for f in raw],
+            key=lambda x: x.name,
+        )
+        self._cache[cache_key] = funnels
+        return list(funnels)
+
+    def list_cohorts(self) -> list[SavedCohort]:
+        """List all saved cohorts in the project.
+
+        Returns:
+            Alphabetically sorted list of SavedCohort objects.
+            Empty list if no cohorts exist (not an error).
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+
+        Note:
+            Results are cached for the lifetime of this service instance.
+        """
+        cache_key = ("list_cohorts",)
+        if cache_key in self._cache:
+            return list(self._cache[cache_key])
+
+        raw = self._api_client.list_cohorts()
+        cohorts = sorted(
+            [
+                SavedCohort(
+                    id=c["id"],
+                    name=c["name"],
+                    count=c["count"],
+                    description=c.get("description", ""),
+                    created=c["created"],
+                    is_visible=bool(c["is_visible"]),
+                )
+                for c in raw
+            ],
+            key=lambda x: x.name,
+        )
+        self._cache[cache_key] = cohorts
+        return list(cohorts)
+
+    def list_top_events(
+        self,
+        *,
+        type: str = "general",
+        limit: int | None = None,
+    ) -> list[TopEvent]:
+        """Get today's top events with counts and trends.
+
+        Args:
+            type: Counting method - "general", "unique", or "average".
+            limit: Maximum events to return (default: 100).
+
+        Returns:
+            List of TopEvent objects (NOT cached - real-time data).
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+
+        Note:
+            Results are NOT cached because data changes throughout the day.
+        """
+        # No caching - always fetch fresh data
+        raw = self._api_client.get_top_events(type=type, limit=limit)
+        return [
+            TopEvent(
+                event=e["event"],
+                count=e["amount"],  # Map amount -> count
+                percent_change=e["percent_change"],
+            )
+            for e in raw.get("events", [])
+        ]
 
     def clear_cache(self) -> None:
         """Clear all cached discovery results.
