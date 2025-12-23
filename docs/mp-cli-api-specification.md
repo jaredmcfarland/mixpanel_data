@@ -55,17 +55,23 @@ mp segmentation --event Purchase --from 2024-01-01 --to 2024-01-31 --on country
 
 ## Global Options
 
-These options can be used with any command.
+These options can be used with any command (before the command name).
 
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--account <name>` | `-a` | Use a specific named account instead of the default |
-| `--project <id>` | `-p` | Override the project ID from the account configuration |
-| `--format <format>` | `-f` | Output format: `json` (default), `table`, `csv`, `jsonl` |
 | `--quiet` | `-q` | Suppress progress bars and status messages |
 | `--verbose` | `-v` | Show detailed output including API calls |
 | `--help` | `-h` | Show help for the command |
 | `--version` | | Show version information |
+
+## Per-Command Options
+
+The `--format` option is available on all commands that produce output (after the command name).
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--format <format>` | `-f` | Output format: `json` (default), `table`, `csv`, `jsonl`, `plain` |
 
 ### Format Details
 
@@ -79,17 +85,20 @@ These options can be used with any command.
 ### Examples
 
 ```bash
-# Use a specific account
+# Use a specific account (global option before command)
 mp --account staging fetch events --from 2024-01-01 --to 2024-01-31
 
-# Output as CSV
-mp sql "SELECT * FROM events" --format csv > events.csv
+# Output as CSV (format option after command)
+mp query sql "SELECT * FROM events" --format csv > events.csv
 
-# Quiet mode for scripts
+# Quiet mode for scripts (global option before command)
 mp --quiet fetch events --from 2024-01-01 --to 2024-01-31
 
 # Verbose mode for debugging
-mp --verbose segmentation --event Purchase --from 2024-01-01 --to 2024-01-31
+mp --verbose query segmentation --event Purchase --from 2024-01-01 --to 2024-01-31
+
+# Combine global and per-command options
+mp --account staging auth list --format table
 ```
 
 ---

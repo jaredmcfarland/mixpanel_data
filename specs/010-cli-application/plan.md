@@ -5,7 +5,7 @@
 
 ## Summary
 
-Implement the `mp` command-line interface as a thin wrapper around the Workspace facade, providing 31 commands across 4 groups (auth, fetch, query, inspect). The CLI uses Typer for argument parsing and Rich for output formatting, with support for multiple output formats (json, table, csv, jsonl, plain), global options (--account, --format, --quiet, --verbose), and structured exit codes.
+Implement the `mp` command-line interface as a thin wrapper around the Workspace facade, providing 31 commands across 4 groups (auth, fetch, query, inspect). The CLI uses Typer for argument parsing and Rich for output formatting, with support for multiple output formats (json, table, csv, jsonl, plain), global options (--account, --quiet, --verbose), per-command format option (--format), and structured exit codes.
 
 The CLI adheres to the Library-First principle: every command delegates to an existing Workspace or ConfigManager method, adding only I/O formatting. No business logic resides in the CLI layer.
 

@@ -321,3 +321,42 @@ class TestOutputResult:
             # JSONL should have one object per line
             lines = output.strip().split("\n")
             assert len(lines) == 2
+
+    def test_explicit_format_parameter(self) -> None:
+        """Test that explicit format parameter works."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}  # No format in context
+
+        with patch("mixpanel_data.cli.utils.console") as mock_console:
+            output_result(ctx, {"key": "value"}, format="json")
+
+            mock_console.print.assert_called_once()
+            call_args = mock_console.print.call_args
+            assert '"key"' in call_args[0][0]
+
+    def test_explicit_format_overrides_context(self) -> None:
+        """Test that explicit format parameter takes precedence over ctx.obj."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {"format": "table"}  # Context says table
+
+        with patch("mixpanel_data.cli.utils.console") as mock_console:
+            output_result(ctx, {"key": "value"}, format="json")  # Explicit json
+
+            mock_console.print.assert_called_once()
+            call_args = mock_console.print.call_args
+            # Should be JSON, not table
+            assert '"key"' in call_args[0][0]
+            assert '"value"' in call_args[0][0]
+
+    def test_defaults_to_json_when_no_format_specified(self) -> None:
+        """Test that output defaults to JSON when neither param nor ctx.obj provided."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}  # No format in context
+
+        with patch("mixpanel_data.cli.utils.console") as mock_console:
+            output_result(ctx, {"key": "value"})  # No explicit format
+
+            mock_console.print.assert_called_once()
+            call_args = mock_console.print.call_args
+            # Should default to JSON
+            assert '"key"' in call_args[0][0]

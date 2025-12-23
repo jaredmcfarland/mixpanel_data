@@ -214,14 +214,20 @@ mixpanel_data/
 
 ### Global Flags
 
-All commands support:
+All commands support these global options (before the command):
 
 ```
---project <name>     Override default project for this command
---ephemeral          Use temporary database, cleanup on exit
+--account <name>     Use a specific named account instead of the default
 --quiet              Suppress progress and status output
---format <fmt>       Output format: table (default), json, csv
+--verbose            Enable debug output
 --help               Show help for any command
+--version            Show version information
+```
+
+Per-command options (after the command):
+
+```
+--format <fmt>       Output format: json (default), jsonl, table, csv, plain
 ```
 
 ### `mp auth` — Authentication & Project Management
@@ -1162,12 +1168,12 @@ marimo apps are pure Python files—you can generate them, edit them, and run th
 
 ## Output Formats
 
-All commands support `--format`:
-- `table` — Human-readable ASCII table (default)
-- `json` — JSON array of objects
-- `csv` — Comma-separated values
+All commands support the `--format` option (per-command, placed after the command name):
+- `json` — JSON array of objects (default)
 - `jsonl` — Newline-delimited JSON (streaming-friendly)
-```
+- `table` — Human-readable ASCII table
+- `csv` — Comma-separated values
+- `plain` — Minimal output (one value per line)
 
 ---
 

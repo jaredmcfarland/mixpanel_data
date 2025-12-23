@@ -11,16 +11,23 @@
 
 ## Global Options Contract
 
-All commands accept these global options:
+Global options are placed before the command name:
 
 | Option | Short | Type | Default | Description |
 |--------|-------|------|---------|-------------|
 | --account | -a | string | (default account) | Account name to use |
-| --format | -f | enum | json | Output format |
 | --quiet | -q | flag | false | Suppress progress output |
 | --verbose | -v | flag | false | Enable debug output |
 | --help | -h | flag | - | Show help |
 | --version | | flag | - | Show version |
+
+## Per-Command Options Contract
+
+The `--format` option is available on all commands and is placed after the command name:
+
+| Option | Short | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| --format | -f | enum | json | Output format |
 
 ### Format Enum Values
 

@@ -19,6 +19,7 @@ from typing import Annotated
 
 import typer
 
+from mixpanel_data.cli.options import FormatOption
 from mixpanel_data.cli.utils import (
     err_console,
     get_workspace,
@@ -36,11 +37,11 @@ inspect_app = typer.Typer(
 
 @inspect_app.command("events")
 @handle_errors
-def inspect_events(ctx: typer.Context) -> None:
+def inspect_events(ctx: typer.Context, format: FormatOption = "json") -> None:
     """List all event names from Mixpanel project."""
     workspace = get_workspace(ctx)
     events = workspace.events()
-    output_result(ctx, events)
+    output_result(ctx, events, format=format)
 
 
 @inspect_app.command("properties")
@@ -51,11 +52,12 @@ def inspect_properties(
         str,
         typer.Option("--event", "-e", help="Event name."),
     ],
+    format: FormatOption = "json",
 ) -> None:
     """List properties for a specific event."""
     workspace = get_workspace(ctx)
     properties = workspace.properties(event)
-    output_result(ctx, properties)
+    output_result(ctx, properties, format=format)
 
 
 @inspect_app.command("values")
@@ -74,6 +76,7 @@ def inspect_values(
         int,
         typer.Option("--limit", "-l", help="Maximum values to return."),
     ] = 100,
+    format: FormatOption = "json",
 ) -> None:
     """List sample values for a property."""
     workspace = get_workspace(ctx)
@@ -82,22 +85,22 @@ def inspect_values(
         event=event,
         limit=limit,
     )
-    output_result(ctx, values)
+    output_result(ctx, values, format=format)
 
 
 @inspect_app.command("funnels")
 @handle_errors
-def inspect_funnels(ctx: typer.Context) -> None:
+def inspect_funnels(ctx: typer.Context, format: FormatOption = "json") -> None:
     """List saved funnels in Mixpanel project."""
     workspace = get_workspace(ctx)
     funnels = workspace.funnels()
     data = [{"funnel_id": f.funnel_id, "name": f.name} for f in funnels]
-    output_result(ctx, data, columns=["funnel_id", "name"])
+    output_result(ctx, data, columns=["funnel_id", "name"], format=format)
 
 
 @inspect_app.command("cohorts")
 @handle_errors
-def inspect_cohorts(ctx: typer.Context) -> None:
+def inspect_cohorts(ctx: typer.Context, format: FormatOption = "json") -> None:
     """List saved cohorts in Mixpanel project."""
     workspace = get_workspace(ctx)
     cohorts = workspace.cohorts()
@@ -110,7 +113,9 @@ def inspect_cohorts(ctx: typer.Context) -> None:
         }
         for c in cohorts
     ]
-    output_result(ctx, data, columns=["id", "name", "count", "description"])
+    output_result(
+        ctx, data, columns=["id", "name", "count", "description"], format=format
+    )
 
 
 @inspect_app.command("top-events")
@@ -125,6 +130,7 @@ def inspect_top_events(
         int,
         typer.Option("--limit", "-l", help="Maximum events to return."),
     ] = 10,
+    format: FormatOption = "json",
 ) -> None:
     """List today's top events by count."""
     validated_type = validate_count_type(type_)
@@ -138,21 +144,23 @@ def inspect_top_events(
         }
         for e in events
     ]
-    output_result(ctx, data, columns=["event", "count", "percent_change"])
+    output_result(
+        ctx, data, columns=["event", "count", "percent_change"], format=format
+    )
 
 
 @inspect_app.command("info")
 @handle_errors
-def inspect_info(ctx: typer.Context) -> None:
+def inspect_info(ctx: typer.Context, format: FormatOption = "json") -> None:
     """Show workspace information."""
     workspace = get_workspace(ctx)
     info = workspace.info()
-    output_result(ctx, info.to_dict())
+    output_result(ctx, info.to_dict(), format=format)
 
 
 @inspect_app.command("tables")
 @handle_errors
-def inspect_tables(ctx: typer.Context) -> None:
+def inspect_tables(ctx: typer.Context, format: FormatOption = "json") -> None:
     """List tables in local database."""
     workspace = get_workspace(ctx)
     tables = workspace.tables()
@@ -165,7 +173,9 @@ def inspect_tables(ctx: typer.Context) -> None:
         }
         for t in tables
     ]
-    output_result(ctx, data, columns=["name", "type", "row_count", "fetched_at"])
+    output_result(
+        ctx, data, columns=["name", "type", "row_count", "fetched_at"], format=format
+    )
 
 
 @inspect_app.command("schema")
@@ -180,6 +190,7 @@ def inspect_schema(
         bool,
         typer.Option("--sample", help="Include sample values."),
     ] = False,
+    format: FormatOption = "json",
 ) -> None:
     """Show schema for a table in local database."""
     # Note: _sample is reserved for future implementation
@@ -198,7 +209,7 @@ def inspect_schema(
         ],
     }
 
-    output_result(ctx, data)
+    output_result(ctx, data, format=format)
 
 
 @inspect_app.command("drop")
@@ -213,6 +224,7 @@ def inspect_drop(
         bool,
         typer.Option("--force", help="Skip confirmation prompt."),
     ] = False,
+    format: FormatOption = "json",
 ) -> None:
     """Drop a table from the local database."""
     if not force:
@@ -224,4 +236,4 @@ def inspect_drop(
     workspace = get_workspace(ctx)
     workspace.drop(table)
 
-    output_result(ctx, {"dropped": table})
+    output_result(ctx, {"dropped": table}, format=format)

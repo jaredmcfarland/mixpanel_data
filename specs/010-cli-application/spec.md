@@ -224,9 +224,12 @@ A developer working with multiple Mixpanel projects needs to specify which accou
 #### Global Options
 
 - **FR-034**: CLI MUST support `--account <name>` global option to override the default account for any command
-- **FR-035**: CLI MUST support `--format <format>` global option with values: json (default), table, csv, jsonl, plain
-- **FR-036**: CLI MUST support `--quiet` global option to suppress progress output (data still goes to stdout)
-- **FR-037**: CLI MUST support `--verbose` global option to show debug information
+- **FR-035**: CLI MUST support `--quiet` global option to suppress progress output (data still goes to stdout)
+- **FR-036**: CLI MUST support `--verbose` global option to show debug information
+
+#### Per-Command Options
+
+- **FR-037**: CLI MUST support `--format <format>` per-command option with values: json (default), table, csv, jsonl, plain
 
 #### Exit Codes
 

@@ -18,6 +18,7 @@ from typing import Annotated
 import typer
 
 from mixpanel_data._internal.config import AccountInfo, ConfigManager
+from mixpanel_data.cli.options import FormatOption
 from mixpanel_data.cli.utils import (
     err_console,
     get_config,
@@ -34,7 +35,10 @@ auth_app = typer.Typer(
 
 @auth_app.command("list")
 @handle_errors
-def list_accounts(ctx: typer.Context) -> None:
+def list_accounts(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+) -> None:
     """List all configured accounts.
 
     Shows account name, username, project ID, region, and default status.
@@ -54,7 +58,10 @@ def list_accounts(ctx: typer.Context) -> None:
     ]
 
     output_result(
-        ctx, data, columns=["name", "username", "project_id", "region", "is_default"]
+        ctx,
+        data,
+        columns=["name", "username", "project_id", "region", "is_default"],
+        format=format,
     )
 
 
@@ -87,6 +94,7 @@ def add_account(
         bool,
         typer.Option("--secret-stdin", help="Read secret from stdin."),
     ] = False,
+    format: FormatOption = "json",
 ) -> None:
     """Add a new account to the configuration.
 
@@ -167,7 +175,7 @@ def add_account(
     if default:
         config.set_default(name)
 
-    output_result(ctx, {"added": name, "is_default": default})
+    output_result(ctx, {"added": name, "is_default": default}, format=format)
 
 
 @auth_app.command("remove")
@@ -179,6 +187,7 @@ def remove_account(
         bool,
         typer.Option("--force", help="Skip confirmation prompt."),
     ] = False,
+    format: FormatOption = "json",
 ) -> None:
     """Remove an account from the configuration."""
     if not force:
@@ -190,7 +199,7 @@ def remove_account(
     config = get_config(ctx)
     config.remove_account(name)
 
-    output_result(ctx, {"removed": name})
+    output_result(ctx, {"removed": name}, format=format)
 
 
 @auth_app.command("switch")
@@ -198,12 +207,13 @@ def remove_account(
 def switch_account(
     ctx: typer.Context,
     name: Annotated[str, typer.Argument(help="Account name to set as default.")],
+    format: FormatOption = "json",
 ) -> None:
     """Set an account as the default."""
     config = get_config(ctx)
     config.set_default(name)
 
-    output_result(ctx, {"default": name})
+    output_result(ctx, {"default": name}, format=format)
 
 
 def _find_default_account(config: ConfigManager) -> AccountInfo | None:
@@ -223,6 +233,7 @@ def show_account(
         str | None,
         typer.Argument(help="Account name (default if omitted)."),
     ] = None,
+    format: FormatOption = "json",
 ) -> None:
     """Show account details (secret is redacted)."""
     config = get_config(ctx)
@@ -247,7 +258,7 @@ def show_account(
         "is_default": account.is_default,
     }
 
-    output_result(ctx, data)
+    output_result(ctx, data, format=format)
 
 
 @auth_app.command("test")
@@ -258,6 +269,7 @@ def test_account(
         str | None,
         typer.Argument(help="Account name to test (default if omitted)."),
     ] = None,
+    format: FormatOption = "json",
 ) -> None:
     """Test account credentials by pinging the API.
 
@@ -268,4 +280,4 @@ def test_account(
     # Delegate to Workspace.test_credentials() which handles credential resolution
     # and API testing. Exceptions are handled by @handle_errors decorator.
     result = Workspace.test_credentials(name)
-    output_result(ctx, result)
+    output_result(ctx, result, format=format)

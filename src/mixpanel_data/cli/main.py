@@ -64,14 +64,6 @@ def main(
             envvar="MP_ACCOUNT",
         ),
     ] = None,
-    format: Annotated[
-        str,
-        typer.Option(
-            "--format",
-            "-f",
-            help="Output format: json, jsonl, table, csv, plain.",
-        ),
-    ] = "json",
     quiet: Annotated[
         bool,
         typer.Option(
@@ -105,7 +97,6 @@ def main(
     """
     ctx.ensure_object(dict)
     ctx.obj["account"] = account
-    ctx.obj["format"] = format
     ctx.obj["quiet"] = quiet
     ctx.obj["verbose"] = verbose
     ctx.obj["workspace"] = None

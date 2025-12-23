@@ -21,8 +21,8 @@ class TestAuthList:
             "mixpanel_data.cli.commands.auth.get_config",
             return_value=mock_config_manager,
         ):
-            # --format is a global option, so it goes before the subcommand
-            result = cli_runner.invoke(app, ["--format", "json", "auth", "list"])
+            # --format is a per-command option, so it goes after the command
+            result = cli_runner.invoke(app, ["auth", "list", "--format", "json"])
 
         assert result.exit_code == 0
         data = json.loads(result.stdout)
@@ -39,8 +39,8 @@ class TestAuthList:
             "mixpanel_data.cli.commands.auth.get_config",
             return_value=mock_config_manager,
         ):
-            # --format is a global option, so it goes before the subcommand
-            result = cli_runner.invoke(app, ["--format", "table", "auth", "list"])
+            # --format is a per-command option, so it goes after the command
+            result = cli_runner.invoke(app, ["auth", "list", "--format", "table"])
 
         assert result.exit_code == 0
         assert "production" in result.stdout

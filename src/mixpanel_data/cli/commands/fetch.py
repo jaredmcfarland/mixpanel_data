@@ -12,6 +12,7 @@ from typing import Annotated
 
 import typer
 
+from mixpanel_data.cli.options import FormatOption
 from mixpanel_data.cli.utils import (
     err_console,
     get_workspace,
@@ -58,6 +59,7 @@ def fetch_events(
         bool,
         typer.Option("--no-progress", help="Hide progress bar."),
     ] = False,
+    format: FormatOption = "json",
 ) -> None:
     """Fetch events from Mixpanel into local storage.
 
@@ -93,7 +95,7 @@ def fetch_events(
         progress=show_progress,
     )
 
-    output_result(ctx, result.to_dict())
+    output_result(ctx, result.to_dict(), format=format)
 
 
 @fetch_app.command("profiles")
@@ -116,6 +118,7 @@ def fetch_profiles(
         bool,
         typer.Option("--no-progress", help="Hide progress bar."),
     ] = False,
+    format: FormatOption = "json",
 ) -> None:
     """Fetch user profiles from Mixpanel into local storage.
 
@@ -137,4 +140,4 @@ def fetch_profiles(
         progress=show_progress,
     )
 
-    output_result(ctx, result.to_dict())
+    output_result(ctx, result.to_dict(), format=format)

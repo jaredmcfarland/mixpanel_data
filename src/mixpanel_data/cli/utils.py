@@ -166,16 +166,19 @@ def output_result(
     ctx: typer.Context,
     data: dict[str, Any] | list[Any],
     columns: list[str] | None = None,
+    *,
+    format: str | None = None,
 ) -> None:
     """Output data in the requested format.
 
     Routes data to the appropriate formatter based on the --format
-    global option. Supports json, jsonl, table, csv, and plain formats.
+    option. Supports json, jsonl, table, csv, and plain formats.
 
     Args:
         ctx: Typer context with global options in obj dict.
         data: Data to output (dict or list).
         columns: Column names for table/csv format (auto-detected if None).
+        format: Output format. If None, falls back to ctx.obj["format"] or "json".
     """
     from mixpanel_data.cli.formatters import (
         format_csv,
@@ -185,7 +188,8 @@ def output_result(
         format_table,
     )
 
-    fmt = ctx.obj.get("format", "json")
+    # Priority: explicit format param > ctx.obj > default
+    fmt = format if format is not None else ctx.obj.get("format", "json")
 
     if fmt == "json":
         output = format_json(data)

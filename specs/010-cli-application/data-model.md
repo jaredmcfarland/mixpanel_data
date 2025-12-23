@@ -13,18 +13,19 @@ The CLI introduces no new domain entities. It uses existing types from `mixpanel
 
 ## CLI Context Model
 
-### GlobalOptions
+### ContextOptions
 
-Runtime context passed to all commands via Typer's context object.
+Runtime context passed to all commands via Typer's context object (`ctx.obj`).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | account | str | None | Override account name (-a/--account) |
-| format | OutputFormat | "json" | Output format (-f/--format) |
 | quiet | bool | False | Suppress progress (-q/--quiet) |
 | verbose | bool | False | Debug output (-v/--verbose) |
 | workspace | Workspace | None | Lazy-initialized workspace instance |
 | config | ConfigManager | None | Lazy-initialized config manager |
+
+Note: The `--format` option is per-command (not global) and is passed directly to each command's function, not via `ctx.obj`.
 
 ### OutputFormat (Enum)
 

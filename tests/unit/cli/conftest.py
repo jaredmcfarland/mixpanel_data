@@ -126,7 +126,6 @@ def mock_context() -> typer.Context:
     ctx = MagicMock(spec=typer.Context)
     ctx.obj = {
         "account": None,
-        "format": "json",
         "quiet": False,
         "verbose": False,
         "workspace": None,
