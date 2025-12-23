@@ -292,10 +292,10 @@ just fmt && just lint
 ```
 
 ## Recent Changes
+- 010-cli-application: Added Python 3.11+ (per constitution, with full type hints) + Typer (CLI framework), Rich (output formatting), existing mixpanel_data library
 - 009-workspace: Implemented Workspace facade class with 40+ public methods covering discovery (7), fetching (2), local queries (3), live queries (12), introspection (3), table management (2), and escape hatches (2). Added 51 new tests (45 unit, 6 integration)
 - 008-query-service-enhancements: Added 6 new LiveQueryService methods (activity_feed, insights, frequency, segmentation_numeric, segmentation_sum, segmentation_average) with 7 new result types and 61 new tests
-- 007-discovery-enhancements: Added funnels, cohorts, top events discovery; event/property counts queries
 
 ## Active Technologies
-- Python 3.11+ (per constitution) + DuckDB (storage), httpx (HTTP), Pydantic v2 (validation), Rich (progress bars), pandas (DataFrames)
-- DuckDB embedded database (persistent or ephemeral modes)
+- Python 3.11+ (per constitution, with full type hints) + Typer (CLI framework), Rich (output formatting), existing mixpanel_data library (010-cli-application)
+- DuckDB (via existing StorageEngine, already implemented) (010-cli-application)
