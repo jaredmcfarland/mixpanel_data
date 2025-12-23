@@ -225,7 +225,7 @@ event_time = datetime.fromtimestamp(props.get("time"), tz=timezone.utc)
 
 1. **Transformation Functions**: Private module-level functions for API → Result conversion
 2. **Lazy DataFrame**: Cache via `object.__setattr__` on frozen dataclass
-3. **Type Ignores**: Use `# type: ignore[arg-type]` for Literal assignment from API strings
+3. **Shared Type Aliases**: Use `TimeUnit`, `HourDayUnit`, `CountType` from `_literal_types.py` for type-safe Literal parameters
 4. **Docstrings**: Google style with Args, Returns, Raises, Example sections
 
 ### From Phase 007 (Discovery Enhancements)

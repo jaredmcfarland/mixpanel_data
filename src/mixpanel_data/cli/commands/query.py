@@ -30,6 +30,11 @@ from mixpanel_data.cli.utils import (
     handle_errors,
     output_result,
 )
+from mixpanel_data.cli.validators import (
+    validate_count_type,
+    validate_hour_day_unit,
+    validate_time_unit,
+)
 
 query_app = typer.Typer(
     name="query",
@@ -116,6 +121,7 @@ def query_segmentation(
     ] = None,
 ) -> None:
     """Run live segmentation query against Mixpanel API."""
+    validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
 
     result = workspace.segmentation(
@@ -123,7 +129,7 @@ def query_segmentation(
         from_date=from_date,
         to_date=to_date,
         on=on,
-        unit=unit,  # type: ignore[arg-type]
+        unit=validated_unit,
         where=where,
     )
 
@@ -211,6 +217,7 @@ def query_retention(
     ] = "day",
 ) -> None:
     """Run live retention analysis against Mixpanel API."""
+    validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
 
     # Use defaults if not provided
@@ -226,7 +233,7 @@ def query_retention(
         return_where=return_where,
         interval=actual_interval,
         interval_count=actual_interval_count,
-        unit=unit,  # type: ignore[arg-type]
+        unit=validated_unit,
     )
 
     output_result(ctx, result.to_dict())
@@ -309,10 +316,13 @@ def query_event_counts(
     ] = "general",
     unit: Annotated[
         str,
-        typer.Option("--unit", "-u", help="Time unit: minute, hour, day, week, month."),
+        typer.Option("--unit", "-u", help="Time unit: day, week, month."),
     ] = "day",
 ) -> None:
     """Query event counts over time for multiple events."""
+    validated_type = validate_count_type(type_)
+    validated_unit = validate_time_unit(unit)
+
     # Parse events
     events_list = [e.strip() for e in events.split(",")]
 
@@ -322,8 +332,8 @@ def query_event_counts(
         events=events_list,
         from_date=from_date,
         to_date=to_date,
-        type=type_,  # type: ignore[arg-type]
-        unit=unit,  # type: ignore[arg-type]
+        type=validated_type,
+        unit=validated_unit,
     )
 
     output_result(ctx, result.to_dict())
@@ -355,7 +365,7 @@ def query_property_counts(
     ] = "general",
     unit: Annotated[
         str,
-        typer.Option("--unit", "-u", help="Time unit: minute, hour, day, week, month."),
+        typer.Option("--unit", "-u", help="Time unit: day, week, month."),
     ] = "day",
     limit: Annotated[
         int,
@@ -363,6 +373,8 @@ def query_property_counts(
     ] = 10,
 ) -> None:
     """Query event counts broken down by property values."""
+    validated_type = validate_count_type(type_)
+    validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
 
     result = workspace.property_counts(
@@ -370,8 +382,8 @@ def query_property_counts(
         property_name=property_name,
         from_date=from_date,
         to_date=to_date,
-        type=type_,  # type: ignore[arg-type]
-        unit=unit,  # type: ignore[arg-type]
+        type=validated_type,
+        unit=validated_unit,
         limit=limit,
     )
 
@@ -457,14 +469,18 @@ def query_frequency(
     ] = None,
 ) -> None:
     """Analyze event frequency distribution (addiction analysis)."""
+    validated_unit = validate_time_unit(unit)
+    validated_addiction_unit = validate_hour_day_unit(
+        addiction_unit, "--addiction-unit"
+    )
     workspace = get_workspace(ctx)
 
     result = workspace.frequency(
         from_date=from_date,
         to_date=to_date,
         event=event,
-        unit=unit,  # type: ignore[arg-type]
-        addiction_unit=addiction_unit,  # type: ignore[arg-type]
+        unit=validated_unit,
+        addiction_unit=validated_addiction_unit,
         where=where,
     )
 
@@ -497,7 +513,7 @@ def query_segmentation_numeric(
     ] = "general",
     unit: Annotated[
         str,
-        typer.Option("--unit", "-u", help="Time unit: day, week, month."),
+        typer.Option("--unit", "-u", help="Time unit: hour, day."),
     ] = "day",
     where: Annotated[
         str | None,
@@ -505,6 +521,8 @@ def query_segmentation_numeric(
     ] = None,
 ) -> None:
     """Bucket events by numeric property ranges."""
+    validated_type = validate_count_type(type_)
+    validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
 
     result = workspace.segmentation_numeric(
@@ -512,8 +530,8 @@ def query_segmentation_numeric(
         on=on,
         from_date=from_date,
         to_date=to_date,
-        type=type_,  # type: ignore[arg-type]
-        unit=unit,  # type: ignore[arg-type]
+        type=validated_type,
+        unit=validated_unit,
         where=where,
     )
 
@@ -542,7 +560,7 @@ def query_segmentation_sum(
     ],
     unit: Annotated[
         str,
-        typer.Option("--unit", "-u", help="Time unit: day, week, month."),
+        typer.Option("--unit", "-u", help="Time unit: hour, day."),
     ] = "day",
     where: Annotated[
         str | None,
@@ -550,6 +568,7 @@ def query_segmentation_sum(
     ] = None,
 ) -> None:
     """Calculate sum of numeric property over time."""
+    validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
 
     result = workspace.segmentation_sum(
@@ -557,7 +576,7 @@ def query_segmentation_sum(
         on=on,
         from_date=from_date,
         to_date=to_date,
-        unit=unit,  # type: ignore[arg-type]
+        unit=validated_unit,
         where=where,
     )
 
@@ -586,7 +605,7 @@ def query_segmentation_average(
     ],
     unit: Annotated[
         str,
-        typer.Option("--unit", "-u", help="Time unit: day, week, month."),
+        typer.Option("--unit", "-u", help="Time unit: hour, day."),
     ] = "day",
     where: Annotated[
         str | None,
@@ -594,6 +613,7 @@ def query_segmentation_average(
     ] = None,
 ) -> None:
     """Calculate average of numeric property over time."""
+    validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
 
     result = workspace.segmentation_average(
@@ -601,7 +621,7 @@ def query_segmentation_average(
         on=on,
         from_date=from_date,
         to_date=to_date,
-        unit=unit,  # type: ignore[arg-type]
+        unit=validated_unit,
         where=where,
     )
 

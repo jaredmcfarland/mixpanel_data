@@ -602,8 +602,8 @@ def _transform_frequency(
         event=event,
         from_date=from_date,
         to_date=to_date,
-        unit=unit,  # type: ignore[arg-type]
-        addiction_unit=addiction_unit,  # type: ignore[arg-type]
+        unit=unit,
+        addiction_unit=addiction_unit,
         data=data,
     )
 ```

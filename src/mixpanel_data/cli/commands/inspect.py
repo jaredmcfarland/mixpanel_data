@@ -25,6 +25,7 @@ from mixpanel_data.cli.utils import (
     handle_errors,
     output_result,
 )
+from mixpanel_data.cli.validators import validate_count_type
 
 inspect_app = typer.Typer(
     name="inspect",
@@ -126,8 +127,9 @@ def inspect_top_events(
     ] = 10,
 ) -> None:
     """List today's top events by count."""
+    validated_type = validate_count_type(type_)
     workspace = get_workspace(ctx)
-    events = workspace.top_events(type=type_, limit=limit)  # type: ignore[arg-type]
+    events = workspace.top_events(type=validated_type, limit=limit)
     data = [
         {
             "event": e.event,

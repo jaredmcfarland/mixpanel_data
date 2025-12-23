@@ -391,19 +391,23 @@ Benefits:
 - mypy catches invalid values at compile time
 - Self-documenting API
 
-### 4. Type Ignore Comments for Literal Conversion
+### 4. Shared Type Aliases for Literal Types
 
-When passing string parameters to Literal-typed fields, explicit type ignores document intentional coercion:
+Shared type aliases (`TimeUnit`, `HourDayUnit`, `CountType`) defined in `_literal_types.py` ensure type safety across layers:
 
 ```python
-return FrequencyResult(
-    unit=unit,  # type: ignore[arg-type]
-    addiction_unit=addiction_unit,  # type: ignore[arg-type]
+from mixpanel_data._literal_types import HourDayUnit, TimeUnit
+
+def frequency(
+    self,
+    unit: TimeUnit = "day",
+    addiction_unit: HourDayUnit = "hour",
     ...
-)
+) -> FrequencyResult:
+    ...
 ```
 
-This acknowledges that the service accepts strings but the result type expects Literals.
+The CLI layer validates string inputs against these types before passing to service methods.
 
 ---
 
@@ -529,7 +533,7 @@ freq = workspace.frequency("2024-01-01", "2024-01-07", event="App Open")
 
 4. **Test empty responses explicitly.** Every query method has an "empty response" test to verify graceful handling. AI agents encountering empty data should get valid (empty) results, not errors.
 
-5. **Literal types are worth the type: ignore.** The slight ugliness of `# type: ignore[arg-type]` is outweighed by the IDE autocomplete and mypy validation benefits for users of the library.
+5. **Shared type aliases eliminate type: ignore comments.** Defining `TimeUnit`, `HourDayUnit`, and `CountType` as shared aliases in `_literal_types.py` allows both service methods and result types to use the same types, providing full type safety with IDE autocomplete and mypy validation.
 
 ---
 

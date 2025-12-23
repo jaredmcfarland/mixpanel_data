@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
+from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
 from mixpanel_data.types import (
     ActivityFeedResult,
     CohortInfo,
@@ -102,7 +103,7 @@ def _transform_retention(
     return_event: str,
     from_date: str,
     to_date: str,
-    unit: str,
+    unit: TimeUnit,
 ) -> RetentionResult:
     """Transform raw retention API response into RetentionResult.
 
@@ -143,7 +144,7 @@ def _transform_retention(
         return_event=return_event,
         from_date=from_date,
         to_date=to_date,
-        unit=unit,  # type: ignore[arg-type]
+        unit=unit,
         cohorts=cohorts,
     )
 
@@ -153,7 +154,7 @@ def _transform_segmentation(
     event: str,
     from_date: str,
     to_date: str,
-    unit: str,
+    unit: TimeUnit,
     on: str | None,
 ) -> SegmentationResult:
     """Transform raw segmentation API response into SegmentationResult.
@@ -181,7 +182,7 @@ def _transform_segmentation(
         event=event,
         from_date=from_date,
         to_date=to_date,
-        unit=unit,  # type: ignore[arg-type]
+        unit=unit,
         segment_property=on,
         total=total,
         series=values,
@@ -221,7 +222,7 @@ class LiveQueryService:
         to_date: str,
         *,
         on: str | None = None,
-        unit: str = "day",
+        unit: TimeUnit = "day",
         where: str | None = None,
     ) -> SegmentationResult:
         """Run a segmentation query.
@@ -325,7 +326,7 @@ class LiveQueryService:
         return_where: str | None = None,
         interval: int = 1,
         interval_count: int = 10,
-        unit: str = "day",
+        unit: TimeUnit = "day",
     ) -> RetentionResult:
         """Run a retention analysis query.
 
@@ -611,8 +612,8 @@ class LiveQueryService:
         from_date: str,
         to_date: str,
         *,
-        unit: Literal["day", "week", "month"] = "day",
-        addiction_unit: Literal["hour", "day"] = "hour",
+        unit: TimeUnit = "day",
+        addiction_unit: HourDayUnit = "hour",
         event: str | None = None,
         where: str | None = None,
     ) -> FrequencyResult:
@@ -666,9 +667,9 @@ class LiveQueryService:
         to_date: str,
         on: str,
         *,
-        unit: Literal["hour", "day"] = "day",
+        unit: HourDayUnit = "day",
         where: str | None = None,
-        type: Literal["general", "unique", "average"] = "general",
+        type: CountType = "general",
     ) -> NumericBucketResult:
         """Query events bucketed by numeric property ranges.
 
@@ -720,7 +721,7 @@ class LiveQueryService:
         to_date: str,
         on: str,
         *,
-        unit: Literal["hour", "day"] = "day",
+        unit: HourDayUnit = "day",
         where: str | None = None,
     ) -> NumericSumResult:
         """Query sum of numeric property values.
@@ -771,7 +772,7 @@ class LiveQueryService:
         to_date: str,
         on: str,
         *,
-        unit: Literal["hour", "day"] = "day",
+        unit: HourDayUnit = "day",
         where: str | None = None,
     ) -> NumericAverageResult:
         """Query average of numeric property values.
@@ -911,8 +912,8 @@ def _transform_frequency(
     event: str | None,
     from_date: str,
     to_date: str,
-    unit: str,
-    addiction_unit: str,
+    unit: TimeUnit,
+    addiction_unit: HourDayUnit,
 ) -> FrequencyResult:
     """Transform raw frequency API response into FrequencyResult.
 
@@ -933,8 +934,8 @@ def _transform_frequency(
         event=event,
         from_date=from_date,
         to_date=to_date,
-        unit=unit,  # type: ignore[arg-type]
-        addiction_unit=addiction_unit,  # type: ignore[arg-type]
+        unit=unit,
+        addiction_unit=addiction_unit,
         data=data,
     )
 
@@ -945,7 +946,7 @@ def _transform_numeric_bucket(
     from_date: str,
     to_date: str,
     on: str,
-    unit: str,
+    unit: HourDayUnit,
 ) -> NumericBucketResult:
     """Transform raw numeric segmentation API response into NumericBucketResult.
 
@@ -968,7 +969,7 @@ def _transform_numeric_bucket(
         from_date=from_date,
         to_date=to_date,
         property_expr=on,
-        unit=unit,  # type: ignore[arg-type]
+        unit=unit,
         series=values,
     )
 
@@ -979,7 +980,7 @@ def _transform_numeric_sum(
     from_date: str,
     to_date: str,
     on: str,
-    unit: str,
+    unit: HourDayUnit,
 ) -> NumericSumResult:
     """Transform raw sum API response into NumericSumResult.
 
@@ -1002,7 +1003,7 @@ def _transform_numeric_sum(
         from_date=from_date,
         to_date=to_date,
         property_expr=on,
-        unit=unit,  # type: ignore[arg-type]
+        unit=unit,
         results=results,
         computed_at=computed_at,
     )
@@ -1014,7 +1015,7 @@ def _transform_numeric_average(
     from_date: str,
     to_date: str,
     on: str,
-    unit: str,
+    unit: HourDayUnit,
 ) -> NumericAverageResult:
     """Transform raw average API response into NumericAverageResult.
 
@@ -1036,6 +1037,6 @@ def _transform_numeric_average(
         from_date=from_date,
         to_date=to_date,
         property_expr=on,
-        unit=unit,  # type: ignore[arg-type]
+        unit=unit,
         results=results,
     )
