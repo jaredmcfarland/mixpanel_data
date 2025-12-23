@@ -849,7 +849,13 @@ def _transform_activity_feed(
         props = event_data.get("properties", {})
 
         # Convert Unix timestamp to datetime
-        timestamp = props.get("time", 0)
+        # Mixpanel events should always have a time field (server-side if not client-side).
+        # Missing timestamps indicate API format changes or data corruption.
+        timestamp = props.get("time")
+        if timestamp is None:
+            raise ValueError(
+                f"Event missing required 'time' field: {event_data.get('event', 'unknown')}"
+            )
         event_time = datetime.fromtimestamp(timestamp, tz=UTC)
 
         events.append(

@@ -13,6 +13,10 @@ import httpx
 import pytest
 
 from mixpanel_data._internal.services.live_query import LiveQueryService
+from mixpanel_data.exceptions import (
+    AuthenticationError,
+    QueryError,
+)
 from mixpanel_data.types import (
     ActivityFeedResult,
     FrequencyResult,
@@ -627,3 +631,305 @@ class TestInsightsService:
         assert "date" in df.columns
         assert "count" in df.columns
         assert len(df) == 4  # 2 events x 2 dates
+
+
+# =============================================================================
+# Error Handling Tests
+# =============================================================================
+
+
+class TestPhase008ServiceErrorHandling:
+    """Error propagation tests for Phase 008 service methods."""
+
+    # -------------------------------------------------------------------------
+    # Activity Feed Error Propagation
+    # -------------------------------------------------------------------------
+
+    def test_activity_feed_propagates_auth_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """activity_feed() should propagate AuthenticationError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(AuthenticationError):
+            live_query.activity_feed(distinct_ids=["user_123"])
+
+    def test_activity_feed_propagates_query_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """activity_feed() should propagate QueryError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid query"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(QueryError):
+            live_query.activity_feed(distinct_ids=["user_123"])
+
+    # -------------------------------------------------------------------------
+    # Segmentation Sum Error Propagation
+    # -------------------------------------------------------------------------
+
+    def test_segmentation_sum_propagates_auth_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """segmentation_sum() should propagate AuthenticationError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(AuthenticationError):
+            live_query.segmentation_sum(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    def test_segmentation_sum_propagates_query_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """segmentation_sum() should propagate QueryError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid property"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(QueryError):
+            live_query.segmentation_sum(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    # -------------------------------------------------------------------------
+    # Segmentation Average Error Propagation
+    # -------------------------------------------------------------------------
+
+    def test_segmentation_average_propagates_auth_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """segmentation_average() should propagate AuthenticationError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(AuthenticationError):
+            live_query.segmentation_average(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    def test_segmentation_average_propagates_query_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """segmentation_average() should propagate QueryError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid event"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(QueryError):
+            live_query.segmentation_average(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    # -------------------------------------------------------------------------
+    # Frequency Error Propagation
+    # -------------------------------------------------------------------------
+
+    def test_frequency_propagates_auth_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """frequency() should propagate AuthenticationError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(AuthenticationError):
+            live_query.frequency(
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+            )
+
+    def test_frequency_propagates_query_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """frequency() should propagate QueryError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid date range"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(QueryError):
+            live_query.frequency(
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+            )
+
+    # -------------------------------------------------------------------------
+    # Segmentation Numeric Error Propagation
+    # -------------------------------------------------------------------------
+
+    def test_segmentation_numeric_propagates_auth_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """segmentation_numeric() should propagate AuthenticationError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(AuthenticationError):
+            live_query.segmentation_numeric(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    def test_segmentation_numeric_propagates_query_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """segmentation_numeric() should propagate QueryError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Property not found"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(QueryError):
+            live_query.segmentation_numeric(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    # -------------------------------------------------------------------------
+    # Insights Error Propagation
+    # -------------------------------------------------------------------------
+
+    def test_insights_propagates_auth_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """insights() should propagate AuthenticationError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(AuthenticationError):
+            live_query.insights(bookmark_id=12345678)
+
+    def test_insights_propagates_query_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """insights() should propagate QueryError from API."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid bookmark_id"})
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(QueryError):
+            live_query.insights(bookmark_id=99999999)
+
+
+# =============================================================================
+# Edge Case Tests
+# =============================================================================
+
+
+class TestPhase008EdgeCases:
+    """Edge case tests for Phase 008 service methods."""
+
+    def test_activity_feed_missing_timestamp_raises_error(
+        self,
+        live_query_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], LiveQueryService
+        ],
+    ) -> None:
+        """Events with missing timestamps should raise ValueError."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {
+                        "events": [
+                            {
+                                "event": "Test Event",
+                                "properties": {
+                                    "$distinct_id": "user_123",
+                                    # Note: 'time' field is intentionally missing
+                                },
+                            }
+                        ]
+                    },
+                },
+            )
+
+        live_query = live_query_factory(handler)
+
+        with pytest.raises(ValueError, match="missing required 'time' field"):
+            live_query.activity_feed(distinct_ids=["user_123"])

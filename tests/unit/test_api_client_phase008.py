@@ -13,6 +13,11 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import Credentials
+from mixpanel_data.exceptions import (
+    AuthenticationError,
+    QueryError,
+    RateLimitError,
+)
 
 
 @pytest.fixture
@@ -376,3 +381,374 @@ class TestInsights:
             result = client.insights(bookmark_id=99887766)
 
         assert "series" in result
+
+
+# =============================================================================
+# Error Handling Tests
+# =============================================================================
+
+
+class TestPhase008ErrorHandling:
+    """Error handling tests for Phase 008 API methods."""
+
+    # -------------------------------------------------------------------------
+    # Activity Feed Error Handling
+    # -------------------------------------------------------------------------
+
+    def test_activity_feed_auth_error_on_401(
+        self, test_credentials: Credentials
+    ) -> None:
+        """activity_feed() should raise AuthenticationError on 401."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(AuthenticationError) as exc_info,
+        ):
+            client.activity_feed(distinct_ids=["user_123"])
+
+        assert "credentials" in str(exc_info.value).lower()
+
+    def test_activity_feed_query_error_on_400(
+        self, test_credentials: Credentials
+    ) -> None:
+        """activity_feed() should raise QueryError on 400."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid query"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(QueryError) as exc_info,
+        ):
+            client.activity_feed(distinct_ids=["user_123"])
+
+        assert "Invalid query" in str(exc_info.value)
+
+    def test_activity_feed_rate_limit_on_429(
+        self, test_credentials: Credentials
+    ) -> None:
+        """activity_feed() should raise RateLimitError on 429."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=1, _transport=transport
+        )
+
+        with client, pytest.raises(RateLimitError) as exc_info:
+            client.activity_feed(distinct_ids=["user_123"])
+
+        assert exc_info.value.retry_after == 0
+
+    # -------------------------------------------------------------------------
+    # Segmentation Sum Error Handling
+    # -------------------------------------------------------------------------
+
+    def test_segmentation_sum_auth_error_on_401(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_sum() should raise AuthenticationError on 401."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(AuthenticationError),
+        ):
+            client.segmentation_sum(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    def test_segmentation_sum_query_error_on_400(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_sum() should raise QueryError on 400."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid property expression"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(QueryError) as exc_info,
+        ):
+            client.segmentation_sum(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+        assert "Invalid property expression" in str(exc_info.value)
+
+    def test_segmentation_sum_rate_limit_on_429(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_sum() should raise RateLimitError on 429."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=1, _transport=transport
+        )
+
+        with client, pytest.raises(RateLimitError) as exc_info:
+            client.segmentation_sum(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+        assert exc_info.value.retry_after == 0
+
+    # -------------------------------------------------------------------------
+    # Segmentation Average Error Handling
+    # -------------------------------------------------------------------------
+
+    def test_segmentation_average_auth_error_on_401(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_average() should raise AuthenticationError on 401."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(AuthenticationError),
+        ):
+            client.segmentation_average(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    def test_segmentation_average_query_error_on_400(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_average() should raise QueryError on 400."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid event name"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(QueryError) as exc_info,
+        ):
+            client.segmentation_average(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+        assert "Invalid event name" in str(exc_info.value)
+
+    def test_segmentation_average_rate_limit_on_429(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_average() should raise RateLimitError on 429."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=1, _transport=transport
+        )
+
+        with client, pytest.raises(RateLimitError) as exc_info:
+            client.segmentation_average(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+        assert exc_info.value.retry_after == 0
+
+    # -------------------------------------------------------------------------
+    # Frequency Error Handling
+    # -------------------------------------------------------------------------
+
+    def test_frequency_auth_error_on_401(self, test_credentials: Credentials) -> None:
+        """frequency() should raise AuthenticationError on 401."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(AuthenticationError),
+        ):
+            client.frequency(
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                unit="day",
+                addiction_unit="hour",
+            )
+
+    def test_frequency_query_error_on_400(self, test_credentials: Credentials) -> None:
+        """frequency() should raise QueryError on 400."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid date range"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(QueryError) as exc_info,
+        ):
+            client.frequency(
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                unit="day",
+                addiction_unit="hour",
+            )
+
+        assert "Invalid date range" in str(exc_info.value)
+
+    def test_frequency_rate_limit_on_429(self, test_credentials: Credentials) -> None:
+        """frequency() should raise RateLimitError on 429."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=1, _transport=transport
+        )
+
+        with client, pytest.raises(RateLimitError) as exc_info:
+            client.frequency(
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                unit="day",
+                addiction_unit="hour",
+            )
+
+        assert exc_info.value.retry_after == 0
+
+    # -------------------------------------------------------------------------
+    # Segmentation Numeric Error Handling
+    # -------------------------------------------------------------------------
+
+    def test_segmentation_numeric_auth_error_on_401(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_numeric() should raise AuthenticationError on 401."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(AuthenticationError),
+        ):
+            client.segmentation_numeric(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+    def test_segmentation_numeric_query_error_on_400(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_numeric() should raise QueryError on 400."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Property not found"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(QueryError) as exc_info,
+        ):
+            client.segmentation_numeric(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+        assert "Property not found" in str(exc_info.value)
+
+    def test_segmentation_numeric_rate_limit_on_429(
+        self, test_credentials: Credentials
+    ) -> None:
+        """segmentation_numeric() should raise RateLimitError on 429."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=1, _transport=transport
+        )
+
+        with client, pytest.raises(RateLimitError) as exc_info:
+            client.segmentation_numeric(
+                event="Purchase",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                on='properties["amount"]',
+            )
+
+        assert exc_info.value.retry_after == 0
+
+    # -------------------------------------------------------------------------
+    # Insights Error Handling
+    # -------------------------------------------------------------------------
+
+    def test_insights_auth_error_on_401(self, test_credentials: Credentials) -> None:
+        """insights() should raise AuthenticationError on 401."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "Invalid credentials"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(AuthenticationError),
+        ):
+            client.insights(bookmark_id=12345678)
+
+    def test_insights_query_error_on_400(self, test_credentials: Credentials) -> None:
+        """insights() should raise QueryError on 400."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": "Invalid bookmark_id"})
+
+        with (
+            create_mock_client(test_credentials, handler) as client,
+            pytest.raises(QueryError) as exc_info,
+        ):
+            client.insights(bookmark_id=99999999)
+
+        assert "Invalid bookmark_id" in str(exc_info.value)
+
+    def test_insights_rate_limit_on_429(self, test_credentials: Credentials) -> None:
+        """insights() should raise RateLimitError on 429."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(
+            test_credentials, max_retries=1, _transport=transport
+        )
+
+        with client, pytest.raises(RateLimitError) as exc_info:
+            client.insights(bookmark_id=12345678)
+
+        assert exc_info.value.retry_after == 0
