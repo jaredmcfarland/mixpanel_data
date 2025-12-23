@@ -276,6 +276,10 @@ just fmt && just lint
 ```
 
 ## Recent Changes
+- 009-workspace: Added Python 3.11+ (per constitution) + DuckDB (storage), httpx (HTTP), Pydantic v2 (validation), Rich (progress bars), pandas (DataFrames)
 - 008-query-service-enhancements: Added 6 new LiveQueryService methods (activity_feed, insights, frequency, segmentation_numeric, segmentation_sum, segmentation_average) with 7 new result types and 61 new tests
 - 007-discovery-enhancements: Added funnels, cohorts, top events discovery; event/property counts queries
-- 006-live-query-service: Added segmentation, funnel, retention, JQL queries with typed results
+
+## Active Technologies
+- Python 3.11+ (per constitution) + DuckDB (storage), httpx (HTTP), Pydantic v2 (validation), Rich (progress bars), pandas (DataFrames) (009-workspace)
+- DuckDB embedded database (persistent or ephemeral modes) (009-workspace)
