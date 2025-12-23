@@ -257,7 +257,7 @@ def query_jql(
     if file is not None:
         if not file.exists():
             err_console.print(f"[red]Error:[/red] File not found: {file}")
-            raise typer.Exit(2)
+            raise typer.Exit(3)
         jql_script = file.read_text()
     elif script is not None:
         jql_script = script

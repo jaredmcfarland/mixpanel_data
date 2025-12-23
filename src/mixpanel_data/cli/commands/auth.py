@@ -11,6 +11,8 @@ This module provides commands for managing Mixpanel accounts:
 
 from __future__ import annotations
 
+import os
+import sys
 from typing import Annotated
 
 import typer
@@ -65,10 +67,6 @@ def add_account(
         str | None,
         typer.Option("--username", "-u", help="Service account username."),
     ] = None,
-    secret: Annotated[
-        str | None,
-        typer.Option("--secret", "-s", help="Service account secret."),
-    ] = None,
     project: Annotated[
         str | None,
         typer.Option("--project", "-p", help="Project ID."),
@@ -83,28 +81,69 @@ def add_account(
     ] = False,
     interactive: Annotated[
         bool,
-        typer.Option("--interactive", "-i", help="Prompt for credentials."),
+        typer.Option("--interactive", "-i", help="Prompt for all credentials."),
+    ] = False,
+    secret_stdin: Annotated[
+        bool,
+        typer.Option("--secret-stdin", help="Read secret from stdin."),
     ] = False,
 ) -> None:
     """Add a new account to the configuration.
 
-    Credentials can be provided via options or interactively with --interactive.
+    The secret can be provided via:
+    - Interactive prompt (default, hidden input)
+    - MP_SECRET environment variable (for CI/CD)
+    - --secret-stdin flag to read from stdin (e.g., echo $SECRET | mp auth add ...)
+
+    Examples:
+        # Interactive (prompts for secret with hidden input)
+        mp auth add production -u myuser -p 12345
+
+        # Using environment variable
+        MP_SECRET=abc123 mp auth add production -u myuser -p 12345
+
+        # Reading secret from stdin
+        echo "abc123" | mp auth add production -u myuser -p 12345 --secret-stdin
     """
-    # Handle interactive mode
+    secret: str | None = None
+
+    # Handle interactive mode for all fields
     if interactive:
         if username is None:
             username = typer.prompt("Service account username")
-        if secret is None:
-            secret = typer.prompt("Service account secret", hide_input=True)
         if project is None:
             project = typer.prompt("Project ID")
+        # Secret is always prompted with hidden input in interactive mode
+        secret = typer.prompt("Service account secret", hide_input=True)
+    else:
+        # Secret resolution priority:
+        # 1. --secret-stdin: read from stdin
+        # 2. MP_SECRET env var
+        # 3. Interactive prompt (always hidden)
+        if secret_stdin:
+            # Read secret from stdin
+            if sys.stdin.isatty():
+                err_console.print(
+                    "[red]Error:[/red] --secret-stdin requires piped input"
+                )
+                err_console.print("Example: echo $SECRET | mp auth add ...")
+                raise typer.Exit(3)
+            secret = sys.stdin.read().strip()
+            if not secret:
+                err_console.print("[red]Error:[/red] No secret provided via stdin")
+                raise typer.Exit(3)
+        elif os.environ.get("MP_SECRET"):
+            secret = os.environ["MP_SECRET"]
+        else:
+            # Prompt for secret with hidden input (secure by default)
+            secret = typer.prompt("Service account secret", hide_input=True)
 
     # Validate required fields
     if not username:
         err_console.print("[red]Error:[/red] --username is required")
         raise typer.Exit(3)
     if not secret:
-        err_console.print("[red]Error:[/red] --secret is required")
+        err_console.print("[red]Error:[/red] Secret is required")
         raise typer.Exit(3)
     if not project:
         err_console.print("[red]Error:[/red] --project is required")
@@ -224,48 +263,9 @@ def test_account(
 
     Verifies that the credentials are valid and can access the project.
     """
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_data.workspace import Workspace
 
-    config = get_config(ctx)
-
-    account: AccountInfo
-    if name is None:
-        default_account = _find_default_account(config)
-        if default_account is None:
-            err_console.print("[red]Error:[/red] No default account configured.")
-            raise typer.Exit(1)
-        account = default_account
-    else:
-        account = config.get_account(name)
-
-    # Resolve credentials (includes secret)
-    credentials = config.resolve_credentials(account.name)
-
-    client = MixpanelAPIClient(credentials)
-
-    # Make a simple API call to test credentials
-    # Use list_events as a lightweight test endpoint
-    try:
-        events = client.get_events()
-        event_count = len(list(events)) if events else 0
-
-        output_result(
-            ctx,
-            {
-                "success": True,
-                "account": account.name,
-                "project_id": account.project_id,
-                "region": account.region,
-                "events_found": event_count,
-            },
-        )
-    except Exception as e:
-        output_result(
-            ctx,
-            {
-                "success": False,
-                "account": account.name,
-                "error": str(e),
-            },
-        )
-        raise typer.Exit(1) from None
+    # Delegate to Workspace.test_credentials() which handles credential resolution
+    # and API testing. Exceptions are handled by @handle_errors decorator.
+    result = Workspace.test_credentials(name)
+    output_result(ctx, result)

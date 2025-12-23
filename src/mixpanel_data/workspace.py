@@ -284,6 +284,72 @@ class Workspace:
             self._api_client.close()
             self._api_client = None
 
+    @staticmethod
+    def test_credentials(account: str | None = None) -> dict[str, Any]:
+        """Test account credentials by making a lightweight API call.
+
+        This method verifies that credentials are valid and can access the
+        Mixpanel API. It's useful for validating configuration before
+        attempting more expensive operations.
+
+        Args:
+            account: Named account to test. If None, tests the default account
+                or credentials from environment variables.
+
+        Returns:
+            Dict containing:
+                - success: bool - Whether the test succeeded
+                - account: str | None - Account name tested
+                - project_id: str - Project ID from credentials
+                - region: str - Region from credentials
+                - events_found: int - Number of events found (validation metric)
+
+        Raises:
+            AccountNotFoundError: If named account doesn't exist.
+            AuthenticationError: If credentials are invalid.
+            ConfigError: If no credentials can be resolved.
+
+        Example::
+
+            # Test default account
+            result = Workspace.test_credentials()
+            if result["success"]:
+                print(f"Authenticated to project {result['project_id']}")
+
+            # Test specific account
+            result = Workspace.test_credentials("production")
+        """
+        config_manager = ConfigManager()
+        credentials = config_manager.resolve_credentials(account)
+
+        # Get account info if we used a named account
+        account_info = None
+        if account is not None:
+            account_info = config_manager.get_account(account)
+        else:
+            # Check if credentials came from a default account
+            accounts = config_manager.list_accounts()
+            for acc in accounts:
+                if acc.is_default:
+                    account_info = acc
+                    break
+
+        # Create API client and test with a lightweight call
+        api_client = MixpanelAPIClient(credentials)
+        try:
+            events = api_client.get_events()
+            event_count = len(list(events)) if events else 0
+
+            return {
+                "success": True,
+                "account": account_info.name if account_info else None,
+                "project_id": credentials.project_id,
+                "region": credentials.region,
+                "events_found": event_count,
+            }
+        finally:
+            api_client.close()
+
     # =========================================================================
     # PRIVATE HELPERS
     # =========================================================================

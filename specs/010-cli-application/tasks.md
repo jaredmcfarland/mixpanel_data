@@ -71,11 +71,11 @@
 - [ ] T021 [US1] Create auth command group scaffold at src/mixpanel_data/cli/commands/auth.py
 - [ ] T022 [US1] Register auth_app subcommand in main.py at src/mixpanel_data/cli/main.py
 - [ ] T023 [US1] Implement `mp auth list` command delegating to ConfigManager.list_accounts() in src/mixpanel_data/cli/commands/auth.py
-- [ ] T024 [US1] Implement `mp auth add` command with --username, --secret, --project, --region, --default, --interactive options in src/mixpanel_data/cli/commands/auth.py
+- [ ] T024 [US1] Implement `mp auth add` command with --username, --project, --region, --default, --interactive, --secret-stdin options (secret via secure prompt, MP_SECRET env, or stdin) in src/mixpanel_data/cli/commands/auth.py
 - [ ] T025 [US1] Implement `mp auth remove` command with --force option and confirmation prompt in src/mixpanel_data/cli/commands/auth.py
 - [ ] T026 [US1] Implement `mp auth switch` command delegating to ConfigManager.set_default() in src/mixpanel_data/cli/commands/auth.py
 - [ ] T027 [US1] Implement `mp auth show` command with redacted secret display in src/mixpanel_data/cli/commands/auth.py
-- [ ] T028 [US1] Implement `mp auth test` command that resolves credentials and pings API in src/mixpanel_data/cli/commands/auth.py
+- [ ] T028 [US1] Implement `mp auth test` command delegating to Workspace.test_credentials() in src/mixpanel_data/cli/commands/auth.py
 
 ### Tests for User Story 1
 

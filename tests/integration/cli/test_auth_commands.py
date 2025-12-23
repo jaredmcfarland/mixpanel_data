@@ -83,10 +83,12 @@ class TestAuthShow:
 class TestAuthAdd:
     """Tests for mp auth add command."""
 
-    def test_add_account_with_options(
-        self, cli_runner: CliRunner, mock_config_manager: MagicMock
+    def test_add_account_with_env_var_secret(
+        self, cli_runner: CliRunner, mock_config_manager: MagicMock, monkeypatch
     ) -> None:
-        """Test adding account with all options."""
+        """Test adding account with secret from MP_SECRET env var."""
+        monkeypatch.setenv("MP_SECRET", "test_secret")
+
         with patch(
             "mixpanel_data.cli.commands.auth.get_config",
             return_value=mock_config_manager,
@@ -99,8 +101,6 @@ class TestAuthAdd:
                     "test_account",
                     "--username",
                     "test@example.com",
-                    "--secret",
-                    "test_secret",
                     "--project",
                     "12345",
                     "--region",
@@ -117,18 +117,92 @@ class TestAuthAdd:
             region="us",
         )
 
-    def test_add_account_missing_required(
-        self, cli_runner: CliRunner, mock_config_manager: MagicMock
+    def test_add_account_with_secret_stdin(
+        self, cli_runner: CliRunner, mock_config_manager: MagicMock, monkeypatch
     ) -> None:
-        """Test error when required options are missing."""
+        """Test adding account with secret from stdin."""
+        # Clear MP_SECRET to avoid env var taking precedence
+        monkeypatch.delenv("MP_SECRET", raising=False)
+
         with patch(
             "mixpanel_data.cli.commands.auth.get_config",
             return_value=mock_config_manager,
         ):
-            result = cli_runner.invoke(app, ["auth", "add", "test_account"])
+            result = cli_runner.invoke(
+                app,
+                [
+                    "auth",
+                    "add",
+                    "test_account",
+                    "--username",
+                    "test@example.com",
+                    "--project",
+                    "12345",
+                    "--region",
+                    "us",
+                    "--secret-stdin",
+                ],
+                input="stdin_secret\n",
+            )
 
+        assert result.exit_code == 0
+        mock_config_manager.add_account.assert_called_once_with(
+            name="test_account",
+            username="test@example.com",
+            secret="stdin_secret",
+            project_id="12345",
+            region="us",
+        )
+
+    def test_add_account_missing_username(
+        self, cli_runner: CliRunner, mock_config_manager: MagicMock, monkeypatch
+    ) -> None:
+        """Test error when username is missing."""
+        # Provide secret via env var so we can test username validation
+        monkeypatch.setenv("MP_SECRET", "test_secret")
+
+        with patch(
+            "mixpanel_data.cli.commands.auth.get_config",
+            return_value=mock_config_manager,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["auth", "add", "test_account", "--project", "12345"],
+            )
+
+        # Should fail due to missing username
         assert result.exit_code == 3
         assert "username" in result.stderr.lower() or "Error" in result.stderr
+
+    def test_add_account_secret_stdin_without_pipe_fails(
+        self, cli_runner: CliRunner, mock_config_manager: MagicMock, monkeypatch
+    ) -> None:
+        """Test that --secret-stdin fails when stdin is a tty."""
+        monkeypatch.delenv("MP_SECRET", raising=False)
+
+        with patch(
+            "mixpanel_data.cli.commands.auth.get_config",
+            return_value=mock_config_manager,
+        ):
+            # CliRunner simulates a TTY by default, so --secret-stdin should fail
+            result = cli_runner.invoke(
+                app,
+                [
+                    "auth",
+                    "add",
+                    "test_account",
+                    "--username",
+                    "test@example.com",
+                    "--project",
+                    "12345",
+                    "--secret-stdin",
+                ],
+            )
+
+        assert result.exit_code == 3
+        assert (
+            "requires piped input" in result.stderr or "stdin" in result.stderr.lower()
+        )
 
 
 class TestAuthRemove:
@@ -165,3 +239,67 @@ class TestAuthSwitch:
         mock_config_manager.set_default.assert_called_once_with("staging")
         data = json.loads(result.stdout)
         assert data["default"] == "staging"
+
+
+class TestAuthTest:
+    """Tests for mp auth test command."""
+
+    def test_test_account_success(
+        self, cli_runner: CliRunner, mock_config_manager: MagicMock
+    ) -> None:
+        """Test successful credential test."""
+        mock_result = {
+            "success": True,
+            "account": "production",
+            "project_id": "12345",
+            "region": "us",
+            "events_found": 42,
+        }
+
+        with (
+            patch(
+                "mixpanel_data.cli.commands.auth.get_config",
+                return_value=mock_config_manager,
+            ),
+            patch(
+                "mixpanel_data.workspace.Workspace.test_credentials",
+                return_value=mock_result,
+            ) as mock_test_creds,
+        ):
+            result = cli_runner.invoke(app, ["auth", "test", "production"])
+
+        assert result.exit_code == 0
+        mock_test_creds.assert_called_once_with("production")
+        data = json.loads(result.stdout)
+        assert data["success"] is True
+        assert data["account"] == "production"
+        assert data["events_found"] == 42
+
+    def test_test_default_account(
+        self, cli_runner: CliRunner, mock_config_manager: MagicMock
+    ) -> None:
+        """Test testing default account when no name specified."""
+        mock_result = {
+            "success": True,
+            "account": "production",
+            "project_id": "12345",
+            "region": "us",
+            "events_found": 10,
+        }
+
+        with (
+            patch(
+                "mixpanel_data.cli.commands.auth.get_config",
+                return_value=mock_config_manager,
+            ),
+            patch(
+                "mixpanel_data.workspace.Workspace.test_credentials",
+                return_value=mock_result,
+            ) as mock_test_creds,
+        ):
+            result = cli_runner.invoke(app, ["auth", "test"])
+
+        assert result.exit_code == 0
+        mock_test_creds.assert_called_once_with(None)
+        data = json.loads(result.stdout)
+        assert data["success"] is True

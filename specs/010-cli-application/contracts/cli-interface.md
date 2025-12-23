@@ -72,16 +72,21 @@ Authentication and account management commands.
 | Option | Short | Required | Description |
 |--------|-------|----------|-------------|
 | --username | -u | yes* | Service account username |
-| --secret | -s | yes* | Service account secret |
 | --project | -p | yes* | Project ID |
 | --region | -r | no | Region (us, eu, in) default: us |
 | --default | -d | no | Set as default account |
-| --interactive | -i | no | Prompt for credentials |
+| --interactive | -i | no | Prompt for all credentials |
+| --secret-stdin | | no | Read secret from stdin |
 
 *Required unless --interactive
 
+**Secret Handling** (secure by default):
+1. `--secret-stdin`: Read from stdin (e.g., `echo $SECRET | mp auth add ...`)
+2. `MP_SECRET` environment variable (for CI/CD)
+3. Interactive prompt with hidden input (default)
+
 **Output**: Success message or error
-**Exit Codes**: 0 (success), 1 (already exists), 2 (missing required), 3 (invalid region)
+**Exit Codes**: 0 (success), 1 (already exists), 3 (missing required/invalid region)
 
 ---
 

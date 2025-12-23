@@ -355,7 +355,7 @@ After implementation, verify:
 
 - [ ] `mp --help` shows all command groups
 - [ ] `mp auth --help` shows all auth commands
-- [ ] `mp auth add production -u ... -s ... -p ... -r us` works
+- [ ] `MP_SECRET=... mp auth add production -u ... -p ... -r us` works (or interactive prompt)
 - [ ] `mp auth test` validates credentials
 - [ ] `mp fetch events --from 2024-01-01 --to 2024-01-07` fetches data
 - [ ] `mp query sql "SELECT COUNT(*) FROM events"` returns result
