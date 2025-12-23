@@ -22,6 +22,7 @@ from mixpanel_data.exceptions import (
 from mixpanel_data.types import (
     ActivityFeedResult,
     CohortInfo,
+    ColumnInfo,
     EventCountsResult,
     FetchResult,
     FrequencyResult,
@@ -37,13 +38,20 @@ from mixpanel_data.types import (
     RetentionResult,
     SavedCohort,
     SegmentationResult,
+    TableInfo,
+    TableMetadata,
+    TableSchema,
     TopEvent,
     UserEvent,
+    WorkspaceInfo,
 )
+from mixpanel_data.workspace import Workspace
 
 __version__ = "0.1.0"
 
 __all__ = [
+    # Core
+    "Workspace",
     # Exceptions
     "MixpanelDataError",
     "APIError",
@@ -79,4 +87,11 @@ __all__ = [
     "NumericBucketResult",
     "NumericSumResult",
     "NumericAverageResult",
+    # Storage types
+    "TableMetadata",
+    "TableInfo",
+    "ColumnInfo",
+    "TableSchema",
+    # Workspace types
+    "WorkspaceInfo",
 ]
