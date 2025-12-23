@@ -633,9 +633,12 @@ class TestRetention:
 
         def handler(request: httpx.Request) -> httpx.Response:
             # Verify interval parameters are passed
+            # Note: interval is only included when != 1 (Mixpanel API constraint)
             url_str = str(request.url)
-            assert "interval=" in url_str
+            assert "interval=7" in url_str  # Custom interval
             assert "interval_count=" in url_str
+            # When interval != 1, unit should NOT be included
+            assert "unit=" not in url_str
             return httpx.Response(
                 200,
                 json={
@@ -649,7 +652,7 @@ class TestRetention:
             return_event="Any Event",
             from_date="2024-01-01",
             to_date="2024-01-01",
-            interval=1,
+            interval=7,  # 7-day intervals (custom, not default)
             interval_count=5,
         )
 
