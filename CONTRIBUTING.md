@@ -22,7 +22,7 @@ git clone https://github.com/discohead/mixpanel_data.git
 cd mixpanel_data
 
 # Install dependencies
-uv sync
+uv sync --all-extras
 
 # Verify setup
 just check

@@ -148,7 +148,7 @@ mp inspect events
 mp inspect properties --event Purchase
 
 # 3. Fetch data
-mp fetch events --name jan --from 2024-01-01 --to 2024-01-31
+mp fetch events jan --from 2024-01-01 --to 2024-01-31
 
 # 4. Query locally
 mp query sql "SELECT event_name, COUNT(*) FROM jan GROUP BY 1" --format table

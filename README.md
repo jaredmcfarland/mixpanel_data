@@ -59,7 +59,7 @@ mp inspect funnels                     # Saved funnels
 ### 3. Fetch Events to Local Storage
 
 ```bash
-mp fetch events --name jan --from 2024-01-01 --to 2024-01-31
+mp fetch events jan --from 2024-01-01 --to 2024-01-31
 ```
 
 ### 4. Query with SQL
@@ -173,7 +173,7 @@ mp inspect events --format json
 mp inspect properties --event Purchase --format json
 
 # 2. Fetch relevant data
-mp fetch events --name data --from 2024-01-01 --to 2024-01-31
+mp fetch events data --from 2024-01-01 --to 2024-01-31
 
 # 3. Iterate with SQL queries
 mp query sql "SELECT ..." --format json
