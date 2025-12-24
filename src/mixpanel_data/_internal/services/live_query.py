@@ -45,8 +45,17 @@ def _transform_funnel(
 
     Aggregates step counts across all dates and recalculates conversion rates.
 
+    Conversion rate calculation:
+        - Step 0: Always 1.0 (100% of users start the funnel)
+        - Step N: count[N] / count[N-1] (percentage who continued from previous step)
+        - Overall: last_step_count / first_step_count
+
+    Edge cases:
+        - Empty steps: Returns 0.0 conversion rate
+        - Previous step count = 0: Returns 0.0 to avoid division by zero
+
     Args:
-        raw: Raw API response dictionary.
+        raw: Raw API response dictionary with data[date][steps] structure.
         funnel_id: Funnel identifier.
         from_date: Query start date.
         to_date: Query end date.
@@ -109,8 +118,19 @@ def _transform_retention(
 
     Calculates retention percentages from raw counts for each cohort.
 
+    Retention calculation:
+        retention[i] = counts[i] / cohort_size
+        Where counts[i] is users who returned in period i after their birth date.
+
+    Edge cases:
+        - Cohort size = 0: Returns 0.0 for all retention periods (no division by zero)
+        - Empty counts: Returns empty retention list
+
+    API response structure:
+        {date: {"first": cohort_size, "counts": [period_0_count, period_1_count, ...]}}
+
     Args:
-        raw: Raw API response dictionary.
+        raw: Raw API response dictionary keyed by cohort date.
         born_event: Event that defines cohort membership.
         return_event: Event that defines return.
         from_date: Query start date.
@@ -118,7 +138,7 @@ def _transform_retention(
         unit: Retention period unit.
 
     Returns:
-        Typed RetentionResult with cohorts sorted by date.
+        Typed RetentionResult with cohorts sorted by date (ascending).
     """
     cohorts: list[CohortInfo] = []
 

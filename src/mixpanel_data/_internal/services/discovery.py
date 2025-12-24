@@ -23,14 +23,30 @@ class DiscoveryService:
     Provides methods to explore events, properties, and sample values
     with session-scoped caching to avoid redundant API calls.
 
+    Caching Behavior:
+        Results are cached in-memory for the lifetime of this service instance.
+        Cache keys are tuples identifying each unique query:
+
+        - ("list_events",) - All event names
+        - ("list_properties", event) - Properties for a specific event
+        - ("list_property_values", property, event, limit) - Sample values
+        - ("list_funnels",) - All saved funnels
+        - ("list_cohorts",) - All saved cohorts
+
+        Exception: list_top_events() is NOT cached (real-time data).
+
+        Use clear_cache() to force fresh data on next request.
+
     Example:
         >>> from mixpanel_data._internal.api_client import MixpanelAPIClient
         >>> from mixpanel_data._internal.services.discovery import DiscoveryService
         >>>
         >>> client = MixpanelAPIClient(credentials)
         >>> discovery = DiscoveryService(client)
-        >>> events = discovery.list_events()
-        >>> properties = discovery.list_properties("Sign Up")
+        >>> events = discovery.list_events()  # Fetches from API
+        >>> events = discovery.list_events()  # Returns cached result
+        >>> discovery.clear_cache()
+        >>> events = discovery.list_events()  # Fetches from API again
     """
 
     def __init__(self, api_client: MixpanelAPIClient) -> None:
@@ -40,10 +56,7 @@ class DiscoveryService:
             api_client: Authenticated Mixpanel API client.
         """
         self._api_client = api_client
-        # Cache keys by method:
-        #   ("list_events",)
-        #   ("list_properties", event: str)
-        #   ("list_property_values", property: str, event: str | None, limit: int)
+        # Internal cache: tuple keys map to cached results
         self._cache: dict[tuple[str | int | None, ...], list[Any]] = {}
 
     def list_events(self) -> list[str]:

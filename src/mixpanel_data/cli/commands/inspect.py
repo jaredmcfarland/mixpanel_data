@@ -192,7 +192,12 @@ def inspect_schema(
     ] = False,
     format: FormatOption = "json",
 ) -> None:
-    """Show schema for a table in local database."""
+    """Show schema for a table in local database.
+
+    Lists all columns with their types and nullability constraints.
+
+    Note: The --sample option is reserved for future implementation.
+    """
     # Note: _sample is reserved for future implementation
     workspace = get_workspace(ctx)
     schema = workspace.schema(table)

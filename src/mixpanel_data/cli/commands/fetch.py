@@ -63,7 +63,13 @@ def fetch_events(
 ) -> None:
     """Fetch events from Mixpanel into local storage.
 
-    Events are stored in a DuckDB table for SQL querying.
+    Events are stored in a DuckDB table for SQL querying. A progress bar
+    shows fetch progress (disable with --no-progress or --quiet).
+
+    Use --events to filter by event name (comma-separated list).
+    Use --where for Mixpanel expression filters (e.g., 'properties["country"]=="US"').
+
+    Output shows table name, row count, duration, and date range.
     """
     # Validate required options
     if not from_date:
@@ -122,7 +128,12 @@ def fetch_profiles(
 ) -> None:
     """Fetch user profiles from Mixpanel into local storage.
 
-    Profiles are stored in a DuckDB table for SQL querying.
+    Profiles are stored in a DuckDB table for SQL querying. A progress bar
+    shows fetch progress (disable with --no-progress or --quiet).
+
+    Use --where for Mixpanel expression filters on profile properties.
+
+    Output shows table name, row count, and fetch duration.
     """
     workspace = get_workspace(ctx)
 

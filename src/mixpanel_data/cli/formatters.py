@@ -20,7 +20,18 @@ from rich.table import Table
 
 
 def _json_serializer(obj: Any) -> str:
-    """Custom JSON serializer for non-standard types."""
+    """Serialize non-standard types to JSON-compatible strings.
+
+    Used as the default serializer for json.dumps() to handle types
+    that aren't natively JSON-serializable.
+
+    Args:
+        obj: The object to serialize. Handles datetime, date, and
+            falls back to str() for other types.
+
+    Returns:
+        ISO format string for datetime/date objects, or str(obj) for others.
+    """
     if isinstance(obj, datetime | date):
         return obj.isoformat()
     return str(obj)
@@ -102,7 +113,19 @@ def format_table(
 
 
 def _format_cell(value: Any) -> str:
-    """Format a single cell value for table display."""
+    """Format a single cell value for Rich table display.
+
+    Converts various Python types to human-readable string representations
+    suitable for display in terminal tables.
+
+    Args:
+        value: The value to format. Handles None, bool, datetime, date,
+            list, dict, and other types.
+
+    Returns:
+        Formatted string: empty for None, "Yes"/"No" for bool, ISO format
+        for dates, JSON for collections, str() for others.
+    """
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -156,7 +179,19 @@ def format_csv(data: dict[str, Any] | list[Any]) -> str:
 
 
 def _csv_value(value: Any) -> str:
-    """Format a value for CSV output."""
+    """Format a value for CSV output.
+
+    Converts various Python types to string representations suitable for
+    CSV files. Uses lowercase for booleans (common CSV convention).
+
+    Args:
+        value: The value to format. Handles None, bool, datetime, date,
+            list, dict, and other types.
+
+    Returns:
+        Formatted string: empty for None, lowercase "true"/"false" for bool,
+        ISO format for dates, JSON for collections, str() for others.
+    """
     if value is None:
         return ""
     if isinstance(value, bool):
