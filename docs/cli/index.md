@@ -140,8 +140,8 @@ mp query sql "SELECT * FROM events" --format jsonl | jq '.event_name'
 ### Complete Workflow
 
 ```bash
-# 1. Set up credentials
-mp auth add production --username sa_... --secret ... --project 12345 --region us
+# 1. Set up credentials (prompts for secret securely)
+mp auth add production --username sa_... --project 12345 --region us
 
 # 2. Explore schema
 mp inspect events
