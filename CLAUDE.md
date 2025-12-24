@@ -293,6 +293,7 @@ This project uses [just](https://github.com/casey/just) as a command runner. Run
 | `just sync` | Sync dependencies |
 | `just clean` | Remove caches and build artifacts |
 | `just build` | Build package |
+| `just mp` | Run the CLI (supports args: `just mp --help`) |
 
 ## Development Environment
 
