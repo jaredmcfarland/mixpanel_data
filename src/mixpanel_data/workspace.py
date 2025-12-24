@@ -4,25 +4,31 @@ The Workspace class is the unified entry point for all Mixpanel data operations,
 orchestrating DiscoveryService, FetcherService, LiveQueryService, and StorageEngine.
 
 Example:
-    Basic usage with credentials from config::
+    Basic usage with credentials from config:
 
-        ws = Workspace()
+    ```python
+    ws = Workspace()
+    ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
+    df = ws.sql("SELECT * FROM events LIMIT 10")
+    ws.close()
+    ```
+
+    Ephemeral workspace for temporary analysis:
+
+    ```python
+    with Workspace.ephemeral() as ws:
         ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-        df = ws.sql("SELECT * FROM events LIMIT 10")
-        ws.close()
+        total = ws.sql_scalar("SELECT COUNT(*) FROM events")
+    # Database automatically deleted
+    ```
 
-    Ephemeral workspace for temporary analysis::
+    Query-only access to existing database:
 
-        with Workspace.ephemeral() as ws:
-            ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-            total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-        # Database automatically deleted
-
-    Query-only access to existing database::
-
-        ws = Workspace.open("path/to/database.db")
-        df = ws.sql("SELECT * FROM events")
-        ws.close()
+    ```python
+    ws = Workspace.open("path/to/database.db")
+    df = ws.sql("SELECT * FROM events")
+    ws.close()
+    ```
 """
 
 from __future__ import annotations
@@ -76,23 +82,29 @@ class Workspace:
     - StorageEngine for local SQL queries
 
     Examples:
-        Basic usage with credentials from config::
+        Basic usage with credentials from config:
 
-            ws = Workspace()
+        ```python
+        ws = Workspace()
+        ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
+        df = ws.sql("SELECT * FROM events LIMIT 10")
+        ```
+
+        Ephemeral workspace for temporary analysis:
+
+        ```python
+        with Workspace.ephemeral() as ws:
             ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-            df = ws.sql("SELECT * FROM events LIMIT 10")
+            total = ws.sql_scalar("SELECT COUNT(*) FROM events")
+        # Database automatically deleted
+        ```
 
-        Ephemeral workspace for temporary analysis::
+        Query-only access to existing database:
 
-            with Workspace.ephemeral() as ws:
-                ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-                total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-            # Database automatically deleted
-
-        Query-only access to existing database::
-
-            ws = Workspace.open("path/to/database.db")
-            df = ws.sql("SELECT * FROM events")
+        ```python
+        ws = Workspace.open("path/to/database.db")
+        df = ws.sql("SELECT * FROM events")
+        ```
     """
 
     # =========================================================================
@@ -198,12 +210,13 @@ class Workspace:
         Yields:
             Workspace: A workspace with temporary database.
 
-        Example::
-
+        Example:
+            ```python
             with Workspace.ephemeral() as ws:
                 ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
                 print(ws.sql_scalar("SELECT COUNT(*) FROM events"))
             # Database file automatically deleted
+            ```
         """
         storage = StorageEngine.ephemeral()
         ws = cls(
@@ -235,11 +248,12 @@ class Workspace:
         Raises:
             FileNotFoundError: If database file doesn't exist.
 
-        Example::
-
+        Example:
+            ```python
             ws = Workspace.open("my_data.db")
             df = ws.sql("SELECT * FROM events")
             ws.close()
+            ```
         """
         db_path = Path(path) if isinstance(path, str) else path
         storage = StorageEngine.open_existing(db_path)
@@ -317,8 +331,8 @@ class Workspace:
             AuthenticationError: If credentials are invalid.
             ConfigError: If no credentials can be resolved.
 
-        Example::
-
+        Example:
+            ```python
             # Test default account
             result = Workspace.test_credentials()
             if result["success"]:
@@ -326,6 +340,7 @@ class Workspace:
 
             # Test specific account
             result = Workspace.test_credentials("production")
+            ```
         """
         config_manager = ConfigManager()
         credentials = config_manager.resolve_credentials(account)

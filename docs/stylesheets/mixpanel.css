@@ -28,11 +28,102 @@
   --md-default-bg-color--lighter: #ffffff;
   --md-default-bg-color--lightest: #ffffff;
 
-  /* Code blocks */
-  --md-code-bg-color: #f5f2f2;
+  /* Code blocks - Mixpanel uses #F6F6F6 */
+  --md-code-bg-color: #f6f6f6;
 
   /* Typeset links */
   --md-typeset-a-color: #7856ff;
+}
+
+/* Syntax highlighting - Mixpanel developer docs palette (light mode) */
+/* Strings - green (Mixpanel: #219464) */
+[data-md-color-scheme="default"] .highlight .s,
+[data-md-color-scheme="default"] .highlight .s1,
+[data-md-color-scheme="default"] .highlight .s2,
+[data-md-color-scheme="default"] .highlight .sb,
+[data-md-color-scheme="default"] .highlight .sc,
+[data-md-color-scheme="default"] .highlight .sd,
+[data-md-color-scheme="default"] .highlight .se,
+[data-md-color-scheme="default"] .highlight .sh,
+[data-md-color-scheme="default"] .highlight .si,
+[data-md-color-scheme="default"] .highlight .sr,
+[data-md-color-scheme="default"] .highlight .ss,
+[data-md-color-scheme="default"] .highlight .sx {
+  color: #219464;
+}
+
+/* Numbers - orange (Mixpanel: #DF7800) */
+[data-md-color-scheme="default"] .highlight .m,
+[data-md-color-scheme="default"] .highlight .mi,
+[data-md-color-scheme="default"] .highlight .mo,
+[data-md-color-scheme="default"] .highlight .mf,
+[data-md-color-scheme="default"] .highlight .mh,
+[data-md-color-scheme="default"] .highlight .mb,
+[data-md-color-scheme="default"] .highlight .il {
+  color: #df7800;
+}
+
+/* Keywords - red (Mixpanel: #E34F2F) */
+[data-md-color-scheme="default"] .highlight .k,
+[data-md-color-scheme="default"] .highlight .kn,
+[data-md-color-scheme="default"] .highlight .kd,
+[data-md-color-scheme="default"] .highlight .kc,
+[data-md-color-scheme="default"] .highlight .kp,
+[data-md-color-scheme="default"] .highlight .kr,
+[data-md-color-scheme="default"] .highlight .kt {
+  color: #e34f2f;
+}
+
+/* Names/identifiers - orange for property/attribute names */
+[data-md-color-scheme="default"] .highlight .na,
+[data-md-color-scheme="default"] .highlight .nl,
+[data-md-color-scheme="default"] .highlight .nt {
+  color: #df7800;
+}
+
+/* Function names - blue (Mixpanel: #4F44E0) */
+[data-md-color-scheme="default"] .highlight .nf,
+[data-md-color-scheme="default"] .highlight .fm {
+  color: #4f44e0;
+}
+
+/* Built-in names - purple-blue (Mixpanel: #463DBB) */
+[data-md-color-scheme="default"] .highlight .nb,
+[data-md-color-scheme="default"] .highlight .bp {
+  color: #463dbb;
+}
+
+/* Comments - gray (Mixpanel: #8F8F91) */
+[data-md-color-scheme="default"] .highlight .c,
+[data-md-color-scheme="default"] .highlight .c1,
+[data-md-color-scheme="default"] .highlight .cm,
+[data-md-color-scheme="default"] .highlight .cp,
+[data-md-color-scheme="default"] .highlight .cs,
+[data-md-color-scheme="default"] .highlight .ch {
+  color: #8f8f91;
+  font-style: italic;
+}
+
+/* Operators and punctuation */
+[data-md-color-scheme="default"] .highlight .o,
+[data-md-color-scheme="default"] .highlight .ow,
+[data-md-color-scheme="default"] .highlight .p {
+  color: #626266;
+}
+
+/* Class and type names - orange */
+[data-md-color-scheme="default"] .highlight .nc,
+[data-md-color-scheme="default"] .highlight .nn {
+  color: #df7800;
+}
+
+/* Variables and general names - base text color (Mixpanel: #626266) */
+[data-md-color-scheme="default"] .highlight .n,
+[data-md-color-scheme="default"] .highlight .nv,
+[data-md-color-scheme="default"] .highlight .vm,
+[data-md-color-scheme="default"] .highlight .vi,
+[data-md-color-scheme="default"] .highlight .vg {
+  color: #626266;
 }
 
 /* Dark mode overrides */
@@ -42,14 +133,105 @@
   --md-default-bg-color--lighter: #363252;
   --md-default-bg-color--lightest: #3f3b62;
 
-  /* Code blocks */
-  --md-code-bg-color: #1b0b3b;
+  /* Code blocks - Mixpanel uses semi-transparent overlay */
+  --md-code-bg-color: rgba(255, 255, 255, 0.08);
 
   /* Typeset */
   --md-typeset-a-color: #9b7fff;
 
   /* Header */
   --md-primary-fg-color: #7856ff;
+}
+
+/* Syntax highlighting - Mixpanel developer docs palette (dark mode) */
+/* Strings - green (Mixpanel: #219464, brightened for dark mode) */
+[data-md-color-scheme="slate"] .highlight .s,
+[data-md-color-scheme="slate"] .highlight .s1,
+[data-md-color-scheme="slate"] .highlight .s2,
+[data-md-color-scheme="slate"] .highlight .sb,
+[data-md-color-scheme="slate"] .highlight .sc,
+[data-md-color-scheme="slate"] .highlight .sd,
+[data-md-color-scheme="slate"] .highlight .se,
+[data-md-color-scheme="slate"] .highlight .sh,
+[data-md-color-scheme="slate"] .highlight .si,
+[data-md-color-scheme="slate"] .highlight .sr,
+[data-md-color-scheme="slate"] .highlight .ss,
+[data-md-color-scheme="slate"] .highlight .sx {
+  color: #2eb87d;
+}
+
+/* Numbers - orange (Mixpanel: #DF7800, brightened for dark mode) */
+[data-md-color-scheme="slate"] .highlight .m,
+[data-md-color-scheme="slate"] .highlight .mi,
+[data-md-color-scheme="slate"] .highlight .mo,
+[data-md-color-scheme="slate"] .highlight .mf,
+[data-md-color-scheme="slate"] .highlight .mh,
+[data-md-color-scheme="slate"] .highlight .mb,
+[data-md-color-scheme="slate"] .highlight .il {
+  color: #f08d1c;
+}
+
+/* Keywords - red (Mixpanel: #E34F2F, brightened for dark mode) */
+[data-md-color-scheme="slate"] .highlight .k,
+[data-md-color-scheme="slate"] .highlight .kn,
+[data-md-color-scheme="slate"] .highlight .kd,
+[data-md-color-scheme="slate"] .highlight .kc,
+[data-md-color-scheme="slate"] .highlight .kp,
+[data-md-color-scheme="slate"] .highlight .kr,
+[data-md-color-scheme="slate"] .highlight .kt {
+  color: #ef6347;
+}
+
+/* Names/identifiers - orange for property/attribute names */
+[data-md-color-scheme="slate"] .highlight .na,
+[data-md-color-scheme="slate"] .highlight .nl,
+[data-md-color-scheme="slate"] .highlight .nt {
+  color: #f08d1c;
+}
+
+/* Function names - blue (Mixpanel: #4F44E0, brightened) */
+[data-md-color-scheme="slate"] .highlight .nf,
+[data-md-color-scheme="slate"] .highlight .fm {
+  color: #7169e8;
+}
+
+/* Built-in names - purple-blue (Mixpanel: #463DBB, brightened) */
+[data-md-color-scheme="slate"] .highlight .nb,
+[data-md-color-scheme="slate"] .highlight .bp {
+  color: #6b5fd4;
+}
+
+/* Comments - gray (Mixpanel: #8F8F91) */
+[data-md-color-scheme="slate"] .highlight .c,
+[data-md-color-scheme="slate"] .highlight .c1,
+[data-md-color-scheme="slate"] .highlight .cm,
+[data-md-color-scheme="slate"] .highlight .cp,
+[data-md-color-scheme="slate"] .highlight .cs,
+[data-md-color-scheme="slate"] .highlight .ch {
+  color: #9a9a9c;
+  font-style: italic;
+}
+
+/* Operators and punctuation - light gray */
+[data-md-color-scheme="slate"] .highlight .o,
+[data-md-color-scheme="slate"] .highlight .ow,
+[data-md-color-scheme="slate"] .highlight .p {
+  color: #c0c0c0;
+}
+
+/* Class and type names - orange */
+[data-md-color-scheme="slate"] .highlight .nc,
+[data-md-color-scheme="slate"] .highlight .nn {
+  color: #f08d1c;
+}
+
+/* Variables and general names - base text color */
+[data-md-color-scheme="slate"] .highlight .n,
+[data-md-color-scheme="slate"] .highlight .nv,
+[data-md-color-scheme="slate"] .highlight .vm,
+[data-md-color-scheme="slate"] .highlight .vi,
+[data-md-color-scheme="slate"] .highlight .vg {
+  color: #e0e0e0;
 }
 
 /* Header styling - dark purple like Mixpanel */
