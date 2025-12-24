@@ -54,6 +54,11 @@ jobs:
             - Performance considerations
             - Security concerns
             - Test coverage
+            - Type safety and annotation completeness
+            - Documentation (docstrings, comments where non-obvious)
+            - Architecture compliance (layer boundaries, no _internal leakage)
+            - Error handling patterns (using proper exception hierarchy)
+            - Consistency with existing code style and patterns
 
             Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
 
