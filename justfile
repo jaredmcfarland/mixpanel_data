@@ -51,6 +51,6 @@ clean:
 build: clean
     uv build
 
-# Run the CLI (once implemented)
+# Run the CLI
 mp *args:
     uv run mp {{ args }}
