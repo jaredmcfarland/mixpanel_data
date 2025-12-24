@@ -40,7 +40,15 @@ from mixpanel_data.cli.validators import (
 query_app = typer.Typer(
     name="query",
     help="Query local and live data.",
+    epilog="""[dim]Local (uses DuckDB):[/dim]
+  sql           Execute SQL against local database
+
+[dim]Live (calls Mixpanel API):[/dim]
+  segmentation, funnel, retention, jql, event-counts,
+  property-counts, activity-feed, insights, frequency,
+  segmentation-numeric, segmentation-sum, segmentation-average""",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 
 
@@ -70,6 +78,11 @@ def query_sql(
     Results are returned as a list of row objects by default. With --scalar,
     returns a single value wrapped in {"value": result} for JSON output,
     or just the raw value for plain output.
+
+    [dim]Examples:[/dim]
+      mp query sql "SELECT COUNT(*) FROM events" --scalar
+      mp query sql "SELECT event, COUNT(*) FROM events GROUP BY 1" --format table
+      mp query sql --file analysis.sql --format csv
     """
     # Get query from argument or file
     if query is None and file is None:
@@ -136,6 +149,11 @@ def query_segmentation(
 
     Output includes event name, date range, total count, time unit, and
     a series dict mapping dates to counts (or segments to date/count dicts).
+
+    [dim]Examples:[/dim]
+      mp query segmentation -e "Sign Up" --from 2025-01-01 --to 2025-01-31
+      mp query segmentation -e "Purchase" --from 2025-01-01 --to 2025-01-31 --on country
+      mp query segmentation -e "Login" --from 2025-01-01 --to 2025-01-07 --unit week
     """
     validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
@@ -185,6 +203,11 @@ def query_funnel(
 
     Output includes funnel_id, date range, and steps array with each step's
     event name, count, and conversion_rate (percentage who completed this step).
+
+    [dim]Examples:[/dim]
+      mp query funnel 12345 --from 2025-01-01 --to 2025-01-31
+      mp query funnel 12345 --from 2025-01-01 --to 2025-01-31 --unit week
+      mp query funnel 12345 --from 2025-01-01 --to 2025-01-31 --on country
     """
     workspace = get_workspace(ctx)
 
@@ -255,6 +278,11 @@ def query_retention(
 
     Output includes cohorts array with each cohort's date, user count,
     and retention percentages for each interval.
+
+    [dim]Examples:[/dim]
+      mp query retention --born "Sign Up" --return "Login" --from 2025-01-01 --to 2025-01-31
+      mp query retention --born "Sign Up" --return "Purchase" --from 2025-01-01 --to 2025-01-31 --unit week
+      mp query retention --born "Sign Up" --return "Login" --from 2025-01-01 --to 2025-01-31 --intervals 7
     """
     validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
@@ -300,6 +328,11 @@ def query_jql(
 
     Script can be provided as a file argument or inline with --script.
     Parameters can be passed with --param key=value (repeatable).
+
+    [dim]Examples:[/dim]
+      mp query jql analysis.js
+      mp query jql --script "function main() { return Events({...}).groupBy(['event'], mixpanel.reducer.count()) }"
+      mp query jql analysis.js --param start_date=2025-01-01 --param event_name=Login
     """
     # Get script from file or inline
     if file is not None:
@@ -372,6 +405,11 @@ def query_event_counts(
 
     Output includes events list, date range, and series dict mapping
     each event name to its date/count series.
+
+    [dim]Examples:[/dim]
+      mp query event-counts --events "Sign Up,Login,Purchase" --from 2025-01-01 --to 2025-01-31
+      mp query event-counts --events "Sign Up,Purchase" --from 2025-01-01 --to 2025-01-31 --type unique
+      mp query event-counts --events "Login" --from 2025-01-01 --to 2025-01-31 --unit week
     """
     validated_type = validate_count_type(type_)
     validated_unit = validate_time_unit(unit)
@@ -441,6 +479,11 @@ def query_property_counts(
 
     Output includes event, property name, date range, and series dict
     mapping each property value to its date/count series.
+
+    [dim]Examples:[/dim]
+      mp query property-counts -e "Purchase" -p country --from 2025-01-01 --to 2025-01-31
+      mp query property-counts -e "Sign Up" -p "utm_source" --from 2025-01-01 --to 2025-01-31 --limit 20
+      mp query property-counts -e "Login" -p browser --from 2025-01-01 --to 2025-01-31 --type unique
     """
     validated_type = validate_count_type(type_)
     validated_unit = validate_time_unit(unit)
@@ -487,6 +530,11 @@ def query_activity_feed(
 
     Output includes distinct_ids queried, optional date range, and events
     array with each event's name, timestamp, and properties.
+
+    [dim]Examples:[/dim]
+      mp query activity-feed --users "user123"
+      mp query activity-feed --users "user123,user456" --from 2025-01-01 --to 2025-01-31
+      mp query activity-feed --users "user123" --format table
     """
     # Parse users
     user_list = [u.strip() for u in users.split(",")]
@@ -520,6 +568,10 @@ def query_insights(
 
     Output includes bookmark_id, computed_at timestamp, date_range, headers
     (column names), and series data matching the saved report configuration.
+
+    [dim]Examples:[/dim]
+      mp query insights 12345
+      mp query insights 12345 --format table
     """
     workspace = get_workspace(ctx)
 
@@ -569,6 +621,11 @@ def query_frequency(
 
     Output includes date range, units, and data dict mapping dates to
     arrays of user counts (index 0 = users who did it once, 1 = twice, etc.).
+
+    [dim]Examples:[/dim]
+      mp query frequency --from 2025-01-01 --to 2025-01-31
+      mp query frequency -e "Login" --from 2025-01-01 --to 2025-01-31
+      mp query frequency -e "Login" --from 2025-01-01 --to 2025-01-31 --addiction-unit day
     """
     validated_unit = validate_time_unit(unit)
     validated_addiction_unit = validate_hour_day_unit(
@@ -637,6 +694,10 @@ def query_segmentation_numeric(
 
     Output includes event, property, date range, buckets info, and values
     dict mapping bucket labels to their date/count series.
+
+    [dim]Examples:[/dim]
+      mp query segmentation-numeric -e "Purchase" --on amount --from 2025-01-01 --to 2025-01-31
+      mp query segmentation-numeric -e "Purchase" --on amount --from 2025-01-01 --to 2025-01-31 --type unique
     """
     validated_type = validate_count_type(type_)
     validated_unit = validate_hour_day_unit(unit)
@@ -695,6 +756,10 @@ def query_segmentation_sum(
 
     Output includes event, property, date range, and results dict mapping
     dates to the sum of property values for that period.
+
+    [dim]Examples:[/dim]
+      mp query segmentation-sum -e "Purchase" --on revenue --from 2025-01-01 --to 2025-01-31
+      mp query segmentation-sum -e "Purchase" --on quantity --from 2025-01-01 --to 2025-01-31 --unit hour
     """
     validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
@@ -751,6 +816,10 @@ def query_segmentation_average(
 
     Output includes event, property, date range, and results dict mapping
     dates to the average property value for that period.
+
+    [dim]Examples:[/dim]
+      mp query segmentation-average -e "Purchase" --on order_value --from 2025-01-01 --to 2025-01-31
+      mp query segmentation-average -e "Session" --on duration --from 2025-01-01 --to 2025-01-31 --unit hour
     """
     validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)

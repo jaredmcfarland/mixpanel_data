@@ -30,6 +30,7 @@ auth_app = typer.Typer(
     name="auth",
     help="Manage authentication and accounts.",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 
 
@@ -42,6 +43,10 @@ def list_accounts(
     """List all configured accounts.
 
     Shows account name, username, project ID, region, and default status.
+
+    [dim]Examples:[/dim]
+      mp auth list
+      mp auth list --format table
     """
     config = get_config(ctx)
     accounts = config.list_accounts()
@@ -101,17 +106,13 @@ def add_account(
     The secret can be provided via:
     - Interactive prompt (default, hidden input)
     - MP_SECRET environment variable (for CI/CD)
-    - --secret-stdin flag to read from stdin (e.g., echo $SECRET | mp auth add ...)
+    - --secret-stdin flag to read from stdin
 
-    Examples:
-        # Interactive (prompts for secret with hidden input)
-        mp auth add production -u myuser -p 12345
-
-        # Using environment variable
-        MP_SECRET=abc123 mp auth add production -u myuser -p 12345
-
-        # Reading secret from stdin
-        echo "abc123" | mp auth add production -u myuser -p 12345 --secret-stdin
+    [dim]Examples:[/dim]
+      mp auth add production -u myuser -p 12345
+      MP_SECRET=abc123 mp auth add production -u myuser -p 12345
+      echo "abc123" | mp auth add production -u myuser -p 12345 --secret-stdin
+      mp auth add staging -u myuser -p 12345 -r eu --default
     """
     secret: str | None = None
 
@@ -189,7 +190,15 @@ def remove_account(
     ] = False,
     format: FormatOption = "json",
 ) -> None:
-    """Remove an account from the configuration."""
+    """Remove an account from the configuration.
+
+    Deletes the account credentials from local config. Use --force
+    to skip the confirmation prompt.
+
+    [dim]Examples:[/dim]
+      mp auth remove staging
+      mp auth remove old_account --force
+    """
     if not force:
         confirm = typer.confirm(f"Remove account '{name}'?")
         if not confirm:
@@ -209,7 +218,14 @@ def switch_account(
     name: Annotated[str, typer.Argument(help="Account name to set as default.")],
     format: FormatOption = "json",
 ) -> None:
-    """Set an account as the default."""
+    """Set an account as the default.
+
+    The default account is used when --account is not specified.
+
+    [dim]Examples:[/dim]
+      mp auth switch production
+      mp auth switch staging
+    """
     config = get_config(ctx)
     config.set_default(name)
 
@@ -245,7 +261,15 @@ def show_account(
     ] = None,
     format: FormatOption = "json",
 ) -> None:
-    """Show account details (secret is redacted)."""
+    """Show account details (secret is redacted).
+
+    Displays configuration for the named account or default if omitted.
+
+    [dim]Examples:[/dim]
+      mp auth show
+      mp auth show production
+      mp auth show --format table
+    """
     config = get_config(ctx)
 
     account: AccountInfo
@@ -284,6 +308,10 @@ def test_account(
     """Test account credentials by pinging the API.
 
     Verifies that the credentials are valid and can access the project.
+
+    [dim]Examples:[/dim]
+      mp auth test
+      mp auth test production
     """
     from mixpanel_data.workspace import Workspace
 

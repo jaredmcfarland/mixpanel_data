@@ -31,14 +31,28 @@ from mixpanel_data.cli.validators import validate_count_type
 inspect_app = typer.Typer(
     name="inspect",
     help="Inspect schema and local database.",
+    epilog="""[dim]Live (calls Mixpanel API):[/dim]
+  events, properties, values, funnels, cohorts, top-events
+
+[dim]Local (uses DuckDB):[/dim]
+  info, tables, schema, drop""",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 
 
 @inspect_app.command("events")
 @handle_errors
 def inspect_events(ctx: typer.Context, format: FormatOption = "json") -> None:
-    """List all event names from Mixpanel project."""
+    """List all event names from Mixpanel project.
+
+    Calls the Mixpanel API to retrieve tracked event types. Use this
+    to discover what events exist before fetching or querying.
+
+    [dim]Examples:[/dim]
+      mp inspect events
+      mp inspect events --format table
+    """
     workspace = get_workspace(ctx)
     events = workspace.events()
     output_result(ctx, events, format=format)
@@ -54,7 +68,15 @@ def inspect_properties(
     ],
     format: FormatOption = "json",
 ) -> None:
-    """List properties for a specific event."""
+    """List properties for a specific event.
+
+    Calls the Mixpanel API to retrieve property names tracked with an event.
+    Shows both custom event properties and default Mixpanel properties.
+
+    [dim]Examples:[/dim]
+      mp inspect properties -e "Sign Up"
+      mp inspect properties -e "Purchase" --format table
+    """
     workspace = get_workspace(ctx)
     properties = workspace.properties(event)
     output_result(ctx, properties, format=format)
@@ -78,7 +100,16 @@ def inspect_values(
     ] = 100,
     format: FormatOption = "json",
 ) -> None:
-    """List sample values for a property."""
+    """List sample values for a property.
+
+    Calls the Mixpanel API to retrieve sample values for a property.
+    Useful for understanding the data shape before writing queries.
+
+    [dim]Examples:[/dim]
+      mp inspect values -p country
+      mp inspect values -p country -e "Sign Up" --limit 20
+      mp inspect values -p browser --format table
+    """
     workspace = get_workspace(ctx)
     values = workspace.property_values(
         property_name=property_name,
@@ -91,7 +122,15 @@ def inspect_values(
 @inspect_app.command("funnels")
 @handle_errors
 def inspect_funnels(ctx: typer.Context, format: FormatOption = "json") -> None:
-    """List saved funnels in Mixpanel project."""
+    """List saved funnels in Mixpanel project.
+
+    Calls the Mixpanel API to retrieve saved funnel definitions.
+    Use the funnel_id with 'mp query funnel' to run funnel analysis.
+
+    [dim]Examples:[/dim]
+      mp inspect funnels
+      mp inspect funnels --format table
+    """
     workspace = get_workspace(ctx)
     funnels = workspace.funnels()
     data = [{"funnel_id": f.funnel_id, "name": f.name} for f in funnels]
@@ -101,7 +140,15 @@ def inspect_funnels(ctx: typer.Context, format: FormatOption = "json") -> None:
 @inspect_app.command("cohorts")
 @handle_errors
 def inspect_cohorts(ctx: typer.Context, format: FormatOption = "json") -> None:
-    """List saved cohorts in Mixpanel project."""
+    """List saved cohorts in Mixpanel project.
+
+    Calls the Mixpanel API to retrieve saved cohort definitions.
+    Shows cohort ID, name, user count, and description.
+
+    [dim]Examples:[/dim]
+      mp inspect cohorts
+      mp inspect cohorts --format table
+    """
     workspace = get_workspace(ctx)
     cohorts = workspace.cohorts()
     data = [
@@ -132,7 +179,16 @@ def inspect_top_events(
     ] = 10,
     format: FormatOption = "json",
 ) -> None:
-    """List today's top events by count."""
+    """List today's top events by count.
+
+    Calls the Mixpanel API to retrieve today's most frequent events.
+    Useful for quick overview of project activity.
+
+    [dim]Examples:[/dim]
+      mp inspect top-events
+      mp inspect top-events --limit 20 --format table
+      mp inspect top-events --type unique
+    """
     validated_type = validate_count_type(type_)
     workspace = get_workspace(ctx)
     events = workspace.top_events(type=validated_type, limit=limit)
@@ -152,7 +208,15 @@ def inspect_top_events(
 @inspect_app.command("info")
 @handle_errors
 def inspect_info(ctx: typer.Context, format: FormatOption = "json") -> None:
-    """Show workspace information."""
+    """Show workspace information.
+
+    Shows current account configuration, database location, and
+    connection status. Uses local configuration only (no API call).
+
+    [dim]Examples:[/dim]
+      mp inspect info
+      mp inspect info --format json
+    """
     workspace = get_workspace(ctx)
     info = workspace.info()
     output_result(ctx, info.to_dict(), format=format)
@@ -161,7 +225,15 @@ def inspect_info(ctx: typer.Context, format: FormatOption = "json") -> None:
 @inspect_app.command("tables")
 @handle_errors
 def inspect_tables(ctx: typer.Context, format: FormatOption = "json") -> None:
-    """List tables in local database."""
+    """List tables in local database.
+
+    Shows all tables in the local DuckDB database with row counts
+    and fetch timestamps. Use this to see what data has been fetched.
+
+    [dim]Examples:[/dim]
+      mp inspect tables
+      mp inspect tables --format table
+    """
     workspace = get_workspace(ctx)
     tables = workspace.tables()
     data = [
@@ -195,8 +267,13 @@ def inspect_schema(
     """Show schema for a table in local database.
 
     Lists all columns with their types and nullability constraints.
+    Useful for understanding the data structure before writing SQL.
 
     Note: The --sample option is reserved for future implementation.
+
+    [dim]Examples:[/dim]
+      mp inspect schema -t events
+      mp inspect schema -t events --format table
     """
     # Note: _sample is reserved for future implementation
     workspace = get_workspace(ctx)
@@ -231,7 +308,15 @@ def inspect_drop(
     ] = False,
     format: FormatOption = "json",
 ) -> None:
-    """Drop a table from the local database."""
+    """Drop a table from the local database.
+
+    Permanently removes a table and all its data. Use --force to skip
+    the confirmation prompt. Commonly used before re-fetching data.
+
+    [dim]Examples:[/dim]
+      mp inspect drop -t old_events
+      mp inspect drop -t events --force
+    """
     if not force:
         confirm = typer.confirm(f"Drop table '{table}'?")
         if not confirm:

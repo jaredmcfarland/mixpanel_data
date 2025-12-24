@@ -24,6 +24,7 @@ fetch_app = typer.Typer(
     name="fetch",
     help="Fetch data from Mixpanel.",
     no_args_is_help=True,
+    rich_markup_mode="rich",
 )
 
 
@@ -70,6 +71,12 @@ def fetch_events(
     Use --where for Mixpanel expression filters (e.g., 'properties["country"]=="US"').
 
     Output shows table name, row count, duration, and date range.
+
+    [dim]Examples:[/dim]
+      mp fetch events --from 2025-01-01 --to 2025-01-31
+      mp fetch events signups --from 2025-01-01 --to 2025-01-31 --events "Sign Up"
+      mp fetch events --from 2025-01-01 --to 2025-01-31 --where 'properties["country"]=="US"'
+      mp fetch events --from 2025-01-01 --to 2025-01-31 --replace
     """
     # Validate required options
     if not from_date:
@@ -134,6 +141,11 @@ def fetch_profiles(
     Use --where for Mixpanel expression filters on profile properties.
 
     Output shows table name, row count, and fetch duration.
+
+    [dim]Examples:[/dim]
+      mp fetch profiles
+      mp fetch profiles users --replace
+      mp fetch profiles --where 'properties["plan"]=="premium"'
     """
     workspace = get_workspace(ctx)
 
