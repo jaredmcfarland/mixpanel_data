@@ -327,7 +327,7 @@ class TestInspectSchema:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """Test showing table schema in JSON format."""
-        mock_workspace.schema.return_value = TableSchema(
+        mock_workspace.table_schema.return_value = TableSchema(
             table_name="events",
             columns=[
                 ColumnInfo(name="event", type="VARCHAR", nullable=False),
