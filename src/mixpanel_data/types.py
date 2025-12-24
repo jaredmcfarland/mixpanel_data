@@ -1,9 +1,17 @@
 """Result types for mixpanel_data operations.
 
 All result types are immutable frozen dataclasses with:
-- Lazy DataFrame conversion via the `df` property
-- JSON serialization via the `to_dict()` method
+- Lazy DataFrame conversion via the `df` property (computed once, then cached)
+- JSON serialization via the `to_dict()` method (all values JSON-serializable)
 - Full type hints for IDE/mypy support
+
+Immutability: These dataclasses are frozen, meaning their attributes cannot be
+modified after construction. This ensures data integrity and thread-safety.
+If you need to modify a result, create a new instance with the desired values.
+
+DataFrame caching: The `.df` property computes the DataFrame on first access
+and caches it internally. Subsequent accesses return the cached DataFrame
+without recomputation.
 """
 
 from __future__ import annotations
@@ -563,7 +571,11 @@ class PropertyCountsResult:
     """Counting method used."""
 
     series: dict[str, dict[str, int]]
-    """Time series data: {property_value: {date: count}}."""
+    """Time series data by property value.
+
+    Structure: {property_value: {date: count}}
+    Example: {"US": {"2024-01-01": 150, "2024-01-02": 200}, "EU": {...}}
+    """
 
     _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
@@ -796,7 +808,16 @@ class FrequencyResult:
     """Measurement granularity."""
 
     data: dict[str, list[int]] = field(default_factory=dict)
-    """Frequency arrays: {date: [count_1, count_2, ...]}."""
+    """Frequency arrays by date.
+
+    Structure: {date: [count_1, count_2, ...]}
+    Example: {"2024-01-01": [100, 50, 25, 10]}
+
+    Each array shows user counts by frequency:
+    - Index 0: users active exactly 1 time
+    - Index 1: users active exactly 2 times
+    - Index N: users active exactly N+1 times
+    """
 
     _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 

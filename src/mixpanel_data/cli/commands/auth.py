@@ -217,7 +217,17 @@ def switch_account(
 
 
 def _find_default_account(config: ConfigManager) -> AccountInfo | None:
-    """Find the default account from accounts list."""
+    """Find the account marked as default in the configuration.
+
+    Iterates through all configured accounts and returns the one
+    with is_default=True.
+
+    Args:
+        config: ConfigManager instance to query for accounts.
+
+    Returns:
+        The default AccountInfo if one exists, None if no default is set.
+    """
     accounts = config.list_accounts()
     for acc in accounts:
         if acc.is_default:

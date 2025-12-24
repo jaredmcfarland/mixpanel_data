@@ -177,6 +177,15 @@ class MixpanelAPIClient:
         All exceptions include request/response context for debugging and
         autonomous recovery by AI agents.
 
+        Status code handling:
+            - 200-299: Parse and return JSON response
+            - 400: QueryError with error message from response body
+            - 401: AuthenticationError (invalid credentials)
+            - 412: JQLSyntaxError (JQL script errors with parsed details)
+            - 5xx: ServerError with status code and error details
+
+        Note: 429 (rate limit) is handled separately in _request() with retry logic.
+
         Args:
             response: The HTTP response to handle.
             request_method: HTTP method used (GET, POST).
@@ -186,7 +195,7 @@ class MixpanelAPIClient:
             script: Optional JQL script for error context (used for 412 errors).
 
         Returns:
-            Parsed JSON response.
+            Parsed JSON response for successful requests.
 
         Raises:
             AuthenticationError: On 401 response.
@@ -267,13 +276,19 @@ class MixpanelAPIClient:
         return response.json()
 
     def _calculate_backoff(self, attempt: int) -> float:
-        """Calculate backoff delay with jitter.
+        """Calculate exponential backoff delay with jitter.
+
+        Uses exponential backoff starting at 1 second, doubling each
+        attempt up to a maximum of 60 seconds. Adds 0-10% random jitter
+        to prevent thundering herd.
+
+        Formula: min(1.0 * 2^attempt, 60.0) + random(0, delay * 0.1)
 
         Args:
-            attempt: Zero-based attempt number.
+            attempt: Zero-based attempt number (0, 1, 2, ...).
 
         Returns:
-            Delay in seconds.
+            Delay in seconds including jitter.
         """
         base = 1.0
         max_delay = 60.0
@@ -294,24 +309,29 @@ class MixpanelAPIClient:
     ) -> Any:
         """Make an authenticated request with retry on rate limit.
 
+        Automatically adds project_id to all requests and handles rate limiting
+        with exponential backoff. Retries up to max_retries times (default 3)
+        before raising RateLimitError.
+
         Args:
             method: HTTP method (GET, POST, etc.).
             url: Full URL to request.
-            params: Query parameters.
+            params: Query parameters. project_id is automatically added.
             data: Request body as JSON (for POST).
             form_data: Request body as form-encoded (for POST).
-            timeout: Override default timeout.
+            timeout: Override default timeout (uses self._timeout if not specified).
             script: Optional JQL script for error context.
 
         Returns:
             Parsed JSON response.
 
         Raises:
-            AuthenticationError: Invalid credentials.
-            RateLimitError: Rate limit exceeded after max retries.
-            QueryError: Invalid parameters.
-            JQLSyntaxError: JQL script syntax/runtime error.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Invalid parameters (400).
+            JQLSyntaxError: JQL script syntax/runtime error (412).
             ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
         """
         client = self._ensure_client()
 
@@ -434,20 +454,26 @@ class MixpanelAPIClient:
     ) -> Iterator[dict[str, Any]]:
         """Stream events from the Export API.
 
+        Streams events line by line from Mixpanel's JSONL export endpoint.
+        Memory-efficient for large exports since events are yielded one at a time.
+
         Args:
             from_date: Start date (YYYY-MM-DD, inclusive).
             to_date: End date (YYYY-MM-DD, inclusive).
             events: Optional list of event names to filter.
             where: Optional filter expression.
-            on_batch: Optional callback invoked with count after each batch.
+            on_batch: Optional callback invoked with cumulative count every
+                1000 events, and once at the end for any remaining events.
 
         Yields:
             Event dictionaries with 'event' and 'properties' keys.
+            Malformed JSON lines are logged and skipped (not raised).
 
         Raises:
             AuthenticationError: Invalid credentials.
             RateLimitError: Rate limit exceeded after max retries.
             QueryError: Invalid parameters.
+            ServerError: Server-side errors (5xx).
         """
         url = self._build_url("export", "/export")
 
@@ -563,9 +589,13 @@ class MixpanelAPIClient:
     ) -> Iterator[dict[str, Any]]:
         """Stream profiles from the Engage API.
 
+        Paginates through all user profiles using Mixpanel's session-based
+        pagination. Each page is a separate API request.
+
         Args:
             where: Optional filter expression.
-            on_batch: Optional callback invoked with count after each page.
+            on_batch: Optional callback invoked with cumulative count after
+                each page is processed.
 
         Yields:
             Profile dictionaries with '$distinct_id' and '$properties' keys.
@@ -573,6 +603,7 @@ class MixpanelAPIClient:
         Raises:
             AuthenticationError: Invalid credentials.
             RateLimitError: Rate limit exceeded after max retries.
+            ServerError: Server-side errors (5xx).
         """
         url = self._build_url("engage", "")
 

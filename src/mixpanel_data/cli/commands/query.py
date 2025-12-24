@@ -65,6 +65,11 @@ def query_sql(
     """Execute SQL query against local DuckDB database.
 
     Query can be provided as an argument or read from a file with --file.
+    Use --scalar when your query returns a single value (e.g., COUNT(*)).
+
+    Results are returned as a list of row objects by default. With --scalar,
+    returns a single value wrapped in {"value": result} for JSON output,
+    or just the raw value for plain output.
     """
     # Get query from argument or file
     if query is None and file is None:
@@ -123,7 +128,15 @@ def query_segmentation(
     ] = None,
     format: FormatOption = "json",
 ) -> None:
-    """Run live segmentation query against Mixpanel API."""
+    """Run live segmentation query against Mixpanel API.
+
+    Returns time-series event counts, optionally segmented by a property.
+    Without --on, returns total counts per time period. With --on, breaks
+    down counts by property values (e.g., --on country shows counts per country).
+
+    Output includes event name, date range, total count, time unit, and
+    a series dict mapping dates to counts (or segments to date/count dicts).
+    """
     validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
 
@@ -165,7 +178,14 @@ def query_funnel(
     ] = None,
     format: FormatOption = "json",
 ) -> None:
-    """Run live funnel analysis against Mixpanel API."""
+    """Run live funnel analysis against Mixpanel API.
+
+    Analyzes conversion through a saved funnel's steps. The funnel_id can be
+    found in the Mixpanel UI URL when viewing the funnel, or via 'mp inspect funnels'.
+
+    Output includes funnel_id, date range, and steps array with each step's
+    event name, count, and conversion_rate (percentage who completed this step).
+    """
     workspace = get_workspace(ctx)
 
     result = workspace.funnel(
@@ -221,7 +241,21 @@ def query_retention(
     ] = "day",
     format: FormatOption = "json",
 ) -> None:
-    """Run live retention analysis against Mixpanel API."""
+    """Run live retention analysis against Mixpanel API.
+
+    Measures how many users return after their first action (birth event).
+    Users are grouped into cohorts by when they first did the birth event,
+    then tracked for how many returned to do the return event.
+
+    The --interval and --intervals options control bucket granularity:
+    --interval is the bucket size (default 1), --intervals is the number
+    of buckets to track (default 10). Combined with --unit, this defines
+    the retention window (e.g., --unit day --interval 1 --intervals 7
+    tracks daily retention for 7 days).
+
+    Output includes cohorts array with each cohort's date, user count,
+    and retention percentages for each interval.
+    """
     validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
 
@@ -326,7 +360,19 @@ def query_event_counts(
     ] = "day",
     format: FormatOption = "json",
 ) -> None:
-    """Query event counts over time for multiple events."""
+    """Query event counts over time for multiple events.
+
+    Compares multiple events on the same time series. Pass comma-separated
+    event names to --events (e.g., --events "Sign Up,Login,Purchase").
+
+    The --type option controls how counts are calculated:
+    - general: Total event occurrences (default)
+    - unique: Unique users who triggered the event
+    - average: Average events per user
+
+    Output includes events list, date range, and series dict mapping
+    each event name to its date/count series.
+    """
     validated_type = validate_count_type(type_)
     validated_unit = validate_time_unit(unit)
 
@@ -380,7 +426,22 @@ def query_property_counts(
     ] = 10,
     format: FormatOption = "json",
 ) -> None:
-    """Query event counts broken down by property values."""
+    """Query event counts broken down by property values.
+
+    Shows how event counts vary across different values of a property.
+    For example, --property country shows event counts per country.
+
+    The --type option controls how counts are calculated:
+    - general: Total event occurrences (default)
+    - unique: Unique users who triggered the event
+    - average: Average events per user
+
+    The --limit option controls how many property values to return
+    (default 10, ordered by count descending).
+
+    Output includes event, property name, date range, and series dict
+    mapping each property value to its date/count series.
+    """
     validated_type = validate_count_type(type_)
     validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
@@ -416,7 +477,17 @@ def query_activity_feed(
     ] = None,
     format: FormatOption = "json",
 ) -> None:
-    """Query user activity feed for specific users."""
+    """Query user activity feed for specific users.
+
+    Retrieves the event history for one or more users identified by their
+    distinct_id. Pass comma-separated IDs to --users.
+
+    Optionally filter by date range with --from and --to. Without date
+    filters, returns recent activity (API default).
+
+    Output includes distinct_ids queried, optional date range, and events
+    array with each event's name, timestamp, and properties.
+    """
     # Parse users
     user_list = [u.strip() for u in users.split(",")]
 
@@ -441,7 +512,15 @@ def query_insights(
     ],
     format: FormatOption = "json",
 ) -> None:
-    """Query a saved Insights report by bookmark ID."""
+    """Query a saved Insights report by bookmark ID.
+
+    Retrieves data from a saved Insights report in Mixpanel. The bookmark_id
+    can be found in the URL when viewing an Insights report (the numeric ID
+    after /insights/).
+
+    Output includes bookmark_id, computed_at timestamp, date_range, headers
+    (column names), and series data matching the saved report configuration.
+    """
     workspace = get_workspace(ctx)
 
     result = workspace.insights(bookmark_id=bookmark_id)
@@ -479,7 +558,18 @@ def query_frequency(
     ] = None,
     format: FormatOption = "json",
 ) -> None:
-    """Analyze event frequency distribution (addiction analysis)."""
+    """Analyze event frequency distribution (addiction analysis).
+
+    Shows how many users performed an event N times within each time period.
+    Useful for understanding user engagement depth and "power user" distribution.
+
+    The --addiction-unit controls granularity of frequency buckets (hour or day).
+    For example, with --addiction-unit hour, the data shows how many users
+    performed the event 1 time, 2 times, 3 times, etc. per hour.
+
+    Output includes date range, units, and data dict mapping dates to
+    arrays of user counts (index 0 = users who did it once, 1 = twice, etc.).
+    """
     validated_unit = validate_time_unit(unit)
     validated_addiction_unit = validate_hour_day_unit(
         addiction_unit, "--addiction-unit"
@@ -532,7 +622,22 @@ def query_segmentation_numeric(
     ] = None,
     format: FormatOption = "json",
 ) -> None:
-    """Bucket events by numeric property ranges."""
+    """Bucket events by numeric property ranges.
+
+    Groups events into buckets based on a numeric property's value.
+    Mixpanel automatically determines optimal bucket ranges based on
+    the property's value distribution.
+
+    For example, --on price might create buckets like "0-10", "10-50", "50+".
+
+    The --type option controls how counts are calculated:
+    - general: Total event occurrences (default)
+    - unique: Unique users who triggered the event
+    - average: Average events per user
+
+    Output includes event, property, date range, buckets info, and values
+    dict mapping bucket labels to their date/count series.
+    """
     validated_type = validate_count_type(type_)
     validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
@@ -580,7 +685,17 @@ def query_segmentation_sum(
     ] = None,
     format: FormatOption = "json",
 ) -> None:
-    """Calculate sum of numeric property over time."""
+    """Calculate sum of numeric property over time.
+
+    Sums the values of a numeric property across all matching events.
+    Useful for tracking totals like revenue, quantity, or duration.
+
+    For example, --event Purchase --on revenue calculates total revenue
+    per time period.
+
+    Output includes event, property, date range, and results dict mapping
+    dates to the sum of property values for that period.
+    """
     validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
 
@@ -626,7 +741,17 @@ def query_segmentation_average(
     ] = None,
     format: FormatOption = "json",
 ) -> None:
-    """Calculate average of numeric property over time."""
+    """Calculate average of numeric property over time.
+
+    Calculates the mean value of a numeric property across all matching events.
+    Useful for tracking averages like order value, session duration, or scores.
+
+    For example, --event Purchase --on order_value calculates average order
+    value per time period.
+
+    Output includes event, property, date range, and results dict mapping
+    dates to the average property value for that period.
+    """
     validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
 

@@ -409,8 +409,8 @@ class StorageEngine:
         Args:
             name: Table name.
             data: Iterator yielding event dictionaries.
-            progress_callback: Optional callback invoked with row count.
-            batch_size: Number of rows per batch.
+            progress_callback: Optional callback invoked with cumulative row count.
+            batch_size: Number of rows per batch. Default: 2000.
 
         Returns:
             Total number of rows inserted.
@@ -479,8 +479,8 @@ class StorageEngine:
         Args:
             name: Table name.
             data: Iterator yielding profile dictionaries.
-            progress_callback: Optional callback invoked with row count.
-            batch_size: Number of rows per batch.
+            progress_callback: Optional callback invoked with cumulative row count.
+            batch_size: Number of rows per batch. Default: 2000.
 
         Returns:
             Total number of rows inserted.

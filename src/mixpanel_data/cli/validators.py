@@ -41,18 +41,51 @@ def validate_literal(value: str, literal_type: Any, param_name: str) -> Any:
 
 
 def validate_time_unit(value: str, param_name: str = "--unit") -> TimeUnit:
-    """Validate time unit (day, week, month)."""
+    """Validate time unit for aggregation.
+
+    Args:
+        value: String value from CLI (should be "day", "week", or "month").
+        param_name: Parameter name for error message. Default: "--unit".
+
+    Returns:
+        Validated value as TimeUnit literal type.
+
+    Raises:
+        typer.Exit: With code 3 (INVALID_ARGS) if value is invalid.
+    """
     validate_literal(value, TimeUnit, param_name)
     return cast(TimeUnit, value)
 
 
 def validate_hour_day_unit(value: str, param_name: str = "--unit") -> HourDayUnit:
-    """Validate hour/day unit."""
+    """Validate hour/day unit for numeric queries.
+
+    Args:
+        value: String value from CLI (should be "hour" or "day").
+        param_name: Parameter name for error message. Default: "--unit".
+
+    Returns:
+        Validated value as HourDayUnit literal type.
+
+    Raises:
+        typer.Exit: With code 3 (INVALID_ARGS) if value is invalid.
+    """
     validate_literal(value, HourDayUnit, param_name)
     return cast(HourDayUnit, value)
 
 
 def validate_count_type(value: str, param_name: str = "--type") -> CountType:
-    """Validate count type (general, unique, average)."""
+    """Validate count type for event counting.
+
+    Args:
+        value: String value from CLI (should be "general", "unique", or "average").
+        param_name: Parameter name for error message. Default: "--type".
+
+    Returns:
+        Validated value as CountType literal type.
+
+    Raises:
+        typer.Exit: With code 3 (INVALID_ARGS) if value is invalid.
+    """
     validate_literal(value, CountType, param_name)
     return cast(CountType, value)

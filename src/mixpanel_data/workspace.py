@@ -258,7 +258,11 @@ class Workspace:
         return instance
 
     def __enter__(self) -> Workspace:
-        """Enter context manager."""
+        """Enter context manager.
+
+        Returns:
+            Self for use in 'with' statement.
+        """
         return self
 
     def __exit__(
@@ -267,7 +271,11 @@ class Workspace:
         exc_val: BaseException | None,
         exc_tb: Any,
     ) -> None:
-        """Exit context manager, closing all resources."""
+        """Exit context manager, closing all resources.
+
+        Closes the database connection and HTTP client. Exceptions are
+        NOT suppressed - they propagate normally after cleanup.
+        """
         self.close()
 
     def close(self) -> None:
