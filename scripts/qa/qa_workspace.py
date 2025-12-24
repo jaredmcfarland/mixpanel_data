@@ -1210,12 +1210,12 @@ def main() -> int:
 
     runner.run_test("7.2 tables()", test_tables)
 
-    # Test 7.3: schema()
-    def test_schema() -> dict[str, Any]:
+    # Test 7.3: table_schema()
+    def test_table_schema() -> dict[str, Any]:
         from mixpanel_data.types import TableSchema
 
         assert ws is not None
-        schema = ws.schema("qa_events")
+        schema = ws.table_schema("qa_events")
         if not isinstance(schema, TableSchema):
             raise TypeError(f"Expected TableSchema, got {type(schema)}")
         return {
@@ -1224,20 +1224,20 @@ def main() -> int:
             "columns": [c.name for c in schema.columns],
         }
 
-    runner.run_test("7.3 schema()", test_schema)
+    runner.run_test("7.3 table_schema()", test_table_schema)
 
-    # Test 7.4: schema() error - non-existent table
-    def test_schema_error() -> dict[str, Any]:
+    # Test 7.4: table_schema() error - non-existent table
+    def test_table_schema_error() -> dict[str, Any]:
         from mixpanel_data.exceptions import TableNotFoundError
 
         assert ws is not None
         try:
-            ws.schema("nonexistent_table_xyz")
+            ws.table_schema("nonexistent_table_xyz")
             raise AssertionError("Should have raised TableNotFoundError")
         except TableNotFoundError as e:
             return {"error_code": e.code, "raised": True}
 
-    runner.run_test("7.4 Error: schema() non-existent", test_schema_error)
+    runner.run_test("7.4 Error: table_schema() non-existent", test_table_schema_error)
 
     # =========================================================================
     # Phase 8: Table Management

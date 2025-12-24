@@ -325,7 +325,7 @@ class TestTableManagementIntegration:
             assert "table2" in table_names
 
             # Get schema
-            schema = ws.schema("table1")
+            schema = ws.table_schema("table1")
             assert schema.table_name == "table1"
             column_names = {c.name for c in schema.columns}
             assert "event_name" in column_names

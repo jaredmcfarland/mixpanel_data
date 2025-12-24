@@ -24,6 +24,7 @@ from mixpanel_data.types import (
     ActivityFeedResult,
     CohortInfo,
     ColumnInfo,
+    EntityType,
     EventCountsResult,
     FetchResult,
     FrequencyResult,
@@ -32,6 +33,10 @@ from mixpanel_data.types import (
     FunnelStep,
     InsightsResult,
     JQLResult,
+    LexiconDefinition,
+    LexiconMetadata,
+    LexiconProperty,
+    LexiconSchema,
     NumericAverageResult,
     NumericBucketResult,
     NumericSumResult,
@@ -99,4 +104,10 @@ __all__ = [
     "TableSchema",
     # Workspace types
     "WorkspaceInfo",
+    # Lexicon schema types
+    "EntityType",
+    "LexiconMetadata",
+    "LexiconProperty",
+    "LexiconDefinition",
+    "LexiconSchema",
 ]

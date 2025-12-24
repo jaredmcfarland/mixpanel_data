@@ -1072,7 +1072,7 @@ class TestIntrospection:
                 "CREATE TABLE test_schema (id INTEGER, name VARCHAR)"
             )
 
-            schema = ws.schema("test_schema")
+            schema = ws.table_schema("test_schema")
 
             assert isinstance(schema, TableSchema)
             assert schema.table_name == "test_schema"

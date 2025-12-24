@@ -12,6 +12,7 @@ import typer
 
 from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
 from mixpanel_data.cli.utils import ExitCode, err_console
+from mixpanel_data.types import EntityType
 
 T = TypeVar("T")
 
@@ -89,3 +90,20 @@ def validate_count_type(value: str, param_name: str = "--type") -> CountType:
     """
     validate_literal(value, CountType, param_name)
     return cast(CountType, value)
+
+
+def validate_entity_type(value: str, param_name: str = "--type") -> EntityType:
+    """Validate Lexicon entity type.
+
+    Args:
+        value: String value from CLI (should be "event" or "profile").
+        param_name: Parameter name for error message. Default: "--type".
+
+    Returns:
+        Validated value as EntityType literal type.
+
+    Raises:
+        typer.Exit: With code 3 (INVALID_ARGS) if value is invalid.
+    """
+    validate_literal(value, EntityType, param_name)
+    return cast(EntityType, value)

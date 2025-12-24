@@ -44,16 +44,19 @@ ENDPOINTS: dict[str, dict[str, str]] = {
         "query": "https://mixpanel.com/api/query",
         "export": "https://data.mixpanel.com/api/2.0",
         "engage": "https://mixpanel.com/api/2.0/engage",
+        "app": "https://mixpanel.com/api/app",
     },
     "eu": {
         "query": "https://eu.mixpanel.com/api/query",
         "export": "https://data-eu.mixpanel.com/api/2.0",
         "engage": "https://eu.mixpanel.com/api/2.0/engage",
+        "app": "https://eu.mixpanel.com/api/app",
     },
     "in": {
         "query": "https://in.mixpanel.com/api/query",
         "export": "https://data-in.mixpanel.com/api/2.0",
         "engage": "https://in.mixpanel.com/api/2.0/engage",
+        "app": "https://in.mixpanel.com/api/app",
     },
 }
 
@@ -1407,4 +1410,76 @@ class MixpanelAPIClient:
         if where:
             params["where"] = where
         result: dict[str, Any] = self._request("GET", url, params=params)
+        return result
+
+    # =========================================================================
+    # Lexicon Schemas API
+    # =========================================================================
+
+    def get_schemas(
+        self,
+        *,
+        entity_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List all Lexicon schemas in the project.
+
+        Retrieves documented event and profile property schemas from the
+        Mixpanel Lexicon (data dictionary).
+
+        Args:
+            entity_type: Optional filter by type ("event" or "profile").
+                If None, returns all schemas.
+
+        Returns:
+            List of raw schema dictionaries from the API, each containing:
+                - entityType: "event" or "profile"
+                - name: Entity name
+                - schemaJson: Full schema definition with properties and metadata
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            RateLimitError: Rate limit exceeded after max retries.
+        """
+        url = self._build_url(
+            "app", f"/projects/{self._credentials.project_id}/schemas"
+        )
+        params: dict[str, Any] = {}
+        if entity_type is not None:
+            params["entityType"] = entity_type
+        result: dict[str, Any] = self._request(
+            "GET", url, params=params if params else None
+        )
+        schemas: list[dict[str, Any]] = result.get("results", [])
+        return schemas
+
+    def get_schema(
+        self,
+        entity_type: str,
+        name: str,
+    ) -> dict[str, Any]:
+        """Get a single Lexicon schema by entity type and name.
+
+        Args:
+            entity_type: Entity type ("event" or "profile").
+            name: Entity name (will be URL-encoded automatically).
+
+        Returns:
+            Raw schema dictionary from the API containing:
+                - entityType: "event" or "profile"
+                - name: Entity name
+                - schemaJson: Full schema definition with properties and metadata
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Schema not found (404 mapped to QueryError).
+            RateLimitError: Rate limit exceeded after max retries.
+        """
+        from urllib.parse import quote
+
+        encoded_name = quote(name, safe="")
+        url = self._build_url(
+            "app",
+            f"/projects/{self._credentials.project_id}/schemas/{entity_type}/{encoded_name}",
+        )
+        result: dict[str, Any] = self._request("GET", url)
         return result
