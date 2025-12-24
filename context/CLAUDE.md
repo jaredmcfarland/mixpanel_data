@@ -1,56 +1,58 @@
 # mixpanel_data Documentation
 
-This directory contains all design documentation, specifications, and reference materials for building the `mixpanel_data` library.
+This directory contains all design documentation, specifications, and reference materials for the `mixpanel_data` library.
+
+**Project Status:** All core components complete (Phases 001-010). Phase 011 (Polish & Release) is next.
 
 ## Document Hierarchy
 
 ```
-docs/
-├── CLAUDE.md                              # This file
-├── mixpanel_data-project-brief.md         # Vision, goals, why we're building this
+context/
+├── CLAUDE.md                              # This file - directory guide
+├── mixpanel_data-project-brief.md         # Vision, goals, design principles
 ├── mixpanel_data-design.md                # Architecture and technical design
-├── mixpanel_data-api-specification.md     # Python library API spec
+├── mixpanel_data-api-specification.md     # Python library API specification
 ├── mp-cli-api-specification.md            # CLI command specification
 ├── mp-cli-project-spec.md                 # Full project specification
-├── MIXPANEL_DATA_MODEL_REFERENCE.md       # Mixpanel data model (events, profiles)
+├── mixpanel-data-model-reference.md       # Mixpanel data model (events, profiles)
+├── mixpanel-http-api-specification.md     # Mixpanel HTTP API (all 11 APIs)
 ├── mixpanel-query-expression-language.md  # Query expression syntax
-├── jql.md                                 # JQL (deprecated, maintenance mode)
-└── api-docs/                              # Mixpanel API documentation
+└── jql.md                                 # JQL (deprecated, maintenance mode)
 ```
 
 ## Reading Order
 
-For understanding the project:
-1. **[mixpanel_data-project-brief.md](mixpanel_data-project-brief.md)** - Start here. Vision, goals, design principles
-2. **[mixpanel_data-design.md](mixpanel_data-design.md)** - Architecture, layers, system design
-3. **[mp-cli-project-spec.md](mp-cli-project-spec.md)** - Full specification with command hierarchy
+**For understanding the project:**
+1. **[mixpanel_data-project-brief.md](mixpanel_data-project-brief.md)** — Vision, goals, design principles
+2. **[mixpanel_data-design.md](mixpanel_data-design.md)** — Architecture, layers, system design
+3. **[mp-cli-project-spec.md](mp-cli-project-spec.md)** — Full specification with command hierarchy
 
-For implementation:
-1. **[mixpanel_data-api-specification.md](mixpanel_data-api-specification.md)** - Python API design
-2. **[mp-cli-api-specification.md](mp-cli-api-specification.md)** - CLI commands and options
-3. **[MIXPANEL_DATA_MODEL_REFERENCE.md](MIXPANEL_DATA_MODEL_REFERENCE.md)** - Data model for Pydantic/DuckDB mapping
+**For implementation:**
+1. **[mixpanel_data-api-specification.md](mixpanel_data-api-specification.md)** — Python library API design
+2. **[mp-cli-api-specification.md](mp-cli-api-specification.md)** — CLI commands and options
+3. **[mixpanel-data-model-reference.md](mixpanel-data-model-reference.md)** — Data model for Pydantic/DuckDB mapping
 
-## Key Concepts
-
-### The Core Insight
+## The Core Insight
 
 ```
 MCP Approach:   Agent → API call → 30KB JSON in context → repeat → context exhausted
 mp Approach:    Agent → fetch once → DuckDB → SQL queries → minimal tokens → reasoning preserved
 ```
 
-### Architecture
+Agents should fetch Mixpanel data once into a local DuckDB database, then query repeatedly with SQL—preserving context window for reasoning rather than consuming it with raw API responses.
+
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  CLI Layer (thin)                                           │
-│  mp/cli/ - Typer commands, Rich output                      │
+│  CLI Layer (Typer + Rich)                                   │
+│  src/mixpanel_data/cli/ - Commands, formatters, validators  │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Public API Layer                                           │
-│  Workspace class - facade for all operations                │
+│  Workspace class - Unified facade for all operations        │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -62,77 +64,194 @@ mp Approach:    Agent → fetch once → DuckDB → SQL queries → minimal toke
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Infrastructure Layer                                       │
-│  MixpanelClient (httpx) | DuckDBConnection                  │
+│  ConfigManager | MixpanelAPIClient | StorageEngine (DuckDB) │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Naming Convention
+**Two data paths:**
+- **Live queries**: Call Mixpanel API directly (segmentation, funnel, retention, jql)
+- **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
+
+## Naming Convention
 
 | Context | Name | Example |
 |---------|------|---------|
-| PyPI | `mixpanel_data` | `pip install mixpanel_data` |
-| Python | `mixpanel_data` | `import mixpanel_data as mp` |
-| CLI | `mp` | `mp fetch events --from 2024-01-01` |
+| PyPI package | `mixpanel_data` | `pip install mixpanel_data` |
+| Python import | `mixpanel_data` | `import mixpanel_data as mp` |
+| CLI command | `mp` | `mp fetch events --from 2024-01-01` |
 
 ## Design Principles
 
-1. **Library-First** - CLI wraps library; every capability is programmatic
-2. **Agent-Native** - Non-interactive, structured output, composable
-3. **Context Efficient** - Fetch once, query many times
-4. **Two Data Paths** - Live queries (quick) vs local DB (deep analysis)
-5. **Unix Philosophy** - One thing well, compose with other tools
-6. **Explicit Over Implicit** - No global state, explicit table creation/deletion
-7. **Secure by Default** - Credentials in config file, never in code
+1. **Library-First** — CLI wraps library; every capability is programmatic
+2. **Agent-Native** — Non-interactive, structured output, composable
+3. **Context Efficient** — Fetch once, query many times
+4. **Two Data Paths** — Live queries (quick) vs local DB (deep analysis)
+5. **Unix Philosophy** — One thing well, compose with other tools
+6. **Explicit Over Implicit** — No global state, explicit table creation/deletion
+7. **Secure by Default** — Credentials in config file, never in code
 
-## Key Files by Purpose
+## Python Library API
 
-### Python Library API
-- **Workspace class** - Single entry point: `from mixpanel_data import Workspace`
-- **Authentication** - `~/.mp/config.toml` with named accounts
-- **Core methods**: `fetch_events()`, `sql()`, `segmentation()`, `funnels()`, `retention()`
+**Entry point:** `from mixpanel_data import Workspace`
 
-### CLI Commands
-```bash
-mp auth add/switch/list/remove    # Credential management
-mp fetch events/profiles          # Fetch to local DB
-mp sql "SELECT ..."               # Query local DB
-mp segmentation/funnels/retention # Live Mixpanel queries
-mp explore events/properties      # Data discovery
-mp db info/tables/drop            # Database management
+```python
+# Create workspace with credentials
+ws = Workspace(account="myaccount", path="./data.db")
+
+# Or open existing database (no credentials needed)
+ws = Workspace.open("./data.db")
+
+# Discovery
+events = ws.events()
+props = ws.properties("PageView")
+values = ws.property_values("$browser", "PageView")
+funnels = ws.funnels()
+cohorts = ws.cohorts()
+
+# Fetch data to local storage
+ws.fetch_events("events_jan", from_date="2024-01-01", to_date="2024-01-31")
+ws.fetch_profiles("users")
+
+# Query local data
+df = ws.sql("SELECT * FROM events_jan LIMIT 10")
+count = ws.sql_scalar("SELECT COUNT(*) FROM users")
+
+# Live queries (call Mixpanel API directly)
+seg = ws.segmentation("PageView", from_date="2024-01-01", to_date="2024-01-07")
+funnel = ws.funnel(funnel_id=12345, from_date="2024-01-01", to_date="2024-01-31")
+ret = ws.retention("Signup", "Purchase", from_date="2024-01-01", to_date="2024-01-31")
+
+# Introspection
+info = ws.info()
+tables = ws.tables()
+schema = ws.schema("events_jan")
+
+# Cleanup
+ws.drop("events_jan")
+ws.close()
 ```
 
-### Data Model
-- **Events** - Timestamped actions (`event`, `distinct_id`, `time`, `properties`)
-- **User Profiles** - Mutable user state (`$set`, `$append`, `$unset`)
-- **Group Profiles** - Organization/account attributes
-- **Lookup Tables** - Arbitrary entity enrichment
+## CLI Commands (Implemented)
+
+### Authentication (6 commands)
+```bash
+mp auth list                              # List configured accounts
+mp auth add <name>                        # Add new account
+mp auth remove <name>                     # Remove account
+mp auth switch <name>                     # Set default account
+mp auth show [name]                       # Show account details
+mp auth test [name]                       # Test credentials
+```
+
+### Data Fetching (2 commands)
+```bash
+mp fetch events <name> --from DATE --to DATE [--events E1,E2] [--where EXPR]
+mp fetch profiles <name> [--where EXPR]
+```
+
+### Queries (13 commands)
+```bash
+# Local queries
+mp query sql "SELECT * FROM events LIMIT 10"
+
+# Live queries
+mp query segmentation <event> --from DATE --to DATE [--on PROP] [--unit day|week|month]
+mp query funnel <id> --from DATE --to DATE [--unit day|week|month]
+mp query retention --born EVENT --return EVENT --from DATE --to DATE
+mp query jql <script> [--params JSON]
+mp query event-counts --events E1,E2 --from DATE --to DATE
+mp query property-counts <event> <property> --from DATE --to DATE
+mp query activity-feed --users ID1,ID2 --from DATE --to DATE
+mp query insights <bookmark_id>
+mp query frequency --from DATE --to DATE [--event E] [--unit hour|day|week|month]
+mp query segmentation-numeric <event> --from DATE --to DATE --on PROP
+mp query segmentation-sum <event> --from DATE --to DATE --on PROP
+mp query segmentation-average <event> --from DATE --to DATE --on PROP
+```
+
+### Inspection (10 commands)
+```bash
+mp inspect events                         # List event types
+mp inspect properties <event>             # List properties for event
+mp inspect values <property> [--event E]  # List property values
+mp inspect funnels                        # List saved funnels
+mp inspect cohorts                        # List saved cohorts
+mp inspect top-events [--type general|unique] [--limit N]
+mp inspect info                           # Workspace metadata
+mp inspect tables                         # List local tables
+mp inspect schema <table>                 # Table schema details
+mp inspect drop <table> [--all]           # Drop table(s)
+```
+
+### Output Formats
+All commands support `--format` option:
+- `json` — Pretty-printed JSON (default for most)
+- `jsonl` — JSON Lines (streaming)
+- `table` — Rich table (human-readable)
+- `csv` — CSV with headers
+- `plain` — Minimal output
+
+## Data Model
+
+- **Events** — Timestamped actions (`event`, `distinct_id`, `time`, `properties`)
+- **User Profiles** — Mutable user state (`$set`, `$append`, `$unset`)
+- **Group Profiles** — Organization/account attributes
+- **Lookup Tables** — Arbitrary entity enrichment
+
+See [mixpanel-data-model-reference.md](mixpanel-data-model-reference.md) for complete reference.
 
 ## Reference Documentation
 
-### Mixpanel API Docs ([api-docs/](api-docs/))
-- **Event Export API** - Raw event fetching (primary for local DB)
-- **Query API** - Segmentation, funnels, retention (live queries)
-- **Lexicon Schemas API** - Event/property discovery
+### Mixpanel HTTP API
+**[mixpanel-http-api-specification.md](mixpanel-http-api-specification.md)** — Complete API specification for all 11 Mixpanel APIs:
+- Event Export API, Query API, Ingestion API, Identity API
+- Lexicon Schemas API, GDPR API, Annotations API
+- Feature Flags API, Service Accounts API
+- Data Pipelines API (deprecated), Warehouse Connectors API
+- Authentication methods (Service Account, Project Token, OAuth)
+- Regional endpoints (US, EU, India)
+- Rate limits and error codes
 
 ### Query Languages
-- **[mixpanel-query-expression-language.md](mixpanel-query-expression-language.md)** - Filter expressions, operators, functions
-- **[jql.md](jql.md)** - JavaScript Query Language (⚠️ deprecated, maintenance mode)
+- **[mixpanel-query-expression-language.md](mixpanel-query-expression-language.md)** — Filter expressions, operators, functions
+- **[jql.md](jql.md)** — JavaScript Query Language (deprecated, maintenance mode)
 
 ## Technology Stack
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Language | Python 3.11+ | DuckDB/Pandas ecosystem |
+| Language | Python 3.11+ | DuckDB/Pandas ecosystem, modern typing |
 | CLI | Typer | Type hints, auto-generated help |
-| Output | Rich | Tables, progress bars |
-| Validation | Pydantic | API response validation |
+| Output | Rich | Tables, progress bars, colors |
+| Validation | Pydantic v2 | API response validation, frozen models |
 | Database | DuckDB | Embedded, analytical, JSON support |
 | HTTP | httpx | Async support, connection pooling |
+| Package Manager | uv | Fast, reliable dependency management |
+| Task Runner | just | Simple command runner |
 
-## When Working in This Directory
+## Development Workflow
+
+### Prerequisites
+- Python 3.11+ (3.12 recommended)
+- [uv](https://docs.astral.sh/uv/) — Package manager
+- [just](https://github.com/casey/just) — Command runner
+
+### Commands
+```bash
+just              # List all commands
+just check        # Run all checks (lint, typecheck, test)
+just test         # Run tests
+just test-cov     # Run tests with coverage
+just lint         # Lint with ruff
+just lint-fix     # Auto-fix lint errors
+just fmt          # Format with ruff
+just typecheck    # Type check with mypy
+just sync         # Sync dependencies
+just mp --help    # Run the CLI
+```
 
 ### Adding New Documentation
-- Follow existing naming: `mixpanel_data-*.md` or `mp-cli-*.md`
+- Follow naming: `mixpanel_data-*.md` or `mp-cli-*.md`
 - Update this CLAUDE.md with the new file
 - Cross-reference from related documents
 
@@ -140,8 +259,3 @@ mp db info/tables/drop            # Database management
 - Keep version numbers in sync across related docs
 - Update "Last Updated" dates
 - Ensure CLI spec matches library API spec
-
-### Using API Docs
-- Start with [api-docs/CLAUDE.md](api-docs/CLAUDE.md) for navigation
-- OpenAPI specs in `api-docs/openapi/src/` are source of truth
-- Reference docs in `api-docs/reference/` are human-readable

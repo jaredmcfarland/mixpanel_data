@@ -110,12 +110,12 @@ Creates wheel and sdist in `dist/`
 │   └── integration/            # Integration tests
 │       ├── test_foundation.py  # Foundation layer workflow tests
 │       └── test_config_file.py # Config file persistence tests
-├── docs/                       # Design documentation
-│   ├── mixpanel_data-design.md          # Architecture & component specs
-│   ├── mixpanel_data-project-brief.md   # Vision and goals
-│   ├── mp-cli-project-spec.md           # CLI specification
-│   ├── MIXPANEL_DATA_MODEL_REFERENCE.md # Mixpanel data model
-│   └── api-docs/                        # Mixpanel API documentation
+├── context/                    # Design documentation
+│   ├── mixpanel_data-design.md              # Architecture & component specs
+│   ├── mixpanel_data-project-brief.md       # Vision and goals
+│   ├── mp-cli-project-spec.md               # CLI specification
+│   ├── MIXPANEL_DATA_MODEL_REFERENCE.md     # Mixpanel data model
+│   └── mixpanel-http-api-specification.md   # Mixpanel HTTP API (all 11 APIs)
 ├── specs/                      # Implementation specifications
 │   └── 001-foundation-layer/   # Foundation layer spec (current phase)
 ├── pyproject.toml              # Project configuration (build, deps, tools)
@@ -205,7 +205,8 @@ Config file: `~/.mp/config.toml` (TOML format)
 
 **Documentation:**
 - User docs: `README.md`
-- Design specs: `docs/*.md`
+- Design specs: `context/*.md`
+- Mixpanel API: `context/mixpanel-http-api-specification.md`
 - Implementation specs: `specs/001-foundation-layer/`
 - AI guidance: `CLAUDE.md`
 

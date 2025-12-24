@@ -102,12 +102,15 @@ Legend: ✅ Implemented | ⏳ Pending
 
 ## Mixpanel API Reference
 
-Complete API documentation in `context/api-docs/`:
-- **Event Export API** — Raw event fetching for local storage
-- **Query API** — Segmentation, funnels, retention, JQL
-- **Lexicon Schemas API** — Event/property discovery
+Complete API documentation in `context/mixpanel-http-api-specification.md`:
+- All 11 Mixpanel APIs with endpoints, parameters, and response formats
+- Authentication methods (Service Account, Project Token, OAuth)
+- Regional endpoints (US, EU, India)
+- Rate limits and error codes
 
-OpenAPI specs: `context/api-docs/openapi/src/*.openapi.yaml`
+Additional references:
+- **Query Expression Language** — `context/mixpanel-query-expression-language.md`
+- **JQL** — `context/jql.md` (deprecated, maintenance mode)
 
 ## Environment Variables
 
