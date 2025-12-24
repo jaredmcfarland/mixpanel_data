@@ -613,7 +613,7 @@ class Workspace:
     # LEXICON SCHEMA METHODS
     # =========================================================================
 
-    def schemas(
+    def lexicon_schemas(
         self,
         *,
         entity_type: EntityType | None = None,
@@ -638,7 +638,7 @@ class Workspace:
         """
         return self._discovery_service.list_schemas(entity_type=entity_type)
 
-    def schema(
+    def lexicon_schema(
         self,
         entity_type: EntityType,
         name: str,

@@ -351,7 +351,7 @@ def inspect_lexicon_schemas(
     """
     validated_type = validate_entity_type(type_) if type_ is not None else None
     workspace = get_workspace(ctx)
-    schemas = workspace.schemas(entity_type=validated_type)
+    schemas = workspace.lexicon_schemas(entity_type=validated_type)
     data = [
         {
             "entity_type": s.entity_type,
@@ -395,5 +395,5 @@ def inspect_lexicon_schema(
     """
     validated_type = validate_entity_type(type_)
     workspace = get_workspace(ctx)
-    schema = workspace.schema(validated_type, name)
+    schema = workspace.lexicon_schema(validated_type, name)
     output_result(ctx, schema.to_dict(), format=format)
