@@ -135,6 +135,8 @@ Design documents in `context/`:
 ## Active Technologies
 - Python 3.11+ + Typer (CLI), httpx (HTTP), Rich (progress to stderr) (011-streaming-api)
 - N/A for streaming (bypasses DuckDB entirely) (011-streaming-api)
+- Python 3.11+ + httpx (HTTP client), Typer (CLI), Rich (output formatting), Pydantic v2 (validation) (012-lexicon-schemas)
+- N/A (read-only API operations, no local persistence) (012-lexicon-schemas)
 
 ## Recent Changes
 - 011-streaming-api: Added Python 3.11+ + Typer (CLI), httpx (HTTP), Rich (progress to stderr)
