@@ -400,18 +400,27 @@ For Mixpanel APIs not covered by the Workspace class, use the `api` property to 
 
     ```python
     import mixpanel_data as mp
-    from urllib.parse import quote
 
     ws = mp.Workspace()
     client = ws.api
 
-    # Example: Fetch event schema from the Lexicon Schemas API
+    # Example: List annotations from the Annotations API
     # Many Mixpanel APIs require the project ID in the URL path
-    event_name = quote("Added To Cart", safe="")
-    url = f"https://mixpanel.com/api/app/projects/{client.project_id}/schemas/event/{event_name}"
+    base_url = "https://mixpanel.com/api/app"  # Use eu.mixpanel.com for EU
+    url = f"{base_url}/projects/{client.project_id}/annotations"
 
-    schema = client.request("GET", url)
-    print(schema)
+    response = client.request("GET", url)
+    annotations = response["results"]
+
+    for ann in annotations:
+        print(f"{ann['id']}: {ann['date']} - {ann['description']}")
+
+    # Get a specific annotation by ID
+    if annotations:
+        annotation_id = annotations[0]["id"]
+        detail_url = f"{base_url}/projects/{client.project_id}/annotations/{annotation_id}"
+        annotation = client.request("GET", detail_url)
+        print(annotation)
     ```
 
 ### Request Parameters
