@@ -474,6 +474,26 @@ class Workspace:
             )
         return self._get_api_client()
 
+    @staticmethod
+    def _try_float(value: Any) -> float | None:
+        """Attempt to convert a value to float, returning None if not possible.
+
+        Used for handling DuckDB SUMMARIZE output where avg/std may be
+        non-numeric for certain column types (e.g., timestamps).
+
+        Args:
+            value: Value to convert.
+
+        Returns:
+            Float value if conversion succeeds, None otherwise.
+        """
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+
     @property
     def _discovery_service(self) -> DiscoveryService:
         """Get or create discovery service (lazy initialization)."""
@@ -1478,8 +1498,8 @@ class Workspace:
                     min=row["min"],
                     max=row["max"],
                     approx_unique=int(row["approx_unique"]),
-                    avg=float(row["avg"]) if row["avg"] is not None else None,
-                    std=float(row["std"]) if row["std"] is not None else None,
+                    avg=self._try_float(row["avg"]),
+                    std=self._try_float(row["std"]),
                     q25=row["q25"],
                     q50=row["q50"],
                     q75=row["q75"],
