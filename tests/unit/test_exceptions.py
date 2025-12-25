@@ -202,9 +202,9 @@ class TestExceptionHierarchy:
         ]
 
         for exc in exceptions:
-            assert isinstance(
-                exc, MixpanelDataError
-            ), f"{exc.__class__.__name__} should inherit from MixpanelDataError"
+            assert isinstance(exc, MixpanelDataError), (
+                f"{exc.__class__.__name__} should inherit from MixpanelDataError"
+            )
             assert isinstance(exc, Exception)
 
     def test_config_exceptions_inherit_from_config_error(self) -> None:
@@ -250,9 +250,9 @@ class TestExceptionHierarchy:
             else:
                 exc = exc_class("test message")
 
-            assert (
-                exc.code == expected_code
-            ), f"{exc_class.__name__} should have code {expected_code}, got {exc.code}"
+            assert exc.code == expected_code, (
+                f"{exc_class.__name__} should have code {expected_code}, got {exc.code}"
+            )
 
 
 class TestJQLSyntaxError:

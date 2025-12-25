@@ -583,3 +583,394 @@ class TestInspectLexiconSchema:
             )
 
         assert result.exit_code == 3  # INVALID_ARGS
+
+
+# =============================================================================
+# Introspection Command Tests
+# =============================================================================
+
+
+class TestInspectSample:
+    """Tests for mp inspect sample command."""
+
+    def test_sample_returns_rows(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test sampling rows from a table."""
+        import pandas as pd
+
+        mock_workspace.sample.return_value = pd.DataFrame(
+            [
+                {"event_name": "Page View", "distinct_id": "user_1"},
+                {"event_name": "Sign Up", "distinct_id": "user_2"},
+            ]
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["inspect", "sample", "--table", "events", "--format", "json"],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert len(data) == 2
+        assert data[0]["event_name"] == "Page View"
+        mock_workspace.sample.assert_called_once_with("events", n=10)
+
+    def test_sample_with_rows_parameter(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test sampling with custom row count."""
+        import pandas as pd
+
+        mock_workspace.sample.return_value = pd.DataFrame([])
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "inspect",
+                    "sample",
+                    "--table",
+                    "events",
+                    "--rows",
+                    "5",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        mock_workspace.sample.assert_called_once_with("events", n=5)
+
+    def test_sample_table_format(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test sampling with table format output."""
+        import pandas as pd
+
+        mock_workspace.sample.return_value = pd.DataFrame(
+            [{"event_name": "Test", "count": 100}]
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["inspect", "sample", "--table", "events", "--format", "table"],
+            )
+
+        assert result.exit_code == 0
+        assert "event_name" in result.stdout or "Test" in result.stdout
+
+
+class TestInspectSummarize:
+    """Tests for mp inspect summarize command."""
+
+    def test_summarize_returns_stats(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test summarizing table statistics."""
+        from mixpanel_data.types import ColumnSummary, SummaryResult
+
+        mock_workspace.summarize.return_value = SummaryResult(
+            table="events",
+            row_count=1000,
+            columns=[
+                ColumnSummary(
+                    column_name="event_name",
+                    column_type="VARCHAR",
+                    min="A",
+                    max="Z",
+                    approx_unique=50,
+                    avg=None,
+                    std=None,
+                    q25=None,
+                    q50=None,
+                    q75=None,
+                    count=1000,
+                    null_percentage=0.0,
+                )
+            ],
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["inspect", "summarize", "--table", "events", "--format", "json"],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["table"] == "events"
+        assert data["row_count"] == 1000
+        assert len(data["columns"]) == 1
+        assert data["columns"][0]["column_name"] == "event_name"
+        mock_workspace.summarize.assert_called_once_with("events")
+
+
+class TestInspectBreakdown:
+    """Tests for mp inspect breakdown command."""
+
+    def test_breakdown_returns_event_stats(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test event breakdown analysis."""
+        from datetime import datetime
+
+        from mixpanel_data.types import EventBreakdownResult, EventStats
+
+        mock_workspace.event_breakdown.return_value = EventBreakdownResult(
+            table="events",
+            total_events=1000,
+            total_users=100,
+            date_range=(
+                datetime(2024, 1, 1, 0, 0, 0),
+                datetime(2024, 1, 31, 23, 59, 59),
+            ),
+            events=[
+                EventStats(
+                    event_name="Page View",
+                    count=500,
+                    unique_users=80,
+                    first_seen=datetime(2024, 1, 1, 10, 0, 0),
+                    last_seen=datetime(2024, 1, 31, 20, 0, 0),
+                    pct_of_total=50.0,
+                ),
+                EventStats(
+                    event_name="Sign Up",
+                    count=500,
+                    unique_users=50,
+                    first_seen=datetime(2024, 1, 2, 9, 0, 0),
+                    last_seen=datetime(2024, 1, 30, 15, 0, 0),
+                    pct_of_total=50.0,
+                ),
+            ],
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["inspect", "breakdown", "--table", "events", "--format", "json"],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["table"] == "events"
+        assert data["total_events"] == 1000
+        assert data["total_users"] == 100
+        assert len(data["events"]) == 2
+        assert data["events"][0]["event_name"] == "Page View"
+        mock_workspace.event_breakdown.assert_called_once_with("events")
+
+
+class TestInspectKeys:
+    """Tests for mp inspect keys command."""
+
+    def test_keys_returns_property_keys(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test listing JSON property keys."""
+        mock_workspace.property_keys.return_value = [
+            "$browser",
+            "$city",
+            "country",
+            "page",
+        ]
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["inspect", "keys", "--table", "events", "--format", "json"],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data == ["$browser", "$city", "country", "page"]
+        mock_workspace.property_keys.assert_called_once_with("events", event=None)
+
+    def test_keys_with_event_filter(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test filtering property keys by event."""
+        mock_workspace.property_keys.return_value = ["amount", "currency"]
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "inspect",
+                    "keys",
+                    "--table",
+                    "events",
+                    "--event",
+                    "Purchase",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data == ["amount", "currency"]
+        mock_workspace.property_keys.assert_called_once_with("events", event="Purchase")
+
+
+class TestInspectColumn:
+    """Tests for mp inspect column command."""
+
+    def test_column_returns_stats(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test column statistics analysis."""
+        from mixpanel_data.types import ColumnStatsResult
+
+        mock_workspace.column_stats.return_value = ColumnStatsResult(
+            table="events",
+            column="event_name",
+            dtype="VARCHAR",
+            count=1000,
+            null_count=0,
+            null_pct=0.0,
+            unique_count=50,
+            unique_pct=5.0,
+            top_values=[("Page View", 500), ("Sign Up", 300), ("Purchase", 200)],
+            min=None,
+            max=None,
+            mean=None,
+            std=None,
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "inspect",
+                    "column",
+                    "--table",
+                    "events",
+                    "--column",
+                    "event_name",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["table"] == "events"
+        assert data["column"] == "event_name"
+        assert data["count"] == 1000
+        assert data["unique_count"] == 50
+        assert len(data["top_values"]) == 3
+        mock_workspace.column_stats.assert_called_once_with(
+            "events", "event_name", top_n=10
+        )
+
+    def test_column_with_top_parameter(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test column stats with custom top_n."""
+        from mixpanel_data.types import ColumnStatsResult
+
+        mock_workspace.column_stats.return_value = ColumnStatsResult(
+            table="events",
+            column="distinct_id",
+            dtype="VARCHAR",
+            count=1000,
+            null_count=0,
+            null_pct=0.0,
+            unique_count=100,
+            unique_pct=10.0,
+            top_values=[("user_1", 50)],
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "inspect",
+                    "column",
+                    "--table",
+                    "events",
+                    "--column",
+                    "distinct_id",
+                    "--top",
+                    "20",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        mock_workspace.column_stats.assert_called_once_with(
+            "events", "distinct_id", top_n=20
+        )
+
+    def test_column_with_json_path_expression(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test column stats with JSON path expression."""
+        from mixpanel_data.types import ColumnStatsResult
+
+        mock_workspace.column_stats.return_value = ColumnStatsResult(
+            table="events",
+            column="properties->>'$.country'",
+            dtype="VARCHAR",
+            count=1000,
+            null_count=100,
+            null_pct=10.0,
+            unique_count=50,
+            unique_pct=5.56,
+            top_values=[("US", 400), ("UK", 200)],
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "inspect",
+                    "column",
+                    "--table",
+                    "events",
+                    "--column",
+                    "properties->>'$.country'",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["column"] == "properties->>'$.country'"
+        assert data["null_pct"] == 10.0

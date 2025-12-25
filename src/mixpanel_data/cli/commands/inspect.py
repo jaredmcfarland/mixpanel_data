@@ -31,13 +31,13 @@ from mixpanel_data.cli.validators import validate_count_type, validate_entity_ty
 inspect_app = typer.Typer(
     name="inspect",
     help="Inspect schema and local database.",
-    epilog="""[dim]Live (calls Mixpanel API):[/dim]
+    epilog="""Live (calls Mixpanel API):
   events, properties, values, funnels, cohorts, top-events
 
-[dim]Local (uses DuckDB):[/dim]
+Local (uses DuckDB):
   info, tables, schema, drop""",
     no_args_is_help=True,
-    rich_markup_mode="rich",
+    rich_markup_mode="markdown",
 )
 
 
@@ -49,9 +49,10 @@ def inspect_events(ctx: typer.Context, format: FormatOption = "json") -> None:
     Calls the Mixpanel API to retrieve tracked event types. Use this
     to discover what events exist before fetching or querying.
 
-    [dim]Examples:[/dim]
-      mp inspect events
-      mp inspect events --format table
+    Examples:
+
+        mp inspect events
+        mp inspect events --format table
     """
     workspace = get_workspace(ctx)
     events = workspace.events()
@@ -73,9 +74,10 @@ def inspect_properties(
     Calls the Mixpanel API to retrieve property names tracked with an event.
     Shows both custom event properties and default Mixpanel properties.
 
-    [dim]Examples:[/dim]
-      mp inspect properties -e "Sign Up"
-      mp inspect properties -e "Purchase" --format table
+    Examples:
+
+        mp inspect properties -e "Sign Up"
+        mp inspect properties -e "Purchase" --format table
     """
     workspace = get_workspace(ctx)
     properties = workspace.properties(event)
@@ -105,10 +107,11 @@ def inspect_values(
     Calls the Mixpanel API to retrieve sample values for a property.
     Useful for understanding the data shape before writing queries.
 
-    [dim]Examples:[/dim]
-      mp inspect values -p country
-      mp inspect values -p country -e "Sign Up" --limit 20
-      mp inspect values -p browser --format table
+    Examples:
+
+        mp inspect values -p country
+        mp inspect values -p country -e "Sign Up" --limit 20
+        mp inspect values -p browser --format table
     """
     workspace = get_workspace(ctx)
     values = workspace.property_values(
@@ -127,9 +130,10 @@ def inspect_funnels(ctx: typer.Context, format: FormatOption = "json") -> None:
     Calls the Mixpanel API to retrieve saved funnel definitions.
     Use the funnel_id with 'mp query funnel' to run funnel analysis.
 
-    [dim]Examples:[/dim]
-      mp inspect funnels
-      mp inspect funnels --format table
+    Examples:
+
+        mp inspect funnels
+        mp inspect funnels --format table
     """
     workspace = get_workspace(ctx)
     funnels = workspace.funnels()
@@ -145,9 +149,10 @@ def inspect_cohorts(ctx: typer.Context, format: FormatOption = "json") -> None:
     Calls the Mixpanel API to retrieve saved cohort definitions.
     Shows cohort ID, name, user count, and description.
 
-    [dim]Examples:[/dim]
-      mp inspect cohorts
-      mp inspect cohorts --format table
+    Examples:
+
+        mp inspect cohorts
+        mp inspect cohorts --format table
     """
     workspace = get_workspace(ctx)
     cohorts = workspace.cohorts()
@@ -184,10 +189,11 @@ def inspect_top_events(
     Calls the Mixpanel API to retrieve today's most frequent events.
     Useful for quick overview of project activity.
 
-    [dim]Examples:[/dim]
-      mp inspect top-events
-      mp inspect top-events --limit 20 --format table
-      mp inspect top-events --type unique
+    Examples:
+
+        mp inspect top-events
+        mp inspect top-events --limit 20 --format table
+        mp inspect top-events --type unique
     """
     validated_type = validate_count_type(type_)
     workspace = get_workspace(ctx)
@@ -213,9 +219,10 @@ def inspect_info(ctx: typer.Context, format: FormatOption = "json") -> None:
     Shows current account configuration, database location, and
     connection status. Uses local configuration only (no API call).
 
-    [dim]Examples:[/dim]
-      mp inspect info
-      mp inspect info --format json
+    Examples:
+
+        mp inspect info
+        mp inspect info --format json
     """
     workspace = get_workspace(ctx)
     info = workspace.info()
@@ -230,9 +237,10 @@ def inspect_tables(ctx: typer.Context, format: FormatOption = "json") -> None:
     Shows all tables in the local DuckDB database with row counts
     and fetch timestamps. Use this to see what data has been fetched.
 
-    [dim]Examples:[/dim]
-      mp inspect tables
-      mp inspect tables --format table
+    Examples:
+
+        mp inspect tables
+        mp inspect tables --format table
     """
     workspace = get_workspace(ctx)
     tables = workspace.tables()
@@ -271,9 +279,10 @@ def inspect_schema(
 
     Note: The --sample option is reserved for future implementation.
 
-    [dim]Examples:[/dim]
-      mp inspect schema -t events
-      mp inspect schema -t events --format table
+    Examples:
+
+        mp inspect schema -t events
+        mp inspect schema -t events --format table
     """
     # Note: _sample is reserved for future implementation
     workspace = get_workspace(ctx)
@@ -313,9 +322,10 @@ def inspect_drop(
     Permanently removes a table and all its data. Use --force to skip
     the confirmation prompt. Commonly used before re-fetching data.
 
-    [dim]Examples:[/dim]
-      mp inspect drop -t old_events
-      mp inspect drop -t events --force
+    Examples:
+
+        mp inspect drop -t old_events
+        mp inspect drop -t events --force
     """
     if not force:
         confirm = typer.confirm(f"Drop table '{table}'?")
@@ -346,10 +356,11 @@ def inspect_lexicon_schemas(
     Retrieves documented event and profile property schemas from the
     Mixpanel Lexicon. Shows schema names, types, and property counts.
 
-    [dim]Examples:[/dim]
-      mp inspect lexicon-schemas
-      mp inspect lexicon-schemas --type event
-      mp inspect lexicon-schemas --type profile --format table
+    Examples:
+
+        mp inspect lexicon-schemas
+        mp inspect lexicon-schemas --type event
+        mp inspect lexicon-schemas --type profile --format table
     """
     validated_type = validate_entity_type(type_) if type_ is not None else None
     workspace = get_workspace(ctx)
@@ -392,12 +403,159 @@ def inspect_lexicon_schema(
     Retrieves the full schema definition for a specific event or profile
     property, including all property definitions and metadata.
 
-    [dim]Examples:[/dim]
-      mp inspect lexicon-schema --type event --name "Purchase"
-      mp inspect lexicon-schema -t event -n "Sign Up"
-      mp inspect lexicon-schema -t profile -n "Plan Type" --format json
+    Examples:
+
+        mp inspect lexicon-schema --type event --name "Purchase"
+        mp inspect lexicon-schema -t event -n "Sign Up"
+        mp inspect lexicon-schema -t profile -n "Plan Type" --format json
     """
     validated_type = validate_entity_type(type_)
     workspace = get_workspace(ctx)
     schema = workspace.lexicon_schema(validated_type, name)
     output_result(ctx, schema.to_dict(), format=format)
+
+
+@inspect_app.command("sample")
+@handle_errors
+def inspect_sample(
+    ctx: typer.Context,
+    table: Annotated[
+        str,
+        typer.Option("--table", "-t", help="Table name."),
+    ],
+    rows: Annotated[
+        int,
+        typer.Option("--rows", "-n", help="Number of rows to sample."),
+    ] = 10,
+    format: FormatOption = "table",
+) -> None:
+    """Show random sample rows from a table.
+
+    Uses reservoir sampling to return representative rows from throughout
+    the table. Useful for quickly exploring data structure and values.
+
+    Examples:
+
+        mp inspect sample -t events
+        mp inspect sample -t events -n 5 --format json
+    """
+    workspace = get_workspace(ctx)
+    df = workspace.sample(table, n=rows)
+    # Convert DataFrame to list of dicts for output
+    data = df.to_dict(orient="records")
+    output_result(ctx, data, format=format)
+
+
+@inspect_app.command("summarize")
+@handle_errors
+def inspect_summarize(
+    ctx: typer.Context,
+    table: Annotated[
+        str,
+        typer.Option("--table", "-t", help="Table name."),
+    ],
+    format: FormatOption = "table",
+) -> None:
+    """Show statistical summary of all columns in a table.
+
+    Uses DuckDB's SUMMARIZE command to compute per-column statistics
+    including min/max, quartiles, null percentage, and distinct counts.
+
+    Examples:
+
+        mp inspect summarize -t events
+        mp inspect summarize -t events --format json
+    """
+    workspace = get_workspace(ctx)
+    result = workspace.summarize(table)
+    output_result(ctx, result.to_dict(), format=format)
+
+
+@inspect_app.command("breakdown")
+@handle_errors
+def inspect_breakdown(
+    ctx: typer.Context,
+    table: Annotated[
+        str,
+        typer.Option("--table", "-t", help="Table name."),
+    ],
+    format: FormatOption = "table",
+) -> None:
+    """Show event distribution in a table.
+
+    Analyzes event counts, unique users, date ranges, and percentages
+    for each event type. Requires event_name, event_time, distinct_id columns.
+
+    Examples:
+
+        mp inspect breakdown -t events
+        mp inspect breakdown -t events --format json
+    """
+    workspace = get_workspace(ctx)
+    result = workspace.event_breakdown(table)
+    output_result(ctx, result.to_dict(), format=format)
+
+
+@inspect_app.command("keys")
+@handle_errors
+def inspect_keys(
+    ctx: typer.Context,
+    table: Annotated[
+        str,
+        typer.Option("--table", "-t", help="Table name."),
+    ],
+    event: Annotated[
+        str | None,
+        typer.Option("--event", "-e", help="Filter to specific event type."),
+    ] = None,
+    format: FormatOption = "json",
+) -> None:
+    """List JSON property keys in a table.
+
+    Extracts distinct keys from the 'properties' JSON column. Useful
+    for discovering queryable fields in event properties.
+
+    Examples:
+
+        mp inspect keys -t events
+        mp inspect keys -t events -e "Purchase"
+        mp inspect keys -t events --format table
+    """
+    workspace = get_workspace(ctx)
+    keys = workspace.property_keys(table, event=event)
+    output_result(ctx, keys, format=format)
+
+
+@inspect_app.command("column")
+@handle_errors
+def inspect_column(
+    ctx: typer.Context,
+    table: Annotated[
+        str,
+        typer.Option("--table", "-t", help="Table name."),
+    ],
+    column: Annotated[
+        str,
+        typer.Option("--column", "-c", help="Column name or expression."),
+    ],
+    top: Annotated[
+        int,
+        typer.Option("--top", help="Number of top values to show."),
+    ] = 10,
+    format: FormatOption = "json",
+) -> None:
+    """Show detailed statistics for a single column.
+
+    Performs deep analysis including null rates, cardinality, top values,
+    and numeric statistics. Supports JSON path expressions like
+    "properties->>'$.country'" for analyzing JSON columns.
+
+    Examples:
+
+        mp inspect column -t events -c event_name
+        mp inspect column -t events -c "properties->>'$.country'"
+        mp inspect column -t events -c distinct_id --top 20
+    """
+    workspace = get_workspace(ctx)
+    result = workspace.column_stats(table, column, top_n=top)
+    output_result(ctx, result.to_dict(), format=format)

@@ -833,13 +833,13 @@ class TestFunnelAndRetention:
             # Only one of 'unit' or 'interval' should be present, never both
             has_unit = "unit" in captured_params
             has_interval = "interval" in captured_params
-            assert not (
-                has_unit and has_interval
-            ), f"Both 'unit' and 'interval' sent for interval={interval}"
+            assert not (has_unit and has_interval), (
+                f"Both 'unit' and 'interval' sent for interval={interval}"
+            )
             # At least one should be present
-            assert (
-                has_unit or has_interval
-            ), f"Neither 'unit' nor 'interval' sent for interval={interval}"
+            assert has_unit or has_interval, (
+                f"Neither 'unit' nor 'interval' sent for interval={interval}"
+            )
 
 
 # =============================================================================

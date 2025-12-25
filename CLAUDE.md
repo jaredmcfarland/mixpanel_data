@@ -72,6 +72,18 @@ src/mixpanel_data/
 
 **Testing**: New functionality requires tests. Aim for both unit tests (isolated, mocked dependencies) and integration tests (real component interaction).
 
+## Test-First Development (CRITICAL)
+
+**Follow TDD strictly:**
+1. **Write tests BEFORE implementation** — Tests define expected behavior
+2. **Study existing patterns FIRST** — Before writing any new test, read existing tests for the same module to understand established conventions, fixtures, and mocking strategies
+3. **Tests must pass in CI** — Never assume local success means CI success; local environments often have configuration that CI lacks
+
+**When adding tests for existing modules:**
+- Find and read the corresponding test file (e.g., `test_workspace.py` for `workspace.py`)
+- Copy fixture patterns and mocking approaches exactly
+- Use the same naming conventions and test organization
+
 ## Key Design Decisions
 
 - **Explicit table management**: Tables never implicitly overwritten; `TableExistsError` if exists
@@ -137,6 +149,8 @@ Design documents in `context/`:
 - N/A for streaming (bypasses DuckDB entirely) (011-streaming-api)
 - Python 3.11+ + httpx (HTTP client), Typer (CLI), Rich (output formatting), Pydantic v2 (validation) (012-lexicon-schemas)
 - N/A (read-only API operations, no local persistence) (012-lexicon-schemas)
+- Python 3.11+ + DuckDB (analytical queries), pandas (DataFrame conversion), Typer (CLI), Rich (output formatting) (014-introspection-api)
+- DuckDB (existing `StorageEngine` class) (014-introspection-api)
 
 ## Recent Changes
 - 011-streaming-api: Added Python 3.11+ + Typer (CLI), httpx (HTTP), Rich (progress to stderr)

@@ -30,7 +30,7 @@ auth_app = typer.Typer(
     name="auth",
     help="Manage authentication and accounts.",
     no_args_is_help=True,
-    rich_markup_mode="rich",
+    rich_markup_mode="markdown",
 )
 
 
@@ -44,9 +44,10 @@ def list_accounts(
 
     Shows account name, username, project ID, region, and default status.
 
-    [dim]Examples:[/dim]
-      mp auth list
-      mp auth list --format table
+    Examples:
+
+        mp auth list
+        mp auth list --format table
     """
     config = get_config(ctx)
     accounts = config.list_accounts()
@@ -108,11 +109,12 @@ def add_account(
     - MP_SECRET environment variable (for CI/CD)
     - --secret-stdin flag to read from stdin
 
-    [dim]Examples:[/dim]
-      mp auth add production -u myuser -p 12345
-      MP_SECRET=abc123 mp auth add production -u myuser -p 12345
-      echo "abc123" | mp auth add production -u myuser -p 12345 --secret-stdin
-      mp auth add staging -u myuser -p 12345 -r eu --default
+    Examples:
+
+        mp auth add production -u myuser -p 12345
+        MP_SECRET=abc123 mp auth add production -u myuser -p 12345
+        echo "abc123" | mp auth add production -u myuser -p 12345 --secret-stdin
+        mp auth add staging -u myuser -p 12345 -r eu --default
     """
     secret: str | None = None
 
@@ -195,9 +197,10 @@ def remove_account(
     Deletes the account credentials from local config. Use --force
     to skip the confirmation prompt.
 
-    [dim]Examples:[/dim]
-      mp auth remove staging
-      mp auth remove old_account --force
+    Examples:
+
+        mp auth remove staging
+        mp auth remove old_account --force
     """
     if not force:
         confirm = typer.confirm(f"Remove account '{name}'?")
@@ -222,9 +225,10 @@ def switch_account(
 
     The default account is used when --account is not specified.
 
-    [dim]Examples:[/dim]
-      mp auth switch production
-      mp auth switch staging
+    Examples:
+
+        mp auth switch production
+        mp auth switch staging
     """
     config = get_config(ctx)
     config.set_default(name)
@@ -265,10 +269,11 @@ def show_account(
 
     Displays configuration for the named account or default if omitted.
 
-    [dim]Examples:[/dim]
-      mp auth show
-      mp auth show production
-      mp auth show --format table
+    Examples:
+
+        mp auth show
+        mp auth show production
+        mp auth show --format table
     """
     config = get_config(ctx)
 
@@ -309,9 +314,10 @@ def test_account(
 
     Verifies that the credentials are valid and can access the project.
 
-    [dim]Examples:[/dim]
-      mp auth test
-      mp auth test production
+    Examples:
+
+        mp auth test
+        mp auth test production
     """
     from mixpanel_data.workspace import Workspace
 
