@@ -26,7 +26,7 @@ from mixpanel_data.cli.utils import (
     handle_errors,
     output_result,
 )
-from mixpanel_data.cli.validators import validate_count_type
+from mixpanel_data.cli.validators import validate_count_type, validate_entity_type
 
 inspect_app = typer.Typer(
     name="inspect",
@@ -277,7 +277,7 @@ def inspect_schema(
     """
     # Note: _sample is reserved for future implementation
     workspace = get_workspace(ctx)
-    schema = workspace.schema(table)
+    schema = workspace.table_schema(table)
 
     data = {
         "table": schema.table_name,
@@ -327,3 +327,77 @@ def inspect_drop(
     workspace.drop(table)
 
     output_result(ctx, {"dropped": table}, format=format)
+
+
+@inspect_app.command("lexicon-schemas")
+@handle_errors
+def inspect_lexicon_schemas(
+    ctx: typer.Context,
+    type_: Annotated[
+        str | None,
+        typer.Option(
+            "--type", "-t", help="Entity type: event, profile, custom_event, etc."
+        ),
+    ] = None,
+    format: FormatOption = "json",
+) -> None:
+    """List Lexicon schemas from Mixpanel data dictionary.
+
+    Retrieves documented event and profile property schemas from the
+    Mixpanel Lexicon. Shows schema names, types, and property counts.
+
+    [dim]Examples:[/dim]
+      mp inspect lexicon-schemas
+      mp inspect lexicon-schemas --type event
+      mp inspect lexicon-schemas --type profile --format table
+    """
+    validated_type = validate_entity_type(type_) if type_ is not None else None
+    workspace = get_workspace(ctx)
+    schemas = workspace.lexicon_schemas(entity_type=validated_type)
+    data = [
+        {
+            "entity_type": s.entity_type,
+            "name": s.name,
+            "property_count": len(s.schema_json.properties),
+            "description": s.schema_json.description,
+        }
+        for s in schemas
+    ]
+    output_result(
+        ctx,
+        data,
+        columns=["entity_type", "name", "property_count", "description"],
+        format=format,
+    )
+
+
+@inspect_app.command("lexicon-schema")
+@handle_errors
+def inspect_lexicon_schema(
+    ctx: typer.Context,
+    type_: Annotated[
+        str,
+        typer.Option(
+            "--type", "-t", help="Entity type: event, profile, custom_event, etc."
+        ),
+    ],
+    name: Annotated[
+        str,
+        typer.Option("--name", "-n", help="Entity name."),
+    ],
+    format: FormatOption = "json",
+) -> None:
+    """Get a single Lexicon schema from Mixpanel data dictionary.
+
+    Retrieves the full schema definition for a specific event or profile
+    property, including all property definitions and metadata.
+
+    [dim]Examples:[/dim]
+      mp inspect lexicon-schema --type event --name "Purchase"
+      mp inspect lexicon-schema -t event -n "Sign Up"
+      mp inspect lexicon-schema -t profile -n "Plan Type" --format json
+    """
+    validated_type = validate_entity_type(type_)
+    workspace = get_workspace(ctx)
+    schema = workspace.lexicon_schema(validated_type, name)
+    output_result(ctx, schema.to_dict(), format=format)

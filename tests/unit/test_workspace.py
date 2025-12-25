@@ -27,6 +27,8 @@ from mixpanel_data.types import (
     FunnelResult,
     InsightsResult,
     JQLResult,
+    LexiconDefinition,
+    LexiconSchema,
     NumericAverageResult,
     NumericBucketResult,
     NumericSumResult,
@@ -940,6 +942,102 @@ class TestDiscovery:
         finally:
             ws.close()
 
+    def test_lexicon_schemas_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test lexicon_schemas() delegates to discovery service."""
+        ws = workspace_factory()
+        try:
+            mock_discovery = MagicMock()
+            mock_discovery.list_schemas.return_value = [
+                LexiconSchema(
+                    entity_type="event",
+                    name="Purchase",
+                    schema_json=LexiconDefinition(
+                        description="User made a purchase",
+                        properties={},
+                        metadata=None,
+                    ),
+                ),
+                LexiconSchema(
+                    entity_type="event",
+                    name="Sign Up",
+                    schema_json=LexiconDefinition(
+                        description="User signed up",
+                        properties={},
+                        metadata=None,
+                    ),
+                ),
+            ]
+            ws._discovery = mock_discovery
+
+            result = ws.lexicon_schemas()
+
+            assert len(result) == 2
+            assert result[0].name == "Purchase"
+            assert result[1].name == "Sign Up"
+            mock_discovery.list_schemas.assert_called_once_with(entity_type=None)
+        finally:
+            ws.close()
+
+    def test_lexicon_schemas_with_entity_type_filter(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test lexicon_schemas() passes entity_type filter to discovery service."""
+        ws = workspace_factory()
+        try:
+            mock_discovery = MagicMock()
+            mock_discovery.list_schemas.return_value = [
+                LexiconSchema(
+                    entity_type="profile",
+                    name="Plan",
+                    schema_json=LexiconDefinition(
+                        description="User subscription plan",
+                        properties={},
+                        metadata=None,
+                    ),
+                ),
+            ]
+            ws._discovery = mock_discovery
+
+            result = ws.lexicon_schemas(entity_type="profile")
+
+            assert len(result) == 1
+            assert result[0].entity_type == "profile"
+            mock_discovery.list_schemas.assert_called_once_with(entity_type="profile")
+        finally:
+            ws.close()
+
+    def test_lexicon_schema_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test lexicon_schema() delegates to discovery service."""
+        ws = workspace_factory()
+        try:
+            mock_discovery = MagicMock()
+            mock_discovery.get_schema.return_value = LexiconSchema(
+                entity_type="event",
+                name="Purchase",
+                schema_json=LexiconDefinition(
+                    description="User made a purchase",
+                    properties={},
+                    metadata=None,
+                ),
+            )
+            ws._discovery = mock_discovery
+
+            result = ws.lexicon_schema("event", "Purchase")
+
+            assert result.entity_type == "event"
+            assert result.name == "Purchase"
+            assert result.schema_json.description == "User made a purchase"
+            mock_discovery.get_schema.assert_called_once_with("event", "Purchase")
+        finally:
+            ws.close()
+
 
 # =============================================================================
 # Phase 8: US6 Query-Only Tests
@@ -1072,7 +1170,7 @@ class TestIntrospection:
                 "CREATE TABLE test_schema (id INTEGER, name VARCHAR)"
             )
 
-            schema = ws.schema("test_schema")
+            schema = ws.table_schema("test_schema")
 
             assert isinstance(schema, TableSchema)
             assert schema.table_name == "test_schema"

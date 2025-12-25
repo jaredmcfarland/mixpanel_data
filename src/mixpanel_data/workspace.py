@@ -55,6 +55,7 @@ from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import (
     ActivityFeedResult,
+    EntityType,
     EventCountsResult,
     FetchResult,
     FrequencyResult,
@@ -62,6 +63,7 @@ from mixpanel_data.types import (
     FunnelResult,
     InsightsResult,
     JQLResult,
+    LexiconSchema,
     NumericAverageResult,
     NumericBucketResult,
     NumericSumResult,
@@ -606,6 +608,71 @@ class Workspace:
         """
         if self._discovery is not None:
             self._discovery.clear_cache()
+
+    # =========================================================================
+    # LEXICON SCHEMA METHODS
+    # =========================================================================
+
+    def lexicon_schemas(
+        self,
+        *,
+        entity_type: EntityType | None = None,
+    ) -> list[LexiconSchema]:
+        """List Lexicon schemas in the project.
+
+        Retrieves documented event and profile property schemas from the
+        Mixpanel Lexicon (data dictionary).
+
+        Results are cached for the lifetime of the Workspace.
+
+        Args:
+            entity_type: Optional filter by type ("event" or "profile").
+                If None, returns all schemas.
+
+        Returns:
+            Alphabetically sorted list of LexiconSchema objects.
+
+        Raises:
+            ConfigError: If API credentials not available.
+            AuthenticationError: If credentials are invalid.
+
+        Note:
+            The Lexicon API has a strict 5 requests/minute rate limit.
+            Caching helps avoid hitting this limit; call clear_discovery_cache()
+            only when fresh data is needed.
+        """
+        return self._discovery_service.list_schemas(entity_type=entity_type)
+
+    def lexicon_schema(
+        self,
+        entity_type: EntityType,
+        name: str,
+    ) -> LexiconSchema:
+        """Get a single Lexicon schema by entity type and name.
+
+        Retrieves a documented schema for a specific event or profile property
+        from the Mixpanel Lexicon (data dictionary).
+
+        Results are cached for the lifetime of the Workspace.
+
+        Args:
+            entity_type: Entity type ("event" or "profile").
+            name: Entity name.
+
+        Returns:
+            LexiconSchema for the specified entity.
+
+        Raises:
+            ConfigError: If API credentials not available.
+            AuthenticationError: If credentials are invalid.
+            QueryError: If schema not found.
+
+        Note:
+            The Lexicon API has a strict 5 requests/minute rate limit.
+            Caching helps avoid hitting this limit; call clear_discovery_cache()
+            only when fresh data is needed.
+        """
+        return self._discovery_service.get_schema(entity_type, name)
 
     # =========================================================================
     # FETCHING METHODS
@@ -1323,8 +1390,8 @@ class Workspace:
         """
         return self._storage.list_tables()
 
-    def schema(self, table: str) -> TableSchema:
-        """Get schema for a table.
+    def table_schema(self, table: str) -> TableSchema:
+        """Get schema for a table in the local database.
 
         Args:
             table: Table name.

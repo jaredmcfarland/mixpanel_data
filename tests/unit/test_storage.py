@@ -253,9 +253,10 @@ def test_create_events_table_handles_large_batches(tmp_path: Path) -> None:
 
     db_path = tmp_path / "test.db"
     with StorageEngine(path=db_path) as storage:
-        # Create 5000 events to test batching
+        # Create 2100 events to test batching (batch size is 2000, so this
+        # creates 2 batches - enough to verify batching works correctly)
         def event_generator() -> Iterator[dict[str, Any]]:
-            for i in range(5000):
+            for i in range(2100):
                 yield {
                     "event_name": "Event",
                     "event_time": datetime.now(UTC),
@@ -279,13 +280,13 @@ def test_create_events_table_handles_large_batches(tmp_path: Path) -> None:
         )
 
         # Verify row count
-        assert row_count == 5000
+        assert row_count == 2100
 
         # Verify data was inserted
         result = storage.connection.execute(
             "SELECT COUNT(*) FROM large_events"
         ).fetchone()
-        assert result == (5000,)
+        assert result == (2100,)
 
 
 def test_create_events_table_raises_error_if_table_exists(tmp_path: Path) -> None:
@@ -577,9 +578,9 @@ def test_create_events_table_invokes_progress_callback(tmp_path: Path) -> None:
 
     db_path = tmp_path / "test.db"
     with StorageEngine(path=db_path) as storage:
-        # Create events generator
+        # Create events generator (2100 events = 2 batches with batch_size=2000)
         def event_generator() -> Iterator[dict[str, Any]]:
-            for i in range(3000):
+            for i in range(2100):
                 yield {
                     "event_name": "Event",
                     "event_time": datetime.now(UTC),
@@ -610,7 +611,7 @@ def test_create_events_table_invokes_progress_callback(tmp_path: Path) -> None:
         assert len(callback_invocations) > 0
 
         # Verify final callback has total row count
-        assert callback_invocations[-1] == total_rows == 3000
+        assert callback_invocations[-1] == total_rows == 2100
 
         # Verify callback was invoked multiple times (batching)
         # With batch size of 2000, we should have at least 2 invocations
@@ -623,9 +624,9 @@ def test_create_profiles_table_invokes_progress_callback(tmp_path: Path) -> None
 
     db_path = tmp_path / "test.db"
     with StorageEngine(path=db_path) as storage:
-        # Create profiles generator
+        # Create profiles generator (500 is enough to verify callback works)
         def profile_generator() -> Iterator[dict[str, Any]]:
-            for i in range(1500):
+            for i in range(500):
                 yield {
                     "distinct_id": f"user_{i}",
                     "properties": {"name": f"User {i}"},
@@ -657,7 +658,7 @@ def test_create_profiles_table_invokes_progress_callback(tmp_path: Path) -> None
         assert len(callback_invocations) > 0
 
         # Verify final callback has total row count
-        assert callback_invocations[-1] == total_rows == 1500
+        assert callback_invocations[-1] == total_rows == 500
 
 
 # =============================================================================

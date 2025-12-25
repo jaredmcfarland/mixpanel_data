@@ -9,12 +9,103 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mixpanel_data.types import FunnelInfo, SavedCohort, TopEvent
+from mixpanel_data.types import (
+    FunnelInfo,
+    LexiconDefinition,
+    LexiconMetadata,
+    LexiconProperty,
+    LexiconSchema,
+    SavedCohort,
+    TopEvent,
+)
 
 if TYPE_CHECKING:
     from mixpanel_data._internal.api_client import MixpanelAPIClient
 
 _logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Lexicon Schema Parser Functions
+# =============================================================================
+
+
+def _parse_lexicon_metadata(data: dict[str, Any] | None) -> LexiconMetadata | None:
+    """Parse Lexicon metadata from API response.
+
+    Extracts Mixpanel-specific metadata from the nested 'com.mixpanel' key
+    in the API response.
+
+    Args:
+        data: Raw metadata dictionary from API response (may contain 'com.mixpanel').
+
+    Returns:
+        LexiconMetadata if data contains 'com.mixpanel', None otherwise.
+    """
+    if data is None:
+        return None
+    mp_data = data.get("com.mixpanel", {})
+    if not mp_data:
+        return None
+    return LexiconMetadata(
+        source=mp_data.get("$source"),
+        display_name=mp_data.get("displayName"),
+        tags=mp_data.get("tags", []),
+        hidden=mp_data.get("hidden", False),
+        dropped=mp_data.get("dropped", False),
+        contacts=mp_data.get("contacts", []),
+        team_contacts=mp_data.get("teamContacts", []),
+    )
+
+
+def _parse_lexicon_property(data: dict[str, Any]) -> LexiconProperty:
+    """Parse a single Lexicon property from API response.
+
+    Args:
+        data: Raw property dictionary from API response.
+
+    Returns:
+        LexiconProperty with type, description, and optional metadata.
+    """
+    return LexiconProperty(
+        type=data.get("type", "string"),
+        description=data.get("description"),
+        metadata=_parse_lexicon_metadata(data.get("metadata")),
+    )
+
+
+def _parse_lexicon_definition(data: dict[str, Any]) -> LexiconDefinition:
+    """Parse Lexicon definition from API response.
+
+    Args:
+        data: Raw schemaJson dictionary from API response.
+
+    Returns:
+        LexiconDefinition with description, properties, and optional metadata.
+    """
+    properties_raw = data.get("properties", {})
+    properties = {k: _parse_lexicon_property(v) for k, v in properties_raw.items()}
+    return LexiconDefinition(
+        description=data.get("description"),
+        properties=properties,
+        metadata=_parse_lexicon_metadata(data.get("metadata")),
+    )
+
+
+def _parse_lexicon_schema(data: dict[str, Any]) -> LexiconSchema:
+    """Parse a complete Lexicon schema from API response.
+
+    Args:
+        data: Raw schema dictionary from API response.
+
+    Returns:
+        LexiconSchema with entity_type, name, and schema_json.
+    """
+    return LexiconSchema(
+        entity_type=data["entityType"],
+        name=data["name"],
+        schema_json=_parse_lexicon_definition(data["schemaJson"]),
+    )
 
 
 class DiscoveryService:
@@ -241,3 +332,75 @@ class DiscoveryService:
         fetch fresh data from the Mixpanel API.
         """
         self._cache = {}
+
+    # =========================================================================
+    # Lexicon Schemas API
+    # =========================================================================
+
+    def list_schemas(
+        self,
+        *,
+        entity_type: str | None = None,
+    ) -> list[LexiconSchema]:
+        """List Lexicon schemas in the project.
+
+        Retrieves documented event and profile property schemas from the
+        Mixpanel Lexicon (data dictionary).
+
+        Args:
+            entity_type: Optional filter by type ("event" or "profile").
+                If None, returns all schemas.
+
+        Returns:
+            Alphabetically sorted list of LexiconSchema objects.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+
+        Note:
+            Results are cached for the lifetime of this service instance.
+        """
+        cache_key = ("list_schemas", entity_type)
+        if cache_key in self._cache:
+            return list(self._cache[cache_key])
+
+        raw = self._api_client.get_schemas(entity_type=entity_type)
+        schemas = sorted(
+            [_parse_lexicon_schema(s) for s in raw],
+            key=lambda x: (x.entity_type, x.name),
+        )
+        self._cache[cache_key] = schemas
+        return list(schemas)
+
+    def get_schema(
+        self,
+        entity_type: str,
+        name: str,
+    ) -> LexiconSchema:
+        """Get a single Lexicon schema by entity type and name.
+
+        Args:
+            entity_type: Entity type ("event" or "profile").
+            name: Entity name.
+
+        Returns:
+            LexiconSchema for the specified entity.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Schema not found.
+
+        Note:
+            Results are cached for the lifetime of this service instance.
+        """
+        cache_key = ("get_schema", entity_type, name)
+        if cache_key in self._cache:
+            cached = self._cache[cache_key]
+            if cached:
+                cached_schema: LexiconSchema = cached[0]
+                return cached_schema
+
+        raw = self._api_client.get_schema(entity_type, name)
+        schema = _parse_lexicon_schema(raw)
+        self._cache[cache_key] = [schema]
+        return schema

@@ -1217,3 +1217,157 @@ class WorkspaceInfo:
             "size_mb": self.size_mb,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+# Lexicon Schemas Types
+
+EntityType = Literal["event", "profile"]
+"""Type alias for Lexicon entity types accepted as input parameters.
+
+Valid input types:
+    - event: Standard tracked events
+    - profile: User profile properties
+
+Note: The Mixpanel API may return additional entity types in responses
+(custom_event, group, lookup, collect_everything_event) which are accepted
+but not supported as input filters.
+"""
+
+
+@dataclass(frozen=True)
+class LexiconMetadata:
+    """Mixpanel-specific metadata for Lexicon schemas and properties.
+
+    Contains platform-specific information about how schemas and properties
+    are displayed and organized in the Mixpanel UI.
+    """
+
+    source: str | None
+    """Origin of the schema definition (e.g., 'api', 'csv', 'ui')."""
+
+    display_name: str | None
+    """Human-readable display name in Mixpanel UI."""
+
+    tags: list[str]
+    """Categorization tags for organization."""
+
+    hidden: bool
+    """Whether hidden from Mixpanel UI."""
+
+    dropped: bool
+    """Whether data is dropped/ignored."""
+
+    contacts: list[str]
+    """Owner email addresses."""
+
+    team_contacts: list[str]
+    """Team ownership labels."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with all metadata fields.
+        """
+        return {
+            "source": self.source,
+            "display_name": self.display_name,
+            "tags": self.tags,
+            "hidden": self.hidden,
+            "dropped": self.dropped,
+            "contacts": self.contacts,
+            "team_contacts": self.team_contacts,
+        }
+
+
+@dataclass(frozen=True)
+class LexiconProperty:
+    """Schema definition for a single property in a Lexicon schema.
+
+    Describes the type and metadata for an event or profile property.
+    """
+
+    type: str
+    """JSON Schema type (string, number, boolean, array, object, integer, null)."""
+
+    description: str | None
+    """Human-readable description of the property."""
+
+    metadata: LexiconMetadata | None
+    """Optional Mixpanel-specific metadata."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with type, and optionally description and metadata.
+        """
+        result: dict[str, Any] = {"type": self.type}
+        if self.description is not None:
+            result["description"] = self.description
+        if self.metadata is not None:
+            result["metadata"] = self.metadata.to_dict()
+        return result
+
+
+@dataclass(frozen=True)
+class LexiconDefinition:
+    """Full schema definition for an event or profile property in Lexicon.
+
+    Contains the structural definition including description, properties,
+    and platform-specific metadata.
+    """
+
+    description: str | None
+    """Human-readable description of the entity."""
+
+    properties: dict[str, LexiconProperty]
+    """Property definitions keyed by property name."""
+
+    metadata: LexiconMetadata | None
+    """Optional Mixpanel-specific metadata for the entity."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with properties, and optionally description and metadata.
+        """
+        result: dict[str, Any] = {
+            "properties": {k: v.to_dict() for k, v in self.properties.items()},
+        }
+        if self.description is not None:
+            result["description"] = self.description
+        if self.metadata is not None:
+            result["metadata"] = self.metadata.to_dict()
+        return result
+
+
+@dataclass(frozen=True)
+class LexiconSchema:
+    """Complete schema definition from Mixpanel Lexicon.
+
+    Represents a documented event or profile property definition
+    from the Mixpanel data dictionary.
+    """
+
+    entity_type: str
+    """Type of entity (e.g., 'event', 'profile', 'custom_event', 'group', etc.)."""
+
+    name: str
+    """Name of the event or profile property."""
+
+    schema_json: LexiconDefinition
+    """Full schema definition."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with entity_type, name, and schema_json.
+        """
+        return {
+            "entity_type": self.entity_type,
+            "name": self.name,
+            "schema_json": self.schema_json.to_dict(),
+        }
