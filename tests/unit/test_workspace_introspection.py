@@ -12,11 +12,14 @@ Tests cover:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+from pydantic import SecretStr
 
 from mixpanel_data import QueryError, TableNotFoundError, Workspace
+from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.types import (
     ColumnStatsResult,
@@ -33,15 +36,34 @@ from mixpanel_data.types import (
 
 
 @pytest.fixture
+def mock_credentials() -> Credentials:
+    """Create mock credentials for testing."""
+    return Credentials(
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        project_id="12345",
+        region="us",
+    )
+
+
+@pytest.fixture
+def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
+    """Create mock ConfigManager that returns credentials."""
+    manager = MagicMock(spec=ConfigManager)
+    manager.resolve_credentials.return_value = mock_credentials
+    return manager
+
+
+@pytest.fixture
 def storage() -> StorageEngine:
     """Create ephemeral storage for testing."""
     return StorageEngine.ephemeral()
 
 
 @pytest.fixture
-def workspace(storage: StorageEngine) -> Workspace:
-    """Create workspace with ephemeral storage."""
-    return Workspace(_storage=storage)
+def workspace(storage: StorageEngine, mock_config_manager: MagicMock) -> Workspace:
+    """Create workspace with ephemeral storage and mocked credentials."""
+    return Workspace(_storage=storage, _config_manager=mock_config_manager)
 
 
 @pytest.fixture
