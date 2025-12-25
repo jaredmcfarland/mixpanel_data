@@ -107,7 +107,53 @@ Fetch a month of events into a local DuckDB database:
     print(f"Fetched {result.row_count} events in {result.duration_seconds:.1f}s")
     ```
 
-## Step 5: Query with SQL
+## Step 5: Inspect Your Fetched Data
+
+Before writing queries, explore what you fetched:
+
+=== "CLI"
+
+    ```bash
+    # See tables in your workspace
+    mp inspect tables
+
+    # Sample a few rows to see the data shape
+    mp inspect sample -t jan_events
+
+    # Understand event distribution
+    mp inspect breakdown -t jan_events
+
+    # Discover queryable property keys
+    mp inspect keys -t jan_events
+    ```
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    # See tables in your workspace
+    for table in ws.tables():
+        print(f"{table.name}: {table.row_count:,} rows")
+
+    # Sample rows to see data shape
+    print(ws.sample("jan_events", n=3))
+
+    # Understand event distribution
+    breakdown = ws.event_breakdown("jan_events")
+    print(f"{breakdown.total_events:,} events from {breakdown.total_users:,} users")
+    for e in breakdown.events[:5]:
+        print(f"  {e.event_name}: {e.count:,} ({e.pct_of_total:.1f}%)")
+
+    # Discover queryable property keys
+    print(ws.property_keys("jan_events"))
+    ```
+
+This tells you what events exist, how they're distributed, and what properties you can query—so your SQL is informed rather than guesswork.
+
+## Step 6: Query with SQL
 
 Analyze the data with SQL:
 
@@ -136,7 +182,7 @@ Analyze the data with SQL:
     print(df)
     ```
 
-## Step 6: Run Live Queries
+## Step 7: Run Live Queries
 
 For real-time analytics, query Mixpanel directly:
 

@@ -133,6 +133,33 @@ All result types are immutable frozen dataclasses with:
       show_root_heading: true
       show_root_toc_entry: true
 
+## Introspection Types
+
+::: mixpanel_data.ColumnSummary
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.SummaryResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.EventStats
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.EventBreakdownResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.ColumnStatsResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Storage Types
 
 ::: mixpanel_data.TableMetadata

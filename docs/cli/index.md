@@ -93,6 +93,11 @@ Explore schema and local database.
 | `mp inspect tables` | List local tables |
 | `mp inspect schema` | Show table schema |
 | `mp inspect drop` | Drop a local table |
+| `mp inspect sample` | Random sample rows from a table |
+| `mp inspect summarize` | Statistical summary of all columns |
+| `mp inspect breakdown` | Event distribution analysis |
+| `mp inspect keys` | Discover JSON property keys |
+| `mp inspect column` | Deep column-level statistics |
 
 ## Output Formats
 

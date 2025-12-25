@@ -29,14 +29,14 @@ from mixpanel_data.cli.utils import ExitCode, err_console
 app = typer.Typer(
     name="mp",
     help="Mixpanel data CLI - fetch, store, and query analytics data.",
-    epilog="""[dim]Two data paths:[/dim]
-  [cyan]Live:[/cyan]  mp query segmentation, mp query funnel (call Mixpanel API directly)
-  [cyan]Local:[/cyan] mp fetch events → mp query sql (store locally, query with SQL)
+    epilog="""Two data paths:
+  Live:  mp query segmentation, mp query funnel (call Mixpanel API directly)
+  Local: mp fetch events → mp query sql (store locally, query with SQL)
 
-[dim]Workflow:[/dim] mp inspect events → mp fetch events → mp query sql""",
+Workflow: mp inspect events → mp fetch events → mp query sql""",
     no_args_is_help=True,
     add_completion=True,
-    rich_markup_mode="rich",
+    rich_markup_mode="markdown",
 )
 
 

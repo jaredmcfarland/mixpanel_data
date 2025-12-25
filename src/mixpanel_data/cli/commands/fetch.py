@@ -29,7 +29,7 @@ fetch_app = typer.Typer(
     name="fetch",
     help="Fetch data from Mixpanel.",
     no_args_is_help=True,
-    rich_markup_mode="rich",
+    rich_markup_mode="markdown",
 )
 
 
@@ -95,13 +95,14 @@ def fetch_events(
 
     Output shows table name, row count, duration, and date range.
 
-    [dim]Examples:[/dim]
-      mp fetch events --from 2025-01-01 --to 2025-01-31
-      mp fetch events signups --from 2025-01-01 --to 2025-01-31 --events "Sign Up"
-      mp fetch events --from 2025-01-01 --to 2025-01-31 --where 'properties["country"]=="US"'
-      mp fetch events --from 2025-01-01 --to 2025-01-31 --replace
-      mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
-      mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout --raw | jq '.event'
+    Examples:
+
+        mp fetch events --from 2025-01-01 --to 2025-01-31
+        mp fetch events signups --from 2025-01-01 --to 2025-01-31 --events "Sign Up"
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --where 'properties["country"]=="US"'
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --replace
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout --raw | jq '.event'
     """
     # Validate required options
     if not from_date:
@@ -206,12 +207,13 @@ def fetch_profiles(
 
     Output shows table name, row count, and fetch duration.
 
-    [dim]Examples:[/dim]
-      mp fetch profiles
-      mp fetch profiles users --replace
-      mp fetch profiles --where 'properties["plan"]=="premium"'
-      mp fetch profiles --stdout
-      mp fetch profiles --stdout --raw
+    Examples:
+
+        mp fetch profiles
+        mp fetch profiles users --replace
+        mp fetch profiles --where 'properties["plan"]=="premium"'
+        mp fetch profiles --stdout
+        mp fetch profiles --stdout --raw
     """
     # Validate --raw only with --stdout
     if raw and not stdout:

@@ -57,5 +57,10 @@ Workspace orchestrates four internal services:
         - table_schema
         - drop
         - drop_all
+        - sample
+        - summarize
+        - event_breakdown
+        - property_keys
+        - column_stats
         - connection
         - api
