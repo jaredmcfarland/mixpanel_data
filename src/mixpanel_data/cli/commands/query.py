@@ -9,7 +9,8 @@ This module provides commands for querying data:
 - event-counts: Multi-event time series
 - property-counts: Property breakdown
 - activity-feed: User activity history
-- insights: Saved Insights reports
+- saved-report: Saved reports (Insights, Retention, Funnel)
+- flows: Saved flows reports
 - frequency: Event frequency distribution
 - segmentation-numeric: Numeric property bucketing
 - segmentation-sum: Numeric sum aggregation
@@ -30,6 +31,7 @@ from mixpanel_data.cli.utils import (
     get_workspace,
     handle_errors,
     output_result,
+    status_spinner,
 )
 from mixpanel_data.cli.validators import (
     validate_count_type,
@@ -45,7 +47,7 @@ query_app = typer.Typer(
 
 Live (calls Mixpanel API):
   segmentation, funnel, retention, jql, event-counts,
-  property-counts, activity-feed, insights, frequency,
+  property-counts, activity-feed, saved-report, flows, frequency,
   segmentation-numeric, segmentation-sum, segmentation-average""",
     no_args_is_help=True,
     rich_markup_mode="markdown",
@@ -160,14 +162,15 @@ def query_segmentation(
     validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
 
-    result = workspace.segmentation(
-        event=event,
-        from_date=from_date,
-        to_date=to_date,
-        on=on,
-        unit=validated_unit,
-        where=where,
-    )
+    with status_spinner(ctx, "Running segmentation query..."):
+        result = workspace.segmentation(
+            event=event,
+            from_date=from_date,
+            to_date=to_date,
+            on=on,
+            unit=validated_unit,
+            where=where,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -214,13 +217,14 @@ def query_funnel(
     """
     workspace = get_workspace(ctx)
 
-    result = workspace.funnel(
-        funnel_id=funnel_id,
-        from_date=from_date,
-        to_date=to_date,
-        unit=unit,
-        on=on,
-    )
+    with status_spinner(ctx, "Running funnel query..."):
+        result = workspace.funnel(
+            funnel_id=funnel_id,
+            from_date=from_date,
+            to_date=to_date,
+            unit=unit,
+            on=on,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -295,17 +299,18 @@ def query_retention(
     actual_interval = interval if interval is not None else 1
     actual_interval_count = intervals if intervals is not None else 10
 
-    result = workspace.retention(
-        born_event=born,
-        return_event=return_event,
-        from_date=from_date,
-        to_date=to_date,
-        born_where=born_where,
-        return_where=return_where,
-        interval=actual_interval,
-        interval_count=actual_interval_count,
-        unit=validated_unit,
-    )
+    with status_spinner(ctx, "Running retention query..."):
+        result = workspace.retention(
+            born_event=born,
+            return_event=return_event,
+            from_date=from_date,
+            to_date=to_date,
+            born_where=born_where,
+            return_where=return_where,
+            interval=actual_interval,
+            interval_count=actual_interval_count,
+            unit=validated_unit,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -364,10 +369,11 @@ def query_jql(
 
     workspace = get_workspace(ctx)
 
-    result = workspace.jql(
-        script=jql_script,
-        params=params if params else None,
-    )
+    with status_spinner(ctx, "Running JQL query..."):
+        result = workspace.jql(
+            script=jql_script,
+            params=params if params else None,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -425,13 +431,14 @@ def query_event_counts(
 
     workspace = get_workspace(ctx)
 
-    result = workspace.event_counts(
-        events=events_list,
-        from_date=from_date,
-        to_date=to_date,
-        type=validated_type,
-        unit=validated_unit,
-    )
+    with status_spinner(ctx, "Running event counts query..."):
+        result = workspace.event_counts(
+            events=events_list,
+            from_date=from_date,
+            to_date=to_date,
+            type=validated_type,
+            unit=validated_unit,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -496,15 +503,16 @@ def query_property_counts(
     validated_unit = validate_time_unit(unit)
     workspace = get_workspace(ctx)
 
-    result = workspace.property_counts(
-        event=event,
-        property_name=property_name,
-        from_date=from_date,
-        to_date=to_date,
-        type=validated_type,
-        unit=validated_unit,
-        limit=limit,
-    )
+    with status_spinner(ctx, "Running property counts query..."):
+        result = workspace.property_counts(
+            event=event,
+            property_name=property_name,
+            from_date=from_date,
+            to_date=to_date,
+            type=validated_type,
+            unit=validated_unit,
+            limit=limit,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -549,42 +557,77 @@ def query_activity_feed(
 
     workspace = get_workspace(ctx)
 
-    result = workspace.activity_feed(
-        distinct_ids=user_list,
-        from_date=from_date,
-        to_date=to_date,
-    )
+    with status_spinner(ctx, "Fetching activity feed..."):
+        result = workspace.activity_feed(
+            distinct_ids=user_list,
+            from_date=from_date,
+            to_date=to_date,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
 
-@query_app.command("insights")
+@query_app.command("saved-report")
 @handle_errors
-def query_insights(
+def query_saved_report(
     ctx: typer.Context,
     bookmark_id: Annotated[
         int,
-        typer.Argument(help="Saved Insights report bookmark ID."),
+        typer.Argument(help="Saved report bookmark ID."),
     ],
     format: FormatOption = "json",
 ) -> None:
-    """Query a saved Insights report by bookmark ID.
+    """Query a saved report (Insights, Retention, or Funnel) by bookmark ID.
 
-    Retrieves data from a saved Insights report in Mixpanel. The bookmark_id
-    can be found in the URL when viewing an Insights report (the numeric ID
-    after /insights/).
+    Retrieves data from a saved report in Mixpanel. The bookmark_id
+    can be found in the URL when viewing a report (the numeric ID
+    after /insights/, /retention/, or /funnels/).
 
+    The report type is automatically detected from the response headers.
     Output includes bookmark_id, computed_at timestamp, date_range, headers
-    (column names), and series data matching the saved report configuration.
+    (column names), series data, and report_type.
 
     Examples:
 
-        mp query insights 12345
-        mp query insights 12345 --format table
+        mp query saved-report 12345
+        mp query saved-report 12345 --format table
     """
     workspace = get_workspace(ctx)
 
-    result = workspace.insights(bookmark_id=bookmark_id)
+    with status_spinner(ctx, "Querying saved report..."):
+        result = workspace.query_saved_report(bookmark_id=bookmark_id)
+
+    output_result(ctx, result.to_dict(), format=format)
+
+
+@query_app.command("flows")
+@handle_errors
+def query_flows(
+    ctx: typer.Context,
+    bookmark_id: Annotated[
+        int,
+        typer.Argument(help="Saved flows report bookmark ID."),
+    ],
+    format: FormatOption = "json",
+) -> None:
+    """Query a saved Flows report by bookmark ID.
+
+    Retrieves data from a saved Flows report in Mixpanel. The bookmark_id
+    can be found in the URL when viewing a flows report (the numeric ID
+    after /flows/).
+
+    Flows reports show user paths through a sequence of events with
+    step-by-step conversion rates and path breakdowns.
+
+    Examples:
+
+        mp query flows 12345
+        mp query flows 12345 --format table
+    """
+    workspace = get_workspace(ctx)
+
+    with status_spinner(ctx, "Querying flows report..."):
+        result = workspace.query_flows(bookmark_id=bookmark_id)
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -643,14 +686,15 @@ def query_frequency(
     )
     workspace = get_workspace(ctx)
 
-    result = workspace.frequency(
-        from_date=from_date,
-        to_date=to_date,
-        event=event,
-        unit=validated_unit,
-        addiction_unit=validated_addiction_unit,
-        where=where,
-    )
+    with status_spinner(ctx, "Running frequency query..."):
+        result = workspace.frequency(
+            from_date=from_date,
+            to_date=to_date,
+            event=event,
+            unit=validated_unit,
+            addiction_unit=validated_addiction_unit,
+            where=where,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -714,15 +758,16 @@ def query_segmentation_numeric(
     validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
 
-    result = workspace.segmentation_numeric(
-        event=event,
-        on=on,
-        from_date=from_date,
-        to_date=to_date,
-        type=validated_type,
-        unit=validated_unit,
-        where=where,
-    )
+    with status_spinner(ctx, "Running numeric segmentation..."):
+        result = workspace.segmentation_numeric(
+            event=event,
+            on=on,
+            from_date=from_date,
+            to_date=to_date,
+            type=validated_type,
+            unit=validated_unit,
+            where=where,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -776,14 +821,15 @@ def query_segmentation_sum(
     validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
 
-    result = workspace.segmentation_sum(
-        event=event,
-        on=on,
-        from_date=from_date,
-        to_date=to_date,
-        unit=validated_unit,
-        where=where,
-    )
+    with status_spinner(ctx, "Running sum query..."):
+        result = workspace.segmentation_sum(
+            event=event,
+            on=on,
+            from_date=from_date,
+            to_date=to_date,
+            unit=validated_unit,
+            where=where,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
 
@@ -837,13 +883,14 @@ def query_segmentation_average(
     validated_unit = validate_hour_day_unit(unit)
     workspace = get_workspace(ctx)
 
-    result = workspace.segmentation_average(
-        event=event,
-        on=on,
-        from_date=from_date,
-        to_date=to_date,
-        unit=validated_unit,
-        where=where,
-    )
+    with status_spinner(ctx, "Running average query..."):
+        result = workspace.segmentation_average(
+            event=event,
+            on=on,
+            from_date=from_date,
+            to_date=to_date,
+            unit=validated_unit,
+            where=where,
+        )
 
     output_result(ctx, result.to_dict(), format=format)
