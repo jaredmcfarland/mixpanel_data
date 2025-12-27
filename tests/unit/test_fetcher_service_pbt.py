@@ -18,6 +18,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from mixpanel_data._internal.services.fetcher import (
+    _RESERVED_EVENT_KEYS,
     _transform_event,
     _transform_profile,
 )
@@ -45,10 +46,6 @@ json_values: st.SearchStrategy[Any] = st.recursive(
     ),
     max_leaves=15,
 )
-
-# Reserved keys that _transform_event extracts from properties
-# These should not be randomly generated in property dicts
-_RESERVED_EVENT_KEYS = frozenset({"distinct_id", "time", "$insert_id"})
 
 # Strategy for event property keys (excluding reserved keys)
 event_property_keys = st.text().filter(lambda k: k not in _RESERVED_EVENT_KEYS)

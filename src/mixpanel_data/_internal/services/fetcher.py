@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+# Reserved keys that _transform_event extracts from properties.
+# These are standard Mixpanel fields that become top-level columns in storage.
+_RESERVED_EVENT_KEYS = frozenset({"distinct_id", "time", "$insert_id"})
+
 
 def _transform_event(event: dict[str, Any]) -> dict[str, Any]:
     """Transform API event to storage format.
