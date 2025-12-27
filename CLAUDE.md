@@ -70,7 +70,12 @@ src/mixpanel_data/
 3. Implement until tests pass
 4. Refactor while keeping tests green
 
-**Testing**: New functionality requires tests. Aim for both unit tests (isolated, mocked dependencies) and integration tests (real component interaction).
+**Testing**: New functionality requires tests. Aim for both unit tests (isolated, mocked dependencies) and integration tests (real component interaction). Consider property-based tests for data types and serialization.
+
+**Property-Based Testing**: This project uses [Hypothesis](https://hypothesis.works) for property-based testing. PBT tests verify invariants across randomly generated inputs, catching edge cases that example-based tests miss. Name PBT test files with `_pbt` suffix (e.g., `test_types_pbt.py`). Hypothesis profiles control example counts:
+- `default`: 100 examples (local development)
+- `dev`: 10 examples (fast iteration)
+- `ci`: 200 examples, deterministic (CI/CD)
 
 ## Test-First Development (CRITICAL)
 
@@ -115,6 +120,11 @@ This project uses [just](https://github.com/casey/just) as a command runner:
 | `just` | List all available commands |
 | `just check` | Run all checks (lint, typecheck, test) |
 | `just test` | Run tests (supports args: `just test -k foo`) |
+| `just test-dev` | Run tests with dev Hypothesis profile (fast, 10 examples) |
+| `just test-ci` | Run tests with CI Hypothesis profile (thorough, 200 examples) |
+| `just test-pbt` | Run property-based tests only |
+| `just test-pbt-dev` | Run PBT tests with dev profile |
+| `just test-cov` | Run tests with coverage (fails if below 90%) |
 | `just lint` | Lint code with ruff |
 | `just fmt` | Format code with ruff |
 | `just typecheck` | Type check with mypy |
@@ -126,6 +136,9 @@ just check
 
 # Run specific tests
 just test -k test_name
+
+# Fast iteration on property-based tests
+just test-pbt-dev
 ```
 
 ## Technology Stack
@@ -134,6 +147,7 @@ just test -k test_name
 - Typer (CLI) + Rich (output formatting)
 - DuckDB (embedded analytical database)
 - httpx (HTTP client), Pydantic (validation)
+- Hypothesis (property-based testing)
 - uv (package manager), just (command runner)
 
 ## Reference Documentation
