@@ -25,9 +25,17 @@ from mixpanel_data._internal.config import ConfigManager, Credentials
 # Custom Strategies
 # =============================================================================
 
-# Strategy for secrets that are long enough to not match by coincidence
-# and don't contain the redaction placeholder
-secrets = st.text(min_size=4).filter(lambda s: "***" not in s and s.strip())
+# Fixed field values used in tests - secrets must not be substrings of these
+_FIXED_USERNAME = "test_user"
+_FIXED_PROJECT_ID = "12345"
+_FIXED_REGION = "us"
+_FIXED_VALUES = f"{_FIXED_USERNAME}{_FIXED_PROJECT_ID}{_FIXED_REGION}"
+
+# Strategy for secrets that are long enough to not match by coincidence,
+# don't contain the redaction placeholder, and aren't substrings of fixed field values
+secrets = st.text(min_size=4).filter(
+    lambda s: "***" not in s and s.strip() and s not in _FIXED_VALUES
+)
 
 # Strategy for valid region values
 regions = st.sampled_from(["us", "eu", "in", "US", "EU", "IN"])
@@ -66,10 +74,10 @@ class TestSecretRedactionProperties:
             secret: Any non-trivial secret string.
         """
         creds = Credentials(
-            username="test_user",
+            username=_FIXED_USERNAME,
             secret=SecretStr(secret),
-            project_id="12345",
-            region="us",
+            project_id=_FIXED_PROJECT_ID,
+            region=_FIXED_REGION,
         )
 
         repr_output = repr(creds)
@@ -85,10 +93,10 @@ class TestSecretRedactionProperties:
             secret: Any non-trivial secret string.
         """
         creds = Credentials(
-            username="test_user",
+            username=_FIXED_USERNAME,
             secret=SecretStr(secret),
-            project_id="12345",
-            region="us",
+            project_id=_FIXED_PROJECT_ID,
+            region=_FIXED_REGION,
         )
 
         str_output = str(creds)

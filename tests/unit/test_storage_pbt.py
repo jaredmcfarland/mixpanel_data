@@ -49,8 +49,9 @@ event_properties = st.dictionaries(st.text(), json_values, max_size=10)
 
 # Strategy for identifier strings that DuckDB can handle
 # Excludes null bytes which are invalid in identifiers
+# Excludes surrogate characters (category "Cs") which can't be encoded to UTF-8
 identifier_strings = st.text(
-    alphabet=st.characters(exclude_characters="\x00"),
+    alphabet=st.characters(exclude_characters="\x00", exclude_categories=["Cs"]),
     min_size=1,
     max_size=50,
 )
@@ -165,8 +166,18 @@ class TestQuoteIdentifierProperties:
             assert result[0] == 42
 
     @given(
-        prefix=st.text(max_size=5),
-        suffix=st.text(max_size=5),
+        prefix=st.text(
+            alphabet=st.characters(
+                exclude_characters="\x00", exclude_categories=["Cs"]
+            ),
+            max_size=5,
+        ),
+        suffix=st.text(
+            alphabet=st.characters(
+                exclude_characters="\x00", exclude_categories=["Cs"]
+            ),
+            max_size=5,
+        ),
         num_quotes=st.integers(min_value=1, max_value=3),
     )
     def test_quoted_identifier_handles_embedded_quotes(
@@ -185,8 +196,7 @@ class TestQuoteIdentifierProperties:
         # Build a name with guaranteed embedded quotes
         name = prefix + ('"' * num_quotes) + suffix
 
-        # Filter out null bytes which are invalid
-        assume("\x00" not in name)
+        # Filter out empty names
         assume(len(name) > 0)
 
         quoted = _quote_identifier(name)
@@ -277,8 +287,9 @@ class TestPropertiesJsonRoundtrip:
 
             storage.create_events_table(table_name, iter([event]), metadata)
 
-            # Retrieve and verify
-            df = storage.execute_df(f"SELECT properties FROM {table_name}")
+            # Retrieve and verify (quote table name to handle reserved words like TRUE)
+            quoted_name = _quote_identifier(table_name)
+            df = storage.execute_df(f"SELECT properties FROM {quoted_name}")
             stored_properties = json.loads(df["properties"].iloc[0])
             assert stored_properties == properties
 
