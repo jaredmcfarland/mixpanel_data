@@ -112,8 +112,8 @@ def add_account(
     Examples:
 
         mp auth add production -u myuser -p 12345
-        MP_SECRET=abc123 mp auth add production -u myuser -p 12345
-        echo "abc123" | mp auth add production -u myuser -p 12345 --secret-stdin
+        MP_SECRET=abc123 mp auth add production -u myuser -p 12345  # inline env var
+        echo "$SECRET" | mp auth add production -u myuser -p 12345 --secret-stdin
         mp auth add staging -u myuser -p 12345 -r eu --default
     """
     secret: str | None = None

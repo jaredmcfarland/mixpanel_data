@@ -39,10 +39,10 @@ mp auth test  # Verify connection
 Alternative methods for CI/CD:
 
 ```bash
-# Via environment variable
+# Via inline environment variable (secret is only exposed to this command)
 MP_SECRET=xxx mp auth add production --username sa_xxx --project 12345
 
-# Via stdin
+# Via stdin (useful when secret is already in a variable)
 echo "$SECRET" | mp auth add production --username sa_xxx --project 12345 --secret-stdin
 ```
 
