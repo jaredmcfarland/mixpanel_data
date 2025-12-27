@@ -32,23 +32,35 @@ api_types = st.sampled_from(list(ENDPOINTS["us"].keys()))
 
 # Strategy for non-empty strings suitable for usernames
 # Exclude null bytes which aren't valid in HTTP headers
+# Exclude surrogates (Cs category) which can't be encoded to UTF-8
 usernames = st.text(
-    alphabet=st.characters(exclude_characters="\x00"),
+    alphabet=st.characters(
+        exclude_characters="\x00",
+        exclude_categories=("Cs",),  # type: ignore[arg-type]  # Cs is valid Unicode category
+    ),
     min_size=1,
     max_size=100,
 ).filter(lambda s: s.strip())
 
 # Strategy for secrets (can contain any printable characters including colons)
 # Exclude null bytes for HTTP header compatibility
+# Exclude surrogates (Cs category) which can't be encoded to UTF-8
 secrets = st.text(
-    alphabet=st.characters(exclude_characters="\x00"),
+    alphabet=st.characters(
+        exclude_characters="\x00",
+        exclude_categories=("Cs",),  # type: ignore[arg-type]  # Cs is valid Unicode category
+    ),
     min_size=1,
     max_size=100,
 ).filter(lambda s: s.strip())
 
 # Strategy for project IDs
+# Exclude surrogates (Cs category) which can't be encoded to UTF-8
 project_ids = st.text(
-    alphabet=st.characters(exclude_characters="\x00"),
+    alphabet=st.characters(
+        exclude_characters="\x00",
+        exclude_categories=("Cs",),  # type: ignore[arg-type]  # Cs is valid Unicode category
+    ),
     min_size=1,
     max_size=50,
 ).filter(lambda s: s.strip())
@@ -120,12 +132,18 @@ class TestAuthHeaderProperties:
 
     @given(
         prefix=st.text(
-            alphabet=st.characters(exclude_characters="\x00"),
+            alphabet=st.characters(
+                exclude_characters="\x00",
+                exclude_categories=("Cs",),  # type: ignore[arg-type]  # Cs is valid
+            ),
             min_size=1,
             max_size=20,
         ).filter(lambda s: s.strip()),
         suffix=st.text(
-            alphabet=st.characters(exclude_characters="\x00"),
+            alphabet=st.characters(
+                exclude_characters="\x00",
+                exclude_categories=("Cs",),  # type: ignore[arg-type]  # Cs is valid
+            ),
             max_size=20,
         ),
         secret=secrets,

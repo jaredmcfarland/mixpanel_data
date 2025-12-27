@@ -29,19 +29,34 @@ from mixpanel_data._internal.config import ConfigManager, Credentials
 _FIXED_USERNAME = "test_user"
 _FIXED_PROJECT_ID = "12345"
 _FIXED_REGION = "us"
-_FIXED_VALUES = {_FIXED_USERNAME, _FIXED_PROJECT_ID, _FIXED_REGION}
+# Include "Credentials" to avoid false positives where secret is substring of class name
+_FIXED_VALUES = {_FIXED_USERNAME, _FIXED_PROJECT_ID, _FIXED_REGION, "Credentials"}
+
+# Strategy for valid UTF-8 text (excludes surrogates which can't be encoded)
+_valid_utf8_text = st.text(
+    alphabet=st.characters(
+        exclude_categories=("Cs",)  # type: ignore[arg-type]  # Cs is valid Unicode category
+    ),
+)
 
 # Strategy for secrets that are long enough to not match by coincidence,
-# don't contain the redaction placeholder, and don't equal fixed field values
-secrets = st.text(min_size=4).filter(
-    lambda s: "***" not in s and s.strip() and s not in _FIXED_VALUES
+# don't contain the redaction placeholder, and aren't substrings of fixed field values
+secrets = _valid_utf8_text.filter(
+    lambda s: (
+        len(s) >= 4
+        and "***" not in s
+        and s.strip()
+        and s not in _FIXED_VALUES
+        and not any(s in v for v in _FIXED_VALUES)  # Not a substring of fixed values
+    )
 )
 
 # Strategy for valid region values
 regions = st.sampled_from(["us", "eu", "in", "US", "EU", "IN"])
 
 # Strategy for non-empty strings suitable for usernames/project_ids
-non_empty_strings = st.text(min_size=1).filter(lambda s: s.strip())
+# Uses valid UTF-8 text to avoid encoding issues in TOML serialization
+non_empty_strings = _valid_utf8_text.filter(lambda s: len(s) >= 1 and s.strip())
 
 # Strategy for valid account names (non-empty, TOML-safe)
 # Avoid extremely problematic characters for TOML keys
