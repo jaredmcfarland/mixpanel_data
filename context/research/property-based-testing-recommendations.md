@@ -25,8 +25,8 @@ def test_sort_properties(xs):
     assert len(result) == len(xs)
     # Property 2: Output is sorted
     assert all(result[i] <= result[i+1] for i in range(len(result)-1))
-    # Property 3: Output is a permutation of input
-    assert sorted(result) == sorted(xs)
+    # Property 3: Output is equivalent to Python's sorted()
+    assert result == sorted(xs)
 ```
 
 The property-based test will automatically generate edge cases like empty lists, single-element lists, lists with duplicates, negative numbers, and extreme values—many of which a developer might forget to test explicitly.

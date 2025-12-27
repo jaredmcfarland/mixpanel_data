@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import base64
 
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from pydantic import SecretStr
 
@@ -57,8 +57,8 @@ project_ids = st.text(
 # Paths can contain any characters valid in URLs
 url_paths = st.text(
     alphabet=st.characters(
-        whitelist_categories=("L", "N", "P"),
-        whitelist_characters="/-_.",
+        categories=("L", "N", "P"),
+        include_characters="/-_.",
     ),
     min_size=1,
     max_size=100,
@@ -276,8 +276,7 @@ class TestBackoffProperties:
             attempt1: First attempt number.
             attempt2: Second attempt number.
         """
-        if attempt1 >= attempt2:
-            return  # Only test when attempt1 < attempt2
+        assume(attempt1 < attempt2)
 
         creds = Credentials(
             username="test",

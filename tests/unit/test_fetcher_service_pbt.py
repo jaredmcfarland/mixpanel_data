@@ -399,12 +399,15 @@ class TestTransformConsistency:
         properties=event_properties,
         distinct_id=distinct_ids,
     )
-    def test_transform_functions_are_pure(
+    def test_transform_preserves_deterministic_fields(
         self,
         properties: dict[str, Any],
         distinct_id: str,
     ) -> None:
-        """Both transform functions should be pure (same input -> same output).
+        """Transform functions preserve deterministic fields across calls.
+
+        Note: insert_id is excluded from comparison since it's randomly
+        generated when $insert_id is missing from input.
 
         Args:
             properties: Arbitrary event properties.
@@ -431,11 +434,11 @@ class TestTransformConsistency:
         result1_profile = _transform_profile(copy.deepcopy(profile))
         result2_profile = _transform_profile(copy.deepcopy(profile))
 
-        # Results should be identical (deterministic)
-        # Note: We need to handle insert_id specially since it's generated
-        # when missing, so we compare properties and other fields
+        # Deterministic fields should be identical across calls
+        # Note: insert_id is excluded since it's randomly generated when missing
         assert result1_event["properties"] == result2_event["properties"]
         assert result1_event["event_name"] == result2_event["event_name"]
         assert result1_event["distinct_id"] == result2_event["distinct_id"]
+        assert result1_event["event_time"] == result2_event["event_time"]
 
         assert result1_profile == result2_profile

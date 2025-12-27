@@ -16,7 +16,7 @@ import io
 import json
 from typing import Any
 
-from hypothesis import assume, given
+from hypothesis import given
 from hypothesis import strategies as st
 
 from mixpanel_data.cli.formatters import (
@@ -221,10 +221,6 @@ class TestFormatCsvProperties:
         Args:
             data: A non-empty list of dictionaries to format as CSV.
         """
-        # Ensure all dicts have at least one common key
-        assume(len(data) > 0)
-        assume(all(len(d) > 0 for d in data))
-
         formatted = format_csv(data)
 
         # Should be parseable without error
@@ -260,9 +256,6 @@ class TestFormatCsvProperties:
         Args:
             data: A non-empty list of dictionaries to format as CSV.
         """
-        assume(len(data) > 0)
-        assume(all(len(d) > 0 for d in data))
-
         formatted = format_csv(data)
         reader = csv.reader(io.StringIO(formatted))
         rows = list(reader)
@@ -300,9 +293,6 @@ class TestFormatCsvProperties:
         Args:
             data: A non-empty list of dictionaries.
         """
-        assume(len(data) > 0)
-        assume(len(data[0]) > 0)
-
         formatted = format_csv(data)
         reader = csv.DictReader(io.StringIO(formatted))
         fieldnames = reader.fieldnames
