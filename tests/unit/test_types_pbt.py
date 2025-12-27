@@ -86,6 +86,12 @@ retention_lists = st.lists(
 # Strategy for time units
 time_units = st.sampled_from(["day", "week", "month"])
 
+# Strategy for datetime values (deterministic for reproducibility)
+datetimes = st.datetimes(
+    min_value=datetime(2020, 1, 1),
+    max_value=datetime(2030, 12, 31),
+)
+
 
 # =============================================================================
 # FetchResult Property Tests
@@ -100,9 +106,15 @@ class TestFetchResultProperties:
         rows=st.integers(min_value=0, max_value=10_000_000),
         data_type=st.sampled_from(["events", "profiles"]),
         duration=st.floats(min_value=0.0, max_value=3600.0, allow_nan=False),
+        fetched_at=datetimes,
     )
     def test_to_dict_always_json_serializable(
-        self, table: str, rows: int, data_type: str, duration: float
+        self,
+        table: str,
+        rows: int,
+        data_type: str,
+        duration: float,
+        fetched_at: datetime,
     ) -> None:
         """to_dict() output should always be JSON-serializable."""
         result = FetchResult(
@@ -111,7 +123,7 @@ class TestFetchResultProperties:
             type=data_type,  # type: ignore[arg-type]
             duration_seconds=duration,
             date_range=None,
-            fetched_at=datetime.now(),
+            fetched_at=fetched_at,
         )
 
         # Should not raise
@@ -122,9 +134,10 @@ class TestFetchResultProperties:
     @given(
         table=table_names,
         rows=st.integers(min_value=0, max_value=1000),
+        fetched_at=datetimes,
     )
     def test_df_returns_dataframe_with_consistent_length(
-        self, table: str, rows: int
+        self, table: str, rows: int, fetched_at: datetime
     ) -> None:
         """df property should return DataFrame matching data length."""
         data = [{"col": i} for i in range(rows)]
@@ -134,15 +147,17 @@ class TestFetchResultProperties:
             type="events",
             duration_seconds=1.0,
             date_range=None,
-            fetched_at=datetime.now(),
+            fetched_at=fetched_at,
             _data=data,
         )
 
         df = result.df
         assert len(df) == rows
 
-    @given(table=table_names)
-    def test_df_cached_returns_same_object(self, table: str) -> None:
+    @given(table=table_names, fetched_at=datetimes)
+    def test_df_cached_returns_same_object(
+        self, table: str, fetched_at: datetime
+    ) -> None:
         """Repeated df access should return the same cached object."""
         result = FetchResult(
             table=table,
@@ -150,7 +165,7 @@ class TestFetchResultProperties:
             type="events",
             duration_seconds=1.0,
             date_range=None,
-            fetched_at=datetime.now(),
+            fetched_at=fetched_at,
         )
 
         df1 = result.df
@@ -438,8 +453,8 @@ class TestJQLResultProperties:
 class TestCrossTypeInvariants:
     """Tests for properties that should hold across all result types."""
 
-    @given(st.integers(min_value=0, max_value=100))
-    def test_all_types_support_empty_data(self, _seed: int) -> None:
+    @given(fetched_at=datetimes)
+    def test_all_types_support_empty_data(self, fetched_at: datetime) -> None:
         """All result types should handle empty data gracefully."""
         # Create instances with empty/minimal data
         fetch = FetchResult(
@@ -448,7 +463,7 @@ class TestCrossTypeInvariants:
             type="events",
             duration_seconds=0,
             date_range=None,
-            fetched_at=datetime.now(),
+            fetched_at=fetched_at,
         )
         seg = SegmentationResult(
             event="e",
@@ -959,6 +974,7 @@ class TestActivityFeedResultProperties:
         from_date=st.one_of(st.none(), date_strings),
         to_date=st.one_of(st.none(), date_strings),
         event_count=st.integers(min_value=0, max_value=10),
+        event_time=datetimes,
     )
     def test_to_dict_always_json_serializable(
         self,
@@ -966,12 +982,13 @@ class TestActivityFeedResultProperties:
         from_date: str | None,
         to_date: str | None,
         event_count: int,
+        event_time: datetime,
     ) -> None:
         """to_dict() output should always be JSON-serializable."""
         events = [
             UserEvent(
                 event=f"Event_{i}",
-                time=datetime.now(),
+                time=event_time,
                 properties={"$distinct_id": distinct_ids[0]},
             )
             for i in range(event_count)
@@ -989,13 +1006,15 @@ class TestActivityFeedResultProperties:
         assert isinstance(json_str, str)
         assert data["event_count"] == event_count
 
-    @given(event_count=st.integers(min_value=0, max_value=20))
-    def test_df_row_count_matches_events(self, event_count: int) -> None:
+    @given(event_count=st.integers(min_value=0, max_value=20), event_time=datetimes)
+    def test_df_row_count_matches_events(
+        self, event_count: int, event_time: datetime
+    ) -> None:
         """DataFrame row count should equal number of events."""
         events = [
             UserEvent(
                 event=f"Event_{i}",
-                time=datetime.now(),
+                time=event_time,
                 properties={"$distinct_id": "user_1"},
             )
             for i in range(event_count)
@@ -1217,19 +1236,24 @@ class TestEventBreakdownResultProperties:
         total_events=st.integers(min_value=0, max_value=10_000_000),
         total_users=st.integers(min_value=0, max_value=1_000_000),
         event_count=st.integers(min_value=0, max_value=10),
+        timestamp=datetimes,
     )
     def test_to_dict_always_json_serializable(
-        self, table: str, total_events: int, total_users: int, event_count: int
+        self,
+        table: str,
+        total_events: int,
+        total_users: int,
+        event_count: int,
+        timestamp: datetime,
     ) -> None:
         """to_dict() output should always be JSON-serializable."""
-        now = datetime.now()
         events = [
             EventStats(
                 event_name=f"Event_{i}",
                 count=total_events // max(1, event_count),
                 unique_users=total_users // max(1, event_count),
-                first_seen=now,
-                last_seen=now,
+                first_seen=timestamp,
+                last_seen=timestamp,
                 pct_of_total=100.0 / max(1, event_count),
             )
             for i in range(event_count)
@@ -1239,7 +1263,7 @@ class TestEventBreakdownResultProperties:
             table=table,
             total_events=total_events,
             total_users=total_users,
-            date_range=(now, now),
+            date_range=(timestamp, timestamp),
             events=events,
         )
 
@@ -1248,17 +1272,18 @@ class TestEventBreakdownResultProperties:
         assert isinstance(json_str, str)
         assert len(data["events"]) == event_count
 
-    @given(event_count=st.integers(min_value=0, max_value=20))
-    def test_df_row_count_matches_events(self, event_count: int) -> None:
+    @given(event_count=st.integers(min_value=0, max_value=20), timestamp=datetimes)
+    def test_df_row_count_matches_events(
+        self, event_count: int, timestamp: datetime
+    ) -> None:
         """DataFrame row count should equal number of event types."""
-        now = datetime.now()
         events = [
             EventStats(
                 event_name=f"Event_{i}",
                 count=100,
                 unique_users=50,
-                first_seen=now,
-                last_seen=now,
+                first_seen=timestamp,
+                last_seen=timestamp,
                 pct_of_total=10.0,
             )
             for i in range(event_count)
@@ -1268,7 +1293,7 @@ class TestEventBreakdownResultProperties:
             table="test_table",
             total_events=1000,
             total_users=100,
-            date_range=(now, now),
+            date_range=(timestamp, timestamp),
             events=events,
         )
 
@@ -1440,6 +1465,7 @@ class TestHelperTypeProperties:
 
     @given(
         event=event_names,
+        event_time=datetimes,
         properties=st.dictionaries(
             keys=st.text(min_size=1, max_size=20),
             values=st.one_of(
@@ -1454,10 +1480,10 @@ class TestHelperTypeProperties:
         ),
     )
     def test_user_event_to_dict_json_serializable(
-        self, event: str, properties: dict[str, object]
+        self, event: str, event_time: datetime, properties: dict[str, object]
     ) -> None:
         """UserEvent.to_dict() should always be JSON-serializable."""
-        result = UserEvent(event=event, time=datetime.now(), properties=properties)
+        result = UserEvent(event=event, time=event_time, properties=properties)
         data = result.to_dict()
         json_str = json.dumps(data)
         assert isinstance(json_str, str)
