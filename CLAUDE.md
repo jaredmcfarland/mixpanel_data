@@ -51,43 +51,81 @@ src/mixpanel_data/
     └── utils.py             # Error handling, console helpers
 ```
 
-## Code Style
+## Code Quality Standards (STRICT)
 
-**Type Safety**: All code must be fully typed and pass `mypy --strict`. No `Any` types without explicit justification. Use `Literal` types for constrained string values.
+This project enforces strict standards. CI will reject code that doesn't meet them.
 
-**Documentation**: Every class, method, and function—public and private—requires a complete docstring:
-- One-line summary
-- Args section with type and description for each parameter
-- Returns section describing the return value
-- Raises section listing exceptions that may be raised
-- Example section where usage isn't immediately obvious
+### Type Safety (STRICT)
 
-**Formatting & Linting**: Code must pass `ruff format` and `ruff check`. Run `just check` before committing to verify all standards are met.
+All code must be fully typed and pass `mypy --strict`. This is non-negotiable:
+- No `Any` types without explicit justification
+- Use `Literal` types for constrained string values
+- All function signatures must have complete type annotations
+- All return types must be explicitly declared
 
-**Development Approach**: This project uses spec-driven development and test-first (TDD):
-1. Define behavior in specs/design docs before implementation
-2. Write tests that capture expected behavior
-3. Implement until tests pass
-4. Refactor while keeping tests green
+### Formatting & Linting (STRICT)
 
-**Testing**: New functionality requires tests. Aim for both unit tests (isolated, mocked dependencies) and integration tests (real component interaction). Consider property-based tests for data types and serialization.
+Code must pass `ruff format` and `ruff check`. Run `just check` before committing:
+- Zero tolerance for lint errors
+- Consistent formatting enforced by pre-commit hooks
+- CI will fail on any violation
 
-**Property-Based Testing**: This project uses [Hypothesis](https://hypothesis.works) for property-based testing. PBT tests verify invariants across randomly generated inputs, catching edge cases that example-based tests miss. Name PBT test files with `_pbt` suffix (e.g., `test_types_pbt.py`). Hypothesis profiles control example counts:
-- `default`: 100 examples (local development)
-- `dev`: 10 examples (fast iteration)
-- `ci`: 200 examples, deterministic (CI/CD)
+### Documentation (STRICT)
 
-## Test-First Development (CRITICAL)
+**Every class, method, and function requires a complete docstring. No exceptions.**
 
-**Follow TDD strictly:**
-1. **Write tests BEFORE implementation** — Tests define expected behavior
-2. **Study existing patterns FIRST** — Before writing any new test, read existing tests for the same module to understand established conventions, fixtures, and mocking strategies
-3. **Tests must pass in CI** — Never assume local success means CI success; local environments often have configuration that CI lacks
+This applies to:
+- Public API methods and classes
+- Private/internal methods (prefixed with `_`)
+- Module-level functions
+- Helper functions
+- Test fixtures and test methods
 
-**When adding tests for existing modules:**
+Required docstring sections:
+- **Summary**: One-line description of what it does
+- **Args**: Every parameter with type and description
+- **Returns**: What the function returns and when
+- **Raises**: All exceptions that may be raised
+- **Example**: Usage example where behavior isn't immediately obvious
+
+Undocumented code will not pass code review.
+
+## Test-Driven Development (STRICT)
+
+This project follows **strict TDD**. Tests are not optional or an afterthought.
+
+### The TDD Workflow
+
+1. **Write tests FIRST** — Before any implementation code
+2. **Tests define behavior** — The test is the specification
+3. **Implement until tests pass** — Only write code to make tests green
+4. **Refactor with confidence** — Tests protect against regressions
+
+### TDD Rules (Non-Negotiable)
+
+- **Never write implementation code without a failing test first**
+- **Study existing test patterns** — Before writing any new test, read existing tests for the same module to understand established conventions, fixtures, and mocking strategies
+- **Tests must pass in CI** — Never assume local success means CI success; local environments often have configuration that CI lacks
+- **Coverage minimum: 90%** — CI fails if coverage drops below this threshold
+
+### When Adding Tests
+
 - Find and read the corresponding test file (e.g., `test_workspace.py` for `workspace.py`)
 - Copy fixture patterns and mocking approaches exactly
 - Use the same naming conventions and test organization
+
+### Test Types
+
+- **Unit tests**: Isolated, mocked dependencies
+- **Integration tests**: Real component interaction
+- **Property-based tests**: Invariants verified across random inputs (use Hypothesis)
+
+### Property-Based Testing
+
+This project uses [Hypothesis](https://hypothesis.works) for property-based testing. PBT tests verify invariants across randomly generated inputs, catching edge cases that example-based tests miss. Name PBT test files with `_pbt` suffix (e.g., `test_types_pbt.py`). Hypothesis profiles control example counts:
+- `default`: 100 examples (local development)
+- `dev`: 10 examples (fast iteration)
+- `ci`: 200 examples, deterministic (CI/CD)
 
 ## Key Design Decisions
 
