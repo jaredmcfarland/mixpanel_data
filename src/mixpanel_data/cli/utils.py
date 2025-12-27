@@ -124,7 +124,7 @@ def handle_errors(func: F) -> F:
     return wrapper  # type: ignore[return-value]
 
 
-def get_workspace(ctx: typer.Context, *, read_only: bool = True) -> Workspace:
+def get_workspace(ctx: typer.Context, *, read_only: bool = False) -> Workspace:
     """Get or create workspace from context.
 
     Lazily initializes a Workspace instance, respecting the --account
@@ -136,9 +136,10 @@ def get_workspace(ctx: typer.Context, *, read_only: bool = True) -> Workspace:
 
     Args:
         ctx: Typer context with global options in obj dict.
-        read_only: If True (default), open database in read-only mode
-            allowing concurrent reads. Pass False for commands that
-            modify the database (fetch, drop).
+        read_only: If True, open database in read-only mode allowing
+            concurrent reads. Defaults to False (write access) matching
+            DuckDB's native behavior. Pass True for read-only commands
+            (query, inspect) to enable concurrent access.
 
     Returns:
         Configured Workspace instance.

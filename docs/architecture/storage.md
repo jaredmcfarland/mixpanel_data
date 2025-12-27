@@ -160,11 +160,14 @@ Within a single Python process, multiple `Workspace` instances can share the sam
 
 ### Read-Only Mode
 
-`StorageEngine` supports read-only connections for future optimization:
+Both `StorageEngine` and `Workspace` support a `read_only` parameter:
 
 ```python
-# Internal API - not currently exposed via Workspace
-storage = StorageEngine(path=db_path, read_only=True)
+# Default: write access (matches DuckDB's native behavior)
+ws = Workspace()  # read_only=False
+
+# Explicit read-only for concurrent access
+ws = Workspace(path="data.db", read_only=True)
 ```
 
 Read-only connections:
@@ -172,6 +175,11 @@ Read-only connections:
 - Allow concurrent reads while a write lock is held (by another process)
 - Cannot execute INSERT, UPDATE, DELETE, or DDL statements
 - Useful for query-only workflows
+
+The CLI uses this automatically:
+
+- **Read commands** (`mp query`, `mp inspect tables`, etc.) use `read_only=True`
+- **Write commands** (`mp fetch`, `mp inspect drop`) use `read_only=False`
 
 ## See Also
 

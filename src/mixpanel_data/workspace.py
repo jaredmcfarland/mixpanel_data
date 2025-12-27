@@ -131,7 +131,7 @@ class Workspace:
         project_id: str | None = None,
         region: str | None = None,
         path: str | Path | None = None,
-        read_only: bool = True,
+        read_only: bool = False,
         # Dependency injection for testing
         _config_manager: ConfigManager | None = None,
         _api_client: MixpanelAPIClient | None = None,

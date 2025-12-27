@@ -78,7 +78,7 @@ class StorageEngine:
         self,
         path: Path | None = None,
         *,
-        read_only: bool = True,
+        read_only: bool = False,
         _ephemeral: bool = False,
         _in_memory: bool = False,
     ) -> None:

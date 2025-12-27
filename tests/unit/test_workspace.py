@@ -1839,20 +1839,20 @@ class TestReadOnlyMode:
         finally:
             ws.close()
 
-    def test_workspace_default_is_read_only(
+    def test_workspace_default_is_not_read_only(
         self,
         mock_config_manager: MagicMock,
         mock_api_client: MagicMock,
         tmp_path: Path,
     ) -> None:
-        """Workspace should default to read-only for concurrent read access."""
+        """Workspace should default to write access matching DuckDB behavior."""
         ws = Workspace(
             path=tmp_path / "test.db",
             _config_manager=mock_config_manager,
             _api_client=mock_api_client,
         )
         try:
-            assert ws._read_only is True
+            assert ws._read_only is False
         finally:
             ws.close()
 

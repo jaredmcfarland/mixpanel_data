@@ -197,7 +197,7 @@ class TestGetWorkspace:
 
             result = get_workspace(ctx)
 
-            MockWorkspace.assert_called_once_with(account=None, read_only=True)
+            MockWorkspace.assert_called_once_with(account=None, read_only=False)
             assert result == mock_ws
             assert ctx.obj["workspace"] == mock_ws
 
@@ -221,7 +221,7 @@ class TestGetWorkspace:
         with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
             get_workspace(ctx)
 
-            MockWorkspace.assert_called_once_with(account="staging", read_only=True)
+            MockWorkspace.assert_called_once_with(account="staging", read_only=False)
 
 
 class TestGetConfig:
