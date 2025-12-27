@@ -61,14 +61,14 @@ date_strings = st.dates().map(lambda d: d.strftime("%Y-%m-%d"))
 
 # Strategy for event names (non-empty printable strings)
 event_names = st.text(
-    alphabet=st.characters(whitelist_categories=("L", "N", "P", "S")),
+    alphabet=st.characters(categories=("L", "N", "P", "S")),
     min_size=1,
     max_size=50,
 ).filter(lambda s: s.strip())
 
 # Strategy for table names (valid identifiers)
 table_names = st.text(
-    alphabet=st.characters(whitelist_categories=("L", "N")),
+    alphabet=st.characters(categories=("L", "N")),
     min_size=1,
     max_size=30,
 ).filter(lambda s: s and s[0].isalpha())
@@ -277,8 +277,8 @@ class TestFunnelResultProperties:
         steps = [
             FunnelStep(
                 event=f"Step {i}",
-                count=1000 - i * 100,
-                conversion_rate=1.0 - i * 0.1,
+                count=max(0, 1000 - i * 100),
+                conversion_rate=max(0.0, 1.0 - i * 0.1),
             )
             for i in range(step_count)
         ]
@@ -453,9 +453,12 @@ class TestJQLResultProperties:
 class TestCrossTypeInvariants:
     """Tests for properties that should hold across all result types."""
 
-    @given(fetched_at=datetimes)
-    def test_all_types_support_empty_data(self, fetched_at: datetime) -> None:
-        """All result types should handle empty data gracefully."""
+    def test_all_types_support_empty_data(self) -> None:
+        """All result types should handle empty data gracefully.
+
+        Note: This is a regular unit test, not property-based, because empty data
+        is a fixed scenario that doesn't benefit from randomized inputs.
+        """
         # Create instances with empty/minimal data
         fetch = FetchResult(
             table="t",
@@ -463,7 +466,7 @@ class TestCrossTypeInvariants:
             type="events",
             duration_seconds=0,
             date_range=None,
-            fetched_at=fetched_at,
+            fetched_at=datetime(2024, 1, 1),
         )
         seg = SegmentationResult(
             event="e",
@@ -1113,7 +1116,8 @@ class TestFlowsResultProperties:
     ) -> None:
         """to_dict() output should always be JSON-serializable."""
         steps = [
-            {"event": f"Step_{i}", "count": 100 - i * 10} for i in range(step_count)
+            {"event": f"Step_{i}", "count": max(0, 100 - i * 10)}
+            for i in range(step_count)
         ]
 
         result = FlowsResult(
