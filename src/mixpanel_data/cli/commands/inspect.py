@@ -1,6 +1,8 @@
 """Schema discovery and local database inspection commands.
 
 This module provides commands for inspecting data:
+
+Live (calls Mixpanel API):
 - events: List event names from Mixpanel
 - properties: List properties for an event
 - values: List values for a property
@@ -8,10 +10,19 @@ This module provides commands for inspecting data:
 - cohorts: List saved cohorts
 - top-events: List today's top events
 - bookmarks: List saved reports (bookmarks)
+- lexicon-schemas: List Lexicon schemas
+- lexicon-schema: Get a single Lexicon schema
+
+Local (uses DuckDB):
 - info: Show workspace information
 - tables: List local tables
 - schema: Show table schema
 - drop: Drop a table
+- sample: Show random sample rows
+- summarize: Show statistical summary
+- breakdown: Show event distribution
+- keys: List JSON property keys
+- column: Show column statistics
 """
 
 from __future__ import annotations
@@ -34,10 +45,11 @@ inspect_app = typer.Typer(
     name="inspect",
     help="Inspect schema and local database.",
     epilog="""Live (calls Mixpanel API):
-  events, properties, values, funnels, cohorts, top-events, bookmarks
+  events, properties, values, funnels, cohorts, top-events, bookmarks,
+  lexicon-schemas, lexicon-schema
 
 Local (uses DuckDB):
-  info, tables, schema, drop""",
+  info, tables, schema, drop, sample, summarize, breakdown, keys, column""",
     no_args_is_help=True,
     rich_markup_mode="markdown",
 )
@@ -478,7 +490,7 @@ def inspect_sample(
         int,
         typer.Option("--rows", "-n", help="Number of rows to sample."),
     ] = 10,
-    format: FormatOption = "table",
+    format: FormatOption = "json",
 ) -> None:
     """Show random sample rows from a table.
 
@@ -505,7 +517,7 @@ def inspect_summarize(
         str,
         typer.Option("--table", "-t", help="Table name."),
     ],
-    format: FormatOption = "table",
+    format: FormatOption = "json",
 ) -> None:
     """Show statistical summary of all columns in a table.
 
@@ -530,7 +542,7 @@ def inspect_breakdown(
         str,
         typer.Option("--table", "-t", help="Table name."),
     ],
-    format: FormatOption = "table",
+    format: FormatOption = "json",
 ) -> None:
     """Show event distribution in a table.
 

@@ -21,5 +21,6 @@ FormatOption = Annotated[
         "--format",
         "-f",
         help="Output format: json, jsonl, table, csv, plain.",
+        show_choices=False,
     ),
 ]
