@@ -12,9 +12,39 @@ check: lint typecheck test
 test *args:
     uv run pytest {{ args }}
 
-# Run tests with coverage
+# Run tests with dev Hypothesis profile (fast, 10 examples)
+test-dev *args:
+    HYPOTHESIS_PROFILE=dev uv run pytest {{ args }}
+
+# Run tests with CI Hypothesis profile (thorough, 200 examples, deterministic)
+test-ci *args:
+    HYPOTHESIS_PROFILE=ci uv run pytest {{ args }}
+
+# Run property-based tests only
+test-pbt *args:
+    uv run pytest -k "_pbt" {{ args }}
+
+# Run property-based tests with dev profile (fast iteration)
+test-pbt-dev *args:
+    HYPOTHESIS_PROFILE=dev uv run pytest -k "_pbt" {{ args }}
+
+# Run property-based tests with CI profile (thorough)
+test-pbt-ci *args:
+    HYPOTHESIS_PROFILE=ci uv run pytest -k "_pbt" {{ args }}
+
+# Run tests with coverage (fails if below 90%)
 test-cov:
-    uv run pytest --cov=src/mixpanel_data --cov-report=term-missing
+    uv run pytest --cov=src/mixpanel_data --cov-report=term-missing --cov-fail-under=90
+
+# === Hypothesis CLI ===
+
+# Refactor deprecated Hypothesis code (e.g., just hypo-codemod src/)
+hypo-codemod *args:
+    uv run hypothesis codemod {{ args }}
+
+# Generate property-based tests for a module (e.g., just hypo-write mixpanel_data.types)
+hypo-write *args:
+    uv run hypothesis write {{ args }}
 
 # Lint code with ruff
 lint *args:
