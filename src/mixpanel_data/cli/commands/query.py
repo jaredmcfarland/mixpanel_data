@@ -100,7 +100,7 @@ def query_sql(
     else:
         sql_query = query  # type: ignore[assignment]
 
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     if scalar:
         result = workspace.sql_scalar(sql_query)
@@ -160,7 +160,7 @@ def query_segmentation(
         mp query segmentation -e "Login" --from 2025-01-01 --to 2025-01-07 --unit week
     """
     validated_unit = validate_time_unit(unit)
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running segmentation query..."):
         result = workspace.segmentation(
@@ -215,7 +215,7 @@ def query_funnel(
         mp query funnel 12345 --from 2025-01-01 --to 2025-01-31 --unit week
         mp query funnel 12345 --from 2025-01-01 --to 2025-01-31 --on country
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running funnel query..."):
         result = workspace.funnel(
@@ -293,7 +293,7 @@ def query_retention(
         mp query retention --born "Sign Up" --return "Login" --from 2025-01-01 --to 2025-01-31 --intervals 7
     """
     validated_unit = validate_time_unit(unit)
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     # Use defaults if not provided
     actual_interval = interval if interval is not None else 1
@@ -367,7 +367,7 @@ def query_jql(
             key, value = p.split("=", 1)
             params[key] = value
 
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running JQL query..."):
         result = workspace.jql(
@@ -429,7 +429,7 @@ def query_event_counts(
     # Parse events
     events_list = [e.strip() for e in events.split(",")]
 
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running event counts query..."):
         result = workspace.event_counts(
@@ -501,7 +501,7 @@ def query_property_counts(
     """
     validated_type = validate_count_type(type_)
     validated_unit = validate_time_unit(unit)
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running property counts query..."):
         result = workspace.property_counts(
@@ -555,7 +555,7 @@ def query_activity_feed(
     # Parse users
     user_list = [u.strip() for u in users.split(",")]
 
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Fetching activity feed..."):
         result = workspace.activity_feed(
@@ -592,7 +592,7 @@ def query_saved_report(
         mp query saved-report 12345
         mp query saved-report 12345 --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Querying saved report..."):
         result = workspace.query_saved_report(bookmark_id=bookmark_id)
@@ -624,7 +624,7 @@ def query_flows(
         mp query flows 12345
         mp query flows 12345 --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Querying flows report..."):
         result = workspace.query_flows(bookmark_id=bookmark_id)
@@ -684,7 +684,7 @@ def query_frequency(
     validated_addiction_unit = validate_hour_day_unit(
         addiction_unit, "--addiction-unit"
     )
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running frequency query..."):
         result = workspace.frequency(
@@ -756,7 +756,7 @@ def query_segmentation_numeric(
     """
     validated_type = validate_count_type(type_)
     validated_unit = validate_hour_day_unit(unit)
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running numeric segmentation..."):
         result = workspace.segmentation_numeric(
@@ -819,7 +819,7 @@ def query_segmentation_sum(
         mp query segmentation-sum -e "Purchase" --on quantity --from 2025-01-01 --to 2025-01-31 --unit hour
     """
     validated_unit = validate_hour_day_unit(unit)
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running sum query..."):
         result = workspace.segmentation_sum(
@@ -881,7 +881,7 @@ def query_segmentation_average(
         mp query segmentation-average -e "Session" --on duration --from 2025-01-01 --to 2025-01-31 --unit hour
     """
     validated_unit = validate_hour_day_unit(unit)
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Running average query..."):
         result = workspace.segmentation_average(

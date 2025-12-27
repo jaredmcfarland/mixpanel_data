@@ -559,6 +559,104 @@ class TableNotFoundError(MixpanelDataError):
         return str(self._details.get("table_name", ""))
 
 
+class DatabaseLockedError(MixpanelDataError):
+    """Database is locked by another process.
+
+    Raised when attempting to access a DuckDB database that is locked
+    by another process. DuckDB uses single-writer, multiple-reader
+    concurrency - only one process can have write access at a time.
+
+    Example:
+        ```python
+        try:
+            ws = Workspace()
+        except DatabaseLockedError as e:
+            print(f"Database {e.db_path} is locked")
+            if e.holding_pid:
+                print(f"Held by PID {e.holding_pid}")
+        ```
+    """
+
+    def __init__(
+        self,
+        db_path: str,
+        holding_pid: int | None = None,
+    ) -> None:
+        """Initialize DatabaseLockedError.
+
+        Args:
+            db_path: Path to the locked database file.
+            holding_pid: Process ID holding the lock, if available.
+        """
+        message = f"Database '{db_path}' is locked by another process"
+        if holding_pid is not None:
+            message += f" (PID {holding_pid})"
+        message += ". Wait for the other operation to complete and try again."
+
+        details: dict[str, str | int] = {
+            "db_path": db_path,
+            "suggestion": "Wait for the other operation to complete and try again.",
+        }
+        if holding_pid is not None:
+            details["holding_pid"] = holding_pid
+
+        super().__init__(message, code="DATABASE_LOCKED", details=details)
+
+    @property
+    def db_path(self) -> str:
+        """Path to the locked database."""
+        return str(self._details.get("db_path", ""))
+
+    @property
+    def holding_pid(self) -> int | None:
+        """Process ID holding the lock, if available."""
+        pid = self._details.get("holding_pid")
+        return int(pid) if pid is not None else None
+
+
+class DatabaseNotFoundError(MixpanelDataError):
+    """Database file does not exist.
+
+    Raised when attempting to open a non-existent database file in read-only
+    mode. DuckDB cannot create a new database file when opened read-only.
+
+    This typically happens when running read-only commands (like `mp query`
+    or `mp inspect tables`) before any data has been fetched.
+
+    Example:
+        ```python
+        try:
+            ws = Workspace(read_only=True)
+        except DatabaseNotFoundError as e:
+            print(f"No data yet: {e.db_path}")
+            print("Run 'mp fetch events' first to create the database.")
+        ```
+    """
+
+    def __init__(self, db_path: str) -> None:
+        """Initialize DatabaseNotFoundError.
+
+        Args:
+            db_path: Path to the database file that doesn't exist.
+        """
+        message = (
+            f"Database '{db_path}' does not exist. "
+            "Run 'mp fetch events' first to create it."
+        )
+
+        details: dict[str, str] = {
+            "db_path": db_path,
+            "suggestion": "Run 'mp fetch events' or 'mp fetch profiles' to create the database.",
+        }
+
+        super().__init__(message, code="DATABASE_NOT_FOUND", details=details)
+
+    @property
+    def db_path(self) -> str:
+        """Path to the database file that doesn't exist."""
+        return str(self._details.get("db_path", ""))
+
+
 # JQL Exceptions
 
 

@@ -19,7 +19,13 @@ from typing import Any
 import duckdb
 import pandas as pd
 
-from mixpanel_data.exceptions import QueryError, TableExistsError, TableNotFoundError
+from mixpanel_data.exceptions import (
+    DatabaseLockedError,
+    DatabaseNotFoundError,
+    QueryError,
+    TableExistsError,
+    TableNotFoundError,
+)
 from mixpanel_data.types import ColumnInfo, TableInfo, TableMetadata, TableSchema
 
 # Module-level logger for cleanup operations
@@ -73,6 +79,7 @@ class StorageEngine:
         self,
         path: Path | None = None,
         *,
+        read_only: bool = False,
         _ephemeral: bool = False,
         _in_memory: bool = False,
     ) -> None:
@@ -80,6 +87,10 @@ class StorageEngine:
 
         Args:
             path: Path to database file. Required unless _in_memory=True.
+            read_only: Open database in read-only mode. When True, the
+                connection allows SELECT queries but blocks INSERT, UPDATE,
+                DELETE, and DDL operations. Read-only connections can be
+                opened concurrently, enabling parallel query operations.
             _ephemeral: Internal flag to mark database as ephemeral.
                 DO NOT USE DIRECTLY - use StorageEngine.ephemeral() instead.
                 This parameter is keyword-only and prefixed with underscore
@@ -90,11 +101,14 @@ class StorageEngine:
         Raises:
             OSError: If path is invalid or lacks write permissions.
             ValueError: If _ephemeral or _in_memory is used incorrectly.
+            DatabaseLockedError: If database is locked and read_only=False.
+            DatabaseNotFoundError: If read_only=True and database file doesn't exist.
         """
         self._path: Path | None = None
         self._conn: duckdb.DuckDBPyConnection | None = None
         self._is_ephemeral = _ephemeral
         self._is_in_memory = _in_memory
+        self._read_only = read_only
         self._closed = False  # Track if close() was explicitly called
 
         # Validate mutually exclusive flags
@@ -121,6 +135,11 @@ class StorageEngine:
                 ) from None
 
         if path is not None:
+            # Check for read-only access to non-existent file
+            # DuckDB cannot create a new file in read-only mode
+            if read_only and not path.exists():
+                raise DatabaseNotFoundError(str(path))
+
             # Persistent mode: create database at specified path
             try:
                 # Create parent directories if they don't exist
@@ -130,13 +149,26 @@ class StorageEngine:
                 self._path = path
 
                 # Connect to database (creates file if doesn't exist)
-                self._conn = duckdb.connect(database=str(path), read_only=False)
+                self._conn = duckdb.connect(database=str(path), read_only=read_only)
 
                 # Register atexit handler for ephemeral databases
                 if self._is_ephemeral:
                     atexit.register(self._cleanup_ephemeral)
-            except Exception as e:
-                # Wrap any error as OSError for consistency
+            except duckdb.IOException as e:
+                # Check for database lock conflict
+                error_str = str(e)
+                if "Could not set lock" in error_str:
+                    # Best-effort PID extraction from DuckDB error message.
+                    # Format may change across DuckDB versions; we silently
+                    # fall back to None if parsing fails.
+                    # Example: "Conflicting lock is held in ... (PID 12345)"
+                    pid_match = re.search(r"PID (\d+)", error_str)
+                    holding_pid = int(pid_match.group(1)) if pid_match else None
+                    raise DatabaseLockedError(str(path), holding_pid) from e
+                # Other IO errors - wrap as OSError
+                raise OSError(f"Failed to create database at {path}: {e}") from e
+            except OSError as e:
+                # Filesystem errors (permissions, disk full, etc.)
                 raise OSError(f"Failed to create database at {path}: {e}") from e
         else:
             # No path provided - should use ephemeral() or memory() classmethod
@@ -167,8 +199,8 @@ class StorageEngine:
         # File is closed here. Delete it so DuckDB can create it fresh.
         temp_path.unlink()
 
-        # Create storage engine with ephemeral flag
-        storage = cls(path=temp_path, _ephemeral=True)
+        # Create storage engine with ephemeral flag (write access needed)
+        storage = cls(path=temp_path, read_only=False, _ephemeral=True)
 
         return storage
 
@@ -199,14 +231,16 @@ class StorageEngine:
             # Database gone - no cleanup needed
             ```
         """
-        return cls(path=None, _in_memory=True)
+        return cls(path=None, read_only=False, _in_memory=True)
 
     @classmethod
-    def open_existing(cls, path: Path) -> StorageEngine:
+    def open_existing(cls, path: Path, *, read_only: bool = True) -> StorageEngine:
         """Open existing database file.
 
         Args:
             path: Path to existing database file.
+            read_only: If True (default), open in read-only mode allowing
+                concurrent reads. Set to False for write access.
 
         Returns:
             StorageEngine instance.
@@ -225,7 +259,7 @@ class StorageEngine:
             raise FileNotFoundError(f"Database file not found: {path}")
 
         # Open existing database
-        return cls(path=path)
+        return cls(path=path, read_only=read_only)
 
     @property
     def path(self) -> Path | None:
@@ -235,6 +269,19 @@ class StorageEngine:
             Path to database file, or None if not yet initialized.
         """
         return self._path
+
+    @property
+    def read_only(self) -> bool:
+        """Whether the database was opened in read-only mode.
+
+        Read-only connections allow SELECT queries but block INSERT, UPDATE,
+        DELETE, and DDL operations. Multiple read-only connections can access
+        the same database concurrently.
+
+        Returns:
+            True if opened with read_only=True, False otherwise.
+        """
+        return self._read_only
 
     @property
     def connection(self) -> duckdb.DuckDBPyConnection:

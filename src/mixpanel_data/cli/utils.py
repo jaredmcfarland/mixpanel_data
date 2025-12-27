@@ -25,6 +25,8 @@ from mixpanel_data.exceptions import (
     AccountNotFoundError,
     AuthenticationError,
     ConfigError,
+    DatabaseLockedError,
+    DatabaseNotFoundError,
     MixpanelDataError,
     QueryError,
     RateLimitError,
@@ -101,6 +103,16 @@ def handle_errors(func: F) -> F:
         except TableNotFoundError as e:
             err_console.print(f"[red]Table not found:[/red] {e.table_name}")
             raise typer.Exit(ExitCode.NOT_FOUND) from None
+        except DatabaseLockedError as e:
+            err_console.print(f"[yellow]Database locked:[/yellow] {e.db_path}")
+            err_console.print("Another mp command may be running. Try again shortly.")
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from None
+        except DatabaseNotFoundError as e:
+            err_console.print(f"[yellow]No data yet:[/yellow] {e.db_path}")
+            err_console.print(
+                "Run 'mp fetch events' or 'mp fetch profiles' to create the database."
+            )
+            raise typer.Exit(ExitCode.NOT_FOUND) from None
         except RateLimitError as e:
             err_console.print(f"[yellow]Rate limited:[/yellow] {e.message}")
             if e.retry_after:
@@ -119,14 +131,24 @@ def handle_errors(func: F) -> F:
     return wrapper  # type: ignore[return-value]
 
 
-def get_workspace(ctx: typer.Context) -> Workspace:
+def get_workspace(ctx: typer.Context, *, read_only: bool = False) -> Workspace:
     """Get or create workspace from context.
 
     Lazily initializes a Workspace instance, respecting the --account
     global option. The workspace is cached in the context for reuse.
 
+    Note: The read_only parameter only applies when creating a new workspace.
+    If a workspace already exists in context, that instance is returned
+    regardless of the read_only parameter. This is safe because each CLI
+    command runs in a separate process, so caching within a single command
+    invocation doesn't cause read_only mismatches across commands.
+
     Args:
         ctx: Typer context with global options in obj dict.
+        read_only: If True, open database in read-only mode allowing
+            concurrent reads. Defaults to False (write access) matching
+            DuckDB's native behavior. Pass True for read-only commands
+            (query, inspect) to enable concurrent access.
 
     Returns:
         Configured Workspace instance.
@@ -139,7 +161,7 @@ def get_workspace(ctx: typer.Context) -> Workspace:
 
     if "workspace" not in ctx.obj or ctx.obj["workspace"] is None:
         account = ctx.obj.get("account")
-        ctx.obj["workspace"] = Workspace(account=account)
+        ctx.obj["workspace"] = Workspace(account=account, read_only=read_only)
     workspace: Workspace = ctx.obj["workspace"]
     return workspace
 

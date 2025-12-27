@@ -56,7 +56,7 @@ def inspect_events(ctx: typer.Context, format: FormatOption = "json") -> None:
         mp inspect events
         mp inspect events --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching events..."):
         events = workspace.events()
     output_result(ctx, events, format=format)
@@ -82,7 +82,7 @@ def inspect_properties(
         mp inspect properties -e "Sign Up"
         mp inspect properties -e "Purchase" --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching properties..."):
         properties = workspace.properties(event)
     output_result(ctx, properties, format=format)
@@ -117,7 +117,7 @@ def inspect_values(
         mp inspect values -p country -e "Sign Up" --limit 20
         mp inspect values -p browser --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching values..."):
         values = workspace.property_values(
             property_name=property_name,
@@ -140,7 +140,7 @@ def inspect_funnels(ctx: typer.Context, format: FormatOption = "json") -> None:
         mp inspect funnels
         mp inspect funnels --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching funnels..."):
         funnels = workspace.funnels()
     data = [{"funnel_id": f.funnel_id, "name": f.name} for f in funnels]
@@ -160,7 +160,7 @@ def inspect_cohorts(ctx: typer.Context, format: FormatOption = "json") -> None:
         mp inspect cohorts
         mp inspect cohorts --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching cohorts..."):
         cohorts = workspace.cohorts()
     data = [
@@ -203,7 +203,7 @@ def inspect_top_events(
         mp inspect top-events --type unique
     """
     validated_type = validate_count_type(type_)
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching top events..."):
         events = workspace.top_events(type=validated_type, limit=limit)
     data = [
@@ -244,7 +244,7 @@ def inspect_bookmarks(
         mp inspect bookmarks --type insights
         mp inspect bookmarks --type funnels --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
 
     with status_spinner(ctx, "Fetching bookmarks..."):
         bookmarks = workspace.list_bookmarks(bookmark_type=type_)  # type: ignore[arg-type]
@@ -273,7 +273,7 @@ def inspect_info(ctx: typer.Context, format: FormatOption = "json") -> None:
         mp inspect info
         mp inspect info --format json
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     info = workspace.info()
     output_result(ctx, info.to_dict(), format=format)
 
@@ -291,7 +291,7 @@ def inspect_tables(ctx: typer.Context, format: FormatOption = "json") -> None:
         mp inspect tables
         mp inspect tables --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     tables = workspace.tables()
     data = [
         {
@@ -334,7 +334,7 @@ def inspect_schema(
         mp inspect schema -t events --format table
     """
     # Note: _sample is reserved for future implementation
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     schema = workspace.table_schema(table)
 
     data = {
@@ -382,7 +382,7 @@ def inspect_drop(
             err_console.print("[yellow]Cancelled[/yellow]")
             raise typer.Exit(2)
 
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx)  # write access needed for drop
     workspace.drop(table)
 
     output_result(ctx, {"dropped": table}, format=format)
@@ -412,7 +412,7 @@ def inspect_lexicon_schemas(
         mp inspect lexicon-schemas --type profile --format table
     """
     validated_type = validate_entity_type(type_) if type_ is not None else None
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching schemas..."):
         schemas = workspace.lexicon_schemas(entity_type=validated_type)
     data = [
@@ -460,7 +460,7 @@ def inspect_lexicon_schema(
         mp inspect lexicon-schema -t profile -n "Plan Type" --format json
     """
     validated_type = validate_entity_type(type_)
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching schema..."):
         schema = workspace.lexicon_schema(validated_type, name)
     output_result(ctx, schema.to_dict(), format=format)
@@ -490,7 +490,7 @@ def inspect_sample(
         mp inspect sample -t events
         mp inspect sample -t events -n 5 --format json
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     df = workspace.sample(table, n=rows)
     # Convert DataFrame to list of dicts for output
     data = df.to_dict(orient="records")
@@ -517,7 +517,7 @@ def inspect_summarize(
         mp inspect summarize -t events
         mp inspect summarize -t events --format json
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     result = workspace.summarize(table)
     output_result(ctx, result.to_dict(), format=format)
 
@@ -542,7 +542,7 @@ def inspect_breakdown(
         mp inspect breakdown -t events
         mp inspect breakdown -t events --format json
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     result = workspace.event_breakdown(table)
     output_result(ctx, result.to_dict(), format=format)
 
@@ -572,7 +572,7 @@ def inspect_keys(
         mp inspect keys -t events -e "Purchase"
         mp inspect keys -t events --format table
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     keys = workspace.property_keys(table, event=event)
     output_result(ctx, keys, format=format)
 
@@ -607,6 +607,6 @@ def inspect_column(
         mp inspect column -t events -c "properties->>'$.country'"
         mp inspect column -t events -c distinct_id --top 20
     """
-    workspace = get_workspace(ctx)
+    workspace = get_workspace(ctx, read_only=True)
     result = workspace.column_stats(table, column, top_n=top)
     output_result(ctx, result.to_dict(), format=format)
