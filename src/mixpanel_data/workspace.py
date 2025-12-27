@@ -149,8 +149,8 @@ class Workspace:
             project_id: Override project ID from credentials.
             region: Override region from credentials (us, eu, in).
             path: Path to database file. If None, uses default location.
-            read_only: If True (default), open database in read-only mode
-                allowing concurrent reads. Set to False for write access.
+            read_only: If True, open database in read-only mode allowing
+                concurrent reads. Defaults to False (write access).
             _config_manager: Injected ConfigManager for testing.
             _api_client: Injected MixpanelAPIClient for testing.
             _storage: Injected StorageEngine for testing.
