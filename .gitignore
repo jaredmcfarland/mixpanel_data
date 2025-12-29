@@ -2,10 +2,11 @@
 .DS_Store
 
 # IDE/Editor
-.claude/
-.specify/
 .vscode/
 .idea/
+
+# Claude Code local settings (keep permissions local)
+.claude/settings.local.json
 
 # Python
 __pycache__/
