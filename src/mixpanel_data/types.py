@@ -1307,6 +1307,12 @@ class TableMetadata:
     filter_where: str | None = None
     """WHERE clause filter (if applicable)."""
 
+    filter_cohort_id: str | None = None
+    """Cohort ID filter for profiles (if applicable)."""
+
+    filter_output_properties: list[str] | None = None
+    """Property names to include in output (if applicable)."""
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize for JSON output."""
         return {
@@ -1316,6 +1322,8 @@ class TableMetadata:
             "to_date": self.to_date,
             "filter_events": self.filter_events,
             "filter_where": self.filter_where,
+            "filter_cohort_id": self.filter_cohort_id,
+            "filter_output_properties": self.filter_output_properties,
         }
 
 

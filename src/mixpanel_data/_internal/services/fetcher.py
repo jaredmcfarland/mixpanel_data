@@ -278,6 +278,8 @@ class FetcherService:
         name: str,
         *,
         where: str | None = None,
+        cohort_id: str | None = None,
+        output_properties: list[str] | None = None,
         progress_callback: Callable[[int], None] | None = None,
         append: bool = False,
         batch_size: int = 1000,
@@ -287,6 +289,10 @@ class FetcherService:
         Args:
             name: Table name to create or append to.
             where: Optional filter expression.
+            cohort_id: Optional cohort ID to filter by. Only profiles that are
+                members of this cohort will be returned.
+            output_properties: Optional list of property names to include in
+                the response. If None, all properties are returned.
             progress_callback: Optional callback invoked with row count during fetch.
             append: If True, append to existing table. If False (default), create new.
             batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
@@ -315,6 +321,8 @@ class FetcherService:
         # Stream profiles from API
         profiles_iter = self._api_client.export_profiles(
             where=where,
+            cohort_id=cohort_id,
+            output_properties=output_properties,
             on_batch=on_api_batch,
         )
 
@@ -332,6 +340,8 @@ class FetcherService:
             to_date=None,
             filter_events=None,
             filter_where=where,
+            filter_cohort_id=cohort_id,
+            filter_output_properties=output_properties,
         )
 
         # Store in database (handles TableExistsError/TableNotFoundError, transactions)

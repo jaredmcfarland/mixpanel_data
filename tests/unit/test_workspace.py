@@ -2027,6 +2027,80 @@ class TestBatchSizeParameter:
         finally:
             ws.close()
 
+    def test_fetch_profiles_passes_cohort_id_to_fetcher(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_profiles should pass cohort_id to FetcherService."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_profiles.return_value = FetchResult(
+                table="profiles",
+                rows=50,
+                type="profiles",
+                duration_seconds=0.5,
+                date_range=None,
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            ws.fetch_profiles(
+                "cohort_profiles",
+                cohort_id="cohort_12345",
+                progress=False,
+            )
+
+            # Verify cohort_id was passed to fetcher
+            call_kwargs = mock_fetcher.fetch_profiles.call_args.kwargs
+            assert call_kwargs.get("cohort_id") == "cohort_12345"
+        finally:
+            ws.close()
+
+    def test_fetch_profiles_passes_output_properties_to_fetcher(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_profiles should pass output_properties to FetcherService."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_profiles.return_value = FetchResult(
+                table="profiles",
+                rows=50,
+                type="profiles",
+                duration_seconds=0.5,
+                date_range=None,
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            ws.fetch_profiles(
+                "limited_profiles",
+                output_properties=["$email", "$name", "plan"],
+                progress=False,
+            )
+
+            # Verify output_properties was passed to fetcher
+            call_kwargs = mock_fetcher.fetch_profiles.call_args.kwargs
+            assert call_kwargs.get("output_properties") == ["$email", "$name", "plan"]
+        finally:
+            ws.close()
+
     def test_fetch_events_validates_batch_size_minimum(
         self,
         mock_config_manager: MagicMock,

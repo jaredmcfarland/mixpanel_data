@@ -161,6 +161,68 @@ Use Mixpanel expression syntax:
         --where 'properties["plan"] == "premium"'
     ```
 
+### Filtering by Cohort
+
+Fetch only profiles that are members of a specific cohort:
+
+=== "Python"
+
+    ```python
+    result = ws.fetch_profiles(
+        name="power_users",
+        cohort_id="12345"
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch profiles power_users --cohort 12345
+    ```
+
+### Selecting Specific Properties
+
+Reduce bandwidth and memory by fetching only the properties you need:
+
+=== "Python"
+
+    ```python
+    result = ws.fetch_profiles(
+        name="user_emails",
+        output_properties=["$email", "$name", "plan"]
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch profiles user_emails --output-properties '$email,$name,plan'
+    ```
+
+### Combining Filters
+
+Filters can be combined for precise data selection:
+
+=== "Python"
+
+    ```python
+    result = ws.fetch_profiles(
+        name="premium_emails",
+        cohort_id="premium_cohort",
+        output_properties=["$email", "$name"],
+        where='properties["country"] == "US"'
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch profiles premium_emails \
+        --cohort premium_cohort \
+        --output-properties '$email,$name' \
+        --where 'properties["country"] == "US"'
+    ```
+
 ## Table Naming
 
 Tables are stored with the name you provide:

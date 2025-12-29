@@ -206,6 +206,16 @@ def fetch_profiles(
         str | None,
         typer.Option("--where", "-w", help="Mixpanel filter expression."),
     ] = None,
+    cohort: Annotated[
+        str | None,
+        typer.Option("--cohort", "-c", help="Filter by cohort ID."),
+    ] = None,
+    output_properties: Annotated[
+        str | None,
+        typer.Option(
+            "--output-properties", "-o", help="Comma-separated properties to include."
+        ),
+    ] = None,
     replace: Annotated[
         bool,
         typer.Option("--replace", help="Replace existing table."),
@@ -246,6 +256,8 @@ def fetch_profiles(
     consider running in the background.
 
     Use --where for Mixpanel expression filters on profile properties.
+    Use --cohort to filter by cohort ID membership.
+    Use --output-properties to select specific properties (reduces bandwidth).
     Use --replace to drop and recreate an existing table.
     Use --append to add data to an existing table.
     Use --stdout to stream JSONL to stdout instead of storing locally.
@@ -259,6 +271,8 @@ def fetch_profiles(
         mp fetch profiles users --replace
         mp fetch profiles users --append
         mp fetch profiles --where 'properties["plan"]=="premium"'
+        mp fetch profiles --cohort 12345
+        mp fetch profiles --output-properties '$email,$name,plan'
         mp fetch profiles --stdout
         mp fetch profiles --stdout --raw
     """
@@ -274,6 +288,11 @@ def fetch_profiles(
         err_console.print("[red]Error:[/red] --raw requires --stdout")
         raise typer.Exit(3)
 
+    # Parse output_properties filter
+    props_list = (
+        [p.strip() for p in output_properties.split(",")] if output_properties else None
+    )
+
     workspace = get_workspace(ctx)
 
     # Streaming mode: output JSONL to stdout
@@ -281,7 +300,12 @@ def fetch_profiles(
         quiet = ctx.obj.get("quiet", False)
         count = 0
 
-        for profile in workspace.stream_profiles(where=where, raw=raw):
+        for profile in workspace.stream_profiles(
+            where=where,
+            cohort_id=cohort,
+            output_properties=props_list,
+            raw=raw,
+        ):
             print(json.dumps(profile, default=_json_serializer), file=sys.stdout)
             count += 1
             if not quiet and count % 1000 == 0:
@@ -307,6 +331,8 @@ def fetch_profiles(
     result = workspace.fetch_profiles(
         name=table_name,
         where=where,
+        cohort_id=cohort,
+        output_properties=props_list,
         progress=show_progress,
         append=append,
         batch_size=batch_size,

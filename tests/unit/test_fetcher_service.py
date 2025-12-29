@@ -513,6 +513,82 @@ class TestFetchProfiles:
         call_kwargs = mock_api_client.export_profiles.call_args.kwargs
         assert call_kwargs["where"] == 'user["plan"] == "premium"'
 
+    def test_fetch_profiles_passes_cohort_id_to_api_client(self) -> None:
+        """fetch_profiles should pass cohort_id to API client."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_profiles.return_value = iter([])
+        mock_storage.create_profiles_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_profiles(
+            name="cohort_profiles",
+            cohort_id="cohort_12345",
+        )
+
+        call_kwargs = mock_api_client.export_profiles.call_args.kwargs
+        assert call_kwargs["cohort_id"] == "cohort_12345"
+
+    def test_fetch_profiles_passes_output_properties_to_api_client(self) -> None:
+        """fetch_profiles should pass output_properties to API client."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_profiles.return_value = iter([])
+        mock_storage.create_profiles_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_profiles(
+            name="limited_profiles",
+            output_properties=["$email", "$name", "plan"],
+        )
+
+        call_kwargs = mock_api_client.export_profiles.call_args.kwargs
+        assert call_kwargs["output_properties"] == ["$email", "$name", "plan"]
+
+    def test_fetch_profiles_metadata_includes_cohort_id(self) -> None:
+        """fetch_profiles should include cohort_id in metadata."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_profiles.return_value = iter([])
+        mock_storage.create_profiles_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_profiles(
+            name="profiles",
+            cohort_id="cohort_abc",
+        )
+
+        # Get the metadata passed to storage
+        call_kwargs = mock_storage.create_profiles_table.call_args.kwargs
+        metadata = call_kwargs["metadata"]
+        assert metadata.filter_cohort_id == "cohort_abc"
+
+    def test_fetch_profiles_metadata_includes_output_properties(self) -> None:
+        """fetch_profiles should include output_properties in metadata."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_profiles.return_value = iter([])
+        mock_storage.create_profiles_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_profiles(
+            name="profiles",
+            output_properties=["$email"],
+        )
+
+        # Get the metadata passed to storage
+        call_kwargs = mock_storage.create_profiles_table.call_args.kwargs
+        metadata = call_kwargs["metadata"]
+        assert metadata.filter_output_properties == ["$email"]
+
     def test_fetch_profiles_table_exists_error(self) -> None:
         """fetch_profiles should propagate TableExistsError from storage."""
         mock_api_client = MagicMock()

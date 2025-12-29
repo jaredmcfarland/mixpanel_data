@@ -549,3 +549,96 @@ class TestBackwardCompatibility:
         # fetch_profiles should be called, not stream_profiles
         mock_workspace.fetch_profiles.assert_called_once()
         mock_workspace.stream_profiles.assert_not_called()
+
+    def test_fetch_profiles_with_cohort_option(self, cli_runner: CliRunner) -> None:
+        """Verify --cohort option is passed to workspace.fetch_profiles."""
+        mock_workspace = MagicMock()
+        mock_workspace.fetch_profiles.return_value = MagicMock(
+            to_dict=lambda: {"table": "profiles", "rows": 50}
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                ["-q", "fetch", "profiles", "--cohort", "12345"],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.fetch_profiles.call_args.kwargs
+        assert call_kwargs.get("cohort_id") == "12345"
+
+    def test_fetch_profiles_with_output_properties_option(
+        self, cli_runner: CliRunner
+    ) -> None:
+        """Verify --output-properties option is parsed and passed to workspace."""
+        mock_workspace = MagicMock()
+        mock_workspace.fetch_profiles.return_value = MagicMock(
+            to_dict=lambda: {"table": "profiles", "rows": 50}
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                [
+                    "-q",
+                    "fetch",
+                    "profiles",
+                    "--output-properties",
+                    "$email,$name,plan",
+                ],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.fetch_profiles.call_args.kwargs
+        assert call_kwargs.get("output_properties") == ["$email", "$name", "plan"]
+
+    def test_fetch_profiles_stdout_with_cohort(self, cli_runner: CliRunner) -> None:
+        """Verify --cohort works with --stdout (streaming mode)."""
+        mock_workspace = MagicMock()
+        mock_workspace.stream_profiles.return_value = iter(
+            [{"distinct_id": "user_1", "properties": {}}]
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                ["-q", "fetch", "profiles", "--stdout", "--cohort", "cohort_abc"],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.stream_profiles.call_args.kwargs
+        assert call_kwargs.get("cohort_id") == "cohort_abc"
+
+    def test_fetch_profiles_stdout_with_output_properties(
+        self, cli_runner: CliRunner
+    ) -> None:
+        """Verify --output-properties works with --stdout (streaming mode)."""
+        mock_workspace = MagicMock()
+        mock_workspace.stream_profiles.return_value = iter(
+            [{"distinct_id": "user_1", "properties": {"$email": "test@example.com"}}]
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                [
+                    "-q",
+                    "fetch",
+                    "profiles",
+                    "--stdout",
+                    "-o",
+                    "$email",
+                ],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.stream_profiles.call_args.kwargs
+        assert call_kwargs.get("output_properties") == ["$email"]

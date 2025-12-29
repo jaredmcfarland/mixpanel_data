@@ -697,6 +697,94 @@ class TestProfileExport:
 
         assert "where" in captured_body
 
+    def test_cohort_id_filter(self, test_credentials: Credentials) -> None:
+        """Should include filter_by_cohort when cohort_id provided."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles(cohort_id="12345"))
+
+        assert captured_body.get("filter_by_cohort") == "12345"
+
+    def test_output_properties_filter(self, test_credentials: Credentials) -> None:
+        """Should include output_properties as JSON array string."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles(output_properties=["$email", "$name", "plan"]))
+
+        # output_properties should be serialized as JSON array string
+        output_props = captured_body.get("output_properties")
+        assert output_props is not None
+        assert json.loads(output_props) == ["$email", "$name", "plan"]
+
+    def test_cohort_id_and_output_properties_together(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should include both cohort_id and output_properties."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(
+                client.export_profiles(
+                    cohort_id="cohort_abc",
+                    output_properties=["$email"],
+                )
+            )
+
+        assert captured_body.get("filter_by_cohort") == "cohort_abc"
+        assert json.loads(captured_body.get("output_properties", "[]")) == ["$email"]
+
+    def test_no_cohort_id_when_none(self, test_credentials: Credentials) -> None:
+        """Should not include filter_by_cohort when cohort_id is None."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles())
+
+        assert "filter_by_cohort" not in captured_body
+
+    def test_no_output_properties_when_none(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should not include output_properties when None."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles())
+
+        assert "output_properties" not in captured_body
+
 
 # =============================================================================
 # User Story 7: Funnel and Retention

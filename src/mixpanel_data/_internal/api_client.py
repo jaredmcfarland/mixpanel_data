@@ -752,6 +752,8 @@ class MixpanelAPIClient:
         self,
         *,
         where: str | None = None,
+        cohort_id: str | None = None,
+        output_properties: list[str] | None = None,
         on_batch: Callable[[int], None] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Stream profiles from the Engage API.
@@ -761,6 +763,10 @@ class MixpanelAPIClient:
 
         Args:
             where: Optional filter expression.
+            cohort_id: Optional cohort ID to filter by. Only profiles that are
+                members of this cohort will be returned.
+            output_properties: Optional list of property names to include in
+                the response. If None, all properties are returned.
             on_batch: Optional callback invoked with cumulative count after
                 each page is processed.
 
@@ -787,6 +793,10 @@ class MixpanelAPIClient:
                 params["session_id"] = session_id
             if where:
                 params["where"] = where
+            if cohort_id:
+                params["filter_by_cohort"] = cohort_id
+            if output_properties:
+                params["output_properties"] = json.dumps(output_properties)
 
             response = self._request("POST", url, data=params)
 

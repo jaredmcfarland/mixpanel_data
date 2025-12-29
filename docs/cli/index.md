@@ -65,6 +65,14 @@ Fetch data from Mixpanel into local storage, or stream directly to stdout.
 | `--stdout` | Stream data as JSONL to stdout instead of storing |
 | `--raw` | Output raw Mixpanel API format (requires `--stdout`) |
 
+**Profile Filter Options (fetch profiles only):**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--cohort` | `-c` | Filter by cohort ID |
+| `--output-properties` | `-o` | Comma-separated properties to include |
+| `--where` | `-w` | Mixpanel filter expression |
+
 ### query — Query Operations
 
 Execute queries against local or remote data.
@@ -218,6 +226,12 @@ mp fetch events --from 2024-01-01 --to 2024-01-31 --stdout
 
 # Stream profiles
 mp fetch profiles --stdout
+
+# Stream profiles filtered by cohort
+mp fetch profiles --stdout --cohort 12345
+
+# Stream specific profile properties only
+mp fetch profiles --stdout --output-properties '$email,$name,plan'
 
 # Pipe to jq for filtering
 mp fetch events --from 2024-01-01 --to 2024-01-31 --stdout \

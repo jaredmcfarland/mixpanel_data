@@ -879,6 +879,8 @@ class Workspace:
         name: str = "profiles",
         *,
         where: str | None = None,
+        cohort_id: str | None = None,
+        output_properties: list[str] | None = None,
         progress: bool = True,
         append: bool = False,
         batch_size: int = 1000,
@@ -893,6 +895,10 @@ class Workspace:
         Args:
             name: Table name to create or append to (default: "profiles").
             where: Optional WHERE clause for filtering.
+            cohort_id: Optional cohort ID to filter by. Only profiles that are
+                members of this cohort will be returned.
+            output_properties: Optional list of property names to include in
+                the response. If None, all properties are returned.
             progress: Show progress bar (default: True).
             append: If True, append to existing table. If False (default), create new.
             batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
@@ -939,6 +945,8 @@ class Workspace:
             result = self._fetcher_service.fetch_profiles(
                 name=name,
                 where=where,
+                cohort_id=cohort_id,
+                output_properties=output_properties,
                 progress_callback=progress_callback,
                 append=append,
                 batch_size=batch_size,
@@ -1019,6 +1027,8 @@ class Workspace:
         self,
         *,
         where: str | None = None,
+        cohort_id: str | None = None,
+        output_properties: list[str] | None = None,
         raw: bool = False,
     ) -> Iterator[dict[str, Any]]:
         """Stream user profiles directly from Mixpanel API without storing.
@@ -1028,6 +1038,10 @@ class Workspace:
 
         Args:
             where: Optional Mixpanel filter expression for profile properties.
+            cohort_id: Optional cohort ID to filter by. Only profiles that are
+                members of this cohort will be returned.
+            output_properties: Optional list of property names to include in
+                the response. If None, all properties are returned.
             raw: If True, return profiles in raw Mixpanel API format.
                  If False (default), return normalized format.
 
@@ -1053,9 +1067,23 @@ class Workspace:
             for profile in ws.stream_profiles(where='properties["plan"]=="premium"'):
                 send_survey(profile)
             ```
+
+            Filter by cohort and select specific properties:
+
+            ```python
+            for profile in ws.stream_profiles(
+                cohort_id="12345",
+                output_properties=["$email", "$name"]
+            ):
+                send_email(profile)
+            ```
         """
         api_client = self._require_api_client()
-        profile_iterator = api_client.export_profiles(where=where)
+        profile_iterator = api_client.export_profiles(
+            where=where,
+            cohort_id=cohort_id,
+            output_properties=output_properties,
+        )
 
         if raw:
             yield from profile_iterator
