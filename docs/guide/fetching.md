@@ -92,6 +92,38 @@ result = ws.fetch_events(
 
 The CLI automatically displays a progress bar.
 
+### Batch Size
+
+Control the memory/IO tradeoff with `batch_size`:
+
+=== "Python"
+
+    ```python
+    # Smaller batch size = less memory, more disk IO
+    result = ws.fetch_events(
+        name="events",
+        from_date="2024-01-01",
+        to_date="2024-01-31",
+        batch_size=500
+    )
+
+    # Larger batch size = more memory, less disk IO
+    result = ws.fetch_events(
+        name="events",
+        from_date="2024-01-01",
+        to_date="2024-01-31",
+        batch_size=5000
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch events --from 2024-01-01 --to 2024-01-31 --batch-size 500
+    ```
+
+The default is 1000 rows per commit. Valid range: 100-100,000.
+
 ## Fetching Profiles
 
 Fetch user profiles into local storage:
@@ -140,7 +172,78 @@ ws.fetch_profiles(name="users")            # Creates table: users
 ```
 
 !!! warning "Table Names Must Be Unique"
-    Fetching to an existing table name raises `TableExistsError`. Drop the table first or use a different name.
+    Fetching to an existing table name raises `TableExistsError`. Use `--replace` to overwrite, `--append` to add data, or choose a different name.
+
+## Replacing and Appending
+
+### Replace Mode
+
+Drop and recreate a table with fresh data:
+
+=== "Python"
+
+    ```python
+    # First drop the table, then fetch
+    ws.drop("events")
+    result = ws.fetch_events(
+        name="events",
+        from_date="2024-01-01",
+        to_date="2024-01-31"
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch events --from 2024-01-01 --to 2024-01-31 --replace
+    ```
+
+### Append Mode
+
+Add data to an existing table. Duplicates (by `insert_id` for events, `distinct_id` for profiles) are automatically skipped:
+
+=== "Python"
+
+    ```python
+    # Initial fetch
+    ws.fetch_events(
+        name="events",
+        from_date="2024-01-01",
+        to_date="2024-01-31"
+    )
+
+    # Append more data
+    ws.fetch_events(
+        name="events",
+        from_date="2024-02-01",
+        to_date="2024-02-28",
+        append=True
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Initial fetch
+    mp fetch events --from 2024-01-01 --to 2024-01-31
+
+    # Append more data
+    mp fetch events --from 2024-02-01 --to 2024-02-28 --append
+    ```
+
+!!! tip "Resuming Failed Fetches"
+    If a fetch crashes or times out, use append mode to resume from where you left off:
+
+    ```bash
+    # Check the last event timestamp
+    mp query sql "SELECT MAX(event_time) FROM events"
+    # 2024-01-15T14:30:00
+
+    # Resume from that point
+    mp fetch events --from 2024-01-15 --to 2024-01-31 --append
+    ```
+
+    Overlapping date ranges are safe—duplicates are automatically skipped.
 
 ## Table Management
 
@@ -216,27 +319,69 @@ Fetched profiles have this schema:
 
 ### Chunk Large Date Ranges
 
-For very large datasets, fetch in chunks:
+For very large datasets, fetch in chunks using append mode:
 
-```python
-import datetime
+=== "Single Table (Recommended)"
 
-start = datetime.date(2024, 1, 1)
-end = datetime.date(2024, 12, 31)
+    ```python
+    import datetime
 
-current = start
-while current < end:
-    chunk_end = min(current + datetime.timedelta(days=30), end)
-    table_name = f"events_{current.strftime('%Y%m')}"
-
+    # Fetch first chunk
     ws.fetch_events(
-        name=table_name,
-        from_date=str(current),
-        to_date=str(chunk_end)
+        name="events_2024",
+        from_date="2024-01-01",
+        to_date="2024-01-31"
     )
 
-    current = chunk_end + datetime.timedelta(days=1)
-```
+    # Append subsequent chunks
+    start = datetime.date(2024, 2, 1)
+    end = datetime.date(2024, 12, 31)
+
+    current = start
+    while current <= end:
+        chunk_end = min(current + datetime.timedelta(days=30), end)
+
+        ws.fetch_events(
+            name="events_2024",
+            from_date=str(current),
+            to_date=str(chunk_end),
+            append=True  # Add to existing table
+        )
+
+        current = chunk_end + datetime.timedelta(days=1)
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Fetch month by month, appending to a single table
+    mp fetch events events_2024 --from 2024-01-01 --to 2024-01-31
+    mp fetch events events_2024 --from 2024-02-01 --to 2024-02-29 --append
+    mp fetch events events_2024 --from 2024-03-01 --to 2024-03-31 --append
+    # ... continue for each month
+    ```
+
+=== "Separate Tables"
+
+    ```python
+    import datetime
+
+    start = datetime.date(2024, 1, 1)
+    end = datetime.date(2024, 12, 31)
+
+    current = start
+    while current < end:
+        chunk_end = min(current + datetime.timedelta(days=30), end)
+        table_name = f"events_{current.strftime('%Y%m')}"
+
+        ws.fetch_events(
+            name=table_name,
+            from_date=str(current),
+            to_date=str(chunk_end)
+        )
+
+        current = chunk_end + datetime.timedelta(days=1)
+    ```
 
 ### Choose the Right Storage Mode
 

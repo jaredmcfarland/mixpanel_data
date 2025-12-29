@@ -50,6 +50,14 @@ Fetch data from Mixpanel into local storage, or stream directly to stdout.
 | `mp fetch events` | Fetch events to local DuckDB |
 | `mp fetch profiles` | Fetch user profiles to local DuckDB |
 
+**Table Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--replace` | Drop and recreate existing table |
+| `--append` | Add data to existing table (duplicates skipped) |
+| `--batch-size` | Rows per commit (100-100000, default: 1000) |
+
 **Streaming Options:**
 
 | Option | Description |
@@ -167,6 +175,23 @@ mp query sql "SELECT event_name, COUNT(*) FROM jan GROUP BY 1" --format table
 
 # 5. Run live queries
 mp query segmentation --event Purchase --from 2024-01-01 --to 2024-01-31 --format table
+```
+
+### Incremental Fetching
+
+```bash
+# Fetch initial data
+mp fetch events events --from 2024-01-01 --to 2024-01-31
+
+# Append more data later
+mp fetch events events --from 2024-02-01 --to 2024-02-28 --append
+
+# Resume after a crash (overlapping dates are safe)
+mp query sql "SELECT MAX(event_time) FROM events"
+mp fetch events events --from 2024-02-15 --to 2024-02-28 --append
+
+# Replace with fresh data
+mp fetch events events --from 2024-01-01 --to 2024-02-28 --replace
 ```
 
 ### Piping and Scripting

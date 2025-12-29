@@ -124,4 +124,6 @@ pytest_add_cli_args_test_selection = ["tests/"]
 dev = [
     "click-man>=0.5.1",
     "pre-commit>=4.5.1",
+    "psutil>=7.2.0",
+    "types-psutil>=7.2.0.20251228",
 ]

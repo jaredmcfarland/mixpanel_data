@@ -86,6 +86,10 @@ from mixpanel_data.types import (
     WorkspaceInfo,
 )
 
+# Batch size validation bounds
+_MIN_BATCH_SIZE = 100
+_MAX_BATCH_SIZE = 100_000
+
 
 class Workspace:
     """Unified entry point for Mixpanel data operations.
@@ -776,25 +780,43 @@ class Workspace:
         events: list[str] | None = None,
         where: str | None = None,
         progress: bool = True,
+        append: bool = False,
+        batch_size: int = 1000,
     ) -> FetchResult:
         """Fetch events from Mixpanel and store in local database.
 
         Args:
-            name: Table name to create (default: "events").
+            name: Table name to create or append to (default: "events").
             from_date: Start date (YYYY-MM-DD).
             to_date: End date (YYYY-MM-DD).
             events: Optional list of event names to filter.
             where: Optional WHERE clause for filtering.
             progress: Show progress bar (default: True).
+            append: If True, append to existing table. If False (default), create new.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000. Valid range: 100-100000.
 
         Returns:
             FetchResult with table name, row count, duration.
 
         Raises:
-            TableExistsError: If table already exists.
+            TableExistsError: If table exists and append=False.
+            TableNotFoundError: If table doesn't exist and append=True.
             ConfigError: If API credentials not available.
             AuthenticationError: If credentials are invalid.
+            ValueError: If batch_size is outside valid range (100-100000).
         """
+        # Validate batch_size
+        if batch_size < _MIN_BATCH_SIZE:
+            raise ValueError(
+                f"batch_size must be at least {_MIN_BATCH_SIZE}, got {batch_size}"
+            )
+        if batch_size > _MAX_BATCH_SIZE:
+            raise ValueError(
+                f"batch_size must be at most {_MAX_BATCH_SIZE}, got {batch_size}"
+            )
         # Create progress callback if requested (only for interactive terminals)
         progress_callback = None
         pbar = None
@@ -826,6 +848,8 @@ class Workspace:
                 events=events,
                 where=where,
                 progress_callback=progress_callback,
+                append=append,
+                batch_size=batch_size,
             )
         finally:
             if pbar is not None:
@@ -839,21 +863,40 @@ class Workspace:
         *,
         where: str | None = None,
         progress: bool = True,
+        append: bool = False,
+        batch_size: int = 1000,
     ) -> FetchResult:
         """Fetch user profiles from Mixpanel and store in local database.
 
         Args:
-            name: Table name to create (default: "profiles").
+            name: Table name to create or append to (default: "profiles").
             where: Optional WHERE clause for filtering.
             progress: Show progress bar (default: True).
+            append: If True, append to existing table. If False (default), create new.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000. Valid range: 100-100000.
 
         Returns:
             FetchResult with table name, row count, duration.
 
         Raises:
-            TableExistsError: If table already exists.
+            TableExistsError: If table exists and append=False.
+            TableNotFoundError: If table doesn't exist and append=True.
             ConfigError: If API credentials not available.
+            ValueError: If batch_size is outside valid range (100-100000).
         """
+        # Validate batch_size
+        if batch_size < _MIN_BATCH_SIZE:
+            raise ValueError(
+                f"batch_size must be at least {_MIN_BATCH_SIZE}, got {batch_size}"
+            )
+        if batch_size > _MAX_BATCH_SIZE:
+            raise ValueError(
+                f"batch_size must be at most {_MAX_BATCH_SIZE}, got {batch_size}"
+            )
+
         # Create progress callback if requested (only for interactive terminals)
         progress_callback = None
         pbar = None
@@ -882,6 +925,8 @@ class Workspace:
                 name=name,
                 where=where,
                 progress_callback=progress_callback,
+                append=append,
+                batch_size=batch_size,
             )
         finally:
             if pbar is not None:

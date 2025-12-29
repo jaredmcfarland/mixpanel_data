@@ -690,3 +690,306 @@ class TestDateRangeValidation:
 
         # API should NOT have been called since validation failed first
         mock_api_client.export_events.assert_not_called()
+
+
+# =============================================================================
+# Append Mode Tests
+# =============================================================================
+
+
+class TestFetchEventsAppend:
+    """Tests for FetcherService.fetch_events() with append=True."""
+
+    def test_fetch_events_append_calls_append_method(self) -> None:
+        """fetch_events with append=True should call append_events_table."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.append_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        result = fetcher.fetch_events(
+            name="existing_events",
+            from_date="2024-01-15",
+            to_date="2024-01-15",
+            append=True,
+        )
+
+        # Should call append, not create
+        mock_storage.append_events_table.assert_called_once()
+        mock_storage.create_events_table.assert_not_called()
+
+        # Verify result
+        assert result.table == "existing_events"
+        assert result.rows == 1
+
+    def test_fetch_events_append_false_calls_create_method(self) -> None:
+        """fetch_events with append=False (default) should call create_events_table."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.create_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_events(
+            name="new_events",
+            from_date="2024-01-15",
+            to_date="2024-01-15",
+            append=False,
+        )
+
+        # Should call create, not append
+        mock_storage.create_events_table.assert_called_once()
+        mock_storage.append_events_table.assert_not_called()
+
+
+class TestFetchProfilesAppend:
+    """Tests for FetcherService.fetch_profiles() with append=True."""
+
+    def test_fetch_profiles_append_calls_append_method(self) -> None:
+        """fetch_profiles with append=True should call append_profiles_table."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "$distinct_id": "user_1",
+                "$properties": {
+                    "$last_seen": "2024-01-15T10:00:00",
+                    "plan": "premium",
+                },
+            }
+
+        mock_api_client.export_profiles.return_value = mock_export()
+        mock_storage.append_profiles_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        result = fetcher.fetch_profiles(
+            name="existing_profiles",
+            append=True,
+        )
+
+        # Should call append, not create
+        mock_storage.append_profiles_table.assert_called_once()
+        mock_storage.create_profiles_table.assert_not_called()
+
+        # Verify result
+        assert result.table == "existing_profiles"
+        assert result.rows == 1
+
+    def test_fetch_profiles_append_false_calls_create_method(self) -> None:
+        """fetch_profiles with append=False (default) should call create_profiles_table."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "$distinct_id": "user_1",
+                "$properties": {
+                    "$last_seen": "2024-01-15T10:00:00",
+                    "plan": "premium",
+                },
+            }
+
+        mock_api_client.export_profiles.return_value = mock_export()
+        mock_storage.create_profiles_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_profiles(
+            name="new_profiles",
+            append=False,
+        )
+
+        # Should call create, not append
+        mock_storage.create_profiles_table.assert_called_once()
+        mock_storage.append_profiles_table.assert_not_called()
+
+
+# =============================================================================
+# Batch Size Parameter Tests
+# =============================================================================
+
+
+class TestFetchEventsBatchSize:
+    """Tests for batch_size parameter in fetch_events."""
+
+    def test_fetch_events_passes_batch_size_to_create(self) -> None:
+        """fetch_events should pass batch_size to create_events_table."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.create_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            batch_size=500,
+        )
+
+        # Verify batch_size was passed to storage
+        call_kwargs = mock_storage.create_events_table.call_args.kwargs
+        assert call_kwargs.get("batch_size") == 500
+
+    def test_fetch_events_passes_batch_size_to_append(self) -> None:
+        """fetch_events with append=True should pass batch_size to append_events_table."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.append_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            append=True,
+            batch_size=250,
+        )
+
+        # Verify batch_size was passed to storage
+        call_kwargs = mock_storage.append_events_table.call_args.kwargs
+        assert call_kwargs.get("batch_size") == 250
+
+    def test_fetch_events_default_batch_size(self) -> None:
+        """fetch_events should use default batch_size of 1000."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.create_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        # Don't specify batch_size - should use default
+        fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+        )
+
+        # Verify default batch_size of 1000
+        call_kwargs = mock_storage.create_events_table.call_args.kwargs
+        assert call_kwargs.get("batch_size") == 1000
+
+
+class TestFetchProfilesBatchSize:
+    """Tests for batch_size parameter in fetch_profiles."""
+
+    def test_fetch_profiles_passes_batch_size_to_create(self) -> None:
+        """fetch_profiles should pass batch_size to create_profiles_table."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "$distinct_id": "user_1",
+                "$properties": {
+                    "$last_seen": "2024-01-15T10:00:00",
+                    "plan": "premium",
+                },
+            }
+
+        mock_api_client.export_profiles.return_value = mock_export()
+        mock_storage.create_profiles_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_profiles(
+            name="profiles",
+            batch_size=500,
+        )
+
+        # Verify batch_size was passed to storage
+        call_kwargs = mock_storage.create_profiles_table.call_args.kwargs
+        assert call_kwargs.get("batch_size") == 500
+
+    def test_fetch_profiles_passes_batch_size_to_append(self) -> None:
+        """fetch_profiles with append=True should pass batch_size to append_profiles_table."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "$distinct_id": "user_1",
+                "$properties": {
+                    "$last_seen": "2024-01-15T10:00:00",
+                    "plan": "premium",
+                },
+            }
+
+        mock_api_client.export_profiles.return_value = mock_export()
+        mock_storage.append_profiles_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_profiles(
+            name="profiles",
+            append=True,
+            batch_size=250,
+        )
+
+        # Verify batch_size was passed to storage
+        call_kwargs = mock_storage.append_profiles_table.call_args.kwargs
+        assert call_kwargs.get("batch_size") == 250

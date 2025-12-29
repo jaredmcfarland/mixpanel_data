@@ -11,6 +11,28 @@ Workspace orchestrates four internal services:
 - **LiveQueryService** — Real-time analytics queries
 - **StorageEngine** — Local SQL query execution
 
+## Key Features
+
+### Append Mode
+
+The `fetch_events()` and `fetch_profiles()` methods support an `append` parameter for incremental data loading:
+
+```python
+# Initial fetch
+ws.fetch_events(name="events", from_date="2024-01-01", to_date="2024-01-31")
+
+# Append more data (duplicates are automatically skipped)
+ws.fetch_events(name="events", from_date="2024-02-01", to_date="2024-02-28", append=True)
+```
+
+This is useful for:
+
+- **Incremental loading**: Fetch data in chunks without creating multiple tables
+- **Crash recovery**: Resume a failed fetch from the last successful point
+- **Extending date ranges**: Add more historical or recent data to an existing table
+
+Duplicate events (by `insert_id`) and profiles (by `distinct_id`) are automatically skipped via `INSERT OR IGNORE`.
+
 ## Class Reference
 
 ::: mixpanel_data.Workspace

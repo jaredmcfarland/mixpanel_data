@@ -69,6 +69,10 @@ def fetch_events(
         bool,
         typer.Option("--replace", help="Replace existing table."),
     ] = False,
+    append: Annotated[
+        bool,
+        typer.Option("--append", help="Append to existing table."),
+    ] = False,
     no_progress: Annotated[
         bool,
         typer.Option("--no-progress", help="Hide progress bar."),
@@ -81,6 +85,15 @@ def fetch_events(
         bool,
         typer.Option("--raw", help="Output raw API format (only with --stdout)."),
     ] = False,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            "--batch-size",
+            help="Rows per commit. Controls memory/IO tradeoff. (100-100000)",
+            min=100,
+            max=100000,
+        ),
+    ] = 1000,
     format: FormatOption = "json",
 ) -> None:
     """Fetch events from Mixpanel into local storage.
@@ -90,6 +103,8 @@ def fetch_events(
 
     Use --events to filter by event name (comma-separated list).
     Use --where for Mixpanel expression filters (e.g., 'properties["country"]=="US"').
+    Use --replace to drop and recreate an existing table.
+    Use --append to add data to an existing table.
     Use --stdout to stream JSONL to stdout instead of storing locally.
     Use --raw with --stdout to output raw Mixpanel API format.
 
@@ -101,6 +116,7 @@ def fetch_events(
         mp fetch events signups --from 2025-01-01 --to 2025-01-31 --events "Sign Up"
         mp fetch events --from 2025-01-01 --to 2025-01-31 --where 'properties["country"]=="US"'
         mp fetch events --from 2025-01-01 --to 2025-01-31 --replace
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --append
         mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
         mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout --raw | jq '.event'
     """
@@ -110,6 +126,13 @@ def fetch_events(
         raise typer.Exit(3)
     if not to_date:
         err_console.print("[red]Error:[/red] --to is required")
+        raise typer.Exit(3)
+
+    # Validate mutually exclusive options
+    if replace and append:
+        err_console.print(
+            "[red]Error:[/red] --replace and --append are mutually exclusive"
+        )
         raise typer.Exit(3)
 
     # Validate --raw only with --stdout
@@ -161,6 +184,8 @@ def fetch_events(
         events=events_list,
         where=where,
         progress=show_progress,
+        append=append,
+        batch_size=batch_size,
     )
 
     output_result(ctx, result.to_dict(), format=format)
@@ -182,6 +207,10 @@ def fetch_profiles(
         bool,
         typer.Option("--replace", help="Replace existing table."),
     ] = False,
+    append: Annotated[
+        bool,
+        typer.Option("--append", help="Append to existing table."),
+    ] = False,
     no_progress: Annotated[
         bool,
         typer.Option("--no-progress", help="Hide progress bar."),
@@ -194,6 +223,15 @@ def fetch_profiles(
         bool,
         typer.Option("--raw", help="Output raw API format (only with --stdout)."),
     ] = False,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            "--batch-size",
+            help="Rows per commit. Controls memory/IO tradeoff. (100-100000)",
+            min=100,
+            max=100000,
+        ),
+    ] = 1000,
     format: FormatOption = "json",
 ) -> None:
     """Fetch user profiles from Mixpanel into local storage.
@@ -202,6 +240,8 @@ def fetch_profiles(
     shows fetch progress (disable with --no-progress or --quiet).
 
     Use --where for Mixpanel expression filters on profile properties.
+    Use --replace to drop and recreate an existing table.
+    Use --append to add data to an existing table.
     Use --stdout to stream JSONL to stdout instead of storing locally.
     Use --raw with --stdout to output raw Mixpanel API format.
 
@@ -211,10 +251,18 @@ def fetch_profiles(
 
         mp fetch profiles
         mp fetch profiles users --replace
+        mp fetch profiles users --append
         mp fetch profiles --where 'properties["plan"]=="premium"'
         mp fetch profiles --stdout
         mp fetch profiles --stdout --raw
     """
+    # Validate mutually exclusive options
+    if replace and append:
+        err_console.print(
+            "[red]Error:[/red] --replace and --append are mutually exclusive"
+        )
+        raise typer.Exit(3)
+
     # Validate --raw only with --stdout
     if raw and not stdout:
         err_console.print("[red]Error:[/red] --raw requires --stdout")
@@ -254,6 +302,8 @@ def fetch_profiles(
         name=table_name,
         where=where,
         progress=show_progress,
+        append=append,
+        batch_size=batch_size,
     )
 
     output_result(ctx, result.to_dict(), format=format)

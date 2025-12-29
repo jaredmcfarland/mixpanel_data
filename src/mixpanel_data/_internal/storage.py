@@ -522,21 +522,26 @@ class StorageEngine:
         name: str,
         data: Iterator[dict[str, Any]],
         progress_callback: Callable[[int], None] | None = None,
-        batch_size: int = 2000,
+        batch_size: int = 1000,
     ) -> int:
-        """Insert events from iterator in batches.
+        """Insert events from iterator in batches with per-batch commits.
+
+        Each batch is committed immediately after insertion to bound memory
+        usage. DuckDB releases transaction buffers after each commit, keeping
+        memory constant regardless of total dataset size.
 
         Args:
             name: Table name.
             data: Iterator yielding event dictionaries.
             progress_callback: Optional callback invoked with cumulative row count.
-            batch_size: Number of rows per batch. Default: 2000.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Default: 1000.
+                Lower values use less memory but have more disk I/O overhead.
 
         Returns:
             Total number of rows inserted.
         """
         total_rows = 0
-        batch = []
+        batch: list[tuple[str, str, str, str, str]] = []
         quoted_name = _quote_identifier(name)
         # Use INSERT OR IGNORE to skip duplicates silently.
         # The Mixpanel Export API returns raw data without deduplication,
@@ -567,8 +572,10 @@ class StorageEngine:
             )
 
             if len(batch) >= batch_size:
-                # Insert batch
+                # Insert batch and commit immediately to release memory
                 self.connection.executemany(insert_sql, batch)
+                self.connection.execute("COMMIT")
+                self.connection.execute("BEGIN TRANSACTION")
                 total_rows += len(batch)
                 batch = []
 
@@ -592,21 +599,26 @@ class StorageEngine:
         name: str,
         data: Iterator[dict[str, Any]],
         progress_callback: Callable[[int], None] | None = None,
-        batch_size: int = 2000,
+        batch_size: int = 1000,
     ) -> int:
-        """Insert profiles from iterator in batches.
+        """Insert profiles from iterator in batches with per-batch commits.
+
+        Each batch is committed immediately after insertion to bound memory
+        usage. DuckDB releases transaction buffers after each commit, keeping
+        memory constant regardless of total dataset size.
 
         Args:
             name: Table name.
             data: Iterator yielding profile dictionaries.
             progress_callback: Optional callback invoked with cumulative row count.
-            batch_size: Number of rows per batch. Default: 2000.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Default: 1000.
+                Lower values use less memory but have more disk I/O overhead.
 
         Returns:
             Total number of rows inserted.
         """
         total_rows = 0
-        batch = []
+        batch: list[tuple[str, str, str]] = []
         quoted_name = _quote_identifier(name)
         # Use INSERT OR IGNORE to skip duplicates silently.
         # Duplicate distinct_ids can occur in profile exports.
@@ -633,8 +645,10 @@ class StorageEngine:
             )
 
             if len(batch) >= batch_size:
-                # Insert batch
+                # Insert batch and commit immediately to release memory
                 self.connection.executemany(insert_sql, batch)
+                self.connection.execute("COMMIT")
+                self.connection.execute("BEGIN TRANSACTION")
                 total_rows += len(batch)
                 batch = []
 
@@ -691,14 +705,29 @@ class StorageEngine:
         data: Iterator[dict[str, Any]],
         metadata: TableMetadata,
         progress_callback: Callable[[int], None] | None = None,
+        batch_size: int = 1000,
     ) -> int:
         """Create events table with streaming batch insert.
+
+        Uses per-batch commits to bound memory usage for large datasets.
+        Each batch is committed immediately, allowing DuckDB to release
+        transaction buffers. This trades atomicity for constant memory usage.
+
+        Note:
+            If an error occurs after some chunks have been committed, those
+            chunks will remain in the database. The table will exist with
+            partial data but no metadata entry. Use drop_table() to clean up
+            before retrying.
 
         Args:
             name: Table name (alphanumeric + underscore, no leading _).
             data: Iterator yielding event dictionaries.
             metadata: Fetch operation metadata.
             progress_callback: Optional callback invoked with row count.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000.
 
         Returns:
             Total number of rows inserted.
@@ -714,15 +743,17 @@ class StorageEngine:
         if self.table_exists(name):
             raise TableExistsError(f"Table '{name}' already exists")
 
-        # Use transaction to ensure atomicity - if insertion fails,
-        # table is rolled back so user can retry without TableExistsError
+        # Start transaction - will be periodically committed during insert
+        # for memory efficiency. On error, only the current chunk is rolled back.
         self.connection.execute("BEGIN TRANSACTION")
         try:
             # Create table schema
             self._create_events_table_schema(name)
 
-            # Batch insert data
-            row_count = self._batch_insert_events(name, data, progress_callback)
+            # Batch insert data with periodic commits
+            row_count = self._batch_insert_events(
+                name, data, progress_callback, batch_size
+            )
 
             # Record metadata
             self._record_metadata(name, metadata, row_count)
@@ -739,14 +770,29 @@ class StorageEngine:
         data: Iterator[dict[str, Any]],
         metadata: TableMetadata,
         progress_callback: Callable[[int], None] | None = None,
+        batch_size: int = 1000,
     ) -> int:
         """Create profiles table with streaming batch insert.
+
+        Uses per-batch commits to bound memory usage for large datasets.
+        Each batch is committed immediately, allowing DuckDB to release
+        transaction buffers. This trades atomicity for constant memory usage.
+
+        Note:
+            If an error occurs after some chunks have been committed, those
+            chunks will remain in the database. The table will exist with
+            partial data but no metadata entry. Use drop_table() to clean up
+            before retrying.
 
         Args:
             name: Table name (alphanumeric + underscore, no leading _).
             data: Iterator yielding profile dictionaries.
             metadata: Fetch operation metadata.
             progress_callback: Optional callback invoked with row count.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000.
 
         Returns:
             Total number of rows inserted.
@@ -762,15 +808,17 @@ class StorageEngine:
         if self.table_exists(name):
             raise TableExistsError(f"Table '{name}' already exists")
 
-        # Use transaction to ensure atomicity - if insertion fails,
-        # table is rolled back so user can retry without TableExistsError
+        # Start transaction - will be periodically committed during insert
+        # for memory efficiency. On error, only the current chunk is rolled back.
         self.connection.execute("BEGIN TRANSACTION")
         try:
             # Create table schema
             self._create_profiles_table_schema(name)
 
-            # Batch insert data
-            row_count = self._batch_insert_profiles(name, data, progress_callback)
+            # Batch insert data with periodic commits
+            row_count = self._batch_insert_profiles(
+                name, data, progress_callback, batch_size
+            )
 
             # Record metadata
             self._record_metadata(name, metadata, row_count)
@@ -780,6 +828,193 @@ class StorageEngine:
         except Exception:
             self.connection.execute("ROLLBACK")
             raise
+
+    def append_events_table(
+        self,
+        name: str,
+        data: Iterator[dict[str, Any]],
+        metadata: TableMetadata,
+        progress_callback: Callable[[int], None] | None = None,
+        batch_size: int = 1000,
+    ) -> int:
+        """Append events to an existing table.
+
+        Adds new events to an existing events table. Duplicates (by insert_id)
+        are silently skipped via INSERT OR IGNORE. Metadata is updated to
+        reflect the expanded date range and new row count.
+
+        Uses per-batch commits to bound memory usage for large datasets.
+
+        Args:
+            name: Existing table name.
+            data: Iterator yielding event dictionaries.
+            metadata: Metadata for the appended data (dates will be merged).
+            progress_callback: Optional callback invoked with row count.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000.
+
+        Returns:
+            Number of rows inserted in this append operation.
+
+        Raises:
+            TableNotFoundError: If table does not exist.
+            ValueError: If data is malformed.
+        """
+        # Validate table name
+        self._validate_table_name(name)
+
+        # Check if table exists
+        if not self.table_exists(name):
+            raise TableNotFoundError(f"Table '{name}' does not exist")
+
+        # Start transaction
+        self.connection.execute("BEGIN TRANSACTION")
+        try:
+            # Batch insert data with periodic commits
+            row_count = self._batch_insert_events(
+                name, data, progress_callback, batch_size
+            )
+
+            # Update metadata with expanded date range and row count
+            self._update_metadata_for_append(name, metadata, row_count)
+
+            self.connection.execute("COMMIT")
+            return row_count
+        except Exception:
+            self.connection.execute("ROLLBACK")
+            raise
+
+    def append_profiles_table(
+        self,
+        name: str,
+        data: Iterator[dict[str, Any]],
+        metadata: TableMetadata,
+        progress_callback: Callable[[int], None] | None = None,
+        batch_size: int = 1000,
+    ) -> int:
+        """Append profiles to an existing table.
+
+        Adds new profiles to an existing profiles table. Duplicates (by
+        distinct_id) are silently skipped via INSERT OR IGNORE. Metadata
+        is updated to reflect the new row count.
+
+        Uses per-batch commits to bound memory usage for large datasets.
+
+        Args:
+            name: Existing table name.
+            data: Iterator yielding profile dictionaries.
+            metadata: Metadata for the appended data.
+            progress_callback: Optional callback invoked with row count.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000.
+
+        Returns:
+            Number of rows inserted in this append operation.
+
+        Raises:
+            TableNotFoundError: If table does not exist.
+            ValueError: If data is malformed.
+        """
+        # Validate table name
+        self._validate_table_name(name)
+
+        # Check if table exists
+        if not self.table_exists(name):
+            raise TableNotFoundError(f"Table '{name}' does not exist")
+
+        # Start transaction
+        self.connection.execute("BEGIN TRANSACTION")
+        try:
+            # Batch insert data with periodic commits
+            row_count = self._batch_insert_profiles(
+                name, data, progress_callback, batch_size
+            )
+
+            # Update metadata with new row count
+            self._update_metadata_for_append(name, metadata, row_count)
+
+            self.connection.execute("COMMIT")
+            return row_count
+        except Exception:
+            self.connection.execute("ROLLBACK")
+            raise
+
+    def _update_metadata_for_append(
+        self,
+        table_name: str,
+        new_metadata: TableMetadata,
+        appended_rows: int,
+    ) -> None:
+        """Update metadata after appending data.
+
+        Expands date range to include new data and updates row count.
+
+        Args:
+            table_name: Name of the table.
+            new_metadata: Metadata from the append operation.
+            appended_rows: Number of rows added in this append.
+        """
+        # Get current metadata
+        result = self.connection.execute(
+            """
+            SELECT from_date, to_date, row_count
+            FROM _metadata
+            WHERE table_name = ?
+            """,
+            (table_name,),
+        ).fetchone()
+
+        if result is None:
+            # No metadata entry - create one
+            self._record_metadata(table_name, new_metadata, appended_rows)
+            return
+
+        current_from_raw, current_to_raw, _ = result
+
+        # Convert dates to strings for comparison (DuckDB may return date objects)
+        current_from = str(current_from_raw) if current_from_raw else None
+        current_to = str(current_to_raw) if current_to_raw else None
+
+        # Calculate new date range (expand to include new data)
+        new_from = current_from
+        new_to = current_to
+
+        if new_metadata.from_date and (
+            current_from is None or new_metadata.from_date < current_from
+        ):
+            new_from = new_metadata.from_date
+
+        if new_metadata.to_date and (
+            current_to is None or new_metadata.to_date > current_to
+        ):
+            new_to = new_metadata.to_date
+
+        # Get actual row count from table (not cumulative of appends)
+        quoted_name = _quote_identifier(table_name)
+        count_result = self.connection.execute(
+            f"SELECT COUNT(*) FROM {quoted_name}"
+        ).fetchone()
+        actual_count = count_result[0] if count_result else 0
+
+        # Update metadata
+        self.connection.execute(
+            """
+            UPDATE _metadata
+            SET from_date = ?, to_date = ?, row_count = ?, fetched_at = ?
+            WHERE table_name = ?
+            """,
+            (
+                new_from,
+                new_to,
+                actual_count,
+                new_metadata.fetched_at.isoformat(),
+                table_name,
+            ),
+        )
 
     def execute(self, sql: str) -> duckdb.DuckDBPyRelation:
         """Execute SQL and return DuckDB relation (for chaining).

@@ -1941,3 +1941,219 @@ class TestReadOnlyMode:
             assert count == 2
         finally:
             ws.close()
+
+
+# =============================================================================
+# Batch Size Parameter Tests
+# =============================================================================
+
+
+class TestBatchSizeParameter:
+    """Tests for batch_size parameter in fetch_events and fetch_profiles."""
+
+    def test_fetch_events_passes_batch_size_to_fetcher(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events should pass batch_size to FetcherService."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_events.return_value = FetchResult(
+                table="events",
+                rows=100,
+                type="events",
+                duration_seconds=1.5,
+                date_range=("2024-01-01", "2024-01-31"),
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                progress=False,
+                batch_size=500,
+            )
+
+            # Verify batch_size was passed to fetcher
+            call_kwargs = mock_fetcher.fetch_events.call_args.kwargs
+            assert call_kwargs.get("batch_size") == 500
+        finally:
+            ws.close()
+
+    def test_fetch_profiles_passes_batch_size_to_fetcher(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_profiles should pass batch_size to FetcherService."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_profiles.return_value = FetchResult(
+                table="profiles",
+                rows=50,
+                type="profiles",
+                duration_seconds=0.5,
+                date_range=None,
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            ws.fetch_profiles(
+                "profiles",
+                progress=False,
+                batch_size=250,
+            )
+
+            # Verify batch_size was passed to fetcher
+            call_kwargs = mock_fetcher.fetch_profiles.call_args.kwargs
+            assert call_kwargs.get("batch_size") == 250
+        finally:
+            ws.close()
+
+    def test_fetch_events_validates_batch_size_minimum(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events should reject batch_size below 100."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            with pytest.raises(ValueError, match="batch_size must be at least 100"):
+                ws.fetch_events(
+                    "events",
+                    from_date="2024-01-01",
+                    to_date="2024-01-31",
+                    batch_size=50,
+                )
+        finally:
+            ws.close()
+
+    def test_fetch_events_validates_batch_size_maximum(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events should reject batch_size above 100000."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            with pytest.raises(ValueError, match="batch_size must be at most 100000"):
+                ws.fetch_events(
+                    "events",
+                    from_date="2024-01-01",
+                    to_date="2024-01-31",
+                    batch_size=200000,
+                )
+        finally:
+            ws.close()
+
+    def test_fetch_profiles_validates_batch_size_minimum(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_profiles should reject batch_size below 100."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            with pytest.raises(ValueError, match="batch_size must be at least 100"):
+                ws.fetch_profiles(
+                    "profiles",
+                    batch_size=99,
+                )
+        finally:
+            ws.close()
+
+    def test_fetch_profiles_validates_batch_size_maximum(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_profiles should reject batch_size above 100000."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            with pytest.raises(ValueError, match="batch_size must be at most 100000"):
+                ws.fetch_profiles(
+                    "profiles",
+                    batch_size=100001,
+                )
+        finally:
+            ws.close()
+
+    def test_fetch_events_default_batch_size(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events should use default batch_size of 1000."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_events.return_value = FetchResult(
+                table="events",
+                rows=100,
+                type="events",
+                duration_seconds=1.5,
+                date_range=("2024-01-01", "2024-01-31"),
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            # Don't specify batch_size - should use default
+            ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                progress=False,
+            )
+
+            # Verify default batch_size of 1000
+            call_kwargs = mock_fetcher.fetch_events.call_args.kwargs
+            assert call_kwargs.get("batch_size") == 1000
+        finally:
+            ws.close()
