@@ -2,7 +2,7 @@
 
 This directory contains all design documentation, specifications, and reference materials for the `mixpanel_data` library.
 
-**Project Status:** All core components complete (Phases 001-010). Phase 011 (Polish & Release) is next.
+**A complete programmable interface to Mixpanel analytics**—Python library and CLI for discovery, querying, and data extraction.
 
 ## Document Hierarchy
 
@@ -32,14 +32,24 @@ context/
 2. **[mp-cli-api-specification.md](mp-cli-api-specification.md)** — CLI commands and options
 3. **[mixpanel-data-model-reference.md](mixpanel-data-model-reference.md)** — Data model for Pydantic/DuckDB mapping
 
-## The Core Insight
+## Core Capabilities
 
-```
-MCP Approach:   Agent → API call → 30KB JSON in context → repeat → context exhausted
-mp Approach:    Agent → fetch once → DuckDB → SQL queries → minimal tokens → reasoning preserved
-```
+- **Discovery**: Explore your project schema—events, properties, funnels, cohorts, bookmarks
+- **Live Analytics**: Segmentation, funnels, retention, saved reports, flows—direct API queries
+- **Data Extraction**: Fetch events and profiles for local analysis or streaming to external systems
+- **Local SQL**: Store in DuckDB, query with SQL—fetch once, iterate many times
+- **JQL Execution**: Run custom JavaScript Query Language scripts
 
-Agents should fetch Mixpanel data once into a local DuckDB database, then query repeatedly with SQL—preserving context window for reasoning rather than consuming it with raw API responses.
+## For Humans and Agents
+
+The entire surface area is self-documenting:
+
+- Every CLI command supports `--help` with complete argument descriptions
+- Python API uses typed dataclasses—IDEs show available fields
+- Exceptions include error codes and context for programmatic handling
+- Discoverable schema: `list_events()`, `list_properties()`, `list_funnels()`, `list_cohorts()`, `list_bookmarks()`
+
+Both human developers and AI coding agents can explore capabilities without external documentation.
 
 ## Architecture
 
@@ -69,7 +79,7 @@ Agents should fetch Mixpanel data once into a local DuckDB database, then query 
 ```
 
 **Two data paths:**
-- **Live queries**: Call Mixpanel API directly (segmentation, funnel, retention, jql)
+- **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention, saved reports, flows, JQL)
 - **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
 
 ## Naming Convention
@@ -78,7 +88,7 @@ Agents should fetch Mixpanel data once into a local DuckDB database, then query 
 |---------|------|---------|
 | PyPI package | `mixpanel_data` | `pip install mixpanel_data` |
 | Python import | `mixpanel_data` | `import mixpanel_data as mp` |
-| CLI command | `mp` | `mp fetch events --from 2024-01-01` |
+| CLI command | `mp` | `mp fetch events --from 2025-01-01` |
 
 ## Design Principles
 
@@ -95,34 +105,36 @@ Agents should fetch Mixpanel data once into a local DuckDB database, then query 
 **Entry point:** `from mixpanel_data import Workspace`
 
 ```python
-# Create workspace with credentials
-ws = Workspace(account="myaccount", path="./data.db")
+import mixpanel_data as mp
 
-# Or open existing database (no credentials needed)
-ws = Workspace.open("./data.db")
+ws = mp.Workspace()
 
-# Discovery
-events = ws.events()
-props = ws.properties("PageView")
-values = ws.property_values("$browser", "PageView")
-funnels = ws.funnels()
-cohorts = ws.cohorts()
+# Discovery - explore your project schema
+events = ws.list_events()
+props = ws.list_properties("Purchase")
+funnels = ws.list_funnels()
+cohorts = ws.list_cohorts()
+bookmarks = ws.list_bookmarks()
+
+# Live analytics queries
+seg = ws.segmentation("Purchase", from_date="2025-01-01", to_date="2025-01-31", on="country")
+funnel = ws.funnel(funnel_id=funnels[0].id, from_date="2025-01-01", to_date="2025-01-31")
+ret = ws.retention("Signup", "Purchase", from_date="2025-01-01", to_date="2025-01-31")
+report = ws.saved_report(bookmark_id=bookmarks[0].id)
 
 # Fetch data to local storage
-ws.fetch_events("events_jan", from_date="2024-01-01", to_date="2024-01-31")
+ws.fetch_events("events_jan", from_date="2025-01-01", to_date="2025-01-31")
 ws.fetch_profiles("users")
 
-# Query local data
+# Query local data with SQL
 df = ws.sql("SELECT * FROM events_jan LIMIT 10")
 count = ws.sql_scalar("SELECT COUNT(*) FROM users")
 
-# Live queries (call Mixpanel API directly)
-seg = ws.segmentation("PageView", from_date="2024-01-01", to_date="2024-01-07")
-funnel = ws.funnel(funnel_id=12345, from_date="2024-01-01", to_date="2024-01-31")
-ret = ws.retention("Signup", "Purchase", from_date="2024-01-01", to_date="2024-01-31")
+# Stream without storage
+for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-07"):
+    process(event)
 
 # Introspection
-info = ws.info()
 tables = ws.tables()
 schema = ws.schema("events_jan")
 
@@ -145,39 +157,45 @@ mp auth test [name]                       # Test credentials
 
 ### Data Fetching (2 commands)
 ```bash
-mp fetch events <name> --from DATE --to DATE [--events E1,E2] [--where EXPR]
-mp fetch profiles <name> [--where EXPR]
+mp fetch events <name> --from DATE --to DATE [--events E1,E2] [--where EXPR] [--stdout]
+mp fetch profiles <name> [--where EXPR] [--stdout]
 ```
 
-### Queries (13 commands)
+Use `--stdout` to stream as JSONL instead of storing locally.
+
+### Queries
 ```bash
-# Local queries
+# Local SQL
 mp query sql "SELECT * FROM events LIMIT 10"
 
-# Live queries
+# Live analytics
 mp query segmentation <event> --from DATE --to DATE [--on PROP] [--unit day|week|month]
 mp query funnel <id> --from DATE --to DATE [--unit day|week|month]
 mp query retention --born EVENT --return EVENT --from DATE --to DATE
+mp query saved-report <bookmark_id>
+mp query flows <event> --from DATE --to DATE [--direction before|after|both]
 mp query jql <script> [--params JSON]
+
+# Additional query commands
 mp query event-counts --events E1,E2 --from DATE --to DATE
 mp query property-counts <event> <property> --from DATE --to DATE
-mp query activity-feed --users ID1,ID2 --from DATE --to DATE
-mp query insights <bookmark_id>
-mp query frequency --from DATE --to DATE [--event E] [--unit hour|day|week|month]
+mp query frequency --from DATE --to DATE [--event E]
 mp query segmentation-numeric <event> --from DATE --to DATE --on PROP
 mp query segmentation-sum <event> --from DATE --to DATE --on PROP
 mp query segmentation-average <event> --from DATE --to DATE --on PROP
 ```
 
-### Inspection (10 commands)
+### Inspection
 ```bash
+# Discovery - explore project schema
 mp inspect events                         # List event types
-mp inspect properties <event>             # List properties for event
+mp inspect properties --event <event>     # List properties for event
 mp inspect values <property> [--event E]  # List property values
 mp inspect funnels                        # List saved funnels
 mp inspect cohorts                        # List saved cohorts
-mp inspect top-events [--type general|unique] [--limit N]
-mp inspect info                           # Workspace metadata
+mp inspect bookmarks                      # List saved reports/insights
+
+# Local database introspection
 mp inspect tables                         # List local tables
 mp inspect schema <table>                 # Table schema details
 mp inspect drop <table> [--all]           # Drop table(s)

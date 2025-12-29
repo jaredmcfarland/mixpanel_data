@@ -1,5 +1,12 @@
 # mixpanel_data Package
 
+A complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, and data extraction.
+
+**Design principles:**
+- **Self-documenting**: Typed dataclasses with `.df` and `.to_dict()`, exceptions with structured context
+- **Discovery-first**: List events, properties, funnels, cohorts, and bookmarks before querying
+- **Dual data paths**: Live API queries for analytics, local DuckDB for SQL iteration
+
 Public API for the Mixpanel data library. Import from here, not from `_internal`.
 
 ## Files
@@ -22,13 +29,13 @@ from mixpanel_data import Workspace
 
 # Standard usage (credentials from env/config)
 ws = Workspace()
-ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
+ws.fetch_events(from_date="2025-01-01", to_date="2025-01-31")
 df = ws.sql("SELECT * FROM events")
 ws.close()
 
 # Ephemeral (auto-cleanup)
 with Workspace.ephemeral() as ws:
-    ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
+    ws.fetch_events(from_date="2025-01-01", to_date="2025-01-31")
     count = ws.sql_scalar("SELECT COUNT(*) FROM events")
 
 # Query-only (no credentials needed)
@@ -37,13 +44,15 @@ ws = Workspace.open("existing.db")
 
 ## Workspace Methods
 
-**Discovery**: `events()`, `properties()`, `property_values()`, `funnels()`, `cohorts()`, `list_bookmarks()`, `top_events()`, `lexicon_schemas()`, `lexicon_schema()`, `clear_discovery_cache()`
+**Discovery** (self-documenting API): `events()`, `properties()`, `property_values()`, `funnels()`, `cohorts()`, `list_bookmarks()`, `top_events()`, `lexicon_schemas()`, `lexicon_schema()`, `clear_discovery_cache()`
 
-**Fetching**: `fetch_events()`, `fetch_profiles()`, `stream_events()`, `stream_profiles()`
+**Data Extraction**: `fetch_events()`, `fetch_profiles()`, `stream_events()`, `stream_profiles()`
 
-**Local Queries**: `sql()`, `sql_scalar()`, `sql_rows()`
+**Local SQL Queries**: `sql()`, `sql_scalar()`, `sql_rows()`
 
-**Live Queries**: `segmentation()`, `funnel()`, `retention()`, `jql()`, `event_counts()`, `property_counts()`, `activity_feed()`, `query_saved_report()`, `query_flows()`, `frequency()`, `segmentation_numeric()`, `segmentation_sum()`, `segmentation_average()`
+**Core Analytics**: `segmentation()`, `funnel()`, `retention()`, `query_saved_report()`
+
+**Extended Live Queries**: `jql()`, `event_counts()`, `property_counts()`, `activity_feed()`, `query_flows()`, `frequency()`, `segmentation_numeric()`, `segmentation_sum()`, `segmentation_average()`
 
 **JQL Discovery**: `property_distribution()`, `numeric_summary()`, `daily_counts()`, `engagement_distribution()`, `property_coverage()`
 

@@ -2,9 +2,12 @@
 
 ## Project Overview
 
-**mixpanel_data** is a Python library and CLI for working with Mixpanel analytics data, designed for AI coding agents.
+**mixpanel_data** is a complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, and data extraction.
 
-**Core Concept**: Fetch Mixpanel data once into a local DuckDB database, then query repeatedly with SQL—preserving context window for reasoning rather than consuming it with raw API responses.
+**Core capabilities:**
+- **Discovery**: Explore schema (events, properties, funnels, cohorts, bookmarks)
+- **Live queries**: Segmentation, funnels, retention, saved reports, JQL—direct API access
+- **Local analysis**: Fetch into DuckDB, query with SQL, iterate without re-fetching
 
 **Technology Stack**: Python 3.11+, Typer (CLI), Rich (output), Pydantic v2 (validation), DuckDB (storage), httpx (HTTP client), pandas (DataFrames), pytest, ruff, mypy
 
@@ -106,8 +109,9 @@ Services                 → DiscoveryService, FetcherService, LiveQueryService
 Infrastructure           → ConfigManager, MixpanelAPIClient, StorageEngine (DuckDB)
 ```
 
-**Two data paths:**
-- **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention)
+**Three capability areas:**
+- **Discovery**: Explore schema (events, properties, funnels, cohorts, bookmarks)
+- **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention, JQL)
 - **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
 
 ## Code Style

@@ -1,6 +1,6 @@
 # Internal Implementation
 
-Private implementation details. Do not import directly—use public API from `mixpanel_data`.
+Private infrastructure powering mixpanel_data's complete programmable interface to Mixpanel analytics. Do not import directly—use public API from `mixpanel_data`.
 
 ## Files
 
@@ -9,7 +9,7 @@ Private implementation details. Do not import directly—use public API from `mi
 | `config.py` | Configuration management, credential resolution, TOML parsing |
 | `api_client.py` | HTTP client for Mixpanel API (authentication, error handling) |
 | `storage.py` | DuckDB storage engine (table management, SQL execution) |
-| `services/` | Domain services (discovery, fetcher, live_query) |
+| `services/` | Domain services: DiscoveryService (events, properties, funnels, cohorts, bookmarks, lexicon), FetcherService (events, profiles), LiveQueryService (segmentation, retention, JQL) |
 
 ## Key Classes
 

@@ -1,6 +1,15 @@
 # CLI Package
 
-The `mp` command-line interface built with Typer.
+The `mp` command-line interface for `mixpanel_data`—a complete programmable interface to Mixpanel analytics. Built with Typer.
+
+## Command Groups
+
+| Group | Purpose |
+|-------|---------|
+| `auth` | Account management (login, logout, list, switch) |
+| `fetch` | Data retrieval into local DuckDB (events, profiles) |
+| `query` | Live Mixpanel API queries (segmentation, funnels, retention, JQL) |
+| `inspect` | Local database introspection (tables, schema, sample, stats) |
 
 ## Files
 

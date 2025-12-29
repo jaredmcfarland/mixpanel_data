@@ -4,13 +4,13 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-`mixpanel_data` is a Python library and CLI for working with Mixpanel analytics data. The core insight: fetch data once into a local DuckDB database, then query it repeatedly with SQL—preserving context window for reasoning rather than consuming it with raw API responses.
+`mixpanel_data` is a complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, and data extraction. Discover your schema, run live analytics (segmentation, funnels, retention), execute JQL, and analyze locally with SQL via DuckDB.
 
 | Context | Name | Example |
 |---------|------|---------|
 | PyPI package | `mixpanel_data` | `pip install mixpanel_data` |
 | Python import | `mixpanel_data` | `import mixpanel_data as mp` |
-| CLI command | `mp` | `mp fetch events --from 2024-01-01` |
+| CLI command | `mp` | `mp fetch events --from 2025-01-01` |
 
 ## Architecture
 
@@ -26,8 +26,9 @@ Services                 → DiscoveryService, FetcherService, LiveQueryService
 Infrastructure           → ConfigManager, MixpanelAPIClient, StorageEngine (DuckDB)
 ```
 
-**Two data paths:**
-- **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention)
+**Three capability areas:**
+- **Discovery**: Explore schema (events, properties, funnels, cohorts, bookmarks)
+- **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention, JQL)
 - **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
 
 ## Package Structure
@@ -218,16 +219,3 @@ Design documents in `context/`:
 - [mixpanel_data-design.md](context/mixpanel_data-design.md) — Architecture and public API
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
-
-## Active Technologies
-- Python 3.11+ + Typer (CLI), httpx (HTTP), Rich (progress to stderr) (011-streaming-api)
-- N/A for streaming (bypasses DuckDB entirely) (011-streaming-api)
-- Python 3.11+ + httpx (HTTP client), Typer (CLI), Rich (output formatting), Pydantic v2 (validation) (012-lexicon-schemas)
-- N/A (read-only API operations, no local persistence) (012-lexicon-schemas)
-- Python 3.11+ + DuckDB (analytical queries), pandas (DataFrame conversion), Typer (CLI), Rich (output formatting) (014-introspection-api)
-- DuckDB (existing `StorageEngine` class) (014-introspection-api)
-- Python 3.11+ with full type hints (mypy --strict compliant) + httpx (HTTP client), Typer (CLI), Rich (output formatting), Pydantic v2 (validation), pandas (DataFrame conversion) (015-bookmarks-api)
-- N/A (live queries only - no local persistence for bookmark operations) (015-bookmarks-api)
-
-## Recent Changes
-- 011-streaming-api: Added Python 3.11+ + Typer (CLI), httpx (HTTP), Rich (progress to stderr)

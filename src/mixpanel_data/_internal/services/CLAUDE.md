@@ -30,15 +30,16 @@ Domain services implementing core business logic. These are internal implementat
 
 ### FetcherService
 - Fetches events and profiles from Export API
-- Streams data to `StorageEngine` via iterators
-- Returns `FetchResult` with metadata
+- Streams data to `StorageEngine` via iterators (fetch) or yields directly (stream)
+- Returns `FetchResult` with metadata for fetch operations
 - Supports progress callbacks for CLI
 
 ### LiveQueryService
 - Executes real-time queries against Mixpanel API
 - Segmentation, funnels, retention, JQL
-- Event counts, property counts, insights
+- Event counts, property counts, insights, activity feed
 - Frequency analysis, numeric aggregations
+- Flows, saved reports, bookmarks, lexicon schemas
 
 ## Testing
 
