@@ -431,10 +431,11 @@ class TestInspectDropAll:
     ) -> None:
         """Test dropping all tables with --force flag skips confirmation."""
         mock_workspace.drop_all.return_value = None
-        mock_workspace.storage.list_tables.return_value = [
-            MagicMock(name="events1"),
-            MagicMock(name="profiles1"),
-        ]
+        mock_table1 = MagicMock()
+        mock_table1.name = "events1"
+        mock_table2 = MagicMock()
+        mock_table2.name = "profiles1"
+        mock_workspace.storage.list_tables.return_value = [mock_table1, mock_table2]
         with patch(
             "mixpanel_data.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
@@ -454,9 +455,10 @@ class TestInspectDropAll:
     ) -> None:
         """Test dropping all tables with type filter."""
         mock_workspace.drop_all.return_value = None
-        mock_workspace.storage.list_tables.return_value = [
-            MagicMock(name="events1", type="events"),
-        ]
+        mock_table = MagicMock()
+        mock_table.name = "events1"
+        mock_table.type = "events"
+        mock_workspace.storage.list_tables.return_value = [mock_table]
         with patch(
             "mixpanel_data.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
@@ -484,9 +486,9 @@ class TestInspectDropAll:
     ) -> None:
         """Test dropping all tables prompts for confirmation."""
         mock_workspace.drop_all.return_value = None
-        mock_workspace.storage.list_tables.return_value = [
-            MagicMock(name="events1"),
-        ]
+        mock_table = MagicMock()
+        mock_table.name = "events1"
+        mock_workspace.storage.list_tables.return_value = [mock_table]
         with patch(
             "mixpanel_data.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
@@ -504,9 +506,9 @@ class TestInspectDropAll:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """Test dropping all tables cancelled when user declines."""
-        mock_workspace.storage.list_tables.return_value = [
-            MagicMock(name="events1"),
-        ]
+        mock_table = MagicMock()
+        mock_table.name = "events1"
+        mock_workspace.storage.list_tables.return_value = [mock_table]
         with patch(
             "mixpanel_data.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
