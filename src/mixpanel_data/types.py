@@ -2180,7 +2180,7 @@ class NumericPropertySummaryResult:
 
     Attributes:
         event: The event type analyzed.
-        property: The property name analyzed.
+        property_name: The property name analyzed.
         from_date: Query start date (YYYY-MM-DD).
         to_date: Query end date (YYYY-MM-DD).
         count: Number of events with this property defined.
@@ -2195,7 +2195,7 @@ class NumericPropertySummaryResult:
     event: str
     """Event type analyzed."""
 
-    property: str
+    property_name: str
     """Property name analyzed."""
 
     from_date: str
@@ -2233,7 +2233,7 @@ class NumericPropertySummaryResult:
         """
         return {
             "event": self.event,
-            "property": self.property,
+            "property_name": self.property_name,
             "from_date": self.from_date,
             "to_date": self.to_date,
             "count": self.count,

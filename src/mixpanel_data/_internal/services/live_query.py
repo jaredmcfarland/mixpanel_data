@@ -1247,7 +1247,8 @@ function main() {
     })
     .reduce(function(accumulators, items) {
         var result = accumulators[0] || {total: 0, properties: {}};
-        for (var i = 0; i < accumulators.length; i++) {
+        // Start from index 1 to avoid double-counting accumulators[0]
+        for (var i = 1; i < accumulators.length; i++) {
             result.total += accumulators[i].total || 0;
             for (var prop in accumulators[i].properties) {
                 result.properties[prop] = (result.properties[prop] || 0) +
@@ -1615,7 +1616,7 @@ def _transform_numeric_summary(
     if not raw or not raw[0]:
         return NumericPropertySummaryResult(
             event=event,
-            property=property,
+            property_name=property,
             from_date=from_date,
             to_date=to_date,
             count=0,
@@ -1648,7 +1649,7 @@ def _transform_numeric_summary(
 
     return NumericPropertySummaryResult(
         event=event,
-        property=property,
+        property_name=property,
         from_date=from_date,
         to_date=to_date,
         count=summary_data.get("count", 0),

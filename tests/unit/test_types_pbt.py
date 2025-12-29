@@ -1633,9 +1633,11 @@ class TestPropertyValueCountProperties:
         """PropertyValueCount should be immutable (frozen dataclass)."""
         result = PropertyValueCount(value="test", count=count, percentage=percentage)
 
+        import dataclasses
+
         import pytest
 
-        with pytest.raises(AttributeError):
+        with pytest.raises(dataclasses.FrozenInstanceError):
             result.count = 999  # type: ignore[misc]
 
 
@@ -1779,7 +1781,7 @@ class TestNumericPropertySummaryResultProperties:
         """to_dict() output should always be JSON-serializable."""
         result = NumericPropertySummaryResult(
             event=event,
-            property=property_name,
+            property_name=property_name,
             from_date=from_date,
             to_date=to_date,
             count=count,
@@ -1810,7 +1812,7 @@ class TestNumericPropertySummaryResultProperties:
 
         result = NumericPropertySummaryResult(
             event="test_event",
-            property="test_property",
+            property_name="test_property",
             from_date="2024-01-01",
             to_date="2024-01-31",
             count=1000,

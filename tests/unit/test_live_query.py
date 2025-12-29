@@ -1435,7 +1435,7 @@ class TestNumericSummary:
         )
 
         assert result.event == "Purchase"
-        assert result.property == "amount"
+        assert result.property_name == "amount"
         assert result.from_date == "2024-01-01"
         assert result.to_date == "2024-01-31"
         assert result.count == 10000

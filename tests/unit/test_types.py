@@ -1322,7 +1322,7 @@ class TestNumericPropertySummaryResult:
 
         result = NumericPropertySummaryResult(
             event="Purchase",
-            property="amount",
+            property_name="amount",
             from_date="2024-01-01",
             to_date="2024-01-31",
             count=10000,
@@ -1342,7 +1342,7 @@ class TestNumericPropertySummaryResult:
         )
 
         assert result.event == "Purchase"
-        assert result.property == "amount"
+        assert result.property_name == "amount"
         assert result.count == 10000
         assert result.min == 1.0
         assert result.max == 9999.0
@@ -1355,7 +1355,7 @@ class TestNumericPropertySummaryResult:
 
         result = NumericPropertySummaryResult(
             event="Purchase",
-            property="amount",
+            property_name="amount",
             from_date="2024-01-01",
             to_date="2024-01-31",
             count=100,
@@ -1376,7 +1376,7 @@ class TestNumericPropertySummaryResult:
 
         result = NumericPropertySummaryResult(
             event="Purchase",
-            property="amount",
+            property_name="amount",
             from_date="2024-01-01",
             to_date="2024-01-31",
             count=1000,
@@ -1392,7 +1392,7 @@ class TestNumericPropertySummaryResult:
         json_str = json.dumps(data)
 
         assert "Purchase" in json_str
-        assert data["property"] == "amount"
+        assert data["property_name"] == "amount"
         assert data["min"] == 1.0
         assert data["percentiles"]["50"] == 45.0
 
