@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to mixpanel_data!
 
+> **Note**: This package is currently in pre-release and not yet published to PyPI. We welcome contributions, but please be aware that APIs may change between versions as we work toward a stable 1.0 release.
+
 ## Development Setup
 
 ### Prerequisites
