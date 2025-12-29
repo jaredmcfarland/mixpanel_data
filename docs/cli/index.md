@@ -50,12 +50,36 @@ Fetch data from Mixpanel into local storage, or stream directly to stdout.
 | `mp fetch events` | Fetch events to local DuckDB |
 | `mp fetch profiles` | Fetch user profiles to local DuckDB |
 
+**Table Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--replace` | Drop and recreate existing table |
+| `--append` | Add data to existing table (duplicates skipped) |
+| `--batch-size` | Rows per commit (100-100000, default: 1000) |
+
 **Streaming Options:**
 
 | Option | Description |
 |--------|-------------|
 | `--stdout` | Stream data as JSONL to stdout instead of storing |
 | `--raw` | Output raw Mixpanel API format (requires `--stdout`) |
+
+**Event Filter Options (fetch events only):**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--events` | `-e` | Comma-separated event names to filter |
+| `--where` | `-w` | Mixpanel filter expression |
+| `--limit` | `-l` | Maximum events to return (max 100000) |
+
+**Profile Filter Options (fetch profiles only):**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--cohort` | `-c` | Filter by cohort ID |
+| `--output-properties` | `-o` | Comma-separated properties to include |
+| `--where` | `-w` | Mixpanel filter expression |
 
 ### query — Query Operations
 
@@ -169,6 +193,23 @@ mp query sql "SELECT event_name, COUNT(*) FROM jan GROUP BY 1" --format table
 mp query segmentation --event Purchase --from 2024-01-01 --to 2024-01-31 --format table
 ```
 
+### Incremental Fetching
+
+```bash
+# Fetch initial data
+mp fetch events events --from 2024-01-01 --to 2024-01-31
+
+# Append more data later
+mp fetch events events --from 2024-02-01 --to 2024-02-28 --append
+
+# Resume after a crash (overlapping dates are safe)
+mp query sql "SELECT MAX(event_time) FROM events"
+mp fetch events events --from 2024-02-15 --to 2024-02-28 --append
+
+# Replace with fresh data
+mp fetch events events --from 2024-01-01 --to 2024-02-28 --replace
+```
+
 ### Piping and Scripting
 
 ```bash
@@ -193,6 +234,12 @@ mp fetch events --from 2024-01-01 --to 2024-01-31 --stdout
 
 # Stream profiles
 mp fetch profiles --stdout
+
+# Stream profiles filtered by cohort
+mp fetch profiles --stdout --cohort 12345
+
+# Stream specific profile properties only
+mp fetch profiles --stdout --output-properties '$email,$name,plan'
 
 # Pipe to jq for filtering
 mp fetch events --from 2024-01-01 --to 2024-01-31 --stdout \

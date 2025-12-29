@@ -132,7 +132,11 @@ def query_segmentation(
     ],
     on: Annotated[
         str | None,
-        typer.Option("--on", "-o", help="Property to segment by."),
+        typer.Option(
+            "--on",
+            "-o",
+            help="Property to segment by (bare name or expression).",
+        ),
     ] = None,
     unit: Annotated[
         str,
@@ -149,6 +153,9 @@ def query_segmentation(
     Returns time-series event counts, optionally segmented by a property.
     Without --on, returns total counts per time period. With --on, breaks
     down counts by property values (e.g., --on country shows counts per country).
+
+    The --on parameter accepts bare property names (e.g., 'country') or full
+    filter expressions (e.g., 'properties["country"] == "US"').
 
     Output includes event name, date range, total count, time unit, and
     a series dict mapping dates to counts (or segments to date/count dicts).
@@ -709,7 +716,11 @@ def query_segmentation_numeric(
     ],
     on: Annotated[
         str,
-        typer.Option("--on", "-o", help="Numeric property to bucket."),
+        typer.Option(
+            "--on",
+            "-o",
+            help="Numeric property to bucket (bare name or expression).",
+        ),
     ],
     from_date: Annotated[
         str,
@@ -782,7 +793,11 @@ def query_segmentation_sum(
     ],
     on: Annotated[
         str,
-        typer.Option("--on", "-o", help="Numeric property to sum."),
+        typer.Option(
+            "--on",
+            "-o",
+            help="Numeric property to sum (bare name or expression).",
+        ),
     ],
     from_date: Annotated[
         str,
@@ -844,7 +859,11 @@ def query_segmentation_average(
     ],
     on: Annotated[
         str,
-        typer.Option("--on", "-o", help="Numeric property to average."),
+        typer.Option(
+            "--on",
+            "-o",
+            help="Numeric property to average (bare name or expression).",
+        ),
     ],
     from_date: Annotated[
         str,

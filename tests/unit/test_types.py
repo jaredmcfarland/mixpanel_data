@@ -21,6 +21,7 @@ from mixpanel_data.types import (
     RetentionResult,
     SavedCohort,
     SegmentationResult,
+    TableMetadata,
     TopEvent,
 )
 
@@ -906,3 +907,98 @@ class TestPropertyCountsResult:
 
         assert "Purchase" in json_str
         assert data["property_name"] == "country"
+
+
+class TestTableMetadata:
+    """Tests for TableMetadata."""
+
+    def test_basic_creation(self) -> None:
+        """Test creating a TableMetadata with minimal fields."""
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime(2024, 1, 15, 12, 0, 0),
+        )
+
+        assert metadata.type == "profiles"
+        assert metadata.fetched_at == datetime(2024, 1, 15, 12, 0, 0)
+        assert metadata.from_date is None
+        assert metadata.to_date is None
+        assert metadata.filter_events is None
+        assert metadata.filter_where is None
+
+    def test_with_cohort_id(self) -> None:
+        """Test creating TableMetadata with cohort_id filter."""
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime(2024, 1, 15, 12, 0, 0),
+            filter_cohort_id="cohort_12345",
+        )
+
+        assert metadata.filter_cohort_id == "cohort_12345"
+
+    def test_with_output_properties(self) -> None:
+        """Test creating TableMetadata with output_properties filter."""
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime(2024, 1, 15, 12, 0, 0),
+            filter_output_properties=["$email", "$name", "plan"],
+        )
+
+        assert metadata.filter_output_properties == ["$email", "$name", "plan"]
+
+    def test_with_all_filters(self) -> None:
+        """Test creating TableMetadata with all filter fields."""
+        metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime(2024, 1, 15, 12, 0, 0),
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            filter_events=["Purchase", "Signup"],
+            filter_where='properties["plan"] == "premium"',
+            filter_cohort_id="cohort_abc",
+            filter_output_properties=["$email"],
+        )
+
+        assert metadata.filter_events == ["Purchase", "Signup"]
+        assert metadata.filter_where == 'properties["plan"] == "premium"'
+        assert metadata.filter_cohort_id == "cohort_abc"
+        assert metadata.filter_output_properties == ["$email"]
+
+    def test_to_dict_includes_new_fields(self) -> None:
+        """to_dict should include filter_cohort_id and filter_output_properties."""
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime(2024, 1, 15, 12, 0, 0),
+            filter_cohort_id="cohort_123",
+            filter_output_properties=["$email", "$name"],
+        )
+
+        data = metadata.to_dict()
+
+        assert data["filter_cohort_id"] == "cohort_123"
+        assert data["filter_output_properties"] == ["$email", "$name"]
+
+    def test_to_dict_serializable(self) -> None:
+        """to_dict output should be JSON serializable."""
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime(2024, 1, 15, 12, 0, 0),
+            filter_cohort_id="cohort_123",
+            filter_output_properties=["$email"],
+        )
+
+        data = metadata.to_dict()
+        json_str = json.dumps(data)
+
+        assert "cohort_123" in json_str
+        assert "$email" in json_str
+
+    def test_immutable(self) -> None:
+        """TableMetadata should be immutable (frozen)."""
+        metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime(2024, 1, 15, 12, 0, 0),
+        )
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            metadata.type = "events"  # type: ignore[misc]

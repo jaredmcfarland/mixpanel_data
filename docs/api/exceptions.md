@@ -95,6 +95,15 @@ except mp.MixpanelDataError as e:
 
 ## Storage Exceptions
 
+Storage exceptions are raised during fetch and table operations:
+
+| Exception | Raised When |
+|-----------|-------------|
+| `TableExistsError` | Fetching to an existing table without `append=True` or `--replace` |
+| `TableNotFoundError` | Using `append=True` on a non-existent table |
+| `DatabaseLockedError` | Another process has the database locked |
+| `DatabaseNotFoundError` | Database file not found in read-only mode |
+
 ::: mixpanel_data.TableExistsError
     options:
       show_root_heading: true

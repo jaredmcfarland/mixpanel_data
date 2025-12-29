@@ -617,6 +617,7 @@ class MixpanelAPIClient:
         *,
         events: list[str] | None = None,
         where: str | None = None,
+        limit: int | None = None,
         on_batch: Callable[[int], None] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Stream events from the Export API.
@@ -629,6 +630,7 @@ class MixpanelAPIClient:
             to_date: End date (YYYY-MM-DD, inclusive).
             events: Optional list of event names to filter.
             where: Optional filter expression.
+            limit: Optional maximum number of events to return (max 100000).
             on_batch: Optional callback invoked with cumulative count every
                 1000 events, and once at the end for any remaining events.
 
@@ -653,6 +655,8 @@ class MixpanelAPIClient:
             params["event"] = json.dumps(events)
         if where:
             params["where"] = where
+        if limit is not None:
+            params["limit"] = limit
 
         client = self._ensure_client()
         headers = {
@@ -752,6 +756,8 @@ class MixpanelAPIClient:
         self,
         *,
         where: str | None = None,
+        cohort_id: str | None = None,
+        output_properties: list[str] | None = None,
         on_batch: Callable[[int], None] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Stream profiles from the Engage API.
@@ -761,6 +767,10 @@ class MixpanelAPIClient:
 
         Args:
             where: Optional filter expression.
+            cohort_id: Optional cohort ID to filter by. Only profiles that are
+                members of this cohort will be returned.
+            output_properties: Optional list of property names to include in
+                the response. If None, all properties are returned.
             on_batch: Optional callback invoked with cumulative count after
                 each page is processed.
 
@@ -787,6 +797,10 @@ class MixpanelAPIClient:
                 params["session_id"] = session_id
             if where:
                 params["where"] = where
+            if cohort_id:
+                params["filter_by_cohort"] = cohort_id
+            if output_properties:
+                params["output_properties"] = json.dumps(output_properties)
 
             response = self._request("POST", url, data=params)
 

@@ -178,23 +178,33 @@ class FetcherService:
         *,
         events: list[str] | None = None,
         where: str | None = None,
+        limit: int | None = None,
         progress_callback: Callable[[int], None] | None = None,
+        append: bool = False,
+        batch_size: int = 1000,
     ) -> FetchResult:
         """Fetch events from Mixpanel and store in local database.
 
         Args:
-            name: Table name to create (alphanumeric + underscore, no leading _).
+            name: Table name to create or append to.
             from_date: Start date (YYYY-MM-DD, inclusive).
             to_date: End date (YYYY-MM-DD, inclusive).
             events: Optional list of event names to filter.
             where: Optional filter expression.
+            limit: Optional maximum number of events to return (max 100000).
             progress_callback: Optional callback invoked with row count during fetch.
+            append: If True, append to existing table. If False (default), create new.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000.
 
         Returns:
             FetchResult with table name, row count, duration, and metadata.
 
         Raises:
-            TableExistsError: If table with given name already exists.
+            TableExistsError: If table exists and append=False.
+            TableNotFoundError: If table doesn't exist and append=True.
             AuthenticationError: If API credentials are invalid.
             RateLimitError: If Mixpanel rate limit is exceeded.
             QueryError: If filter expression is invalid.
@@ -217,6 +227,7 @@ class FetcherService:
             to_date=to_date,
             events=events,
             where=where,
+            limit=limit,
             on_batch=on_api_batch,
         )
 
@@ -236,12 +247,21 @@ class FetcherService:
             filter_where=where,
         )
 
-        # Store in database (handles TableExistsError, transactions, etc.)
-        row_count = self._storage.create_events_table(
-            name=name,
-            data=transform_iterator(),
-            metadata=metadata,
-        )
+        # Store in database (handles TableExistsError/TableNotFoundError, transactions)
+        if append:
+            row_count = self._storage.append_events_table(
+                name=name,
+                data=transform_iterator(),
+                metadata=metadata,
+                batch_size=batch_size,
+            )
+        else:
+            row_count = self._storage.create_events_table(
+                name=name,
+                data=transform_iterator(),
+                metadata=metadata,
+                batch_size=batch_size,
+            )
 
         # Calculate final timing (use distinct variable to avoid confusion with metadata timestamp)
         completed_at = datetime.now(UTC)
@@ -261,21 +281,35 @@ class FetcherService:
         name: str,
         *,
         where: str | None = None,
+        cohort_id: str | None = None,
+        output_properties: list[str] | None = None,
         progress_callback: Callable[[int], None] | None = None,
+        append: bool = False,
+        batch_size: int = 1000,
     ) -> FetchResult:
         """Fetch user profiles from Mixpanel and store in local database.
 
         Args:
-            name: Table name to create (alphanumeric + underscore, no leading _).
+            name: Table name to create or append to.
             where: Optional filter expression.
+            cohort_id: Optional cohort ID to filter by. Only profiles that are
+                members of this cohort will be returned.
+            output_properties: Optional list of property names to include in
+                the response. If None, all properties are returned.
             progress_callback: Optional callback invoked with row count during fetch.
+            append: If True, append to existing table. If False (default), create new.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000.
 
         Returns:
             FetchResult with table name, row count, duration, and metadata.
             The date_range field will be None for profiles.
 
         Raises:
-            TableExistsError: If table with given name already exists.
+            TableExistsError: If table exists and append=False.
+            TableNotFoundError: If table doesn't exist and append=True.
             AuthenticationError: If API credentials are invalid.
             RateLimitError: If Mixpanel rate limit is exceeded.
             ValueError: If table name is invalid.
@@ -290,6 +324,8 @@ class FetcherService:
         # Stream profiles from API
         profiles_iter = self._api_client.export_profiles(
             where=where,
+            cohort_id=cohort_id,
+            output_properties=output_properties,
             on_batch=on_api_batch,
         )
 
@@ -307,14 +343,25 @@ class FetcherService:
             to_date=None,
             filter_events=None,
             filter_where=where,
+            filter_cohort_id=cohort_id,
+            filter_output_properties=output_properties,
         )
 
-        # Store in database (handles TableExistsError, transactions, etc.)
-        row_count = self._storage.create_profiles_table(
-            name=name,
-            data=transform_iterator(),
-            metadata=metadata,
-        )
+        # Store in database (handles TableExistsError/TableNotFoundError, transactions)
+        if append:
+            row_count = self._storage.append_profiles_table(
+                name=name,
+                data=transform_iterator(),
+                metadata=metadata,
+                batch_size=batch_size,
+            )
+        else:
+            row_count = self._storage.create_profiles_table(
+                name=name,
+                data=transform_iterator(),
+                metadata=metadata,
+                batch_size=batch_size,
+            )
 
         # Calculate final timing (use distinct variable to avoid confusion with metadata timestamp)
         completed_at = datetime.now(UTC)

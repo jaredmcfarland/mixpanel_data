@@ -86,6 +86,53 @@ from mixpanel_data.types import (
     WorkspaceInfo,
 )
 
+# Batch size validation bounds
+_MIN_BATCH_SIZE = 100
+_MAX_BATCH_SIZE = 100_000
+
+# Limit validation bounds (Mixpanel API restriction)
+_MIN_LIMIT = 1
+_MAX_LIMIT = 100_000
+
+
+def _validate_batch_size(batch_size: int) -> None:
+    """Validate batch_size is within the allowed range.
+
+    Args:
+        batch_size: Number of rows per commit.
+
+    Raises:
+        ValueError: If batch_size is outside the valid range.
+    """
+    if batch_size < _MIN_BATCH_SIZE:
+        raise ValueError(
+            f"batch_size must be at least {_MIN_BATCH_SIZE}, got {batch_size}"
+        )
+    if batch_size > _MAX_BATCH_SIZE:
+        raise ValueError(
+            f"batch_size must be at most {_MAX_BATCH_SIZE}, got {batch_size}"
+        )
+
+
+def _validate_limit(limit: int | None) -> None:
+    """Validate limit is within the allowed range.
+
+    Mixpanel API restricts the limit parameter to a maximum of 100000 events.
+    This validation catches invalid values early to avoid wasting an API call.
+
+    Args:
+        limit: Maximum number of events to return, or None for no limit.
+
+    Raises:
+        ValueError: If limit is outside the valid range (1 to 100000).
+    """
+    if limit is None:
+        return
+    if limit < _MIN_LIMIT:
+        raise ValueError(f"limit must be at least {_MIN_LIMIT}, got {limit}")
+    if limit > _MAX_LIMIT:
+        raise ValueError(f"limit must be at most {_MAX_LIMIT}, got {limit}")
+
 
 class Workspace:
     """Unified entry point for Mixpanel data operations.
@@ -775,26 +822,47 @@ class Workspace:
         to_date: str,
         events: list[str] | None = None,
         where: str | None = None,
+        limit: int | None = None,
         progress: bool = True,
+        append: bool = False,
+        batch_size: int = 1000,
     ) -> FetchResult:
         """Fetch events from Mixpanel and store in local database.
 
+        Note:
+            This is a potentially long-running operation that streams data from
+            Mixpanel's Export API. For large date ranges, consider chunking into
+            smaller ranges with ``append=True``, or running in a background process.
+
         Args:
-            name: Table name to create (default: "events").
+            name: Table name to create or append to (default: "events").
             from_date: Start date (YYYY-MM-DD).
             to_date: End date (YYYY-MM-DD).
             events: Optional list of event names to filter.
             where: Optional WHERE clause for filtering.
+            limit: Optional maximum number of events to return (max 100000).
             progress: Show progress bar (default: True).
+            append: If True, append to existing table. If False (default), create new.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000. Valid range: 100-100000.
 
         Returns:
             FetchResult with table name, row count, duration.
 
         Raises:
-            TableExistsError: If table already exists.
+            TableExistsError: If table exists and append=False.
+            TableNotFoundError: If table doesn't exist and append=True.
             ConfigError: If API credentials not available.
             AuthenticationError: If credentials are invalid.
+            ValueError: If batch_size is outside valid range (100-100000).
+            ValueError: If limit is outside valid range (1-100000).
         """
+        # Validate parameters early to avoid wasted API calls
+        _validate_batch_size(batch_size)
+        _validate_limit(limit)
+
         # Create progress callback if requested (only for interactive terminals)
         progress_callback = None
         pbar = None
@@ -825,7 +893,10 @@ class Workspace:
                 to_date=to_date,
                 events=events,
                 where=where,
+                limit=limit,
                 progress_callback=progress_callback,
+                append=append,
+                batch_size=batch_size,
             )
         finally:
             if pbar is not None:
@@ -838,22 +909,45 @@ class Workspace:
         name: str = "profiles",
         *,
         where: str | None = None,
+        cohort_id: str | None = None,
+        output_properties: list[str] | None = None,
         progress: bool = True,
+        append: bool = False,
+        batch_size: int = 1000,
     ) -> FetchResult:
         """Fetch user profiles from Mixpanel and store in local database.
 
+        Note:
+            This is a potentially long-running operation that streams data from
+            Mixpanel's Engage API. For large profile sets, consider running in a
+            background process.
+
         Args:
-            name: Table name to create (default: "profiles").
+            name: Table name to create or append to (default: "profiles").
             where: Optional WHERE clause for filtering.
+            cohort_id: Optional cohort ID to filter by. Only profiles that are
+                members of this cohort will be returned.
+            output_properties: Optional list of property names to include in
+                the response. If None, all properties are returned.
             progress: Show progress bar (default: True).
+            append: If True, append to existing table. If False (default), create new.
+            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
+                memory/IO tradeoff: smaller values use less memory but more
+                disk IO; larger values use more memory but less IO.
+                Default: 1000. Valid range: 100-100000.
 
         Returns:
             FetchResult with table name, row count, duration.
 
         Raises:
-            TableExistsError: If table already exists.
+            TableExistsError: If table exists and append=False.
+            TableNotFoundError: If table doesn't exist and append=True.
             ConfigError: If API credentials not available.
+            ValueError: If batch_size is outside valid range (100-100000).
         """
+        # Validate batch_size
+        _validate_batch_size(batch_size)
+
         # Create progress callback if requested (only for interactive terminals)
         progress_callback = None
         pbar = None
@@ -881,7 +975,11 @@ class Workspace:
             result = self._fetcher_service.fetch_profiles(
                 name=name,
                 where=where,
+                cohort_id=cohort_id,
+                output_properties=output_properties,
                 progress_callback=progress_callback,
+                append=append,
+                batch_size=batch_size,
             )
         finally:
             if pbar is not None:
@@ -900,6 +998,7 @@ class Workspace:
         to_date: str,
         events: list[str] | None = None,
         where: str | None = None,
+        limit: int | None = None,
         raw: bool = False,
     ) -> Iterator[dict[str, Any]]:
         """Stream events directly from Mixpanel API without storing.
@@ -912,6 +1011,7 @@ class Workspace:
             to_date: End date inclusive (YYYY-MM-DD format).
             events: Optional list of event names to filter. If None, all events returned.
             where: Optional Mixpanel filter expression (e.g., 'properties["country"]=="US"').
+            limit: Optional maximum number of events to return (max 100000).
             raw: If True, return events in raw Mixpanel API format.
                  If False (default), return normalized format with datetime objects.
 
@@ -923,6 +1023,7 @@ class Workspace:
             AuthenticationError: If credentials are invalid.
             RateLimitError: If rate limit exceeded after max retries.
             QueryError: If filter expression is invalid.
+            ValueError: If limit is outside valid range (1-100000).
 
         Example:
             ```python
@@ -941,12 +1042,16 @@ class Workspace:
                 legacy_system.ingest(event)
             ```
         """
+        # Validate limit early to avoid wasted API calls
+        _validate_limit(limit)
+
         api_client = self._require_api_client()
         event_iterator = api_client.export_events(
             from_date=from_date,
             to_date=to_date,
             events=events,
             where=where,
+            limit=limit,
         )
 
         if raw:
@@ -959,6 +1064,8 @@ class Workspace:
         self,
         *,
         where: str | None = None,
+        cohort_id: str | None = None,
+        output_properties: list[str] | None = None,
         raw: bool = False,
     ) -> Iterator[dict[str, Any]]:
         """Stream user profiles directly from Mixpanel API without storing.
@@ -968,6 +1075,10 @@ class Workspace:
 
         Args:
             where: Optional Mixpanel filter expression for profile properties.
+            cohort_id: Optional cohort ID to filter by. Only profiles that are
+                members of this cohort will be returned.
+            output_properties: Optional list of property names to include in
+                the response. If None, all properties are returned.
             raw: If True, return profiles in raw Mixpanel API format.
                  If False (default), return normalized format.
 
@@ -993,9 +1104,23 @@ class Workspace:
             for profile in ws.stream_profiles(where='properties["plan"]=="premium"'):
                 send_survey(profile)
             ```
+
+            Filter by cohort and select specific properties:
+
+            ```python
+            for profile in ws.stream_profiles(
+                cohort_id="12345",
+                output_properties=["$email", "$name"]
+            ):
+                send_email(profile)
+            ```
         """
         api_client = self._require_api_client()
-        profile_iterator = api_client.export_profiles(where=where)
+        profile_iterator = api_client.export_profiles(
+            where=where,
+            cohort_id=cohort_id,
+            output_properties=output_properties,
+        )
 
         if raw:
             yield from profile_iterator

@@ -509,6 +509,60 @@ class TestEventExport:
         assert events[0]["event"] == "A"
         assert events[1]["event"] == "B"
 
+    def test_export_events_with_limit(self, test_credentials: Credentials) -> None:
+        """Should pass limit parameter to API."""
+        captured_url: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_url
+            captured_url = str(request.url)
+            return httpx.Response(200, content=b"")
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_events("2024-01-01", "2024-01-31", limit=1000))
+
+        assert "limit=1000" in captured_url
+
+    def test_export_events_without_limit(self, test_credentials: Credentials) -> None:
+        """Should not include limit parameter when None."""
+        captured_url: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_url
+            captured_url = str(request.url)
+            return httpx.Response(200, content=b"")
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_events("2024-01-01", "2024-01-31"))
+
+        assert "limit=" not in captured_url
+
+    def test_export_events_limit_with_other_params(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should combine limit with other filter parameters."""
+        captured_url: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_url
+            captured_url = str(request.url)
+            return httpx.Response(200, content=b"")
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(
+                client.export_events(
+                    "2024-01-01",
+                    "2024-01-31",
+                    events=["Purchase"],
+                    where='properties["amount"] > 100',
+                    limit=500,
+                )
+            )
+
+        assert "limit=500" in captured_url
+        assert "event=" in captured_url
+        assert "where=" in captured_url
+
 
 # =============================================================================
 # User Story 4: Segmentation Queries
@@ -696,6 +750,94 @@ class TestProfileExport:
             list(client.export_profiles(where='properties["plan"] == "premium"'))
 
         assert "where" in captured_body
+
+    def test_cohort_id_filter(self, test_credentials: Credentials) -> None:
+        """Should include filter_by_cohort when cohort_id provided."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles(cohort_id="12345"))
+
+        assert captured_body.get("filter_by_cohort") == "12345"
+
+    def test_output_properties_filter(self, test_credentials: Credentials) -> None:
+        """Should include output_properties as JSON array string."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles(output_properties=["$email", "$name", "plan"]))
+
+        # output_properties should be serialized as JSON array string
+        output_props = captured_body.get("output_properties")
+        assert output_props is not None
+        assert json.loads(output_props) == ["$email", "$name", "plan"]
+
+    def test_cohort_id_and_output_properties_together(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should include both cohort_id and output_properties."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(
+                client.export_profiles(
+                    cohort_id="cohort_abc",
+                    output_properties=["$email"],
+                )
+            )
+
+        assert captured_body.get("filter_by_cohort") == "cohort_abc"
+        assert json.loads(captured_body.get("output_properties", "[]")) == ["$email"]
+
+    def test_no_cohort_id_when_none(self, test_credentials: Credentials) -> None:
+        """Should not include filter_by_cohort when cohort_id is None."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles())
+
+        assert "filter_by_cohort" not in captured_body
+
+    def test_no_output_properties_when_none(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should not include output_properties when None."""
+        captured_body: dict[str, Any] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.content:
+                nonlocal captured_body
+                captured_body = json.loads(request.content)
+            return httpx.Response(200, json={"results": []})
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_profiles())
+
+        assert "output_properties" not in captured_body
 
 
 # =============================================================================

@@ -364,3 +364,159 @@ class TestFetchProfiles:
         assert result.exit_code == 0
         call_kwargs = mock_workspace.fetch_profiles.call_args.kwargs
         assert call_kwargs["progress"] is False
+
+
+# =============================================================================
+# Batch Size Parameter Tests
+# =============================================================================
+
+
+class TestFetchEventsBatchSize:
+    """Tests for --batch-size option in fetch events command."""
+
+    def test_batch_size_passed_to_workspace(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that --batch-size is passed to workspace.fetch_events."""
+        mock_workspace.fetch_events.return_value = FetchResult(
+            table="events",
+            rows=1000,
+            type="events",
+            date_range=("2024-01-01", "2024-01-31"),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--batch-size",
+                    "500",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        assert call_kwargs["batch_size"] == 500
+
+    def test_batch_size_default_not_passed(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that default batch_size is passed when not specified."""
+        mock_workspace.fetch_events.return_value = FetchResult(
+            table="events",
+            rows=1000,
+            type="events",
+            date_range=("2024-01-01", "2024-01-31"),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        assert call_kwargs["batch_size"] == 1000
+
+    def test_batch_size_invalid_too_small(self, cli_runner: CliRunner) -> None:
+        """Test that batch_size below 100 is rejected by Typer."""
+        result = cli_runner.invoke(
+            app,
+            [
+                "fetch",
+                "events",
+                "--from",
+                "2024-01-01",
+                "--to",
+                "2024-01-31",
+                "--batch-size",
+                "50",
+            ],
+        )
+
+        assert result.exit_code != 0
+        # Typer provides its own validation error message
+
+    def test_batch_size_invalid_too_large(self, cli_runner: CliRunner) -> None:
+        """Test that batch_size above 100000 is rejected by Typer."""
+        result = cli_runner.invoke(
+            app,
+            [
+                "fetch",
+                "events",
+                "--from",
+                "2024-01-01",
+                "--to",
+                "2024-01-31",
+                "--batch-size",
+                "200000",
+            ],
+        )
+
+        assert result.exit_code != 0
+        # Typer provides its own validation error message
+
+
+class TestFetchProfilesBatchSize:
+    """Tests for --batch-size option in fetch profiles command."""
+
+    def test_batch_size_passed_to_workspace(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that --batch-size is passed to workspace.fetch_profiles."""
+        mock_workspace.fetch_profiles.return_value = FetchResult(
+            table="profiles",
+            rows=100,
+            type="profiles",
+            date_range=None,
+            duration_seconds=0.5,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "profiles",
+                    "--batch-size",
+                    "250",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_profiles.call_args.kwargs
+        assert call_kwargs["batch_size"] == 250

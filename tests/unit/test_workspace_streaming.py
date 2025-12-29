@@ -160,6 +160,7 @@ class TestStreamEvents:
                 to_date="2024-01-15",
                 events=None,
                 where=None,
+                limit=None,
             )
         finally:
             ws.close()
@@ -192,6 +193,7 @@ class TestStreamEvents:
                 to_date="2024-01-15",
                 events=["Purchase", "Signup"],
                 where=None,
+                limit=None,
             )
         finally:
             ws.close()
@@ -225,6 +227,7 @@ class TestStreamEvents:
                 to_date="2024-01-15",
                 events=None,
                 where=where_clause,
+                limit=None,
             )
         finally:
             ws.close()
@@ -346,6 +349,34 @@ class TestStreamEvents:
         finally:
             ws.close()
 
+    def test_stream_events_with_limit(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """Test streaming events with limit parameter."""
+        ws = workspace_factory()
+        try:
+            mock_api_client.export_events.return_value = iter(
+                [raw_event("Event", "user_1", 1705328400)]
+            )
+
+            list(
+                ws.stream_events(
+                    from_date="2024-01-15", to_date="2024-01-15", limit=5000
+                )
+            )
+
+            mock_api_client.export_events.assert_called_once_with(
+                from_date="2024-01-15",
+                to_date="2024-01-15",
+                events=None,
+                where=None,
+                limit=5000,
+            )
+        finally:
+            ws.close()
+
 
 # =============================================================================
 # Phase 4: User Story 3 - Stream Profiles Tests (T007-T010)
@@ -382,7 +413,11 @@ class TestStreamProfiles:
             assert profiles[1]["distinct_id"] == "user_2"
             assert profiles[1]["properties"]["name"] == "Bob"
 
-            mock_api_client.export_profiles.assert_called_once_with(where=None)
+            mock_api_client.export_profiles.assert_called_once_with(
+                where=None,
+                cohort_id=None,
+                output_properties=None,
+            )
         finally:
             ws.close()
 
@@ -404,7 +439,88 @@ class TestStreamProfiles:
             assert len(profiles) == 1
             assert profiles[0]["properties"]["plan"] == "premium"
 
-            mock_api_client.export_profiles.assert_called_once_with(where=where_clause)
+            mock_api_client.export_profiles.assert_called_once_with(
+                where=where_clause,
+                cohort_id=None,
+                output_properties=None,
+            )
+        finally:
+            ws.close()
+
+    def test_stream_profiles_with_cohort_id(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """stream_profiles should pass cohort_id to API client."""
+        ws = workspace_factory()
+        try:
+            mock_api_client.export_profiles.return_value = iter(
+                [raw_profile("user_1", plan="premium")]
+            )
+
+            profiles = list(ws.stream_profiles(cohort_id="cohort_12345"))
+
+            assert len(profiles) == 1
+
+            mock_api_client.export_profiles.assert_called_once_with(
+                where=None,
+                cohort_id="cohort_12345",
+                output_properties=None,
+            )
+        finally:
+            ws.close()
+
+    def test_stream_profiles_with_output_properties(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """stream_profiles should pass output_properties to API client."""
+        ws = workspace_factory()
+        try:
+            mock_api_client.export_profiles.return_value = iter(
+                [raw_profile("user_1", email="test@example.com")]
+            )
+
+            profiles = list(
+                ws.stream_profiles(output_properties=["$email", "$name", "plan"])
+            )
+
+            assert len(profiles) == 1
+
+            mock_api_client.export_profiles.assert_called_once_with(
+                where=None,
+                cohort_id=None,
+                output_properties=["$email", "$name", "plan"],
+            )
+        finally:
+            ws.close()
+
+    def test_stream_profiles_with_all_filters(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """stream_profiles should pass all filter params to API client."""
+        ws = workspace_factory()
+        try:
+            mock_api_client.export_profiles.return_value = iter([raw_profile("user_1")])
+
+            where_clause = 'properties["plan"]=="premium"'
+            list(
+                ws.stream_profiles(
+                    where=where_clause,
+                    cohort_id="cohort_abc",
+                    output_properties=["$email"],
+                )
+            )
+
+            mock_api_client.export_profiles.assert_called_once_with(
+                where=where_clause,
+                cohort_id="cohort_abc",
+                output_properties=["$email"],
+            )
         finally:
             ws.close()
 

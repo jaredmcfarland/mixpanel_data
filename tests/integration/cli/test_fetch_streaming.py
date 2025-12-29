@@ -549,3 +549,228 @@ class TestBackwardCompatibility:
         # fetch_profiles should be called, not stream_profiles
         mock_workspace.fetch_profiles.assert_called_once()
         mock_workspace.stream_profiles.assert_not_called()
+
+    def test_fetch_profiles_with_cohort_option(self, cli_runner: CliRunner) -> None:
+        """Verify --cohort option is passed to workspace.fetch_profiles."""
+        mock_workspace = MagicMock()
+        mock_workspace.fetch_profiles.return_value = MagicMock(
+            to_dict=lambda: {"table": "profiles", "rows": 50}
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                ["-q", "fetch", "profiles", "--cohort", "12345"],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.fetch_profiles.call_args.kwargs
+        assert call_kwargs.get("cohort_id") == "12345"
+
+    def test_fetch_profiles_with_output_properties_option(
+        self, cli_runner: CliRunner
+    ) -> None:
+        """Verify --output-properties option is parsed and passed to workspace."""
+        mock_workspace = MagicMock()
+        mock_workspace.fetch_profiles.return_value = MagicMock(
+            to_dict=lambda: {"table": "profiles", "rows": 50}
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                [
+                    "-q",
+                    "fetch",
+                    "profiles",
+                    "--output-properties",
+                    "$email,$name,plan",
+                ],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.fetch_profiles.call_args.kwargs
+        assert call_kwargs.get("output_properties") == ["$email", "$name", "plan"]
+
+    def test_fetch_profiles_stdout_with_cohort(self, cli_runner: CliRunner) -> None:
+        """Verify --cohort works with --stdout (streaming mode)."""
+        mock_workspace = MagicMock()
+        mock_workspace.stream_profiles.return_value = iter(
+            [{"distinct_id": "user_1", "properties": {}}]
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                ["-q", "fetch", "profiles", "--stdout", "--cohort", "cohort_abc"],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.stream_profiles.call_args.kwargs
+        assert call_kwargs.get("cohort_id") == "cohort_abc"
+
+    def test_fetch_profiles_stdout_with_output_properties(
+        self, cli_runner: CliRunner
+    ) -> None:
+        """Verify --output-properties works with --stdout (streaming mode)."""
+        mock_workspace = MagicMock()
+        mock_workspace.stream_profiles.return_value = iter(
+            [{"distinct_id": "user_1", "properties": {"$email": "test@example.com"}}]
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                [
+                    "-q",
+                    "fetch",
+                    "profiles",
+                    "--stdout",
+                    "-o",
+                    "$email",
+                ],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.stream_profiles.call_args.kwargs
+        assert call_kwargs.get("output_properties") == ["$email"]
+
+    def test_fetch_events_with_limit_option(self, cli_runner: CliRunner) -> None:
+        """Verify --limit option is passed to workspace.fetch_events."""
+        mock_workspace = MagicMock()
+        mock_workspace.fetch_events.return_value = MagicMock(
+            to_dict=lambda: {
+                "table": "events",
+                "rows": 5000,
+                "from_date": "2024-01-01",
+                "to_date": "2024-01-31",
+            }
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                [
+                    "-q",
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--limit",
+                    "5000",
+                ],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        assert call_kwargs.get("limit") == 5000
+
+    def test_fetch_events_stdout_with_limit(self, cli_runner: CliRunner) -> None:
+        """Verify --limit works with --stdout (streaming mode)."""
+        mock_workspace = MagicMock()
+        mock_workspace.stream_events.return_value = iter(
+            [{"event_name": "Test", "distinct_id": "user_1"}]
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                [
+                    "-q",
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--stdout",
+                    "--limit",
+                    "1000",
+                ],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.stream_events.call_args.kwargs
+        assert call_kwargs.get("limit") == 1000
+
+
+class TestFetchEventsLimitValidation:
+    """Tests for CLI limit parameter validation."""
+
+    def test_fetch_events_rejects_limit_over_100000(
+        self,
+        cli_runner: CliRunner,
+    ) -> None:
+        """fetch events should reject limit > 100000 at CLI level."""
+        result = cli_runner.invoke(
+            app,
+            [
+                "fetch",
+                "events",
+                "--from",
+                "2024-01-01",
+                "--to",
+                "2024-01-31",
+                "--limit",
+                "100001",
+            ],
+        )
+
+        assert result.exit_code == 2  # Typer validation error
+        assert "100000" in result.output or "Invalid value" in result.output
+
+    def test_fetch_events_rejects_limit_zero(
+        self,
+        cli_runner: CliRunner,
+    ) -> None:
+        """fetch events should reject limit = 0 at CLI level."""
+        result = cli_runner.invoke(
+            app,
+            [
+                "fetch",
+                "events",
+                "--from",
+                "2024-01-01",
+                "--to",
+                "2024-01-31",
+                "--limit",
+                "0",
+            ],
+        )
+
+        assert result.exit_code == 2  # Typer validation error
+
+    def test_fetch_events_rejects_negative_limit(
+        self,
+        cli_runner: CliRunner,
+    ) -> None:
+        """fetch events should reject negative limit at CLI level."""
+        result = cli_runner.invoke(
+            app,
+            [
+                "fetch",
+                "events",
+                "--from",
+                "2024-01-01",
+                "--to",
+                "2024-01-31",
+                "--limit",
+                "-5",
+            ],
+        )
+
+        assert result.exit_code == 2  # Typer validation error

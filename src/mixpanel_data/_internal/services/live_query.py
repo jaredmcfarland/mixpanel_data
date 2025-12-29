@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
+from mixpanel_data._internal.expressions import normalize_on_expression
 from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
 from mixpanel_data.types import (
     ActivityFeedResult,
@@ -281,11 +282,14 @@ class LiveQueryService:
             print(result.df.head())
             ```
         """
+        # Normalize bare property names to filter expression syntax
+        normalized_on = normalize_on_expression(on) if on else None
+
         raw = self._api_client.segmentation(
             event=event,
             from_date=from_date,
             to_date=to_date,
-            on=on,
+            on=normalized_on,
             unit=unit,
             where=where,
         )
@@ -778,11 +782,14 @@ class LiveQueryService:
                 print(f"{bucket}: {sum(series.values())} events")
             ```
         """
+        # Normalize bare property names to filter expression syntax
+        normalized_on = normalize_on_expression(on)
+
         raw = self._api_client.segmentation_numeric(
             event=event,
             from_date=from_date,
             to_date=to_date,
-            on=on,
+            on=normalized_on,
             unit=unit,
             where=where,
             type=type,
@@ -832,11 +839,14 @@ class LiveQueryService:
             print(f"Total revenue: ${total:,.2f}")
             ```
         """
+        # Normalize bare property names to filter expression syntax
+        normalized_on = normalize_on_expression(on)
+
         raw = self._api_client.segmentation_sum(
             event=event,
             from_date=from_date,
             to_date=to_date,
-            on=on,
+            on=normalized_on,
             unit=unit,
             where=where,
         )
@@ -885,11 +895,14 @@ class LiveQueryService:
             print(f"Average order value: ${avg:.2f}")
             ```
         """
+        # Normalize bare property names to filter expression syntax
+        normalized_on = normalize_on_expression(on)
+
         raw = self._api_client.segmentation_average(
             event=event,
             from_date=from_date,
             to_date=to_date,
-            on=on,
+            on=normalized_on,
             unit=unit,
             where=where,
         )

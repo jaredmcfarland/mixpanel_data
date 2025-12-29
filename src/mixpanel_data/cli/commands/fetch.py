@@ -65,9 +65,23 @@ def fetch_events(
         str | None,
         typer.Option("--where", "-w", help="Mixpanel filter expression."),
     ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            "--limit",
+            "-l",
+            help="Maximum events to return (max 100000).",
+            min=1,
+            max=100000,
+        ),
+    ] = None,
     replace: Annotated[
         bool,
         typer.Option("--replace", help="Replace existing table."),
+    ] = False,
+    append: Annotated[
+        bool,
+        typer.Option("--append", help="Append to existing table."),
     ] = False,
     no_progress: Annotated[
         bool,
@@ -81,6 +95,15 @@ def fetch_events(
         bool,
         typer.Option("--raw", help="Output raw API format (only with --stdout)."),
     ] = False,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            "--batch-size",
+            help="Rows per commit. Controls memory/IO tradeoff. (100-100000)",
+            min=100,
+            max=100000,
+        ),
+    ] = 1000,
     format: FormatOption = "json",
 ) -> None:
     """Fetch events from Mixpanel into local storage.
@@ -88,8 +111,14 @@ def fetch_events(
     Events are stored in a DuckDB table for SQL querying. A progress bar
     shows fetch progress (disable with --no-progress or --quiet).
 
+    **Note:** This is a long-running operation. For large date ranges, chunk
+    into smaller ranges with --append, or run in the background.
+
     Use --events to filter by event name (comma-separated list).
     Use --where for Mixpanel expression filters (e.g., 'properties["country"]=="US"').
+    Use --limit to cap the number of events returned (max 100000).
+    Use --replace to drop and recreate an existing table.
+    Use --append to add data to an existing table.
     Use --stdout to stream JSONL to stdout instead of storing locally.
     Use --raw with --stdout to output raw Mixpanel API format.
 
@@ -100,7 +129,9 @@ def fetch_events(
         mp fetch events --from 2025-01-01 --to 2025-01-31
         mp fetch events signups --from 2025-01-01 --to 2025-01-31 --events "Sign Up"
         mp fetch events --from 2025-01-01 --to 2025-01-31 --where 'properties["country"]=="US"'
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --limit 10000
         mp fetch events --from 2025-01-01 --to 2025-01-31 --replace
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --append
         mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
         mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout --raw | jq '.event'
     """
@@ -110,6 +141,13 @@ def fetch_events(
         raise typer.Exit(3)
     if not to_date:
         err_console.print("[red]Error:[/red] --to is required")
+        raise typer.Exit(3)
+
+    # Validate mutually exclusive options
+    if replace and append:
+        err_console.print(
+            "[red]Error:[/red] --replace and --append are mutually exclusive"
+        )
         raise typer.Exit(3)
 
     # Validate --raw only with --stdout
@@ -132,6 +170,7 @@ def fetch_events(
             to_date=to_date,
             events=events_list,
             where=where,
+            limit=limit,
             raw=raw,
         ):
             print(json.dumps(event, default=_json_serializer), file=sys.stdout)
@@ -160,7 +199,10 @@ def fetch_events(
         to_date=to_date,
         events=events_list,
         where=where,
+        limit=limit,
         progress=show_progress,
+        append=append,
+        batch_size=batch_size,
     )
 
     output_result(ctx, result.to_dict(), format=format)
@@ -178,9 +220,23 @@ def fetch_profiles(
         str | None,
         typer.Option("--where", "-w", help="Mixpanel filter expression."),
     ] = None,
+    cohort: Annotated[
+        str | None,
+        typer.Option("--cohort", "-c", help="Filter by cohort ID."),
+    ] = None,
+    output_properties: Annotated[
+        str | None,
+        typer.Option(
+            "--output-properties", "-o", help="Comma-separated properties to include."
+        ),
+    ] = None,
     replace: Annotated[
         bool,
         typer.Option("--replace", help="Replace existing table."),
+    ] = False,
+    append: Annotated[
+        bool,
+        typer.Option("--append", help="Append to existing table."),
     ] = False,
     no_progress: Annotated[
         bool,
@@ -194,6 +250,15 @@ def fetch_profiles(
         bool,
         typer.Option("--raw", help="Output raw API format (only with --stdout)."),
     ] = False,
+    batch_size: Annotated[
+        int,
+        typer.Option(
+            "--batch-size",
+            help="Rows per commit. Controls memory/IO tradeoff. (100-100000)",
+            min=100,
+            max=100000,
+        ),
+    ] = 1000,
     format: FormatOption = "json",
 ) -> None:
     """Fetch user profiles from Mixpanel into local storage.
@@ -201,7 +266,14 @@ def fetch_profiles(
     Profiles are stored in a DuckDB table for SQL querying. A progress bar
     shows fetch progress (disable with --no-progress or --quiet).
 
+    **Note:** This is a long-running operation. For large profile sets,
+    consider running in the background.
+
     Use --where for Mixpanel expression filters on profile properties.
+    Use --cohort to filter by cohort ID membership.
+    Use --output-properties to select specific properties (reduces bandwidth).
+    Use --replace to drop and recreate an existing table.
+    Use --append to add data to an existing table.
     Use --stdout to stream JSONL to stdout instead of storing locally.
     Use --raw with --stdout to output raw Mixpanel API format.
 
@@ -211,14 +283,29 @@ def fetch_profiles(
 
         mp fetch profiles
         mp fetch profiles users --replace
+        mp fetch profiles users --append
         mp fetch profiles --where 'properties["plan"]=="premium"'
+        mp fetch profiles --cohort 12345
+        mp fetch profiles --output-properties '$email,$name,plan'
         mp fetch profiles --stdout
         mp fetch profiles --stdout --raw
     """
+    # Validate mutually exclusive options
+    if replace and append:
+        err_console.print(
+            "[red]Error:[/red] --replace and --append are mutually exclusive"
+        )
+        raise typer.Exit(3)
+
     # Validate --raw only with --stdout
     if raw and not stdout:
         err_console.print("[red]Error:[/red] --raw requires --stdout")
         raise typer.Exit(3)
+
+    # Parse output_properties filter
+    props_list = (
+        [p.strip() for p in output_properties.split(",")] if output_properties else None
+    )
 
     workspace = get_workspace(ctx)
 
@@ -227,7 +314,12 @@ def fetch_profiles(
         quiet = ctx.obj.get("quiet", False)
         count = 0
 
-        for profile in workspace.stream_profiles(where=where, raw=raw):
+        for profile in workspace.stream_profiles(
+            where=where,
+            cohort_id=cohort,
+            output_properties=props_list,
+            raw=raw,
+        ):
             print(json.dumps(profile, default=_json_serializer), file=sys.stdout)
             count += 1
             if not quiet and count % 1000 == 0:
@@ -253,7 +345,11 @@ def fetch_profiles(
     result = workspace.fetch_profiles(
         name=table_name,
         where=where,
+        cohort_id=cohort,
+        output_properties=props_list,
         progress=show_progress,
+        append=append,
+        batch_size=batch_size,
     )
 
     output_result(ctx, result.to_dict(), format=format)
