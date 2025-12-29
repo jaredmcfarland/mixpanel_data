@@ -1,8 +1,9 @@
 # mixpanel_data
 
-[![PyPI](https://img.shields.io/pypi/v/mixpanel_data)](https://pypi.org/project/mixpanel_data/)
-[![Python](https://img.shields.io/pypi/pyversions/mixpanel_data)](https://pypi.org/project/mixpanel_data/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/github/license/discohead/mixpanel_data)](LICENSE)
+
+> **⚠️ Pre-release Software**: This package is under active development and not yet published to PyPI. APIs may change between versions.
 
 A complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, and data extraction.
 
@@ -14,8 +15,10 @@ Core analytics—segmentation, funnels, retention, saved reports—plus capabili
 
 ## Installation
 
+Install directly from GitHub (package not yet published to PyPI):
+
 ```bash
-pip install mixpanel_data
+pip install git+https://github.com/discohead/mixpanel_data.git
 ```
 
 Requires Python 3.11+. Verify installation:
