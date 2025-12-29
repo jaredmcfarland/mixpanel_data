@@ -1400,25 +1400,29 @@ class TestNumericSummary:
         """numeric_summary() should return NumericPropertySummaryResult."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
+            # JQL returns [[summary_dict, percentiles_list, min, max]]
             return httpx.Response(
                 200,
                 json=[
-                    {
-                        "count": 10000,
-                        "sum": 1562300.0,
-                        "avg": 156.23,
-                        "stddev": 234.56,
-                        "min": 1.0,
-                        "max": 9999.0,
-                        "percentiles": {
-                            "25": 45.0,
-                            "50": 98.0,
-                            "75": 189.0,
-                            "90": 356.0,
-                            "95": 567.0,
-                            "99": 1234.0,
+                    [
+                        {
+                            "count": 10000,
+                            "sum": 1562300.0,
+                            "avg": 156.23,
+                            "stddev": 234.56,
+                            "sum_squares": 0.0,
                         },
-                    }
+                        [
+                            {"percentile": 25, "value": 45.0},
+                            {"percentile": 50, "value": 98.0},
+                            {"percentile": 75, "value": 189.0},
+                            {"percentile": 90, "value": 356.0},
+                            {"percentile": 95, "value": 567.0},
+                            {"percentile": 99, "value": 1234.0},
+                        ],
+                        1.0,
+                        9999.0,
+                    ]
                 ],
             )
 
@@ -1455,18 +1459,25 @@ class TestNumericSummary:
             content = request.content.decode()
             # The percentile values should appear somewhere in the request
             assert "10" in content or "90" in content
+            # JQL returns [[summary_dict, percentiles_list, min, max]]
             return httpx.Response(
                 200,
                 json=[
-                    {
-                        "count": 100,
-                        "sum": 5000.0,
-                        "avg": 50.0,
-                        "stddev": 10.0,
-                        "min": 10.0,
-                        "max": 100.0,
-                        "percentiles": {"10": 20.0, "90": 80.0},
-                    }
+                    [
+                        {
+                            "count": 100,
+                            "sum": 5000.0,
+                            "avg": 50.0,
+                            "stddev": 10.0,
+                            "sum_squares": 0.0,
+                        },
+                        [
+                            {"percentile": 10, "value": 20.0},
+                            {"percentile": 90, "value": 80.0},
+                        ],
+                        10.0,
+                        100.0,
+                    ]
                 ],
             )
 
@@ -1491,18 +1502,22 @@ class TestNumericSummary:
         """numeric_summary() should handle empty results."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
+            # JQL returns [[summary_dict, percentiles_list, min, max]]
             return httpx.Response(
                 200,
                 json=[
-                    {
-                        "count": 0,
-                        "sum": 0.0,
-                        "avg": 0.0,
-                        "stddev": 0.0,
-                        "min": 0.0,
-                        "max": 0.0,
-                        "percentiles": {},
-                    }
+                    [
+                        {
+                            "count": 0,
+                            "sum": 0.0,
+                            "avg": 0.0,
+                            "stddev": 0.0,
+                            "sum_squares": 0.0,
+                        },
+                        [],
+                        None,
+                        None,
+                    ]
                 ],
             )
 
@@ -1516,6 +1531,8 @@ class TestNumericSummary:
 
         assert result.count == 0
         assert result.percentiles == {}
+        assert result.min == 0.0
+        assert result.max == 0.0
 
     def test_numeric_summary_propagates_query_error(
         self,

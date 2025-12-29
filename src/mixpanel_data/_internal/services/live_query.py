@@ -971,11 +971,10 @@ function main() {
     })
     .filter(function(e) { return e.properties[params.property] !== undefined; })
     .groupBy(['properties.' + params.property], mixpanel.reducer.count())
-    .sortDesc('value')
-    .take(params.limit)
     .map(function(item) {
         return {value: item.key[0], count: item.value};
-    });
+    })
+    .sortDesc('count');
 }
 """
         params = {
@@ -987,7 +986,7 @@ function main() {
         }
         raw = self._api_client.jql(script=script, params=params)
         return _transform_property_distribution(
-            raw, event, property, from_date, to_date
+            raw, event, property, from_date, to_date, limit
         )
 
     def numeric_summary(
@@ -1047,7 +1046,9 @@ function main() {
     })
     .reduce([
         mixpanel.reducer.numeric_summary(propPath),
-        mixpanel.reducer.numeric_percentiles(propPath, params.percentiles)
+        mixpanel.reducer.numeric_percentiles(propPath, params.percentiles),
+        mixpanel.reducer.min(propPath),
+        mixpanel.reducer.max(propPath)
     ]);
 }
 """
@@ -1544,6 +1545,7 @@ def _transform_property_distribution(
     property: str,
     from_date: str,
     to_date: str,
+    limit: int,
 ) -> PropertyDistributionResult:
     """Transform raw JQL property distribution response.
 
@@ -1555,11 +1557,16 @@ def _transform_property_distribution(
         property: Property name analyzed.
         from_date: Query start date.
         to_date: Query end date.
+        limit: Maximum number of values to include.
 
     Returns:
         Typed PropertyDistributionResult with values and percentages.
     """
+    # Total count is computed from all results for accurate percentages
     total_count = sum(item.get("count", 0) for item in raw)
+
+    # Apply limit after computing total (percentages are relative to full data)
+    limited_raw = raw[:limit]
 
     values = tuple(
         PropertyValueCount(
@@ -1569,7 +1576,7 @@ def _transform_property_distribution(
             if total_count > 0
             else 0.0,
         )
-        for item in raw
+        for item in limited_raw
     )
 
     return PropertyDistributionResult(
@@ -1583,7 +1590,7 @@ def _transform_property_distribution(
 
 
 def _transform_numeric_summary(
-    raw: list[dict[str, Any]],
+    raw: list[Any],
     event: str,
     property: str,
     from_date: str,
@@ -1591,11 +1598,11 @@ def _transform_numeric_summary(
 ) -> NumericPropertySummaryResult:
     """Transform raw JQL numeric summary response.
 
-    JQL reduce with multiple reducers returns a list with one element
-    containing the combined results.
+    JQL reduce with multiple reducers returns a nested list structure:
+    [[{summary_dict}, [{percentile_obj}, ...]]]
 
     Args:
-        raw: Raw JQL response (list with single combined result dict).
+        raw: Raw JQL response (nested list with summary and percentiles).
         event: Event name queried.
         property: Property name analyzed.
         from_date: Query start date.
@@ -1604,24 +1611,52 @@ def _transform_numeric_summary(
     Returns:
         Typed NumericPropertySummaryResult with statistics.
     """
-    # JQL returns a list with one element when using reduce
-    data = raw[0] if raw else {}
+    # JQL returns [[summary_dict, percentiles_list]] for multiple reducers
+    if not raw or not raw[0]:
+        return NumericPropertySummaryResult(
+            event=event,
+            property=property,
+            from_date=from_date,
+            to_date=to_date,
+            count=0,
+            min=0.0,
+            max=0.0,
+            sum=0.0,
+            avg=0.0,
+            stddev=0.0,
+            percentiles={},
+        )
 
-    # Parse percentiles - keys are string integers
-    raw_percentiles = data.get("percentiles", {})
-    percentiles = {int(k): float(v) for k, v in raw_percentiles.items()}
+    inner = raw[0]
+
+    # Extract results from the inner array:
+    # [summary_dict, percentiles_list, min_value, max_value]
+    summary_data: dict[str, Any] = inner[0] if len(inner) > 0 else {}
+    percentiles_list: list[dict[str, Any]] = inner[1] if len(inner) > 1 else []
+    min_value: float = (
+        float(inner[2]) if len(inner) > 2 and inner[2] is not None else 0.0
+    )
+    max_value: float = (
+        float(inner[3]) if len(inner) > 3 and inner[3] is not None else 0.0
+    )
+
+    # Parse percentiles from list of {percentile: N, value: V} objects
+    percentiles = {
+        int(p.get("percentile", 0)): float(p.get("value", 0.0))
+        for p in percentiles_list
+    }
 
     return NumericPropertySummaryResult(
         event=event,
         property=property,
         from_date=from_date,
         to_date=to_date,
-        count=data.get("count", 0),
-        min=float(data.get("min", 0.0)),
-        max=float(data.get("max", 0.0)),
-        sum=float(data.get("sum", 0.0)),
-        avg=float(data.get("avg", 0.0)),
-        stddev=float(data.get("stddev", 0.0)),
+        count=summary_data.get("count", 0),
+        min=min_value,
+        max=max_value,
+        sum=float(summary_data.get("sum", 0.0)),
+        avg=float(summary_data.get("avg", 0.0)),
+        stddev=float(summary_data.get("stddev", 0.0)),
         percentiles=percentiles,
     )
 
