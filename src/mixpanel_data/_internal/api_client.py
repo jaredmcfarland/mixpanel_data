@@ -617,6 +617,7 @@ class MixpanelAPIClient:
         *,
         events: list[str] | None = None,
         where: str | None = None,
+        limit: int | None = None,
         on_batch: Callable[[int], None] | None = None,
     ) -> Iterator[dict[str, Any]]:
         """Stream events from the Export API.
@@ -629,6 +630,7 @@ class MixpanelAPIClient:
             to_date: End date (YYYY-MM-DD, inclusive).
             events: Optional list of event names to filter.
             where: Optional filter expression.
+            limit: Optional maximum number of events to return (max 100000).
             on_batch: Optional callback invoked with cumulative count every
                 1000 events, and once at the end for any remaining events.
 
@@ -653,6 +655,8 @@ class MixpanelAPIClient:
             params["event"] = json.dumps(events)
         if where:
             params["where"] = where
+        if limit is not None:
+            params["limit"] = limit
 
         client = self._ensure_client()
         headers = {

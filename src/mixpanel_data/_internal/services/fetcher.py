@@ -178,6 +178,7 @@ class FetcherService:
         *,
         events: list[str] | None = None,
         where: str | None = None,
+        limit: int | None = None,
         progress_callback: Callable[[int], None] | None = None,
         append: bool = False,
         batch_size: int = 1000,
@@ -190,6 +191,7 @@ class FetcherService:
             to_date: End date (YYYY-MM-DD, inclusive).
             events: Optional list of event names to filter.
             where: Optional filter expression.
+            limit: Optional maximum number of events to return (max 100000).
             progress_callback: Optional callback invoked with row count during fetch.
             append: If True, append to existing table. If False (default), create new.
             batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
@@ -225,6 +227,7 @@ class FetcherService:
             to_date=to_date,
             events=events,
             where=where,
+            limit=limit,
             on_batch=on_api_batch,
         )
 

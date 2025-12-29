@@ -509,6 +509,60 @@ class TestEventExport:
         assert events[0]["event"] == "A"
         assert events[1]["event"] == "B"
 
+    def test_export_events_with_limit(self, test_credentials: Credentials) -> None:
+        """Should pass limit parameter to API."""
+        captured_url: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_url
+            captured_url = str(request.url)
+            return httpx.Response(200, content=b"")
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_events("2024-01-01", "2024-01-31", limit=1000))
+
+        assert "limit=1000" in captured_url
+
+    def test_export_events_without_limit(self, test_credentials: Credentials) -> None:
+        """Should not include limit parameter when None."""
+        captured_url: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_url
+            captured_url = str(request.url)
+            return httpx.Response(200, content=b"")
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(client.export_events("2024-01-01", "2024-01-31"))
+
+        assert "limit=" not in captured_url
+
+    def test_export_events_limit_with_other_params(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should combine limit with other filter parameters."""
+        captured_url: str = ""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal captured_url
+            captured_url = str(request.url)
+            return httpx.Response(200, content=b"")
+
+        with create_mock_client(test_credentials, handler) as client:
+            list(
+                client.export_events(
+                    "2024-01-01",
+                    "2024-01-31",
+                    events=["Purchase"],
+                    where='properties["amount"] > 100',
+                    limit=500,
+                )
+            )
+
+        assert "limit=500" in captured_url
+        assert "event=" in captured_url
+        assert "where=" in captured_url
+
 
 # =============================================================================
 # User Story 4: Segmentation Queries

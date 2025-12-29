@@ -642,3 +642,67 @@ class TestBackwardCompatibility:
         assert result.exit_code == 0, f"Failed with: {result.output}"
         call_kwargs = mock_workspace.stream_profiles.call_args.kwargs
         assert call_kwargs.get("output_properties") == ["$email"]
+
+    def test_fetch_events_with_limit_option(self, cli_runner: CliRunner) -> None:
+        """Verify --limit option is passed to workspace.fetch_events."""
+        mock_workspace = MagicMock()
+        mock_workspace.fetch_events.return_value = MagicMock(
+            to_dict=lambda: {
+                "table": "events",
+                "rows": 5000,
+                "from_date": "2024-01-01",
+                "to_date": "2024-01-31",
+            }
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                [
+                    "-q",
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--limit",
+                    "5000",
+                ],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        assert call_kwargs.get("limit") == 5000
+
+    def test_fetch_events_stdout_with_limit(self, cli_runner: CliRunner) -> None:
+        """Verify --limit works with --stdout (streaming mode)."""
+        mock_workspace = MagicMock()
+        mock_workspace.stream_events.return_value = iter(
+            [{"event_name": "Test", "distinct_id": "user_1"}]
+        )
+
+        with patch("mixpanel_data.cli.commands.fetch.get_workspace") as mock_get_ws:
+            mock_get_ws.return_value = mock_workspace
+
+            result = cli_runner.invoke(
+                app,
+                [
+                    "-q",
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--stdout",
+                    "--limit",
+                    "1000",
+                ],
+            )
+
+        assert result.exit_code == 0, f"Failed with: {result.output}"
+        call_kwargs = mock_workspace.stream_events.call_args.kwargs
+        assert call_kwargs.get("limit") == 1000

@@ -160,6 +160,7 @@ class TestStreamEvents:
                 to_date="2024-01-15",
                 events=None,
                 where=None,
+                limit=None,
             )
         finally:
             ws.close()
@@ -192,6 +193,7 @@ class TestStreamEvents:
                 to_date="2024-01-15",
                 events=["Purchase", "Signup"],
                 where=None,
+                limit=None,
             )
         finally:
             ws.close()
@@ -225,6 +227,7 @@ class TestStreamEvents:
                 to_date="2024-01-15",
                 events=None,
                 where=where_clause,
+                limit=None,
             )
         finally:
             ws.close()
@@ -343,6 +346,34 @@ class TestStreamEvents:
             # Consume remaining
             list(iterator)
             assert call_count == 3
+        finally:
+            ws.close()
+
+    def test_stream_events_with_limit(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """Test streaming events with limit parameter."""
+        ws = workspace_factory()
+        try:
+            mock_api_client.export_events.return_value = iter(
+                [raw_event("Event", "user_1", 1705328400)]
+            )
+
+            list(
+                ws.stream_events(
+                    from_date="2024-01-15", to_date="2024-01-15", limit=5000
+                )
+            )
+
+            mock_api_client.export_events.assert_called_once_with(
+                from_date="2024-01-15",
+                to_date="2024-01-15",
+                events=None,
+                where=None,
+                limit=5000,
+            )
         finally:
             ws.close()
 

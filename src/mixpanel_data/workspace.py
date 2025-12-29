@@ -798,6 +798,7 @@ class Workspace:
         to_date: str,
         events: list[str] | None = None,
         where: str | None = None,
+        limit: int | None = None,
         progress: bool = True,
         append: bool = False,
         batch_size: int = 1000,
@@ -815,6 +816,7 @@ class Workspace:
             to_date: End date (YYYY-MM-DD).
             events: Optional list of event names to filter.
             where: Optional WHERE clause for filtering.
+            limit: Optional maximum number of events to return (max 100000).
             progress: Show progress bar (default: True).
             append: If True, append to existing table. If False (default), create new.
             batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
@@ -864,6 +866,7 @@ class Workspace:
                 to_date=to_date,
                 events=events,
                 where=where,
+                limit=limit,
                 progress_callback=progress_callback,
                 append=append,
                 batch_size=batch_size,
@@ -968,6 +971,7 @@ class Workspace:
         to_date: str,
         events: list[str] | None = None,
         where: str | None = None,
+        limit: int | None = None,
         raw: bool = False,
     ) -> Iterator[dict[str, Any]]:
         """Stream events directly from Mixpanel API without storing.
@@ -980,6 +984,7 @@ class Workspace:
             to_date: End date inclusive (YYYY-MM-DD format).
             events: Optional list of event names to filter. If None, all events returned.
             where: Optional Mixpanel filter expression (e.g., 'properties["country"]=="US"').
+            limit: Optional maximum number of events to return (max 100000).
             raw: If True, return events in raw Mixpanel API format.
                  If False (default), return normalized format with datetime objects.
 
@@ -1015,6 +1020,7 @@ class Workspace:
             to_date=to_date,
             events=events,
             where=where,
+            limit=limit,
         )
 
         if raw:

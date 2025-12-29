@@ -2231,3 +2231,84 @@ class TestBatchSizeParameter:
             assert call_kwargs.get("batch_size") == 1000
         finally:
             ws.close()
+
+
+class TestFetchEventsLimit:
+    """Tests for limit parameter in fetch_events."""
+
+    def test_fetch_events_passes_limit_to_fetcher(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events should pass limit to FetcherService."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_events.return_value = FetchResult(
+                table="events",
+                rows=100,
+                type="events",
+                duration_seconds=1.5,
+                date_range=("2024-01-01", "2024-01-31"),
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                limit=5000,
+                progress=False,
+            )
+
+            # Verify limit was passed to fetcher
+            call_kwargs = mock_fetcher.fetch_events.call_args.kwargs
+            assert call_kwargs.get("limit") == 5000
+        finally:
+            ws.close()
+
+    def test_fetch_events_no_limit_by_default(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events should not pass limit when not specified."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_events.return_value = FetchResult(
+                table="events",
+                rows=100,
+                type="events",
+                duration_seconds=1.5,
+                date_range=("2024-01-01", "2024-01-31"),
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                progress=False,
+            )
+
+            # Verify limit is None by default
+            call_kwargs = mock_fetcher.fetch_events.call_args.kwargs
+            assert call_kwargs.get("limit") is None
+        finally:
+            ws.close()

@@ -65,6 +65,10 @@ def fetch_events(
         str | None,
         typer.Option("--where", "-w", help="Mixpanel filter expression."),
     ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option("--limit", "-l", help="Maximum events to return (max 100000)."),
+    ] = None,
     replace: Annotated[
         bool,
         typer.Option("--replace", help="Replace existing table."),
@@ -106,6 +110,7 @@ def fetch_events(
 
     Use --events to filter by event name (comma-separated list).
     Use --where for Mixpanel expression filters (e.g., 'properties["country"]=="US"').
+    Use --limit to cap the number of events returned (max 100000).
     Use --replace to drop and recreate an existing table.
     Use --append to add data to an existing table.
     Use --stdout to stream JSONL to stdout instead of storing locally.
@@ -118,6 +123,7 @@ def fetch_events(
         mp fetch events --from 2025-01-01 --to 2025-01-31
         mp fetch events signups --from 2025-01-01 --to 2025-01-31 --events "Sign Up"
         mp fetch events --from 2025-01-01 --to 2025-01-31 --where 'properties["country"]=="US"'
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --limit 10000
         mp fetch events --from 2025-01-01 --to 2025-01-31 --replace
         mp fetch events --from 2025-01-01 --to 2025-01-31 --append
         mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
@@ -158,6 +164,7 @@ def fetch_events(
             to_date=to_date,
             events=events_list,
             where=where,
+            limit=limit,
             raw=raw,
         ):
             print(json.dumps(event, default=_json_serializer), file=sys.stdout)
@@ -186,6 +193,7 @@ def fetch_events(
         to_date=to_date,
         events=events_list,
         where=where,
+        limit=limit,
         progress=show_progress,
         append=append,
         batch_size=batch_size,

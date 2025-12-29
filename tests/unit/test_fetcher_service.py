@@ -1010,6 +1010,71 @@ class TestFetchEventsBatchSize:
         assert call_kwargs.get("batch_size") == 1000
 
 
+class TestFetchEventsLimit:
+    """Tests for limit parameter in fetch_events."""
+
+    def test_fetch_events_passes_limit_to_api_client(self) -> None:
+        """fetch_events should pass limit to API client."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.create_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            limit=5000,
+        )
+
+        # Verify limit was passed to API client
+        call_kwargs = mock_api_client.export_events.call_args.kwargs
+        assert call_kwargs.get("limit") == 5000
+
+    def test_fetch_events_no_limit_by_default(self) -> None:
+        """fetch_events should not pass limit when not specified."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.create_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+        )
+
+        # Verify limit is None by default
+        call_kwargs = mock_api_client.export_events.call_args.kwargs
+        assert call_kwargs.get("limit") is None
+
+
 class TestFetchProfilesBatchSize:
     """Tests for batch_size parameter in fetch_profiles."""
 

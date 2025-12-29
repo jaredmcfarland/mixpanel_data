@@ -74,6 +74,30 @@ Filter with Mixpanel expression syntax:
         --where 'properties["plan"] == "premium"'
     ```
 
+### Limiting Results
+
+Cap the number of events returned (max 100,000):
+
+=== "Python"
+
+    ```python
+    result = ws.fetch_events(
+        name="sample_events",
+        from_date="2024-01-01",
+        to_date="2024-01-31",
+        limit=10000
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch events sample_events --from 2024-01-01 --to 2024-01-31 \
+        --limit 10000
+    ```
+
+This is useful for testing queries or sampling data before a full fetch.
+
 ### Progress Tracking
 
 Monitor fetch progress with a callback:

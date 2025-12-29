@@ -65,6 +65,14 @@ Fetch data from Mixpanel into local storage, or stream directly to stdout.
 | `--stdout` | Stream data as JSONL to stdout instead of storing |
 | `--raw` | Output raw Mixpanel API format (requires `--stdout`) |
 
+**Event Filter Options (fetch events only):**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--events` | `-e` | Comma-separated event names to filter |
+| `--where` | `-w` | Mixpanel filter expression |
+| `--limit` | `-l` | Maximum events to return (max 100000) |
+
 **Profile Filter Options (fetch profiles only):**
 
 | Option | Short | Description |
