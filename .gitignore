@@ -62,3 +62,6 @@ htmlcov/
 # Documentation
 site/
 man/
+
+# Jupyter
+.ipynb_checkpoints/

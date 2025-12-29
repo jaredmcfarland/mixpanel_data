@@ -63,7 +63,7 @@ USER root
 # Configure uv for the vscode user
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_PYTHON_DOWNLOADS=never
-ENV PATH="/workspace/.venv/bin:${PATH}"
+ENV PATH="/home/vscode/.local/bin:/workspace/.venv/bin:${PATH}"
 
 # Set working directory
 WORKDIR /workspace
