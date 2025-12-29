@@ -3706,3 +3706,197 @@ def test_create_events_table_default_batch_size_is_1000(tmp_path: Path) -> None:
         # (callback is also invoked for final partial batch)
         assert len(callback_invocations) == 3
         assert callback_invocations == [1000, 2000, 2500]
+
+
+# =============================================================================
+# Append Type Validation Tests
+# =============================================================================
+
+
+def test_append_events_to_profiles_table_raises_error(tmp_path: Path) -> None:
+    """Appending events to a profiles table should raise ValueError."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path, read_only=False) as storage:
+        # Create a profiles table
+        profiles = [
+            {
+                "distinct_id": "user_1",
+                "properties": {"name": "Alice"},
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+            },
+        ]
+        profiles_metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+        storage.create_profiles_table("my_data", iter(profiles), profiles_metadata)
+
+        # Try to append events to the profiles table
+        events = [
+            {
+                "event_name": "Page View",
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {"page": "/home"},
+            },
+        ]
+        events_metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+            from_date="2024-01-15",
+            to_date="2024-01-15",
+        )
+
+        with pytest.raises(ValueError, match="Cannot append events to profiles table"):
+            storage.append_events_table("my_data", iter(events), events_metadata)
+
+
+def test_append_profiles_to_events_table_raises_error(tmp_path: Path) -> None:
+    """Appending profiles to an events table should raise ValueError."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path, read_only=False) as storage:
+        # Create an events table
+        events = [
+            {
+                "event_name": "Page View",
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "distinct_id": "user_1",
+                "insert_id": "event_1",
+                "properties": {"page": "/home"},
+            },
+        ]
+        events_metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+            from_date="2024-01-15",
+            to_date="2024-01-15",
+        )
+        storage.create_events_table("my_data", iter(events), events_metadata)
+
+        # Try to append profiles to the events table
+        profiles = [
+            {
+                "distinct_id": "user_1",
+                "properties": {"name": "Alice"},
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+            },
+        ]
+        profiles_metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+
+        with pytest.raises(ValueError, match="Cannot append profiles to events table"):
+            storage.append_profiles_table("my_data", iter(profiles), profiles_metadata)
+
+
+# =============================================================================
+# Empty Iterator Append Tests
+# =============================================================================
+
+
+def test_append_events_empty_iterator_returns_zero(tmp_path: Path) -> None:
+    """Appending empty iterator should return 0 and preserve metadata."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path, read_only=False) as storage:
+        # Create table with initial event
+        initial_event = {
+            "event_name": "Initial Event",
+            "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+            "distinct_id": "user_1",
+            "insert_id": "event_1",
+            "properties": {"source": "initial"},
+        }
+        initial_metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+            from_date="2024-01-15",
+            to_date="2024-01-15",
+        )
+        storage.create_events_table("events", iter([initial_event]), initial_metadata)
+
+        # Get original row count from metadata table
+        original_row_count = storage.execute_scalar(
+            "SELECT row_count FROM _metadata WHERE table_name = 'events'"
+        )
+
+        # Append empty iterator with different dates
+        empty_metadata = TableMetadata(
+            type="events",
+            fetched_at=datetime.now(UTC),
+            from_date="2024-02-01",  # Different date
+            to_date="2024-02-28",
+        )
+        result = storage.append_events_table("events", iter([]), empty_metadata)
+
+        # Should return 0 rows inserted
+        assert result == 0
+
+        # Row count should remain unchanged
+        assert storage.execute_scalar("SELECT COUNT(*) FROM events") == 1
+
+        # Metadata row count should remain unchanged
+        new_row_count = storage.execute_scalar(
+            "SELECT row_count FROM _metadata WHERE table_name = 'events'"
+        )
+        assert new_row_count == original_row_count
+
+
+def test_append_profiles_empty_iterator_returns_zero(tmp_path: Path) -> None:
+    """Appending empty iterator should return 0 and preserve metadata."""
+    from datetime import datetime
+
+    from mixpanel_data.types import TableMetadata
+
+    db_path = tmp_path / "test.db"
+    with StorageEngine(path=db_path, read_only=False) as storage:
+        # Create table with initial profile
+        initial_profile = {
+            "distinct_id": "user_1",
+            "properties": {"name": "Alice"},
+            "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+        }
+        initial_metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+        storage.create_profiles_table(
+            "profiles", iter([initial_profile]), initial_metadata
+        )
+
+        # Get original row count from metadata table
+        original_row_count = storage.execute_scalar(
+            "SELECT row_count FROM _metadata WHERE table_name = 'profiles'"
+        )
+
+        # Append empty iterator
+        empty_metadata = TableMetadata(
+            type="profiles",
+            fetched_at=datetime.now(UTC),
+        )
+        result = storage.append_profiles_table("profiles", iter([]), empty_metadata)
+
+        # Should return 0 rows inserted
+        assert result == 0
+
+        # Row count should remain unchanged
+        assert storage.execute_scalar("SELECT COUNT(*) FROM profiles") == 1
+
+        # Metadata row count should remain unchanged
+        new_row_count = storage.execute_scalar(
+            "SELECT row_count FROM _metadata WHERE table_name = 'profiles'"
+        )
+        assert new_row_count == original_row_count

@@ -882,7 +882,7 @@ class StorageEngine:
 
         Raises:
             TableNotFoundError: If table does not exist.
-            ValueError: If data is malformed.
+            ValueError: If data is malformed or table is not an events table.
         """
         # Validate table name
         self._validate_table_name(name)
@@ -890,6 +890,13 @@ class StorageEngine:
         # Check if table exists
         if not self.table_exists(name):
             raise TableNotFoundError(f"Table '{name}' does not exist")
+
+        # Verify table is an events table (not profiles)
+        existing_metadata = self.get_metadata(name)
+        if existing_metadata.type != "events":
+            raise ValueError(
+                f"Cannot append events to {existing_metadata.type} table '{name}'"
+            )
 
         # Start transaction
         self.connection.execute("BEGIN TRANSACTION")
@@ -939,7 +946,7 @@ class StorageEngine:
 
         Raises:
             TableNotFoundError: If table does not exist.
-            ValueError: If data is malformed.
+            ValueError: If data is malformed or table is not a profiles table.
         """
         # Validate table name
         self._validate_table_name(name)
@@ -947,6 +954,13 @@ class StorageEngine:
         # Check if table exists
         if not self.table_exists(name):
             raise TableNotFoundError(f"Table '{name}' does not exist")
+
+        # Verify table is a profiles table (not events)
+        existing_metadata = self.get_metadata(name)
+        if existing_metadata.type != "profiles":
+            raise ValueError(
+                f"Cannot append profiles to {existing_metadata.type} table '{name}'"
+            )
 
         # Start transaction
         self.connection.execute("BEGIN TRANSACTION")
