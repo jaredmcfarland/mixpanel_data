@@ -59,8 +59,8 @@ def test_init_with_invalid_path_raises_error(tmp_path: Path) -> None:
     # Create a file, then try to create a database "inside" it
     # This reliably fails on all systems (not permission-dependent)
     blocker_file = tmp_path / "blocker.txt"
-    blocker_file.write_text("I am a file, not a directory")
-    invalid_path = blocker_file / "subdir" / "test.db"
+    blocker_file.touch()
+    invalid_path = blocker_file / "test.db"
 
     with pytest.raises(OSError):
         StorageEngine(path=invalid_path)
