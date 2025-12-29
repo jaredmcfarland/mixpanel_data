@@ -20,9 +20,13 @@ from mixpanel_data.exceptions import (
     AccountNotFoundError,
     AuthenticationError,
     ConfigError,
+    DatabaseLockedError,
+    DateRangeTooLargeError,
+    JQLSyntaxError,
     MixpanelDataError,
     QueryError,
     RateLimitError,
+    ServerError,
     TableExistsError,
     TableNotFoundError,
 )
@@ -181,6 +185,170 @@ class TestHandleErrors:
 
         assert documented_func.__name__ == "documented_func"
         assert "documented function" in (documented_func.__doc__ or "")
+
+    def test_jql_syntax_error_exits_with_code_3(self) -> None:
+        """Test JQLSyntaxError maps to exit code 3 (INVALID_ARGS)."""
+
+        @handle_errors
+        def jql_fail() -> None:
+            raise JQLSyntaxError(
+                raw_error="TypeError: undefined is not a function",
+                script="function main() { return Events().foo(); }",
+            )
+
+        with pytest.raises(click.exceptions.Exit) as exc:
+            jql_fail()
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+    def test_jql_syntax_error_shows_error_details(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test JQLSyntaxError displays rich error context."""
+
+        @handle_errors
+        def jql_fail() -> None:
+            raise JQLSyntaxError(
+                raw_error="Uncaught exception TypeError: foo is not a function\n  .foo()\n  ^",
+                script="function main() { return Events().foo(); }",
+            )
+
+        with pytest.raises(click.exceptions.Exit):
+            jql_fail()
+
+        captured = capsys.readouterr()
+        # Should show error type and message
+        assert "TypeError" in captured.err
+        # Should show the script (truncated if long)
+        assert "Events()" in captured.err
+
+    def test_server_error_exits_with_code_1(self) -> None:
+        """Test ServerError maps to exit code 1 (GENERAL_ERROR)."""
+
+        @handle_errors
+        def server_fail() -> None:
+            raise ServerError(
+                "Internal server error",
+                status_code=500,
+                response_body={"error": "Service temporarily unavailable"},
+            )
+
+        with pytest.raises(click.exceptions.Exit) as exc:
+            server_fail()
+        assert exc.value.exit_code == ExitCode.GENERAL_ERROR
+
+    def test_server_error_shows_status_code(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test ServerError displays status code and response."""
+
+        @handle_errors
+        def server_fail() -> None:
+            raise ServerError(
+                "Service unavailable",
+                status_code=503,
+                response_body={"error": "Database connection failed"},
+                request_url="https://api.mixpanel.com/query/segmentation",
+            )
+
+        with pytest.raises(click.exceptions.Exit):
+            server_fail()
+
+        captured = capsys.readouterr()
+        # Should show status code
+        assert "503" in captured.err
+        # Should show API error from response
+        assert "Database connection failed" in captured.err
+        # Should show endpoint
+        assert "segmentation" in captured.err
+
+    def test_database_locked_error_shows_pid(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test DatabaseLockedError displays holding PID when available."""
+
+        @handle_errors
+        def db_locked() -> None:
+            raise DatabaseLockedError(
+                db_path="/home/user/.mp/mixpanel.db",
+                holding_pid=12345,
+            )
+
+        with pytest.raises(click.exceptions.Exit):
+            db_locked()
+
+        captured = capsys.readouterr()
+        assert "12345" in captured.err
+        assert "PID" in captured.err
+
+    def test_date_range_error_shows_details(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test DateRangeTooLargeError displays date range details."""
+
+        @handle_errors
+        def date_range_fail() -> None:
+            raise DateRangeTooLargeError(
+                from_date="2024-01-01",
+                to_date="2024-06-30",
+                days_requested=181,
+                max_days=100,
+            )
+
+        with pytest.raises(click.exceptions.Exit):
+            date_range_fail()
+
+        captured = capsys.readouterr()
+        # Should show requested dates
+        assert "2024-01-01" in captured.err
+        assert "2024-06-30" in captured.err
+        # Should show days count
+        assert "181" in captured.err
+        # Should show max allowed
+        assert "100" in captured.err
+
+    def test_auth_error_shows_endpoint(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test AuthenticationError displays endpoint context."""
+
+        @handle_errors
+        def auth_fail() -> None:
+            raise AuthenticationError(
+                "Invalid API key",
+                status_code=401,
+                request_url="https://api.mixpanel.com/query/segmentation?project_id=123",
+                response_body={"error": "Unauthorized"},
+            )
+
+        with pytest.raises(click.exceptions.Exit):
+            auth_fail()
+
+        captured = capsys.readouterr()
+        # Should show endpoint (without sensitive params)
+        assert "segmentation" in captured.err
+
+    def test_query_error_shows_response_body(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test QueryError displays response body with API error message."""
+
+        @handle_errors
+        def query_fail() -> None:
+            raise QueryError(
+                "Query failed",
+                status_code=400,
+                response_body={"error": "Invalid event name: 'NonExistent'"},
+                request_params={"event": "NonExistent"},
+            )
+
+        with pytest.raises(click.exceptions.Exit):
+            query_fail()
+
+        captured = capsys.readouterr()
+        # Should show the API error from response body
+        assert "Invalid event name" in captured.err
+        # Should show request params
+        assert "NonExistent" in captured.err
 
 
 class TestGetWorkspace:

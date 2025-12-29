@@ -29,9 +29,11 @@ from mixpanel_data.exceptions import (
     DatabaseNotFoundError,
     DateRangeTooLargeError,
     EventNotFoundError,
+    JQLSyntaxError,
     MixpanelDataError,
     QueryError,
     RateLimitError,
+    ServerError,
     TableExistsError,
     TableNotFoundError,
 )
@@ -87,6 +89,16 @@ def handle_errors(func: F) -> F:
             return func(*args, **kwargs)
         except AuthenticationError as e:
             err_console.print(f"[red]Authentication error:[/red] {e.message}")
+            # Show request context to help debug auth issues
+            if e.request_url:
+                # Extract endpoint without sensitive params
+                endpoint = e.request_url.split("?")[0].split("/")[-1]
+                err_console.print(f"  [dim]Endpoint:[/dim] {endpoint}")
+            # Show API error message if available
+            if isinstance(e.response_body, dict):
+                api_error = e.response_body.get("error", "")
+                if api_error:
+                    err_console.print(f"  [dim]API response:[/dim] {api_error}")
             raise typer.Exit(ExitCode.AUTH_ERROR) from None
         except AccountNotFoundError as e:
             err_console.print(f"[red]Account not found:[/red] {e.account_name}")
@@ -107,6 +119,8 @@ def handle_errors(func: F) -> F:
             raise typer.Exit(ExitCode.NOT_FOUND) from None
         except DatabaseLockedError as e:
             err_console.print(f"[yellow]Database locked:[/yellow] {e.db_path}")
+            if e.holding_pid:
+                err_console.print(f"  [dim]Held by PID:[/dim] {e.holding_pid}")
             err_console.print("Another mp command may be running. Try again shortly.")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except DatabaseNotFoundError as e:
@@ -138,21 +152,96 @@ def handle_errors(func: F) -> F:
             raise typer.Exit(ExitCode.NOT_FOUND) from None
         except DateRangeTooLargeError as e:
             err_console.print(f"[red]Date range too large:[/red] {e.message}")
-            err_console.print("Split your request into chunks of 100 days or less.")
+            err_console.print(
+                f"  [dim]Requested:[/dim] {e.from_date} to {e.to_date} "
+                f"({e.days_requested} days)"
+            )
+            err_console.print(f"  [dim]Maximum:[/dim] {e.max_days} days")
+            err_console.print(
+                "[yellow]Tip:[/yellow] Split into multiple fetches, e.g.:\n"
+                f"  mp fetch events --from {e.from_date} --to <midpoint>\n"
+                f"  mp fetch events --from <midpoint+1> --to {e.to_date} --append"
+            )
+            raise typer.Exit(ExitCode.INVALID_ARGS) from None
+        except JQLSyntaxError as e:
+            # JQLSyntaxError must be caught before QueryError (it's a subclass)
+            err_console.print(
+                f"[red]JQL error:[/red] {e.error_type}: {e.error_message}"
+            )
+            # Show line info if available (code snippet with caret)
+            if e.line_info:
+                err_console.print(f"[dim]{e.line_info}[/dim]")
+            # Show stack trace if available
+            if e.stack_trace:
+                err_console.print(f"  [dim]Location:[/dim] {e.stack_trace}")
+            # Show the script that failed (truncated for readability)
+            if e.script:
+                script_preview = e.script.strip()
+                if len(script_preview) > 200:
+                    script_preview = script_preview[:200] + "..."
+                err_console.print(f"  [dim]Script:[/dim]\n{script_preview}")
+            # Show raw error for debugging if it has more info
+            if e.raw_error and e.raw_error != e.error_message:
+                err_console.print(f"  [dim]Raw error:[/dim] {e.raw_error}")
             raise typer.Exit(ExitCode.INVALID_ARGS) from None
         except QueryError as e:
             err_console.print(f"[red]Query error:[/red] {e.message}")
+            # Show response body - often contains the actual API error message
+            if e.response_body:
+                if isinstance(e.response_body, dict):
+                    api_error = e.response_body.get("error", "")
+                    if api_error and api_error not in e.message:
+                        err_console.print(f"  [dim]API error:[/dim] {api_error}")
+                elif (
+                    isinstance(e.response_body, str)
+                    and e.response_body not in e.message
+                ):
+                    # Truncate long response bodies
+                    body_preview = e.response_body[:200]
+                    if len(e.response_body) > 200:
+                        body_preview += "..."
+                    err_console.print(f"  [dim]Response:[/dim] {body_preview}")
             # Show non-sensitive request context for debugging
             if e.request_params:
                 for key, value in e.request_params.items():
                     if key not in ("project_id",):
                         err_console.print(f"  [dim]{key}:[/dim] {value}")
+            # Show request body if present (e.g., for POST requests)
+            if e.request_body:
+                for key, value in e.request_body.items():
+                    if key not in ("script",):  # Don't duplicate JQL script
+                        val_str = str(value)
+                        if len(val_str) > 100:
+                            val_str = val_str[:100] + "..."
+                        err_console.print(f"  [dim]{key}:[/dim] {val_str}")
             # Provide contextual hints
             if e.status_code == 403:
                 err_console.print(
                     "[yellow]Hint:[/yellow] Check service account permissions."
                 )
             raise typer.Exit(ExitCode.INVALID_ARGS) from None
+        except ServerError as e:
+            err_console.print(f"[red]Server error ({e.status_code}):[/red] {e.message}")
+            # Show response body - may contain actionable error details
+            if e.response_body:
+                if isinstance(e.response_body, dict):
+                    api_error = e.response_body.get("error", "")
+                    if api_error:
+                        err_console.print(f"  [dim]API error:[/dim] {api_error}")
+                elif isinstance(e.response_body, str):
+                    body_preview = e.response_body[:200]
+                    if len(e.response_body) > 200:
+                        body_preview += "..."
+                    err_console.print(f"  [dim]Response:[/dim] {body_preview}")
+            # Show endpoint for context
+            if e.request_url:
+                endpoint = e.request_url.split("?")[0].split("/")[-1]
+                err_console.print(f"  [dim]Endpoint:[/dim] {endpoint}")
+            err_console.print(
+                "[yellow]Hint:[/yellow] This may be a transient issue. "
+                "Try again in a few moments."
+            )
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except ConfigError as e:
             err_console.print(f"[red]Configuration error:[/red] {e.message}")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
