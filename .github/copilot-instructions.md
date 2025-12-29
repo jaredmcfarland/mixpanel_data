@@ -27,6 +27,7 @@ uv run pytest --cov=src/mixpanel_data --cov-fail-under=90
 - **CLI**: Typer + Rich
 - **Validation**: Pydantic v2
 - **Database**: DuckDB
+- **DataFrames**: pandas
 - **HTTP**: httpx
 - **Testing**: pytest, ruff, mypy
 
@@ -88,7 +89,7 @@ Every function/method/class needs:
 - `model_config = ConfigDict(frozen=True)` on Pydantic models
 - Use `Iterator[T]` not `list[T]` for streaming data
 - Use `field(default_factory=list)` not `[]` for defaults
-
+- **Explicit table management**: Storage operations must never implicitly overwrite existing tables; raise `TableExistsError` if the target table already exists and require an explicit drop/overwrite step instead of silent replacement.
 ## Exceptions
 
 Use library hierarchy, never bare `Exception`:
@@ -113,6 +114,16 @@ Use library hierarchy, never bare `Exception`:
 - Don't interpolate secrets in f-strings
 - Don't log Credentials without using `__repr__`
 
+## Configuration
+
+- Config file (TOML): `~/.mp/config.toml`
+- Supports multiple named accounts with one marked as default
+- Environment variables override config file values:
+  - `MP_USERNAME`
+  - `MP_SECRET`
+  - `MP_PROJECT_ID`
+  - `MP_REGION`
+  - `MP_CONFIG_PATH`
 ## Agent Task Guidelines
 
 ### Adding a Feature
