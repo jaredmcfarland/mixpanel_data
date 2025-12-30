@@ -466,24 +466,154 @@ class JQLResult:
 
     @property
     def df(self) -> pd.DataFrame:
-        """Convert result to DataFrame.
+        """Convert result to DataFrame with intelligent structure detection.
 
-        The structure depends on the JQL query results.
+        The conversion strategy depends on the detected JQL result pattern:
+
+        **groupBy results** (detected by {key: [...], value: X} structure):
+            - Keys expanded to columns: key_0, key_1, key_2, ...
+            - Single value: "value" column
+            - Multiple reducers (value array): value_0, value_1, value_2, ...
+            - Additional fields (from .map()): preserved as-is
+            - Example: {"key": ["US"], "value": 100, "name": "USA"}
+              -> columns: key_0, value, name
+
+        **Nested percentile results** ([[{percentile: X, value: Y}, ...]]):
+            - Outer list unwrapped, inner dicts converted directly
+
+        **Simple list of dicts** (already well-structured):
+            - Converted directly to DataFrame preserving all fields
+
+        **Fallback for other structures** (scalars, mixed types, incompatible dicts):
+            - Safely wrapped in single "value" column to prevent data loss
+            - Used when structure doesn't match known patterns
+
+        Raises:
+            ValueError: If groupBy structure has inconsistent value types across rows
+                (some scalar, some array) which indicates malformed query results.
+
+        Returns:
+            DataFrame representation, cached after first access.
         """
         if self._df_cache is not None:
             return self._df_cache
 
-        # If raw is a list of dicts, convert directly
-        if self._raw and isinstance(self._raw[0], dict):
-            result_df = pd.DataFrame(self._raw)
-        elif self._raw:
-            # For other structures, wrap in a DataFrame
-            result_df = pd.DataFrame({"value": self._raw})
-        else:
-            result_df = pd.DataFrame()
-
+        result_df = self._convert_to_dataframe(self._raw)
         object.__setattr__(self, "_df_cache", result_df)
         return result_df
+
+    def _convert_to_dataframe(self, raw: list[Any]) -> pd.DataFrame:
+        """Convert raw JQL results to DataFrame.
+
+        Args:
+            raw: Raw JQL result data.
+
+        Returns:
+            DataFrame representation.
+        """
+        if not raw:
+            return pd.DataFrame()
+
+        # Detect groupBy structure: {key: [...], value: X}
+        if self._is_groupby_structure(raw):
+            return self._expand_groupby_structure(raw)
+
+        # Special case: nested list of dicts (e.g., from percentiles after flatten)
+        # Structure: [[{percentile: 50, value: 118}, ...]]
+        if (
+            len(raw) == 1
+            and isinstance(raw[0], list)
+            and raw[0]
+            and isinstance(raw[0][0], dict)
+        ):
+            return pd.DataFrame(raw[0])
+
+        # Handle list of dicts (already good structure or after .map())
+        # But first check if ALL items are dicts to avoid pandas errors
+        if isinstance(raw[0], dict) and all(isinstance(item, dict) for item in raw):
+            try:
+                return pd.DataFrame(raw)
+            except (ValueError, TypeError):
+                # Mixed dict structures, wrap safely
+                return pd.DataFrame({"value": raw})
+
+        # For other structures (lists, scalars, mixed types), wrap in value column
+        return pd.DataFrame({"value": raw})
+
+    def _is_groupby_structure(self, raw: list[Any]) -> bool:
+        """Check if raw data has groupBy structure {key: [...], value: X}.
+
+        Validates that ALL elements match the pattern to prevent KeyError
+        during expansion. Allows additional fields (e.g., from .map()).
+
+        Args:
+            raw: Raw JQL result data.
+
+        Returns:
+            True if ALL elements match groupBy pattern.
+        """
+        if not raw:
+            return False
+
+        # Check ALL elements for consistent structure
+        return all(
+            isinstance(item, dict)
+            and set(item.keys()) >= {"key", "value"}  # Allow additional fields!
+            and isinstance(item.get("key"), list)
+            for item in raw
+        )
+
+    def _expand_groupby_structure(self, raw: list[dict[str, Any]]) -> pd.DataFrame:
+        """Expand groupBy {key: [...], value: X} structure to columns.
+
+        Preserves additional fields (e.g., from .map()) and validates
+        value type consistency across all rows.
+
+        Args:
+            raw: List of groupBy result objects.
+
+        Returns:
+            DataFrame with expanded key and value columns.
+
+        Raises:
+            ValueError: If value types are inconsistent across rows.
+        """
+        # Validate consistent value types
+        value_is_list = [isinstance(item["value"], list) for item in raw]
+        if not (all(value_is_list) or not any(value_is_list)):
+            raise ValueError(
+                "Inconsistent value types in groupBy results: "
+                "some rows have scalar values, others have arrays. "
+                "This typically indicates a malformed JQL query result."
+            )
+
+        rows = []
+        for item in raw:
+            row_dict: dict[str, Any] = {}
+
+            # FIRST: Preserve all additional fields (anything except key/value)
+            for k, v in item.items():
+                if k not in {"key", "value"}:
+                    row_dict[k] = v
+
+            # THEN: Expand key array into key_0, key_1, key_2, ...
+            keys = item["key"]
+            for i, key_val in enumerate(keys):
+                row_dict[f"key_{i}"] = key_val
+
+            # THEN: Handle value - could be scalar or array (multiple reducers)
+            value = item["value"]
+            if isinstance(value, list):
+                # Multiple reducers: expand to value_0, value_1, value_2
+                for i, val in enumerate(value):
+                    row_dict[f"value_{i}"] = val
+            else:
+                # Single reducer: just "value"
+                row_dict["value"] = value
+
+            rows.append(row_dict)
+
+        return pd.DataFrame(rows)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for JSON output."""
