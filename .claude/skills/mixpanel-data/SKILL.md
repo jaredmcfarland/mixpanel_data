@@ -7,6 +7,41 @@ description: Analyze Mixpanel analytics data using the mixpanel_data Python libr
 
 Fetch Mixpanel data once into local DuckDB, then query repeatedly with SQL—preserving context for reasoning rather than consuming it with raw API responses.
 
+## Documentation Access
+
+Full documentation is hosted at **https://discohead.github.io/mixpanel_data/** with LLM-optimized access:
+
+| Resource | URL | Use Case |
+|----------|-----|----------|
+| **llms.txt** | `https://discohead.github.io/mixpanel_data/llms.txt` | Index of all docs with descriptions |
+| **llms-full.txt** | `https://discohead.github.io/mixpanel_data/llms-full.txt` | Complete documentation (~400KB) |
+| **Individual pages** | `https://discohead.github.io/mixpanel_data/{path}/index.md` | Specific topic deep-dive |
+
+### When to Fetch Documentation
+
+- **Use this skill** for quick patterns, common examples, and API summaries
+- **Fetch llms.txt** to discover what documentation exists
+- **Fetch llms-full.txt** when you need comprehensive reference (API signatures, all parameters, edge cases)
+- **Fetch individual .md** for focused deep-dives (e.g., `/api/workspace/index.md` for Workspace class details)
+
+### Documentation Structure
+
+| Path | Content |
+|------|---------|
+| `/getting-started/installation/index.md` | Installation options |
+| `/getting-started/quickstart/index.md` | 5-minute tutorial |
+| `/getting-started/configuration/index.md` | Credentials and config |
+| `/guide/fetching/index.md` | Fetching events/profiles |
+| `/guide/streaming/index.md` | Streaming without storage |
+| `/guide/sql-queries/index.md` | DuckDB SQL patterns |
+| `/guide/live-analytics/index.md` | Segmentation, funnels, retention |
+| `/guide/discovery/index.md` | Schema exploration |
+| `/api/workspace/index.md` | Workspace class reference |
+| `/api/auth/index.md` | Authentication module |
+| `/api/exceptions/index.md` | Exception hierarchy |
+| `/api/types/index.md` | Result types |
+| `/cli/commands/index.md` | CLI command reference |
+
 ## When to Use
 
 ### Python Library (`mixpanel_data`)
@@ -312,6 +347,7 @@ For complete method signatures, see [references/library-api.md](references/libra
 For CLI commands, see [references/cli-commands.md](references/cli-commands.md).
 For filter expressions and JQL, see [references/query-expressions.md](references/query-expressions.md).
 For pandas/jq integration patterns, see [references/patterns.md](references/patterns.md).
+For documentation access and URLs, see [references/documentation.md](references/documentation.md).
 
 ## Common Errors
 
