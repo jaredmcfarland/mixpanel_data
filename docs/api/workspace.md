@@ -92,4 +92,5 @@ Duplicate events (by `insert_id`) and profiles (by `distinct_id`) are automatica
         - property_keys
         - column_stats
         - connection
+        - db_path
         - api

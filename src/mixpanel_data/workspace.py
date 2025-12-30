@@ -2388,6 +2388,30 @@ class Workspace:
         return self.storage.connection
 
     @property
+    def db_path(self) -> Path | None:
+        """Path to the DuckDB database file.
+
+        Returns the filesystem path where data is stored. Useful for:
+        - Knowing where your data lives
+        - Opening the same database later with ``Workspace.open(path)``
+        - Debugging and logging
+
+        Returns:
+            The database file path, or None for in-memory workspaces.
+
+        Example:
+            Save the path for later use::
+
+                ws = mp.Workspace()
+                path = ws.db_path
+                ws.close()
+
+                # Later, reopen the same database
+                ws = mp.Workspace.open(path)
+        """
+        return self.storage.path
+
+    @property
     def api(self) -> MixpanelAPIClient:
         """Direct access to the Mixpanel API client.
 
