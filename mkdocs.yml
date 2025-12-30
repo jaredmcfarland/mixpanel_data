@@ -48,8 +48,55 @@ theme:
 extra_css:
   - stylesheets/mixpanel.css
 
+extra_javascript:
+  - javascripts/copy-markdown.js
+
 plugins:
   - search
+  - llmstxt-md:
+      # noklam's plugin - markdown URLs and copy buttons (llms.txt generation disabled)
+      enable_markdown_urls: true
+      enable_copy_button: true
+      enable_llms_txt: false
+      enable_llms_full: false
+      copy_button_text: "Copy markdown"
+      copy_button_position:
+        top: "85px"
+        right: "24px"
+      copy_button_style:
+        background: "transparent"
+        color: "rgba(255, 255, 255, 0.7)"
+        border: "1px solid rgba(255, 255, 255, 0.2)"
+        padding: "6px 12px"
+        border_radius: "6px"
+        font_size: "13px"
+        font_weight: "400"
+        font_family: "inherit"
+      sections:
+        Getting Started:
+          - index.md
+          - getting-started/installation.md
+          - getting-started/quickstart.md
+          - getting-started/configuration.md
+        User Guide:
+          - guide/fetching.md
+          - guide/streaming.md
+          - guide/sql-queries.md
+          - guide/live-analytics.md
+          - guide/discovery.md
+        API Reference:
+          - api/index.md
+          - api/workspace.md
+          - api/auth.md
+          - api/exceptions.md
+          - api/types.md
+        CLI Reference:
+          - cli/index.md
+          - cli/commands.md
+        Architecture:
+          - architecture/design.md
+          - architecture/data-model.md
+          - architecture/storage.md
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -67,6 +114,39 @@ plugins:
             separate_signature: true
             line_length: 80
             members_order: source
+  - llmstxt:
+      # pawamoy's plugin - handles all llms.txt generation from HTML
+      full_output: llms-full.txt
+      markdown_description: |
+        mixpanel_data is a complete programmable interface to Mixpanel analytics.
+        Python library and CLI for discovery, querying, and data extraction.
+        Discover your schema, run live analytics (segmentation, funnels, retention),
+        execute JQL, and analyze locally with SQL via DuckDB.
+      sections:
+        Getting Started:
+          - index.md: "Project overview and key concepts"
+          - getting-started/installation.md: "Install with pip or uv"
+          - getting-started/quickstart.md: "First queries in 5 minutes"
+          - getting-started/configuration.md: "Accounts, env vars, config files"
+        User Guide:
+          - guide/fetching.md: "Fetch events and profiles to DuckDB"
+          - guide/streaming.md: "Stream data without storage for ETL"
+          - guide/sql-queries.md: "Query with DuckDB SQL and JSON operators"
+          - guide/live-analytics.md: "Segmentation, funnels, retention, JQL"
+          - guide/discovery.md: "Explore schema, events, properties, cohorts"
+        API Reference:
+          - api/index.md: "Python API overview"
+          - api/workspace.md: "Workspace class - main entry point"
+          - api/auth.md: "Authentication and credentials"
+          - api/exceptions.md: "Exception hierarchy"
+          - api/types.md: "Result types (SegmentationResult, etc.)"
+        CLI Reference:
+          - cli/index.md: "CLI overview and output formats"
+          - cli/commands.md: "Complete command reference"
+        Architecture:
+          - architecture/design.md: "Layered architecture and services"
+          - architecture/data-model.md: "Event and profile data model"
+          - architecture/storage.md: "DuckDB storage engine"
 
 markdown_extensions:
   - admonition

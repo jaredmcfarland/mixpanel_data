@@ -50,6 +50,8 @@ docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.24",
     "mkdocs-typer>=0.0.3",
+    "mkdocs-llmstxt>=0.2.0",
+    "mkdocs-llmstxt-md>=0.1.0",
 ]
 notebook = [
     "jupyterlab>=4.0",

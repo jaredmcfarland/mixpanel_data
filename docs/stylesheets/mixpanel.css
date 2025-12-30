@@ -301,3 +301,97 @@
 .md-typeset table:not([class]) th {
   background-color: rgba(120, 86, 255, 0.1);
 }
+
+/*
+ * LLMs.txt copy button - Anthropic-style outlined button with icon
+ * Note: !important is required throughout to override inline styles
+ * injected by the mkdocs-llmstxt-md plugin
+ */
+#llms-copy-button {
+  position: fixed !important;
+  top: 85px !important;
+  right: 24px !important;
+}
+
+#llms-copy-button button {
+  display: inline-flex !important;
+  align-items: center !important;
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+#llms-copy-button button::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2' ry='2'%3E%3C/rect%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  flex-shrink: 0;
+}
+
+#llms-copy-button button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+#llms-copy-button button:hover::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.9)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2' ry='2'%3E%3C/rect%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'%3E%3C/path%3E%3C/svg%3E");
+}
+
+/* Light mode adjustments */
+[data-md-color-scheme="default"] #llms-copy-button button {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+[data-md-color-scheme="default"] #llms-copy-button button::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.6)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2' ry='2'%3E%3C/rect%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'%3E%3C/path%3E%3C/svg%3E");
+}
+
+[data-md-color-scheme="default"] #llms-copy-button button:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.25) !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+[data-md-color-scheme="default"] #llms-copy-button button:hover::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.8)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='13' height='13' rx='2' ry='2'%3E%3C/rect%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'%3E%3C/path%3E%3C/svg%3E");
+}
+
+/* Copy button success state (works in both light and dark modes) */
+#llms-copy-button button.success {
+  border-color: #219464 !important;
+  color: #219464 !important;
+}
+
+#llms-copy-button button.success::before {
+  display: none;
+}
+
+/* Copy button error state (works in both light and dark modes) */
+#llms-copy-button button.error {
+  border-color: #e34f2f !important;
+  color: #e34f2f !important;
+}
+
+#llms-copy-button button.error::before {
+  display: none;
+}
+
+/* Keyboard focus styles for accessibility */
+#llms-copy-button button:focus-visible {
+  outline: 2px solid var(--md-primary-fg-color) !important;
+  outline-offset: 2px !important;
+}
