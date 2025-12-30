@@ -10,11 +10,7 @@
   },
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/eitsupi/devcontainer-features/duckdb-cli:1": {},
-    "ghcr.io/devcontainers/features/python:1": {
-      "installTools": false,
-      "installJupyterlab": true
-    }
+    "ghcr.io/eitsupi/devcontainer-features/duckdb-cli:1": {}
   },
   "customizations": {
     "vscode": {
