@@ -596,8 +596,9 @@ class TestJQLResultProperties:
 
         # Row count should match input length (or flattened length for nested)
         if raw_data and isinstance(raw_data[0], list):
-            # Nested structure gets flattened
-            assert len(df) >= 0
+            # Nested structure gets flattened; each element of the inner list should
+            # correspond to one row in the DataFrame.
+            assert len(df) == len(raw_data[0])
         else:
             assert len(df) == len(raw_data)
 
@@ -666,6 +667,27 @@ class TestJQLResultProperties:
         # All rows should have values for all value columns
         for col in value_columns:
             assert df[col].notna().all()
+
+    @given(
+        num_rows=st.integers(min_value=2, max_value=10),
+    )
+    def test_heterogeneous_value_types_raise_error(self, num_rows: int) -> None:
+        """Heterogeneous value types (mixed scalar/array) should raise ValueError.
+
+        This test generates groupBy structures where some rows have scalar values
+        and others have array values, which should be detected and rejected.
+        """
+        import pytest
+
+        # Create data with GUARANTEED heterogeneity: first row scalar, rest arrays
+        raw_data = [{"key": ["key0"], "value": 42}]  # First row: scalar
+        for i in range(1, num_rows):
+            raw_data.append({"key": [f"key{i}"], "value": [1, 2, 3]})  # Rest: arrays
+
+        result = JQLResult(_raw=raw_data)
+
+        with pytest.raises(ValueError, match="Inconsistent value types"):
+            _ = result.df
 
 
 # =============================================================================

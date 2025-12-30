@@ -8,6 +8,7 @@ These tests demonstrate handling of common JQL result structures:
 """
 
 import pandas as pd
+import pytest
 
 from mixpanel_data.types import JQLResult
 
@@ -27,7 +28,7 @@ class TestJQLResultGroupByStructure:
         )
 
         df = result.df
-        assert "key_0" in df.columns or "key" in df.columns
+        assert "key_0" in df.columns
         assert "value" in df.columns
         assert len(df) == 3
         assert df["value"].tolist() == [100, 50, 75]
@@ -84,6 +85,27 @@ class TestJQLResultGroupByStructure:
         assert "total_revenue" in df.columns
         assert "avg" in df.columns
 
+    def test_groupby_preserves_additional_fields(self) -> None:
+        """groupBy expansion should preserve fields added by .map()."""
+        # Common pattern: groupBy result with .map() adding readable names
+        result = JQLResult(
+            _raw=[
+                {"key": ["US"], "value": 100, "country_name": "United States"},
+                {"key": ["UK"], "value": 50, "country_name": "United Kingdom"},
+                {"key": ["CA"], "value": 75, "country_name": "Canada"},
+            ]
+        )
+
+        df = result.df
+        assert "key_0" in df.columns
+        assert "value" in df.columns
+        assert "country_name" in df.columns  # MUST be preserved
+        assert df["country_name"].tolist() == [
+            "United States",
+            "United Kingdom",
+            "Canada",
+        ]
+
 
 class TestJQLResultReduceStructure:
     """Tests for reduce() results."""
@@ -95,7 +117,7 @@ class TestJQLResultReduceStructure:
 
         df = result.df
         assert len(df) == 1
-        # Should have a sensible column name, not just "value"
+        # Should have a sensible column name, e.g. "value" or "result"
         assert "value" in df.columns or "result" in df.columns
 
     def test_object_reduce(self) -> None:
@@ -134,8 +156,8 @@ class TestJQLResultReduceStructure:
         )
 
         df = result.df
-        # Could flatten to rows, or pivot to columns
-        assert len(df) >= 4 or "p50" in df.columns
+        # Nested percentile structures should be flattened to one row per entry
+        assert len(df) == 4
 
 
 class TestJQLResultEdgeCases:
@@ -149,14 +171,44 @@ class TestJQLResultEdgeCases:
         assert len(df) == 0
         assert isinstance(df, pd.DataFrame)
 
+    def test_mixed_structure_not_detected_as_groupby(self) -> None:
+        """Mixed structures should not be detected as groupBy."""
+        # First element looks like groupBy, second doesn't
+        result = JQLResult(
+            _raw=[
+                {"key": ["US"], "value": 100},
+                {"country": "UK", "count": 50},  # Different structure
+            ]
+        )
+
+        # Should fall back to safe wrapping, not crash
+        df = result.df
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 2
+
     def test_mixed_structure_fallback(self) -> None:
         """Mixed structures should fall back gracefully."""
         # Sometimes JQL can return heterogeneous results
         result = JQLResult(_raw=[{"a": 1}, {"b": 2}, "string", 42])
 
         df = result.df
-        # Should not crash, but structure may vary
+        # Should not crash and should preserve all data
         assert isinstance(df, pd.DataFrame)
+        assert len(df) == 4  # All items should be in DataFrame
+        assert "value" in df.columns  # Should fall back to value column
+
+    def test_inconsistent_value_types_raises_error(self) -> None:
+        """Mixed scalar/array values should raise descriptive error."""
+        # Some rows have scalar values, others have arrays
+        result = JQLResult(
+            _raw=[
+                {"key": ["US"], "value": 100},
+                {"key": ["UK"], "value": [50, 2500]},
+            ]
+        )
+
+        with pytest.raises(ValueError, match="Inconsistent value types"):
+            _ = result.df
 
     def test_deeply_nested_values(self) -> None:
         """Deeply nested values should be preserved."""
