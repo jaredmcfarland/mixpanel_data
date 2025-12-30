@@ -1321,6 +1321,34 @@ class TestEscapeHatches:
         finally:
             ws.close()
 
+    def test_db_path_property_returns_path(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """T103: Test db_path property returning database path."""
+        ws = workspace_factory()
+        try:
+            path = ws.db_path
+
+            # Should be a Path object
+            assert isinstance(path, Path)
+            # Should match the storage path
+            assert path == ws.storage.path
+        finally:
+            ws.close()
+
+    def test_db_path_property_returns_none_for_memory(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+    ) -> None:
+        """T104: Test db_path property returns None for memory workspaces."""
+        with Workspace.memory(
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        ) as ws:
+            assert ws.db_path is None
+
 
 # =============================================================================
 # Context Manager Tests

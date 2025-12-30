@@ -248,6 +248,22 @@ conn.execute("SET threads TO 4")
 result = conn.execute("EXPLAIN ANALYZE SELECT * FROM events").fetchall()
 ```
 
+### Database Path
+
+Get the path to the underlying database file:
+
+```python
+# Get the database file path
+path = ws.db_path
+print(f"Data stored at: {path}")
+
+# Useful for reopening the same database later
+ws.close()
+ws = mp.Workspace.open(path)
+```
+
+Note: `db_path` returns `None` for in-memory workspaces created with `Workspace.memory()`.
+
 ## Performance Tips
 
 ### Use Appropriate Data Types
