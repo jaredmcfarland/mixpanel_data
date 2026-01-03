@@ -223,22 +223,6 @@ Ask questions about your Mixpanel data in natural language and get guided, inter
 
 Then restart Claude Code.
 
-**Example interaction:**
-
-```
-You: "What were my top events last month and what drove user retention?"
-
-Claude: [Auto-activates mixpanel-data skill for context]
-        [Verifies credentials with /mp-auth]
-        [Discovers events with /mp-inspect]
-        [Fetches January data with /mp-fetch]
-        [Analyzes with SQL via /mp-query]
-        [Invokes retention-specialist agent for cohort analysis]
-
-        Your top events were Sign Up (45K), Page View (892K)...
-        Day 7 retention is 34% for users who completed onboarding...
-```
-
 **What you get:**
 
 - **Auto-discovery skill**: `mixpanel-data` skill activates when you mention Mixpanel, analytics, funnels, or retention—loads comprehensive reference docs and guides your workflow
