@@ -85,8 +85,8 @@ class MixpanelAPIClient:
         self,
         credentials: Credentials,
         *,
-        timeout: float = 30.0,
-        export_timeout: float = 300.0,
+        timeout: float = 120.0,
+        export_timeout: float = 600.0,
         max_retries: int = 3,
         _transport: httpx.BaseTransport | None = None,
     ) -> None:

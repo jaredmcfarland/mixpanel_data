@@ -18,12 +18,159 @@ from mixpanel_data.types import (
     FunnelStep,
     JQLResult,
     PropertyCountsResult,
+    ResultWithDataFrame,
     RetentionResult,
     SavedCohort,
     SegmentationResult,
     TableMetadata,
     TopEvent,
 )
+
+
+class TestResultWithDataFrame:
+    """Tests for ResultWithDataFrame base class."""
+
+    def test_base_class_requires_df_property_implementation(self) -> None:
+        """Subclasses must implement df property or raise NotImplementedError."""
+
+        # Create a minimal subclass without implementing df
+        @dataclasses.dataclass(frozen=True)
+        class MinimalResult(ResultWithDataFrame):
+            value: int
+
+        result = MinimalResult(value=42)
+
+        with pytest.raises(NotImplementedError, match="must implement df property"):
+            _ = result.df
+
+    def test_to_table_dict_with_implemented_df(self) -> None:
+        """to_table_dict should use df property to create list of dicts."""
+
+        # Create a subclass with proper df implementation
+        @dataclasses.dataclass(frozen=True)
+        class TestResult(ResultWithDataFrame):
+            data: dict[str, int] = dataclasses.field(default_factory=dict)
+
+            @property
+            def df(self) -> pd.DataFrame:
+                if self._df_cache is not None:
+                    return self._df_cache
+
+                rows = [{"key": k, "value": v} for k, v in self.data.items()]
+                result_df = pd.DataFrame(rows)
+                object.__setattr__(self, "_df_cache", result_df)
+                return result_df
+
+        result = TestResult(data={"a": 1, "b": 2, "c": 3})
+        table_dict = result.to_table_dict()
+
+        assert isinstance(table_dict, list)
+        assert len(table_dict) == 3
+        assert all(isinstance(item, dict) for item in table_dict)
+        assert all("key" in item and "value" in item for item in table_dict)
+
+        # Verify specific values
+        assert {"key": "a", "value": 1} in table_dict
+        assert {"key": "b", "value": 2} in table_dict
+        assert {"key": "c", "value": 3} in table_dict
+
+    def test_to_table_dict_empty_dataframe(self) -> None:
+        """to_table_dict should return empty list for empty DataFrame."""
+
+        @dataclasses.dataclass(frozen=True)
+        class EmptyResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                return pd.DataFrame()
+
+        result = EmptyResult()
+        table_dict = result.to_table_dict()
+
+        assert isinstance(table_dict, list)
+        assert len(table_dict) == 0
+
+    def test_to_table_dict_json_serializable(self) -> None:
+        """to_table_dict output should be JSON serializable."""
+
+        @dataclasses.dataclass(frozen=True)
+        class SerializableResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                return pd.DataFrame(
+                    [
+                        {"date": "2024-01-01", "count": 100},
+                        {"date": "2024-01-02", "count": 200},
+                    ]
+                )
+
+        result = SerializableResult()
+        table_dict = result.to_table_dict()
+        json_str = json.dumps(table_dict)
+
+        assert isinstance(json_str, str)
+        parsed = json.loads(json_str)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 2
+        assert parsed[0]["date"] == "2024-01-01"
+        assert parsed[0]["count"] == 100
+
+    def test_df_caching_works(self) -> None:
+        """df should be cached in _df_cache after first access."""
+
+        @dataclasses.dataclass(frozen=True)
+        class CachedResult(ResultWithDataFrame):
+            compute_count: int = dataclasses.field(default=0, init=False, repr=False)
+
+            @property
+            def df(self) -> pd.DataFrame:
+                if self._df_cache is not None:
+                    return self._df_cache
+
+                # Increment counter to track how many times df is computed
+                object.__setattr__(self, "compute_count", self.compute_count + 1)
+
+                result_df = pd.DataFrame([{"value": 42}])
+                object.__setattr__(self, "_df_cache", result_df)
+                return result_df
+
+        result = CachedResult()
+
+        # First access computes df
+        df1 = result.df
+        assert result.compute_count == 1
+
+        # Second access uses cache
+        df2 = result.df
+        assert result.compute_count == 1  # Not incremented
+        assert df1 is df2  # Same object
+
+    def test_multiple_result_types_can_inherit(self) -> None:
+        """Multiple result types can inherit from ResultWithDataFrame."""
+
+        @dataclasses.dataclass(frozen=True)
+        class ResultTypeA(ResultWithDataFrame):
+            value_a: str
+
+            @property
+            def df(self) -> pd.DataFrame:
+                return pd.DataFrame([{"type": "A", "value": self.value_a}])
+
+        @dataclasses.dataclass(frozen=True)
+        class ResultTypeB(ResultWithDataFrame):
+            value_b: int
+
+            @property
+            def df(self) -> pd.DataFrame:
+                return pd.DataFrame([{"type": "B", "value": self.value_b}])
+
+        result_a = ResultTypeA(value_a="test")
+        result_b = ResultTypeB(value_b=123)
+
+        table_a = result_a.to_table_dict()
+        table_b = result_b.to_table_dict()
+
+        assert table_a == [{"type": "A", "value": "test"}]
+        assert table_b == [{"type": "B", "value": 123}]
 
 
 class TestFetchResult:

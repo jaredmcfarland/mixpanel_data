@@ -31,14 +31,19 @@ def normalize_on_expression(on: str) -> str:
         backslashes in bare property names are escaped to produce valid syntax.
 
     Examples:
-        >>> normalize_on_expression("Source")
-        'properties["Source"]'
-        >>> normalize_on_expression('properties["Source"]')
-        'properties["Source"]'
-        >>> normalize_on_expression('properties["Type"] == "Event"')
-        'properties["Type"] == "Event"'
-        >>> normalize_on_expression('my"property')
-        'properties["my\\\\"property"]'
+        ```python
+        normalize_on_expression("Source")
+        # 'properties["Source"]'
+
+        normalize_on_expression('properties["Source"]')
+        # 'properties["Source"]'
+
+        normalize_on_expression('properties["Type"] == "Event"')
+        # 'properties["Type"] == "Event"'
+
+        normalize_on_expression('my"property')
+        # 'properties["my\\\\"property"]'
+        ```
     """
     if any(accessor in on for accessor in _FILTER_EXPR_ACCESSORS):
         return on

@@ -190,7 +190,7 @@ class MixpanelBookmarkAPI:
         self.client = httpx.Client(
             auth=(username, secret),
             base_url=base_url,
-            timeout=30.0
+            timeout=120.0
         )
     
     def get_insights_bookmarks(self, project_id: int) -> List[Dict[str, Any]]:

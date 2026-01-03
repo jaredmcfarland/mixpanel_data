@@ -176,8 +176,8 @@ def test_export_events():
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `timeout` | 30.0 | Request timeout (seconds) |
-| `export_timeout` | 300.0 | Export request timeout (seconds) |
+| `timeout` | 120.0 | Request timeout (seconds) |
+| `export_timeout` | 600.0 | Export request timeout (seconds) |
 | `max_retries` | 3 | Max retries for rate limits |
 
 ```python
