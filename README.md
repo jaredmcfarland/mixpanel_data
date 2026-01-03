@@ -208,6 +208,58 @@ Key design features:
 - **Local SQL iteration**: Fetch once, query repeatedly—no re-fetching needed
 - **Typed exceptions**: Error codes and context for programmatic handling
 
+## Claude Code Plugin
+
+This project also includes a Claude Code plugin that brings analytics workflows directly into conversational AI interactions.
+
+Ask questions about your Mixpanel data in natural language and get guided, interactive analytics workflows—all within Claude Code.
+
+**Installation:**
+
+```bash
+/plugin marketplace add jaredmcfarland/mixpanel_data
+/plugin install mixpanel-data
+```
+
+Then restart Claude Code.
+
+**Example interaction:**
+
+```
+You: "What were my top events last month and what drove user retention?"
+
+Claude: [Auto-activates mixpanel-data skill for context]
+        [Verifies credentials with /mp-auth]
+        [Discovers events with /mp-inspect]
+        [Fetches January data with /mp-fetch]
+        [Analyzes with SQL via /mp-query]
+        [Invokes retention-specialist agent for cohort analysis]
+
+        Your top events were Sign Up (45K), Page View (892K)...
+        Day 7 retention is 34% for users who completed onboarding...
+```
+
+**What you get:**
+
+- **Auto-discovery skill**: `mixpanel-data` skill activates when you mention Mixpanel, analytics, funnels, or retention—loads comprehensive reference docs and guides your workflow
+- **7 interactive commands**:
+  - `/mp-auth` - Secure credential management with account switching
+  - `/mp-inspect` - 12-operation schema explorer (events, properties, funnels, cohorts, tables)
+  - `/mp-fetch` - Guided data ingestion with validation
+  - `/mp-query` - Universal query builder (SQL, JQL, live analytics)
+  - `/mp-funnel` - Conversion analysis with visualizations
+  - `/mp-retention` - Retention curves and cohort analysis
+  - `/mp-report` - Comprehensive reporting with automated insights
+- **4 specialist agents**: Auto-invoked based on your questions
+  - `mixpanel-analyst` - General analytics, SQL/JQL query building
+  - `funnel-optimizer` - Conversion analysis and drop-off diagnostics
+  - `retention-specialist` - Cohort behavior and retention curves
+  - `jql-expert` - Advanced JavaScript queries and transformations
+- **Multiple query paths**: SQL (DuckDB local analysis), JQL (complex transforms), or Mixpanel API (live analytics)
+- **Secure by design**: Credentials managed outside conversation context
+
+Learn more: [Plugin Documentation](mixpanel-plugin/README.md)
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
