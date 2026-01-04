@@ -17,9 +17,11 @@ Usage:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import datetime
 
+import pandas as pd
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -52,6 +54,7 @@ from mixpanel_data.types import (
     PropertyCoverageResult,
     PropertyDistributionResult,
     PropertyValueCount,
+    ResultWithDataFrame,
     RetentionResult,
     SavedCohort,
     SavedReportResult,
@@ -101,6 +104,217 @@ datetimes = st.datetimes(
     min_value=datetime(2020, 1, 1),
     max_value=datetime(2030, 12, 31),
 )
+
+
+# =============================================================================
+# ResultWithDataFrame Property Tests
+# =============================================================================
+
+
+class TestResultWithDataFrameProperties:
+    """Property-based tests for ResultWithDataFrame base class.
+
+    These tests verify invariants that should hold for all types inheriting from
+    ResultWithDataFrame, ensuring the base class implementation is robust.
+    """
+
+    @given(
+        num_rows=st.integers(min_value=0, max_value=50),
+        num_cols=st.integers(min_value=1, max_value=10),
+    )
+    def test_to_table_dict_always_returns_list(
+        self, num_rows: int, num_cols: int
+    ) -> None:
+        """to_table_dict() should always return a list, never None or other type."""
+
+        @dataclasses.dataclass(frozen=True)
+        class TestResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                if self._df_cache is not None:
+                    return self._df_cache
+
+                data = {f"col_{i}": list(range(num_rows)) for i in range(num_cols)}
+                result_df = pd.DataFrame(data)
+                object.__setattr__(self, "_df_cache", result_df)
+                return result_df
+
+        result = TestResult()
+        table_dict = result.to_table_dict()
+
+        assert isinstance(table_dict, list)
+
+    @given(
+        num_rows=st.integers(min_value=1, max_value=50),
+        num_cols=st.integers(min_value=1, max_value=10),
+    )
+    def test_all_elements_are_dicts(self, num_rows: int, num_cols: int) -> None:
+        """Every element in to_table_dict() output should be a dict."""
+
+        @dataclasses.dataclass(frozen=True)
+        class TestResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                data = {f"col_{i}": list(range(num_rows)) for i in range(num_cols)}
+                return pd.DataFrame(data)
+
+        result = TestResult()
+        table_dict = result.to_table_dict()
+
+        assert all(isinstance(row, dict) for row in table_dict)
+
+    def test_empty_dataframe_returns_empty_list(self) -> None:
+        """to_table_dict() should return empty list for empty DataFrame."""
+
+        @dataclasses.dataclass(frozen=True)
+        class EmptyResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                return pd.DataFrame()
+
+        result = EmptyResult()
+        table_dict = result.to_table_dict()
+
+        assert table_dict == []
+        assert isinstance(table_dict, list)
+
+    @given(
+        num_rows=st.integers(min_value=0, max_value=50),
+        num_cols=st.integers(min_value=1, max_value=10),
+    )
+    def test_row_count_matches_dataframe(self, num_rows: int, num_cols: int) -> None:
+        """Length of to_table_dict() should equal number of DataFrame rows."""
+
+        @dataclasses.dataclass(frozen=True)
+        class TestResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                data = {f"col_{i}": list(range(num_rows)) for i in range(num_cols)}
+                return pd.DataFrame(data)
+
+        result = TestResult()
+        table_dict = result.to_table_dict()
+
+        assert len(table_dict) == num_rows
+        assert len(table_dict) == len(result.df)
+
+    @given(
+        num_rows=st.integers(min_value=1, max_value=20),
+        col_names=st.lists(
+            st.text(
+                alphabet=st.characters(categories=("L", "N")),
+                min_size=1,
+                max_size=15,
+            ).filter(lambda s: s and s[0].isalpha()),
+            min_size=1,
+            max_size=8,
+            unique=True,
+        ),
+    )
+    def test_column_names_become_dict_keys(
+        self, num_rows: int, col_names: list[str]
+    ) -> None:
+        """All DataFrame column names should appear as keys in output dicts."""
+
+        @dataclasses.dataclass(frozen=True)
+        class TestResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                data = {col: list(range(num_rows)) for col in col_names}
+                return pd.DataFrame(data)
+
+        result = TestResult()
+        table_dict = result.to_table_dict()
+
+        if table_dict:  # Only check if non-empty
+            for row in table_dict:
+                assert set(row.keys()) == set(col_names)
+
+    @given(
+        num_rows=st.integers(min_value=0, max_value=30),
+        num_cols=st.integers(min_value=1, max_value=8),
+    )
+    def test_output_is_json_serializable(self, num_rows: int, num_cols: int) -> None:
+        """to_table_dict() output should always be JSON-serializable."""
+
+        @dataclasses.dataclass(frozen=True)
+        class TestResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                data = {f"col_{i}": list(range(num_rows)) for i in range(num_cols)}
+                return pd.DataFrame(data)
+
+        result = TestResult()
+        table_dict = result.to_table_dict()
+
+        # Should not raise
+        json_str = json.dumps(table_dict)
+        assert isinstance(json_str, str)
+
+        # Should round-trip correctly
+        parsed = json.loads(json_str)
+        assert isinstance(parsed, list)
+        assert len(parsed) == num_rows
+
+    @given(
+        num_rows=st.integers(min_value=1, max_value=20),
+        num_cols=st.integers(min_value=1, max_value=5),
+    )
+    def test_deterministic_conversion(self, num_rows: int, num_cols: int) -> None:
+        """Same DataFrame should always produce identical output."""
+
+        @dataclasses.dataclass(frozen=True)
+        class TestResult(ResultWithDataFrame):
+            data: dict[str, list[int]] = dataclasses.field(default_factory=dict)
+
+            @property
+            def df(self) -> pd.DataFrame:
+                if self._df_cache is not None:
+                    return self._df_cache
+
+                result_df = pd.DataFrame(self.data)
+                object.__setattr__(self, "_df_cache", result_df)
+                return result_df
+
+        data = {f"col_{i}": list(range(num_rows)) for i in range(num_cols)}
+
+        result1 = TestResult(data=data)
+        result2 = TestResult(data=data)
+
+        table_dict1 = result1.to_table_dict()
+        table_dict2 = result2.to_table_dict()
+
+        assert table_dict1 == table_dict2
+
+    @given(
+        values=st.lists(
+            st.one_of(
+                st.integers(min_value=-1000, max_value=1000),
+                st.floats(min_value=-1e6, max_value=1e6, allow_nan=False),
+                st.text(max_size=20),
+                st.booleans(),
+            ),
+            min_size=0,
+            max_size=20,
+        )
+    )
+    def test_handles_various_data_types(self, values: list[object]) -> None:
+        """Should handle DataFrames with various column types."""
+
+        @dataclasses.dataclass(frozen=True)
+        class TestResult(ResultWithDataFrame):
+            @property
+            def df(self) -> pd.DataFrame:
+                if not values:
+                    return pd.DataFrame()
+                return pd.DataFrame({"value": values})
+
+        result = TestResult()
+        table_dict = result.to_table_dict()
+
+        assert len(table_dict) == len(values)
+        # Should still be JSON-serializable
+        json.dumps(table_dict)
 
 
 # =============================================================================
@@ -547,8 +761,6 @@ class TestJQLResultProperties:
         not relying on dictionary ordering, hash randomness, or other
         non-deterministic factors.
         """
-        import pandas as pd
-
         # Create two separate JQLResult objects with same data
         result1 = JQLResult(_raw=raw_data)
         result2 = JQLResult(_raw=raw_data)
@@ -590,8 +802,6 @@ class TestJQLResultProperties:
         df = result.df
 
         # Should always return a DataFrame
-        import pandas as pd
-
         assert isinstance(df, pd.DataFrame)
 
         # Row count should match input length (or flattened length for nested)
@@ -1867,8 +2077,6 @@ class TestPropertyValueCountProperties:
     def test_immutable(self, count: int, percentage: float) -> None:
         """PropertyValueCount should be immutable (frozen dataclass)."""
         result = PropertyValueCount(value="test", count=count, percentage=percentage)
-
-        import dataclasses
 
         import pytest
 

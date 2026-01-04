@@ -205,6 +205,22 @@ class TestFormatTable:
         assert isinstance(table, Table)
         assert table.row_count == 1
 
+    def test_format_normalized_segmentation_data(self) -> None:
+        """Test formatting normalized segmentation data with date/segment/count."""
+        # This is the format returned by SegmentationResult.to_table_dict()
+        data = [
+            {"date": "2024-01-01", "segment": "US", "count": 100},
+            {"date": "2024-01-01", "segment": "EU", "count": 50},
+            {"date": "2024-01-02", "segment": "US", "count": 150},
+            {"date": "2024-01-02", "segment": "EU", "count": 75},
+        ]
+        table = format_table(data)
+
+        assert isinstance(table, Table)
+        assert table.row_count == 4
+        # Verify columns are properly detected from first item
+        assert len(table.columns) == 3
+
 
 class TestFormatCsv:
     """Tests for format_csv function."""

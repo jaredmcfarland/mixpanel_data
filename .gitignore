@@ -65,3 +65,6 @@ man/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Demo
+demo/

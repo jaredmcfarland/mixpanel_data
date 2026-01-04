@@ -25,6 +25,139 @@ from typing import Any, Literal
 import pandas as pd
 
 # =============================================================================
+# Base Class for Result Types with DataFrame Conversion
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ResultWithDataFrame:
+    """Base class for result types with lazy DataFrame conversion and table output.
+
+    This base class provides common functionality for result types that:
+    1. Store data in nested dict/list structures
+    2. Support conversion to normalized DataFrames via a `df` property
+    3. Need readable table output for CLI `--format table` option
+
+    Attributes:
+        _df_cache: Internal cache for lazy DataFrame conversion. Not part of
+            the public API. Subclasses should not access this directly.
+            This field is keyword-only to allow subclasses to define required
+            fields without defaults.
+
+    Methods:
+        df: Property that must be implemented by subclasses to return a
+            normalized DataFrame.
+        to_table_dict: Converts the DataFrame to a list of dicts suitable
+            for table formatting.
+
+    Usage:
+        Subclasses must implement the `df` property to normalize their data
+        into a flat DataFrame structure. The base class handles caching and
+        table serialization automatically.
+
+    Example:
+        ```python
+        @dataclass(frozen=True)
+        class MyResult(ResultWithDataFrame):
+            data: dict[str, dict[str, int]]
+
+            @property
+            def df(self) -> pd.DataFrame:
+                if self._df_cache is not None:
+                    return self._df_cache
+
+                rows = [{"key": k, "date": d, "count": c}
+                        for k, dates in self.data.items()
+                        for d, c in dates.items()]
+                result_df = pd.DataFrame(rows)
+                object.__setattr__(self, "_df_cache", result_df)
+                return result_df
+
+        result = MyResult(data={"A": {"2024-01-01": 10}})
+        result.to_table_dict()
+        # [{"key": "A", "date": "2024-01-01", "count": 10}]
+        ```
+    """
+
+    _df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Convert result data to normalized DataFrame.
+
+        This property must be implemented by subclasses to convert their
+        specific data structure into a flat, normalized DataFrame suitable
+        for analysis and table display.
+
+        The implementation should:
+        1. Check if _df_cache is not None and return it (for performance)
+        2. Build rows as list[dict[str, Any]] from the result's data
+        3. Create a DataFrame from the rows (or empty DataFrame with columns)
+        4. Cache the result using object.__setattr__(self, "_df_cache", result_df)
+        5. Return the DataFrame
+
+        Returns:
+            Normalized DataFrame with flat columns suitable for analysis.
+            Column names should be lowercase, descriptive, and consistent
+            across result types where possible (e.g., "date", "count", "event").
+
+        Raises:
+            NotImplementedError: If subclass doesn't implement this property.
+
+        Example:
+            ```python
+            df = result.df
+            df.columns
+            # Index(['date', 'segment', 'count'], dtype='object')
+            ```
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement df property"
+        )
+
+    def to_table_dict(self) -> list[dict[str, Any]]:
+        """Convert DataFrame rows to list of dicts for table formatting.
+
+        This method uses the `df` property which normalizes nested data
+        structures into flat tabular form, then converts to a list of
+        records (one dict per row). This provides readable output for
+        CLI `--format table` option.
+
+        The normalized table format is much more readable than displaying
+        nested dict/list structures as JSON blobs in table cells.
+
+        Returns:
+            List of dictionaries with normalized row data, one dict per row.
+            Each dict has keys matching the DataFrame column names.
+            Returns empty list if DataFrame is empty.
+
+        Example:
+            Without to_table_dict (unreadable table):
+                ┃ SERIES                                              ┃
+                ┃ {"US": {"2024-01-01": 100, "2024-01-02": 150}, ...} ┃
+
+            With to_table_dict (readable table):
+                ┃ DATE       ┃ SEGMENT ┃ COUNT ┃
+                ┃ 2024-01-01 ┃ US      ┃ 100   ┃
+                ┃ 2024-01-02 ┃ US      ┃ 150   ┃
+
+        Note:
+            This method is used automatically by CLI commands when
+            `--format table` is specified. For other formats (json, jsonl, csv),
+            use the `to_dict()` method which preserves the original structure.
+        """
+        from typing import cast
+
+        df = self.df
+        if df.empty:
+            return []
+
+        # Cast required because pandas to_dict("records") returns
+        # list[dict[Hashable, Any]] but we know our columns are strings
+        return cast(list[dict[str, Any]], df.to_dict("records"))
+
+
+# =============================================================================
 # Bookmark Type Aliases (Phase 015)
 # =============================================================================
 
@@ -195,10 +328,14 @@ class FetchResult:
 
 
 @dataclass(frozen=True)
-class SegmentationResult:
+class SegmentationResult(ResultWithDataFrame):
     """Result of a segmentation query.
 
     Contains time-series data for an event, optionally segmented by a property.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     event: str
@@ -226,8 +363,6 @@ class SegmentationResult:
     Example: {"US": {"2024-01-01": 150, "2024-01-02": 200}, "EU": {...}}
     For unsegmented queries, segment_name is "total".
     """
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -295,10 +430,14 @@ class FunnelStep:
 
 
 @dataclass(frozen=True)
-class FunnelResult:
+class FunnelResult(ResultWithDataFrame):
     """Result of a funnel query.
 
     Contains step-by-step conversion data for a funnel.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     funnel_id: int
@@ -318,8 +457,6 @@ class FunnelResult:
 
     steps: list[FunnelStep] = field(default_factory=list)
     """Step-by-step breakdown."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -383,10 +520,14 @@ class CohortInfo:
 
 
 @dataclass(frozen=True)
-class RetentionResult:
+class RetentionResult(ResultWithDataFrame):
     """Result of a retention query.
 
     Contains cohort-based retention data.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     born_event: str
@@ -406,8 +547,6 @@ class RetentionResult:
 
     cohorts: list[CohortInfo] = field(default_factory=list)
     """Cohort retention data."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -448,16 +587,21 @@ class RetentionResult:
 
 
 @dataclass(frozen=True)
-class JQLResult:
+class JQLResult(ResultWithDataFrame):
     """Result of a JQL query.
 
     JQL (JavaScript Query Language) allows custom queries against Mixpanel data.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
+
+    The df property intelligently detects JQL result patterns (groupBy, percentiles,
+    simple dicts) and converts them to clean tabular format.
     """
 
     _raw: list[Any] = field(default_factory=list, repr=False)
     """Raw result data from JQL execution."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def raw(self) -> list[Any]:
@@ -792,11 +936,15 @@ class TopEvent:
 
 
 @dataclass(frozen=True)
-class EventCountsResult:
+class EventCountsResult(ResultWithDataFrame):
     """Time-series event count data.
 
     Contains aggregate counts for multiple events over time with
     lazy DataFrame conversion support.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     events: list[str]
@@ -816,8 +964,6 @@ class EventCountsResult:
 
     series: dict[str, dict[str, int]]
     """Time series data: {event_name: {date: count}}."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -861,11 +1007,15 @@ class EventCountsResult:
 
 
 @dataclass(frozen=True)
-class PropertyCountsResult:
+class PropertyCountsResult(ResultWithDataFrame):
     """Time-series property value distribution data.
 
     Contains aggregate counts by property values over time with
     lazy DataFrame conversion support.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     event: str
@@ -892,8 +1042,6 @@ class PropertyCountsResult:
     Structure: {property_value: {date: count}}
     Example: {"US": {"2024-01-01": 150, "2024-01-02": 200}, "EU": {...}}
     """
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -967,11 +1115,15 @@ class UserEvent:
 
 
 @dataclass(frozen=True)
-class ActivityFeedResult:
+class ActivityFeedResult(ResultWithDataFrame):
     """Collection of user events from activity feed query.
 
     Contains chronological event history for one or more users
     with lazy DataFrame conversion support.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     distinct_ids: list[str]
@@ -985,8 +1137,6 @@ class ActivityFeedResult:
 
     events: list[UserEvent] = field(default_factory=list)
     """Event history (chronological order)."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -1152,11 +1302,15 @@ class SavedReportResult:
 
 
 @dataclass(frozen=True)
-class FlowsResult:
+class FlowsResult(ResultWithDataFrame):
     """Data from a saved Flows report.
 
     Contains user path/navigation data from a pre-configured Flows report
     with lazy DataFrame conversion support.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
 
     Attributes:
         bookmark_id: Saved report identifier.
@@ -1184,8 +1338,6 @@ class FlowsResult:
 
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional API metadata from the response."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -1219,11 +1371,15 @@ class FlowsResult:
 
 
 @dataclass(frozen=True)
-class FrequencyResult:
+class FrequencyResult(ResultWithDataFrame):
     """Event frequency distribution (addiction analysis).
 
     Contains frequency arrays showing how many users performed events
     in N time periods, with lazy DataFrame conversion support.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     event: str | None
@@ -1252,8 +1408,6 @@ class FrequencyResult:
     - Index 1: users active exactly 2 times
     - Index N: users active exactly N+1 times
     """
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -1290,11 +1444,15 @@ class FrequencyResult:
 
 
 @dataclass(frozen=True)
-class NumericBucketResult:
+class NumericBucketResult(ResultWithDataFrame):
     """Events segmented into numeric property ranges.
 
     Contains time-series data bucketed by automatically determined
     numeric ranges, with lazy DataFrame conversion support.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     event: str
@@ -1314,8 +1472,6 @@ class NumericBucketResult:
 
     series: dict[str, dict[str, int]] = field(default_factory=dict)
     """Bucket data: {range_string: {date: count}}."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -1359,11 +1515,15 @@ class NumericBucketResult:
 
 
 @dataclass(frozen=True)
-class NumericSumResult:
+class NumericSumResult(ResultWithDataFrame):
     """Sum of numeric property values per time unit.
 
     Contains daily or hourly sum totals for a numeric property
     with lazy DataFrame conversion support.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     event: str
@@ -1386,8 +1546,6 @@ class NumericSumResult:
 
     computed_at: str | None = None
     """Computation timestamp (if provided by API)."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
@@ -1425,11 +1583,15 @@ class NumericSumResult:
 
 
 @dataclass(frozen=True)
-class NumericAverageResult:
+class NumericAverageResult(ResultWithDataFrame):
     """Average of numeric property values per time unit.
 
     Contains daily or hourly average values for a numeric property
     with lazy DataFrame conversion support.
+
+    Inherits from ResultWithDataFrame to provide:
+    - Lazy DataFrame caching via _df_cache field
+    - Normalized table output via to_table_dict() method
     """
 
     event: str
@@ -1449,8 +1611,6 @@ class NumericAverageResult:
 
     results: dict[str, float] = field(default_factory=dict)
     """Average values: {date: average}."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
 
     @property
     def df(self) -> pd.DataFrame:
