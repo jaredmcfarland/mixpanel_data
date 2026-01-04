@@ -82,11 +82,29 @@ def inspect_events(
     Calls the Mixpanel API to retrieve tracked event types. Use this
     to discover what events exist before fetching or querying.
 
+    Output Structure (JSON):
+
+        ["Sign Up", "Login", "Purchase", "Page View", "Add to Cart"]
+
     Examples:
 
         mp inspect events
         mp inspect events --format table
         mp inspect events --format json --jq '.[0:3]'
+
+    jq Examples:
+
+        # Get first 5 events
+        mp inspect events --jq '.[0:5]'
+
+        # Count total events
+        mp inspect events --jq 'length'
+
+        # Find events containing "Purchase"
+        mp inspect events --jq '[.[] | select(contains("Purchase"))]'
+
+        # Sort alphabetically
+        mp inspect events --jq 'sort'
     """
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching events..."):
@@ -110,10 +128,28 @@ def inspect_properties(
     Calls the Mixpanel API to retrieve property names tracked with an event.
     Shows both custom event properties and default Mixpanel properties.
 
+    Output Structure (JSON):
+
+        ["country", "browser", "device", "$city", "$region", "plan_type"]
+
     Examples:
 
         mp inspect properties -e "Sign Up"
         mp inspect properties -e "Purchase" --format table
+
+    jq Examples:
+
+        # Get first 10 properties
+        mp inspect properties -e Purchase --jq '.[0:10]'
+
+        # Find user-defined properties (no $ prefix)
+        mp inspect properties -e Purchase --jq '[.[] | select(startswith("$") | not)]'
+
+        # Find Mixpanel system properties ($ prefix)
+        mp inspect properties -e Purchase --jq '[.[] | select(startswith("$"))]'
+
+        # Count properties
+        mp inspect properties -e Purchase --jq 'length'
     """
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching properties..."):
@@ -145,11 +181,29 @@ def inspect_values(
     Calls the Mixpanel API to retrieve sample values for a property.
     Useful for understanding the data shape before writing queries.
 
+    Output Structure (JSON):
+
+        ["US", "UK", "DE", "FR", "CA", "AU", "JP"]
+
     Examples:
 
         mp inspect values -p country
         mp inspect values -p country -e "Sign Up" --limit 20
         mp inspect values -p browser --format table
+
+    jq Examples:
+
+        # Get first 5 values
+        mp inspect values -p country --jq '.[0:5]'
+
+        # Count unique values
+        mp inspect values -p country --jq 'length'
+
+        # Filter values matching pattern
+        mp inspect values -p country --jq '[.[] | select(test("^U"))]'
+
+        # Sort values
+        mp inspect values -p browser --jq 'sort'
     """
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching values..."):
@@ -173,10 +227,32 @@ def inspect_funnels(
     Calls the Mixpanel API to retrieve saved funnel definitions.
     Use the funnel_id with 'mp query funnel' to run funnel analysis.
 
+    Output Structure (JSON):
+
+        [
+          {"funnel_id": 12345, "name": "Onboarding Flow"},
+          {"funnel_id": 12346, "name": "Purchase Funnel"},
+          {"funnel_id": 12347, "name": "Trial to Paid"}
+        ]
+
     Examples:
 
         mp inspect funnels
         mp inspect funnels --format table
+
+    jq Examples:
+
+        # Get all funnel IDs
+        mp inspect funnels --jq '[.[].funnel_id]'
+
+        # Find funnel by name pattern
+        mp inspect funnels --jq '.[] | select(.name | test("Purchase"; "i"))'
+
+        # Get funnel names only
+        mp inspect funnels --jq '[.[].name]'
+
+        # Count funnels
+        mp inspect funnels --jq 'length'
     """
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching funnels..."):
@@ -199,10 +275,32 @@ def inspect_cohorts(
     Calls the Mixpanel API to retrieve saved cohort definitions.
     Shows cohort ID, name, user count, and description.
 
+    Output Structure (JSON):
+
+        [
+          {"id": 1001, "name": "Power Users", "count": 5420, "description": "Users with 10+ sessions"},
+          {"id": 1002, "name": "Trial Users", "count": 892, "description": "Active trial accounts"},
+          {"id": 1003, "name": "Churned", "count": 2341, "description": "No activity in 30 days"}
+        ]
+
     Examples:
 
         mp inspect cohorts
         mp inspect cohorts --format table
+
+    jq Examples:
+
+        # Get cohorts with more than 1000 users
+        mp inspect cohorts --jq '[.[] | select(.count > 1000)]'
+
+        # Get cohort names only
+        mp inspect cohorts --jq '[.[].name]'
+
+        # Sort by user count descending
+        mp inspect cohorts --jq 'sort_by(.count) | reverse'
+
+        # Find cohort by name
+        mp inspect cohorts --jq '.[] | select(.name == "Power Users")'
     """
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching cohorts..."):
@@ -245,11 +343,33 @@ def inspect_top_events(
     Calls the Mixpanel API to retrieve today's most frequent events.
     Useful for quick overview of project activity.
 
+    Output Structure (JSON):
+
+        [
+          {"event": "Page View", "count": 15234, "percent_change": 12.5},
+          {"event": "Login", "count": 8921, "percent_change": -3.2},
+          {"event": "Purchase", "count": 1456, "percent_change": 8.7}
+        ]
+
     Examples:
 
         mp inspect top-events
         mp inspect top-events --limit 20 --format table
         mp inspect top-events --type unique
+
+    jq Examples:
+
+        # Get events with positive growth
+        mp inspect top-events --jq '[.[] | select(.percent_change > 0)]'
+
+        # Get just event names
+        mp inspect top-events --jq '[.[].event]'
+
+        # Find events with count over 10000
+        mp inspect top-events --jq '[.[] | select(.count > 10000)]'
+
+        # Get event with highest growth
+        mp inspect top-events --jq 'max_by(.percent_change)'
     """
     validated_type = validate_count_type(type_)
     workspace = get_workspace(ctx, read_only=True)
@@ -292,11 +412,33 @@ def inspect_bookmarks(
     Calls the Mixpanel API to retrieve saved report definitions.
     Use the bookmark ID with 'mp query saved-report' or 'mp query flows'.
 
+    Output Structure (JSON):
+
+        [
+          {"id": 98765, "name": "Weekly KPIs", "type": "insights", "modified": "2024-01-15T10:30:00"},
+          {"id": 98766, "name": "Conversion Funnel", "type": "funnels", "modified": "2024-01-14T15:45:00"},
+          {"id": 98767, "name": "User Retention", "type": "retention", "modified": "2024-01-13T09:20:00"}
+        ]
+
     Examples:
 
         mp inspect bookmarks
         mp inspect bookmarks --type insights
         mp inspect bookmarks --type funnels --format table
+
+    jq Examples:
+
+        # Get bookmarks by type
+        mp inspect bookmarks --jq '[.[] | select(.type == "insights")]'
+
+        # Get bookmark IDs only
+        mp inspect bookmarks --jq '[.[].id]'
+
+        # Sort by modified date (newest first)
+        mp inspect bookmarks --jq 'sort_by(.modified) | reverse'
+
+        # Find bookmark by name
+        mp inspect bookmarks --jq '.[] | select(.name | test("KPI"; "i"))'
     """
     workspace = get_workspace(ctx, read_only=True)
 
@@ -332,10 +474,36 @@ def inspect_info(
     Shows current account configuration, database location, and
     connection status. Uses local configuration only (no API call).
 
+    Output Structure (JSON):
+
+        {
+          "path": "/path/to/mixpanel.db",
+          "project_id": "12345",
+          "region": "us",
+          "account": "production",
+          "tables": ["events", "profiles"],
+          "size_mb": 42.5,
+          "created_at": "2024-01-10T08:00:00"
+        }
+
     Examples:
 
         mp inspect info
         mp inspect info --format json
+
+    jq Examples:
+
+        # Get database path
+        mp inspect info --jq '.path'
+
+        # Get project ID
+        mp inspect info --jq '.project_id'
+
+        # Get list of tables
+        mp inspect info --jq '.tables'
+
+        # Get database size in MB
+        mp inspect info --jq '.size_mb'
     """
     workspace = get_workspace(ctx, read_only=True)
     info = workspace.info()
@@ -354,10 +522,32 @@ def inspect_tables(
     Shows all tables in the local DuckDB database with row counts
     and fetch timestamps. Use this to see what data has been fetched.
 
+    Output Structure (JSON):
+
+        [
+          {"name": "events", "type": "events", "row_count": 125000, "fetched_at": "2024-01-15T10:30:00"},
+          {"name": "jan_events", "type": "events", "row_count": 45000, "fetched_at": "2024-01-10T08:00:00"},
+          {"name": "profiles", "type": "profiles", "row_count": 8500, "fetched_at": "2024-01-14T14:20:00"}
+        ]
+
     Examples:
 
         mp inspect tables
         mp inspect tables --format table
+
+    jq Examples:
+
+        # Get table names only
+        mp inspect tables --jq '[.[].name]'
+
+        # Get tables with more than 100k rows
+        mp inspect tables --jq '[.[] | select(.row_count > 100000)]'
+
+        # Get only event tables
+        mp inspect tables --jq '[.[] | select(.type == "events")]'
+
+        # Get total row count across all tables
+        mp inspect tables --jq '[.[].row_count] | add'
     """
     workspace = get_workspace(ctx, read_only=True)
     tables = workspace.tables()
@@ -401,10 +591,36 @@ def inspect_schema(
 
     Note: The --sample option is reserved for future implementation.
 
+    Output Structure (JSON):
+
+        {
+          "table": "events",
+          "columns": [
+            {"name": "event_name", "type": "VARCHAR", "nullable": false},
+            {"name": "event_time", "type": "TIMESTAMP", "nullable": false},
+            {"name": "distinct_id", "type": "VARCHAR", "nullable": false},
+            {"name": "properties", "type": "JSON", "nullable": true}
+          ]
+        }
+
     Examples:
 
         mp inspect schema -t events
         mp inspect schema -t events --format table
+
+    jq Examples:
+
+        # Get column names only
+        mp inspect schema -t events --jq '.columns | [.[].name]'
+
+        # Get nullable columns
+        mp inspect schema -t events --jq '.columns | [.[] | select(.nullable)]'
+
+        # Get column types
+        mp inspect schema -t events --jq '.columns | [.[] | {name, type}]'
+
+        # Count columns
+        mp inspect schema -t events --jq '.columns | length'
     """
     # Note: _sample is reserved for future implementation
     workspace = get_workspace(ctx, read_only=True)
@@ -445,10 +661,19 @@ def inspect_drop(
     Permanently removes a table and all its data. Use --force to skip
     the confirmation prompt. Commonly used before re-fetching data.
 
+    Output Structure (JSON):
+
+        {"dropped": "old_events"}
+
     Examples:
 
         mp inspect drop -t old_events
         mp inspect drop -t events --force
+
+    jq Examples:
+
+        # Get dropped table name
+        mp inspect drop -t old_events --force --jq '.dropped'
     """
     if not force:
         confirm = typer.confirm(f"Drop table '{table}'?")
@@ -484,11 +709,26 @@ def inspect_drop_all(
     Permanently removes all tables and their data. Use --type to filter
     by table type. Use --force to skip the confirmation prompt.
 
+    Output Structure (JSON):
+
+        {"dropped_count": 3}
+
+        # With type filter:
+        {"dropped_count": 2, "type_filter": "events"}
+
     Examples:
 
         mp inspect drop-all --force
         mp inspect drop-all --type events --force
         mp inspect drop-all -t profiles --force
+
+    jq Examples:
+
+        # Get count of dropped tables
+        mp inspect drop-all --force --jq '.dropped_count'
+
+        # Check if any tables were dropped
+        mp inspect drop-all --force --jq '.dropped_count > 0'
     """
     # Validate type if provided
     type_filter = validate_table_type(type_) if type_ is not None else None
@@ -535,11 +775,33 @@ def inspect_lexicon_schemas(
     Retrieves documented event and profile property schemas from the
     Mixpanel Lexicon. Shows schema names, types, and property counts.
 
+    Output Structure (JSON):
+
+        [
+          {"entity_type": "event", "name": "Purchase", "property_count": 12, "description": "User completed purchase"},
+          {"entity_type": "event", "name": "Sign Up", "property_count": 8, "description": "New user registration"},
+          {"entity_type": "profile", "name": "Plan Type", "property_count": 3, "description": "User subscription tier"}
+        ]
+
     Examples:
 
         mp inspect lexicon-schemas
         mp inspect lexicon-schemas --type event
         mp inspect lexicon-schemas --type profile --format table
+
+    jq Examples:
+
+        # Get only event schemas
+        mp inspect lexicon-schemas --jq '[.[] | select(.entity_type == "event")]'
+
+        # Get schema names
+        mp inspect lexicon-schemas --jq '[.[].name]'
+
+        # Find schemas with many properties
+        mp inspect lexicon-schemas --jq '[.[] | select(.property_count > 10)]'
+
+        # Search by description
+        mp inspect lexicon-schemas --jq '[.[] | select(.description | test("purchase"; "i"))]'
     """
     validated_type = validate_entity_type(type_) if type_ is not None else None
     workspace = get_workspace(ctx, read_only=True)
@@ -585,11 +847,41 @@ def inspect_lexicon_schema(
     Retrieves the full schema definition for a specific event or profile
     property, including all property definitions and metadata.
 
+    Output Structure (JSON):
+
+        {
+          "entity_type": "event",
+          "name": "Purchase",
+          "schema_json": {
+            "description": "User completed a purchase",
+            "properties": {
+              "amount": {"type": "number", "description": "Purchase amount in USD"},
+              "currency": {"type": "string", "description": "Currency code"},
+              "product_id": {"type": "string", "description": "Product identifier"}
+            },
+            "metadata": {"hidden": false, "dropped": false, "tags": ["revenue"]}
+          }
+        }
+
     Examples:
 
         mp inspect lexicon-schema --type event --name "Purchase"
         mp inspect lexicon-schema -t event -n "Sign Up"
         mp inspect lexicon-schema -t profile -n "Plan Type" --format json
+
+    jq Examples:
+
+        # Get property names only
+        mp inspect lexicon-schema -t event -n Purchase --jq '.schema_json.properties | keys'
+
+        # Get property types
+        mp inspect lexicon-schema -t event -n Purchase --jq '.schema_json.properties | to_entries | [.[] | {name: .key, type: .value.type}]'
+
+        # Get description
+        mp inspect lexicon-schema -t event -n Purchase --jq '.schema_json.description'
+
+        # Check if schema is hidden
+        mp inspect lexicon-schema -t event -n Purchase --jq '.schema_json.metadata.hidden'
     """
     validated_type = validate_entity_type(type_)
     workspace = get_workspace(ctx, read_only=True)
@@ -618,10 +910,41 @@ def inspect_sample(
     Uses reservoir sampling to return representative rows from throughout
     the table. Useful for quickly exploring data structure and values.
 
+    Output Structure (JSON):
+
+        [
+          {
+            "event_name": "Purchase",
+            "event_time": "2024-01-15T10:30:00",
+            "distinct_id": "user_123",
+            "properties": {"amount": 99.99, "currency": "USD", "product": "Pro Plan"}
+          },
+          {
+            "event_name": "Login",
+            "event_time": "2024-01-15T09:15:00",
+            "distinct_id": "user_456",
+            "properties": {"browser": "Chrome", "platform": "web"}
+          }
+        ]
+
     Examples:
 
         mp inspect sample -t events
         mp inspect sample -t events -n 5 --format json
+
+    jq Examples:
+
+        # Get event names from sample
+        mp inspect sample -t events --jq '[.[].event_name]'
+
+        # Get unique distinct_ids
+        mp inspect sample -t events --jq '[.[].distinct_id] | unique'
+
+        # Extract specific property from all rows
+        mp inspect sample -t events --jq '[.[].properties.country]'
+
+        # Filter sample by event type
+        mp inspect sample -t events --jq '[.[] | select(.event_name == "Purchase")]'
     """
     workspace = get_workspace(ctx, read_only=True)
     df = workspace.sample(table, n=rows)
@@ -646,10 +969,47 @@ def inspect_summarize(
     Uses DuckDB's SUMMARIZE command to compute per-column statistics
     including min/max, quartiles, null percentage, and distinct counts.
 
+    Output Structure (JSON):
+
+        {
+          "table": "events",
+          "row_count": 125000,
+          "columns": [
+            {
+              "column_name": "event_name",
+              "column_type": "VARCHAR",
+              "min": "Add to Cart",
+              "max": "View Page",
+              "approx_unique": 25,
+              "avg": null,
+              "std": null,
+              "q25": null,
+              "q50": null,
+              "q75": null,
+              "count": 125000,
+              "null_percentage": 0.0
+            }
+          ]
+        }
+
     Examples:
 
         mp inspect summarize -t events
         mp inspect summarize -t events --format json
+
+    jq Examples:
+
+        # Get column names
+        mp inspect summarize -t events --jq '.columns | [.[].column_name]'
+
+        # Find columns with nulls
+        mp inspect summarize -t events --jq '.columns | [.[] | select(.null_percentage > 0)]'
+
+        # Get row count
+        mp inspect summarize -t events --jq '.row_count'
+
+        # Get high-cardinality columns
+        mp inspect summarize -t events --jq '.columns | [.[] | select(.approx_unique > 1000)]'
     """
     workspace = get_workspace(ctx, read_only=True)
     result = workspace.summarize(table)
@@ -672,10 +1032,51 @@ def inspect_breakdown(
     Analyzes event counts, unique users, date ranges, and percentages
     for each event type. Requires event_name, event_time, distinct_id columns.
 
+    Output Structure (JSON):
+
+        {
+          "table": "events",
+          "total_events": 125000,
+          "total_users": 8500,
+          "date_range": ["2024-01-01T00:00:00", "2024-01-31T23:59:59"],
+          "events": [
+            {
+              "event_name": "Page View",
+              "count": 75000,
+              "unique_users": 8200,
+              "first_seen": "2024-01-01T00:05:00",
+              "last_seen": "2024-01-31T23:55:00",
+              "pct_of_total": 60.0
+            },
+            {
+              "event_name": "Purchase",
+              "count": 5000,
+              "unique_users": 2100,
+              "first_seen": "2024-01-01T08:30:00",
+              "last_seen": "2024-01-31T22:15:00",
+              "pct_of_total": 4.0
+            }
+          ]
+        }
+
     Examples:
 
         mp inspect breakdown -t events
         mp inspect breakdown -t events --format json
+
+    jq Examples:
+
+        # Get event names sorted by count
+        mp inspect breakdown -t events --jq '.events | sort_by(.count) | reverse | [.[].event_name]'
+
+        # Get events with more than 10% of total
+        mp inspect breakdown -t events --jq '.events | [.[] | select(.pct_of_total > 10)]'
+
+        # Get total event count
+        mp inspect breakdown -t events --jq '.total_events'
+
+        # Get event with most unique users
+        mp inspect breakdown -t events --jq '.events | max_by(.unique_users)'
     """
     workspace = get_workspace(ctx, read_only=True)
     result = workspace.event_breakdown(table)
@@ -702,11 +1103,29 @@ def inspect_keys(
     Extracts distinct keys from the 'properties' JSON column. Useful
     for discovering queryable fields in event properties.
 
+    Output Structure (JSON):
+
+        ["amount", "browser", "campaign", "country", "currency", "device", "platform"]
+
     Examples:
 
         mp inspect keys -t events
         mp inspect keys -t events -e "Purchase"
         mp inspect keys -t events --format table
+
+    jq Examples:
+
+        # Get first 10 keys
+        mp inspect keys -t events --jq '.[0:10]'
+
+        # Count total property keys
+        mp inspect keys -t events --jq 'length'
+
+        # Find keys containing "utm"
+        mp inspect keys -t events --jq '[.[] | select(contains("utm"))]'
+
+        # Sort keys alphabetically
+        mp inspect keys -t events --jq 'sort'
     """
     workspace = get_workspace(ctx, read_only=True)
     keys = workspace.property_keys(table, event=event)
@@ -738,11 +1157,43 @@ def inspect_column(
     and numeric statistics. Supports JSON path expressions like
     "properties->>'$.country'" for analyzing JSON columns.
 
+    Output Structure (JSON):
+
+        {
+          "table": "events",
+          "column": "properties->>'$.country'",
+          "dtype": "VARCHAR",
+          "count": 120000,
+          "null_count": 5000,
+          "null_pct": 4.0,
+          "unique_count": 45,
+          "unique_pct": 0.04,
+          "top_values": [["US", 45000], ["UK", 22000], ["DE", 15000]],
+          "min": null,
+          "max": null,
+          "mean": null,
+          "std": null
+        }
+
     Examples:
 
         mp inspect column -t events -c event_name
         mp inspect column -t events -c "properties->>'$.country'"
         mp inspect column -t events -c distinct_id --top 20
+
+    jq Examples:
+
+        # Get top values only
+        mp inspect column -t events -c event_name --jq '.top_values'
+
+        # Get null percentage
+        mp inspect column -t events -c event_name --jq '.null_pct'
+
+        # Get unique count
+        mp inspect column -t events -c event_name --jq '.unique_count'
+
+        # Get top value names only
+        mp inspect column -t events -c event_name --jq '.top_values | [.[0]]'
     """
     workspace = get_workspace(ctx, read_only=True)
     result = workspace.column_stats(table, column, top_n=top)
@@ -787,10 +1238,39 @@ def inspect_distribution(
     counts and percentages sorted by frequency. Useful for understanding
     what values a property contains before writing queries.
 
+    Output Structure (JSON):
+
+        {
+          "event": "Purchase",
+          "property_name": "country",
+          "from_date": "2024-01-01",
+          "to_date": "2024-01-31",
+          "total_count": 50000,
+          "values": [
+            {"value": "US", "count": 25000, "percentage": 50.0},
+            {"value": "UK", "count": 10000, "percentage": 20.0},
+            {"value": "DE", "count": 7500, "percentage": 15.0}
+          ]
+        }
+
     Examples:
 
         mp inspect distribution -e Purchase -p country --from 2024-01-01 --to 2024-01-31
         mp inspect distribution -e Signup -p referrer --from 2024-01-01 --to 2024-01-31 --limit 10
+
+    jq Examples:
+
+        # Get values only
+        mp inspect distribution -e Purchase -p country --from 2024-01-01 --to 2024-01-31 --jq '.values | [.[].value]'
+
+        # Get values with more than 10%
+        mp inspect distribution -e Purchase -p country --from 2024-01-01 --to 2024-01-31 --jq '.values | [.[] | select(.percentage > 10)]'
+
+        # Get total count
+        mp inspect distribution -e Purchase -p country --from 2024-01-01 --to 2024-01-31 --jq '.total_count'
+
+        # Get top value
+        mp inspect distribution -e Purchase -p country --from 2024-01-01 --to 2024-01-31 --jq '.values[0]'
     """
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Analyzing property distribution..."):
@@ -838,10 +1318,40 @@ def inspect_numeric(
     Uses JQL to compute min, max, avg, stddev, and percentiles for a
     numeric property. Useful for understanding value ranges and distributions.
 
+    Output Structure (JSON):
+
+        {
+          "event": "Purchase",
+          "property_name": "amount",
+          "from_date": "2024-01-01",
+          "to_date": "2024-01-31",
+          "count": 5000,
+          "min": 9.99,
+          "max": 999.99,
+          "sum": 125000.50,
+          "avg": 25.00,
+          "stddev": 45.75,
+          "percentiles": {"25": 12.99, "50": 19.99, "75": 49.99, "90": 99.99}
+        }
+
     Examples:
 
         mp inspect numeric -e Purchase -p amount --from 2024-01-01 --to 2024-01-31
         mp inspect numeric -e Purchase -p amount --from 2024-01-01 --to 2024-01-31 --percentiles 10,50,90
+
+    jq Examples:
+
+        # Get average value
+        mp inspect numeric -e Purchase -p amount --from 2024-01-01 --to 2024-01-31 --jq '.avg'
+
+        # Get median (50th percentile)
+        mp inspect numeric -e Purchase -p amount --from 2024-01-01 --to 2024-01-31 --jq '.percentiles["50"]'
+
+        # Get min and max
+        mp inspect numeric -e Purchase -p amount --from 2024-01-01 --to 2024-01-31 --jq '{min, max}'
+
+        # Get all percentiles
+        mp inspect numeric -e Purchase -p amount --from 2024-01-01 --to 2024-01-31 --jq '.percentiles'
     """
     # Parse percentiles if provided
     percentile_list: list[int] | None = None
@@ -886,10 +1396,38 @@ def inspect_daily(
     Uses JQL to count events by day. Optionally filter to specific events.
     Useful for understanding activity trends over time.
 
+    Output Structure (JSON):
+
+        {
+          "from_date": "2024-01-01",
+          "to_date": "2024-01-07",
+          "events": ["Purchase", "Signup"],
+          "counts": [
+            {"date": "2024-01-01", "event": "Purchase", "count": 150},
+            {"date": "2024-01-01", "event": "Signup", "count": 45},
+            {"date": "2024-01-02", "event": "Purchase", "count": 175},
+            {"date": "2024-01-02", "event": "Signup", "count": 52}
+          ]
+        }
+
     Examples:
 
         mp inspect daily --from 2024-01-01 --to 2024-01-07
         mp inspect daily --from 2024-01-01 --to 2024-01-07 -e Purchase,Signup
+
+    jq Examples:
+
+        # Get total count for a specific event
+        mp inspect daily --from 2024-01-01 --to 2024-01-07 --jq '.counts | [.[] | select(.event == "Purchase")] | map(.count) | add'
+
+        # Get counts for a specific date
+        mp inspect daily --from 2024-01-01 --to 2024-01-07 --jq '.counts | [.[] | select(.date == "2024-01-01")]'
+
+        # Get all dates
+        mp inspect daily --from 2024-01-01 --to 2024-01-07 --jq '.counts | [.[].date] | unique'
+
+        # Get daily totals (sum across all events)
+        mp inspect daily --from 2024-01-01 --to 2024-01-07 --jq '.counts | group_by(.date) | [.[] | {date: .[0].date, total: map(.count) | add}]'
     """
     # Parse events if provided
     event_list: list[str] | None = None
@@ -938,11 +1476,40 @@ def inspect_engagement(
     Uses JQL to bucket users by their event count, showing how many
     users performed N events. Useful for understanding user engagement levels.
 
+    Output Structure (JSON):
+
+        {
+          "from_date": "2024-01-01",
+          "to_date": "2024-01-31",
+          "events": null,
+          "total_users": 8500,
+          "buckets": [
+            {"bucket_min": 1, "bucket_label": "1", "user_count": 2500, "percentage": 29.4},
+            {"bucket_min": 2, "bucket_label": "2-5", "user_count": 3200, "percentage": 37.6},
+            {"bucket_min": 6, "bucket_label": "6-10", "user_count": 1800, "percentage": 21.2},
+            {"bucket_min": 11, "bucket_label": "11+", "user_count": 1000, "percentage": 11.8}
+          ]
+        }
+
     Examples:
 
         mp inspect engagement --from 2024-01-01 --to 2024-01-31
         mp inspect engagement --from 2024-01-01 --to 2024-01-31 -e Purchase
         mp inspect engagement --from 2024-01-01 --to 2024-01-31 --buckets 1,5,10,50,100
+
+    jq Examples:
+
+        # Get total users
+        mp inspect engagement --from 2024-01-01 --to 2024-01-31 --jq '.total_users'
+
+        # Get power users (high engagement buckets)
+        mp inspect engagement --from 2024-01-01 --to 2024-01-31 --jq '.buckets | [.[] | select(.bucket_min >= 10)]'
+
+        # Get percentage of single-event users
+        mp inspect engagement --from 2024-01-01 --to 2024-01-31 --jq '.buckets | .[] | select(.bucket_min == 1) | .percentage'
+
+        # Get bucket labels only
+        mp inspect engagement --from 2024-01-01 --to 2024-01-31 --jq '.buckets | [.[].bucket_label]'
     """
     # Parse events if provided
     event_list: list[str] | None = None
@@ -995,9 +1562,37 @@ def inspect_coverage(
     Uses JQL to count how often each property is defined (non-null) vs
     undefined. Useful for data quality assessment.
 
+    Output Structure (JSON):
+
+        {
+          "event": "Purchase",
+          "from_date": "2024-01-01",
+          "to_date": "2024-01-31",
+          "total_events": 5000,
+          "coverage": [
+            {"property": "amount", "defined_count": 5000, "null_count": 0, "coverage_percentage": 100.0},
+            {"property": "coupon_code", "defined_count": 1250, "null_count": 3750, "coverage_percentage": 25.0},
+            {"property": "referrer", "defined_count": 4500, "null_count": 500, "coverage_percentage": 90.0}
+          ]
+        }
+
     Examples:
 
         mp inspect coverage -e Purchase -p coupon_code,referrer --from 2024-01-01 --to 2024-01-31
+
+    jq Examples:
+
+        # Get properties with low coverage
+        mp inspect coverage -e Purchase -p amount,coupon_code,referrer --from 2024-01-01 --to 2024-01-31 --jq '.coverage | [.[] | select(.coverage_percentage < 50)]'
+
+        # Get fully covered properties
+        mp inspect coverage -e Purchase -p amount,coupon_code,referrer --from 2024-01-01 --to 2024-01-31 --jq '.coverage | [.[] | select(.coverage_percentage == 100)]'
+
+        # Get property names only
+        mp inspect coverage -e Purchase -p amount,coupon_code,referrer --from 2024-01-01 --to 2024-01-31 --jq '.coverage | [.[].property]'
+
+        # Sort by coverage percentage
+        mp inspect coverage -e Purchase -p amount,coupon_code,referrer --from 2024-01-01 --to 2024-01-31 --jq '.coverage | sort_by(.coverage_percentage)'
     """
     # Parse properties
     property_list = [p.strip() for p in properties.split(",")]
