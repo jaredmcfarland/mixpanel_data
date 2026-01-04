@@ -268,6 +268,10 @@ For real-time analytics, query Mixpanel directly:
 
     ```bash
     mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 --format table
+
+    # Filter results with built-in jq support
+    mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
+        --format json --jq '.total'
     ```
 
 === "Python"
@@ -294,11 +298,12 @@ For ETL pipelines or one-time processing, stream data directly without storing:
 === "CLI"
 
     ```bash
-    # Stream events as JSONL
-    mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
+    # Stream events as JSONL (memory-efficient for large datasets)
+    mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout > events.jsonl
 
-    # Pipe to other tools
-    mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout | jq '.event_name'
+    # Count unique users via Unix pipeline
+    mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout \
+      | jq -r '.distinct_id' | sort -u | wc -l
     ```
 
 === "Python"

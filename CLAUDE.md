@@ -89,6 +89,26 @@ Required docstring sections:
 - **Raises**: All exceptions that may be raised
 - **Example**: Usage example where behavior isn't immediately obvious
 
+**Example format**: Use markdown fenced code blocks with language hints, not doctest-style `>>>` operators:
+
+```python
+# CORRECT - markdown code fence with language hint
+"""
+Example:
+    ```python
+    result = my_function("input")
+    # ["output"]
+    ```
+"""
+
+# WRONG - doctest style (DO NOT USE)
+"""
+Example:
+    >>> my_function("input")
+    ["output"]
+"""
+```
+
 Undocumented code will not pass code review.
 
 ## Test-Driven Development (STRICT)
@@ -208,6 +228,7 @@ just test-pbt-dev
 - Python 3.11+ with full type hints (mypy --strict compliant)
 - Typer (CLI) + Rich (output formatting)
 - DuckDB (embedded analytical database)
+- jq (JSON filtering via `--jq` option for CLI commands)
 - httpx (HTTP client), Pydantic (validation)
 - Hypothesis (property-based testing), mutmut (mutation testing)
 - uv (package manager), just (command runner)

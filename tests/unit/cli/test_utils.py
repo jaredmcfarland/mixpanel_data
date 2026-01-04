@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import click.exceptions
@@ -10,6 +11,7 @@ import typer
 
 from mixpanel_data.cli.utils import (
     ExitCode,
+    _apply_jq_filter,
     get_config,
     get_workspace,
     handle_errors,
@@ -528,3 +530,317 @@ class TestOutputResult:
             call_args = mock_console.print.call_args
             # Should default to JSON
             assert '"key"' in call_args[0][0]
+
+    def test_jq_filter_with_json_format(self) -> None:
+        """Test that jq_filter is applied to JSON output (T011)."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {"format": "json"}
+
+        with patch("mixpanel_data.cli.utils.console") as mock_console:
+            data = {"name": "test", "count": 42}
+            output_result(ctx, data, format="json", jq_filter=".name")
+
+            mock_console.print.assert_called_once()
+            call_args = mock_console.print.call_args
+            output = call_args[0][0]
+            # Should only have the name field extracted
+            assert output.strip() == '"test"'
+
+    def test_jq_filter_with_jsonl_format(self) -> None:
+        """Test that jq_filter is applied to JSONL output."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {"format": "jsonl"}
+
+        with patch("mixpanel_data.cli.utils.console") as mock_console:
+            data = [{"name": "a"}, {"name": "b"}]
+            output_result(ctx, data, format="jsonl", jq_filter=".[0]")
+
+            mock_console.print.assert_called_once()
+            call_args = mock_console.print.call_args
+            output = call_args[0][0]
+            # Should extract first element
+            parsed = json.loads(output.strip())
+            assert parsed == {"name": "a"}
+
+
+class TestApplyJqFilter:
+    """Tests for _apply_jq_filter function (User Story 1)."""
+
+    def test_simple_field_extraction(self) -> None:
+        """Test extracting a single field from dict (T006)."""
+        json_str = '{"name": "test", "count": 42}'
+        result = _apply_jq_filter(json_str, ".name")
+        assert result == ["test"]
+
+    def test_nested_field_extraction(self) -> None:
+        """Test extracting nested fields."""
+        json_str = '{"user": {"name": "alice", "id": 1}}'
+        result = _apply_jq_filter(json_str, ".user.name")
+        assert result == ["alice"]
+
+    def test_list_iteration(self) -> None:
+        """Test iterating over list elements (T007)."""
+        json_str = '[{"name": "a"}, {"name": "b"}, {"name": "c"}]'
+        result = _apply_jq_filter(json_str, ".[].name")
+        # Multiple results returned as list
+        assert result == ["a", "b", "c"]
+
+    def test_list_indexing(self) -> None:
+        """Test accessing list by index."""
+        json_str = '["first", "second", "third"]'
+        result = _apply_jq_filter(json_str, ".[1]")
+        assert result == ["second"]
+
+    def test_select_filter(self) -> None:
+        """Test filtering with select() (T008)."""
+        json_str = '[{"name": "a", "active": true}, {"name": "b", "active": false}]'
+        result = _apply_jq_filter(json_str, ".[] | select(.active)")
+        # Should only return the active item
+        assert result == [{"name": "a", "active": True}]
+
+    def test_select_filter_multiple_results(self) -> None:
+        """Test select() returning multiple results."""
+        json_str = '[{"v": 1}, {"v": 5}, {"v": 10}, {"v": 15}]'
+        result = _apply_jq_filter(json_str, ".[] | select(.v > 3)")
+        assert result == [{"v": 5}, {"v": 10}, {"v": 15}]
+
+    def test_length_filter(self) -> None:
+        """Test length filter (T009)."""
+        json_str = '["a", "b", "c", "d", "e"]'
+        result = _apply_jq_filter(json_str, "length")
+        assert result == [5]
+
+    def test_length_filter_on_object(self) -> None:
+        """Test length filter on object (counts keys)."""
+        json_str = '{"a": 1, "b": 2, "c": 3}'
+        result = _apply_jq_filter(json_str, "length")
+        assert result == [3]
+
+    def test_single_result_returns_list(self) -> None:
+        """Test that single result is returned as single-element list."""
+        json_str = '{"name": "solo"}'
+        result = _apply_jq_filter(json_str, ".name")
+        # Results always returned as list, caller formats
+        assert result == ["solo"]
+
+    def test_multiple_results_as_list(self) -> None:
+        """Test that multiple results are returned as list."""
+        json_str = '[{"x": 1}, {"x": 2}, {"x": 3}]'
+        result = _apply_jq_filter(json_str, ".[].x")
+        assert result == [1, 2, 3]
+
+    def test_identity_filter(self) -> None:
+        """Test identity filter '.' returns input unchanged."""
+        json_str = '{"key": "value"}'
+        result = _apply_jq_filter(json_str, ".")
+        assert result == [{"key": "value"}]
+
+    def test_keys_filter(self) -> None:
+        """Test keys filter extracts object keys."""
+        json_str = '{"b": 1, "a": 2, "c": 3}'
+        result = _apply_jq_filter(json_str, "keys")
+        # Result is list containing one element (the keys array)
+        assert len(result) == 1
+        assert set(result[0]) == {"a", "b", "c"}
+
+    def test_map_filter(self) -> None:
+        """Test map transformation."""
+        json_str = "[1, 2, 3]"
+        result = _apply_jq_filter(json_str, "map(. * 2)")
+        # map() returns single array result
+        assert result == [[2, 4, 6]]
+
+    def test_slice_filter(self) -> None:
+        """Test array slicing."""
+        json_str = "[0, 1, 2, 3, 4, 5]"
+        result = _apply_jq_filter(json_str, ".[:3]")
+        # slice returns single array result
+        assert result == [[0, 1, 2]]
+
+
+class TestApplyJqFilterErrors:
+    """Tests for _apply_jq_filter error handling (User Story 2)."""
+
+    def test_invalid_json_input_raises_exit(self) -> None:
+        """Test that invalid JSON input raises typer.Exit with clean message."""
+        invalid_json = "not valid json {"
+        with pytest.raises(click.exceptions.Exit) as exc:
+            _apply_jq_filter(invalid_json, ".")
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+    def test_invalid_json_error_message(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that invalid JSON error message is helpful."""
+        invalid_json = '{"unclosed": '
+        with pytest.raises(click.exceptions.Exit):
+            _apply_jq_filter(invalid_json, ".")
+
+        captured = capsys.readouterr()
+        assert "invalid json" in captured.err.lower()
+
+    def test_invalid_syntax_raises_exit(self) -> None:
+        """Test that invalid jq syntax raises typer.Exit (T016)."""
+        json_str = '{"name": "test"}'
+        with pytest.raises(click.exceptions.Exit) as exc:
+            _apply_jq_filter(json_str, ".name |")  # Incomplete pipe
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+    def test_error_message_contains_jq(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that error message contains 'jq' for context (T017)."""
+        json_str = '{"name": "test"}'
+        with pytest.raises(click.exceptions.Exit):
+            _apply_jq_filter(json_str, ".name |")
+
+        captured = capsys.readouterr()
+        assert "jq" in captured.err.lower()
+
+    def test_invalid_syntax_exits_with_invalid_args(self) -> None:
+        """Test that syntax error exits with ExitCode.INVALID_ARGS (T018)."""
+        json_str = "[1, 2, 3]"
+        with pytest.raises(click.exceptions.Exit) as exc:
+            _apply_jq_filter(json_str, ".[")  # Unclosed bracket
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+    def test_unknown_function_error(self) -> None:
+        """Test error for unknown jq function."""
+        json_str = '{"x": 1}'
+        with pytest.raises(click.exceptions.Exit) as exc:
+            _apply_jq_filter(json_str, "nonexistent_function")
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+
+class TestOutputResultFormatValidation:
+    """Tests for output_result jq_filter format validation (User Story 3)."""
+
+    def test_jq_filter_rejected_with_table_format(self) -> None:
+        """Test that jq_filter with table format raises Exit (T022)."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}
+
+        with pytest.raises(click.exceptions.Exit) as exc:
+            output_result(ctx, {"name": "test"}, format="table", jq_filter=".")
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+    def test_jq_filter_rejected_with_csv_format(self) -> None:
+        """Test that jq_filter with csv format raises Exit (T023)."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}
+
+        with pytest.raises(click.exceptions.Exit) as exc:
+            output_result(ctx, [{"name": "test"}], format="csv", jq_filter=".")
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+    def test_jq_filter_rejected_with_plain_format(self) -> None:
+        """Test that jq_filter with plain format raises Exit (T024)."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}
+
+        with pytest.raises(click.exceptions.Exit) as exc:
+            output_result(ctx, ["item1"], format="plain", jq_filter=".")
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+    def test_error_message_mentions_json_jsonl(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that error message mentions json/jsonl requirement (T025)."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}
+
+        with pytest.raises(click.exceptions.Exit):
+            output_result(ctx, {"x": 1}, format="table", jq_filter=".")
+
+        captured = capsys.readouterr()
+        # Error should mention that json/jsonl is required
+        assert "json" in captured.err.lower()
+
+    def test_jq_filter_allowed_with_json_format(self) -> None:
+        """Test that jq_filter works with json format."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}
+
+        with patch("mixpanel_data.cli.utils.console") as mock_console:
+            output_result(ctx, {"name": "test"}, format="json", jq_filter=".name")
+            mock_console.print.assert_called_once()
+
+    def test_jq_filter_allowed_with_jsonl_format(self) -> None:
+        """Test that jq_filter works with jsonl format."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}
+
+        with patch("mixpanel_data.cli.utils.console") as mock_console:
+            output_result(ctx, [{"a": 1}], format="jsonl", jq_filter=".[0]")
+            mock_console.print.assert_called_once()
+
+    def test_jq_filter_jsonl_outputs_per_line(self) -> None:
+        """Test that jq filter with jsonl outputs each result on its own line."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}
+
+        with patch("mixpanel_data.cli.utils.console") as mock_console:
+            # Filter that produces multiple results
+            output_result(
+                ctx, [{"x": 1}, {"x": 2}, {"x": 3}], format="jsonl", jq_filter=".[].x"
+            )
+            # Each result should be printed separately (3 calls for 3 results)
+            assert mock_console.print.call_count == 3
+            # Each call should have a single JSON value (1, 2, 3)
+            calls = mock_console.print.call_args_list
+            assert calls[0][0][0] == "1"
+            assert calls[1][0][0] == "2"
+            assert calls[2][0][0] == "3"
+
+
+class TestApplyJqFilterRuntimeErrors:
+    """Tests for _apply_jq_filter runtime error handling (User Story 4)."""
+
+    def test_runtime_error_index_dict_as_array(self) -> None:
+        """Test runtime error when indexing dict as array (T029)."""
+        json_str = '{"name": "test"}'
+        with pytest.raises(click.exceptions.Exit) as exc:
+            _apply_jq_filter(json_str, ".[0]")  # Can't index dict with number
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+    def test_runtime_error_message_is_helpful(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that runtime error message is helpful (T030)."""
+        json_str = '{"name": "test"}'
+        with pytest.raises(click.exceptions.Exit):
+            _apply_jq_filter(json_str, ".[0]")
+
+        captured = capsys.readouterr()
+        # Error message should provide context
+        assert "jq filter error" in captured.err.lower()
+
+    def test_runtime_error_exits_with_invalid_args(self) -> None:
+        """Test runtime error exits with ExitCode.INVALID_ARGS (T031)."""
+        json_str = '"just a string"'
+        with pytest.raises(click.exceptions.Exit) as exc:
+            _apply_jq_filter(json_str, ".missing.path")  # Can't access on string
+        assert exc.value.exit_code == ExitCode.INVALID_ARGS
+
+
+class TestApplyJqFilterEmptyResults:
+    """Tests for _apply_jq_filter empty results handling (User Story 5)."""
+
+    def test_empty_results_return_empty_list(self) -> None:
+        """Test that no matches returns empty list (T035)."""
+        json_str = '[{"x": 1}, {"x": 2}, {"x": 3}]'
+        result = _apply_jq_filter(json_str, ".[] | select(.x > 100)")
+        assert result == []
+
+    def test_empty_results_does_not_raise(self) -> None:
+        """Test that empty results do NOT raise exception (T036)."""
+        json_str = "[]"
+        # This should not raise - empty input with filter = empty output
+        result = _apply_jq_filter(json_str, ".[]")
+        assert result == []
+
+    def test_select_no_matches_returns_empty(self) -> None:
+        """Test select with no matches returns empty list."""
+        json_str = '[{"active": false}, {"active": false}]'
+        result = _apply_jq_filter(json_str, ".[] | select(.active)")
+        assert result == []

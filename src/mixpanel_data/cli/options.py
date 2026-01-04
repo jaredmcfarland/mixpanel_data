@@ -24,3 +24,13 @@ FormatOption = Annotated[
         show_choices=False,
     ),
 ]
+
+# Reusable Annotated type for --jq option
+# Used by commands that support JSON output filtering
+JqOption = Annotated[
+    str | None,
+    typer.Option(
+        "--jq",
+        help="Apply jq filter to JSON output (requires --format json or jsonl).",
+    ),
+]

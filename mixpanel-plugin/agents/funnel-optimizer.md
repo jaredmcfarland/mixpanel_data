@@ -51,6 +51,10 @@ mp query funnel \
 ```bash
 # If user has a saved funnel in Mixpanel
 mp query funnel --funnel-id 12345 --from 2024-01-01 --to 2024-01-31
+
+# Filter output with --jq (e.g., get just step names and rates)
+mp query funnel 12345 --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.steps | map({step: .event, rate: .conversion_rate})'
 ```
 
 **Option C: SQL-Based Funnel (for local data)**

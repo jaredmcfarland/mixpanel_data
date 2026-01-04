@@ -67,6 +67,14 @@ Time-series event counts with optional property segmentation:
     # With property breakdown
     mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
         --on country --format table
+
+    # Filter with jq to get just the total
+    mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
+        --format json --jq '.total'
+
+    # Get top 3 days by volume
+    mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
+        --format json --jq '.series | to_entries | sort_by(.value) | reverse | .[:3]'
     ```
 
 ### SegmentationResult

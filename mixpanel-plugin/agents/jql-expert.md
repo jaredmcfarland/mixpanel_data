@@ -24,6 +24,13 @@ You are a JQL (JavaScript Query Language) expert specializing in advanced Mixpan
 - Standard GROUP BY, JOIN, WHERE operations
 - Performance is critical (SQL on DuckDB is faster)
 
+**Use --jq for:** Filtering JQL/query output on the command line without external tools:
+```bash
+mp query jql script.js --format json --jq '.[:5]'
+mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.total'
+```
+
 ## JQL Core Concepts
 
 ### 1. Events() and People() Functions
