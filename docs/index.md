@@ -113,10 +113,12 @@ mp inspect schema jan_events
 mp inspect sample jan_events
 mp inspect summarize jan_events
 
-# Compose with Unix tools
-mp query segmentation "Purchase" --from 2025-01-01 --format json \
-    | jq '.data'
-mp fetch events --stream --from 2025-01-01 | wc -l
+# Filter with built-in jq
+mp query segmentation "Purchase" --from 2025-01-01 --format json --jq '.total'
+
+# Stream to Unix tools (memory-efficient for large datasets)
+mp fetch events --stdout --from 2025-01-01 --to 2025-01-31 \
+    | jq -r '.distinct_id' | sort -u | wc -l
 ```
 
 ## Capabilities
