@@ -640,3 +640,152 @@ class TestParallelFetchConcurrency:
 
         # All writes should happen from same thread
         assert len(write_thread_ids) <= 1
+
+
+# =============================================================================
+# Write Failure Tests
+# =============================================================================
+
+
+class TestParallelFetchWriteFailure:
+    """Tests for database write failure handling.
+
+    These tests verify that write failures (as opposed to API fetch failures)
+    are properly tracked and reported.
+    """
+
+    def test_write_failure_tracked_as_failure(
+        self,
+        parallel_fetcher: ParallelFetcherService,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """Write failures are tracked in failed_batches count."""
+        # API fetch succeeds, but storage write fails
+        mock_events = [
+            {"event": "test", "properties": {"distinct_id": "u1", "time": 1704067200}}
+        ]
+        mock_api_client.export_events.return_value = iter(mock_events)
+        mock_storage.create_events_table.side_effect = RuntimeError("Disk full")
+
+        result = parallel_fetcher.fetch_events(
+            name="test_events",
+            from_date="2024-01-01",
+            to_date="2024-01-07",  # 1 chunk
+        )
+
+        assert result.has_failures is True
+        assert result.failed_batches >= 1
+        assert result.successful_batches == 0
+
+    def test_write_failure_callback_with_error(
+        self,
+        parallel_fetcher: ParallelFetcherService,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """Write failure triggers callback with error message."""
+        mock_events = [
+            {"event": "test", "properties": {"distinct_id": "u1", "time": 1704067200}}
+        ]
+        mock_api_client.export_events.return_value = iter(mock_events)
+        mock_storage.create_events_table.side_effect = RuntimeError("Database locked")
+
+        progress_list: list[BatchProgress] = []
+
+        parallel_fetcher.fetch_events(
+            name="test_events",
+            from_date="2024-01-01",
+            to_date="2024-01-07",
+            on_batch_complete=lambda p: progress_list.append(p),
+        )
+
+        # Should have exactly one callback (for the failed batch)
+        assert len(progress_list) == 1
+        assert progress_list[0].success is False
+        assert progress_list[0].error is not None
+        assert "Database locked" in progress_list[0].error
+
+    def test_write_failure_populates_failed_date_ranges(
+        self,
+        parallel_fetcher: ParallelFetcherService,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """Write failures add date range to failed_date_ranges."""
+        mock_events = [
+            {"event": "test", "properties": {"distinct_id": "u1", "time": 1704067200}}
+        ]
+        mock_api_client.export_events.return_value = iter(mock_events)
+        mock_storage.create_events_table.side_effect = RuntimeError("IO error")
+
+        result = parallel_fetcher.fetch_events(
+            name="test_events",
+            from_date="2024-01-01",
+            to_date="2024-01-07",
+        )
+
+        assert len(result.failed_date_ranges) >= 1
+        # The failed range should be the date range we requested
+        failed_from, failed_to = result.failed_date_ranges[0]
+        assert failed_from == "2024-01-01"
+        assert failed_to == "2024-01-07"
+
+    def test_write_failure_does_not_count_rows(
+        self,
+        parallel_fetcher: ParallelFetcherService,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """Failed writes don't add to total_rows count."""
+        mock_events = [
+            {"event": "e1", "properties": {"distinct_id": "u1", "time": 1704067200}},
+            {"event": "e2", "properties": {"distinct_id": "u2", "time": 1704067200}},
+        ]
+        mock_api_client.export_events.return_value = iter(mock_events)
+        mock_storage.create_events_table.side_effect = RuntimeError("Write failed")
+
+        result = parallel_fetcher.fetch_events(
+            name="test_events",
+            from_date="2024-01-01",
+            to_date="2024-01-07",
+        )
+
+        # Even though 2 events were fetched, none should be counted due to write failure
+        assert result.total_rows == 0
+
+    def test_partial_write_failure(
+        self,
+        parallel_fetcher: ParallelFetcherService,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """Some batches can succeed while others fail during write."""
+        # Make each API call return a fresh iterator with one event
+        mock_events = [
+            {"event": "test", "properties": {"distinct_id": "u1", "time": 1704067200}}
+        ]
+        mock_api_client.export_events.side_effect = lambda **_kwargs: iter(mock_events)
+
+        write_count = 0
+
+        def write_with_partial_failure(*_args: Any, **_kwargs: Any) -> int:
+            nonlocal write_count
+            write_count += 1
+            if write_count == 1:
+                return 1  # First write succeeds
+            raise RuntimeError("Second write fails")
+
+        mock_storage.create_events_table.side_effect = write_with_partial_failure
+        mock_storage.append_events_table.side_effect = write_with_partial_failure
+
+        result = parallel_fetcher.fetch_events(
+            name="test_events",
+            from_date="2024-01-01",
+            to_date="2024-01-14",  # 2 chunks
+        )
+
+        # Should have one success and one failure
+        assert result.successful_batches >= 1
+        assert result.failed_batches >= 1
+        assert result.has_failures is True

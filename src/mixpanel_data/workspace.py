@@ -48,11 +48,11 @@ from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.fetcher import (
     FetcherService,
-    _transform_event,
     _transform_profile,
 )
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.storage import StorageEngine
+from mixpanel_data._internal.transforms import transform_event
 from mixpanel_data._literal_types import TableType
 from mixpanel_data.exceptions import ConfigError, QueryError
 from mixpanel_data.types import (
@@ -1118,7 +1118,7 @@ class Workspace:
             yield from event_iterator
         else:
             for event in event_iterator:
-                yield _transform_event(event)
+                yield transform_event(event)
 
     def stream_profiles(
         self,

@@ -7,11 +7,11 @@ handling data transformation and progress reporting.
 from __future__ import annotations
 
 import logging
-import uuid
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from mixpanel_data._internal.transforms import transform_event
 from mixpanel_data.exceptions import DateRangeTooLargeError
 from mixpanel_data.types import (
     BatchProgress,
@@ -26,49 +26,9 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-# Reserved keys that _transform_event extracts from properties.
-# These are standard Mixpanel fields that become top-level columns in storage.
-_RESERVED_EVENT_KEYS = frozenset({"distinct_id", "time", "$insert_id"})
-
 # Reserved keys that _transform_profile extracts from properties.
 # These are standard Mixpanel fields that become top-level columns in storage.
 _RESERVED_PROFILE_KEYS = frozenset({"$last_seen"})
-
-
-def _transform_event(event: dict[str, Any]) -> dict[str, Any]:
-    """Transform API event to storage format.
-
-    Args:
-        event: Raw event from Mixpanel Export API with 'event' and 'properties' keys.
-
-    Returns:
-        Transformed event dict with event_name, event_time, distinct_id,
-        insert_id, and properties keys.
-    """
-    properties = event.get("properties", {})
-
-    # Extract and remove standard fields from properties (shallow copy to avoid mutation)
-    remaining_props = dict(properties)
-    distinct_id = remaining_props.pop("distinct_id", "")
-    event_time_raw = remaining_props.pop("time", 0)
-    insert_id = remaining_props.pop("$insert_id", None)
-
-    # Convert Unix timestamp to datetime
-    # Mixpanel Export API returns time as Unix timestamp in seconds (integer)
-    event_time = datetime.fromtimestamp(event_time_raw, tz=UTC)
-
-    # Generate UUID if $insert_id is missing
-    if insert_id is None:
-        insert_id = str(uuid.uuid4())
-        _logger.debug("Generated insert_id for event missing $insert_id")
-
-    return {
-        "event_name": event.get("event", ""),
-        "event_time": event_time,
-        "distinct_id": distinct_id,
-        "insert_id": insert_id,
-        "properties": remaining_props,
-    }
 
 
 def _transform_profile(profile: dict[str, Any]) -> dict[str, Any]:
@@ -272,7 +232,7 @@ class FetcherService:
         # Transform events as they stream through
         def transform_iterator() -> Iterator[dict[str, Any]]:
             for event in events_iter:
-                yield _transform_event(event)
+                yield transform_event(event)
 
         # Construct metadata
         fetched_at = datetime.now(UTC)

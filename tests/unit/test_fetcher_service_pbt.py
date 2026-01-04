@@ -4,7 +4,7 @@ These tests verify invariants that should hold for all possible inputs,
 catching edge cases that example-based tests might miss.
 
 Properties tested:
-- _transform_event: Non-mutation of input, field extraction invariants
+- transform_event: Non-mutation of input, field extraction invariants
 - _transform_profile: Non-mutation of input, field extraction invariants
 """
 
@@ -18,10 +18,12 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from mixpanel_data._internal.services.fetcher import (
-    _RESERVED_EVENT_KEYS,
     _RESERVED_PROFILE_KEYS,
-    _transform_event,
     _transform_profile,
+)
+from mixpanel_data._internal.transforms import (
+    RESERVED_EVENT_KEYS,
+    transform_event,
 )
 
 # =============================================================================
@@ -49,12 +51,12 @@ json_values: st.SearchStrategy[Any] = st.recursive(
 )
 
 # Strategy for event property keys (excluding reserved keys)
-event_property_keys = st.text().filter(lambda k: k not in _RESERVED_EVENT_KEYS)
+event_property_keys = st.text().filter(lambda k: k not in RESERVED_EVENT_KEYS)
 
 # Strategy for event properties dict
 # These are properties that might come from Mixpanel's Export API
 # Reserved keys (distinct_id, time, $insert_id) are excluded since they're
-# handled separately as standard fields in _transform_event
+# handled separately as standard fields in transform_event
 event_properties = st.dictionaries(event_property_keys, json_values, max_size=10)
 
 # Strategy for profile property keys (excluding reserved keys)
@@ -158,14 +160,14 @@ def api_profiles(draw: st.DrawFn) -> dict[str, Any]:
 
 
 # =============================================================================
-# _transform_event Property Tests
+# transform_event Property Tests
 # =============================================================================
 
 
 class TestTransformEventProperties:
-    """Property-based tests for _transform_event function.
+    """Property-based tests for transform_event function.
 
-    The _transform_event function transforms raw Mixpanel Export API events
+    The transform_event function transforms raw Mixpanel Export API events
     into the storage format expected by StorageEngine. It must:
     1. Never mutate the input dictionary
     2. Extract distinct_id, time, and $insert_id from properties
@@ -175,8 +177,8 @@ class TestTransformEventProperties:
 
     @given(event=api_events())
     @settings(max_examples=100)
-    def test_transform_event_never_mutates_input(self, event: dict[str, Any]) -> None:
-        """_transform_event should never mutate the input dictionary.
+    def testtransform_event_never_mutates_input(self, event: dict[str, Any]) -> None:
+        """transform_event should never mutate the input dictionary.
 
         This property is critical for streaming pipelines where the same
         dictionary might be reused or referenced elsewhere. Mutation would
@@ -189,7 +191,7 @@ class TestTransformEventProperties:
         original = copy.deepcopy(event)
 
         # Transform the event
-        _transform_event(event)
+        transform_event(event)
 
         # Input should be unchanged
         assert event == original, (
@@ -198,10 +200,10 @@ class TestTransformEventProperties:
 
     @given(event=api_events())
     @settings(max_examples=100)
-    def test_transform_event_extracts_standard_fields(
+    def testtransform_event_extracts_standard_fields(
         self, event: dict[str, Any]
     ) -> None:
-        """_transform_event output properties should not contain standard fields.
+        """transform_event output properties should not contain standard fields.
 
         The fields 'distinct_id', 'time', and '$insert_id' must be extracted
         to top-level output fields and removed from the output properties dict.
@@ -209,7 +211,7 @@ class TestTransformEventProperties:
         Args:
             event: A raw event dict from Mixpanel's Export API.
         """
-        result = _transform_event(event)
+        result = transform_event(event)
 
         # Standard fields should NOT be in output properties
         output_props = result["properties"]
@@ -224,10 +226,10 @@ class TestTransformEventProperties:
         )
 
     @given(event=api_events())
-    def test_transform_event_has_required_output_fields(
+    def testtransform_event_has_required_output_fields(
         self, event: dict[str, Any]
     ) -> None:
-        """_transform_event output should have all required fields.
+        """transform_event output should have all required fields.
 
         The output dict must contain exactly: event_name, event_time,
         distinct_id, insert_id, and properties.
@@ -235,7 +237,7 @@ class TestTransformEventProperties:
         Args:
             event: A raw event dict from Mixpanel's Export API.
         """
-        result = _transform_event(event)
+        result = transform_event(event)
 
         required_fields = {
             "event_name",
@@ -247,15 +249,15 @@ class TestTransformEventProperties:
         assert set(result.keys()) == required_fields
 
     @given(event=api_events())
-    def test_transform_event_converts_timestamp_to_datetime(
+    def testtransform_event_converts_timestamp_to_datetime(
         self, event: dict[str, Any]
     ) -> None:
-        """_transform_event should convert Unix timestamp to UTC datetime.
+        """transform_event should convert Unix timestamp to UTC datetime.
 
         Args:
             event: A raw event dict from Mixpanel's Export API.
         """
-        result = _transform_event(event)
+        result = transform_event(event)
 
         # event_time should be a datetime
         assert isinstance(result["event_time"], datetime)
@@ -263,10 +265,10 @@ class TestTransformEventProperties:
         assert result["event_time"].tzinfo is not None
 
     @given(event=api_events())
-    def test_transform_event_preserves_custom_properties(
+    def testtransform_event_preserves_custom_properties(
         self, event: dict[str, Any]
     ) -> None:
-        """_transform_event should preserve all non-standard properties.
+        """transform_event should preserve all non-standard properties.
 
         Any property that isn't distinct_id, time, or $insert_id should
         appear unchanged in the output properties.
@@ -274,7 +276,7 @@ class TestTransformEventProperties:
         Args:
             event: A raw event dict from Mixpanel's Export API.
         """
-        result = _transform_event(event)
+        result = transform_event(event)
 
         input_props = event.get("properties", {})
         output_props = result["properties"]
@@ -287,15 +289,15 @@ class TestTransformEventProperties:
                 assert output_props[key] == value, f"Property '{key}' value changed"
 
     @given(event=api_events())
-    def test_transform_event_always_has_insert_id(self, event: dict[str, Any]) -> None:
-        """_transform_event should always produce an insert_id.
+    def testtransform_event_always_has_insert_id(self, event: dict[str, Any]) -> None:
+        """transform_event should always produce an insert_id.
 
         If $insert_id is missing from input, a UUID should be generated.
 
         Args:
             event: A raw event dict from Mixpanel's Export API.
         """
-        result = _transform_event(event)
+        result = transform_event(event)
 
         assert result["insert_id"] is not None
         assert isinstance(result["insert_id"], str)
@@ -443,8 +445,8 @@ class TestTransformConsistency:
         }
 
         # Transform twice
-        result1_event = _transform_event(copy.deepcopy(event))
-        result2_event = _transform_event(copy.deepcopy(event))
+        result1_event = transform_event(copy.deepcopy(event))
+        result2_event = transform_event(copy.deepcopy(event))
 
         result1_profile = _transform_profile(copy.deepcopy(profile))
         result2_profile = _transform_profile(copy.deepcopy(profile))

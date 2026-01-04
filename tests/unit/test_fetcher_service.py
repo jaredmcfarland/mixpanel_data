@@ -14,9 +14,9 @@ import pytest
 
 from mixpanel_data._internal.services.fetcher import (
     FetcherService,
-    _transform_event,
     _transform_profile,
 )
+from mixpanel_data._internal.transforms import transform_event
 from mixpanel_data.exceptions import DateRangeTooLargeError, TableExistsError
 from mixpanel_data.types import FetchResult
 
@@ -26,10 +26,10 @@ from mixpanel_data.types import FetchResult
 
 
 class TestTransformEvent:
-    """Tests for _transform_event function."""
+    """Tests for transform_event function."""
 
-    def test_transform_event_with_valid_data(self) -> None:
-        """_transform_event should transform API event to storage format."""
+    def testtransform_event_with_valid_data(self) -> None:
+        """transform_event should transform API event to storage format."""
         api_event = {
             "event": "Sign Up",
             "properties": {
@@ -41,7 +41,7 @@ class TestTransformEvent:
             },
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == "Sign Up"
         # Unix timestamp 1609459200 = 2021-01-01 00:00:00 UTC
@@ -50,8 +50,8 @@ class TestTransformEvent:
         assert result["insert_id"] == "abc-123-def"
         assert result["properties"] == {"browser": "Chrome", "country": "US"}
 
-    def test_transform_event_with_missing_insert_id(self) -> None:
-        """_transform_event should generate UUID when $insert_id is missing."""
+    def testtransform_event_with_missing_insert_id(self) -> None:
+        """transform_event should generate UUID when $insert_id is missing."""
         api_event = {
             "event": "Page View",
             "properties": {
@@ -61,7 +61,7 @@ class TestTransformEvent:
             },
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == "Page View"
         assert result["distinct_id"] == "user_456"
@@ -69,8 +69,8 @@ class TestTransformEvent:
         assert len(result["insert_id"]) == 36  # UUID length
         assert result["properties"] == {"page": "/home"}
 
-    def test_transform_event_does_not_mutate_input(self) -> None:
-        """_transform_event should not mutate the input dictionary."""
+    def testtransform_event_does_not_mutate_input(self) -> None:
+        """transform_event should not mutate the input dictionary."""
         api_event: dict[str, Any] = {
             "event": "Test Event",
             "properties": {
@@ -84,13 +84,13 @@ class TestTransformEvent:
         # Make a copy for comparison
         original_props = api_event["properties"].copy()
 
-        _transform_event(api_event)
+        transform_event(api_event)
 
         # Original should be unchanged
         assert api_event["properties"] == original_props
 
-    def test_transform_event_with_empty_properties(self) -> None:
-        """_transform_event should handle empty properties."""
+    def testtransform_event_with_empty_properties(self) -> None:
+        """transform_event should handle empty properties."""
         api_event = {
             "event": "Empty Event",
             "properties": {
@@ -100,13 +100,13 @@ class TestTransformEvent:
             },
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == "Empty Event"
         assert result["properties"] == {}
 
-    def test_transform_event_with_missing_event_key(self) -> None:
-        """_transform_event should handle missing event key."""
+    def testtransform_event_with_missing_event_key(self) -> None:
+        """transform_event should handle missing event key."""
         api_event = {
             "properties": {
                 "distinct_id": "user_111",
@@ -115,17 +115,17 @@ class TestTransformEvent:
             },
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == ""
 
-    def test_transform_event_with_missing_properties(self) -> None:
-        """_transform_event should handle missing properties."""
+    def testtransform_event_with_missing_properties(self) -> None:
+        """transform_event should handle missing properties."""
         api_event = {
             "event": "No Properties",
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == "No Properties"
         assert result["distinct_id"] == ""
