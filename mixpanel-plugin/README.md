@@ -25,7 +25,7 @@ Comprehensive Mixpanel analytics integration for Claude Code with interactive co
 
 **`/mp-fetch [from-date] [to-date] [table-name]`**
 - Guided data fetching with validation
-- Validates date ranges (≤100 days)
+- Parallel fetching for large date ranges (up to 10x faster)
 - Handles table conflicts (append/replace)
 - Optional filters: events, WHERE clauses, limits
 - **Use when**: Fetching Mixpanel events into local DuckDB for analysis

@@ -62,7 +62,11 @@ mp inspect funnels                     # Saved funnels
 ### 3. Fetch Events to Local Storage
 
 ```bash
+# Sequential fetch for small date ranges
 mp fetch events jan --from 2025-01-01 --to 2025-01-31
+
+# Parallel fetch for large date ranges (up to 10x faster)
+mp fetch events q1 --from 2025-01-01 --to 2025-03-31 --parallel
 ```
 
 ### 4. Query with SQL
@@ -116,6 +120,9 @@ funnel = ws.funnel(
 # Fetch events into local DuckDB for SQL analysis
 ws.fetch_events("jan", from_date="2025-01-01", to_date="2025-01-31")
 
+# Use parallel=True for large date ranges (up to 10x faster)
+ws.fetch_events("q1", from_date="2025-01-01", to_date="2025-03-31", parallel=True)
+
 df = ws.sql("""
     SELECT
         DATE_TRUNC('day', event_time) as day,
@@ -159,7 +166,7 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp auth`** — Manage accounts: `list`, `add`, `remove`, `switch`, `show`, `test`
 
-**`mp fetch`** — Extract data: `events`, `profiles` (add `--stdout` to stream as JSONL)
+**`mp fetch`** — Extract data: `events`, `profiles` (add `--parallel` for 10x faster large exports, `--stdout` to stream as JSONL)
 
 **`mp query`** — Run analytics: `sql`, `segmentation`, `funnel`, `retention`, `jql`, `saved-report`, `flows`, and 7 more
 
@@ -222,6 +229,7 @@ Key design features:
 - **Discoverable schema**: `list_events()`, `list_properties()`, `list_funnels()`, `list_cohorts()`, `list_bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
 - **Structured output**: All CLI commands support `--format json` for machine-readable responses, plus `--jq` for inline filtering
+- **Parallel fetching**: Up to 10x faster exports for large date ranges via `--parallel` or `parallel=True`
 - **Local SQL iteration**: Fetch once, query repeatedly—no re-fetching needed
 - **Typed exceptions**: Error codes and context for programmatic handling
 

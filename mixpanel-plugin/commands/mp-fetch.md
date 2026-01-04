@@ -28,10 +28,6 @@ If credentials aren't configured, suggest running `/mp-auth` first.
 **Validation**:
 - Both dates must be in YYYY-MM-DD format
 - From date must be ≤ to date
-- **CRITICAL**: Date range must be ≤ 100 days (Mixpanel API limit)
-- If range exceeds 100 days, suggest:
-  - Breaking into chunks (offer to help with multiple fetches)
-  - Using a smaller range for initial exploration
 
 **Calculate range**:
 ```python
@@ -39,9 +35,11 @@ from datetime import datetime
 from_date = datetime.strptime("YYYY-MM-DD", "%Y-%m-%d")
 to_date = datetime.strptime("YYYY-MM-DD", "%Y-%m-%d")
 days = (to_date - from_date).days
-if days > 100:
-    print(f"⚠️ Range is {days} days (max: 100)")
 ```
+
+**Recommend parallel fetching for large ranges**:
+- If range > 7 days: Suggest `--parallel` for faster export (up to 10x speedup)
+- If range > 100 days: `--parallel` is required (sequential has 100-day limit)
 
 ### 2. Table Name
 
@@ -60,7 +58,26 @@ If table exists:
   - Choose different table name
 - Confirm user's choice before proceeding
 
-### 3. Optional Filters (Advanced)
+### 3. Parallel Fetching (Recommended for Large Ranges)
+
+**Parallel mode** (`--parallel` or `-p`):
+- Splits date range into chunks and fetches concurrently
+- Up to 10x faster for multi-month ranges
+- **Required for ranges > 100 days** (bypasses sequential API limit)
+- Automatically recommend for ranges > 7 days
+
+**Workers** (`--workers`, default: 10):
+- Number of concurrent fetch threads
+- Higher values may hit Mixpanel rate limits
+
+**Chunk days** (`--chunk-days`, default: 7):
+- Days per chunk for parallel splitting
+- Valid range: 1-100 days
+- Smaller = more parallelism, larger = fewer API calls
+
+**Important**: `--limit` is incompatible with `--parallel`
+
+### 4. Optional Filters (Advanced)
 
 Ask if the user wants to apply filters:
 
@@ -76,25 +93,54 @@ Ask if the user wants to apply filters:
 **Limit** (optional):
 - Maximum events to fetch (1-100000)
 - Useful for testing or sampling
+- **Not compatible with `--parallel`**
 
 ## Execute Fetch
 
-### Base Command
+### Base Command (Sequential)
 
 ```bash
 mp fetch events <table-name> --from <from-date> --to <to-date>
 ```
 
+### Parallel Command (Recommended for large ranges)
+
+```bash
+mp fetch events <table-name> --from <from-date> --to <to-date> --parallel
+```
+
 ### With Options
 
 Add flags based on user choices:
+- `--parallel` or `-p` for parallel fetching (recommended for > 7 days)
+- `--workers N` to control concurrency (default: 10)
+- `--chunk-days N` to control chunk size (default: 7)
 - `--append` if appending to existing table
 - `--events "Event1" "Event2"` if filtering events
 - `--where 'expression'` if filtering by properties
-- `--limit N` if limiting results
+- `--limit N` if limiting results (NOT with --parallel)
 
-### Example with all options:
+### Examples
 
+**Parallel fetch for large date range (recommended)**:
+```bash
+mp fetch events q4_events \
+  --from 2024-10-01 \
+  --to 2024-12-31 \
+  --parallel
+```
+
+**Parallel fetch with custom workers and chunk size**:
+```bash
+mp fetch events yearly_events \
+  --from 2024-01-01 \
+  --to 2024-12-31 \
+  --parallel \
+  --workers 5 \
+  --chunk-days 14
+```
+
+**Sequential fetch with filters (small range)**:
 ```bash
 mp fetch events jan_purchases \
   --from 2024-01-01 \
@@ -108,18 +154,31 @@ mp fetch events jan_purchases \
 
 After fetch completes, show:
 
-1. **Fetch results**:
+1. **Fetch results** (sequential):
    - Table name
    - Rows fetched
    - Time taken
    - Date range covered
+
+1. **Fetch results** (parallel):
+   - Table name
+   - Total rows fetched
+   - Successful/failed batches
+   - Time taken (note the speedup vs sequential)
+   - If failures: list failed date ranges for retry
 
 2. **Verification query**:
 ```bash
 mp query sql "SELECT COUNT(*) as total_events, COUNT(DISTINCT distinct_id) as unique_users FROM <table-name>" --format table
 ```
 
-3. **Next steps**:
+3. **Handle parallel failures** (if any):
+   If some batches failed, offer to retry failed date ranges:
+   ```bash
+   mp fetch events <table-name> --from <failed-start> --to <failed-end> --append
+   ```
+
+4. **Next steps**:
    - Run `/mp-inspect` to explore table structure and events
    - Run `/mp-query` to analyze the data
    - Explore events: `mp inspect breakdown -t <table-name>`
@@ -128,10 +187,19 @@ mp query sql "SELECT COUNT(*) as total_events, COUNT(DISTINCT distinct_id) as un
 
 ## Common Patterns
 
-**Monthly data**:
+**Full year with parallel (recommended)**:
+```bash
+mp fetch events events_2024 --from 2024-01-01 --to 2024-12-31 --parallel
+```
+
+**Quarter with parallel**:
+```bash
+mp fetch events q4_events --from 2024-10-01 --to 2024-12-31 --parallel
+```
+
+**Monthly data (sequential for small range)**:
 ```bash
 mp fetch events jan --from 2024-01-01 --to 2024-01-31
-mp fetch events feb --from 2024-02-01 --to 2024-02-29 --append
 ```
 
 **Testing/sampling**:
@@ -146,8 +214,18 @@ mp fetch events purchases --from 2024-01-01 --to 2024-01-31 --events "Purchase"
 
 ## Error Handling
 
-**DateRangeTooLargeError**: Range > 100 days
-- Solution: Break into chunks or reduce range
+**DateRangeTooLargeError**: Range > 100 days (sequential mode)
+- Solution: Use `--parallel` flag for ranges > 100 days
+
+**ValueError**: `--limit` used with `--parallel`
+- Solution: Remove `--limit` or use sequential mode
+
+**Parallel batch failures**: Some batches failed during parallel fetch
+- The fetch continues and reports failures at the end
+- Solution: Retry failed date ranges with `--append`:
+  ```bash
+  mp fetch events <table> --from <failed-start> --to <failed-end> --append
+  ```
 
 **TableExistsError**: Table exists without --append
 - Solution: Use --append, --replace, or different name
@@ -157,6 +235,7 @@ mp fetch events purchases --from 2024-01-01 --to 2024-01-31 --events "Purchase"
 
 **RateLimitError**: API rate limited
 - Solution: Wait and retry (shows retry_after seconds)
+- For parallel: reduce `--workers` count
 
 **EventNotFoundError**: Event doesn't exist
 - Solution: Check available events with `mp inspect events`

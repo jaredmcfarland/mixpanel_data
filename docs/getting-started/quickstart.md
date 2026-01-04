@@ -185,6 +185,15 @@ Fetch a month of events into a local DuckDB database:
     print(f"Fetched {result.row_count} events in {result.duration_seconds:.1f}s")
     ```
 
+!!! tip "Parallel Fetching for Large Date Ranges"
+    For date ranges longer than a week, use `--parallel` (CLI) or `parallel=True` (Python) for up to 10x faster exports:
+
+    ```bash
+    mp fetch events q1_events --from 2025-01-01 --to 2025-03-31 --parallel
+    ```
+
+    See [Fetching Data](../guide/fetching.md#parallel-fetching) for details.
+
 ## Step 5: Inspect Your Fetched Data
 
 Before writing queries, explore what you fetched:
