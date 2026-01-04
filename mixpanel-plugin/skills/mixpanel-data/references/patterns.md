@@ -168,7 +168,28 @@ df = ws.sql("""
 
 ## jq Processing
 
-### Extract Fields
+### Built-in --jq Option
+
+The CLI has built-in jq support via the `--jq` option, eliminating the need for external tools:
+
+```bash
+# Filter events inline
+mp inspect events --format json --jq '.[:5]'
+mp inspect events --format json --jq '.[] | select(contains("User"))'
+
+# Filter query results
+mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.total'
+
+# Filter SQL results
+mp query sql "SELECT * FROM events LIMIT 100" --format json \
+  --jq '.[] | select(.event_name == "Purchase")'
+```
+
+### External jq with Streaming
+
+For streaming data, pipe to external jq:
+
 ```bash
 # Single field
 mp fetch events --from 2024-01-01 --to 2024-01-01 --stdout | jq '.event'

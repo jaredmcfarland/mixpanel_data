@@ -106,6 +106,17 @@ mp query sql "<query>" --format table
 - `--format json` - Machine processing
 - `--format csv` - Export to spreadsheet
 
+**Filter JSON output with --jq**:
+```bash
+# Filter results with jq
+mp query sql "SELECT * FROM events LIMIT 100" --format json \
+  --jq '.[] | select(.event_name == "Purchase")'
+
+# Extract specific fields
+mp query sql "SELECT event_name, COUNT(*) as cnt FROM events GROUP BY 1" \
+  --format json --jq 'map({name: .event_name, count: .cnt})'
+```
+
 **Next steps after query**:
 - Deep column analysis → Run `/mp-inspect column -t <table> -c <column>` for statistics
 - Explore workflow analysis → Run `/mp-funnel` or `/mp-retention` for specialized analytics
@@ -217,6 +228,19 @@ mp query segmentation -e "Purchase" \
   --to 2024-01-31 \
   --on country \
   --format table
+```
+
+**Filter with --jq**:
+```bash
+# Get just the total count
+mp query segmentation -e "Purchase" \
+  --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.total'
+
+# Get top days by volume
+mp query segmentation -e "Purchase" \
+  --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.series | to_entries | sort_by(.value) | reverse | .[:5]'
 ```
 
 **With filter**:

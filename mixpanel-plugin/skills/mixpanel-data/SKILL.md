@@ -223,6 +223,27 @@ Full schema and query patterns in [references/patterns.md](references/patterns.m
 
 `--format json` (default), `jsonl`, `table`, `csv`, `plain`
 
+### Filtering with --jq
+
+Commands that output JSON also support the `--jq` option for client-side filtering using jq syntax:
+
+```bash
+# Get first 5 events
+mp inspect events --format json --jq '.[:5]'
+
+# Filter by name pattern
+mp inspect events --format json --jq '.[] | select(contains("User"))'
+
+# Extract fields from query results
+mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.total'
+
+# Filter SQL results
+mp query sql "SELECT * FROM events" --format json --jq '.[] | select(.event_name == "Purchase")'
+```
+
+Note: `--jq` only works with `--format json` or `--format jsonl`.
+
 ## API Overview
 
 The Workspace class provides three main capability areas:

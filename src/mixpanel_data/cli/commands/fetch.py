@@ -17,7 +17,7 @@ from typing import Annotated, Any
 
 import typer
 
-from mixpanel_data.cli.options import FormatOption
+from mixpanel_data.cli.options import FormatOption, JqOption
 from mixpanel_data.cli.utils import (
     err_console,
     get_workspace,
@@ -105,6 +105,7 @@ def fetch_events(
         ),
     ] = 1000,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Fetch events from Mixpanel into local storage.
 
@@ -205,7 +206,7 @@ def fetch_events(
         batch_size=batch_size,
     )
 
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @fetch_app.command("profiles")
@@ -260,6 +261,7 @@ def fetch_profiles(
         ),
     ] = 1000,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Fetch user profiles from Mixpanel into local storage.
 
@@ -352,4 +354,4 @@ def fetch_profiles(
         batch_size=batch_size,
     )
 
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)

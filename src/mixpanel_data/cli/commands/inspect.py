@@ -39,7 +39,7 @@ from typing import Annotated
 
 import typer
 
-from mixpanel_data.cli.options import FormatOption
+from mixpanel_data.cli.options import FormatOption, JqOption
 from mixpanel_data.cli.utils import (
     err_console,
     get_workspace,
@@ -72,7 +72,11 @@ Local (uses DuckDB):
 
 @inspect_app.command("events")
 @handle_errors
-def inspect_events(ctx: typer.Context, format: FormatOption = "json") -> None:
+def inspect_events(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+    jq_filter: JqOption = None,
+) -> None:
     """List all event names from Mixpanel project.
 
     Calls the Mixpanel API to retrieve tracked event types. Use this
@@ -82,11 +86,12 @@ def inspect_events(ctx: typer.Context, format: FormatOption = "json") -> None:
 
         mp inspect events
         mp inspect events --format table
+        mp inspect events --format json --jq '.[0:3]'
     """
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching events..."):
         events = workspace.events()
-    output_result(ctx, events, format=format)
+    output_result(ctx, events, format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("properties")
@@ -98,6 +103,7 @@ def inspect_properties(
         typer.Option("--event", "-e", help="Event name."),
     ],
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """List properties for a specific event.
 
@@ -112,7 +118,7 @@ def inspect_properties(
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching properties..."):
         properties = workspace.properties(event)
-    output_result(ctx, properties, format=format)
+    output_result(ctx, properties, format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("values")
@@ -132,6 +138,7 @@ def inspect_values(
         typer.Option("--limit", "-l", help="Maximum values to return."),
     ] = 100,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """List sample values for a property.
 
@@ -151,12 +158,16 @@ def inspect_values(
             event=event,
             limit=limit,
         )
-    output_result(ctx, values, format=format)
+    output_result(ctx, values, format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("funnels")
 @handle_errors
-def inspect_funnels(ctx: typer.Context, format: FormatOption = "json") -> None:
+def inspect_funnels(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+    jq_filter: JqOption = None,
+) -> None:
     """List saved funnels in Mixpanel project.
 
     Calls the Mixpanel API to retrieve saved funnel definitions.
@@ -171,12 +182,18 @@ def inspect_funnels(ctx: typer.Context, format: FormatOption = "json") -> None:
     with status_spinner(ctx, "Fetching funnels..."):
         funnels = workspace.funnels()
     data = [{"funnel_id": f.funnel_id, "name": f.name} for f in funnels]
-    output_result(ctx, data, columns=["funnel_id", "name"], format=format)
+    output_result(
+        ctx, data, columns=["funnel_id", "name"], format=format, jq_filter=jq_filter
+    )
 
 
 @inspect_app.command("cohorts")
 @handle_errors
-def inspect_cohorts(ctx: typer.Context, format: FormatOption = "json") -> None:
+def inspect_cohorts(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+    jq_filter: JqOption = None,
+) -> None:
     """List saved cohorts in Mixpanel project.
 
     Calls the Mixpanel API to retrieve saved cohort definitions.
@@ -200,7 +217,11 @@ def inspect_cohorts(ctx: typer.Context, format: FormatOption = "json") -> None:
         for c in cohorts
     ]
     output_result(
-        ctx, data, columns=["id", "name", "count", "description"], format=format
+        ctx,
+        data,
+        columns=["id", "name", "count", "description"],
+        format=format,
+        jq_filter=jq_filter,
     )
 
 
@@ -217,6 +238,7 @@ def inspect_top_events(
         typer.Option("--limit", "-l", help="Maximum events to return."),
     ] = 10,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """List today's top events by count.
 
@@ -242,7 +264,11 @@ def inspect_top_events(
         for e in events
     ]
     output_result(
-        ctx, data, columns=["event", "count", "percent_change"], format=format
+        ctx,
+        data,
+        columns=["event", "count", "percent_change"],
+        format=format,
+        jq_filter=jq_filter,
     )
 
 
@@ -259,6 +285,7 @@ def inspect_bookmarks(
         ),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """List saved reports (bookmarks) in Mixpanel project.
 
@@ -284,12 +311,22 @@ def inspect_bookmarks(
         }
         for b in bookmarks
     ]
-    output_result(ctx, data, columns=["id", "name", "type", "modified"], format=format)
+    output_result(
+        ctx,
+        data,
+        columns=["id", "name", "type", "modified"],
+        format=format,
+        jq_filter=jq_filter,
+    )
 
 
 @inspect_app.command("info")
 @handle_errors
-def inspect_info(ctx: typer.Context, format: FormatOption = "json") -> None:
+def inspect_info(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+    jq_filter: JqOption = None,
+) -> None:
     """Show workspace information.
 
     Shows current account configuration, database location, and
@@ -302,12 +339,16 @@ def inspect_info(ctx: typer.Context, format: FormatOption = "json") -> None:
     """
     workspace = get_workspace(ctx, read_only=True)
     info = workspace.info()
-    output_result(ctx, info.to_dict(), format=format)
+    output_result(ctx, info.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("tables")
 @handle_errors
-def inspect_tables(ctx: typer.Context, format: FormatOption = "json") -> None:
+def inspect_tables(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+    jq_filter: JqOption = None,
+) -> None:
     """List tables in local database.
 
     Shows all tables in the local DuckDB database with row counts
@@ -330,7 +371,11 @@ def inspect_tables(ctx: typer.Context, format: FormatOption = "json") -> None:
         for t in tables
     ]
     output_result(
-        ctx, data, columns=["name", "type", "row_count", "fetched_at"], format=format
+        ctx,
+        data,
+        columns=["name", "type", "row_count", "fetched_at"],
+        format=format,
+        jq_filter=jq_filter,
     )
 
 
@@ -347,6 +392,7 @@ def inspect_schema(
         typer.Option("--sample", help="Include sample values."),
     ] = False,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show schema for a table in local database.
 
@@ -376,7 +422,7 @@ def inspect_schema(
         ],
     }
 
-    output_result(ctx, data, format=format)
+    output_result(ctx, data, format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("drop")
@@ -392,6 +438,7 @@ def inspect_drop(
         typer.Option("--force", help="Skip confirmation prompt."),
     ] = False,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Drop a table from the local database.
 
@@ -412,7 +459,7 @@ def inspect_drop(
     workspace = get_workspace(ctx)  # write access needed for drop
     workspace.drop(table)
 
-    output_result(ctx, {"dropped": table}, format=format)
+    output_result(ctx, {"dropped": table}, format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("drop-all")
@@ -430,6 +477,7 @@ def inspect_drop_all(
         typer.Option("--force", help="Skip confirmation prompt."),
     ] = False,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Drop all tables from the local database.
 
@@ -466,7 +514,7 @@ def inspect_drop_all(
     if type_filter is not None:
         result["type_filter"] = type_filter
 
-    output_result(ctx, result, format=format)
+    output_result(ctx, result, format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("lexicon-schemas")
@@ -480,6 +528,7 @@ def inspect_lexicon_schemas(
         ),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """List Lexicon schemas from Mixpanel data dictionary.
 
@@ -510,6 +559,7 @@ def inspect_lexicon_schemas(
         data,
         columns=["entity_type", "name", "property_count", "description"],
         format=format,
+        jq_filter=jq_filter,
     )
 
 
@@ -528,6 +578,7 @@ def inspect_lexicon_schema(
         typer.Option("--name", "-n", help="Entity name."),
     ],
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Get a single Lexicon schema from Mixpanel data dictionary.
 
@@ -544,7 +595,7 @@ def inspect_lexicon_schema(
     workspace = get_workspace(ctx, read_only=True)
     with status_spinner(ctx, "Fetching schema..."):
         schema = workspace.lexicon_schema(validated_type, name)
-    output_result(ctx, schema.to_dict(), format=format)
+    output_result(ctx, schema.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("sample")
@@ -560,6 +611,7 @@ def inspect_sample(
         typer.Option("--rows", "-n", help="Number of rows to sample."),
     ] = 10,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show random sample rows from a table.
 
@@ -575,7 +627,7 @@ def inspect_sample(
     df = workspace.sample(table, n=rows)
     # Convert DataFrame to list of dicts for output
     data = df.to_dict(orient="records")
-    output_result(ctx, data, format=format)
+    output_result(ctx, data, format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("summarize")
@@ -587,6 +639,7 @@ def inspect_summarize(
         typer.Option("--table", "-t", help="Table name."),
     ],
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show statistical summary of all columns in a table.
 
@@ -600,7 +653,7 @@ def inspect_summarize(
     """
     workspace = get_workspace(ctx, read_only=True)
     result = workspace.summarize(table)
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("breakdown")
@@ -612,6 +665,7 @@ def inspect_breakdown(
         typer.Option("--table", "-t", help="Table name."),
     ],
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show event distribution in a table.
 
@@ -625,7 +679,7 @@ def inspect_breakdown(
     """
     workspace = get_workspace(ctx, read_only=True)
     result = workspace.event_breakdown(table)
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("keys")
@@ -641,6 +695,7 @@ def inspect_keys(
         typer.Option("--event", "-e", help="Filter to specific event type."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """List JSON property keys in a table.
 
@@ -655,7 +710,7 @@ def inspect_keys(
     """
     workspace = get_workspace(ctx, read_only=True)
     keys = workspace.property_keys(table, event=event)
-    output_result(ctx, keys, format=format)
+    output_result(ctx, keys, format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("column")
@@ -675,6 +730,7 @@ def inspect_column(
         typer.Option("--top", help="Number of top values to show."),
     ] = 10,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show detailed statistics for a single column.
 
@@ -690,7 +746,7 @@ def inspect_column(
     """
     workspace = get_workspace(ctx, read_only=True)
     result = workspace.column_stats(table, column, top_n=top)
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 # =============================================================================
@@ -723,6 +779,7 @@ def inspect_distribution(
         typer.Option("--limit", "-l", help="Maximum values to return."),
     ] = 20,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show property value distribution from Mixpanel.
 
@@ -744,7 +801,7 @@ def inspect_distribution(
             to_date=to_date,
             limit=limit,
         )
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("numeric")
@@ -774,6 +831,7 @@ def inspect_numeric(
         ),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show numeric property statistics from Mixpanel.
 
@@ -799,7 +857,7 @@ def inspect_numeric(
             to_date=to_date,
             percentiles=percentile_list,
         )
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("daily")
@@ -821,6 +879,7 @@ def inspect_daily(
         ),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show daily event counts from Mixpanel.
 
@@ -844,7 +903,7 @@ def inspect_daily(
             to_date=to_date,
             events=event_list,
         )
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("engagement")
@@ -872,6 +931,7 @@ def inspect_engagement(
         ),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show user engagement distribution from Mixpanel.
 
@@ -902,7 +962,7 @@ def inspect_engagement(
             events=event_list,
             buckets=bucket_list,
         )
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @inspect_app.command("coverage")
@@ -928,6 +988,7 @@ def inspect_coverage(
         typer.Option("--to", help="End date (YYYY-MM-DD)."),
     ],
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Show property coverage statistics from Mixpanel.
 
@@ -949,4 +1010,4 @@ def inspect_coverage(
             from_date=from_date,
             to_date=to_date,
         )
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)

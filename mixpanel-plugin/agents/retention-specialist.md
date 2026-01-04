@@ -42,6 +42,11 @@ mp query retention \
   --unit day \
   --born-where 'properties["plan"] == "premium"' \
   --retention-type first_time  # or recurring
+
+# Filter output with --jq
+mp query retention --born "Signup" --return "Login" \
+  --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.cohorts | map(select(.retention_rate > 0.3))'
 ```
 
 **Retention types:**

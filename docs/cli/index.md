@@ -146,6 +146,34 @@ All commands support the `--format` option:
 | `csv` | CSV with headers | Spreadsheet export |
 | `plain` | Minimal text | Scripting |
 
+## Filtering with --jq
+
+Commands that output JSON also support the `--jq` option for client-side filtering using jq syntax. This enables powerful transformations without external tools.
+
+```bash
+# Get first 5 events
+mp inspect events --format json --jq '.[:5]'
+
+# Filter events by name pattern
+mp inspect events --format json --jq '.[] | select(startswith("User"))'
+
+# Count results
+mp inspect events --format json --jq 'length'
+
+# Extract specific fields from query results
+mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
+  --format json --jq '.series | to_entries | map({date: .key, count: .value})'
+
+# Filter SQL results
+mp query sql "SELECT * FROM events LIMIT 100" --format json \
+  --jq '.[] | select(.event_name == "Purchase")'
+```
+
+!!! note "--jq requires JSON format"
+    The `--jq` option only works with `--format json` or `--format jsonl`. Using it with other formats produces an error.
+
+See the [jq manual](https://jqlang.org/manual/) for filter syntax.
+
 ### Format Examples
 
 Given this query:
@@ -297,7 +325,11 @@ mp fetch events events --from 2025-01-01 --to 2025-02-28 --replace
 # Export to file
 mp query sql "SELECT * FROM events" --format csv > events.csv
 
-# Process with jq
+# Built-in jq filtering (no external tools needed)
+mp query segmentation --event Login --from 2025-01-01 --to 2025-01-31 \
+    --format json --jq '.series | keys | length'
+
+# Or pipe to external jq
 mp query segmentation --event Login --from 2025-01-01 --to 2025-01-31 --format json \
     | jq '.values."$overall"'
 

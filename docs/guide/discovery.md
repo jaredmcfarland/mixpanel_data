@@ -21,6 +21,12 @@ Get all event names in your project:
 
     ```bash
     mp inspect events
+
+    # Filter with jq - get first 5 events
+    mp inspect events --format json --jq '.[:5]'
+
+    # Find events containing "User"
+    mp inspect events --format json --jq '.[] | select(contains("User"))'
     ```
 
 Events are returned sorted alphabetically.

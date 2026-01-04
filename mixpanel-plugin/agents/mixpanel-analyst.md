@@ -216,6 +216,11 @@ mp query segmentation --event Purchase --from 2024-01-01 --to 2024-01-31
 
 # Funnel
 mp query funnel --events "Signup,Purchase" --from 2024-01-01 --to 2024-01-31
+
+# Filter output with --jq
+mp inspect events --format json --jq '.[:5]'
+mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.total'
 ```
 
 ## Best Practices

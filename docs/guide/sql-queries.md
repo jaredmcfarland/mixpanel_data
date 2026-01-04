@@ -233,6 +233,14 @@ mp query sql "SELECT * FROM events" --format csv > events.csv
 
 # JSONL for streaming
 mp query sql "SELECT * FROM events" --format jsonl > events.jsonl
+
+# Filter with built-in jq support
+mp query sql "SELECT * FROM events LIMIT 100" --format json \
+    --jq '.[] | select(.event_name == "Purchase")'
+
+# Extract specific fields with jq
+mp query sql "SELECT event_name, COUNT(*) as cnt FROM events GROUP BY 1" \
+    --format json --jq 'map({name: .event_name, count: .cnt})'
 ```
 
 ## Direct DuckDB Access

@@ -61,6 +61,18 @@ Discover all event names tracked in your Mixpanel project.
 
 **Output**: List of all event names alphabetically sorted.
 
+**Filter with jq** (JSON format only):
+```bash
+# Get first 5 events
+mp inspect events --format json --jq '.[:5]'
+
+# Find events containing "User"
+mp inspect events --format json --jq '.[] | select(contains("User"))'
+
+# Count total events
+mp inspect events --format json --jq 'length'
+```
+
 **Chain suggestions:**
 - Pick an interesting event → Run `/mp-inspect properties <event-name>` to see its properties
 - Ready to fetch specific events? → Run `/mp-fetch` with filtered event list

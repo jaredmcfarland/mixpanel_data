@@ -268,6 +268,10 @@ For real-time analytics, query Mixpanel directly:
 
     ```bash
     mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 --format table
+
+    # Filter results with built-in jq support
+    mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
+        --format json --jq '.total'
     ```
 
 === "Python"

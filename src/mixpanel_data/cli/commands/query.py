@@ -24,7 +24,7 @@ from typing import Annotated
 
 import typer
 
-from mixpanel_data.cli.options import FormatOption
+from mixpanel_data.cli.options import FormatOption, JqOption
 from mixpanel_data.cli.utils import (
     ExitCode,
     err_console,
@@ -72,6 +72,7 @@ def query_sql(
         typer.Option("--scalar", "-s", help="Return single value."),
     ] = False,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Execute SQL query against local DuckDB database.
 
@@ -109,11 +110,11 @@ def query_sql(
         if format == "plain":
             print(result)
         else:
-            output_result(ctx, {"value": result}, format=format)
+            output_result(ctx, {"value": result}, format=format, jq_filter=jq_filter)
     else:
         result = workspace.sql_rows(sql_query)
         # Convert SQLResult to list of dicts for proper output formatting
-        output_result(ctx, result.to_dicts(), format=format)
+        output_result(ctx, result.to_dicts(), format=format, jq_filter=jq_filter)
 
 
 @query_app.command("segmentation")
@@ -149,6 +150,7 @@ def query_segmentation(
         typer.Option("--where", "-w", help="Filter expression."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Run live segmentation query against Mixpanel API.
 
@@ -181,7 +183,7 @@ def query_segmentation(
             where=where,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("funnel")
@@ -209,6 +211,7 @@ def query_funnel(
         typer.Option("--on", "-o", help="Property to segment by."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Run live funnel analysis against Mixpanel API.
 
@@ -235,7 +238,7 @@ def query_funnel(
             on=on,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("retention")
@@ -279,6 +282,7 @@ def query_retention(
         typer.Option("--unit", "-u", help="Time unit: day, week, month."),
     ] = "day",
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Run live retention analysis against Mixpanel API.
 
@@ -321,7 +325,7 @@ def query_retention(
             unit=validated_unit,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("jql")
@@ -341,6 +345,7 @@ def query_jql(
         typer.Option("--param", "-P", help="Parameter (key=value)."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Execute JQL script against Mixpanel API.
 
@@ -384,7 +389,7 @@ def query_jql(
             params=params if params else None,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("event-counts")
@@ -412,6 +417,7 @@ def query_event_counts(
         typer.Option("--unit", "-u", help="Time unit: day, week, month."),
     ] = "day",
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Query event counts over time for multiple events.
 
@@ -449,7 +455,7 @@ def query_event_counts(
             unit=validated_unit,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("property-counts")
@@ -485,6 +491,7 @@ def query_property_counts(
         typer.Option("--limit", "-l", help="Max property values to return."),
     ] = 10,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Query event counts broken down by property values.
 
@@ -523,7 +530,7 @@ def query_property_counts(
             limit=limit,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("activity-feed")
@@ -543,6 +550,7 @@ def query_activity_feed(
         typer.Option("--to", help="End date (YYYY-MM-DD)."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Query user activity feed for specific users.
 
@@ -573,7 +581,7 @@ def query_activity_feed(
             to_date=to_date,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("saved-report")
@@ -585,6 +593,7 @@ def query_saved_report(
         typer.Argument(help="Saved report bookmark ID."),
     ],
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Query a saved report (Insights, Retention, or Funnel) by bookmark ID.
 
@@ -606,7 +615,7 @@ def query_saved_report(
     with status_spinner(ctx, "Querying saved report..."):
         result = workspace.query_saved_report(bookmark_id=bookmark_id)
 
-    output_result(ctx, result.to_dict(), format=format)
+    output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
 
 
 @query_app.command("flows")
@@ -618,6 +627,7 @@ def query_flows(
         typer.Argument(help="Saved flows report bookmark ID."),
     ],
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Query a saved Flows report by bookmark ID.
 
@@ -638,7 +648,7 @@ def query_flows(
     with status_spinner(ctx, "Querying flows report..."):
         result = workspace.query_flows(bookmark_id=bookmark_id)
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("frequency")
@@ -670,6 +680,7 @@ def query_frequency(
         typer.Option("--where", "-w", help="Filter expression."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Analyze event frequency distribution (addiction analysis).
 
@@ -705,7 +716,7 @@ def query_frequency(
             where=where,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("segmentation-numeric")
@@ -745,6 +756,7 @@ def query_segmentation_numeric(
         typer.Option("--where", "-w", help="Filter expression."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Bucket events by numeric property ranges.
 
@@ -782,7 +794,7 @@ def query_segmentation_numeric(
             where=where,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("segmentation-sum")
@@ -818,6 +830,7 @@ def query_segmentation_sum(
         typer.Option("--where", "-w", help="Filter expression."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Calculate sum of numeric property over time.
 
@@ -848,7 +861,7 @@ def query_segmentation_sum(
             where=where,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)
 
 
 @query_app.command("segmentation-average")
@@ -884,6 +897,7 @@ def query_segmentation_average(
         typer.Option("--where", "-w", help="Filter expression."),
     ] = None,
     format: FormatOption = "json",
+    jq_filter: JqOption = None,
 ) -> None:
     """Calculate average of numeric property over time.
 
@@ -914,4 +928,4 @@ def query_segmentation_average(
             where=where,
         )
 
-    present_result(ctx, result, format)
+    present_result(ctx, result, format, jq_filter=jq_filter)

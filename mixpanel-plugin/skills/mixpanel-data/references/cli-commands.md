@@ -17,7 +17,33 @@ Complete reference for the `mp` CLI application.
 | `--quiet, -q` | Suppress progress output |
 | `--verbose, -v` | Enable debug output |
 | `--format` | Output format: json, jsonl, table, csv, plain |
+| `--jq` | Apply jq filter to JSON output (requires --format json/jsonl) |
 | `--version` | Show version and exit |
+
+## Output Filtering with --jq
+
+Commands that support `--format json` or `--format jsonl` also support the `--jq` option for client-side filtering using jq syntax:
+
+```bash
+# Get first 5 events
+mp inspect events --format json --jq '.[:5]'
+
+# Filter by name pattern
+mp inspect events --format json --jq '.[] | select(contains("User"))'
+
+# Count results
+mp inspect events --format json --jq 'length'
+
+# Extract fields from query results
+mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
+  --format json --jq '.total'
+
+# Filter SQL results
+mp query sql "SELECT * FROM events LIMIT 100" --format json \
+  --jq '.[] | select(.event_name == "Purchase")'
+```
+
+Note: `--jq` only works with JSON formats. Using it with other formats produces an error.
 
 ## Filter Expression Syntax
 
