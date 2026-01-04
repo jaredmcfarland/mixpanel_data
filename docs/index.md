@@ -45,11 +45,17 @@ activity = ws.activity_feed(
     from_date="2025-01-01"
 )
 
-# Fetch data locally—use a cohort to scope profiles
+# Fetch data locally (use parallel=True for large date ranges)
 ws.fetch_events(
     "jan_events",
     from_date="2025-01-01",
     to_date="2025-01-31"
+)
+ws.fetch_events(
+    "q1_events",
+    from_date="2025-01-01",
+    to_date="2025-03-31",
+    parallel=True  # Up to 10x faster for large date ranges
 )
 ws.fetch_profiles("power_users", cohort_id=cohorts[0].id)
 
@@ -100,8 +106,9 @@ mp query activity-feed user@example.com --from 2025-01-01
 mp query saved-report 67890
 mp query frequency "Login" --from 2025-01-01
 
-# Fetch data locally
+# Fetch data locally (use --parallel for large date ranges)
 mp fetch events jan_events --from 2025-01-01 --to 2025-01-31
+mp fetch events q1_events --from 2025-01-01 --to 2025-03-31 --parallel
 mp fetch profiles users --cohort-id 12345
 
 # Query locally with SQL
@@ -147,6 +154,7 @@ Discovery commands let you survey what exists before writing queries—no guessi
 **Local Storage** — Fetch once, query repeatedly:
 
 - Store events and profiles in a local DuckDB database
+- Parallel fetching for large date ranges (up to 10x faster)
 - Query with full SQL: joins, window functions, CTEs
 - Introspect tables, sample data, analyze distributions
 - Iterate on analysis without repeated API calls

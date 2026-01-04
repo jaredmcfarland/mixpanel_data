@@ -7,13 +7,18 @@ handling data transformation and progress reporting.
 from __future__ import annotations
 
 import logging
-import uuid
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from mixpanel_data._internal.transforms import transform_event
 from mixpanel_data.exceptions import DateRangeTooLargeError
-from mixpanel_data.types import FetchResult, TableMetadata
+from mixpanel_data.types import (
+    BatchProgress,
+    FetchResult,
+    ParallelFetchResult,
+    TableMetadata,
+)
 
 if TYPE_CHECKING:
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -21,49 +26,9 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-# Reserved keys that _transform_event extracts from properties.
-# These are standard Mixpanel fields that become top-level columns in storage.
-_RESERVED_EVENT_KEYS = frozenset({"distinct_id", "time", "$insert_id"})
-
 # Reserved keys that _transform_profile extracts from properties.
 # These are standard Mixpanel fields that become top-level columns in storage.
 _RESERVED_PROFILE_KEYS = frozenset({"$last_seen"})
-
-
-def _transform_event(event: dict[str, Any]) -> dict[str, Any]:
-    """Transform API event to storage format.
-
-    Args:
-        event: Raw event from Mixpanel Export API with 'event' and 'properties' keys.
-
-    Returns:
-        Transformed event dict with event_name, event_time, distinct_id,
-        insert_id, and properties keys.
-    """
-    properties = event.get("properties", {})
-
-    # Extract and remove standard fields from properties (shallow copy to avoid mutation)
-    remaining_props = dict(properties)
-    distinct_id = remaining_props.pop("distinct_id", "")
-    event_time_raw = remaining_props.pop("time", 0)
-    insert_id = remaining_props.pop("$insert_id", None)
-
-    # Convert Unix timestamp to datetime
-    # Mixpanel Export API returns time as Unix timestamp in seconds (integer)
-    event_time = datetime.fromtimestamp(event_time_raw, tz=UTC)
-
-    # Generate UUID if $insert_id is missing
-    if insert_id is None:
-        insert_id = str(uuid.uuid4())
-        _logger.debug("Generated insert_id for event missing $insert_id")
-
-    return {
-        "event_name": event.get("event", ""),
-        "event_time": event_time,
-        "distinct_id": distinct_id,
-        "insert_id": insert_id,
-        "properties": remaining_props,
-    }
 
 
 def _transform_profile(profile: dict[str, Any]) -> dict[str, Any]:
@@ -182,7 +147,11 @@ class FetcherService:
         progress_callback: Callable[[int], None] | None = None,
         append: bool = False,
         batch_size: int = 1000,
-    ) -> FetchResult:
+        parallel: bool = False,
+        max_workers: int | None = None,
+        on_batch_complete: Callable[[BatchProgress], None] | None = None,
+        chunk_days: int = 7,
+    ) -> FetchResult | ParallelFetchResult:
         """Fetch events from Mixpanel and store in local database.
 
         Args:
@@ -198,9 +167,19 @@ class FetcherService:
                 memory/IO tradeoff: smaller values use less memory but more
                 disk IO; larger values use more memory but less IO.
                 Default: 1000.
+            parallel: If True, use parallel fetching with multiple threads.
+                Splits date range into 7-day chunks and fetches concurrently.
+                Default: False.
+            max_workers: Maximum concurrent fetch threads when parallel=True.
+                Default: 10. Ignored when parallel=False.
+            on_batch_complete: Callback invoked when each batch completes
+                during parallel fetch. Receives BatchProgress with status.
+                Ignored when parallel=False.
+            chunk_days: Days per chunk for parallel date range splitting.
+                Default: 7. Ignored when parallel=False.
 
         Returns:
-            FetchResult with table name, row count, duration, and metadata.
+            FetchResult when parallel=False, ParallelFetchResult when parallel=True.
 
         Raises:
             TableExistsError: If table exists and append=False.
@@ -209,9 +188,32 @@ class FetcherService:
             RateLimitError: If Mixpanel rate limit is exceeded.
             QueryError: If filter expression is invalid.
             ValueError: If table name or date format is invalid.
-            DateRangeTooLargeError: If date range exceeds 100 days.
+            DateRangeTooLargeError: If date range exceeds 100 days (sequential only).
         """
-        # Validate date range before making API calls
+        # Delegate to parallel fetcher if requested
+        if parallel:
+            from mixpanel_data._internal.services.parallel_fetcher import (
+                ParallelFetcherService,
+            )
+
+            parallel_fetcher = ParallelFetcherService(
+                api_client=self._api_client,
+                storage=self._storage,
+            )
+            return parallel_fetcher.fetch_events(
+                name=name,
+                from_date=from_date,
+                to_date=to_date,
+                events=events,
+                where=where,
+                max_workers=max_workers,
+                on_batch_complete=on_batch_complete,
+                append=append,
+                batch_size=batch_size,
+                chunk_days=chunk_days,
+            )
+
+        # Sequential fetch - validate date range (100-day limit)
         self._validate_date_range(from_date, to_date)
 
         start_time = datetime.now(UTC)
@@ -234,7 +236,7 @@ class FetcherService:
         # Transform events as they stream through
         def transform_iterator() -> Iterator[dict[str, Any]]:
             for event in events_iter:
-                yield _transform_event(event)
+                yield transform_event(event)
 
         # Construct metadata
         fetched_at = datetime.now(UTC)

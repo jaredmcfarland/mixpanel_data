@@ -135,15 +135,23 @@ def fetch_events(
     to_date: str,                       # End date (YYYY-MM-DD)
     events: list[str] | None = None,   # Filter to specific events
     where: str | None = None,           # Mixpanel expression filter
-    limit: int | None = None,           # Max events (1-100000)
+    limit: int | None = None,           # Max events (1-100000, NOT with parallel)
     progress: bool = True,              # Show progress bar
     append: bool = False,               # Append to existing table
     batch_size: int = 1000,             # Rows per commit (100-100000)
-) -> FetchResult
+    parallel: bool = False,             # Use parallel fetching (up to 10x faster)
+    max_workers: int | None = None,     # Parallel workers (default: 10)
+    chunk_days: int = 7,                # Days per chunk for parallel (1-100)
+    on_batch_complete: Callable[[BatchProgress], None] | None = None,  # Progress callback
+) -> FetchResult | ParallelFetchResult
 ```
 Fetch events from Export API into local table.
 
-Returns `FetchResult(table, rows, duration_seconds, from_date, to_date, fetched_at)`.
+Returns `FetchResult` (sequential) or `ParallelFetchResult` (parallel).
+- `FetchResult(table, rows, duration_seconds, from_date, to_date, fetched_at)`
+- `ParallelFetchResult(table, total_rows, successful_batches, failed_batches, has_failures, failed_date_ranges, duration_seconds, fetched_at)`
+
+**Note**: For date ranges > 7 days, use `parallel=True` for significantly faster exports. Required for ranges > 100 days.
 
 ### fetch_profiles()
 ```python

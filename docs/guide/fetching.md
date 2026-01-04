@@ -148,6 +148,157 @@ Control the memory/IO tradeoff with `batch_size`:
 
 The default is 1000 rows per commit. Valid range: 100-100,000.
 
+## Parallel Fetching
+
+For large date ranges, parallel fetching can dramatically speed up exports—up to 10x faster for multi-month ranges.
+
+### Basic Parallel Fetch
+
+Enable parallel fetching with the `parallel` flag:
+
+=== "Python"
+
+    ```python
+    result = ws.fetch_events(
+        name="q4_events",
+        from_date="2024-10-01",
+        to_date="2024-12-31",
+        parallel=True
+    )
+
+    print(f"Fetched {result.total_rows} rows in {result.duration_seconds:.1f}s")
+    print(f"Batches: {result.successful_batches} succeeded, {result.failed_batches} failed")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch events q4_events --from 2024-10-01 --to 2024-12-31 --parallel
+    ```
+
+Parallel fetching splits the date range into 7-day chunks and fetches them concurrently using multiple threads. This bypasses Mixpanel's 100-day limit and enables faster exports.
+
+### How It Works
+
+1. **Date Range Chunking**: The date range is split into chunks (default: 7 days each)
+2. **Concurrent Fetching**: Multiple threads fetch chunks simultaneously from Mixpanel
+3. **Single-Writer Queue**: A dedicated writer thread serializes writes to DuckDB (respecting its single-writer constraint)
+4. **Partial Failure Handling**: Failed batches are tracked for potential retry
+
+### Performance
+
+| Date Range | Sequential | Parallel (10 workers) | Speedup |
+|------------|------------|----------------------|---------|
+| 7 days | ~5s | ~5s | 1x (no benefit) |
+| 30 days | ~20s | ~5s | 4x |
+| 90 days | ~60s | ~8s | 7.5x |
+
+!!! tip "When to Use Parallel Fetching"
+    - **Use parallel** for date ranges > 7 days
+    - **Use sequential** for small ranges or when you need the `limit` parameter
+
+### Configuring Workers
+
+Control the number of concurrent fetch threads:
+
+=== "Python"
+
+    ```python
+    result = ws.fetch_events(
+        name="events",
+        from_date="2024-01-01",
+        to_date="2024-03-31",
+        parallel=True,
+        max_workers=5  # Default is 10
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch events --from 2024-01-01 --to 2024-03-31 --parallel --workers 5
+    ```
+
+Higher worker counts may hit Mixpanel rate limits. The default of 10 works well for most cases.
+
+### Configuring Chunk Size
+
+Control how many days each chunk covers:
+
+=== "Python"
+
+    ```python
+    result = ws.fetch_events(
+        name="events",
+        from_date="2024-01-01",
+        to_date="2024-03-31",
+        parallel=True,
+        chunk_days=14  # Default is 7
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp fetch events --from 2024-01-01 --to 2024-03-31 --parallel --chunk-days 14
+    ```
+
+Smaller chunk sizes create more parallel batches (potentially faster) but increase API overhead. Valid range: 1-100 days.
+
+### Progress Callbacks
+
+Monitor batch completion with a callback:
+
+```python
+from mixpanel_data import BatchProgress
+
+def on_batch(progress: BatchProgress) -> None:
+    status = "✓" if progress.success else "✗"
+    print(f"[{status}] Batch {progress.batch_index + 1}/{progress.total_batches}: "
+          f"{progress.from_date} to {progress.to_date} ({progress.rows} rows)")
+
+result = ws.fetch_events(
+    name="events",
+    from_date="2024-01-01",
+    to_date="2024-03-31",
+    parallel=True,
+    on_batch_complete=on_batch
+)
+```
+
+The CLI automatically displays batch progress when `--parallel` is used.
+
+### Handling Failures
+
+Parallel fetching tracks failures and provides retry information:
+
+```python
+result = ws.fetch_events(
+    name="events",
+    from_date="2024-01-01",
+    to_date="2024-03-31",
+    parallel=True
+)
+
+if result.has_failures:
+    print(f"Warning: {result.failed_batches} batches failed")
+    for from_date, to_date in result.failed_date_ranges:
+        print(f"  Failed: {from_date} to {to_date}")
+
+    # Retry failed ranges with append mode
+    for from_date, to_date in result.failed_date_ranges:
+        ws.fetch_events(
+            name="events",
+            from_date=from_date,
+            to_date=to_date,
+            append=True  # Append to existing table
+        )
+```
+
+!!! warning "Parallel Fetch Limitations"
+    - **No `limit` parameter**: Parallel fetch does not support the `limit` parameter. Using both raises an error.
+    - **Exit code 1 on partial failure**: The CLI returns exit code 1 if any batches fail, even if some succeeded.
+
 ## Fetching Profiles
 
 Fetch user profiles into local storage:
@@ -403,9 +554,35 @@ Fetched profiles have this schema:
 
 ## Best Practices
 
-### Chunk Large Date Ranges
+### Use Parallel Fetching for Large Date Ranges
 
-For very large datasets, fetch in chunks using append mode:
+For date ranges longer than a week, use parallel fetching for the best performance:
+
+=== "Python"
+
+    ```python
+    # Recommended: Parallel fetch for large date ranges
+    result = ws.fetch_events(
+        name="events_2025",
+        from_date="2025-01-01",
+        to_date="2025-12-31",
+        parallel=True
+    )
+    print(f"Fetched {result.total_rows} rows in {result.duration_seconds:.1f}s")
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Recommended: Parallel fetch for large date ranges
+    mp fetch events events_2025 --from 2025-01-01 --to 2025-12-31 --parallel
+    ```
+
+Parallel fetching automatically handles chunking, concurrent API requests, and serialized writes to DuckDB—no manual chunking required.
+
+### Manual Chunking (Alternative)
+
+If you need the `limit` parameter (incompatible with parallel), or want fine-grained control, you can manually chunk:
 
 === "Single Table (Recommended)"
 

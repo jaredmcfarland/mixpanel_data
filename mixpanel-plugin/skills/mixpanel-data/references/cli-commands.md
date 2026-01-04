@@ -118,21 +118,27 @@ Fetch events from Export API.
 ```bash
 mp fetch events --from 2024-01-01 --to 2024-01-31
 mp fetch events myevents --from 2024-01-01 --to 2024-01-31  # Custom table name
+mp fetch events --from 2024-01-01 --to 2024-12-31 --parallel  # Parallel fetch for large ranges
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--from` | Start date (YYYY-MM-DD, required) |
 | `--to` | End date (YYYY-MM-DD, required) |
+| `--parallel, -p` | Parallel fetching with multiple threads (up to 10x faster) |
+| `--workers` | Number of parallel workers (default: 10, only with --parallel) |
+| `--chunk-days` | Days per chunk for parallel (default: 7, range: 1-100) |
 | `--events` | Comma-separated event names to filter |
 | `--where` | Filter expression (see syntax above) |
-| `--limit` | Max events (1-100000) |
+| `--limit` | Max events (1-100000, NOT with --parallel) |
 | `--replace` | Replace existing table |
 | `--append` | Append to existing table |
 | `--stdout` | Stream JSONL to stdout instead of storing |
 | `--raw` | Output raw API format (with --stdout) |
 | `--batch-size` | Rows per commit (100-100000) |
 | `--no-progress` | Disable progress bar |
+
+**Note**: For date ranges > 7 days, use `--parallel` for significantly faster exports. Required for ranges > 100 days.
 
 ### mp fetch profiles
 Fetch user profiles from Engage API.

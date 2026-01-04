@@ -13,6 +13,25 @@ All result types are immutable frozen dataclasses with:
       show_root_heading: true
       show_root_toc_entry: true
 
+## Parallel Fetch Types
+
+Types for parallel event fetching with progress tracking and failure handling.
+
+::: mixpanel_data.ParallelFetchResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BatchProgress
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BatchResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Query Results
 
 ::: mixpanel_data.SegmentationResult

@@ -87,6 +87,31 @@ def fetch_events(
         bool,
         typer.Option("--no-progress", help="Hide progress bar."),
     ] = False,
+    parallel: Annotated[
+        bool,
+        typer.Option(
+            "--parallel",
+            "-p",
+            help="Fetch in parallel using multiple threads. Faster for large date ranges.",
+        ),
+    ] = False,
+    workers: Annotated[
+        int | None,
+        typer.Option(
+            "--workers",
+            help="Number of parallel workers (default: 10). Only applies with --parallel.",
+            min=1,
+        ),
+    ] = None,
+    chunk_days: Annotated[
+        int,
+        typer.Option(
+            "--chunk-days",
+            help="Days per chunk for parallel fetching (default: 7). Only applies with --parallel.",
+            min=1,
+            max=100,
+        ),
+    ] = 7,
     stdout: Annotated[
         bool,
         typer.Option("--stdout", help="Stream to stdout as JSONL instead of storing."),
@@ -112,14 +137,16 @@ def fetch_events(
     Events are stored in a DuckDB table for SQL querying. A progress bar
     shows fetch progress (disable with --no-progress or --quiet).
 
-    **Note:** This is a long-running operation. For large date ranges, chunk
-    into smaller ranges with --append, or run in the background.
+    **Note:** This is a long-running operation. For large date ranges, use
+    --parallel for up to 10x faster exports.
 
     Use --events to filter by event name (comma-separated list).
     Use --where for Mixpanel expression filters (e.g., 'properties["country"]=="US"').
     Use --limit to cap the number of events returned (max 100000).
     Use --replace to drop and recreate an existing table.
     Use --append to add data to an existing table.
+    Use --parallel/-p for faster parallel fetching (recommended for large date ranges).
+    Use --chunk-days to configure days per chunk for parallel fetching (default: 7).
     Use --stdout to stream JSONL to stdout instead of storing locally.
     Use --raw with --stdout to output raw Mixpanel API format.
 
@@ -134,6 +161,18 @@ def fetch_events(
           "fetched_at": "2025-01-15T10:30:00Z"
         }
 
+    **Parallel Output Structure (JSON):**
+
+        {
+          "table": "events",
+          "total_rows": 15234,
+          "successful_batches": 5,
+          "failed_batches": 0,
+          "has_failures": false,
+          "duration_seconds": 2.5,
+          "fetched_at": "2025-01-15T10:30:00Z"
+        }
+
     **Examples:**
 
         mp fetch events --from 2025-01-01 --to 2025-01-31
@@ -142,12 +181,15 @@ def fetch_events(
         mp fetch events --from 2025-01-01 --to 2025-01-31 --limit 10000
         mp fetch events --from 2025-01-01 --to 2025-01-31 --replace
         mp fetch events --from 2025-01-01 --to 2025-01-31 --append
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --parallel
+        mp fetch events --from 2025-01-01 --to 2025-01-31 --parallel --chunk-days 1
         mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
         mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout --raw | jq '.event'
 
     **jq Examples:**
 
-        --jq '.rows'                         # Number of events fetched
+        --jq '.rows'                         # Number of events fetched (sequential)
+        --jq '.total_rows'                   # Number of events fetched (parallel)
         --jq '.duration_seconds | round'     # Fetch duration in seconds
         --jq '.date_range'                   # Date range fetched
     """
@@ -169,6 +211,14 @@ def fetch_events(
     # Validate --raw only with --stdout
     if raw and not stdout:
         err_console.print("[red]Error:[/red] --raw requires --stdout")
+        raise typer.Exit(3)
+
+    # Validate --limit not with --parallel (limit not supported in parallel mode)
+    if limit and parallel:
+        err_console.print(
+            "[red]Error:[/red] --limit is not supported with --parallel. "
+            "Use one or the other."
+        )
         raise typer.Exit(3)
 
     # Parse events filter
@@ -209,6 +259,22 @@ def fetch_events(
     quiet = ctx.obj.get("quiet", False)
     show_progress = not quiet and not no_progress
 
+    # Create batch progress callback for parallel mode
+    on_batch_complete = None
+    if parallel and show_progress:
+        from mixpanel_data.types import BatchProgress
+
+        def _on_batch_progress(progress: BatchProgress) -> None:
+            """Display batch completion status to stderr."""
+            status = "✓" if progress.success else "✗"
+            err_console.print(
+                f"  {status} Batch {progress.batch_index + 1}/{progress.total_batches}: "
+                f"{progress.from_date} to {progress.to_date} ({progress.rows} rows)",
+                highlight=False,
+            )
+
+        on_batch_complete = _on_batch_progress
+
     result = workspace.fetch_events(
         name=table_name,
         from_date=from_date,
@@ -219,9 +285,19 @@ def fetch_events(
         progress=show_progress,
         append=append,
         batch_size=batch_size,
+        parallel=parallel,
+        max_workers=workers,
+        on_batch_complete=on_batch_complete,
+        chunk_days=chunk_days,
     )
 
     output_result(ctx, result.to_dict(), format=format, jq_filter=jq_filter)
+
+    # Exit with code 1 if parallel fetch had failures
+    from mixpanel_data.types import ParallelFetchResult
+
+    if isinstance(result, ParallelFetchResult) and result.has_failures:
+        raise typer.Exit(1)
 
 
 @fetch_app.command("profiles")

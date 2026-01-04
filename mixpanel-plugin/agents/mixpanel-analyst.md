@@ -49,7 +49,7 @@ Based on the goal, choose the right approach:
 - JQL: Complex transformations not possible in SQL
 
 **For data fetching:**
-- Determine date range (max 100 days)
+- Determine date range (use `--parallel` for > 7 days, required for > 100 days)
 - Identify which events to fetch
 - Apply filters to reduce data volume
 

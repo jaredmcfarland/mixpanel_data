@@ -88,16 +88,18 @@ mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 --on country
 Fetch data into DuckDB, then query with SQL repeatedly.
 
 ```python
-# Python
-ws.fetch_events("events", from_date="2024-01-01", to_date="2024-01-31")
+# Python - use parallel=True for large date ranges (up to 10x faster)
+ws.fetch_events("events", from_date="2024-01-01", to_date="2024-03-31", parallel=True)
 df = ws.sql("SELECT event_name, COUNT(*) FROM events GROUP BY 1")
 ```
 
 ```bash
-# CLI
-mp fetch events --from 2024-01-01 --to 2024-01-31
+# CLI - use --parallel for large date ranges (up to 10x faster)
+mp fetch events --from 2024-01-01 --to 2024-03-31 --parallel
 mp query sql "SELECT event_name, COUNT(*) FROM events GROUP BY 1"
 ```
+
+**Parallel Fetching**: For date ranges > 7 days, use `--parallel` (CLI) or `parallel=True` (Python) for significantly faster exports. Required for ranges > 100 days.
 
 ### Path 3: Streaming (Pipelines)
 Stream to stdout for processing with external tools.
@@ -263,5 +265,5 @@ For complete method signatures and parameters, see [references/library-api.md](r
 | `TableExistsError` | Table already exists | Use `--replace` or `--append` |
 | `AuthenticationError` | Invalid credentials | Check `mp auth test` |
 | `RateLimitError` | API rate limited | Wait for retry_after seconds |
-| `DateRangeTooLargeError` | >100 days range | Split into smaller chunks |
+| `DateRangeTooLargeError` | >100 days range (sequential) | Use `--parallel` flag |
 | `EventNotFoundError` | Event not in project | Check `mp inspect events` |

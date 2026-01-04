@@ -14,10 +14,11 @@ import pytest
 
 from mixpanel_data._internal.services.fetcher import (
     FetcherService,
-    _transform_event,
     _transform_profile,
 )
+from mixpanel_data._internal.transforms import transform_event
 from mixpanel_data.exceptions import DateRangeTooLargeError, TableExistsError
+from mixpanel_data.types import FetchResult
 
 # =============================================================================
 # Transform Function Tests
@@ -25,10 +26,10 @@ from mixpanel_data.exceptions import DateRangeTooLargeError, TableExistsError
 
 
 class TestTransformEvent:
-    """Tests for _transform_event function."""
+    """Tests for transform_event function."""
 
-    def test_transform_event_with_valid_data(self) -> None:
-        """_transform_event should transform API event to storage format."""
+    def testtransform_event_with_valid_data(self) -> None:
+        """transform_event should transform API event to storage format."""
         api_event = {
             "event": "Sign Up",
             "properties": {
@@ -40,7 +41,7 @@ class TestTransformEvent:
             },
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == "Sign Up"
         # Unix timestamp 1609459200 = 2021-01-01 00:00:00 UTC
@@ -49,8 +50,8 @@ class TestTransformEvent:
         assert result["insert_id"] == "abc-123-def"
         assert result["properties"] == {"browser": "Chrome", "country": "US"}
 
-    def test_transform_event_with_missing_insert_id(self) -> None:
-        """_transform_event should generate UUID when $insert_id is missing."""
+    def testtransform_event_with_missing_insert_id(self) -> None:
+        """transform_event should generate UUID when $insert_id is missing."""
         api_event = {
             "event": "Page View",
             "properties": {
@@ -60,7 +61,7 @@ class TestTransformEvent:
             },
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == "Page View"
         assert result["distinct_id"] == "user_456"
@@ -68,8 +69,8 @@ class TestTransformEvent:
         assert len(result["insert_id"]) == 36  # UUID length
         assert result["properties"] == {"page": "/home"}
 
-    def test_transform_event_does_not_mutate_input(self) -> None:
-        """_transform_event should not mutate the input dictionary."""
+    def testtransform_event_does_not_mutate_input(self) -> None:
+        """transform_event should not mutate the input dictionary."""
         api_event: dict[str, Any] = {
             "event": "Test Event",
             "properties": {
@@ -83,13 +84,13 @@ class TestTransformEvent:
         # Make a copy for comparison
         original_props = api_event["properties"].copy()
 
-        _transform_event(api_event)
+        transform_event(api_event)
 
         # Original should be unchanged
         assert api_event["properties"] == original_props
 
-    def test_transform_event_with_empty_properties(self) -> None:
-        """_transform_event should handle empty properties."""
+    def testtransform_event_with_empty_properties(self) -> None:
+        """transform_event should handle empty properties."""
         api_event = {
             "event": "Empty Event",
             "properties": {
@@ -99,13 +100,13 @@ class TestTransformEvent:
             },
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == "Empty Event"
         assert result["properties"] == {}
 
-    def test_transform_event_with_missing_event_key(self) -> None:
-        """_transform_event should handle missing event key."""
+    def testtransform_event_with_missing_event_key(self) -> None:
+        """transform_event should handle missing event key."""
         api_event = {
             "properties": {
                 "distinct_id": "user_111",
@@ -114,17 +115,17 @@ class TestTransformEvent:
             },
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == ""
 
-    def test_transform_event_with_missing_properties(self) -> None:
-        """_transform_event should handle missing properties."""
+    def testtransform_event_with_missing_properties(self) -> None:
+        """transform_event should handle missing properties."""
         api_event = {
             "event": "No Properties",
         }
 
-        result = _transform_event(api_event)
+        result = transform_event(api_event)
 
         assert result["event_name"] == "No Properties"
         assert result["distinct_id"] == ""
@@ -307,7 +308,8 @@ class TestFetchEvents:
         storage_call = mock_storage.create_events_table.call_args
         assert storage_call.kwargs["name"] == "test_events"
 
-        # Verify result
+        # Verify result (sequential fetch returns FetchResult)
+        assert isinstance(result, FetchResult)
         assert result.table == "test_events"
         assert result.rows == 2
         assert result.type == "events"
@@ -807,7 +809,8 @@ class TestFetchEventsAppend:
         mock_storage.append_events_table.assert_called_once()
         mock_storage.create_events_table.assert_not_called()
 
-        # Verify result
+        # Verify result (sequential fetch returns FetchResult)
+        assert isinstance(result, FetchResult)
         assert result.table == "existing_events"
         assert result.rows == 1
 
@@ -1134,3 +1137,305 @@ class TestFetchProfilesBatchSize:
         # Verify batch_size was passed to storage
         call_kwargs = mock_storage.append_profiles_table.call_args.kwargs
         assert call_kwargs.get("batch_size") == 250
+
+
+# =============================================================================
+# Parallel Fetch Delegation Tests (Feature 017)
+# =============================================================================
+
+
+class TestFetchEventsParallel:
+    """Tests for parallel fetch delegation in FetcherService."""
+
+    def test_parallel_false_uses_sequential_fetch(self) -> None:
+        """fetch_events with parallel=False (default) uses sequential fetch."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.create_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            parallel=False,
+        )
+
+        # Should return FetchResult (not ParallelFetchResult)
+        from mixpanel_data.types import FetchResult
+
+        assert isinstance(result, FetchResult)
+
+    def test_parallel_true_returns_parallel_fetch_result(self) -> None:
+        """fetch_events with parallel=True returns ParallelFetchResult."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_events.return_value = iter([])
+        mock_storage.create_events_table.return_value = 0
+        mock_storage.append_events_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            parallel=True,
+        )
+
+        # Should return ParallelFetchResult
+        from mixpanel_data.types import ParallelFetchResult
+
+        assert isinstance(result, ParallelFetchResult)
+
+    def test_parallel_with_max_workers(self) -> None:
+        """fetch_events with parallel=True respects max_workers."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_events.return_value = iter([])
+        mock_storage.create_events_table.return_value = 0
+        mock_storage.append_events_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            parallel=True,
+            max_workers=5,
+        )
+
+        from mixpanel_data.types import ParallelFetchResult
+
+        assert isinstance(result, ParallelFetchResult)
+
+    def test_parallel_with_on_batch_complete(self) -> None:
+        """fetch_events with parallel=True invokes on_batch_complete callback."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_events.return_value = iter([])
+        mock_storage.create_events_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        progress_list: list[Any] = []
+
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-07",
+            parallel=True,
+            on_batch_complete=lambda p: progress_list.append(p),
+        )
+
+        from mixpanel_data.types import BatchProgress, ParallelFetchResult
+
+        assert isinstance(result, ParallelFetchResult)
+        # Should have received at least one progress update
+        assert len(progress_list) >= 1
+        assert all(isinstance(p, BatchProgress) for p in progress_list)
+
+    def test_parallel_passes_event_filter(self) -> None:
+        """fetch_events with parallel=True passes events filter."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_events.return_value = iter([])
+        mock_storage.create_events_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-07",
+            events=["SignUp", "Purchase"],
+            parallel=True,
+        )
+
+        # Verify events filter was passed to API
+        call_kwargs = mock_api_client.export_events.call_args.kwargs
+        assert call_kwargs["events"] == ["SignUp", "Purchase"]
+
+    def test_parallel_passes_where_filter(self) -> None:
+        """fetch_events with parallel=True passes where filter."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_events.return_value = iter([])
+        mock_storage.create_events_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-07",
+            where='properties["country"] == "US"',
+            parallel=True,
+        )
+
+        # Verify where filter was passed to API
+        call_kwargs = mock_api_client.export_events.call_args.kwargs
+        assert call_kwargs["where"] == 'properties["country"] == "US"'
+
+    def test_parallel_skips_date_range_validation(self) -> None:
+        """fetch_events with parallel=True skips 100-day limit (handles internally)."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_events.return_value = iter([])
+        mock_storage.create_events_table.return_value = 0
+        mock_storage.append_events_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        # 120 days would fail with sequential, but parallel should handle it
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-04-30",  # ~120 days
+            parallel=True,
+        )
+
+        from mixpanel_data.types import ParallelFetchResult
+
+        assert isinstance(result, ParallelFetchResult)
+
+    def test_parallel_append_mode(self) -> None:
+        """fetch_events with parallel=True and append=True works correctly."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        # Return actual mock events so storage methods get called
+        mock_api_client.export_events.return_value = iter(
+            [
+                {
+                    "event": "TestEvent",
+                    "properties": {
+                        "distinct_id": "user1",
+                        "time": 1704067200,
+                        "$insert_id": "insert1",
+                    },
+                }
+            ]
+        )
+        mock_storage.append_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-07",
+            parallel=True,
+            append=True,
+        )
+
+        from mixpanel_data.types import ParallelFetchResult
+
+        assert isinstance(result, ParallelFetchResult)
+        # Append should call append_events_table, not create
+        mock_storage.append_events_table.assert_called()
+
+    def test_parallel_with_chunk_days(self) -> None:
+        """fetch_events with parallel=True respects chunk_days parameter."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_events.return_value = iter([])
+        mock_storage.create_events_table.return_value = 0
+        mock_storage.append_events_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        # 21 days with 3-day chunks = 7 batches
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-21",
+            parallel=True,
+            chunk_days=3,
+        )
+
+        from mixpanel_data.types import ParallelFetchResult
+
+        assert isinstance(result, ParallelFetchResult)
+        # With 21 days and 3-day chunks, should have 7 batches
+        assert result.successful_batches == 7
+
+    def test_parallel_default_chunk_days(self) -> None:
+        """fetch_events with parallel=True uses default 7-day chunks."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        mock_api_client.export_events.return_value = iter([])
+        mock_storage.create_events_table.return_value = 0
+        mock_storage.append_events_table.return_value = 0
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        # 21 days with default 7-day chunks = 3 batches
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-21",
+            parallel=True,
+        )
+
+        from mixpanel_data.types import ParallelFetchResult
+
+        assert isinstance(result, ParallelFetchResult)
+        # With 21 days and 7-day chunks (default), should have 3 batches
+        assert result.successful_batches == 3
+
+    def test_chunk_days_ignored_for_sequential_fetch(self) -> None:
+        """chunk_days parameter is ignored when parallel=False."""
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        def mock_export() -> Iterator[dict[str, Any]]:
+            yield {
+                "event": "Event",
+                "properties": {
+                    "distinct_id": "user_1",
+                    "time": 1609459200,
+                    "$insert_id": "id-1",
+                },
+            }
+
+        mock_api_client.export_events.return_value = mock_export()
+        mock_storage.create_events_table.return_value = 1
+
+        fetcher = FetcherService(mock_api_client, mock_storage)
+
+        # chunk_days should be ignored for sequential fetch
+        result = fetcher.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-01-21",
+            parallel=False,
+            chunk_days=3,
+        )
+
+        # Should return FetchResult (sequential), not ParallelFetchResult
+        from mixpanel_data.types import FetchResult
+
+        assert isinstance(result, FetchResult)

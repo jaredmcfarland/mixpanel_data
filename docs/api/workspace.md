@@ -13,6 +13,29 @@ Workspace orchestrates four internal services:
 
 ## Key Features
 
+### Parallel Fetching
+
+For large date ranges, use `parallel=True` for up to 10x faster exports:
+
+```python
+# Parallel fetch for large date ranges (recommended)
+result = ws.fetch_events(
+    name="events",
+    from_date="2024-01-01",
+    to_date="2024-12-31",
+    parallel=True
+)
+
+print(f"Fetched {result.total_rows} rows in {result.duration_seconds:.1f}s")
+```
+
+Parallel fetching:
+
+- Splits date ranges into 7-day chunks (configurable via `chunk_days`)
+- Fetches chunks concurrently (configurable via `max_workers`, default: 10)
+- Returns `ParallelFetchResult` with batch statistics and failure tracking
+- Supports progress callbacks via `on_batch_complete`
+
 ### Append Mode
 
 The `fetch_events()` and `fetch_profiles()` methods support an `append` parameter for incremental data loading:
@@ -30,6 +53,7 @@ This is useful for:
 - **Incremental loading**: Fetch data in chunks without creating multiple tables
 - **Crash recovery**: Resume a failed fetch from the last successful point
 - **Extending date ranges**: Add more historical or recent data to an existing table
+- **Retrying failed parallel batches**: Use append mode to retry specific date ranges
 
 Duplicate events (by `insert_id`) and profiles (by `distinct_id`) are automatically skipped via `INSERT OR IGNORE`.
 

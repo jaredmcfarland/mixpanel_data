@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from mixpanel_data import Workspace, WorkspaceInfo
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.storage import StorageEngine
-from mixpanel_data.types import TableMetadata
+from mixpanel_data.types import FetchResult, TableMetadata
 
 # =============================================================================
 # Fixtures
@@ -111,6 +111,8 @@ class TestFetchQueryWorkflow:
                 progress=False,
             )
 
+            # Sequential fetch returns FetchResult
+            assert isinstance(result, FetchResult)
             assert result.table == "events"
             assert result.rows == 2
             assert result.type == "events"

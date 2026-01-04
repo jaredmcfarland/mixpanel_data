@@ -240,3 +240,10 @@ Design documents in `context/`:
 - [mixpanel_data-design.md](context/mixpanel_data-design.md) — Architecture and public API
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
+
+## Active Technologies
+- Python 3.11+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies (017-parallel-export)
+- DuckDB (single-writer constraint requires queue-based serialization) (017-parallel-export)
+
+## Recent Changes
+- 017-parallel-export: Added Python 3.11+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies
