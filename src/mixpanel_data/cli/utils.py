@@ -342,10 +342,13 @@ def _apply_jq_filter(json_str: str, filter_expr: str) -> list[Any]:
             runtime error occurs. Uses ExitCode.INVALID_ARGS (3).
 
     Example:
-        >>> _apply_jq_filter('{"name": "test"}', '.name')
-        ['test']
-        >>> _apply_jq_filter('[1, 2, 3]', 'map(. * 2)')
-        [[2, 4, 6]]
+        ```python
+        _apply_jq_filter('{"name": "test"}', '.name')
+        # ['test']
+
+        _apply_jq_filter('[1, 2, 3]', 'map(. * 2)')
+        # [[2, 4, 6]]
+        ```
     """
     try:
         # Parse the input JSON
