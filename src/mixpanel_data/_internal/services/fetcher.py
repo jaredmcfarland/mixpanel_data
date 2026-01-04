@@ -13,7 +13,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from mixpanel_data.exceptions import DateRangeTooLargeError
-from mixpanel_data.types import FetchResult, TableMetadata
+from mixpanel_data.types import (
+    BatchProgress,
+    FetchResult,
+    ParallelFetchResult,
+    TableMetadata,
+)
 
 if TYPE_CHECKING:
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -182,7 +187,10 @@ class FetcherService:
         progress_callback: Callable[[int], None] | None = None,
         append: bool = False,
         batch_size: int = 1000,
-    ) -> FetchResult:
+        parallel: bool = False,
+        max_workers: int | None = None,
+        on_batch_complete: Callable[[BatchProgress], None] | None = None,
+    ) -> FetchResult | ParallelFetchResult:
         """Fetch events from Mixpanel and store in local database.
 
         Args:
@@ -198,9 +206,17 @@ class FetcherService:
                 memory/IO tradeoff: smaller values use less memory but more
                 disk IO; larger values use more memory but less IO.
                 Default: 1000.
+            parallel: If True, use parallel fetching with multiple threads.
+                Splits date range into 7-day chunks and fetches concurrently.
+                Default: False.
+            max_workers: Maximum concurrent fetch threads when parallel=True.
+                Default: 10. Ignored when parallel=False.
+            on_batch_complete: Callback invoked when each batch completes
+                during parallel fetch. Receives BatchProgress with status.
+                Ignored when parallel=False.
 
         Returns:
-            FetchResult with table name, row count, duration, and metadata.
+            FetchResult when parallel=False, ParallelFetchResult when parallel=True.
 
         Raises:
             TableExistsError: If table exists and append=False.
@@ -209,9 +225,31 @@ class FetcherService:
             RateLimitError: If Mixpanel rate limit is exceeded.
             QueryError: If filter expression is invalid.
             ValueError: If table name or date format is invalid.
-            DateRangeTooLargeError: If date range exceeds 100 days.
+            DateRangeTooLargeError: If date range exceeds 100 days (sequential only).
         """
-        # Validate date range before making API calls
+        # Delegate to parallel fetcher if requested
+        if parallel:
+            from mixpanel_data._internal.services.parallel_fetcher import (
+                ParallelFetcherService,
+            )
+
+            parallel_fetcher = ParallelFetcherService(
+                api_client=self._api_client,
+                storage=self._storage,
+            )
+            return parallel_fetcher.fetch_events(
+                name=name,
+                from_date=from_date,
+                to_date=to_date,
+                events=events,
+                where=where,
+                max_workers=max_workers,
+                on_batch_complete=on_batch_complete,
+                append=append,
+                batch_size=batch_size,
+            )
+
+        # Sequential fetch - validate date range (100-day limit)
         self._validate_date_range(from_date, to_date)
 
         start_time = datetime.now(UTC)

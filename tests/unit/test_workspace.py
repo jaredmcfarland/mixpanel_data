@@ -294,6 +294,8 @@ class TestBasicWorkflow:
                 progress=False,
             )
 
+            # Sequential fetch returns FetchResult
+            assert isinstance(result, FetchResult)
             assert result.table == "events"
             assert result.rows == 100
             mock_fetcher.fetch_events.assert_called_once()
@@ -2502,5 +2504,267 @@ class TestLimitValidation:
                         limit=0,
                     )
                 )
+        finally:
+            ws.close()
+
+
+# =============================================================================
+# Parallel Fetch Tests (Feature 017)
+# =============================================================================
+
+
+class TestFetchEventsParallel:
+    """Tests for parallel parameter in Workspace.fetch_events."""
+
+    def test_fetch_events_parallel_false_default(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events defaults to parallel=False."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_events.return_value = FetchResult(
+                table="events",
+                rows=100,
+                type="events",
+                duration_seconds=1.5,
+                date_range=("2024-01-01", "2024-01-31"),
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                progress=False,
+            )
+
+            # Verify parallel=False is passed (default)
+            call_kwargs = mock_fetcher.fetch_events.call_args.kwargs
+            assert call_kwargs.get("parallel") is False
+        finally:
+            ws.close()
+
+    def test_fetch_events_parallel_true(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events passes parallel=True to fetcher."""
+        from mixpanel_data.types import ParallelFetchResult
+
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_events.return_value = ParallelFetchResult(
+                table="events",
+                total_rows=100,
+                successful_batches=1,
+                failed_batches=0,
+                failed_date_ranges=(),
+                duration_seconds=1.5,
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            result = ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                parallel=True,
+                progress=False,
+            )
+
+            # Verify parallel=True is passed
+            call_kwargs = mock_fetcher.fetch_events.call_args.kwargs
+            assert call_kwargs.get("parallel") is True
+            assert isinstance(result, ParallelFetchResult)
+        finally:
+            ws.close()
+
+    def test_fetch_events_parallel_with_max_workers(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events passes max_workers to fetcher."""
+        from mixpanel_data.types import ParallelFetchResult
+
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_events.return_value = ParallelFetchResult(
+                table="events",
+                total_rows=100,
+                successful_batches=1,
+                failed_batches=0,
+                failed_date_ranges=(),
+                duration_seconds=1.5,
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                parallel=True,
+                max_workers=5,
+                progress=False,
+            )
+
+            # Verify max_workers is passed
+            call_kwargs = mock_fetcher.fetch_events.call_args.kwargs
+            assert call_kwargs.get("max_workers") == 5
+        finally:
+            ws.close()
+
+    def test_fetch_events_parallel_with_on_batch_complete(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events passes on_batch_complete callback to fetcher."""
+        from mixpanel_data.types import ParallelFetchResult
+
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+            mock_fetcher.fetch_events.return_value = ParallelFetchResult(
+                table="events",
+                total_rows=100,
+                successful_batches=1,
+                failed_batches=0,
+                failed_date_ranges=(),
+                duration_seconds=1.5,
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            callback = MagicMock()
+            ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                parallel=True,
+                on_batch_complete=callback,
+                progress=False,
+            )
+
+            # Verify on_batch_complete is passed
+            call_kwargs = mock_fetcher.fetch_events.call_args.kwargs
+            assert call_kwargs.get("on_batch_complete") is callback
+        finally:
+            ws.close()
+
+    def test_fetch_events_max_workers_validates_positive(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events raises ValueError if max_workers is not positive."""
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            with pytest.raises(ValueError, match="max_workers must be positive"):
+                ws.fetch_events(
+                    "events",
+                    from_date="2024-01-01",
+                    to_date="2024-01-31",
+                    parallel=True,
+                    max_workers=0,
+                )
+        finally:
+            ws.close()
+
+    def test_fetch_events_return_type_annotation(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """fetch_events returns FetchResult | ParallelFetchResult."""
+        from mixpanel_data.types import FetchResult, ParallelFetchResult
+
+        db_path = tmp_path / "test.db"
+        ws = Workspace(
+            path=db_path,
+            _config_manager=mock_config_manager,
+            _api_client=mock_api_client,
+        )
+        try:
+            mock_fetcher = MagicMock()
+
+            # Test FetchResult return
+            mock_fetcher.fetch_events.return_value = FetchResult(
+                table="events",
+                rows=100,
+                type="events",
+                duration_seconds=1.5,
+                date_range=("2024-01-01", "2024-01-31"),
+                fetched_at=MagicMock(),
+            )
+            ws._fetcher = mock_fetcher
+
+            result1 = ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                parallel=False,
+                progress=False,
+            )
+            assert isinstance(result1, FetchResult)
+
+            # Test ParallelFetchResult return
+            mock_fetcher.fetch_events.return_value = ParallelFetchResult(
+                table="events",
+                total_rows=100,
+                successful_batches=1,
+                failed_batches=0,
+                failed_date_ranges=(),
+                duration_seconds=1.5,
+                fetched_at=MagicMock(),
+            )
+
+            result2 = ws.fetch_events(
+                "events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+                parallel=True,
+                progress=False,
+            )
+            assert isinstance(result2, ParallelFetchResult)
         finally:
             ws.close()

@@ -34,7 +34,7 @@ Example:
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -57,6 +57,7 @@ from mixpanel_data._literal_types import TableType
 from mixpanel_data.exceptions import ConfigError, QueryError
 from mixpanel_data.types import (
     ActivityFeedResult,
+    BatchProgress,
     BookmarkInfo,
     BookmarkType,
     ColumnStatsResult,
@@ -78,6 +79,7 @@ from mixpanel_data.types import (
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
+    ParallelFetchResult,
     PropertyCountsResult,
     PropertyCoverageResult,
     PropertyDistributionResult,
@@ -833,13 +835,16 @@ class Workspace:
         progress: bool = True,
         append: bool = False,
         batch_size: int = 1000,
-    ) -> FetchResult:
+        parallel: bool = False,
+        max_workers: int | None = None,
+        on_batch_complete: Callable[[BatchProgress], None] | None = None,
+    ) -> FetchResult | ParallelFetchResult:
         """Fetch events from Mixpanel and store in local database.
 
         Note:
             This is a potentially long-running operation that streams data from
-            Mixpanel's Export API. For large date ranges, consider chunking into
-            smaller ranges with ``append=True``, or running in a background process.
+            Mixpanel's Export API. For large date ranges, use ``parallel=True``
+            for significantly faster exports (up to 10x speedup).
 
         Args:
             name: Table name to create or append to (default: "events").
@@ -854,9 +859,19 @@ class Workspace:
                 memory/IO tradeoff: smaller values use less memory but more
                 disk IO; larger values use more memory but less IO.
                 Default: 1000. Valid range: 100-100000.
+            parallel: If True, use parallel fetching with multiple threads.
+                Splits date range into 7-day chunks and fetches concurrently.
+                Enables export of date ranges exceeding 100 days. Default: False.
+            max_workers: Maximum concurrent fetch threads when parallel=True.
+                Default: 10. Higher values may hit Mixpanel rate limits.
+                Ignored when parallel=False.
+            on_batch_complete: Callback invoked when each batch completes
+                during parallel fetch. Receives BatchProgress with status.
+                Useful for custom progress reporting. Ignored when parallel=False.
 
         Returns:
-            FetchResult with table name, row count, duration.
+            FetchResult when parallel=False, ParallelFetchResult when parallel=True.
+            ParallelFetchResult includes per-batch statistics and any failure info.
 
         Raises:
             TableExistsError: If table exists and append=False.
@@ -865,15 +880,50 @@ class Workspace:
             AuthenticationError: If credentials are invalid.
             ValueError: If batch_size is outside valid range (100-100000).
             ValueError: If limit is outside valid range (1-100000).
+            ValueError: If max_workers is not positive.
+
+        Example:
+            ```python
+            # Sequential fetch (default)
+            result = ws.fetch_events(
+                name="events",
+                from_date="2024-01-01",
+                to_date="2024-01-31",
+            )
+
+            # Parallel fetch for large date ranges
+            result = ws.fetch_events(
+                name="events_q4",
+                from_date="2024-10-01",
+                to_date="2024-12-31",
+                parallel=True,
+            )
+
+            # With custom progress callback
+            def on_batch(progress: BatchProgress) -> None:
+                print(f"Batch {progress.batch_index + 1}/{progress.total_batches}")
+
+            result = ws.fetch_events(
+                name="events",
+                from_date="2024-01-01",
+                to_date="2024-03-31",
+                parallel=True,
+                on_batch_complete=on_batch,
+            )
+            ```
         """
         # Validate parameters early to avoid wasted API calls
         _validate_batch_size(batch_size)
         _validate_limit(limit)
 
+        # Validate max_workers for parallel mode
+        if max_workers is not None and max_workers <= 0:
+            raise ValueError("max_workers must be positive")
+
         # Create progress callback if requested (only for interactive terminals)
         progress_callback = None
         pbar = None
-        if progress and sys.stderr.isatty():
+        if progress and sys.stderr.isatty() and not parallel:
             try:
                 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -904,6 +954,9 @@ class Workspace:
                 progress_callback=progress_callback,
                 append=append,
                 batch_size=batch_size,
+                parallel=parallel,
+                max_workers=max_workers,
+                on_batch_complete=on_batch_complete,
             )
         finally:
             if pbar is not None:

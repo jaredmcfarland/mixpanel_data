@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 from typer.testing import CliRunner
 
 from mixpanel_data.cli.main import app
-from mixpanel_data.types import FetchResult
+from mixpanel_data.types import FetchResult, ParallelFetchResult
 
 
 class TestFetchEvents:
@@ -520,3 +520,558 @@ class TestFetchProfilesBatchSize:
         assert result.exit_code == 0
         call_kwargs = mock_workspace.fetch_profiles.call_args.kwargs
         assert call_kwargs["batch_size"] == 250
+
+
+# =============================================================================
+# Parallel Fetch Tests (US2)
+# =============================================================================
+
+
+class TestFetchEventsParallel:
+    """Tests for --parallel option in fetch events command."""
+
+    def test_parallel_flag_passed_to_workspace(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that --parallel is passed to workspace.fetch_events."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=1000,
+            successful_batches=3,
+            failed_batches=0,
+            failed_date_ranges=(),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        assert call_kwargs["parallel"] is True
+
+    def test_parallel_short_flag(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that -p short flag works for parallel."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=500,
+            successful_batches=2,
+            failed_batches=0,
+            failed_date_ranges=(),
+            duration_seconds=3.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "-p",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        assert call_kwargs["parallel"] is True
+
+    def test_parallel_result_output_structure(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that ParallelFetchResult is output correctly as JSON."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=1500,
+            successful_batches=3,
+            failed_batches=0,
+            failed_date_ranges=(),
+            duration_seconds=4.5,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["table"] == "events"
+        assert data["total_rows"] == 1500
+        assert data["successful_batches"] == 3
+        assert data["failed_batches"] == 0
+        assert data["has_failures"] is False
+
+    def test_parallel_progress_callback_set(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that on_batch_complete callback is set when parallel."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=1000,
+            successful_batches=3,
+            failed_batches=0,
+            failed_date_ranges=(),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        # When parallel is True and not quiet, on_batch_complete should be set
+        assert call_kwargs.get("on_batch_complete") is not None
+
+    def test_parallel_no_progress_callback_when_quiet(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that on_batch_complete is None when --quiet is set."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=1000,
+            successful_batches=3,
+            failed_batches=0,
+            failed_date_ranges=(),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "--quiet",
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        # When quiet is True, on_batch_complete should be None
+        assert call_kwargs.get("on_batch_complete") is None
+
+    def test_parallel_not_set_by_default(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that parallel is False by default."""
+        mock_workspace.fetch_events.return_value = FetchResult(
+            table="events",
+            rows=1000,
+            type="events",
+            date_range=("2024-01-01", "2024-01-31"),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        assert call_kwargs.get("parallel") is False
+
+    def test_parallel_with_failures_exit_code_1(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that exit code is 1 when parallel fetch has failures."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=500,
+            successful_batches=2,
+            failed_batches=1,
+            failed_date_ranges=(("2024-01-15", "2024-01-21"),),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 1
+
+    def test_parallel_with_failures_outputs_failed_date_ranges(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that failed date ranges are included in output."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=500,
+            successful_batches=2,
+            failed_batches=1,
+            failed_date_ranges=(("2024-01-15", "2024-01-21"),),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        data = json.loads(result.stdout)
+        assert data["has_failures"] is True
+        assert data["failed_batches"] == 1
+        assert len(data["failed_date_ranges"]) == 1
+        assert data["failed_date_ranges"][0] == ["2024-01-15", "2024-01-21"]
+
+    def test_parallel_with_failures_shows_warning_on_stderr(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that failure warning is shown on stderr."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=500,
+            successful_batches=2,
+            failed_batches=1,
+            failed_date_ranges=(("2024-01-15", "2024-01-21"),),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        # Should have warning in stderr about failed batches
+        assert "failed" in result.output.lower() or "1 batch" in result.output.lower()
+
+    def test_parallel_all_success_no_warning(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that no warning is shown when all batches succeed."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=1500,
+            successful_batches=3,
+            failed_batches=0,
+            failed_date_ranges=(),
+            duration_seconds=4.5,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        # Should not have failure warnings
+        assert (
+            "failed" not in result.output.lower() or "failed_batches" in result.output
+        )
+
+    def test_workers_option_passed_to_workspace(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that --workers is passed to workspace.fetch_events."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=1000,
+            successful_batches=3,
+            failed_batches=0,
+            failed_date_ranges=(),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--workers",
+                    "5",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        assert call_kwargs["max_workers"] == 5
+
+    def test_workers_requires_parallel_flag(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that --workers only applies when --parallel is set."""
+        mock_workspace.fetch_events.return_value = FetchResult(
+            table="events",
+            rows=1000,
+            type="events",
+            date_range=("2024-01-01", "2024-01-31"),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--workers",
+                    "5",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        # Should succeed but max_workers only applies when parallel=True
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        # Workers should still be passed through
+        assert call_kwargs.get("max_workers") == 5
+
+    def test_workers_default_not_passed(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that max_workers is None by default."""
+        mock_workspace.fetch_events.return_value = ParallelFetchResult(
+            table="events",
+            total_rows=1000,
+            successful_batches=3,
+            failed_batches=0,
+            failed_date_ranges=(),
+            duration_seconds=5.0,
+            fetched_at=datetime.now(),
+        )
+
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        call_kwargs = mock_workspace.fetch_events.call_args.kwargs
+        # Without --workers, max_workers should be None (use default)
+        assert call_kwargs.get("max_workers") is None
+
+    def test_workers_invalid_zero(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that --workers 0 is rejected."""
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--workers",
+                    "0",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code != 0
+
+    def test_workers_invalid_negative(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that --workers -1 is rejected."""
+        with patch(
+            "mixpanel_data.cli.commands.fetch.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "fetch",
+                    "events",
+                    "--from",
+                    "2024-01-01",
+                    "--to",
+                    "2024-01-31",
+                    "--parallel",
+                    "--workers",
+                    "-1",
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code != 0

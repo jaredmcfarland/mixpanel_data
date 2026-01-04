@@ -2857,3 +2857,207 @@ class PropertyCoverageResult:
             "total_events": self.total_events,
             "coverage": [c.to_dict() for c in self.coverage],
         }
+
+
+# =============================================================================
+# Parallel Export Types (Phase 017)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class BatchProgress:
+    """Progress update for a parallel fetch batch.
+
+    Sent to the on_batch_complete callback when a batch finishes
+    (successfully or with error).
+
+    Attributes:
+        from_date: Start date of this batch (YYYY-MM-DD).
+        to_date: End date of this batch (YYYY-MM-DD).
+        batch_index: Zero-based index of this batch.
+        total_batches: Total number of batches in the parallel fetch.
+        rows: Number of rows fetched in this batch (0 if failed).
+        success: Whether this batch completed successfully.
+        error: Error message if failed, None if successful.
+
+    Example:
+        ```python
+        def on_batch(progress: BatchProgress) -> None:
+            status = "✓" if progress.success else "✗"
+            print(f"[{status}] Batch {progress.batch_index + 1}/{progress.total_batches}")
+
+        result = ws.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-03-31",
+            parallel=True,
+            on_batch_complete=on_batch,
+        )
+        ```
+    """
+
+    from_date: str
+    """Start date of this batch (YYYY-MM-DD)."""
+
+    to_date: str
+    """End date of this batch (YYYY-MM-DD)."""
+
+    batch_index: int
+    """Zero-based index of this batch."""
+
+    total_batches: int
+    """Total number of batches in the parallel fetch."""
+
+    rows: int
+    """Number of rows fetched in this batch (0 if failed)."""
+
+    success: bool
+    """Whether this batch completed successfully."""
+
+    error: str | None = None
+    """Error message if failed, None if successful."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with all batch progress fields.
+        """
+        return {
+            "from_date": self.from_date,
+            "to_date": self.to_date,
+            "batch_index": self.batch_index,
+            "total_batches": self.total_batches,
+            "rows": self.rows,
+            "success": self.success,
+            "error": self.error,
+        }
+
+
+@dataclass(frozen=True)
+class BatchResult:
+    """Result of fetching a single date range chunk.
+
+    Internal type used by ParallelFetcherService to track batch outcomes.
+    Contains either the fetched data (on success) or error info (on failure).
+
+    Attributes:
+        from_date: Start date of this batch (YYYY-MM-DD).
+        to_date: End date of this batch (YYYY-MM-DD).
+        rows: Number of rows fetched (0 if failed).
+        success: Whether the batch completed successfully.
+        error: Exception message if failed, None if successful.
+
+    Note:
+        Data is not included in to_dict() as it's consumed by the writer
+        thread and is not JSON-serializable (iterator of dicts).
+    """
+
+    from_date: str
+    """Start date of this batch (YYYY-MM-DD)."""
+
+    to_date: str
+    """End date of this batch (YYYY-MM-DD)."""
+
+    rows: int
+    """Number of rows fetched (0 if failed)."""
+
+    success: bool
+    """Whether the batch completed successfully."""
+
+    error: str | None = None
+    """Exception message if failed, None if successful."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output (excludes data).
+
+        Returns:
+            Dictionary with batch result fields (excluding data).
+        """
+        return {
+            "from_date": self.from_date,
+            "to_date": self.to_date,
+            "rows": self.rows,
+            "success": self.success,
+            "error": self.error,
+        }
+
+
+@dataclass(frozen=True)
+class ParallelFetchResult:
+    """Result of a parallel fetch operation.
+
+    Aggregates results from all batches, providing summary statistics
+    and information about any failures for retry.
+
+    Attributes:
+        table: Name of the created/appended table.
+        total_rows: Total number of rows fetched across all batches.
+        successful_batches: Number of batches that completed successfully.
+        failed_batches: Number of batches that failed.
+        failed_date_ranges: Date ranges (from_date, to_date) of failed batches.
+        duration_seconds: Total time taken for the parallel fetch.
+        fetched_at: Timestamp when fetch completed.
+
+    Example:
+        ```python
+        result = ws.fetch_events(
+            name="events",
+            from_date="2024-01-01",
+            to_date="2024-03-31",
+            parallel=True,
+        )
+
+        if result.has_failures:
+            print(f"Warning: {result.failed_batches} batches failed")
+            for from_date, to_date in result.failed_date_ranges:
+                print(f"  {from_date} to {to_date}")
+        ```
+    """
+
+    table: str
+    """Name of the created/appended table."""
+
+    total_rows: int
+    """Total number of rows fetched across all batches."""
+
+    successful_batches: int
+    """Number of batches that completed successfully."""
+
+    failed_batches: int
+    """Number of batches that failed."""
+
+    failed_date_ranges: tuple[tuple[str, str], ...]
+    """Date ranges (from_date, to_date) of failed batches for retry."""
+
+    duration_seconds: float
+    """Total time taken for the parallel fetch."""
+
+    fetched_at: datetime
+    """Timestamp when fetch completed."""
+
+    @property
+    def has_failures(self) -> bool:
+        """Check if any batches failed.
+
+        Returns:
+            True if at least one batch failed, False otherwise.
+        """
+        return self.failed_batches > 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with all result fields including has_failures.
+        """
+        return {
+            "table": self.table,
+            "total_rows": self.total_rows,
+            "successful_batches": self.successful_batches,
+            "failed_batches": self.failed_batches,
+            "failed_date_ranges": [list(dr) for dr in self.failed_date_ranges],
+            "duration_seconds": self.duration_seconds,
+            "fetched_at": self.fetched_at.isoformat(),
+            "has_failures": self.has_failures,
+        }

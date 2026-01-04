@@ -26,6 +26,8 @@ from mixpanel_data.exceptions import (
 )
 from mixpanel_data.types import (
     ActivityFeedResult,
+    BatchProgress,
+    BatchResult,
     BookmarkInfo,
     BookmarkType,
     CohortInfo,
@@ -55,6 +57,7 @@ from mixpanel_data.types import (
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
+    ParallelFetchResult,
     PropertyCountsResult,
     PropertyCoverage,
     PropertyCoverageResult,
@@ -105,6 +108,9 @@ __all__ = [
     "DateRangeTooLargeError",
     # Result types
     "FetchResult",
+    "ParallelFetchResult",
+    "BatchProgress",
+    "BatchResult",
     "SegmentationResult",
     "SQLResult",
     "FunnelResult",

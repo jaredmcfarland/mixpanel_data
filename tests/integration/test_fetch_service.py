@@ -16,6 +16,7 @@ import pytest
 from mixpanel_data._internal.services.fetcher import FetcherService
 from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.exceptions import TableExistsError
+from mixpanel_data.types import FetchResult
 
 # =============================================================================
 # User Story 1: Fetch Events Integration Tests
@@ -79,7 +80,8 @@ def test_fetch_events_with_real_duckdb(tmp_path: Path) -> None:
             to_date="2024-01-31",
         )
 
-        # Verify result
+        # Verify result (sequential fetch returns FetchResult)
+        assert isinstance(result, FetchResult)
         assert result.table == "events"
         assert result.rows == 3
         assert result.type == "events"
@@ -253,6 +255,8 @@ def test_fetch_events_progress_callback_integration(tmp_path: Path) -> None:
         # Should have received progress updates
         assert len(progress_values) == 5
         assert progress_values == [1, 2, 3, 4, 5]
+        # Sequential fetch returns FetchResult
+        assert isinstance(result, FetchResult)
         assert result.rows == 5
 
 
