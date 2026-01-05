@@ -174,7 +174,7 @@ result = ws.segmentation(
     event="Purchase",
     from_date="2024-01-01",
     to_date="2024-01-31",
-    on="properties.country",
+    on="country",
     unit="week"
 )
 

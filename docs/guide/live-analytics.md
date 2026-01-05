@@ -41,7 +41,7 @@ Time-series event counts with optional property segmentation:
         event="Purchase",
         from_date="2025-01-01",
         to_date="2025-01-31",
-        on="properties.country"
+        on="country"
     )
 
     # With filtering
@@ -49,7 +49,7 @@ Time-series event counts with optional property segmentation:
         event="Purchase",
         from_date="2025-01-01",
         to_date="2025-01-31",
-        on="properties.country",
+        on="country",
         where='properties["plan"] == "premium"',
         unit="week"  # day, week, month
     )
@@ -112,7 +112,7 @@ Analyze conversion through a sequence of steps:
         funnel_id=12345,
         from_date="2025-01-01",
         to_date="2025-01-31",
-        on="properties.country"
+        on="country"
     )
 
     # Access results
@@ -442,7 +442,7 @@ result = ws.segmentation_numeric(
     event="Purchase",
     from_date="2025-01-01",
     to_date="2025-01-31",
-    on="properties.amount",
+    on="amount",
     type="general"  # or "linear", "logarithmic"
 )
 ```
@@ -454,7 +454,7 @@ result = ws.segmentation_sum(
     event="Purchase",
     from_date="2025-01-01",
     to_date="2025-01-31",
-    on="properties.amount"
+    on="amount"
 )
 # Total revenue per time period
 ```
@@ -466,7 +466,7 @@ result = ws.segmentation_average(
     event="Purchase",
     from_date="2025-01-01",
     to_date="2025-01-31",
-    on="properties.amount"
+    on="amount"
 )
 # Average purchase amount per time period
 ```
