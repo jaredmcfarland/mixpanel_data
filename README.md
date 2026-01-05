@@ -106,7 +106,7 @@ result = ws.segmentation(
     event=events[0].name,
     from_date="2025-01-01",
     to_date="2025-01-31",
-    on="properties.country"
+    on="country"
 )
 print(result.df)  # pandas DataFrame
 

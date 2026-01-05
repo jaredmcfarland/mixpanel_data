@@ -599,10 +599,10 @@ class TestSegmentation:
 
         with create_mock_client(test_credentials, handler) as client:
             client.segmentation(
-                "Purchase", "2024-01-01", "2024-01-31", on="properties.country"
+                "Purchase", "2024-01-01", "2024-01-31", on='properties["country"]'
             )
 
-        assert captured_params["on"] == "properties.country"
+        assert captured_params["on"] == 'properties["country"]'
 
     def test_segmentation_with_where(self, test_credentials: Credentials) -> None:
         """Should include 'where' filter."""
