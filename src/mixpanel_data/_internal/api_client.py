@@ -832,8 +832,6 @@ class MixpanelAPIClient:
 
         # Validate as_of_timestamp is not in the future
         if as_of_timestamp is not None:
-            import time
-
             current_time = int(time.time())
             if as_of_timestamp > current_time:
                 raise ValueError(
