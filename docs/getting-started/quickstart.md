@@ -10,7 +10,7 @@ You'll need:
 - A Mixpanel service account with username, secret, and project ID
 - Your project's data residency region (us, eu, or in)
 
-## Step 1: Set Up Credentials
+## Step 1: Set Up Service Account Credentials
 
 ### Option A: Environment Variables
 
@@ -29,7 +29,7 @@ mp auth add production \
     --username sa_abc123... \
     --project 12345 \
     --region us
-# You'll be prompted for the secret with hidden input
+# You'll be prompted for the service account secret with hidden input
 ```
 
 This stores credentials in `~/.mp/config.toml` and sets `production` as the default account.
