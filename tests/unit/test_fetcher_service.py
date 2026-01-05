@@ -1641,3 +1641,139 @@ class TestFetchProfilesParallelDelegation:
             assert call_kwargs["where"] == 'properties["plan"] == "premium"'
             assert call_kwargs["cohort_id"] == "cohort_abc"
             assert call_kwargs["output_properties"] == ["$email", "$name"]
+
+    def test_fetch_profiles_parallel_passes_all_filters(self) -> None:
+        """fetch_profiles with parallel=True passes all filter parameters.
+
+        Regression test for bug where group_id, behaviors, as_of_timestamp,
+        and include_all_users were not forwarded to the parallel fetcher.
+        """
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        from mixpanel_data.types import ParallelProfileResult
+
+        mock_result = ParallelProfileResult(
+            table="profiles",
+            total_rows=100,
+            successful_pages=2,
+            failed_pages=0,
+            failed_page_indices=(),
+            duration_seconds=1.5,
+            fetched_at=datetime.now(UTC),
+        )
+
+        behaviors = [
+            {"window": "30d", "name": "active", "event_selectors": [{"event": "Login"}]}
+        ]
+        timestamp = 1704067200
+
+        with unittest.mock.patch(
+            "mixpanel_data._internal.services.parallel_profile_fetcher.ParallelProfileFetcherService"
+        ) as MockParallelFetcher:
+            mock_fetcher_instance = MagicMock()
+            mock_fetcher_instance.fetch_profiles.return_value = mock_result
+            MockParallelFetcher.return_value = mock_fetcher_instance
+
+            fetcher = FetcherService(mock_api_client, mock_storage)
+
+            fetcher.fetch_profiles(
+                name="profiles",
+                parallel=True,
+                group_id="companies",
+                behaviors=behaviors,
+                as_of_timestamp=timestamp,
+                include_all_users=True,
+                cohort_id="cohort_123",
+            )
+
+            # Verify all filters were passed
+            call_kwargs = mock_fetcher_instance.fetch_profiles.call_args.kwargs
+            assert call_kwargs["group_id"] == "companies"
+            assert call_kwargs["behaviors"] == behaviors
+            assert call_kwargs["as_of_timestamp"] == timestamp
+            assert call_kwargs["include_all_users"] is True
+            assert call_kwargs["cohort_id"] == "cohort_123"
+
+    def test_fetch_profiles_parallel_with_distinct_id_falls_back_to_sequential(
+        self,
+    ) -> None:
+        """fetch_profiles with parallel=True and distinct_id uses sequential mode.
+
+        The page-based API doesn't support distinct_id filtering, so we fall
+        back to sequential mode when distinct_id is specified.
+        """
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        # Setup sequential mode to work
+        mock_api_client.export_profiles.return_value = iter(
+            [{"$distinct_id": "user1", "$properties": {}}]
+        )
+        mock_storage.create_profiles_table.return_value = 1
+
+        from mixpanel_data.types import FetchResult
+
+        with unittest.mock.patch(
+            "mixpanel_data._internal.services.parallel_profile_fetcher.ParallelProfileFetcherService"
+        ) as MockParallelFetcher:
+            fetcher = FetcherService(mock_api_client, mock_storage)
+
+            result = fetcher.fetch_profiles(
+                name="profiles",
+                parallel=True,
+                distinct_id="user1",
+            )
+
+            # Should NOT have called parallel fetcher
+            MockParallelFetcher.assert_not_called()
+
+            # Should return sequential FetchResult
+            assert isinstance(result, FetchResult)
+
+            # Should have called sequential API
+            mock_api_client.export_profiles.assert_called_once()
+
+    def test_fetch_profiles_parallel_with_distinct_ids_falls_back_to_sequential(
+        self,
+    ) -> None:
+        """fetch_profiles with parallel=True and distinct_ids uses sequential mode.
+
+        The page-based API doesn't support distinct_ids filtering, so we fall
+        back to sequential mode when distinct_ids is specified.
+        """
+        mock_api_client = MagicMock()
+        mock_storage = MagicMock()
+
+        # Setup sequential mode to work
+        mock_api_client.export_profiles.return_value = iter(
+            [
+                {"$distinct_id": "user1", "$properties": {}},
+                {"$distinct_id": "user2", "$properties": {}},
+            ]
+        )
+        mock_storage.create_profiles_table.return_value = 2
+
+        from mixpanel_data.types import FetchResult
+
+        with unittest.mock.patch(
+            "mixpanel_data._internal.services.parallel_profile_fetcher.ParallelProfileFetcherService"
+        ) as MockParallelFetcher:
+            fetcher = FetcherService(mock_api_client, mock_storage)
+
+            result = fetcher.fetch_profiles(
+                name="profiles",
+                parallel=True,
+                distinct_ids=["user1", "user2"],
+            )
+
+            # Should NOT have called parallel fetcher
+            MockParallelFetcher.assert_not_called()
+
+            # Should return sequential FetchResult
+            assert isinstance(result, FetchResult)
+
+            # Should have called sequential API with distinct_ids
+            mock_api_client.export_profiles.assert_called_once()
+            call_kwargs = mock_api_client.export_profiles.call_args.kwargs
+            assert call_kwargs["distinct_ids"] == ["user1", "user2"]

@@ -324,7 +324,9 @@ class FetcherService:
             ValueError: If table name is invalid or parameters are mutually exclusive.
         """
         # Delegate to parallel fetcher if requested
-        if parallel:
+        # Note: distinct_id/distinct_ids are not supported by page-based API,
+        # so we fall back to sequential mode if those are specified
+        if parallel and not distinct_id and not distinct_ids:
             from mixpanel_data._internal.services.parallel_profile_fetcher import (
                 ParallelProfileFetcherService,
             )
@@ -338,6 +340,10 @@ class FetcherService:
                 where=where,
                 cohort_id=cohort_id,
                 output_properties=output_properties,
+                group_id=group_id,
+                behaviors=behaviors,
+                as_of_timestamp=as_of_timestamp,
+                include_all_users=include_all_users,
                 max_workers=max_workers,
                 on_page_complete=on_page_complete,
                 append=append,

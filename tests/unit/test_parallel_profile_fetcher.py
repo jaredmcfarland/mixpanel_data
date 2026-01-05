@@ -141,7 +141,15 @@ class TestParallelFetchProfiles:
         calls = mock_api_client.export_profiles_page.call_args_list
         assert len(calls) >= 1
         assert calls[0] == call(
-            page=0, session_id=None, where=None, cohort_id=None, output_properties=None
+            page=0,
+            session_id=None,
+            where=None,
+            cohort_id=None,
+            output_properties=None,
+            group_id=None,
+            behaviors=None,
+            as_of_timestamp=None,
+            include_all_users=False,
         )
 
     def test_fetch_profiles_single_page_result(
@@ -991,3 +999,176 @@ class TestPreComputedPageApproach:
         assert 2 in result.failed_page_indices
         # Other pages should succeed
         assert result.successful_pages == 3
+
+
+# =============================================================================
+# Filter Parameter Forwarding Tests (Regression for PR review comment)
+# =============================================================================
+
+
+class TestFilterParameterForwarding:
+    """Tests verifying all filter parameters are forwarded to API calls.
+
+    Regression tests for the bug where group_id, behaviors, as_of_timestamp,
+    and include_all_users were not forwarded when using parallel mode.
+    """
+
+    def test_fetch_profiles_passes_group_id_filter(
+        self, parallel_profile_fetcher: Any, mock_api_client: MagicMock
+    ) -> None:
+        """group_id filter is passed to API calls."""
+        mock_api_client.export_profiles_page.return_value = ProfilePageResult(
+            profiles=[],
+            session_id=None,
+            page=0,
+            has_more=False,
+            total=0,
+            page_size=1000,
+        )
+
+        parallel_profile_fetcher.fetch_profiles(
+            name="test_profiles",
+            group_id="companies",
+        )
+
+        call_args = mock_api_client.export_profiles_page.call_args
+        assert call_args.kwargs["group_id"] == "companies"
+
+    def test_fetch_profiles_passes_behaviors_filter(
+        self, parallel_profile_fetcher: Any, mock_api_client: MagicMock
+    ) -> None:
+        """behaviors filter is passed to API calls."""
+        mock_api_client.export_profiles_page.return_value = ProfilePageResult(
+            profiles=[],
+            session_id=None,
+            page=0,
+            has_more=False,
+            total=0,
+            page_size=1000,
+        )
+
+        behaviors = [
+            {"window": "30d", "name": "active", "event_selectors": [{"event": "Login"}]}
+        ]
+
+        parallel_profile_fetcher.fetch_profiles(
+            name="test_profiles",
+            behaviors=behaviors,
+        )
+
+        call_args = mock_api_client.export_profiles_page.call_args
+        assert call_args.kwargs["behaviors"] == behaviors
+
+    def test_fetch_profiles_passes_as_of_timestamp_filter(
+        self, parallel_profile_fetcher: Any, mock_api_client: MagicMock
+    ) -> None:
+        """as_of_timestamp filter is passed to API calls."""
+        mock_api_client.export_profiles_page.return_value = ProfilePageResult(
+            profiles=[],
+            session_id=None,
+            page=0,
+            has_more=False,
+            total=0,
+            page_size=1000,
+        )
+
+        timestamp = 1704067200  # 2024-01-01 00:00:00 UTC
+
+        parallel_profile_fetcher.fetch_profiles(
+            name="test_profiles",
+            as_of_timestamp=timestamp,
+        )
+
+        call_args = mock_api_client.export_profiles_page.call_args
+        assert call_args.kwargs["as_of_timestamp"] == timestamp
+
+    def test_fetch_profiles_passes_include_all_users_filter(
+        self, parallel_profile_fetcher: Any, mock_api_client: MagicMock
+    ) -> None:
+        """include_all_users filter is passed to API calls."""
+        mock_api_client.export_profiles_page.return_value = ProfilePageResult(
+            profiles=[],
+            session_id=None,
+            page=0,
+            has_more=False,
+            total=0,
+            page_size=1000,
+        )
+
+        parallel_profile_fetcher.fetch_profiles(
+            name="test_profiles",
+            cohort_id="cohort_123",
+            include_all_users=True,
+        )
+
+        call_args = mock_api_client.export_profiles_page.call_args
+        assert call_args.kwargs["include_all_users"] is True
+
+    def test_fetch_profiles_passes_all_filters_to_subsequent_pages(
+        self,
+        parallel_profile_fetcher: Any,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """All filter parameters are passed to subsequent page fetches.
+
+        This is a regression test ensuring filters are forwarded to all pages,
+        not just page 0.
+        """
+        behaviors = [
+            {"window": "7d", "name": "engaged", "event_selectors": [{"event": "View"}]}
+        ]
+        timestamp = 1704067200
+
+        # Page 0 indicates 2 pages
+        page_0_result = ProfilePageResult(
+            profiles=[{"$distinct_id": "user1"}],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=2,
+            page_size=1,
+        )
+        page_1_result = ProfilePageResult(
+            profiles=[{"$distinct_id": "user2"}],
+            session_id=None,
+            page=1,
+            has_more=False,
+            total=2,
+            page_size=1,
+        )
+
+        mock_api_client.export_profiles_page.side_effect = [
+            page_0_result,
+            page_1_result,
+        ]
+        mock_storage.create_profiles_table.return_value = 1
+        mock_storage.append_profiles_table.return_value = 1
+
+        parallel_profile_fetcher.fetch_profiles(
+            name="test_profiles",
+            group_id="companies",
+            behaviors=behaviors,
+            as_of_timestamp=timestamp,
+            include_all_users=True,
+            cohort_id="cohort_456",
+        )
+
+        # Both pages should have been called with all filters
+        assert mock_api_client.export_profiles_page.call_count == 2
+
+        # Check page 0 call
+        page_0_call = mock_api_client.export_profiles_page.call_args_list[0]
+        assert page_0_call.kwargs["group_id"] == "companies"
+        assert page_0_call.kwargs["behaviors"] == behaviors
+        assert page_0_call.kwargs["as_of_timestamp"] == timestamp
+        assert page_0_call.kwargs["include_all_users"] is True
+        assert page_0_call.kwargs["cohort_id"] == "cohort_456"
+
+        # Check page 1 call
+        page_1_call = mock_api_client.export_profiles_page.call_args_list[1]
+        assert page_1_call.kwargs["group_id"] == "companies"
+        assert page_1_call.kwargs["behaviors"] == behaviors
+        assert page_1_call.kwargs["as_of_timestamp"] == timestamp
+        assert page_1_call.kwargs["include_all_users"] is True
+        assert page_1_call.kwargs["cohort_id"] == "cohort_456"

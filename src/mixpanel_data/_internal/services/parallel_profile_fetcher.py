@@ -6,6 +6,7 @@ to handle DuckDB's single-writer constraint (feature 019-parallel-profile-fetch)
 
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import threading
@@ -107,6 +108,10 @@ class ParallelProfileFetcherService:
         where: str | None = None,
         cohort_id: str | None = None,
         output_properties: list[str] | None = None,
+        group_id: str | None = None,
+        behaviors: list[dict[str, Any]] | None = None,
+        as_of_timestamp: int | None = None,
+        include_all_users: bool = False,
         max_workers: int | None = None,
         on_page_complete: Callable[[ProfileProgress], None] | None = None,
         append: bool = False,
@@ -123,6 +128,14 @@ class ParallelProfileFetcherService:
             where: Optional filter expression.
             cohort_id: Optional cohort ID filter.
             output_properties: Optional list of properties to include.
+            group_id: Optional group type identifier (e.g., "companies") to fetch
+                group profiles instead of user profiles.
+            behaviors: Optional list of behavioral filters. Each dict should have
+                'window' (e.g., "30d"), 'name' (identifier), and 'event_selectors'.
+            as_of_timestamp: Optional Unix timestamp to query profile state at
+                a specific point in time.
+            include_all_users: If True, include all users and mark cohort membership.
+                Only valid when cohort_id is provided.
             max_workers: Maximum concurrent fetch threads. Defaults to 5, capped at 5.
             on_page_complete: Callback invoked when each page completes.
             append: If True, append to existing table. If False (default), create new.
@@ -137,6 +150,9 @@ class ParallelProfileFetcherService:
         """
         start_time = datetime.now(UTC)
 
+        # Serialize behaviors for metadata storage (used in both page 0 and worker threads)
+        filter_behaviors = json.dumps(behaviors) if behaviors else None
+
         # Cap workers at maximum
         requested_workers = max_workers or self._default_max_workers
         workers = min(requested_workers, _MAX_WORKERS_CAP)
@@ -150,6 +166,10 @@ class ParallelProfileFetcherService:
             where=where,
             cohort_id=cohort_id,
             output_properties=output_properties,
+            group_id=group_id,
+            behaviors=behaviors,
+            as_of_timestamp=as_of_timestamp,
+            include_all_users=include_all_users,
         )
 
         session_id = page_0_result.session_id
@@ -199,6 +219,10 @@ class ParallelProfileFetcherService:
                     type="profiles",
                     fetched_at=datetime.now(UTC),
                     filter_where=where,
+                    filter_cohort_id=cohort_id,
+                    filter_output_properties=output_properties,
+                    filter_group_id=group_id,
+                    filter_behaviors=filter_behaviors,
                 )
 
                 if not append:
@@ -291,6 +315,10 @@ class ParallelProfileFetcherService:
                     where=where,
                     cohort_id=cohort_id,
                     output_properties=output_properties,
+                    group_id=group_id,
+                    behaviors=behaviors,
+                    as_of_timestamp=as_of_timestamp,
+                    include_all_users=include_all_users,
                 )
                 return (page_idx, result)
             except Exception as e:
@@ -427,6 +455,10 @@ class ParallelProfileFetcherService:
                             type="profiles",
                             fetched_at=datetime.now(UTC),
                             filter_where=where,
+                            filter_cohort_id=cohort_id,
+                            filter_output_properties=output_properties,
+                            filter_group_id=group_id,
+                            filter_behaviors=filter_behaviors,
                         )
                         write_queue.put(
                             _ProfileWriteTask(
