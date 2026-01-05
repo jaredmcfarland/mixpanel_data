@@ -168,6 +168,9 @@ class ParallelProfileFetcherService:
             maxsize=workers * 2
         )
 
+        # Pre-compute num_pages from page 0 metadata
+        num_pages = page_0_result.num_pages
+
         def process_page_0() -> None:
             """Process the initial page 0 that was already fetched."""
             nonlocal table_created, total_rows, successful_pages, failed_pages
@@ -179,7 +182,7 @@ class ParallelProfileFetcherService:
                 if on_page_complete:
                     progress = ProfileProgress(
                         page_index=0,
-                        total_pages=None,
+                        total_pages=num_pages,
                         rows=0,
                         success=True,
                         error=None,
@@ -222,7 +225,7 @@ class ParallelProfileFetcherService:
                 if on_page_complete:
                     progress = ProfileProgress(
                         page_index=0,
-                        total_pages=None,
+                        total_pages=num_pages,
                         rows=actual_rows,
                         success=True,
                         error=None,
@@ -241,7 +244,7 @@ class ParallelProfileFetcherService:
                 if on_page_complete:
                     progress = ProfileProgress(
                         page_index=0,
-                        total_pages=None,
+                        total_pages=num_pages,
                         rows=0,
                         success=False,
                         error=str(e),
@@ -252,8 +255,8 @@ class ParallelProfileFetcherService:
         # Process page 0
         process_page_0()
 
-        # If no more pages, return early
-        if not page_0_result.has_more:
+        # If only one page or no pages, return early
+        if num_pages <= 1:
             completed_at = datetime.now(UTC)
             duration_seconds = (completed_at - start_time).total_seconds()
 
@@ -267,9 +270,17 @@ class ParallelProfileFetcherService:
                 fetched_at=completed_at,
             )
 
+        # Warn about rate limits if many pages
+        if num_pages >= _RATE_LIMIT_WARNING_THRESHOLD:
+            _logger.warning(
+                "Large profile export: %d pages may exceed "
+                "rate limits. Consider using cohort filters or "
+                "output_properties to reduce dataset size.",
+                num_pages,
+            )
+
         # Use session_id from page 0 for subsequent pages
         current_session_id = session_id
-        warned_about_rate_limits = False
 
         def fetch_page(page_idx: int) -> tuple[int, ProfilePageResult | Exception]:
             """Fetch a single page and return result or exception."""
@@ -305,7 +316,7 @@ class ParallelProfileFetcherService:
                     if on_page_complete:
                         progress = ProfileProgress(
                             page_index=task.page_idx,
-                            total_pages=None,
+                            total_pages=num_pages,
                             rows=0,
                             success=True,
                             error=None,
@@ -339,7 +350,7 @@ class ParallelProfileFetcherService:
                     if on_page_complete:
                         progress = ProfileProgress(
                             page_index=task.page_idx,
-                            total_pages=None,
+                            total_pages=num_pages,
                             rows=actual_rows,
                             success=True,
                             error=None,
@@ -361,7 +372,7 @@ class ParallelProfileFetcherService:
                     if on_page_complete:
                         progress = ProfileProgress(
                             page_index=task.page_idx,
-                            total_pages=None,
+                            total_pages=num_pages,
                             rows=0,
                             success=False,
                             error=f"Write failed: {e}",
@@ -373,114 +384,63 @@ class ParallelProfileFetcherService:
         writer = threading.Thread(target=writer_thread, daemon=True)
         writer.start()
 
-        # Track state for dynamic page discovery
-        more_pages_exist = True
-        max_page_submitted = 0
-        pages_discovered = 0
-
+        # Pre-computed approach: submit ALL remaining pages at once
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            # Start with just page 1 (page 0 already processed)
-            pending_pages: set[int] = {1}
-            max_page_submitted = 1
-            future_to_page: dict[Any, int] = {executor.submit(fetch_page, 1): 1}
+            # Submit pages 1 through num_pages-1 (page 0 already processed)
+            futures = {
+                executor.submit(fetch_page, page_idx): page_idx
+                for page_idx in range(1, num_pages)
+            }
 
-            while pending_pages or (more_pages_exist and future_to_page):
-                # Wait for any completed futures
-                completed_futures = []
-                for future in list(future_to_page.keys()):
-                    if future.done():
-                        completed_futures.append(future)
+            # Process results as they complete
+            for future in as_completed(futures):
+                page_idx = futures[future]
 
-                if not completed_futures and future_to_page:
-                    # Wait for at least one to complete
-                    for future in as_completed(list(future_to_page.keys())[:1]):
-                        completed_futures.append(future)
-                        break
+                try:
+                    page_num, page_result = future.result()
 
-                for future in completed_futures:
-                    page_idx = future_to_page.pop(future)
-                    pending_pages.discard(page_idx)
+                    if isinstance(page_result, Exception):
+                        # Fetch failed
+                        _logger.warning(
+                            "Page %d fetch failed: %s", page_num, str(page_result)
+                        )
+                        with results_lock:
+                            failed_pages += 1
+                            failed_page_indices.append(page_num)
 
-                    try:
-                        result = future.result()
-                        page_num, page_result = result
-
-                        if isinstance(page_result, Exception):
-                            # Fetch failed
-                            _logger.warning(
-                                "Page %d fetch failed: %s", page_num, str(page_result)
+                        if on_page_complete:
+                            progress = ProfileProgress(
+                                page_index=page_num,
+                                total_pages=num_pages,
+                                rows=0,
+                                success=False,
+                                error=str(page_result),
+                                cumulative_rows=cumulative_rows,
                             )
-                            with results_lock:
-                                failed_pages += 1
-                                failed_page_indices.append(page_num)
-
-                            if on_page_complete:
-                                progress = ProfileProgress(
-                                    page_index=page_num,
-                                    total_pages=None,
-                                    rows=0,
-                                    success=False,
-                                    error=str(page_result),
-                                    cumulative_rows=cumulative_rows,
-                                )
-                                on_page_complete(progress)
-                        else:
-                            # Fetch succeeded
-                            pages_discovered += 1
-
-                            # Warn about rate limits if we've discovered many pages
-                            if (
-                                not warned_about_rate_limits
-                                and pages_discovered >= _RATE_LIMIT_WARNING_THRESHOLD
-                            ):
-                                warned_about_rate_limits = True
-                                _logger.warning(
-                                    "Large profile export: %d+ pages may exceed "
-                                    "rate limits. Consider using cohort filters or "
-                                    "output_properties to reduce dataset size.",
-                                    pages_discovered,
-                                )
-
-                            # Check if more pages exist and submit next page
-                            if page_result.has_more:
-                                next_page = max_page_submitted + 1
-                                if next_page not in pending_pages:
-                                    pending_pages.add(next_page)
-                                    max_page_submitted = next_page
-                                    future = executor.submit(fetch_page, next_page)
-                                    future_to_page[future] = next_page
-                            else:
-                                # This page has no more pages after it
-                                more_pages_exist = False
-
-                            # Queue profiles for writing
-                            transformed = [
-                                transform_profile(p) for p in page_result.profiles
-                            ]
-                            metadata = TableMetadata(
-                                type="profiles",
-                                fetched_at=datetime.now(UTC),
-                                filter_where=where,
+                            on_page_complete(progress)
+                    else:
+                        # Fetch succeeded - queue profiles for writing
+                        transformed = [
+                            transform_profile(p) for p in page_result.profiles
+                        ]
+                        metadata = TableMetadata(
+                            type="profiles",
+                            fetched_at=datetime.now(UTC),
+                            filter_where=where,
+                        )
+                        write_queue.put(
+                            _ProfileWriteTask(
+                                data=transformed,
+                                metadata=metadata,
+                                page_idx=page_num,
+                                rows=len(transformed),
                             )
-                            write_queue.put(
-                                _ProfileWriteTask(
-                                    data=transformed,
-                                    metadata=metadata,
-                                    page_idx=page_num,
-                                    rows=len(transformed),
-                                )
-                            )
-
-                    except Exception as e:
-                        _logger.error(
-                            "Unexpected error processing page %d: %s", page_idx, str(e)
                         )
 
-                # Break if no more pending and no more pages to discover
-                if not pending_pages and not future_to_page:
-                    break
-                if not more_pages_exist and not future_to_page:
-                    break
+                except Exception as e:
+                    _logger.error(
+                        "Unexpected error processing page %d: %s", page_idx, str(e)
+                    )
 
         # Signal writer to stop and wait
         write_queue.put(_STOP_SENTINEL)

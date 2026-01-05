@@ -982,11 +982,17 @@ class MixpanelAPIClient:
         returned_session_id = response.get("session_id")
         has_more = returned_session_id is not None
 
+        # Extract pagination metadata for pre-computed page approach
+        total = response.get("total", 0)
+        page_size = response.get("page_size", 1000)
+
         return ProfilePageResult(
             profiles=profiles,
             session_id=returned_session_id,
             page=page,
             has_more=has_more,
+            total=total,
+            page_size=page_size,
         )
 
     # =========================================================================

@@ -2196,6 +2196,8 @@ class TestExportProfilesPage:
                         {"$distinct_id": "user2", "$properties": {"name": "Bob"}},
                     ],
                     "session_id": "session_abc",
+                    "total": 5000,
+                    "page_size": 1000,
                 },
             )
 
@@ -2224,6 +2226,8 @@ class TestExportProfilesPage:
                 json={
                     "results": [{"$distinct_id": "user3"}],
                     "session_id": "session_abc",
+                    "total": 5000,
+                    "page_size": 1000,
                 },
             )
 
@@ -2244,6 +2248,8 @@ class TestExportProfilesPage:
                 json={
                     "results": [],
                     "session_id": None,
+                    "total": 5000,
+                    "page_size": 1000,
                 },
             )
 
@@ -2264,7 +2270,7 @@ class TestExportProfilesPage:
                 captured_body = json.loads(request.content)
             return httpx.Response(
                 200,
-                json={"results": [], "session_id": None},
+                json={"results": [], "session_id": None, "total": 0, "page_size": 1000},
             )
 
         with create_mock_client(test_credentials, handler) as client:
@@ -2287,7 +2293,7 @@ class TestExportProfilesPage:
                 captured_body = json.loads(request.content)
             return httpx.Response(
                 200,
-                json={"results": [], "session_id": None},
+                json={"results": [], "session_id": None, "total": 0, "page_size": 1000},
             )
 
         with create_mock_client(test_credentials, handler) as client:
@@ -2315,7 +2321,7 @@ class TestExportProfilesPage:
                 captured_body = json.loads(request.content)
             return httpx.Response(
                 200,
-                json={"results": [], "session_id": None},
+                json={"results": [], "session_id": None, "total": 0, "page_size": 1000},
             )
 
         with create_mock_client(test_credentials, handler) as client:
@@ -2336,6 +2342,8 @@ class TestExportProfilesPage:
                 json={
                     "results": [{"$distinct_id": "user1"}],
                     "session_id": "session_abc",
+                    "total": 1000,
+                    "page_size": 1000,
                 },
             )
 
@@ -2355,6 +2363,8 @@ class TestExportProfilesPage:
                 json={
                     "results": [{"$distinct_id": "user1"}],
                     "session_id": "session_abc",
+                    "total": 5000,
+                    "page_size": 1000,
                 },
             )
 
@@ -2374,6 +2384,8 @@ class TestExportProfilesPage:
                 json={
                     "results": [{"$distinct_id": "user1"}],
                     "session_id": None,
+                    "total": 1,
+                    "page_size": 1000,
                 },
             )
 
@@ -2391,6 +2403,8 @@ class TestExportProfilesPage:
                 json={
                     "results": [],
                     "session_id": None,
+                    "total": 0,
+                    "page_size": 1000,
                 },
             )
 
@@ -2400,3 +2414,132 @@ class TestExportProfilesPage:
         assert result.profiles == []
         assert result.session_id is None
         assert result.has_more is False
+
+
+class TestExportProfilesPagePagination:
+    """Tests for total and page_size extraction from API response.
+
+    The Mixpanel Engage API returns total and page_size in every response,
+    which enables pre-computing the total number of pages for parallel fetching.
+    """
+
+    def test_extracts_total_from_response(self, test_credentials: Credentials) -> None:
+        """Should extract total from API response.
+
+        The total field indicates how many profiles match the query across
+        all pages, enabling calculation of num_pages.
+        """
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "results": [{"$distinct_id": "user1"}],
+                    "session_id": "session_abc",
+                    "total": 5432,
+                    "page_size": 1000,
+                    "page": 0,
+                },
+            )
+
+        with create_mock_client(test_credentials, handler) as client:
+            result = client.export_profiles_page(page=0)
+
+        assert result.total == 5432
+
+    def test_extracts_page_size_from_response(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should extract page_size from API response.
+
+        The page_size field indicates profiles per page (typically 1000).
+        """
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "results": [],
+                    "session_id": "session_abc",
+                    "total": 500,
+                    "page_size": 500,
+                    "page": 0,
+                },
+            )
+
+        with create_mock_client(test_credentials, handler) as client:
+            result = client.export_profiles_page(page=0)
+
+        assert result.page_size == 500
+
+    def test_defaults_total_to_zero_when_missing(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should default total to 0 when not in response.
+
+        Defensive handling for unexpected API responses.
+        """
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "results": [],
+                    "session_id": None,
+                    # total field missing
+                    "page_size": 1000,
+                },
+            )
+
+        with create_mock_client(test_credentials, handler) as client:
+            result = client.export_profiles_page(page=0)
+
+        assert result.total == 0
+
+    def test_defaults_page_size_to_1000_when_missing(
+        self, test_credentials: Credentials
+    ) -> None:
+        """Should default page_size to 1000 when not in response.
+
+        1000 is the standard Mixpanel page size for Engage API.
+        """
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "results": [],
+                    "session_id": None,
+                    "total": 0,
+                    # page_size field missing
+                },
+            )
+
+        with create_mock_client(test_credentials, handler) as client:
+            result = client.export_profiles_page(page=0)
+
+        assert result.page_size == 1000
+
+    def test_num_pages_computed_correctly(self, test_credentials: Credentials) -> None:
+        """num_pages property should be computed from total and page_size.
+
+        Verifies end-to-end that extraction and property work together.
+        """
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "results": [{"$distinct_id": f"user{i}"} for i in range(1000)],
+                    "session_id": "session_abc",
+                    "total": 5432,
+                    "page_size": 1000,
+                    "page": 0,
+                },
+            )
+
+        with create_mock_client(test_credentials, handler) as client:
+            result = client.export_profiles_page(page=0)
+
+        # ceil(5432/1000) = 6
+        assert result.num_pages == 6

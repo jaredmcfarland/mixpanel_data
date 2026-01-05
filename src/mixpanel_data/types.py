@@ -16,6 +16,7 @@ without recomputation.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -3088,12 +3089,18 @@ class ProfilePageResult:
         session_id: Session ID for fetching next page, None if no more pages.
         page: Zero-based page index that was fetched.
         has_more: True if there are more pages to fetch.
+        total: Total number of profiles matching the query across all pages.
+        page_size: Number of profiles per page (typically 1000).
 
     Example:
         ```python
-        # Fetch first page
+        # Fetch first page to get pagination metadata
         result = api_client.export_profiles_page(page=0)
         all_profiles = list(result.profiles)
+
+        # Pre-compute total pages for parallel fetching
+        total_pages = result.num_pages
+        print(f"Fetching {total_pages} pages ({result.total} profiles)")
 
         # Continue fetching if more pages
         while result.has_more:
@@ -3117,11 +3124,39 @@ class ProfilePageResult:
     has_more: bool
     """True if there are more pages to fetch."""
 
+    total: int
+    """Total number of profiles matching the query across all pages."""
+
+    page_size: int
+    """Number of profiles per page (typically 1000)."""
+
+    @property
+    def num_pages(self) -> int:
+        """Calculate total number of pages needed.
+
+        Uses ceiling division to ensure partial pages are counted.
+
+        Returns:
+            Total pages needed to fetch all profiles.
+            Returns 0 if total is 0 (empty result set).
+
+        Example:
+            ```python
+            result = api_client.export_profiles_page(page=0)
+            # If total=5432 and page_size=1000, num_pages=6
+            for page_idx in range(1, result.num_pages):
+                # Fetch remaining pages...
+            ```
+        """
+        if self.total == 0:
+            return 0
+        return math.ceil(self.total / self.page_size)
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize for JSON output.
 
         Returns:
-            Dictionary with all page result fields.
+            Dictionary with all page result fields including pagination metadata.
         """
         return {
             "profiles": self.profiles,
@@ -3129,6 +3164,9 @@ class ProfilePageResult:
             "page": self.page,
             "has_more": self.has_more,
             "profile_count": len(self.profiles),
+            "total": self.total,
+            "page_size": self.page_size,
+            "num_pages": self.num_pages,
         }
 
 

@@ -2073,12 +2073,16 @@ class TestProfilePageResult:
             session_id="abc123",
             page=0,
             has_more=True,
+            total=5000,
+            page_size=1000,
         )
 
         assert result.profiles == profiles
         assert result.session_id == "abc123"
         assert result.page == 0
         assert result.has_more is True
+        assert result.total == 5000
+        assert result.page_size == 1000
 
     def test_create_last_page(self) -> None:
         """ProfilePageResult should handle last page with no session_id."""
@@ -2089,10 +2093,13 @@ class TestProfilePageResult:
             session_id=None,
             page=5,
             has_more=False,
+            total=5001,
+            page_size=1000,
         )
 
         assert result.session_id is None
         assert result.has_more is False
+        assert result.page == 5
 
     def test_to_dict(self) -> None:
         """to_dict should serialize all fields including profile_count."""
@@ -2107,6 +2114,8 @@ class TestProfilePageResult:
             session_id="session123",
             page=2,
             has_more=True,
+            total=5000,
+            page_size=1000,
         )
 
         data = result.to_dict()
@@ -2116,6 +2125,9 @@ class TestProfilePageResult:
         assert data["page"] == 2
         assert data["has_more"] is True
         assert data["profile_count"] == 2
+        assert data["total"] == 5000
+        assert data["page_size"] == 1000
+        assert data["num_pages"] == 5
 
     def test_to_dict_json_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
@@ -2128,6 +2140,8 @@ class TestProfilePageResult:
             session_id="session123",
             page=0,
             has_more=True,
+            total=1000,
+            page_size=1000,
         )
 
         data = result.to_dict()
@@ -2135,6 +2149,8 @@ class TestProfilePageResult:
 
         assert "session123" in json_str
         assert "profile_count" in json_str
+        assert "total" in json_str
+        assert "num_pages" in json_str
 
     def test_frozen_dataclass(self) -> None:
         """ProfilePageResult should be immutable."""
@@ -2145,10 +2161,140 @@ class TestProfilePageResult:
             session_id=None,
             page=0,
             has_more=False,
+            total=0,
+            page_size=1000,
         )
 
         with pytest.raises(dataclasses.FrozenInstanceError):
             result.page = 1  # type: ignore[misc]
+
+
+class TestProfilePageResultPagination:
+    """Tests for ProfilePageResult total, page_size, and num_pages fields.
+
+    These fields enable pre-computing the total number of pages for parallel
+    fetching, allowing all pages to be submitted at once rather than dynamic
+    discovery via has_more flag.
+    """
+
+    def test_profile_page_result_includes_total_field(self) -> None:
+        """ProfilePageResult should include total field from API response.
+
+        The Mixpanel Engage API returns total count of matching profiles,
+        which enables calculating total pages for parallel fetching.
+        """
+        from mixpanel_data.types import ProfilePageResult
+
+        result = ProfilePageResult(
+            profiles=[],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=5000,
+            page_size=1000,
+        )
+        assert result.total == 5000
+
+    def test_profile_page_result_includes_page_size_field(self) -> None:
+        """ProfilePageResult should include page_size field from API response.
+
+        The API returns page_size (typically 1000), needed to calculate
+        total number of pages.
+        """
+        from mixpanel_data.types import ProfilePageResult
+
+        result = ProfilePageResult(
+            profiles=[],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=5000,
+            page_size=1000,
+        )
+        assert result.page_size == 1000
+
+    def test_num_pages_property_computes_ceiling(self) -> None:
+        """num_pages should compute ceil(total / page_size).
+
+        When total doesn't divide evenly, an extra partial page is needed.
+        """
+        from mixpanel_data.types import ProfilePageResult
+
+        result = ProfilePageResult(
+            profiles=[],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=5432,
+            page_size=1000,
+        )
+        # ceil(5432/1000) = 6
+        assert result.num_pages == 6
+
+    def test_num_pages_exact_division(self) -> None:
+        """num_pages should be exact when total divides evenly by page_size."""
+        from mixpanel_data.types import ProfilePageResult
+
+        result = ProfilePageResult(
+            profiles=[],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=5000,
+            page_size=1000,
+        )
+        # 5000 / 1000 = 5 exactly
+        assert result.num_pages == 5
+
+    def test_num_pages_empty_result_returns_zero(self) -> None:
+        """num_pages should return 0 when total is 0.
+
+        An empty result set has no pages to fetch.
+        """
+        from mixpanel_data.types import ProfilePageResult
+
+        result = ProfilePageResult(
+            profiles=[],
+            session_id=None,
+            page=0,
+            has_more=False,
+            total=0,
+            page_size=1000,
+        )
+        assert result.num_pages == 0
+
+    def test_num_pages_single_page(self) -> None:
+        """num_pages should be 1 when total is less than page_size."""
+        from mixpanel_data.types import ProfilePageResult
+
+        result = ProfilePageResult(
+            profiles=[{"$distinct_id": "user1"}],
+            session_id=None,
+            page=0,
+            has_more=False,
+            total=500,
+            page_size=1000,
+        )
+        # 500 < 1000, so only 1 page needed
+        assert result.num_pages == 1
+
+    def test_to_dict_includes_pagination_fields(self) -> None:
+        """to_dict should include total, page_size, and num_pages."""
+        from mixpanel_data.types import ProfilePageResult
+
+        result = ProfilePageResult(
+            profiles=[{"$distinct_id": "user1"}],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=5000,
+            page_size=1000,
+        )
+        d = result.to_dict()
+
+        assert d["total"] == 5000
+        assert d["page_size"] == 1000
+        assert d["num_pages"] == 5
 
 
 class TestProfileProgress:

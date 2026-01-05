@@ -114,6 +114,8 @@ class TestParallelFetchProfiles:
             session_id=None,
             page=0,
             has_more=False,
+            total=0,
+            page_size=1000,
         )
 
         result = parallel_profile_fetcher.fetch_profiles(name="test_profiles")
@@ -129,6 +131,8 @@ class TestParallelFetchProfiles:
             session_id=None,
             page=0,
             has_more=False,
+            total=1,
+            page_size=1000,
         )
 
         parallel_profile_fetcher.fetch_profiles(name="test_profiles")
@@ -156,6 +160,8 @@ class TestParallelFetchProfiles:
             session_id=None,
             page=0,
             has_more=False,
+            total=0,
+            page_size=1000,
         )
         mock_storage.create_profiles_table.return_value = 2
 
@@ -172,12 +178,14 @@ class TestParallelFetchProfiles:
         mock_storage: MagicMock,
     ) -> None:
         """Multiple page fetch retrieves all pages."""
-        # Page 0 returns profiles and session_id
+        # Page 0 returns profiles and session_id, total=2500 means 3 pages
         page_0_result = ProfilePageResult(
             profiles=[{"$distinct_id": f"user{i}"} for i in range(1000)],
             session_id="session_abc",
             page=0,
             has_more=True,
+            total=2500,
+            page_size=1000,
         )
         # Page 1 returns more profiles
         page_1_result = ProfilePageResult(
@@ -185,6 +193,8 @@ class TestParallelFetchProfiles:
             session_id="session_abc",
             page=1,
             has_more=True,
+            total=2500,
+            page_size=1000,
         )
         # Page 2 is last page
         page_2_result = ProfilePageResult(
@@ -192,6 +202,8 @@ class TestParallelFetchProfiles:
             session_id=None,
             page=2,
             has_more=False,
+            total=2500,
+            page_size=1000,
         )
 
         mock_api_client.export_profiles_page.side_effect = [
@@ -217,6 +229,8 @@ class TestParallelFetchProfiles:
             session_id=None,
             page=0,
             has_more=False,
+            total=0,
+            page_size=1000,
         )
 
         parallel_profile_fetcher.fetch_profiles(
@@ -236,6 +250,8 @@ class TestParallelFetchProfiles:
             session_id=None,
             page=0,
             has_more=False,
+            total=0,
+            page_size=1000,
         )
 
         parallel_profile_fetcher.fetch_profiles(
@@ -255,6 +271,8 @@ class TestParallelFetchProfiles:
             session_id=None,
             page=0,
             has_more=False,
+            total=0,
+            page_size=1000,
         )
 
         parallel_profile_fetcher.fetch_profiles(
@@ -292,12 +310,16 @@ class TestParallelSequentialEquivalence:
                     session_id="session_abc",
                     page=0,
                     has_more=True,
+                    total=3,
+                    page_size=2,
                 )
             return ProfilePageResult(
                 profiles=profiles_page_1 if page == 1 else [],
                 session_id=None,
                 page=page,
                 has_more=False,
+                total=3,
+                page_size=2,
             )
 
         mock_api_client.export_profiles_page.side_effect = mock_page_fetch
@@ -357,7 +379,7 @@ class TestWorkerCapping:
         max_observed = 0
         lock = threading.Lock()
 
-        # Create many pages to test concurrency
+        # Create many pages to test concurrency (11 pages total)
         def create_page_result(page: int) -> ProfilePageResult:
             nonlocal concurrent_count, max_observed
             with lock:
@@ -373,12 +395,16 @@ class TestWorkerCapping:
                     session_id="session_abc",
                     page=page,
                     has_more=True,
+                    total=11,
+                    page_size=1,
                 )
             return ProfilePageResult(
                 profiles=[],
                 session_id=None,
                 page=page,
                 has_more=False,
+                total=11,
+                page_size=1,
             )
 
         mock_api_client.export_profiles_page.side_effect = (
@@ -437,12 +463,16 @@ class TestWorkerCapping:
                     session_id="session_abc",
                     page=page,
                     has_more=True,
+                    total=6,
+                    page_size=1,
                 )
             return ProfilePageResult(
                 profiles=[],
                 session_id=None,
                 page=page,
                 has_more=False,
+                total=6,
+                page_size=1,
             )
 
         mock_api_client.export_profiles_page.side_effect = (
@@ -476,8 +506,7 @@ class TestRateLimitWarnings:
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Warning is logged when estimated pages > 48."""
-        # Create a response indicating many pages (simulated via repeated has_more)
-        # We'll simulate page 0 returning metadata that suggests 50+ pages
+        # Create a response indicating 50+ pages via total/page_size
         page_0_profiles = [{"$distinct_id": f"user{i}"} for i in range(1000)]
 
         def create_page_result(page: int, **kwargs: Any) -> ProfilePageResult:  # noqa: ARG001
@@ -489,12 +518,16 @@ class TestRateLimitWarnings:
                     session_id="session_abc",
                     page=page,
                     has_more=True,
+                    total=50000,
+                    page_size=1000,
                 )
             return ProfilePageResult(
                 profiles=[],
                 session_id=None,
                 page=page,
                 has_more=False,
+                total=50000,
+                page_size=1000,
             )
 
         mock_api_client.export_profiles_page.side_effect = create_page_result
@@ -527,6 +560,8 @@ class TestRateLimitWarnings:
             session_id=None,
             page=0,
             has_more=False,
+            total=0,
+            page_size=1000,
         )
         mock_storage.create_profiles_table.return_value = 1
 
@@ -568,12 +603,16 @@ class TestProgressCallback:
                     session_id="session_abc",
                     page=0,
                     has_more=True,
+                    total=2,
+                    page_size=1,
                 )
             return ProfilePageResult(
                 profiles=[{"$distinct_id": "user2"}] if page == 1 else [],
                 session_id=None,
                 page=page,
                 has_more=False,
+                total=2,
+                page_size=1,
             )
 
         mock_api_client.export_profiles_page.side_effect = mock_page_fetch
@@ -610,6 +649,8 @@ class TestProgressCallback:
                     session_id="session_abc",
                     page=0,
                     has_more=True,
+                    total=150,
+                    page_size=100,
                 )
             return ProfilePageResult(
                 profiles=[{"$distinct_id": f"user{i}"} for i in range(100, 150)]
@@ -618,6 +659,8 @@ class TestProgressCallback:
                 session_id=None,
                 page=page,
                 has_more=False,
+                total=150,
+                page_size=100,
             )
 
         mock_api_client.export_profiles_page.side_effect = mock_page_fetch
@@ -660,12 +703,16 @@ class TestErrorHandling:
             session_id="session_abc",
             page=0,
             has_more=True,
+            total=3,
+            page_size=1,
         )
         page_2_result = ProfilePageResult(
             profiles=[{"$distinct_id": "user3"}],
             session_id=None,
             page=2,
             has_more=False,
+            total=3,
+            page_size=1,
         )
 
         call_count = [0]
@@ -696,12 +743,14 @@ class TestErrorHandling:
         mock_storage: MagicMock,
     ) -> None:
         """on_page_complete callback is invoked with error on failure."""
-        # Page 0 succeeds, then fails
+        # Page 0 succeeds, then page 1 fails
         page_0_result = ProfilePageResult(
             profiles=[{"$distinct_id": "user1"}],
             session_id="session_abc",
             page=0,
             has_more=True,
+            total=2,
+            page_size=1,
         )
 
         def mock_page_fetch(page: int, **kwargs: Any) -> ProfilePageResult:  # noqa: ARG001
@@ -726,3 +775,219 @@ class TestErrorHandling:
         assert len(successes) >= 1
         assert len(failures) >= 1
         assert failures[0].error is not None
+
+
+# =============================================================================
+# Pre-Computed Page Approach Tests (T7)
+# =============================================================================
+
+
+class TestPreComputedPageApproach:
+    """Tests for pre-computed page approach using total/page_size from API."""
+
+    def test_uses_num_pages_from_page_0_metadata(
+        self,
+        parallel_profile_fetcher: Any,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """All pages are submitted based on num_pages computed from page 0.
+
+        When page 0 returns total=3000, page_size=1000, we know num_pages=3
+        and should immediately submit pages 1 and 2 in parallel.
+        """
+        # Page 0 indicates total=3000, page_size=1000 -> 3 pages
+        page_0_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(1000)],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=3000,
+            page_size=1000,
+        )
+        page_1_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(1000, 2000)],
+            session_id="session_abc",
+            page=1,
+            has_more=True,
+            total=3000,
+            page_size=1000,
+        )
+        page_2_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(2000, 3000)],
+            session_id=None,
+            page=2,
+            has_more=False,
+            total=3000,
+            page_size=1000,
+        )
+
+        mock_api_client.export_profiles_page.side_effect = [
+            page_0_result,
+            page_1_result,
+            page_2_result,
+        ]
+        mock_storage.create_profiles_table.return_value = 1000
+        mock_storage.append_profiles_table.return_value = 1000
+
+        result = parallel_profile_fetcher.fetch_profiles(name="test_profiles")
+
+        # Exactly 3 pages should be fetched (0, 1, 2)
+        assert mock_api_client.export_profiles_page.call_count == 3
+        assert result.successful_pages == 3
+        assert result.total_rows == 3000
+
+    def test_progress_callback_has_total_pages_set(
+        self,
+        parallel_profile_fetcher: Any,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """Progress callback receives total_pages from pre-computed approach."""
+        # Page 0 indicates total=2000, page_size=1000 -> 2 pages
+        page_0_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(1000)],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=2000,
+            page_size=1000,
+        )
+        page_1_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(1000, 2000)],
+            session_id=None,
+            page=1,
+            has_more=False,
+            total=2000,
+            page_size=1000,
+        )
+
+        mock_api_client.export_profiles_page.side_effect = [
+            page_0_result,
+            page_1_result,
+        ]
+        mock_storage.create_profiles_table.return_value = 1000
+        mock_storage.append_profiles_table.return_value = 1000
+
+        progress_updates: list[ProfileProgress] = []
+
+        parallel_profile_fetcher.fetch_profiles(
+            name="test_profiles",
+            on_page_complete=lambda p: progress_updates.append(p),
+        )
+
+        # All progress updates should have total_pages set (not None)
+        assert len(progress_updates) == 2
+        for progress in progress_updates:
+            assert progress.total_pages is not None
+            assert progress.total_pages == 2
+
+    def test_empty_result_returns_immediately(
+        self,
+        parallel_profile_fetcher: Any,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """When total=0, returns immediately after page 0 without parallelism."""
+        # Page 0 indicates total=0 (empty dataset)
+        page_0_result = ProfilePageResult(
+            profiles=[],
+            session_id=None,
+            page=0,
+            has_more=False,
+            total=0,
+            page_size=1000,
+        )
+
+        mock_api_client.export_profiles_page.return_value = page_0_result
+        mock_storage.create_profiles_table.return_value = 0
+
+        result = parallel_profile_fetcher.fetch_profiles(name="test_profiles")
+
+        # Only page 0 should be fetched
+        assert mock_api_client.export_profiles_page.call_count == 1
+        assert result.successful_pages == 1
+        assert result.total_rows == 0
+
+    def test_single_page_no_parallelism(
+        self,
+        parallel_profile_fetcher: Any,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """When total < page_size, only page 0 is fetched (no parallelism)."""
+        # Page 0 indicates total=500, page_size=1000 -> 1 page
+        page_0_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(500)],
+            session_id=None,
+            page=0,
+            has_more=False,
+            total=500,
+            page_size=1000,
+        )
+
+        mock_api_client.export_profiles_page.return_value = page_0_result
+        mock_storage.create_profiles_table.return_value = 500
+
+        result = parallel_profile_fetcher.fetch_profiles(name="test_profiles")
+
+        # Only page 0 should be fetched
+        assert mock_api_client.export_profiles_page.call_count == 1
+        assert result.successful_pages == 1
+        assert result.total_rows == 500
+
+    def test_middle_page_failure_tracked_correctly(
+        self,
+        parallel_profile_fetcher: Any,
+        mock_api_client: MagicMock,
+        mock_storage: MagicMock,
+    ) -> None:
+        """Middle page failure is tracked while other pages succeed."""
+        # Page 0 indicates total=4000, page_size=1000 -> 4 pages
+        page_0_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(1000)],
+            session_id="session_abc",
+            page=0,
+            has_more=True,
+            total=4000,
+            page_size=1000,
+        )
+        page_1_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(1000, 2000)],
+            session_id="session_abc",
+            page=1,
+            has_more=True,
+            total=4000,
+            page_size=1000,
+        )
+        # Page 2 will fail
+        page_3_result = ProfilePageResult(
+            profiles=[{"$distinct_id": f"user{i}"} for i in range(3000, 4000)],
+            session_id=None,
+            page=3,
+            has_more=False,
+            total=4000,
+            page_size=1000,
+        )
+
+        def mock_page_fetch(page: int, **kwargs: Any) -> ProfilePageResult:  # noqa: ARG001
+            if page == 0:
+                return page_0_result
+            if page == 1:
+                return page_1_result
+            if page == 2:
+                raise Exception("Network error on page 2")
+            return page_3_result
+
+        mock_api_client.export_profiles_page.side_effect = mock_page_fetch
+        mock_storage.create_profiles_table.return_value = 1000
+        mock_storage.append_profiles_table.return_value = 1000
+
+        result = parallel_profile_fetcher.fetch_profiles(name="test_profiles")
+
+        # Should track page 2 as failed
+        assert result.has_failures is True
+        assert result.failed_pages == 1
+        assert 2 in result.failed_page_indices
+        # Other pages should succeed
+        assert result.successful_pages == 3

@@ -63,6 +63,8 @@ def test_single_page_fetch_with_real_duckdb(tmp_path: Path) -> None:
                 page=0,
                 session_id="test-session-123",
                 has_more=False,
+                total=2,
+                page_size=1000,
             )
         # No more pages
         return ProfilePageResult(
@@ -70,6 +72,8 @@ def test_single_page_fetch_with_real_duckdb(tmp_path: Path) -> None:
             page=page,
             session_id=session_id or "test-session-123",
             has_more=False,
+            total=2,
+            page_size=1000,
         )
 
     mock_api_client.export_profiles_page.side_effect = mock_export_profiles_page
@@ -140,6 +144,8 @@ def test_multi_page_parallel_fetch_with_real_duckdb(tmp_path: Path) -> None:
             page=page,
             session_id=session_id or "test-session-456",
             has_more=has_more,
+            total=5,
+            page_size=2,
         )
 
     mock_api_client.export_profiles_page.side_effect = mock_export_profiles_page
@@ -202,6 +208,8 @@ def test_progress_callback_with_real_duckdb(tmp_path: Path) -> None:
             page=page,
             session_id=session_id or "test-session-789",
             has_more=has_more,
+            total=3,
+            page_size=2,
         )
 
     mock_api_client.export_profiles_page.side_effect = mock_export_profiles_page
@@ -270,6 +278,8 @@ def test_partial_failure_preserves_successful_data(tmp_path: Path) -> None:
                 page=0,
                 session_id=session_id or "test-session-fail",
                 has_more=True,
+                total=2,
+                page_size=1,
             )
         elif page == 1:
             # Second page fails
@@ -281,6 +291,8 @@ def test_partial_failure_preserves_successful_data(tmp_path: Path) -> None:
                 page=page,
                 session_id=session_id or "test-session-fail",
                 has_more=False,
+                total=2,
+                page_size=1,
             )
 
     mock_api_client.export_profiles_page.side_effect = mock_export_profiles_page
@@ -338,12 +350,16 @@ def test_json_properties_queryable_with_real_duckdb(tmp_path: Path) -> None:
                 page=0,
                 session_id="test-session-json",
                 has_more=False,
+                total=2,
+                page_size=1000,
             )
         return ProfilePageResult(
             profiles=[],
             page=page,
             session_id="test-session-json",
             has_more=False,
+            total=2,
+            page_size=1000,
         )
 
     mock_api_client.export_profiles_page.side_effect = mock_export_profiles_page
