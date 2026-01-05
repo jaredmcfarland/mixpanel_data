@@ -37,6 +37,7 @@ _STOP_SENTINEL = object()
 _MAX_WORKERS_CAP = 5
 
 # Threshold for rate limit warnings (60 requests/hour limit)
+# Set at 80% (48/60) to warn before hitting the limit
 _RATE_LIMIT_WARNING_THRESHOLD = 48
 
 
@@ -192,7 +193,11 @@ class ParallelProfileFetcherService:
         num_pages = page_0_result.num_pages
 
         def process_page_0() -> None:
-            """Process the initial page 0 that was already fetched."""
+            """Process the initial page 0 that was already fetched.
+
+            Note: Runs synchronously before parallel execution starts,
+            so no locking is required for shared state modifications.
+            """
             nonlocal table_created, total_rows, successful_pages, failed_pages
             nonlocal cumulative_rows
 
