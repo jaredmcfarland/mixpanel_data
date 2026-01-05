@@ -863,7 +863,7 @@ class MixpanelAPIClient:
             if where:
                 params["where"] = where
             if cohort_id:
-                params["filter_by_cohort"] = cohort_id
+                params["filter_by_cohort"] = json.dumps({"id": cohort_id})
             if output_properties:
                 params["output_properties"] = json.dumps(output_properties)
             if distinct_id:

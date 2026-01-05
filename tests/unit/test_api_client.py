@@ -764,7 +764,8 @@ class TestProfileExport:
         with create_mock_client(test_credentials, handler) as client:
             list(client.export_profiles(cohort_id="12345"))
 
-        assert captured_body.get("filter_by_cohort") == "12345"
+        # filter_by_cohort requires JSON object format {"id": cohort_id}
+        assert captured_body.get("filter_by_cohort") == '{"id": "12345"}'
 
     def test_output_properties_filter(self, test_credentials: Credentials) -> None:
         """Should include output_properties as JSON array string."""
@@ -804,7 +805,8 @@ class TestProfileExport:
                 )
             )
 
-        assert captured_body.get("filter_by_cohort") == "cohort_abc"
+        # filter_by_cohort requires JSON object format {"id": cohort_id}
+        assert captured_body.get("filter_by_cohort") == '{"id": "cohort_abc"}'
         assert json.loads(captured_body.get("output_properties", "[]")) == ["$email"]
 
     def test_no_cohort_id_when_none(self, test_credentials: Credentials) -> None:
@@ -2106,7 +2108,8 @@ class TestEngageIncludeAllUsersParameter:
                 )
             )
 
-        assert captured_body.get("filter_by_cohort") == "cohort_123"
+        # filter_by_cohort requires JSON object format {"id": cohort_id}
+        assert captured_body.get("filter_by_cohort") == '{"id": "cohort_123"}'
         assert captured_body.get("include_all_users") is True
 
     def test_export_profiles_include_all_users_false_sent_with_cohort(
@@ -2137,7 +2140,8 @@ class TestEngageIncludeAllUsersParameter:
                 )
             )
 
-        assert captured_body.get("filter_by_cohort") == "cohort_123"
+        # filter_by_cohort requires JSON object format {"id": cohort_id}
+        assert captured_body.get("filter_by_cohort") == '{"id": "cohort_123"}'
         assert captured_body.get("include_all_users") is False
 
     def test_export_profiles_include_all_users_not_sent_without_cohort(
