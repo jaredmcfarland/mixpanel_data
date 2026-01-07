@@ -1,5 +1,7 @@
 # Installation
 
+> **⚠️ Pre-release Software**: This package is under active development and not yet published to PyPI. Install directly from GitHub.
+
 ## Requirements
 
 - Python 3.11 or higher
@@ -8,7 +10,7 @@
 ## Installing with pip
 
 ```bash
-pip install mixpanel_data
+pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
 ```
 
 ## Installing with uv
@@ -16,13 +18,13 @@ pip install mixpanel_data
 [uv](https://github.com/astral-sh/uv) is a fast Python package installer:
 
 ```bash
-uv pip install mixpanel_data
+uv pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
 ```
 
 Or add to your project:
 
 ```bash
-uv add mixpanel_data
+uv add git+https://github.com/jaredmcfarland/mixpanel_data.git
 ```
 
 ## Optional Dependencies
