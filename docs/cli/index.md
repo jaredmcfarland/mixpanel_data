@@ -2,6 +2,11 @@
 
 The `mp` command provides full access to mixpanel_data functionality from the command line.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[CLI Usage Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.1-cli-usage)**
+
+    Ask questions about CLI commands, explore options, or get help with specific workflows.
+
 ## Installation
 
 The CLI is installed automatically with the package:

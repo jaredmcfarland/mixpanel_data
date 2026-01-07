@@ -2,6 +2,11 @@
 
 How mixpanel_data uses DuckDB for local data storage.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[StorageEngine Deep Dive →](https://deepwiki.com/jaredmcfarland/mixpanel_data/5.3.2-storageengine)**
+
+    Ask questions about DuckDB integration, concurrency, or storage internals.
+
 ## Overview
 
 The `StorageEngine` class wraps DuckDB to provide persistent local storage for fetched Mixpanel data. Understanding DuckDB's concurrency model helps avoid conflicts when running multiple `mp` commands.

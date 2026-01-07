@@ -2,6 +2,11 @@
 
 Fetch events and user profiles from Mixpanel into a local DuckDB database for fast, repeated SQL queries.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Fetching Data Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.3-fetching-data)**
+
+    Ask questions about fetch options, parallel processing, or troubleshoot data ingestion issues.
+
 ## Fetching Events
 
 ### Basic Usage

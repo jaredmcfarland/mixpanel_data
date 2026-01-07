@@ -2,6 +2,11 @@
 
 Query Mixpanel's analytics APIs directly for real-time data without fetching to local storage.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Querying Data Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.4-querying-data)**
+
+    Ask questions about segmentation, funnels, retention, JQL, or other live query methods.
+
 ## When to Use Live Queries
 
 Use live queries when:

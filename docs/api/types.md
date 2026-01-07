@@ -1,5 +1,10 @@
 # Result Types
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Result Types Reference →](https://deepwiki.com/jaredmcfarland/mixpanel_data/7.5-result-type-reference)**
+
+    Ask questions about result structures, DataFrame conversion, or type usage patterns.
+
 All result types are immutable frozen dataclasses with:
 
 - Lazy DataFrame conversion via the `.df` property

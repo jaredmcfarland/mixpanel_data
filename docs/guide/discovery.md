@@ -2,6 +2,11 @@
 
 Explore your Mixpanel project's schema before writing queries. Discovery results are cached for the session.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Discovery Methods Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.2-discovery-methods)**
+
+    Ask questions about schema exploration, caching behavior, or how to discover your data landscape.
+
 ## Listing Events
 
 Get all event names in your project:
