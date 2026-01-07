@@ -2,6 +2,11 @@
 
 mixpanel_data uses Service Accounts for authentication and supports multiple configuration methods for credentials and settings.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Authentication Setup →](https://deepwiki.com/jaredmcfarland/mixpanel_data/2.2-authentication-setup)**
+
+    Ask questions about service accounts, environment variables, or multi-account configuration.
+
 ## Environment Variables
 
 Set these environment variables to configure credentials:

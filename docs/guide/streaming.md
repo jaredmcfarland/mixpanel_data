@@ -2,6 +2,11 @@
 
 Stream events and user profiles directly from Mixpanel without storing to local database. Ideal for ETL pipelines, one-time exports, and Unix-style piping.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Data Flow Patterns →](https://deepwiki.com/jaredmcfarland/mixpanel_data/4.1-data-flow-patterns)**
+
+    Ask questions about streaming vs fetching, memory-efficient processing, or ETL pipeline patterns.
+
 ## When to Stream vs Fetch
 
 | Use Case | Recommended | Why |

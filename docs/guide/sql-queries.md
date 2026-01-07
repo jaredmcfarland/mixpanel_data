@@ -2,6 +2,11 @@
 
 Query your fetched data with SQL using DuckDB's powerful analytical engine.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Querying Data Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.4-querying-data)**
+
+    Ask questions about SQL patterns, JSON property access, or how to structure complex analytical queries.
+
 ## Basic Queries
 
 ### Execute and Get DataFrame

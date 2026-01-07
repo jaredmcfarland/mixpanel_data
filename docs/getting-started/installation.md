@@ -2,6 +2,11 @@
 
 > **⚠️ Pre-release Software**: This package is under active development and not yet published to PyPI. Install directly from GitHub.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Installation Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/2.1-installation)**
+
+    Ask questions about requirements, dependencies, or troubleshoot installation issues.
+
 ## Requirements
 
 - Python 3.11 or higher

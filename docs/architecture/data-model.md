@@ -2,6 +2,11 @@
 
 How Mixpanel data maps to local storage.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Data Transformation Deep Dive →](https://deepwiki.com/jaredmcfarland/mixpanel_data/4.5-data-transformation)**
+
+    Ask questions about how Mixpanel events and profiles are transformed into DuckDB schemas, or explore the transformation logic.
+
 ## Mixpanel Data Model
 
 Mixpanel tracks two primary data types:

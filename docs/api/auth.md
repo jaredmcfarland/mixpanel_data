@@ -2,6 +2,11 @@
 
 The auth module provides credential management and configuration.
 
+!!! tip "Explore on DeepWiki"
+    🤖 **[Configuration Reference →](https://deepwiki.com/jaredmcfarland/mixpanel_data/7.3-configuration-reference)**
+
+    Ask questions about credential management, ConfigManager, or account configuration.
+
 ## Overview
 
 ```python
