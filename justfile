@@ -119,10 +119,6 @@ clean:
 build: clean
     uv build
 
-# Run the CLI
-mp *args:
-    uv run mp {{ args }}
-
 # === Documentation ===
 
 # Generate man pages for the CLI

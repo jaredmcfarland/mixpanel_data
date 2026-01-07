@@ -2,6 +2,11 @@
 
 A complete programmable interface to Mixpanel analytics—available as both a Python library and CLI.
 
+!!! tip "AI-Friendly Documentation"
+    🤖 **[Explore on DeepWiki →](https://deepwiki.com/jaredmcfarland/mixpanel_data)**
+
+    DeepWiki provides an AI-optimized view of this project—perfect for code assistants, agents, and LLM-powered workflows. Ask questions about the codebase, explore architecture, or get contextual help.
+
 ## Why This Exists
 
 Mixpanel's web UI is built for interactive exploration. But many workflows need something different: scripts that run unattended, notebooks that combine Mixpanel data with other sources, agents that query analytics programmatically, or pipelines that move data between systems.
@@ -172,6 +177,18 @@ The structured output and deterministic command interface make `mixpanel_data` p
 Discovery commands are particularly valuable: an agent can rapidly survey your data landscape—listing events, inspecting properties, sampling values—then construct accurate queries based on what actually exists rather than guessing.
 
 The tool is designed to be self-documenting: comprehensive `--help` on every command, complete docstrings on every method, full type annotations throughout, and rich exception messages that explain what went wrong and how to fix it. Agents can discover capabilities, learn correct usage, and recover from mistakes autonomously.
+
+### LLM-Optimized Documentation
+
+This documentation is built with AI consumption in mind. In addition to the standard HTML pages, we provide:
+
+| Endpoint | Size | Use Case |
+|----------|------|----------|
+| [`llms.txt`](https://jaredmcfarland.github.io/mixpanel_data/llms.txt) | ~3KB | Structured index—discover what documentation exists |
+| [`llms-full.txt`](https://jaredmcfarland.github.io/mixpanel_data/llms-full.txt) | ~400KB | Complete documentation in one file—comprehensive search |
+| `*.md` pages | Varies | Each HTML page has a corresponding markdown file at the same path |
+
+For interactive exploration of the codebase itself, see [DeepWiki](https://deepwiki.com/jaredmcfarland/mixpanel_data).
 
 ## Next Steps
 

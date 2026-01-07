@@ -223,6 +223,20 @@ just test -k test_name
 just test-pbt-dev
 ```
 
+### CLI Debugging (IMPORTANT)
+
+**Never suppress stderr when running CLI commands.** The `mp` CLI provides rich error messages, stack traces, and diagnostic information that are essential for debugging.
+
+```bash
+# WRONG - hides errors
+uv run mp query segmentation -e login 2>/dev/null
+
+# CORRECT - preserves error output
+uv run mp query segmentation -e login
+```
+
+Suppressing stderr causes silent failures and makes it impossible to diagnose issues like rate limits, authentication errors, or malformed queries.
+
 ## Technology Stack
 
 - Python 3.11+ with full type hints (mypy --strict compliant)
