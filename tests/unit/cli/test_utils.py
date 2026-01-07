@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import click.exceptions
@@ -677,29 +678,28 @@ class TestOutputResult:
             # hard line breaks that would corrupt JSON
             assert call_args.kwargs.get("soft_wrap") is True
 
-    def test_jsonl_output_uses_soft_wrap(self) -> None:
-        """Test that JSONL output uses soft_wrap=True."""
-        ctx = MagicMock(spec=typer.Context)
-        ctx.obj = {"format": "jsonl"}
+    @pytest.mark.parametrize(
+        "fmt, data",
+        [
+            ("jsonl", [{"name": "Value with newline\nin it"}]),
+            ("csv", [{"name": "test"}]),
+            ("plain", ["a long line of text that might otherwise be wrapped"]),
+            ("unknown_format", {"key": "value"}),  # Tests the default case
+        ],
+    )
+    def test_structured_data_formats_use_soft_wrap(
+        self, fmt: str, data: Any
+    ) -> None:
+        """Test that JSONL, CSV, plain, and default formats use soft_wrap=True.
 
-        data = [{"name": "Value with newline\nin it"}]
+        Parameterized test covering all structured data output formats to verify
+        they prevent Rich from inserting hard line breaks when piped.
+        """
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {}
 
         with patch("mixpanel_data.cli.utils.console") as mock_console:
-            output_result(ctx, data, format="jsonl")
-
-            mock_console.print.assert_called_once()
-            call_args = mock_console.print.call_args
-            assert call_args.kwargs.get("soft_wrap") is True
-
-    def test_csv_output_uses_soft_wrap(self) -> None:
-        """Test that CSV output uses soft_wrap=True."""
-        ctx = MagicMock(spec=typer.Context)
-        ctx.obj = {"format": "csv"}
-
-        data = [{"name": "test"}]
-
-        with patch("mixpanel_data.cli.utils.console") as mock_console:
-            output_result(ctx, data, format="csv")
+            output_result(ctx, data, format=fmt)
 
             mock_console.print.assert_called_once()
             call_args = mock_console.print.call_args
