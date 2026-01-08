@@ -55,25 +55,9 @@ class ResultWithTableAndDict(Protocol):
 
 # Console instances for stdout/stderr separation
 # Data output goes to stdout; progress/errors go to stderr
+# Note: Table cell content is escaped via rich_escape() in formatters.py
 console = Console()
 err_console = Console(stderr=True, no_color=bool(os.environ.get("NO_COLOR")))
-
-# Plain console for machine-readable output (JSON, JSONL, CSV, plain text)
-# Disables all Rich formatting that could corrupt structured data:
-# - markup=False: Prevents [text] from being interpreted as style tags
-# - highlight=False: Disables syntax highlighting of URLs, numbers, UUIDs
-# - emoji=False: Prevents :emoji_name: from being converted to emoji
-# - soft_wrap=True: Disables word wrapping that could break long lines
-# - force_terminal=False: Never emit ANSI escape codes
-# - no_color=True: Belt-and-suspenders for color disabling
-plain_console = Console(
-    markup=False,
-    highlight=False,
-    emoji=False,
-    soft_wrap=True,
-    force_terminal=False,
-    no_color=True,
-)
 
 
 class ExitCode(IntEnum):
@@ -479,7 +463,7 @@ def output_result(
                 output = json.dumps(results, indent=2)
         else:
             output = format_json(data)
-        plain_console.print(output)
+        print(output)
     elif fmt == "jsonl":
         if jq_filter:
             # Apply jq filter, then output each result as JSONL (one per line)
@@ -487,24 +471,24 @@ def output_result(
             results = _apply_jq_filter(json_str, jq_filter)
             # Output each result element on its own line
             for item in results:
-                plain_console.print(json.dumps(item))
+                print(json.dumps(item))
         else:
             output = format_jsonl(data)
-            plain_console.print(output)
+            print(output)
     elif fmt == "table":
-        # Tables use styled console for visual formatting
+        # Tables use styled console for box-drawing characters
         table = format_table(data, columns)
         console.print(table)
     elif fmt == "csv":
         output = format_csv(data)
-        plain_console.print(output, end="")
+        print(output, end="")
     elif fmt == "plain":
         output = format_plain(data)
-        plain_console.print(output)
+        print(output)
     else:
         # Default to JSON for unknown formats
         output = format_json(data)
-        plain_console.print(output)
+        print(output)
 
 
 @contextmanager
