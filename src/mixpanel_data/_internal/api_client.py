@@ -768,8 +768,10 @@ class MixpanelAPIClient:
 
                     response.raise_for_status()
 
-                    # Use buffered JSONL reader to handle chunk boundary issues
-                    # with gzip-compressed streaming responses
+                    # Use buffered JSONL reader instead of iter_lines().
+                    # httpx iter_lines() can incorrectly split lines at gzip
+                    # decompression chunk boundaries, causing JSON parse errors.
+                    # See: _iter_jsonl_lines docstring for implementation details.
                     for line in _iter_jsonl_lines(response):
                         try:
                             event = json.loads(line)
