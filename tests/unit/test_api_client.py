@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 import pytest
+from httpx._types import SyncByteStream
 from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import (
@@ -2549,6 +2550,34 @@ class TestExportProfilesPagePagination:
         assert result.num_pages == 6
 
 
+class _IterableByteStream(SyncByteStream):
+    """Helper stream that yields chunks individually for testing chunk boundaries.
+
+    Unlike httpx.ByteStream which may combine data, this stream yields each
+    chunk from the input list as a separate iteration, allowing tests to
+    verify correct handling of data split across chunk boundaries.
+    """
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        """Initialize with a list of byte chunks to yield.
+
+        Args:
+            chunks: List of byte chunks to yield individually.
+        """
+        self._chunks = chunks
+
+    def __iter__(self) -> Any:
+        """Iterate over chunks.
+
+        Returns:
+            Iterator over byte chunks.
+        """
+        return iter(self._chunks)
+
+    def close(self) -> None:
+        """Close the stream (no-op for this implementation)."""
+
+
 class TestIterJsonlLines:
     """Tests for the _iter_jsonl_lines buffered line reader.
 
@@ -2643,11 +2672,8 @@ class TestIterJsonlLines:
         ]
 
         def handler(_request: httpx.Request) -> httpx.Response:
-            # Use an iterator extension to simulate chunked response
-            return httpx.Response(
-                200,
-                stream=httpx.ByteStream(b"".join(chunks)),
-            )
+            # Use _IterableByteStream to yield each chunk separately
+            return httpx.Response(200, stream=_IterableByteStream(chunks))
 
         with (
             httpx.Client(transport=httpx.MockTransport(handler)) as client,
@@ -2660,6 +2686,32 @@ class TestIterJsonlLines:
             '{"event":"second"}',
             '{"event":"third"}',
         ]
+
+    def test_utf8_split_across_chunks(self) -> None:
+        """Should handle multi-byte UTF-8 characters split across chunk boundaries.
+
+        When a multi-byte UTF-8 character is split between chunks (e.g., the 3-byte
+        sequence for a CJK character), the buffer must accumulate the complete
+        sequence before decoding. Uses errors='replace' to handle any invalid
+        sequences gracefully.
+        """
+        # "日本語" in UTF-8: 日=\xe6\x97\xa5, 本=\xe6\x9c\xac, 語=\xe8\xaa\x9e
+        # Split in the middle of "本" (after first byte \xe6)
+        chunks = [
+            b'{"event":"\xe6\x97\xa5\xe6',  # "日" complete, first byte of "本"
+            b'\x9c\xac\xe8\xaa\x9e"}\n',  # rest of "本" and "語" complete
+        ]
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, stream=_IterableByteStream(chunks))
+
+        with (
+            httpx.Client(transport=httpx.MockTransport(handler)) as client,
+            client.stream("GET", "http://test.example.com") as response,
+        ):
+            lines = list(_iter_jsonl_lines(response))
+
+        assert lines == ['{"event":"日本語"}']
 
     def test_empty_response(self) -> None:
         """Should handle empty response gracefully.

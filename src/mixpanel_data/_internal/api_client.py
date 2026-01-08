@@ -60,18 +60,23 @@ def _iter_jsonl_lines(response: httpx.Response) -> Iterator[str]:
                 event = json.loads(line)
         ```
     """
-    buffer = b""
+    # Use bytearray for efficient in-place buffer extension (bytes would copy on each +=)
+    buffer = bytearray()
     for chunk in response.iter_bytes():
-        buffer += chunk
-        # Split on newlines but keep the last segment (may be incomplete)
-        while b"\n" in buffer:
-            line, buffer = buffer.split(b"\n", 1)
+        buffer.extend(chunk)
+        # Extract complete lines from buffer
+        while True:
+            newline_pos = buffer.find(b"\n")
+            if newline_pos == -1:
+                break
+            line = bytes(buffer[:newline_pos])
+            del buffer[: newline_pos + 1]
             line_str = line.decode("utf-8", errors="replace").strip()
             if line_str:
                 yield line_str
     # Handle any remaining data in buffer (final line without trailing newline)
     if buffer:
-        line_str = buffer.decode("utf-8", errors="replace").strip()
+        line_str = bytes(buffer).decode("utf-8", errors="replace").strip()
         if line_str:
             yield line_str
 
