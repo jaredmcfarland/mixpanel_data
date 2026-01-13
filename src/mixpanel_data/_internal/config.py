@@ -13,7 +13,7 @@ from dataclasses import dataclass
 if sys.version_info >= (3, 11):
     import tomllib
 else:
-    import tomli as tomllib  # type: ignore[import-not-found]
+    import tomli as tomllib  # type: ignore[import-not-found,unused-ignore]
 from pathlib import Path
 from typing import Any, Literal, cast
 
