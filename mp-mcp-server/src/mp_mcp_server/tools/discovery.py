@@ -66,7 +66,9 @@ def list_properties(
     """
     ws = get_workspace(ctx)
     property_names = ws.properties(event=event)
-    return [{"name": name, "type": "string"} for name in property_names]
+    # Note: ws.properties() only returns names, not types
+    # Type information would require additional API calls
+    return [{"name": name, "type": "unknown"} for name in property_names]
 
 
 @mcp.tool
@@ -74,7 +76,7 @@ def list_properties(
 def list_property_values(
     ctx: Context,
     event: str,
-    property: str,
+    property_name: str,
     limit: int = 100,
 ) -> list[Any]:
     """List sample values for a specific property.
@@ -85,7 +87,7 @@ def list_property_values(
     Args:
         ctx: FastMCP context with workspace access.
         event: Event name containing the property.
-        property: Property name to get values for.
+        property_name: Property name to get values for.
         limit: Maximum number of values to return (default 100).
 
     Returns:
@@ -96,7 +98,7 @@ def list_property_values(
         Returns: ["Chrome", "Firefox", "Safari", ...]
     """
     ws = get_workspace(ctx)
-    return ws.property_values(event=event, property_name=property, limit=limit)
+    return ws.property_values(event=event, property_name=property_name, limit=limit)
 
 
 @mcp.tool
@@ -221,5 +223,5 @@ def workspace_info(ctx: Context) -> dict[str, Any]:
     return {
         "project_id": info.project_id,
         "region": info.region,
-        "tables": [t.to_dict() for t in ws.tables()] if hasattr(ws, "tables") else [],
+        "tables": [t.to_dict() for t in ws.tables()],
     }

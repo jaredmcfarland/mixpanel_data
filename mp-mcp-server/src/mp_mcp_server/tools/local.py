@@ -200,8 +200,9 @@ def event_breakdown(
         Uses: event_breakdown(table="events")
     """
     ws = get_workspace(ctx)
+    # Quote table name to prevent SQL injection
     return ws.sql_rows(
-        f"SELECT event_name, COUNT(*) as count FROM {table} GROUP BY event_name ORDER BY count DESC"
+        f'SELECT event_name, COUNT(*) as count FROM "{table}" GROUP BY event_name ORDER BY count DESC'
     ).to_dicts()
 
 
@@ -256,6 +257,18 @@ def column_stats(
         Uses: column_stats(table="events", column="time")
     """
     ws = get_workspace(ctx)
+    # Validate identifiers to prevent SQL injection
+    # Table names must be valid identifiers (alphanumeric + underscore)
+    # Column can be a name or expression like properties->>'$.field'
+    if not table.replace("_", "").isalnum():
+        raise ValueError(f"Invalid table name: {table}")
+    # For column, we allow JSON path expressions but validate no dangerous chars
+    dangerous_chars = [";", "--", "/*", "*/", "DROP", "DELETE", "INSERT", "UPDATE"]
+    col_upper = column.upper()
+    for char in dangerous_chars:
+        if char in col_upper:
+            raise ValueError(f"Invalid column expression: {column}")
+
     rows = ws.sql_rows(
         f"""
         SELECT
@@ -263,7 +276,7 @@ def column_stats(
             COUNT(DISTINCT {column}) as distinct_count,
             MIN({column}) as min_value,
             MAX({column}) as max_value
-        FROM {table}
+        FROM "{table}"
         """
     ).to_dicts()
     return rows[0] if rows else {}

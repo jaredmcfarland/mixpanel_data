@@ -185,6 +185,8 @@ def stream_events(
     kwargs: dict[str, Any] = {
         "from_date": from_date,
         "to_date": to_date,
+        "limit": limit,
+        "raw": True,  # Use raw format for JSON serialization
     }
 
     if events:
@@ -192,13 +194,7 @@ def stream_events(
     if where:
         kwargs["where"] = where
 
-    events_list = []
-    for e in ws.stream_events(**kwargs):
-        events_list.append(e)
-        if len(events_list) >= limit:
-            break
-
-    return events_list
+    return list(ws.stream_events(**kwargs))
 
 
 @mcp.tool

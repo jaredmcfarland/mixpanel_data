@@ -172,7 +172,7 @@ def jql(
     ctx: Context,
     script: str,
     params: dict[str, Any] | None = None,
-) -> list[dict[str, Any]]:
+) -> list[Any]:
     """Execute a JQL (JavaScript Query Language) script.
 
     JQL allows complex event transformations and aggregations
@@ -240,7 +240,7 @@ def event_counts(
 def property_counts(
     ctx: Context,
     event: str,
-    property: str,
+    property_name: str,
     from_date: str,
     to_date: str,
     type: CountType = "general",
@@ -255,7 +255,7 @@ def property_counts(
     Args:
         ctx: FastMCP context with workspace access.
         event: Event name to analyze.
-        property: Property to break down by.
+        property_name: Property to break down by.
         from_date: Start date (YYYY-MM-DD format).
         to_date: End date (YYYY-MM-DD format).
         type: Count type - general (total), unique (unique users), or average.
@@ -268,12 +268,12 @@ def property_counts(
 
     Example:
         Ask: "What are the top 5 browsers users log in with?"
-        Uses: property_counts(event="login", property="browser", ..., limit=5)
+        Uses: property_counts(event="login", property_name="browser", ..., limit=5)
     """
     ws = get_workspace(ctx)
     result = ws.property_counts(
         event=event,
-        property_name=property,
+        property_name=property_name,
         from_date=from_date,
         to_date=to_date,
         type=type,

@@ -151,16 +151,23 @@ class TestHandleErrors:
         result = successful_func()
         assert result == "success"
 
-    def test_non_mixpanel_error_propagates(self) -> None:
-        """Non-MixpanelDataError exceptions should propagate unchanged."""
+    def test_non_mixpanel_error_wrapped_in_tool_error(self) -> None:
+        """Non-MixpanelDataError exceptions should be wrapped in ToolError."""
+        from fastmcp.exceptions import ToolError
+
         from mp_mcp_server.errors import handle_errors
 
         @handle_errors
         def failing_func() -> None:
             raise ValueError("Not a Mixpanel error")
 
-        with pytest.raises(ValueError, match="Not a Mixpanel error"):
+        with pytest.raises(ToolError) as exc_info:
             failing_func()
+
+        error_msg = str(exc_info.value)
+        assert "ValueError" in error_msg
+        assert "Not a Mixpanel error" in error_msg
+        assert "Unexpected error" in error_msg
 
     def test_jql_syntax_error_includes_script_context(self) -> None:
         """JQLSyntaxError should include script context and line info."""

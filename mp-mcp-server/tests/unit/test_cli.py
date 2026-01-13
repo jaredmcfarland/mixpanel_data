@@ -20,8 +20,8 @@ class TestCliParsing:
         """CLI should accept --transport option."""
         from mp_mcp_server.cli import parse_args
 
-        args = parse_args(["--transport", "http"])
-        assert args.transport == "http"
+        args = parse_args(["--transport", "sse"])
+        assert args.transport == "sse"
 
     def test_cli_accepts_port_option(self) -> None:
         """CLI should accept --port option."""
@@ -73,8 +73,8 @@ class TestCliExecution:
 
             mock_mcp.run.assert_called_once_with(transport="stdio")
 
-    def test_main_runs_http_transport(self) -> None:
-        """main() should run with SSE transport when http is specified."""
+    def test_main_runs_sse_transport(self) -> None:
+        """main() should run with SSE transport when sse is specified."""
         from mp_mcp_server import cli
 
         with (
@@ -83,7 +83,7 @@ class TestCliExecution:
         ):
             mock_mcp.run = MagicMock()
             mock_parse.return_value = MagicMock(
-                account=None, transport="http", port=9000
+                account=None, transport="sse", port=9000
             )
 
             cli.main()

@@ -271,4 +271,11 @@ def handle_errors(func: Callable[P, R]) -> Callable[P, R]:
         except MixpanelDataError as e:
             raise ToolError(format_rich_error(f"Mixpanel error: {e}", e)) from e
 
+        # Catch unexpected exceptions to prevent unhandled crashes
+        except Exception as e:
+            raise ToolError(
+                f"Unexpected error: {type(e).__name__}: {e}\n\n"
+                "This may be a bug in the MCP server. Please report this issue."
+            ) from e
+
     return wrapper

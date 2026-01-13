@@ -54,7 +54,7 @@ class TestListPropertyValuesTools:
         from mp_mcp_server.tools.discovery import list_property_values
 
         result = list_property_values.fn(
-            mock_context, event="signup", property="browser"
+            mock_context, event="signup", property_name="browser"
         )
         assert result == ["Chrome", "Firefox", "Safari"]
 

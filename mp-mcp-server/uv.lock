@@ -1051,11 +1051,6 @@ dev = [
     { name = "ruff" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "pytest-cov" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=2.0,<3" },
@@ -1067,9 +1062,6 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3" },
 ]
 provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest-cov", specifier = ">=7.0.0" }]
 
 [[package]]
 name = "mypy"

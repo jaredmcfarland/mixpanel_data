@@ -16,10 +16,10 @@ Example:
     mp-mcp-server --account production
     ```
 
-    Run with HTTP transport:
+    Run with SSE transport (HTTP Server-Sent Events):
 
     ```bash
-    mp-mcp-server --transport http --port 8000
+    mp-mcp-server --transport sse --port 8000
     ```
 """
 
@@ -54,15 +54,15 @@ def parse_args(args: Sequence[str] | None = None) -> argparse.Namespace:
         "--transport",
         type=str,
         default="stdio",
-        choices=["stdio", "http"],
-        help="Transport type (default: stdio)",
+        choices=["stdio", "sse"],
+        help="Transport type (default: stdio). 'sse' uses HTTP Server-Sent Events.",
     )
 
     parser.add_argument(
         "--port",
         type=int,
         default=8000,
-        help="HTTP port (only used with --transport http)",
+        help="HTTP port (only used with --transport sse)",
     )
 
     return parser.parse_args(args)
@@ -80,7 +80,7 @@ def main() -> None:
         set_account(args.account)
 
     # Run the server with the specified transport
-    if args.transport == "http":
+    if args.transport == "sse":
         mcp.run(transport="sse", port=args.port)
     else:
         mcp.run(transport="stdio")

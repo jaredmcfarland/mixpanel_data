@@ -117,7 +117,7 @@ class TestPropertyCountsTool:
         result = property_counts.fn(
             mock_context,
             event="login",
-            property="browser",
+            property_name="browser",
             from_date="2024-01-01",
             to_date="2024-01-31",
         )

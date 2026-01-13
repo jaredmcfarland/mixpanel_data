@@ -129,13 +129,13 @@ class TestStreamEventsTool:
         assert isinstance(result, list)
 
     def test_stream_events_respects_limit(self, mock_context: MagicMock) -> None:
-        """stream_events should respect the limit parameter."""
+        """stream_events should pass limit parameter to workspace."""
         from mp_mcp_server.tools.fetch import stream_events
 
-        # Reset with more events
+        # Reset with events - the limit is now passed to ws.stream_events
         ws = mock_context.fastmcp._lifespan_result["workspace"]
         ws.stream_events.return_value = iter(
-            [{"name": f"event{i}"} for i in range(100)]
+            [{"event": f"event{i}", "properties": {}} for i in range(5)]
         )
 
         result = stream_events.fn(
@@ -144,6 +144,10 @@ class TestStreamEventsTool:
             to_date="2024-01-07",
             limit=5,
         )
+        # Verify limit was passed to workspace method
+        call_kwargs = ws.stream_events.call_args[1]
+        assert call_kwargs["limit"] == 5
+        assert call_kwargs["raw"] is True
         assert len(result) == 5
 
 
