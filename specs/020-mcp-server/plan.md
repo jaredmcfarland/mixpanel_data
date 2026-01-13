@@ -10,7 +10,7 @@ Create a production-ready MCP (Model Context Protocol) server that exposes `mixp
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (matches mixpanel_data requirements)
+**Language/Version**: Python 3.10+ (matches mixpanel_data requirements)
 **Primary Dependencies**:
 - `fastmcp>=2.0,<3` - MCP server framework
 - `mixpanel_data>=0.1.0` - Analytics library (local dependency)
@@ -47,7 +47,7 @@ Create a production-ready MCP (Model Context Protocol) server that exposes `mixp
 **Technology Stack Compliance**:
 | Component | Constitution | This Feature | Status |
 |-----------|--------------|--------------|--------|
-| Language | Python 3.11+ | Python 3.11+ | ✅ |
+| Language | Python 3.10+ | Python 3.10+ | ✅ |
 | CLI Framework | Typer | argparse (for mp-mcp-server only) | ⚠️ See note |
 | Validation | Pydantic v2 | FastMCP handles | ✅ |
 | Database | DuckDB | Via mixpanel_data | ✅ |

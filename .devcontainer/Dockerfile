@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.10
 FROM mcr.microsoft.com/devcontainers/python:${PYTHON_VERSION}
 
 ARG CLAUDE_CODE_VERSION=latest

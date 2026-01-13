@@ -1,6 +1,6 @@
 # mixpanel_data
 
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/github/license/jaredmcfarland/mixpanel_data)](LICENSE)
 
 > **⚠️ Pre-release Software**: This package is under active development and not yet published to PyPI. APIs may change between versions.
@@ -21,7 +21,7 @@ Install directly from GitHub (package not yet published to PyPI):
 pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
 ```
 
-Requires Python 3.11+. Verify installation:
+Requires Python 3.10+. Verify installation:
 
 ```bash
 mp --version

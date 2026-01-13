@@ -9,7 +9,7 @@ Implement `LiveQueryService` that wraps the raw Mixpanel Query API methods in `M
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (type hints required throughout per constitution)
+**Language/Version**: Python 3.10+ (type hints required throughout per constitution)
 **Primary Dependencies**: httpx (HTTP client, already in use), Pydantic v2 (validation), pandas (DataFrame conversion)
 **Storage**: N/A (live queries only, no local storage)
 **Testing**: pytest with httpx.MockTransport for deterministic HTTP mocking
@@ -34,7 +34,7 @@ Implement `LiveQueryService` that wraps the raw Mixpanel Query API methods in `M
 | VII. Secure by Default | ✅ Pass | Uses existing credential system, no secret handling |
 
 **Technology Stack Compliance**:
-- ✅ Python 3.11+ with type hints
+- ✅ Python 3.10+ with type hints
 - ✅ httpx for HTTP (via existing API client)
 - ✅ Pydantic v2 for validation (credentials)
 - ✅ pandas for DataFrame conversion (existing result types)

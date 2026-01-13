@@ -151,7 +151,7 @@ Create `mp-mcp-server/pyproject.toml`:
 name = "mp-mcp-server"
 version = "0.1.0"
 description = "MCP server for Mixpanel analytics via mixpanel_data"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "fastmcp>=2.0",
     "mixpanel_data>=0.1.0",

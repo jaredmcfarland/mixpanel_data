@@ -24,7 +24,7 @@ AI coding agents consume context window tokens when receiving Mixpanel API respo
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Language | Python 3.11+ | DuckDB/Pandas ecosystem |
+| Language | Python 3.10+ | DuckDB/Pandas ecosystem |
 | CLI | Typer | Type hints, auto-generated help |
 | Output | Rich | Tables, progress bars |
 | Validation | Pydantic | API response validation |

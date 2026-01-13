@@ -324,7 +324,7 @@ class StorageEngine:
 
 ## Technology Stack Validation
 
-✅ **DuckDB 1.0+**: Confirmed compatible with Python 3.11+, stable API
+✅ **DuckDB 1.0+**: Confirmed compatible with Python 3.10+, stable API
 ✅ **pandas 2.0+**: Native DuckDB integration via `.df()` method
 ✅ **Pydantic 2.0**: Used for TableMetadata validation (frozen=True for immutability)
 ✅ **pytest**: Standard testing framework, compatible with all chosen technologies

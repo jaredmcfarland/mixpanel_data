@@ -17,7 +17,7 @@ Extend DiscoveryService to support Mixpanel's Lexicon Schemas API for retrieving
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
+**Language/Version**: Python 3.10+
 **Primary Dependencies**: httpx (HTTP client), Typer (CLI), Rich (output formatting), Pydantic v2 (validation)
 **Storage**: N/A (read-only API operations, no local persistence)
 **Testing**: pytest with mocked HTTP responses
@@ -42,7 +42,7 @@ Extend DiscoveryService to support Mixpanel's Lexicon Schemas API for retrieving
 | VII. Secure by Default | ✅ PASS | Uses existing credential handling; no new security surface |
 
 **Technology Stack Compliance:**
-- ✅ Python 3.11+ with type hints
+- ✅ Python 3.10+ with type hints
 - ✅ Typer for CLI (no Click/argparse)
 - ✅ Rich for output formatting
 - ✅ httpx for HTTP (no requests)

@@ -9,7 +9,7 @@ Add parallel fetching capability to `export_events` operations to improve perfor
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
+**Language/Version**: Python 3.10+
 **Primary Dependencies**: concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies
 **Storage**: DuckDB (single-writer constraint requires queue-based serialization)
 **Testing**: pytest, Hypothesis (property-based testing), mutmut (mutation testing)

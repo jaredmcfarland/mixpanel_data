@@ -9,7 +9,7 @@
 
 ## Requirements
 
-- Python 3.11 or higher
+- Python 3.10 or higher
 - A Mixpanel service account with API access
 
 ## Installing with pip

@@ -17,14 +17,14 @@
 
 ### Decision
 
-Use Python 3.11+ built-in `tomllib` for reading, `tomli-w` for writing.
+Use Python 3.10+ built-in `tomllib` for reading, `tomli-w` for writing.
 
 ### Rationale
 
-- Python 3.11+ includes `tomllib` in the standard library (read-only)
+- Python 3.10+ includes `tomllib` in the standard library (read-only)
 - Eliminates external dependency for reading config
 - `tomli-w` is a lightweight write-only companion (minimal footprint)
-- Constitution requires Python 3.11+, so `tomllib` is always available
+- Constitution requires Python 3.10+, so `tomllib` is always available
 
 ### Alternatives Considered
 

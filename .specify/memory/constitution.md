@@ -118,7 +118,7 @@ The following technology choices are architectural constraints:
 
 | Component         | Choice       | Constraint                              |
 | ----------------- | ------------ | --------------------------------------- |
-| Language          | Python 3.11+ | MUST use type hints throughout          |
+| Language          | Python 3.10+ | MUST use type hints throughout          |
 | CLI Framework     | Typer        | MUST NOT use Click or argparse directly |
 | Output Formatting | Rich         | MUST use for tables, progress bars      |
 | Validation        | Pydantic v2  | MUST use for all API response models    |

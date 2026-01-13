@@ -4,7 +4,7 @@ Get up and running with the Mixpanel MCP server in 5 minutes.
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.10+
 - Mixpanel service account credentials
 - Claude Desktop (or another MCP-compatible client)
 

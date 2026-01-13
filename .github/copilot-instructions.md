@@ -23,7 +23,7 @@ uv run pytest --cov=src/mixpanel_data --cov-fail-under=90
 
 ## Tech Stack
 
-- **Language**: Python 3.11+
+- **Language**: Python 3.10+
 - **CLI**: Typer + Rich
 - **Validation**: Pydantic v2
 - **Database**: DuckDB

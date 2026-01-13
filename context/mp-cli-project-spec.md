@@ -102,7 +102,7 @@ This preserves the agent's context window for reasoning and insights rather than
 
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
-| Language | Python 3.11+ | DuckDB/Pandas ecosystem, your familiarity |
+| Language | Python 3.10+ | DuckDB/Pandas ecosystem, your familiarity |
 | CLI Framework | Typer | Type hints, minimal boilerplate, auto-help |
 | Output Formatting | Rich | Tables, progress bars, colors |
 | Validation | Pydantic | API response validation, settings management |
@@ -115,7 +115,7 @@ This preserves the agent's context window for reasoning and insights rather than
 [project]
 name = "mixpanel_data"
 description = "Python library and CLI for working with Mixpanel data"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",

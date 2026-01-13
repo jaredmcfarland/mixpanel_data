@@ -9,7 +9,7 @@ Add parallel profile fetching capability using page-index parallelism (up to 5x 
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
+**Language/Version**: Python 3.10+
 **Primary Dependencies**: concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new dependencies
 **Storage**: DuckDB (existing StorageEngine)
 **Testing**: pytest, pytest-cov
@@ -34,7 +34,7 @@ Add parallel profile fetching capability using page-index parallelism (up to 5x 
 | VII. Secure by Default | PASS | Uses existing credential handling; no new secrets exposure |
 
 **Technology Stack Compliance**:
-- Python 3.11+ with type hints: COMPLIANT
+- Python 3.10+ with type hints: COMPLIANT
 - Typer for CLI: COMPLIANT (extends existing `mp fetch profiles` command)
 - Rich for output: COMPLIANT (progress bar)
 - DuckDB for storage: COMPLIANT

@@ -238,7 +238,7 @@ See [mixpanel-data-model-reference.md](mixpanel-data-model-reference.md) for com
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Language | Python 3.11+ | DuckDB/Pandas ecosystem, modern typing |
+| Language | Python 3.10+ | DuckDB/Pandas ecosystem, modern typing |
 | CLI | Typer | Type hints, auto-generated help |
 | Output | Rich | Tables, progress bars, colors |
 | Validation | Pydantic v2 | API response validation, frozen models |
@@ -250,7 +250,7 @@ See [mixpanel-data-model-reference.md](mixpanel-data-model-reference.md) for com
 ## Development Workflow
 
 ### Prerequisites
-- Python 3.11+ (3.12 recommended)
+- Python 3.10+ (3.12 recommended)
 - [uv](https://docs.astral.sh/uv/) — Package manager
 - [just](https://github.com/casey/just) — Command runner
 

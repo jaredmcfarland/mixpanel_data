@@ -124,7 +124,7 @@ When the abstractions don't fit, users should be able to drop down:
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Language | Python 3.11+ | DuckDB/Pandas ecosystem, data science tooling |
+| Language | Python 3.10+ | DuckDB/Pandas ecosystem, data science tooling |
 | CLI Framework | Typer | Type hints, minimal boilerplate, auto-generated help |
 | Output Formatting | Rich | Tables, progress bars, colors |
 | Validation | Pydantic | API response validation, settings management |

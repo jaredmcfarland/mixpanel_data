@@ -15,7 +15,7 @@ This layer has no external dependencies beyond core libraries and forms the base
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (per constitution)
+**Language/Version**: Python 3.10+ (per constitution)
 **Primary Dependencies**: Pydantic v2 (validation), tomli/tomllib (TOML parsing), pandas (DataFrame conversion)
 **Storage**: File-based TOML configuration at `~/.mp/config.toml`
 **Testing**: pytest with pytest-cov

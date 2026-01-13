@@ -9,7 +9,7 @@ Implement the `Workspace` class as the unified public API facade that orchestrat
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (per constitution)
+**Language/Version**: Python 3.10+ (per constitution)
 **Primary Dependencies**: DuckDB (storage), httpx (HTTP), Pydantic v2 (validation), Rich (progress bars), pandas (DataFrames)
 **Storage**: DuckDB embedded database (persistent or ephemeral modes)
 **Testing**: pytest with httpx.MockTransport for API mocking, real DuckDB for integration tests
@@ -34,7 +34,7 @@ Implement the `Workspace` class as the unified public API facade that orchestrat
 | VII. Secure by Default | PASS | Credentials from config/env only; SecretStr for secrets; no logging of secrets |
 
 **Technology Stack Compliance**:
-- [x] Python 3.11+ with type hints throughout
+- [x] Python 3.10+ with type hints throughout
 - [x] Pydantic v2 for Credentials model
 - [x] DuckDB for local storage (via StorageEngine)
 - [x] httpx for HTTP (via MixpanelAPIClient)
