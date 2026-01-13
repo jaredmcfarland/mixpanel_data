@@ -8,13 +8,13 @@ Thank you for your interest in contributing to mixpanel_data!
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.10+
 - [uv](https://github.com/astral-sh/uv) (package manager)
 - [just](https://github.com/casey/just) (command runner)
 
 ### Recommended: Use the Devcontainer
 
-The repository includes a devcontainer with Python 3.11, uv, just, and all development tools pre-installed. This is the easiest way to get started.
+The repository includes a devcontainer with Python 3.10, uv, just, and all development tools pre-installed. This is the easiest way to get started.
 
 ### Manual Setup
 

@@ -9,7 +9,7 @@ Extend the LiveQueryService with 6 new Mixpanel Query API methods: activity feed
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (type hints required per constitution)
+**Language/Version**: Python 3.10+ (type hints required per constitution)
 **Primary Dependencies**: httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrame conversion)
 **Storage**: N/A (live queries only, no local storage)
 **Testing**: pytest with fixtures and mocked HTTP responses
@@ -37,7 +37,7 @@ Extend the LiveQueryService with 6 new Mixpanel Query API methods: activity feed
 
 | Component | Required | Used | Status |
 |-----------|----------|------|--------|
-| Language | Python 3.11+ | Python 3.11+ | PASS |
+| Language | Python 3.10+ | Python 3.10+ | PASS |
 | HTTP Client | httpx | httpx | PASS |
 | Validation | Pydantic v2 | Pydantic v2 | PASS |
 | DataFrames | pandas | pandas | PASS |

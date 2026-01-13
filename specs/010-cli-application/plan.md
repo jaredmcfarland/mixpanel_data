@@ -11,7 +11,7 @@ The CLI adheres to the Library-First principle: every command delegates to an ex
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (per constitution, with full type hints)
+**Language/Version**: Python 3.10+ (per constitution, with full type hints)
 **Primary Dependencies**: Typer (CLI framework), Rich (output formatting), existing mixpanel_data library
 **Storage**: DuckDB (via existing StorageEngine, already implemented)
 **Testing**: pytest with unit tests for formatters/helpers, integration tests for command execution

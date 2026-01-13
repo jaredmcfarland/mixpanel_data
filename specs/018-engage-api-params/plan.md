@@ -9,7 +9,7 @@ Add support for 6 missing Mixpanel Engage Query API parameters (`distinct_id`, `
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
+**Language/Version**: Python 3.10+
 **Primary Dependencies**: Typer (CLI), Rich (output), httpx (HTTP), Pydantic v2 (validation)
 **Storage**: DuckDB (local storage for fetched profiles)
 **Testing**: pytest, Hypothesis (property-based), mutmut (mutation testing)

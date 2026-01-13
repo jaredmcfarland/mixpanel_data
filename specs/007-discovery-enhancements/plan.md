@@ -15,7 +15,7 @@ Extend the existing DiscoveryService and LiveQueryService to provide complete co
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (type hints required per constitution)
+**Language/Version**: Python 3.10+ (type hints required per constitution)
 **Primary Dependencies**: httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrame conversion)
 **Storage**: N/A (live queries only, no local storage)
 **Testing**: pytest with mocked API responses
@@ -43,7 +43,7 @@ Extend the existing DiscoveryService and LiveQueryService to provide complete co
 
 | Component | Required | Used | Status |
 |-----------|----------|------|--------|
-| Python 3.11+ | Type hints throughout | Yes | ✅ |
+| Python 3.10+ | Type hints throughout | Yes | ✅ |
 | httpx | All HTTP | Existing in api_client | ✅ |
 | Pydantic v2 | API response models | N/A (frozen dataclasses per existing pattern) | ✅ |
 | pandas | DataFrame conversion | Lazy `.df` property | ✅ |

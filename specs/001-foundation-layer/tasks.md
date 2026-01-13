@@ -23,7 +23,7 @@
 - [x] T003 [SETUP] Create `src/mixpanel_data/_internal/` directory with `__init__.py`
 - [x] T004 [SETUP] Create `src/mixpanel_data/py.typed` PEP 561 marker file
 - [x] T005 [SETUP] Create `pyproject.toml` with project metadata and dependencies:
-  - Python 3.11+
+  - Python 3.10+
   - pydantic>=2.0
   - tomli-w>=1.0
   - pandas>=2.0

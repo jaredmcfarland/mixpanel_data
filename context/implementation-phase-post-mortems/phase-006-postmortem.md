@@ -497,7 +497,7 @@ def segmentation(self, event: str, from_date: str, to_date: str, ...) -> Segment
 
 ### 3. Type Safety
 
-All methods fully typed with Python 3.11+ syntax:
+All methods fully typed with Python 3.10+ syntax:
 
 ```python
 def retention(

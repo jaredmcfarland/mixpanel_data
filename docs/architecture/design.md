@@ -187,7 +187,7 @@ All services accept their dependencies as constructor arguments. This enables:
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| Language | Python 3.11+ | Type hints, modern syntax |
+| Language | Python 3.10+ | Type hints, modern syntax |
 | CLI Framework | Typer | Declarative CLI building |
 | Output Formatting | Rich | Tables, progress bars, colors |
 | Validation | Pydantic | Data validation, settings |

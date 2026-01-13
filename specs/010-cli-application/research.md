@@ -11,7 +11,7 @@
 **Decision**: Use Typer as the CLI framework
 **Rationale**:
 - Mandated by constitution (Technology Stack section)
-- Native type hint support aligns with Python 3.11+ requirement
+- Native type hint support aligns with Python 3.10+ requirement
 - Built on Click but provides cleaner, more modern API
 - Automatic help generation from function signatures and docstrings
 - Built-in shell completion support

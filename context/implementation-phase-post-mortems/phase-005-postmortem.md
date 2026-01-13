@@ -457,7 +457,7 @@ assert metadata.from_date == "2024-01-01"
 
 ### 1. Type Safety
 
-All methods fully typed with modern Python 3.11+ syntax:
+All methods fully typed with modern Python 3.10+ syntax:
 
 ```python
 from collections.abc import Callable, Iterator

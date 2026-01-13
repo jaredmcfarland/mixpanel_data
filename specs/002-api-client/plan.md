@@ -9,7 +9,7 @@ The Mixpanel API Client (`MixpanelAPIClient`) is a unified HTTP interface for al
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (Constitution requirement)
+**Language/Version**: Python 3.10+ (Constitution requirement)
 **Primary Dependencies**: httpx (HTTP client per Constitution), pydantic (validation)
 **Storage**: N/A (client has no storage responsibility; Phase 003 handles DuckDB)
 **Testing**: pytest with httpx.MockTransport for deterministic HTTP mocking

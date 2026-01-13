@@ -9,7 +9,7 @@ The Discovery Service provides schema introspection for Mixpanel projects—list
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
+**Language/Version**: Python 3.10+
 **Primary Dependencies**: httpx (via MixpanelAPIClient from Phase 002)
 **Storage**: N/A (read-only service, in-memory cache only)
 **Testing**: pytest with mocked API client

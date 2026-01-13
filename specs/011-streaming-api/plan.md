@@ -11,7 +11,7 @@ Add streaming methods (`stream_events()`, `stream_profiles()`) to the Workspace 
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
+**Language/Version**: Python 3.10+
 **Primary Dependencies**: Typer (CLI), httpx (HTTP), Rich (progress to stderr)
 **Storage**: N/A for streaming (bypasses DuckDB entirely)
 **Testing**: pytest with mocked API responses

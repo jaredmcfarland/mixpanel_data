@@ -9,7 +9,7 @@ The Fetch Service (`FetcherService`) coordinates data retrieval from Mixpanel's 
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (type hints throughout per constitution)
+**Language/Version**: Python 3.10+ (type hints throughout per constitution)
 **Primary Dependencies**: httpx (HTTP), DuckDB (storage), Pydantic v2 (validation)
 **Storage**: DuckDB (embedded analytical database, per constitution)
 **Testing**: pytest with mocked dependencies

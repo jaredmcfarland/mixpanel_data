@@ -9,7 +9,7 @@ Add `--jq` option to all CLI commands that support `--format json/jsonl`, enabli
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
+**Language/Version**: Python 3.10+
 **Primary Dependencies**: jq>=1.9.0 (new), typer, rich, pydantic
 **Storage**: N/A (output filtering only)
 **Testing**: pytest, hypothesis

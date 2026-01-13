@@ -4,7 +4,7 @@
 
 **Architecture:** Unlike events (date-based chunking), profiles use page-index parallelism. The Mixpanel Engage API returns `total`, `page_size`, and `session_id` on page 0, enabling calculation of total pages and parallel fetching of pages 1..N using the same session_id.
 
-**Tech Stack:** Python 3.11+, concurrent.futures.ThreadPoolExecutor, threading, queue (all stdlib - no new dependencies)
+**Tech Stack:** Python 3.10+, concurrent.futures.ThreadPoolExecutor, threading, queue (all stdlib - no new dependencies)
 
 ---
 

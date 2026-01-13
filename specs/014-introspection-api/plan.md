@@ -9,7 +9,7 @@ Add 5 introspection methods to the `Workspace` class (`sample()`, `summarize()`,
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
+**Language/Version**: Python 3.10+
 **Primary Dependencies**: DuckDB (analytical queries), pandas (DataFrame conversion), Typer (CLI), Rich (output formatting)
 **Storage**: DuckDB (existing `StorageEngine` class)
 **Testing**: pytest (existing test infrastructure)
@@ -34,7 +34,7 @@ Add 5 introspection methods to the `Workspace` class (`sample()`, `summarize()`,
 | VII. Secure by Default | PASS | No credentials involved (local database operations only) |
 
 **Technology Stack Compliance**:
-- [x] Python 3.11+ with type hints
+- [x] Python 3.10+ with type hints
 - [x] Typer for CLI commands
 - [x] Rich for output formatting (via existing formatters)
 - [x] DuckDB for queries (existing StorageEngine)

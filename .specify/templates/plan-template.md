@@ -17,7 +17,7 @@
   the iteration process.
 -->
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
+**Language/Version**: [e.g., Python 3.10, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
 **Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
 **Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
 **Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  

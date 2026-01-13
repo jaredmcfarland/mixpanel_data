@@ -291,24 +291,32 @@ def activity_feed(
     distinct_id: str,
     from_date: str | None = None,
     to_date: str | None = None,
+    limit: int = 100,
 ) -> dict[str, Any]:
     """Get activity feed for a specific user.
 
     Returns chronological event history for a user using the
-    Activity Stream API.
+    Activity Stream API. Results are limited to prevent overwhelming
+    output for users with long event histories.
 
     Args:
         ctx: FastMCP context with workspace access.
         distinct_id: User identifier to look up.
         from_date: Optional start date (YYYY-MM-DD).
         to_date: Optional end date (YYYY-MM-DD).
+        limit: Maximum number of events to return (default 100).
+            Use higher values for longer histories.
+            Set to 0 for unlimited results.
 
     Returns:
-        Dictionary with user events.
+        Dictionary with user events (limited to specified count).
 
     Example:
         Ask: "What has user alice done recently?"
         Uses: activity_feed(distinct_id="alice")
+
+        Ask: "Show me the last 500 events for user bob"
+        Uses: activity_feed(distinct_id="bob", limit=500)
     """
     ws = get_workspace(ctx)
     result = ws.activity_feed(
@@ -316,7 +324,22 @@ def activity_feed(
         from_date=from_date,
         to_date=to_date,
     )
-    return result.to_dict()
+
+    # Limit events to prevent overwhelming context windows
+    output = result.to_dict()
+    if "events" in output:
+        total_event_count = len(result.events)
+        if limit > 0 and total_event_count > limit:
+            output["events"] = output["events"][:limit]
+            output["truncated"] = True
+        else:
+            output["truncated"] = False
+        output["total_events"] = total_event_count
+    else:
+        output["truncated"] = False
+        output["total_events"] = 0
+
+    return output
 
 
 @mcp.tool

@@ -9,7 +9,7 @@ Implement Bookmarks API support for listing saved reports and querying them by b
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ with full type hints (mypy --strict compliant)
+**Language/Version**: Python 3.10+ with full type hints (mypy --strict compliant)
 **Primary Dependencies**: httpx (HTTP client), Typer (CLI), Rich (output formatting), Pydantic v2 (validation), pandas (DataFrame conversion)
 **Storage**: N/A (live queries only - no local persistence for bookmark operations)
 **Testing**: pytest with httpx.MockTransport for API client mocking
@@ -34,7 +34,7 @@ Implement Bookmarks API support for listing saved reports and querying them by b
 | VII. Secure by Default | PASS | Uses existing credential system; no credentials in output |
 
 **Technology Stack Compliance**:
-- Python 3.11+ with type hints: PASS
+- Python 3.10+ with type hints: PASS
 - Typer for CLI: PASS
 - Rich for output: PASS
 - Pydantic v2 for validation: PASS

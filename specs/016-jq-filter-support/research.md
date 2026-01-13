@@ -13,7 +13,7 @@ Selected jq.py as the Python binding for jq functionality.
 
 1. **Maintenance**: Active development (v1.10.0, July 2025)
 2. **Community**: 434 GitHub stars, 10 contributors, 220 dependent packages
-3. **Python support**: 3.8-3.13 (covers project requirement of 3.11+)
+3. **Python support**: 3.8-3.13 (covers project requirement of 3.10+)
 4. **Pre-built wheels**: Available for all target platforms without compilation
 
 ### Alternatives Considered

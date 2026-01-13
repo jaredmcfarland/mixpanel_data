@@ -17,7 +17,7 @@ Technical approach leverages DuckDB's embedded analytical database with JSON col
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (matches project requirement)
+**Language/Version**: Python 3.10+ (matches project requirement)
 **Primary Dependencies**: DuckDB 1.0+, pandas 2.0+, Pydantic 2.0 (for TableMetadata validation)
 **Storage**: DuckDB embedded database (single-file, serverless, ACID-compliant)
 **Testing**: pytest (unit + integration), pytest-cov (coverage tracking), memory_profiler (memory benchmarks)
