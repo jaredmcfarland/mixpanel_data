@@ -155,7 +155,7 @@ class ConfigManager:
 
         try:
             with self._config_path.open("rb") as f:
-                return dict(tomllib.load(f))
+                return tomllib.load(f)
         except tomllib.TOMLDecodeError as e:
             raise ConfigError(
                 f"Invalid TOML in config file: {e}",
