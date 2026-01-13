@@ -6,7 +6,7 @@ stream data directly from Mixpanel API without local storage.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
@@ -286,7 +286,7 @@ class TestStreamEvents:
             assert event["event_name"] == "Purchase"
             assert event["distinct_id"] == "user_123"
             assert isinstance(event["event_time"], datetime)
-            assert event["event_time"].tzinfo == UTC
+            assert event["event_time"].tzinfo == timezone.utc
             assert event["insert_id"] == "evt_1705328400"
 
             # Properties should NOT include distinct_id, time, $insert_id

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
@@ -46,7 +46,7 @@ def normalized_event(
 ) -> dict[str, Any]:
     """Create a normalized event."""
     if timestamp is None:
-        timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
+        timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
     return {
         "event_name": name,
         "distinct_id": distinct_id,

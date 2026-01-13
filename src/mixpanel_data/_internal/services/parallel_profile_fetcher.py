@@ -13,7 +13,7 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from mixpanel_data._internal.transforms import transform_profile
@@ -149,7 +149,7 @@ class ParallelProfileFetcherService:
             TableExistsError: If table exists and append=False.
             TableNotFoundError: If table doesn't exist and append=True.
         """
-        start_time = datetime.now(UTC)
+        start_time = datetime.now(timezone.utc)
 
         # Serialize behaviors for metadata storage (used in both page 0 and worker threads)
         filter_behaviors = json.dumps(behaviors) if behaviors else None
@@ -222,7 +222,7 @@ class ParallelProfileFetcherService:
             try:
                 metadata = TableMetadata(
                     type="profiles",
-                    fetched_at=datetime.now(UTC),
+                    fetched_at=datetime.now(timezone.utc),
                     filter_where=where,
                     filter_cohort_id=cohort_id,
                     filter_output_properties=output_properties,
@@ -286,7 +286,7 @@ class ParallelProfileFetcherService:
 
         # If only one page or no pages, return early
         if num_pages <= 1:
-            completed_at = datetime.now(UTC)
+            completed_at = datetime.now(timezone.utc)
             duration_seconds = (completed_at - start_time).total_seconds()
 
             return ParallelProfileResult(
@@ -458,7 +458,7 @@ class ParallelProfileFetcherService:
                         ]
                         metadata = TableMetadata(
                             type="profiles",
-                            fetched_at=datetime.now(UTC),
+                            fetched_at=datetime.now(timezone.utc),
                             filter_where=where,
                             filter_cohort_id=cohort_id,
                             filter_output_properties=output_properties,
@@ -484,7 +484,7 @@ class ParallelProfileFetcherService:
         writer.join()
 
         # Calculate duration
-        completed_at = datetime.now(UTC)
+        completed_at = datetime.now(timezone.utc)
         duration_seconds = (completed_at - start_time).total_seconds()
 
         _logger.info(

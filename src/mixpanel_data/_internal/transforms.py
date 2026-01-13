@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 _logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ def transform_event(event: dict[str, Any]) -> dict[str, Any]:
         transformed = transform_event(raw)
         # {
         #     "event_name": "Sign Up",
-        #     "event_time": datetime(2024, 1, 1, 0, 0, tzinfo=UTC),
+        #     "event_time": datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc),
         #     "distinct_id": "user123",
         #     "insert_id": "abc123",
         #     "properties": {"plan": "premium"},
@@ -64,7 +64,7 @@ def transform_event(event: dict[str, Any]) -> dict[str, Any]:
 
     # Convert Unix timestamp to datetime
     # Mixpanel Export API returns time as Unix timestamp in seconds (integer)
-    event_time = datetime.fromtimestamp(event_time_raw, tz=UTC)
+    event_time = datetime.fromtimestamp(event_time_raw, tz=timezone.utc)
 
     # Generate UUID if $insert_id is missing
     if insert_id is None:

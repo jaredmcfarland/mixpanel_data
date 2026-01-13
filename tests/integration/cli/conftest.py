@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -43,7 +43,7 @@ def mock_workspace() -> MagicMock:
             name="events",
             type="events",
             row_count=1000,
-            fetched_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
+            fetched_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
         ),
     ]
 
@@ -66,7 +66,7 @@ def mock_workspace() -> MagicMock:
         type="events",
         date_range=("2024-01-01", "2024-01-31"),
         duration_seconds=5.0,
-        fetched_at=datetime(2024, 1, 31, 12, 0, 0, tzinfo=UTC),
+        fetched_at=datetime(2024, 1, 31, 12, 0, 0, tzinfo=timezone.utc),
     )
 
     workspace.segmentation.return_value = SegmentationResult(

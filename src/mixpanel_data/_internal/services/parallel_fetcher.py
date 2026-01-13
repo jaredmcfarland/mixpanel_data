@@ -12,7 +12,7 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from mixpanel_data._internal.date_utils import split_date_range
@@ -136,7 +136,7 @@ class ParallelFetcherService:
             TableExistsError: If table exists and append=False.
             TableNotFoundError: If table doesn't exist and append=True.
         """
-        start_time = datetime.now(UTC)
+        start_time = datetime.now(timezone.utc)
         workers = max_workers or self._default_max_workers
 
         # Split date range into chunks
@@ -190,7 +190,7 @@ class ParallelFetcherService:
                     # Create metadata for this batch
                     metadata = TableMetadata(
                         type="events",
-                        fetched_at=datetime.now(UTC),
+                        fetched_at=datetime.now(timezone.utc),
                         from_date=chunk_from,
                         to_date=chunk_to,
                         filter_events=events,
@@ -377,7 +377,7 @@ class ParallelFetcherService:
         writer.join()
 
         # Calculate duration
-        completed_at = datetime.now(UTC)
+        completed_at = datetime.now(timezone.utc)
         duration_seconds = (completed_at - start_time).total_seconds()
 
         _logger.info(

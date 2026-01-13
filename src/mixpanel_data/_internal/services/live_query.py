@@ -9,7 +9,7 @@ analytics data changes frequently and queries should return fresh data.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal
 
 from mixpanel_data._internal.expressions import normalize_on_expression
@@ -1320,7 +1320,7 @@ def _transform_activity_feed(
             raise ValueError(
                 f"Event missing required 'time' field: {event_data.get('event', 'unknown')}"
             )
-        event_time = datetime.fromtimestamp(timestamp, tz=UTC)
+        event_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
 
         events.append(
             UserEvent(
