@@ -11,7 +11,7 @@ Properties tested:
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from hypothesis import assume, given, settings
@@ -237,7 +237,7 @@ class TestPropertiesJsonRoundtrip:
         with StorageEngine.memory() as storage:
             event = {
                 "event_name": "Test Event",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "test_user",
                 "insert_id": "test_insert_id",
                 "properties": properties,
@@ -245,7 +245,7 @@ class TestPropertiesJsonRoundtrip:
 
             metadata = TableMetadata(
                 type="events",
-                fetched_at=datetime.now(UTC),
+                fetched_at=datetime.now(timezone.utc),
             )
 
             storage.create_events_table("test_events", iter([event]), metadata)
@@ -274,7 +274,7 @@ class TestPropertiesJsonRoundtrip:
         with StorageEngine.memory() as storage:
             event = {
                 "event_name": "Test Event",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "test_user",
                 "insert_id": "test_insert_id",
                 "properties": properties,
@@ -282,7 +282,7 @@ class TestPropertiesJsonRoundtrip:
 
             metadata = TableMetadata(
                 type="events",
-                fetched_at=datetime.now(UTC),
+                fetched_at=datetime.now(timezone.utc),
             )
 
             storage.create_events_table(table_name, iter([event]), metadata)
@@ -316,12 +316,12 @@ class TestProfilePropertiesRoundtrip:
             profile = {
                 "distinct_id": "test_user",
                 "properties": properties,
-                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
             }
 
             metadata = TableMetadata(
                 type="profiles",
-                fetched_at=datetime.now(UTC),
+                fetched_at=datetime.now(timezone.utc),
             )
 
             storage.create_profiles_table("test_profiles", iter([profile]), metadata)

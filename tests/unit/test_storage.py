@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -203,7 +203,6 @@ def test_cleanup_is_alias_for_close(tmp_path: Path) -> None:
 
 def test_create_events_table_inserts_all_records(tmp_path: Path) -> None:
     """Test that create_events_table inserts all records from iterator."""
-    from datetime import datetime
 
     db_path = tmp_path / "test.db"
     with StorageEngine(path=db_path, read_only=False) as storage:
@@ -211,14 +210,14 @@ def test_create_events_table_inserts_all_records(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "user_123",
                 "insert_id": "event_001",
                 "properties": {"page": "/home", "country": "US"},
             },
             {
                 "event_name": "Button Click",
-                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_456",
                 "insert_id": "event_002",
                 "properties": {"button": "signup", "country": "EU"},
@@ -229,7 +228,7 @@ def test_create_events_table_inserts_all_records(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -255,7 +254,6 @@ def test_create_events_table_inserts_all_records(tmp_path: Path) -> None:
 
 def test_create_events_table_handles_large_batches(tmp_path: Path) -> None:
     """Test that create_events_table handles batches correctly."""
-    from datetime import datetime
 
     db_path = tmp_path / "test.db"
     with StorageEngine(path=db_path, read_only=False) as storage:
@@ -265,7 +263,7 @@ def test_create_events_table_handles_large_batches(tmp_path: Path) -> None:
             for i in range(2100):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i}",
                     "insert_id": f"event_{i:06d}",
                     "properties": {"index": i},
@@ -275,7 +273,7 @@ def test_create_events_table_handles_large_batches(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
@@ -297,7 +295,6 @@ def test_create_events_table_handles_large_batches(tmp_path: Path) -> None:
 
 def test_create_events_table_raises_error_if_table_exists(tmp_path: Path) -> None:
     """Test that create_events_table raises TableExistsError if table exists."""
-    from datetime import datetime
 
     from mixpanel_data.exceptions import TableExistsError
     from mixpanel_data.types import TableMetadata
@@ -307,7 +304,7 @@ def test_create_events_table_raises_error_if_table_exists(tmp_path: Path) -> Non
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -316,7 +313,7 @@ def test_create_events_table_raises_error_if_table_exists(tmp_path: Path) -> Non
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Create table first time - should succeed
@@ -329,7 +326,6 @@ def test_create_events_table_raises_error_if_table_exists(tmp_path: Path) -> Non
 
 def test_create_events_table_validates_table_name(tmp_path: Path) -> None:
     """Test that create_events_table validates table names."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -338,7 +334,7 @@ def test_create_events_table_validates_table_name(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -347,7 +343,7 @@ def test_create_events_table_validates_table_name(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Invalid: starts with underscore (reserved for internal tables)
@@ -369,7 +365,6 @@ def test_create_events_table_validates_table_name(tmp_path: Path) -> None:
 
 def test_create_events_table_validates_required_fields(tmp_path: Path) -> None:
     """Test that create_events_table validates required fields."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -377,7 +372,7 @@ def test_create_events_table_validates_required_fields(tmp_path: Path) -> None:
     with StorageEngine(path=db_path, read_only=False) as storage:
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Missing event_name
@@ -387,7 +382,7 @@ def test_create_events_table_validates_required_fields(tmp_path: Path) -> None:
                 iter(
                     [
                         {
-                            "event_time": datetime.now(UTC),
+                            "event_time": datetime.now(timezone.utc),
                             "distinct_id": "user_1",
                             "insert_id": "event_1",
                             "properties": {},
@@ -422,7 +417,7 @@ def test_create_events_table_validates_required_fields(tmp_path: Path) -> None:
                     [
                         {
                             "event_name": "Event",
-                            "event_time": datetime.now(UTC),
+                            "event_time": datetime.now(timezone.utc),
                             "insert_id": "event_1",
                             "properties": {},
                         }
@@ -439,7 +434,7 @@ def test_create_events_table_validates_required_fields(tmp_path: Path) -> None:
                     [
                         {
                             "event_name": "Event",
-                            "event_time": datetime.now(UTC),
+                            "event_time": datetime.now(timezone.utc),
                             "distinct_id": "user_1",
                             "properties": {},
                         }
@@ -457,7 +452,7 @@ def test_create_events_table_validates_required_fields(tmp_path: Path) -> None:
                     [
                         {
                             "event_name": "Event",
-                            "event_time": datetime.now(UTC),
+                            "event_time": datetime.now(timezone.utc),
                             "distinct_id": "user_1",
                             "insert_id": "event_1",
                         }
@@ -474,7 +469,6 @@ def test_create_events_table_validates_required_fields(tmp_path: Path) -> None:
 
 def test_create_profiles_table_inserts_all_records(tmp_path: Path) -> None:
     """Test that create_profiles_table inserts all records from iterator."""
-    from datetime import datetime
 
     db_path = tmp_path / "test.db"
     with StorageEngine(path=db_path, read_only=False) as storage:
@@ -483,12 +477,12 @@ def test_create_profiles_table_inserts_all_records(tmp_path: Path) -> None:
             {
                 "distinct_id": "user_123",
                 "properties": {"name": "Alice", "email": "alice@example.com"},
-                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
             },
             {
                 "distinct_id": "user_456",
                 "properties": {"name": "Bob", "email": "bob@example.com"},
-                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
             },
         ]
 
@@ -496,7 +490,7 @@ def test_create_profiles_table_inserts_all_records(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Create profiles table
@@ -522,7 +516,6 @@ def test_create_profiles_table_inserts_all_records(tmp_path: Path) -> None:
 
 def test_create_profiles_table_validates_required_fields(tmp_path: Path) -> None:
     """Test that create_profiles_table validates required fields."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -530,7 +523,7 @@ def test_create_profiles_table_validates_required_fields(tmp_path: Path) -> None
     with StorageEngine(path=db_path, read_only=False) as storage:
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Missing distinct_id
@@ -541,7 +534,7 @@ def test_create_profiles_table_validates_required_fields(tmp_path: Path) -> None
                     [
                         {
                             "properties": {"name": "Alice"},
-                            "last_seen": datetime.now(UTC),
+                            "last_seen": datetime.now(timezone.utc),
                         }
                     ]
                 ),
@@ -556,7 +549,7 @@ def test_create_profiles_table_validates_required_fields(tmp_path: Path) -> None
                     [
                         {
                             "distinct_id": "user_1",
-                            "last_seen": datetime.now(UTC),
+                            "last_seen": datetime.now(timezone.utc),
                         }
                     ]
                 ),
@@ -580,7 +573,6 @@ def test_create_profiles_table_validates_required_fields(tmp_path: Path) -> None
 
 def test_create_events_table_invokes_progress_callback(tmp_path: Path) -> None:
     """Test that create_events_table invokes progress callback."""
-    from datetime import datetime
 
     db_path = tmp_path / "test.db"
     with StorageEngine(path=db_path, read_only=False) as storage:
@@ -589,7 +581,7 @@ def test_create_events_table_invokes_progress_callback(tmp_path: Path) -> None:
             for i in range(2100):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i}",
                     "insert_id": f"event_{i:06d}",
                     "properties": {"index": i},
@@ -599,7 +591,7 @@ def test_create_events_table_invokes_progress_callback(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Track progress callbacks
@@ -626,7 +618,6 @@ def test_create_events_table_invokes_progress_callback(tmp_path: Path) -> None:
 
 def test_create_profiles_table_invokes_progress_callback(tmp_path: Path) -> None:
     """Test that create_profiles_table invokes progress callback."""
-    from datetime import datetime
 
     db_path = tmp_path / "test.db"
     with StorageEngine(path=db_path, read_only=False) as storage:
@@ -636,14 +627,14 @@ def test_create_profiles_table_invokes_progress_callback(tmp_path: Path) -> None
                 yield {
                     "distinct_id": f"user_{i}",
                     "properties": {"name": f"User {i}"},
-                    "last_seen": datetime.now(UTC),
+                    "last_seen": datetime.now(timezone.utc),
                 }
 
         from mixpanel_data.types import TableMetadata
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Track progress callbacks
@@ -834,7 +825,6 @@ def test_list_tables_returns_empty_list_for_new_database(tmp_path: Path) -> None
 
 def test_list_tables_returns_all_user_tables(tmp_path: Path) -> None:
     """Test that list_tables() returns all user-created tables."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -844,7 +834,7 @@ def test_list_tables_returns_all_user_tables(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -854,19 +844,19 @@ def test_list_tables_returns_all_user_tables(tmp_path: Path) -> None:
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime.now(UTC),
+                "last_seen": datetime.now(timezone.utc),
             }
         ]
 
         events_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
         profiles_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_events_table("events_jan", iter(events), events_metadata)
@@ -894,7 +884,6 @@ def test_list_tables_returns_all_user_tables(tmp_path: Path) -> None:
 
 def test_list_tables_excludes_internal_metadata_table(tmp_path: Path) -> None:
     """Test that list_tables() excludes internal _metadata table."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -904,7 +893,7 @@ def test_list_tables_excludes_internal_metadata_table(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -912,7 +901,7 @@ def test_list_tables_excludes_internal_metadata_table(tmp_path: Path) -> None:
         ]
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         storage.create_events_table("my_events", iter(events), metadata)
 
@@ -937,7 +926,6 @@ def test_list_tables_excludes_internal_metadata_table(tmp_path: Path) -> None:
 
 def test_get_schema_returns_events_table_schema(tmp_path: Path) -> None:
     """Test that get_schema() returns correct schema for events table."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -947,7 +935,7 @@ def test_get_schema_returns_events_table_schema(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -955,7 +943,7 @@ def test_get_schema_returns_events_table_schema(tmp_path: Path) -> None:
         ]
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         storage.create_events_table("test_events", iter(events), metadata)
 
@@ -981,7 +969,6 @@ def test_get_schema_returns_events_table_schema(tmp_path: Path) -> None:
 
 def test_get_schema_returns_profiles_table_schema(tmp_path: Path) -> None:
     """Test that get_schema() returns correct schema for profiles table."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -992,12 +979,12 @@ def test_get_schema_returns_profiles_table_schema(tmp_path: Path) -> None:
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime.now(UTC),
+                "last_seen": datetime.now(timezone.utc),
             }
         ]
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         storage.create_profiles_table("test_profiles", iter(profiles), metadata)
 
@@ -1028,7 +1015,6 @@ def test_get_schema_returns_profiles_table_schema(tmp_path: Path) -> None:
 
 def test_get_metadata_returns_table_metadata(tmp_path: Path) -> None:
     """Test that get_metadata() returns correct metadata for table."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -1038,7 +1024,7 @@ def test_get_metadata_returns_table_metadata(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -1046,7 +1032,7 @@ def test_get_metadata_returns_table_metadata(tmp_path: Path) -> None:
         ]
         original_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+            fetched_at=datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
@@ -1065,7 +1051,6 @@ def test_get_metadata_returns_table_metadata(tmp_path: Path) -> None:
 
 def test_get_metadata_returns_profiles_metadata(tmp_path: Path) -> None:
     """Test that get_metadata() returns correct metadata for profiles table."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -1076,12 +1061,12 @@ def test_get_metadata_returns_profiles_metadata(tmp_path: Path) -> None:
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime.now(UTC),
+                "last_seen": datetime.now(timezone.utc),
             }
         ]
         original_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         storage.create_profiles_table(
             "test_profiles", iter(profiles), original_metadata
@@ -1132,7 +1117,6 @@ def test_get_metadata_raises_error_for_missing_table(tmp_path: Path) -> None:
 
 def test_table_exists_returns_true_for_existing_table(tmp_path: Path) -> None:
     """Test that table_exists() returns True for existing tables."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -1142,7 +1126,7 @@ def test_table_exists_returns_true_for_existing_table(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -1151,7 +1135,7 @@ def test_table_exists_returns_true_for_existing_table(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_events_table("test_events", iter(events), metadata)
@@ -1170,7 +1154,6 @@ def test_table_exists_returns_false_for_nonexistent_table(tmp_path: Path) -> Non
 
 def test_table_exists_returns_false_for_metadata_table(tmp_path: Path) -> None:
     """Test that table_exists() returns True for internal _metadata table."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -1180,7 +1163,7 @@ def test_table_exists_returns_false_for_metadata_table(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -1189,7 +1172,7 @@ def test_table_exists_returns_false_for_metadata_table(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_events_table("test_events", iter(events), metadata)
@@ -1205,7 +1188,6 @@ def test_table_exists_returns_false_for_metadata_table(tmp_path: Path) -> None:
 
 def test_drop_table_removes_table_from_database(tmp_path: Path) -> None:
     """Test that drop_table() removes table from database."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -1215,7 +1197,7 @@ def test_drop_table_removes_table_from_database(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -1224,7 +1206,7 @@ def test_drop_table_removes_table_from_database(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_events_table("test_events", iter(events), metadata)
@@ -1241,7 +1223,6 @@ def test_drop_table_removes_table_from_database(tmp_path: Path) -> None:
 
 def test_drop_table_removes_metadata_entry(tmp_path: Path) -> None:
     """Test that drop_table() removes metadata entry."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -1251,7 +1232,7 @@ def test_drop_table_removes_metadata_entry(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -1260,7 +1241,7 @@ def test_drop_table_removes_metadata_entry(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_events_table("test_events", iter(events), metadata)
@@ -1292,7 +1273,6 @@ def test_create_events_table_raises_table_exists_error_on_duplicate(
     tmp_path: Path,
 ) -> None:
     """Test that creating duplicate events table raises TableExistsError."""
-    from datetime import datetime
 
     from mixpanel_data.exceptions import TableExistsError
     from mixpanel_data.types import TableMetadata
@@ -1302,7 +1282,7 @@ def test_create_events_table_raises_table_exists_error_on_duplicate(
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -1311,7 +1291,7 @@ def test_create_events_table_raises_table_exists_error_on_duplicate(
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Create table first time
@@ -1326,7 +1306,6 @@ def test_create_profiles_table_raises_table_exists_error_on_duplicate(
     tmp_path: Path,
 ) -> None:
     """Test that creating duplicate profiles table raises TableExistsError."""
-    from datetime import datetime
 
     from mixpanel_data.exceptions import TableExistsError
     from mixpanel_data.types import TableMetadata
@@ -1337,13 +1316,13 @@ def test_create_profiles_table_raises_table_exists_error_on_duplicate(
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime.now(UTC),
+                "last_seen": datetime.now(timezone.utc),
             }
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Create table first time
@@ -1376,7 +1355,6 @@ def test_drop_table_raises_table_not_found_error_for_missing_table(
 
 def test_drop_table_raises_table_not_found_error_after_drop(tmp_path: Path) -> None:
     """Test that dropping same table twice raises TableNotFoundError."""
-    from datetime import datetime
 
     from mixpanel_data.exceptions import TableNotFoundError
     from mixpanel_data.types import TableMetadata
@@ -1387,7 +1365,7 @@ def test_drop_table_raises_table_not_found_error_after_drop(tmp_path: Path) -> N
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -1396,7 +1374,7 @@ def test_drop_table_raises_table_not_found_error_after_drop(tmp_path: Path) -> N
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_events_table("test_events", iter(events), metadata)
@@ -1507,7 +1485,6 @@ def test_execute_df_returns_empty_dataframe_for_empty_result(tmp_path: Path) -> 
 
 def test_execute_df_handles_json_columns(tmp_path: Path) -> None:
     """Test that execute_df() handles JSON columns correctly."""
-    from datetime import datetime
 
     import pandas as pd
 
@@ -1519,7 +1496,7 @@ def test_execute_df_handles_json_columns(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "user_123",
                 "insert_id": "event_001",
                 "properties": {"page": "/home", "country": "US"},
@@ -1528,7 +1505,7 @@ def test_execute_df_handles_json_columns(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_events_table("events", iter(events), metadata)
@@ -1979,7 +1956,6 @@ def test_execute_rows_params_wraps_sql_errors_in_query_error(tmp_path: Path) -> 
 
 def test_create_events_table_skips_duplicate_insert_ids(tmp_path: Path) -> None:
     """Test that duplicate insert_ids are silently skipped."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -1989,21 +1965,21 @@ def test_create_events_table_skips_duplicate_insert_ids(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "user_123",
                 "insert_id": "duplicate_id",  # First occurrence
                 "properties": {"page": "/home"},
             },
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "user_123",
                 "insert_id": "duplicate_id",  # Duplicate - should be skipped
                 "properties": {"page": "/home"},
             },
             {
                 "event_name": "Button Click",
-                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_456",
                 "insert_id": "unique_id",  # Unique
                 "properties": {"button": "submit"},
@@ -2012,7 +1988,7 @@ def test_create_events_table_skips_duplicate_insert_ids(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -2034,7 +2010,6 @@ def test_create_events_table_skips_duplicate_insert_ids(tmp_path: Path) -> None:
 
 def test_create_events_table_keeps_first_duplicate(tmp_path: Path) -> None:
     """Test that the first occurrence of a duplicate is kept."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2044,14 +2019,14 @@ def test_create_events_table_keeps_first_duplicate(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "user_123",
                 "insert_id": "same_id",
                 "properties": {"version": "first"},  # First - should be kept
             },
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "user_123",
                 "insert_id": "same_id",
                 "properties": {"version": "second"},  # Duplicate - skipped
@@ -2060,7 +2035,7 @@ def test_create_events_table_keeps_first_duplicate(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -2084,7 +2059,6 @@ def test_create_events_table_keeps_first_duplicate(tmp_path: Path) -> None:
 
 def test_create_profiles_table_skips_duplicate_distinct_ids(tmp_path: Path) -> None:
     """Test that duplicate distinct_ids are silently skipped."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2094,24 +2068,24 @@ def test_create_profiles_table_skips_duplicate_distinct_ids(tmp_path: Path) -> N
         profiles = [
             {
                 "distinct_id": "user_123",  # First occurrence
-                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "properties": {"name": "Alice"},
             },
             {
                 "distinct_id": "user_123",  # Duplicate - should be skipped
-                "last_seen": datetime(2024, 1, 16, 10, 30, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 16, 10, 30, tzinfo=timezone.utc),
                 "properties": {"name": "Alice Updated"},
             },
             {
                 "distinct_id": "user_456",  # Unique
-                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
                 "properties": {"name": "Bob"},
             },
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Should not raise - duplicates silently skipped
@@ -2131,7 +2105,6 @@ def test_create_profiles_table_skips_duplicate_distinct_ids(tmp_path: Path) -> N
 
 def test_create_profiles_table_keeps_first_duplicate(tmp_path: Path) -> None:
     """Test that the first occurrence of a duplicate profile is kept."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2141,19 +2114,19 @@ def test_create_profiles_table_keeps_first_duplicate(tmp_path: Path) -> None:
         profiles = [
             {
                 "distinct_id": "user_123",
-                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "properties": {"version": "first"},  # First - should be kept
             },
             {
                 "distinct_id": "user_123",
-                "last_seen": datetime(2024, 1, 16, 10, 30, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 16, 10, 30, tzinfo=timezone.utc),
                 "properties": {"version": "second"},  # Duplicate - skipped
             },
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_profiles_table(
@@ -2175,7 +2148,6 @@ def test_create_profiles_table_keeps_first_duplicate(tmp_path: Path) -> None:
 
 def test_create_events_table_handles_many_duplicates(tmp_path: Path) -> None:
     """Test that many duplicates are handled efficiently."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2187,7 +2159,7 @@ def test_create_events_table_handles_many_duplicates(tmp_path: Path) -> None:
         for i in range(100):
             base_event = {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": f"user_{i}",
                 "insert_id": f"id_{i}",
                 "properties": {"index": i},
@@ -2197,7 +2169,7 @@ def test_create_events_table_handles_many_duplicates(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -2219,7 +2191,6 @@ def test_create_events_table_handles_many_duplicates(tmp_path: Path) -> None:
 
 def test_create_events_table_row_count_matches_actual_inserts(tmp_path: Path) -> None:
     """Test that returned row_count equals actual inserted rows, not batch size."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2229,28 +2200,28 @@ def test_create_events_table_row_count_matches_actual_inserts(tmp_path: Path) ->
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "unique_1",
                 "properties": {},
             },
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "unique_1",  # Duplicate
                 "properties": {},
             },
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "unique_2",
                 "properties": {},
             },
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "unique_2",  # Duplicate
                 "properties": {},
@@ -2259,7 +2230,7 @@ def test_create_events_table_row_count_matches_actual_inserts(tmp_path: Path) ->
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -2277,7 +2248,6 @@ def test_create_events_table_row_count_matches_actual_inserts(tmp_path: Path) ->
 
 def test_create_profiles_table_row_count_matches_actual_inserts(tmp_path: Path) -> None:
     """Test that returned row_count equals actual inserted rows for profiles."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2288,23 +2258,23 @@ def test_create_profiles_table_row_count_matches_actual_inserts(tmp_path: Path) 
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
             },
             {
                 "distinct_id": "user_1",  # Duplicate
                 "properties": {"name": "Alice Updated"},
-                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
             },
             {
                 "distinct_id": "user_2",
                 "properties": {"name": "Bob"},
-                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
             },
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         row_count = storage.create_profiles_table(
@@ -2320,7 +2290,6 @@ def test_create_profiles_table_row_count_matches_actual_inserts(tmp_path: Path) 
 
 def test_append_events_table_row_count_matches_actual_inserts(tmp_path: Path) -> None:
     """Test that append row_count equals actual inserted rows."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2330,7 +2299,7 @@ def test_append_events_table_row_count_matches_actual_inserts(tmp_path: Path) ->
         initial_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "existing_id",
                 "properties": {},
@@ -2339,7 +2308,7 @@ def test_append_events_table_row_count_matches_actual_inserts(tmp_path: Path) ->
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -2350,28 +2319,28 @@ def test_append_events_table_row_count_matches_actual_inserts(tmp_path: Path) ->
         append_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "existing_id",  # Duplicate of initial
                 "properties": {},
             },
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "new_id_1",
                 "properties": {},
             },
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "new_id_1",  # Duplicate within append
                 "properties": {},
             },
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_3",
                 "insert_id": "new_id_2",
                 "properties": {},
@@ -2380,7 +2349,7 @@ def test_append_events_table_row_count_matches_actual_inserts(tmp_path: Path) ->
 
         append_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-16",
             to_date="2024-01-16",
         )
@@ -2396,7 +2365,6 @@ def test_append_events_table_row_count_matches_actual_inserts(tmp_path: Path) ->
 
 def test_append_profiles_table_row_count_matches_actual_inserts(tmp_path: Path) -> None:
     """Test that append row_count equals actual inserted rows for profiles."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2407,13 +2375,13 @@ def test_append_profiles_table_row_count_matches_actual_inserts(tmp_path: Path) 
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
             },
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_profiles_table("test_profiles", iter(initial_profiles), metadata)
@@ -2423,12 +2391,12 @@ def test_append_profiles_table_row_count_matches_actual_inserts(tmp_path: Path) 
             {
                 "distinct_id": "user_1",  # Duplicate of initial
                 "properties": {"name": "Alice Updated"},
-                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
             },
             {
                 "distinct_id": "user_2",
                 "properties": {"name": "Bob"},
-                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
             },
         ]
 
@@ -2443,7 +2411,6 @@ def test_append_profiles_table_row_count_matches_actual_inserts(tmp_path: Path) 
 
 def test_progress_callback_reports_actual_inserted_rows(tmp_path: Path) -> None:
     """Test that progress callback receives accurate row counts."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2455,7 +2422,7 @@ def test_progress_callback_reports_actual_inserted_rows(tmp_path: Path) -> None:
             events.append(
                 {
                     "event_name": "Event",
-                    "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                    "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                     "distinct_id": f"user_{i}",
                     "insert_id": f"id_{i % 5}",  # Only 5 unique IDs
                     "properties": {},
@@ -2464,7 +2431,7 @@ def test_progress_callback_reports_actual_inserted_rows(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -2498,7 +2465,6 @@ def test_progress_callback_reports_actual_inserted_rows(tmp_path: Path) -> None:
 
 def test_create_events_table_rolls_back_on_failure(tmp_path: Path) -> None:
     """Test that failed event table creation rolls back the transaction."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2508,7 +2474,7 @@ def test_create_events_table_rolls_back_on_failure(tmp_path: Path) -> None:
         """Iterator that yields valid events then fails."""
         yield {
             "event_name": "Valid Event",
-            "event_time": datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            "event_time": datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc),
             "distinct_id": "user_1",
             "insert_id": "id_1",
             "properties": {"key": "value"},
@@ -2518,7 +2484,7 @@ def test_create_events_table_rolls_back_on_failure(tmp_path: Path) -> None:
     with StorageEngine(path=db_path, read_only=False) as storage:
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
@@ -2537,7 +2503,6 @@ def test_create_events_table_rolls_back_on_failure(tmp_path: Path) -> None:
 
 def test_create_profiles_table_rolls_back_on_failure(tmp_path: Path) -> None:
     """Test that failed profile table creation rolls back the transaction."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2555,7 +2520,7 @@ def test_create_profiles_table_rolls_back_on_failure(tmp_path: Path) -> None:
     with StorageEngine(path=db_path, read_only=False) as storage:
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Should raise the error from the iterator
@@ -2572,7 +2537,6 @@ def test_create_profiles_table_rolls_back_on_failure(tmp_path: Path) -> None:
 
 def test_rollback_allows_retry_without_table_exists_error(tmp_path: Path) -> None:
     """Test that after rollback, retrying table creation works."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -2583,7 +2547,7 @@ def test_rollback_allows_retry_without_table_exists_error(tmp_path: Path) -> Non
         """Iterator that fails on first attempt, succeeds on second."""
         yield {
             "event_name": "Event",
-            "event_time": datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+            "event_time": datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc),
             "distinct_id": "user_1",
             "insert_id": "id_1",
             "properties": {},
@@ -2596,7 +2560,7 @@ def test_rollback_allows_retry_without_table_exists_error(tmp_path: Path) -> Non
     with StorageEngine(path=db_path, read_only=False) as storage:
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-01",
         )
@@ -2619,7 +2583,7 @@ def test_rollback_allows_retry_without_table_exists_error(tmp_path: Path) -> Non
                 [
                     {
                         "event_name": "Retry Event",
-                        "event_time": datetime(2024, 1, 1, 10, 0, tzinfo=UTC),
+                        "event_time": datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc),
                         "distinct_id": "user_1",
                         "insert_id": "id_2",
                         "properties": {},
@@ -2674,7 +2638,6 @@ class TestInMemoryMode:
 
     def test_memory_supports_events_table_creation(self) -> None:
         """Test that events can be stored in memory database."""
-        from datetime import datetime
 
         from mixpanel_data.types import TableMetadata
 
@@ -2682,13 +2645,13 @@ class TestInMemoryMode:
             events = [
                 {
                     "event_name": "Test",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": "user_1",
                     "insert_id": "event_1",
                     "properties": {"key": "value"},
                 }
             ]
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
 
             row_count = storage.create_events_table("events", iter(events), metadata)
             assert row_count == 1
@@ -2721,7 +2684,6 @@ class TestInMemoryMode:
 
     def test_memory_introspection_works(self) -> None:
         """Test that list_tables, get_schema work on memory DB."""
-        from datetime import datetime
 
         from mixpanel_data.types import TableMetadata
 
@@ -2733,13 +2695,13 @@ class TestInMemoryMode:
             events = [
                 {
                     "event_name": "Test",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": "user_1",
                     "insert_id": "event_1",
                     "properties": {},
                 }
             ]
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
             storage.create_events_table("my_events", iter(events), metadata)
 
             # Introspection should work
@@ -2752,7 +2714,6 @@ class TestInMemoryMode:
 
     def test_memory_supports_profiles_table_creation(self) -> None:
         """Test that profiles can be stored in memory database."""
-        from datetime import datetime
 
         from mixpanel_data.types import TableMetadata
 
@@ -2761,10 +2722,10 @@ class TestInMemoryMode:
                 {
                     "distinct_id": "user_1",
                     "properties": {"name": "Alice"},
-                    "last_seen": datetime.now(UTC),
+                    "last_seen": datetime.now(timezone.utc),
                 }
             ]
-            metadata = TableMetadata(type="profiles", fetched_at=datetime.now(UTC))
+            metadata = TableMetadata(type="profiles", fetched_at=datetime.now(timezone.utc))
 
             row_count = storage.create_profiles_table(
                 "profiles", iter(profiles), metadata
@@ -2776,7 +2737,6 @@ class TestInMemoryMode:
 
     def test_memory_query_methods_work(self) -> None:
         """Test that all query methods work on memory database."""
-        from datetime import datetime
 
         from mixpanel_data.types import TableMetadata
 
@@ -2784,14 +2744,14 @@ class TestInMemoryMode:
             events = [
                 {
                     "event_name": f"Event_{i}",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i}",
                     "insert_id": f"event_{i}",
                     "properties": {"index": i},
                 }
                 for i in range(5)
             ]
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
             storage.create_events_table("events", iter(events), metadata)
 
             # execute_df
@@ -3159,7 +3119,6 @@ class TestReadOnlyMode:
 
 def test_append_events_table_adds_rows_to_existing_table(tmp_path: Path) -> None:
     """Test that append_events_table adds rows to an existing events table."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3169,14 +3128,14 @@ def test_append_events_table_adds_rows_to_existing_table(tmp_path: Path) -> None
         initial_events = [
             {
                 "event_name": "Event A",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {"batch": "initial"},
             },
             {
                 "event_name": "Event B",
-                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "event_2",
                 "properties": {"batch": "initial"},
@@ -3185,7 +3144,7 @@ def test_append_events_table_adds_rows_to_existing_table(tmp_path: Path) -> None
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -3199,7 +3158,7 @@ def test_append_events_table_adds_rows_to_existing_table(tmp_path: Path) -> None
         append_events = [
             {
                 "event_name": "Event C",
-                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_3",
                 "insert_id": "event_3",
                 "properties": {"batch": "append"},
@@ -3208,7 +3167,7 @@ def test_append_events_table_adds_rows_to_existing_table(tmp_path: Path) -> None
 
         append_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-16",
             to_date="2024-01-16",
         )
@@ -3224,7 +3183,6 @@ def test_append_events_table_adds_rows_to_existing_table(tmp_path: Path) -> None
 
 def test_append_events_table_raises_error_for_missing_table(tmp_path: Path) -> None:
     """Test that append_events_table raises TableNotFoundError for missing table."""
-    from datetime import datetime
 
     from mixpanel_data.exceptions import TableNotFoundError
     from mixpanel_data.types import TableMetadata
@@ -3234,7 +3192,7 @@ def test_append_events_table_raises_error_for_missing_table(tmp_path: Path) -> N
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -3243,7 +3201,7 @@ def test_append_events_table_raises_error_for_missing_table(tmp_path: Path) -> N
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-01",
         )
@@ -3254,7 +3212,6 @@ def test_append_events_table_raises_error_for_missing_table(tmp_path: Path) -> N
 
 def test_append_events_table_deduplicates_across_batches(tmp_path: Path) -> None:
     """Test that duplicates across initial and appended data are handled."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3264,7 +3221,7 @@ def test_append_events_table_deduplicates_across_batches(tmp_path: Path) -> None
         initial_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "shared_id",  # Will be duplicated
                 "properties": {"version": "first"},
@@ -3273,7 +3230,7 @@ def test_append_events_table_deduplicates_across_batches(tmp_path: Path) -> None
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -3284,14 +3241,14 @@ def test_append_events_table_deduplicates_across_batches(tmp_path: Path) -> None
         append_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "shared_id",  # Duplicate - should be skipped
                 "properties": {"version": "second"},
             },
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "unique_id",  # New
                 "properties": {"version": "new"},
@@ -3300,7 +3257,7 @@ def test_append_events_table_deduplicates_across_batches(tmp_path: Path) -> None
 
         append_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-16",
             to_date="2024-01-16",
         )
@@ -3313,7 +3270,6 @@ def test_append_events_table_deduplicates_across_batches(tmp_path: Path) -> None
 
 def test_append_events_table_updates_metadata_date_range(tmp_path: Path) -> None:
     """Test that append updates metadata to expand date range."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3323,7 +3279,7 @@ def test_append_events_table_updates_metadata_date_range(tmp_path: Path) -> None
         initial_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -3332,7 +3288,7 @@ def test_append_events_table_updates_metadata_date_range(tmp_path: Path) -> None
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -3343,7 +3299,7 @@ def test_append_events_table_updates_metadata_date_range(tmp_path: Path) -> None
         append_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 20, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 20, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "event_2",
                 "properties": {},
@@ -3352,7 +3308,7 @@ def test_append_events_table_updates_metadata_date_range(tmp_path: Path) -> None
 
         append_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-20",
             to_date="2024-01-20",
         )
@@ -3367,7 +3323,6 @@ def test_append_events_table_updates_metadata_date_range(tmp_path: Path) -> None
 
 def test_append_events_table_updates_row_count(tmp_path: Path) -> None:
     """Test that append updates the row count in metadata."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3377,7 +3332,7 @@ def test_append_events_table_updates_row_count(tmp_path: Path) -> None:
         initial_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -3386,7 +3341,7 @@ def test_append_events_table_updates_row_count(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -3397,14 +3352,14 @@ def test_append_events_table_updates_row_count(tmp_path: Path) -> None:
         append_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "event_2",
                 "properties": {},
             },
             {
                 "event_name": "Event",
-                "event_time": datetime(2024, 1, 17, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 17, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_3",
                 "insert_id": "event_3",
                 "properties": {},
@@ -3413,7 +3368,7 @@ def test_append_events_table_updates_row_count(tmp_path: Path) -> None:
 
         append_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-16",
             to_date="2024-01-17",
         )
@@ -3428,7 +3383,6 @@ def test_append_events_table_updates_row_count(tmp_path: Path) -> None:
 
 def test_append_profiles_table_adds_rows_to_existing_table(tmp_path: Path) -> None:
     """Test that append_profiles_table adds rows to an existing profiles table."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3439,13 +3393,13 @@ def test_append_profiles_table_adds_rows_to_existing_table(tmp_path: Path) -> No
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
             },
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_profiles_table("my_profiles", iter(initial_profiles), metadata)
@@ -3458,13 +3412,13 @@ def test_append_profiles_table_adds_rows_to_existing_table(tmp_path: Path) -> No
             {
                 "distinct_id": "user_2",
                 "properties": {"name": "Bob"},
-                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
             },
         ]
 
         append_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         row_count = storage.append_profiles_table(
@@ -3478,7 +3432,6 @@ def test_append_profiles_table_adds_rows_to_existing_table(tmp_path: Path) -> No
 
 def test_append_profiles_table_raises_error_for_missing_table(tmp_path: Path) -> None:
     """Test that append_profiles_table raises TableNotFoundError for missing table."""
-    from datetime import datetime
 
     from mixpanel_data.exceptions import TableNotFoundError
     from mixpanel_data.types import TableMetadata
@@ -3489,13 +3442,13 @@ def test_append_profiles_table_raises_error_for_missing_table(tmp_path: Path) ->
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime.now(UTC),
+                "last_seen": datetime.now(timezone.utc),
             }
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         with pytest.raises(TableNotFoundError, match="nonexistent"):
@@ -3504,7 +3457,6 @@ def test_append_profiles_table_raises_error_for_missing_table(tmp_path: Path) ->
 
 def test_append_profiles_table_deduplicates_across_batches(tmp_path: Path) -> None:
     """Test that duplicate distinct_ids across initial and appended data are handled."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3515,13 +3467,13 @@ def test_append_profiles_table_deduplicates_across_batches(tmp_path: Path) -> No
             {
                 "distinct_id": "user_1",  # Will be duplicated
                 "properties": {"version": "first"},
-                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
             },
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_profiles_table("my_profiles", iter(initial_profiles), metadata)
@@ -3531,18 +3483,18 @@ def test_append_profiles_table_deduplicates_across_batches(tmp_path: Path) -> No
             {
                 "distinct_id": "user_1",  # Duplicate - should be skipped
                 "properties": {"version": "second"},
-                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
             },
             {
                 "distinct_id": "user_2",  # New
                 "properties": {"version": "new"},
-                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 16, 10, 0, tzinfo=timezone.utc),
             },
         ]
 
         append_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.append_profiles_table(
@@ -3555,7 +3507,6 @@ def test_append_profiles_table_deduplicates_across_batches(tmp_path: Path) -> No
 
 def test_append_events_table_invokes_progress_callback(tmp_path: Path) -> None:
     """Test that append_events_table invokes progress callback."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3565,7 +3516,7 @@ def test_append_events_table_invokes_progress_callback(tmp_path: Path) -> None:
         initial_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_0",
                 "insert_id": "event_0",
                 "properties": {},
@@ -3574,7 +3525,7 @@ def test_append_events_table_invokes_progress_callback(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-01",
         )
@@ -3586,7 +3537,7 @@ def test_append_events_table_invokes_progress_callback(tmp_path: Path) -> None:
             for i in range(2100):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i + 1}",
                     "insert_id": f"event_{i + 1:06d}",
                     "properties": {},
@@ -3594,7 +3545,7 @@ def test_append_events_table_invokes_progress_callback(tmp_path: Path) -> None:
 
         append_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-02",
             to_date="2024-01-02",
         )
@@ -3623,7 +3574,6 @@ def test_append_events_table_invokes_progress_callback(tmp_path: Path) -> None:
 
 def test_create_events_table_accepts_batch_size(tmp_path: Path) -> None:
     """Test that create_events_table accepts and uses batch_size parameter."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3634,7 +3584,7 @@ def test_create_events_table_accepts_batch_size(tmp_path: Path) -> None:
             for i in range(500):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i}",
                     "insert_id": f"event_{i:06d}",
                     "properties": {"index": i},
@@ -3642,7 +3592,7 @@ def test_create_events_table_accepts_batch_size(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
@@ -3673,7 +3623,6 @@ def test_create_events_table_batch_size_affects_callback_frequency(
     tmp_path: Path,
 ) -> None:
     """Test that larger batch_size results in fewer progress callbacks."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3684,7 +3633,7 @@ def test_create_events_table_batch_size_affects_callback_frequency(
             for i in range(1000):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i}",
                     "insert_id": f"event_{i:06d}",
                     "properties": {"index": i},
@@ -3692,7 +3641,7 @@ def test_create_events_table_batch_size_affects_callback_frequency(
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
@@ -3717,7 +3666,6 @@ def test_create_events_table_batch_size_affects_callback_frequency(
 
 def test_create_profiles_table_accepts_batch_size(tmp_path: Path) -> None:
     """Test that create_profiles_table accepts and uses batch_size parameter."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3729,12 +3677,12 @@ def test_create_profiles_table_accepts_batch_size(tmp_path: Path) -> None:
                 yield {
                     "distinct_id": f"user_{i}",
                     "properties": {"name": f"User {i}"},
-                    "last_seen": datetime.now(UTC).isoformat(),
+                    "last_seen": datetime.now(timezone.utc).isoformat(),
                 }
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         callback_invocations: list[int] = []
@@ -3758,7 +3706,6 @@ def test_create_profiles_table_accepts_batch_size(tmp_path: Path) -> None:
 
 def test_append_events_table_accepts_batch_size(tmp_path: Path) -> None:
     """Test that append_events_table accepts and uses batch_size parameter."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3768,7 +3715,7 @@ def test_append_events_table_accepts_batch_size(tmp_path: Path) -> None:
         initial_events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_0",
                 "insert_id": "event_0",
                 "properties": {},
@@ -3777,7 +3724,7 @@ def test_append_events_table_accepts_batch_size(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-01",
         )
@@ -3789,7 +3736,7 @@ def test_append_events_table_accepts_batch_size(tmp_path: Path) -> None:
             for i in range(400):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i + 1}",
                     "insert_id": f"event_{i + 1:06d}",
                     "properties": {},
@@ -3797,7 +3744,7 @@ def test_append_events_table_accepts_batch_size(tmp_path: Path) -> None:
 
         append_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-02",
             to_date="2024-01-02",
         )
@@ -3822,7 +3769,6 @@ def test_append_events_table_accepts_batch_size(tmp_path: Path) -> None:
 
 def test_append_profiles_table_accepts_batch_size(tmp_path: Path) -> None:
     """Test that append_profiles_table accepts and uses batch_size parameter."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3833,13 +3779,13 @@ def test_append_profiles_table_accepts_batch_size(tmp_path: Path) -> None:
             {
                 "distinct_id": "user_0",
                 "properties": {"name": "User 0"},
-                "last_seen": datetime.now(UTC).isoformat(),
+                "last_seen": datetime.now(timezone.utc).isoformat(),
             }
         ]
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_profiles_table("my_profiles", iter(initial_profiles), metadata)
@@ -3850,12 +3796,12 @@ def test_append_profiles_table_accepts_batch_size(tmp_path: Path) -> None:
                 yield {
                     "distinct_id": f"user_{i + 1}",
                     "properties": {"name": f"User {i + 1}"},
-                    "last_seen": datetime.now(UTC).isoformat(),
+                    "last_seen": datetime.now(timezone.utc).isoformat(),
                 }
 
         append_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         callback_invocations: list[int] = []
@@ -3878,7 +3824,6 @@ def test_append_profiles_table_accepts_batch_size(tmp_path: Path) -> None:
 
 def test_create_events_table_default_batch_size_is_1000(tmp_path: Path) -> None:
     """Test that default batch_size is 1000 when not specified."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3890,7 +3835,7 @@ def test_create_events_table_default_batch_size_is_1000(tmp_path: Path) -> None:
             for i in range(2500):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i}",
                     "insert_id": f"event_{i:06d}",
                     "properties": {"index": i},
@@ -3898,7 +3843,7 @@ def test_create_events_table_default_batch_size_is_1000(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
@@ -3930,7 +3875,6 @@ def test_create_events_table_default_batch_size_is_1000(tmp_path: Path) -> None:
 
 def test_append_events_to_profiles_table_raises_error(tmp_path: Path) -> None:
     """Appending events to a profiles table should raise ValueError."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3941,12 +3885,12 @@ def test_append_events_to_profiles_table_raises_error(tmp_path: Path) -> None:
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
             },
         ]
         profiles_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         storage.create_profiles_table("my_data", iter(profiles), profiles_metadata)
 
@@ -3954,7 +3898,7 @@ def test_append_events_to_profiles_table_raises_error(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {"page": "/home"},
@@ -3962,7 +3906,7 @@ def test_append_events_to_profiles_table_raises_error(tmp_path: Path) -> None:
         ]
         events_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -3973,7 +3917,6 @@ def test_append_events_to_profiles_table_raises_error(tmp_path: Path) -> None:
 
 def test_append_profiles_to_events_table_raises_error(tmp_path: Path) -> None:
     """Appending profiles to an events table should raise ValueError."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -3983,7 +3926,7 @@ def test_append_profiles_to_events_table_raises_error(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {"page": "/home"},
@@ -3991,7 +3934,7 @@ def test_append_profiles_to_events_table_raises_error(tmp_path: Path) -> None:
         ]
         events_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -4002,12 +3945,12 @@ def test_append_profiles_to_events_table_raises_error(tmp_path: Path) -> None:
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
             },
         ]
         profiles_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         with pytest.raises(ValueError, match="Cannot append profiles to events table"):
@@ -4021,7 +3964,6 @@ def test_append_profiles_to_events_table_raises_error(tmp_path: Path) -> None:
 
 def test_append_events_empty_iterator_returns_zero(tmp_path: Path) -> None:
     """Appending empty iterator should return 0 and preserve metadata."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -4030,14 +3972,14 @@ def test_append_events_empty_iterator_returns_zero(tmp_path: Path) -> None:
         # Create table with initial event
         initial_event = {
             "event_name": "Initial Event",
-            "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+            "event_time": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
             "distinct_id": "user_1",
             "insert_id": "event_1",
             "properties": {"source": "initial"},
         }
         initial_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -4051,7 +3993,7 @@ def test_append_events_empty_iterator_returns_zero(tmp_path: Path) -> None:
         # Append empty iterator with different dates
         empty_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-02-01",  # Different date
             to_date="2024-02-28",
         )
@@ -4072,7 +4014,6 @@ def test_append_events_empty_iterator_returns_zero(tmp_path: Path) -> None:
 
 def test_append_profiles_empty_iterator_returns_zero(tmp_path: Path) -> None:
     """Appending empty iterator should return 0 and preserve metadata."""
-    from datetime import datetime
 
     from mixpanel_data.types import TableMetadata
 
@@ -4082,11 +4023,11 @@ def test_append_profiles_empty_iterator_returns_zero(tmp_path: Path) -> None:
         initial_profile = {
             "distinct_id": "user_1",
             "properties": {"name": "Alice"},
-            "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+            "last_seen": datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
         }
         initial_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         storage.create_profiles_table(
             "profiles", iter([initial_profile]), initial_metadata
@@ -4100,7 +4041,7 @@ def test_append_profiles_empty_iterator_returns_zero(tmp_path: Path) -> None:
         # Append empty iterator
         empty_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         result = storage.append_profiles_table("profiles", iter([]), empty_metadata)
 

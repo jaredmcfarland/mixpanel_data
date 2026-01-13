@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest.mock
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -43,7 +43,7 @@ class TestTransformEvent:
 
         assert result["event_name"] == "Sign Up"
         # Unix timestamp 1609459200 = 2021-01-01 00:00:00 UTC
-        assert result["event_time"] == datetime(2021, 1, 1, 0, 0, 0, tzinfo=UTC)
+        assert result["event_time"] == datetime(2021, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         assert result["distinct_id"] == "user_123"
         assert result["insert_id"] == "abc-123-def"
         assert result["properties"] == {"browser": "Chrome", "country": "US"}
@@ -128,7 +128,7 @@ class TestTransformEvent:
         assert result["event_name"] == "No Properties"
         assert result["distinct_id"] == ""
         # Unix timestamp 0 = 1970-01-01 00:00:00 UTC (epoch)
-        assert result["event_time"] == datetime(1970, 1, 1, 0, 0, 0, tzinfo=UTC)
+        assert result["event_time"] == datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
 
 class TestTransformProfile:
@@ -1467,7 +1467,7 @@ class TestFetchProfilesParallelDelegation:
             failed_pages=0,
             failed_page_indices=(),
             duration_seconds=1.5,
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         with unittest.mock.patch(
@@ -1541,7 +1541,7 @@ class TestFetchProfilesParallelDelegation:
             failed_pages=0,
             failed_page_indices=(),
             duration_seconds=1.5,
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         with unittest.mock.patch(
@@ -1577,7 +1577,7 @@ class TestFetchProfilesParallelDelegation:
             failed_pages=0,
             failed_page_indices=(),
             duration_seconds=1.5,
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         def on_page_callback(progress: Any) -> None:
@@ -1616,7 +1616,7 @@ class TestFetchProfilesParallelDelegation:
             failed_pages=0,
             failed_page_indices=(),
             duration_seconds=1.5,
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         with unittest.mock.patch(
@@ -1660,7 +1660,7 @@ class TestFetchProfilesParallelDelegation:
             failed_pages=0,
             failed_page_indices=(),
             duration_seconds=1.5,
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         behaviors = [

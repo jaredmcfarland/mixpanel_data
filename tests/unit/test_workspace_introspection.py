@@ -11,7 +11,7 @@ Tests cover:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -106,14 +106,14 @@ def events_table(storage: StorageEngine) -> None:
             "properties": {"page": "/pricing", "country": "US"},
         },
     ]
-    metadata = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+    metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
     storage.create_events_table("events", iter(events), metadata)
 
 
 @pytest.fixture
 def empty_events_table(storage: StorageEngine) -> None:
     """Create an empty events table for edge case testing."""
-    metadata = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+    metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
     storage.create_events_table("empty_events", iter([]), metadata)
 
 

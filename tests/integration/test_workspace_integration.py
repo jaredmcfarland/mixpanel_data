@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -299,7 +299,7 @@ class TestTableManagementIntegration:
         events = [
             {
                 "event_name": "Event A",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user1",
                 "insert_id": "id1",
                 "properties": {"foo": "bar"},
@@ -307,7 +307,7 @@ class TestTableManagementIntegration:
         ]
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )

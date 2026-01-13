@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -28,7 +28,7 @@ class TestUserEvent:
 
     def test_basic_creation(self) -> None:
         """Test creating a UserEvent."""
-        event_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        event_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         event = UserEvent(
             event="Sign Up",
             time=event_time,
@@ -43,7 +43,7 @@ class TestUserEvent:
         """UserEvent should be immutable (frozen)."""
         event = UserEvent(
             event="Test",
-            time=datetime.now(tz=UTC),
+            time=datetime.now(tz=timezone.utc),
             properties={},
         )
 
@@ -54,7 +54,7 @@ class TestUserEvent:
         """to_dict output should be JSON serializable."""
         event = UserEvent(
             event="Sign Up",
-            time=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+            time=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
             properties={"plan": "premium"},
         )
 
@@ -74,7 +74,7 @@ class TestActivityFeedResult:
         events = [
             UserEvent(
                 event="Sign Up",
-                time=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+                time=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
                 properties={"$distinct_id": "user_123"},
             ),
         ]
@@ -94,12 +94,12 @@ class TestActivityFeedResult:
         events = [
             UserEvent(
                 event="Sign Up",
-                time=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+                time=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
                 properties={"$distinct_id": "user_123", "plan": "free"},
             ),
             UserEvent(
                 event="Purchase",
-                time=datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC),
+                time=datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc),
                 properties={"$distinct_id": "user_123", "amount": 99.99},
             ),
         ]
@@ -159,7 +159,7 @@ class TestActivityFeedResult:
         events = [
             UserEvent(
                 event="Sign Up",
-                time=datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC),
+                time=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
                 properties={"$distinct_id": "user_123"},
             ),
         ]
@@ -672,7 +672,7 @@ class TestPhase008TypesImmutability:
         results: list[object] = [
             UserEvent(
                 event="Test",
-                time=datetime.now(tz=UTC),
+                time=datetime.now(tz=timezone.utc),
                 properties={},
             ),
             ActivityFeedResult(

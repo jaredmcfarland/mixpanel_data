@@ -7,8 +7,13 @@ Configuration is stored in TOML format at ~/.mp/config.toml by default.
 from __future__ import annotations
 
 import os
-import tomllib
+import sys
 from dataclasses import dataclass
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib  # type: ignore[import-not-found,unused-ignore]
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -150,7 +155,7 @@ class ConfigManager:
 
         try:
             with self._config_path.open("rb") as f:
-                return tomllib.load(f)
+                return dict(tomllib.load(f))
         except tomllib.TOMLDecodeError as e:
             raise ConfigError(
                 f"Invalid TOML in config file: {e}",

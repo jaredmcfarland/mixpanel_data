@@ -187,7 +187,7 @@ Config file: `~/.mp/config.toml`
 
 ## Development
 
-**Recommended:** Use the devcontainer (Python 3.11, uv, just pre-installed)
+**Recommended:** Use the devcontainer (Python 3.10+, uv, just pre-installed)
 
 This project uses [just](https://github.com/casey/just) as a command runner:
 
@@ -239,7 +239,7 @@ Suppressing stderr causes silent failures and makes it impossible to diagnose is
 
 ## Technology Stack
 
-- Python 3.11+ with full type hints (mypy --strict compliant)
+- Python 3.10+ with full type hints (mypy --strict compliant)
 - Typer (CLI) + Rich (output formatting)
 - DuckDB (embedded analytical database)
 - jq (JSON filtering via `--jq` option for CLI commands)
@@ -287,14 +287,14 @@ Skill(skill="mixpanel-data:mixpanel-analyst")  # Will fail!
 **Slash commands** (starting with `/mp-`) use the Skill tool correctly.
 
 ## Active Technologies
-- Python 3.11+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies (017-parallel-export)
+- Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies (017-parallel-export)
 - DuckDB (single-writer constraint requires queue-based serialization) (017-parallel-export)
-- Python 3.11+ + Typer (CLI), Rich (output), httpx (HTTP), Pydantic v2 (validation) (018-engage-api-params)
+- Python 3.10+ + Typer (CLI), Rich (output), httpx (HTTP), Pydantic v2 (validation) (018-engage-api-params)
 - DuckDB (local storage for fetched profiles) (018-engage-api-params)
-- Python 3.11+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new dependencies (019-parallel-profile-fetch)
+- Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new dependencies (019-parallel-profile-fetch)
 - DuckDB (existing StorageEngine) (019-parallel-profile-fetch)
-- Python 3.11+ (matches mixpanel_data requirements) (020-mcp-server)
+- Python 3.10+ (matches mixpanel_data requirements) (020-mcp-server)
 - DuckDB (via mixpanel_data Workspace - shared session state) (020-mcp-server)
 
 ## Recent Changes
-- 017-parallel-export: Added Python 3.11+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies
+- 017-parallel-export: Added Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies

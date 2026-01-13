@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from mixpanel_data._internal.transforms import transform_event, transform_profile
@@ -191,7 +191,7 @@ class FetcherService:
         # Sequential fetch - validate date range (100-day limit)
         self._validate_date_range(from_date, to_date)
 
-        start_time = datetime.now(UTC)
+        start_time = datetime.now(timezone.utc)
 
         # Wrap progress callback for API client
         def on_api_batch(count: int) -> None:
@@ -214,7 +214,7 @@ class FetcherService:
                 yield transform_event(event)
 
         # Construct metadata
-        fetched_at = datetime.now(UTC)
+        fetched_at = datetime.now(timezone.utc)
         metadata = TableMetadata(
             type="events",
             fetched_at=fetched_at,
@@ -241,7 +241,7 @@ class FetcherService:
             )
 
         # Calculate final timing (use distinct variable to avoid confusion with metadata timestamp)
-        completed_at = datetime.now(UTC)
+        completed_at = datetime.now(timezone.utc)
         duration_seconds = (completed_at - start_time).total_seconds()
 
         return FetchResult(
@@ -350,7 +350,7 @@ class FetcherService:
                 batch_size=batch_size,
             )
 
-        start_time = datetime.now(UTC)
+        start_time = datetime.now(timezone.utc)
 
         # Wrap progress callback for API client
         def on_api_batch(count: int) -> None:
@@ -380,7 +380,7 @@ class FetcherService:
         filter_behaviors = json.dumps(behaviors) if behaviors else None
 
         # Construct metadata
-        fetched_at = datetime.now(UTC)
+        fetched_at = datetime.now(timezone.utc)
         metadata = TableMetadata(
             type="profiles",
             fetched_at=fetched_at,
@@ -411,7 +411,7 @@ class FetcherService:
             )
 
         # Calculate final timing (use distinct variable to avoid confusion with metadata timestamp)
-        completed_at = datetime.now(UTC)
+        completed_at = datetime.now(timezone.utc)
         duration_seconds = (completed_at - start_time).total_seconds()
 
         return FetchResult(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -311,13 +311,13 @@ class TestInspectTables:
                 name="events_jan",
                 type="events",
                 row_count=1000,
-                fetched_at=datetime(2024, 1, 31, 12, 0, 0, tzinfo=UTC),
+                fetched_at=datetime(2024, 1, 31, 12, 0, 0, tzinfo=timezone.utc),
             ),
             TableInfo(
                 name="profiles",
                 type="profiles",
                 row_count=500,
-                fetched_at=datetime(2024, 1, 30, 10, 0, 0, tzinfo=UTC),
+                fetched_at=datetime(2024, 1, 30, 10, 0, 0, tzinfo=timezone.utc),
             ),
         ]
 

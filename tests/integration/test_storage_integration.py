@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC
+from datetime import timezone
 from pathlib import Path
 from typing import Any
 
@@ -116,7 +116,7 @@ def test_large_dataset_ingestion_100k_events(tmp_path: Path) -> None:
             for i in range(100_000):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i % 10000}",  # 10K unique users
                     "insert_id": f"event_{i:08d}",
                     "properties": {"index": i, "batch": i // 1000},
@@ -124,7 +124,7 @@ def test_large_dataset_ingestion_100k_events(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
@@ -183,12 +183,12 @@ def test_large_dataset_ingestion_50k_profiles(tmp_path: Path) -> None:
                         "email": f"user{i}@example.com",
                         "plan": "free" if i % 10 < 8 else "premium",
                     },
-                    "last_seen": datetime.now(UTC),
+                    "last_seen": datetime.now(timezone.utc),
                 }
 
         metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Create profiles table
@@ -250,7 +250,7 @@ def test_memory_usage_stays_bounded_during_batch_insert(tmp_path: Path) -> None:
             for i in range(NUM_EVENTS):
                 yield {
                     "event_name": "Event",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i % 10000}",
                     "insert_id": f"event_{i:08d}",
                     "properties": {"index": i, "batch": i // 1000},
@@ -258,7 +258,7 @@ def test_memory_usage_stays_bounded_during_batch_insert(tmp_path: Path) -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-12-31",
         )
@@ -455,14 +455,14 @@ def test_ephemeral_with_create_events_table() -> None:
         events = [
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "user_123",
                 "insert_id": "event_001",
                 "properties": {"page": "/home"},
             },
             {
                 "event_name": "Button Click",
-                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_456",
                 "insert_id": "event_002",
                 "properties": {"button": "signup"},
@@ -471,7 +471,7 @@ def test_ephemeral_with_create_events_table() -> None:
 
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         # Create events table
@@ -515,14 +515,14 @@ def test_table_replacement_pattern_create_drop_recreate(tmp_path: Path) -> None:
         initial_events = [
             {
                 "event_name": "Initial Event",
-                "event_time": datetime(2024, 1, 1, 12, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {"version": "v1"},
             },
             {
                 "event_name": "Initial Event 2",
-                "event_time": datetime(2024, 1, 1, 13, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 1, 13, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_2",
                 "insert_id": "event_2",
                 "properties": {"version": "v1"},
@@ -531,7 +531,7 @@ def test_table_replacement_pattern_create_drop_recreate(tmp_path: Path) -> None:
 
         metadata_v1 = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-01",
         )
@@ -556,7 +556,7 @@ def test_table_replacement_pattern_create_drop_recreate(tmp_path: Path) -> None:
         new_events = [
             {
                 "event_name": "New Event",
-                "event_time": datetime(2024, 1, 2, 12, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 2, 12, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_3",
                 "insert_id": "event_3",
                 "properties": {"version": "v2"},
@@ -580,21 +580,21 @@ def test_table_replacement_pattern_create_drop_recreate(tmp_path: Path) -> None:
         replacement_events = [
             {
                 "event_name": "Replacement Event",
-                "event_time": datetime(2024, 1, 15, 12, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 12, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_100",
                 "insert_id": "event_100",
                 "properties": {"version": "v2"},
             },
             {
                 "event_name": "Replacement Event 2",
-                "event_time": datetime(2024, 1, 15, 13, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 13, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_101",
                 "insert_id": "event_101",
                 "properties": {"version": "v2"},
             },
             {
                 "event_name": "Replacement Event 3",
-                "event_time": datetime(2024, 1, 15, 14, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 14, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_102",
                 "insert_id": "event_102",
                 "properties": {"version": "v2"},
@@ -603,7 +603,7 @@ def test_table_replacement_pattern_create_drop_recreate(tmp_path: Path) -> None:
 
         metadata_v2 = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
             from_date="2024-01-15",
             to_date="2024-01-15",
         )
@@ -658,7 +658,7 @@ def test_table_replacement_with_different_table_types(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -666,7 +666,7 @@ def test_table_replacement_with_different_table_types(tmp_path: Path) -> None:
         ]
         metadata_events = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         storage.create_events_table("data_v1", iter(events), metadata_events)
 
@@ -677,12 +677,12 @@ def test_table_replacement_with_different_table_types(tmp_path: Path) -> None:
             {
                 "distinct_id": "user_1",
                 "properties": {"name": "Alice"},
-                "last_seen": datetime.now(UTC),
+                "last_seen": datetime.now(timezone.utc),
             }
         ]
         metadata_profiles = TableMetadata(
             type="profiles",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
         storage.create_profiles_table("data_v1", iter(profiles), metadata_profiles)
 
@@ -730,14 +730,14 @@ def test_introspection_workflow_create_list_inspect_verify(tmp_path: Path) -> No
         jan_events = [
             {
                 "event_name": "Page View",
-                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
                 "distinct_id": "user_123",
                 "insert_id": "event_001",
                 "properties": {"page": "/home", "country": "US"},
             },
             {
                 "event_name": "Button Click",
-                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_456",
                 "insert_id": "event_002",
                 "properties": {"button": "signup", "country": "EU"},
@@ -745,7 +745,7 @@ def test_introspection_workflow_create_list_inspect_verify(tmp_path: Path) -> No
         ]
         jan_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime(2024, 1, 15, 12, 0, tzinfo=UTC),
+            fetched_at=datetime(2024, 1, 15, 12, 0, tzinfo=timezone.utc),
             from_date="2024-01-01",
             to_date="2024-01-31",
         )
@@ -755,7 +755,7 @@ def test_introspection_workflow_create_list_inspect_verify(tmp_path: Path) -> No
         feb_events = [
             {
                 "event_name": "Purchase",
-                "event_time": datetime(2024, 2, 10, 14, 0, tzinfo=UTC),
+                "event_time": datetime(2024, 2, 10, 14, 0, tzinfo=timezone.utc),
                 "distinct_id": "user_789",
                 "insert_id": "event_003",
                 "properties": {"amount": 99.99, "currency": "USD"},
@@ -763,7 +763,7 @@ def test_introspection_workflow_create_list_inspect_verify(tmp_path: Path) -> No
         ]
         feb_metadata = TableMetadata(
             type="events",
-            fetched_at=datetime(2024, 2, 10, 15, 0, tzinfo=UTC),
+            fetched_at=datetime(2024, 2, 10, 15, 0, tzinfo=timezone.utc),
             from_date="2024-02-01",
             to_date="2024-02-29",
         )
@@ -774,17 +774,17 @@ def test_introspection_workflow_create_list_inspect_verify(tmp_path: Path) -> No
             {
                 "distinct_id": "user_123",
                 "properties": {"name": "Alice", "email": "alice@example.com"},
-                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 10, 30, tzinfo=timezone.utc),
             },
             {
                 "distinct_id": "user_456",
                 "properties": {"name": "Bob", "email": "bob@example.com"},
-                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=UTC),
+                "last_seen": datetime(2024, 1, 15, 11, 0, tzinfo=timezone.utc),
             },
         ]
         profiles_metadata = TableMetadata(
             type="profiles",
-            fetched_at=datetime(2024, 1, 15, 12, 0, tzinfo=UTC),
+            fetched_at=datetime(2024, 1, 15, 12, 0, tzinfo=timezone.utc),
         )
         storage.create_profiles_table("profiles_all", iter(profiles), profiles_metadata)
 
@@ -930,7 +930,7 @@ def test_introspection_after_table_drop(tmp_path: Path) -> None:
         events = [
             {
                 "event_name": "Event",
-                "event_time": datetime.now(UTC),
+                "event_time": datetime.now(timezone.utc),
                 "distinct_id": "user_1",
                 "insert_id": "event_1",
                 "properties": {},
@@ -938,7 +938,7 @@ def test_introspection_after_table_drop(tmp_path: Path) -> None:
         ]
         metadata = TableMetadata(
             type="events",
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.now(timezone.utc),
         )
 
         storage.create_events_table("table1", iter(events), metadata)
@@ -996,14 +996,14 @@ class TestInMemoryIntegration:
             events = [
                 {
                     "event_name": f"Event_{i}",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": f"user_{i % 10}",
                     "insert_id": f"event_{i}",
                     "properties": {"index": i, "category": "test"},
                 }
                 for i in range(100)
             ]
-            events_meta = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+            events_meta = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
             storage.create_events_table("events", iter(events), events_meta)
 
             # Create profiles table
@@ -1011,11 +1011,11 @@ class TestInMemoryIntegration:
                 {
                     "distinct_id": f"user_{i}",
                     "properties": {"name": f"User {i}", "tier": "premium"},
-                    "last_seen": datetime.now(UTC),
+                    "last_seen": datetime.now(timezone.utc),
                 }
                 for i in range(50)
             ]
-            profiles_meta = TableMetadata(type="profiles", fetched_at=datetime.now(UTC))
+            profiles_meta = TableMetadata(type="profiles", fetched_at=datetime.now(timezone.utc))
             storage.create_profiles_table("profiles", iter(profiles), profiles_meta)
 
             # Verify row counts
@@ -1057,33 +1057,33 @@ class TestInMemoryIntegration:
             events1 = [
                 {
                     "event_name": "Event_A",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": "user_1",
                     "insert_id": "event_1",
                     "properties": {},
                 }
             ]
-            meta1 = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+            meta1 = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
             s1.create_events_table("events", iter(events1), meta1)
 
             # Create different table in second database
             events2 = [
                 {
                     "event_name": "Event_B",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": "user_2",
                     "insert_id": "event_2",
                     "properties": {},
                 },
                 {
                     "event_name": "Event_C",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": "user_3",
                     "insert_id": "event_3",
                     "properties": {},
                 },
             ]
-            meta2 = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+            meta2 = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
             s2.create_events_table("events", iter(events2), meta2)
 
             # Verify independence
@@ -1101,7 +1101,7 @@ class TestInMemoryIntegration:
         with StorageEngine.memory() as storage:
             # Create empty events table
             events: list[dict[str, object]] = []
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
             row_count = storage.create_events_table(
                 "empty_events", iter(events), metadata
             )
@@ -1128,13 +1128,13 @@ class TestInMemoryIntegration:
             events = [
                 {
                     "event_name": "Original",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": "user_1",
                     "insert_id": "event_1",
                     "properties": {},
                 }
             ]
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(UTC))
+            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
 
             # Create table
             storage.create_events_table("test_table", iter(events), metadata)
@@ -1148,7 +1148,7 @@ class TestInMemoryIntegration:
             new_events = [
                 {
                     "event_name": "Recreated",
-                    "event_time": datetime.now(UTC),
+                    "event_time": datetime.now(timezone.utc),
                     "distinct_id": "user_2",
                     "insert_id": "event_2",
                     "properties": {},
