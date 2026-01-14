@@ -1,18 +1,22 @@
 """Tests for rate limiting middleware.
 
 These tests verify the MixpanelRateLimitMiddleware enforces rate limits correctly.
+Also tests RateLimitedWorkspace wrapper for composed/intelligent tool rate limiting.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+import time
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastmcp.exceptions import ToolError
 
 from mp_mcp_server.middleware.rate_limiting import (
     EXPORT_API_TOOLS,
     QUERY_API_TOOLS,
     MixpanelRateLimitMiddleware,
     RateLimitConfig,
+    RateLimitedWorkspace,
     RateLimitState,
     create_export_rate_limiter,
     create_query_rate_limiter,
@@ -451,3 +455,230 @@ class TestRateLimitWaitingBehavior:
 
         # Should have gone through wait loop at least once
         assert iterations >= 1
+
+
+class TestRateLimitedWorkspace:
+    """Tests for RateLimitedWorkspace wrapper class."""
+
+    def test_proxies_non_rate_limited_attributes(self) -> None:
+        """RateLimitedWorkspace should proxy non-API attributes directly."""
+        mock_workspace = MagicMock()
+        mock_workspace.some_property = "test_value"
+        rate_limiter = MixpanelRateLimitMiddleware()
+
+        wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
+
+        # Non-callable attributes should be proxied directly
+        assert wrapped.some_property == "test_value"
+
+    def test_proxies_non_rate_limited_methods(self) -> None:
+        """RateLimitedWorkspace should proxy non-API methods without rate limiting."""
+        mock_workspace = MagicMock()
+        mock_workspace.events.return_value = ["signup", "login"]
+        rate_limiter = MixpanelRateLimitMiddleware()
+
+        wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
+
+        result = wrapped.events()
+
+        assert result == ["signup", "login"]
+        mock_workspace.events.assert_called_once()
+        # No rate limit should be recorded
+        assert len(rate_limiter._query_state.request_times) == 0
+
+    def test_rate_limits_query_methods(self) -> None:
+        """RateLimitedWorkspace should rate limit Query API methods."""
+        mock_workspace = MagicMock()
+        mock_workspace.segmentation.return_value = {"data": []}
+        rate_limiter = MixpanelRateLimitMiddleware()
+
+        wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
+
+        result = wrapped.segmentation(event="login")
+
+        assert result == {"data": []}
+        mock_workspace.segmentation.assert_called_once_with(event="login")
+        # Rate limit should be recorded
+        assert len(rate_limiter._query_state.request_times) == 1
+
+    def test_rate_limits_export_methods(self) -> None:
+        """RateLimitedWorkspace should rate limit Export API methods."""
+        mock_workspace = MagicMock()
+        mock_workspace.fetch_events.return_value = {"table": "events"}
+        rate_limiter = MixpanelRateLimitMiddleware()
+
+        wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
+
+        result = wrapped.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
+
+        assert result == {"table": "events"}
+        mock_workspace.fetch_events.assert_called_once_with(
+            from_date="2024-01-01", to_date="2024-01-31"
+        )
+        # Rate limit should be recorded
+        assert len(rate_limiter._export_state.request_times) == 1
+
+    def test_rate_limits_all_query_methods(self) -> None:
+        """RateLimitedWorkspace should rate limit all Query API methods."""
+        mock_workspace = MagicMock()
+        rate_limiter = MixpanelRateLimitMiddleware()
+        wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
+
+        for method_name in RateLimitedWorkspace.QUERY_METHODS:
+            getattr(mock_workspace, method_name).return_value = {}
+            getattr(wrapped, method_name)()
+
+        # All query methods should be rate limited
+        assert len(rate_limiter._query_state.request_times) == len(
+            RateLimitedWorkspace.QUERY_METHODS
+        )
+
+    def test_rate_limits_all_export_methods(self) -> None:
+        """RateLimitedWorkspace should rate limit all Export API methods."""
+        mock_workspace = MagicMock()
+        rate_limiter = MixpanelRateLimitMiddleware()
+        wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
+
+        for method_name in RateLimitedWorkspace.EXPORT_METHODS:
+            getattr(mock_workspace, method_name).return_value = {}
+            getattr(wrapped, method_name)()
+
+        # All export methods should be rate limited
+        assert len(rate_limiter._export_state.request_times) == len(
+            RateLimitedWorkspace.EXPORT_METHODS
+        )
+
+    def test_close_delegates_to_workspace(self) -> None:
+        """RateLimitedWorkspace.close() should delegate to underlying workspace."""
+        mock_workspace = MagicMock()
+        rate_limiter = MixpanelRateLimitMiddleware()
+
+        wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
+        wrapped.close()
+
+        mock_workspace.close.assert_called_once()
+
+    def test_shares_rate_limit_state_with_middleware(self) -> None:
+        """RateLimitedWorkspace should share rate limit state with middleware."""
+        mock_workspace = MagicMock()
+        mock_workspace.segmentation.return_value = {}
+        rate_limiter = MixpanelRateLimitMiddleware()
+
+        wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
+
+        # Call via wrapper
+        wrapped.segmentation()
+        assert len(rate_limiter._query_state.request_times) == 1
+
+        # Call via another wrapper with same limiter
+        wrapped2 = RateLimitedWorkspace(mock_workspace, rate_limiter)
+        wrapped2.segmentation()
+
+        # Should share state
+        assert len(rate_limiter._query_state.request_times) == 2
+
+
+class TestSyncRateLimitMethods:
+    """Tests for synchronous rate limit methods."""
+
+    def test_wait_for_query_limit_sync_records_timestamp(self) -> None:
+        """wait_for_query_limit_sync should record request timestamp."""
+        rate_limiter = MixpanelRateLimitMiddleware()
+
+        rate_limiter.wait_for_query_limit_sync()
+
+        assert len(rate_limiter._query_state.request_times) == 1
+
+    def test_wait_for_export_limit_sync_records_timestamp(self) -> None:
+        """wait_for_export_limit_sync should record request timestamp."""
+        rate_limiter = MixpanelRateLimitMiddleware()
+
+        rate_limiter.wait_for_export_limit_sync()
+
+        assert len(rate_limiter._export_state.request_times) == 1
+
+    def test_sync_wait_cleans_old_timestamps(self) -> None:
+        """_wait_for_rate_limit_sync should clean old timestamps."""
+        rate_limiter = MixpanelRateLimitMiddleware()
+        state = rate_limiter._query_state
+        config = rate_limiter.query_config
+
+        # Add an old timestamp (more than 1 hour ago)
+        old_time = time.time() - 4000
+        state.request_times.append(old_time)
+
+        rate_limiter._wait_for_rate_limit_sync(state, config)
+
+        # Old timestamp should be removed
+        assert old_time not in state.request_times
+
+    def test_sync_wait_timeout_raises_error(self) -> None:
+        """_wait_for_rate_limit_sync should raise ToolError on timeout."""
+        # Very low limit to easily hit it
+        config = RateLimitConfig(hourly_limit=1, concurrent_limit=10)
+        rate_limiter = MixpanelRateLimitMiddleware(query_config=config)
+        state = rate_limiter._query_state
+
+        # Fill up the limit with a recent timestamp
+        now = time.time()
+        state.request_times.append(now - 0.5)  # Recent, at limit
+
+        # Should timeout with very short max_wait
+        with pytest.raises(ToolError) as exc_info:
+            rate_limiter._wait_for_rate_limit_sync(state, config, max_wait=0.01)
+
+        assert "Rate limit timeout" in str(exc_info.value)
+
+    def test_sync_wait_logs_when_rate_limited(self) -> None:
+        """_wait_for_rate_limit_sync should log when rate limited."""
+        config = RateLimitConfig(hourly_limit=1, concurrent_limit=10)
+        rate_limiter = MixpanelRateLimitMiddleware(query_config=config)
+        state = rate_limiter._query_state
+
+        # Fill up the limit with a recent timestamp
+        now = time.time()
+        state.request_times.append(now - 0.5)
+
+        with patch("mp_mcp_server.middleware.rate_limiting.logger") as mock_logger:
+            with pytest.raises(ToolError):
+                rate_limiter._wait_for_rate_limit_sync(state, config, max_wait=0.1)
+
+            # Should have logged rate limit info
+            assert mock_logger.info.called
+
+    def test_sync_wait_per_second_limiting(self) -> None:
+        """_wait_for_rate_limit_sync should handle per-second limiting."""
+        config = RateLimitConfig(
+            hourly_limit=1000,
+            concurrent_limit=100,
+            per_second_limit=1,
+        )
+        rate_limiter = MixpanelRateLimitMiddleware(export_config=config)
+        state = rate_limiter._export_state
+
+        # Fill up per-second limit
+        now = time.time()
+        state.per_second_times.append(now - 0.5)  # Recent, at limit
+
+        # Should timeout since we hit per-second limit
+        with pytest.raises(ToolError) as exc_info:
+            rate_limiter._wait_for_rate_limit_sync(state, config, max_wait=0.01)
+
+        assert "Rate limit timeout" in str(exc_info.value)
+
+    def test_sync_wait_waits_and_succeeds(self) -> None:
+        """_wait_for_rate_limit_sync should wait and eventually succeed."""
+        config = RateLimitConfig(hourly_limit=1, concurrent_limit=10)
+        rate_limiter = MixpanelRateLimitMiddleware(query_config=config)
+        state = rate_limiter._query_state
+
+        # Add a timestamp that will expire soon (just over 1 hour ago)
+        old_time = time.time() - 3601  # Just over an hour ago
+        state.request_times.append(old_time)
+
+        # Should succeed immediately since old timestamp is stale
+        rate_limiter._wait_for_rate_limit_sync(state, config, max_wait=1.0)
+
+        # Old timestamp should be cleaned up, new one added
+        assert old_time not in state.request_times
+        assert len(state.request_times) == 1

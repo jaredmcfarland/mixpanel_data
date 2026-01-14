@@ -5,10 +5,13 @@ including mock Workspace instances and FastMCP client fixtures.
 """
 
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+if TYPE_CHECKING:
+    from mp_mcp_server.middleware.rate_limiting import MixpanelRateLimitMiddleware
 
 
 @pytest.fixture
@@ -202,16 +205,32 @@ def mock_workspace() -> MagicMock:
 
 
 @pytest.fixture
-def mock_lifespan_state(mock_workspace: MagicMock) -> dict[str, Any]:
-    """Create a mock lifespan state with workspace.
+def mock_rate_limiter() -> "MixpanelRateLimitMiddleware":
+    """Create a rate limiter for unit tests.
+
+    Returns:
+        MixpanelRateLimitMiddleware instance.
+    """
+    from mp_mcp_server.middleware.rate_limiting import MixpanelRateLimitMiddleware
+
+    # Create a real rate limiter for testing (lightweight, no external deps)
+    return MixpanelRateLimitMiddleware()
+
+
+@pytest.fixture
+def mock_lifespan_state(
+    mock_workspace: MagicMock, mock_rate_limiter: object
+) -> dict[str, Any]:
+    """Create a mock lifespan state with workspace and rate limiter.
 
     Args:
         mock_workspace: The mock workspace fixture.
+        mock_rate_limiter: The mock rate limiter fixture.
 
     Returns:
-        Dict containing the workspace in lifespan state format.
+        Dict containing the workspace and rate limiter in lifespan state format.
     """
-    return {"workspace": mock_workspace}
+    return {"workspace": mock_workspace, "rate_limiter": mock_rate_limiter}
 
 
 @pytest.fixture

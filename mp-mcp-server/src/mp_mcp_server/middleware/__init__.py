@@ -36,6 +36,7 @@ from mp_mcp_server.middleware.rate_limiting import (
     QUERY_API_TOOLS,
     MixpanelRateLimitMiddleware,
     RateLimitConfig,
+    RateLimitedWorkspace,
     create_export_rate_limiter,
     create_query_rate_limiter,
 )
@@ -54,6 +55,7 @@ __all__ = [
     "QUERY_API_TOOLS",
     "MixpanelRateLimitMiddleware",
     "RateLimitConfig",
+    "RateLimitedWorkspace",
     "create_export_rate_limiter",
     "create_query_rate_limiter",
 ]

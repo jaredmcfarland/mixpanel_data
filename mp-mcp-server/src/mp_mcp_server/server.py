@@ -28,6 +28,9 @@ from mixpanel_data import Workspace
 # Module-level account setting (set by CLI before server starts)
 _account: str | None = None
 
+# Module-level rate limiter (created at import time, shared with lifespan)
+_rate_limiter: "MixpanelRateLimitMiddleware | None" = None
+
 
 def set_account(account: str | None) -> None:
     """Set the account name to use when creating the Workspace.
@@ -46,6 +49,20 @@ def get_account() -> str | None:
         The account name, or None if using default.
     """
     return _account
+
+
+def get_rate_limiter() -> "MixpanelRateLimitMiddleware":
+    """Get the rate limiter middleware instance.
+
+    Returns:
+        The MixpanelRateLimitMiddleware instance.
+
+    Raises:
+        RuntimeError: If rate limiter is not initialized.
+    """
+    if _rate_limiter is None:
+        raise RuntimeError("Rate limiter not initialized")
+    return _rate_limiter
 
 
 @asynccontextmanager
@@ -73,7 +90,7 @@ async def lifespan(_server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     workspace = Workspace(account=account) if account else Workspace()
 
     try:
-        yield {"workspace": workspace}
+        yield {"workspace": workspace, "rate_limiter": get_rate_limiter()}
     finally:
         workspace.close()
 
@@ -107,8 +124,11 @@ from mp_mcp_server.middleware import (  # noqa: E402
     create_caching_middleware,
 )
 
+# Store rate limiter at module level for lifespan access
+_rate_limiter = MixpanelRateLimitMiddleware()
+
 mcp.add_middleware(create_audit_middleware())
-mcp.add_middleware(MixpanelRateLimitMiddleware())
+mcp.add_middleware(_rate_limiter)
 mcp.add_middleware(create_caching_middleware())
 
 # Import tool modules to register them with the server
