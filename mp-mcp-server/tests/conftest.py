@@ -4,8 +4,9 @@ This module provides common fixtures used across unit and integration tests,
 including mock Workspace instances and FastMCP client fixtures.
 """
 
-from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -271,6 +272,29 @@ async def mcp_client() -> AsyncIterator[Any]:
 # FastMCP v3 Registration Check Helpers
 # ============================================================================
 
+T = TypeVar("T")
+
+
+def _get_mcp_items(
+    list_func: Callable[[], Awaitable[list[T]]], extractor: Callable[[T], str]
+) -> list[str]:
+    """Run an async MCP list function and extract item properties.
+
+    Args:
+        list_func: Async function that returns a list of MCP items.
+        extractor: Function to extract a string property from each item.
+
+    Returns:
+        List of extracted string values.
+    """
+    from mp_mcp_server.server import mcp  # noqa: F401 - imported for list_func binding
+
+    async def get_items() -> list[str]:
+        items = await list_func()
+        return [extractor(item) for item in items]
+
+    return asyncio.run(get_items())
+
 
 @pytest.fixture
 def registered_tool_names() -> list[str]:
@@ -279,15 +303,9 @@ def registered_tool_names() -> list[str]:
     Returns:
         List of tool names registered with the MCP server.
     """
-    import asyncio
-
     from mp_mcp_server.server import mcp
 
-    async def get_tools() -> list[str]:
-        tools = await mcp.list_tools()
-        return [t.name for t in tools]
-
-    return asyncio.run(get_tools())
+    return _get_mcp_items(mcp.list_tools, lambda t: t.name)
 
 
 @pytest.fixture
@@ -297,15 +315,9 @@ def registered_resource_uris() -> list[str]:
     Returns:
         List of resource URIs registered with the MCP server.
     """
-    import asyncio
-
     from mp_mcp_server.server import mcp
 
-    async def get_resources() -> list[str]:
-        resources = await mcp.list_resources()
-        return [str(r.uri) for r in resources]
-
-    return asyncio.run(get_resources())
+    return _get_mcp_items(mcp.list_resources, lambda r: str(r.uri))
 
 
 @pytest.fixture
@@ -315,15 +327,9 @@ def registered_prompt_names() -> list[str]:
     Returns:
         List of prompt names registered with the MCP server.
     """
-    import asyncio
-
     from mp_mcp_server.server import mcp
 
-    async def get_prompts() -> list[str]:
-        prompts = await mcp.list_prompts()
-        return [p.name for p in prompts]
-
-    return asyncio.run(get_prompts())
+    return _get_mcp_items(mcp.list_prompts, lambda p: p.name)
 
 
 @pytest.fixture
@@ -333,12 +339,6 @@ def registered_resource_template_uris() -> list[str]:
     Returns:
         List of resource template URIs registered with the MCP server.
     """
-    import asyncio
-
     from mp_mcp_server.server import mcp
 
-    async def get_templates() -> list[str]:
-        templates = await mcp.list_resource_templates()
-        return [str(t.uri_template) for t in templates]
-
-    return asyncio.run(get_templates())
+    return _get_mcp_items(mcp.list_resource_templates, lambda t: str(t.uri_template))
