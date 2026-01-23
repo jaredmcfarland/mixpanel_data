@@ -5,7 +5,7 @@ including mock Workspace instances and FastMCP client fixtures.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any, TypeVar
 from unittest.mock import AsyncMock, MagicMock
 
@@ -276,18 +276,17 @@ T = TypeVar("T")
 
 
 def _get_mcp_items(
-    list_func: Callable[[], Awaitable[list[T]]], extractor: Callable[[T], str]
+    list_func: Callable[[], Awaitable[Sequence[T]]], extractor: Callable[[T], str]
 ) -> list[str]:
     """Run an async MCP list function and extract item properties.
 
     Args:
-        list_func: Async function that returns a list of MCP items.
+        list_func: Async function that returns a sequence of MCP items.
         extractor: Function to extract a string property from each item.
 
     Returns:
         List of extracted string values.
     """
-    from mp_mcp_server.server import mcp  # noqa: F401 - imported for list_func binding
 
     async def get_items() -> list[str]:
         items = await list_func()
