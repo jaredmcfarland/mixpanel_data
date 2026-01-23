@@ -51,7 +51,7 @@ class TestPromptFunctionality:
         """analytics_workflow should return workflow guide content."""
         from mp_mcp_server.prompts import analytics_workflow
 
-        result = str(analytics_workflow())
+        result = str(analytics_workflow())  # type: ignore[operator]
         assert "# Mixpanel Analytics Workflow" in result
         assert "list_events" in result
         assert "segmentation" in result
@@ -60,7 +60,7 @@ class TestPromptFunctionality:
         """funnel_analysis should return funnel-specific content."""
         from mp_mcp_server.prompts import funnel_analysis
 
-        result = str(funnel_analysis(funnel_name="checkout"))
+        result = str(funnel_analysis(funnel_name="checkout"))  # type: ignore[operator]
         assert "checkout" in result
         assert "funnel_id" in result
 
@@ -68,7 +68,7 @@ class TestPromptFunctionality:
         """retention_analysis should return retention-specific content."""
         from mp_mcp_server.prompts import retention_analysis
 
-        result = str(retention_analysis(event="login"))
+        result = str(retention_analysis(event="login"))  # type: ignore[operator]
         assert "login" in result
         assert "born_event" in result
         assert "Day 7 retention" in result
@@ -77,7 +77,7 @@ class TestPromptFunctionality:
         """local_analysis_workflow should return SQL analysis guide."""
         from mp_mcp_server.prompts import local_analysis_workflow
 
-        result = str(local_analysis_workflow())
+        result = str(local_analysis_workflow())  # type: ignore[operator]
         assert "# Local Data Analysis Workflow" in result
         assert "fetch_events" in result
         assert "SQL" in result
@@ -86,7 +86,7 @@ class TestPromptFunctionality:
         """gqm_decomposition should return GQM framework content."""
         from mp_mcp_server.prompts import gqm_decomposition
 
-        result = str(gqm_decomposition(goal="improve retention"))
+        result = str(gqm_decomposition(goal="improve retention"))  # type: ignore[operator]
         assert "# Goal-Question-Metric (GQM) Investigation Framework" in result
         assert "improve retention" in result
         assert "Metrics" in result
@@ -95,14 +95,14 @@ class TestPromptFunctionality:
         """gqm_decomposition should use default goal."""
         from mp_mcp_server.prompts import gqm_decomposition
 
-        result = str(gqm_decomposition())
+        result = str(gqm_decomposition())  # type: ignore[operator]
         assert "understand user retention" in result
 
     def test_growth_accounting_returns_content(self) -> None:
         """growth_accounting should return AARRR framework content."""
         from mp_mcp_server.prompts import growth_accounting
 
-        result = str(growth_accounting(acquisition_event="register"))
+        result = str(growth_accounting(acquisition_event="register"))  # type: ignore[operator]
         assert "# Growth Accounting: AARRR Framework Analysis" in result
         assert "register" in result
         assert "Acquisition" in result
@@ -113,14 +113,14 @@ class TestPromptFunctionality:
         """growth_accounting should use default acquisition event."""
         from mp_mcp_server.prompts import growth_accounting
 
-        result = str(growth_accounting())
+        result = str(growth_accounting())  # type: ignore[operator]
         assert "signup" in result
 
     def test_experiment_analysis_returns_content(self) -> None:
         """experiment_analysis should return A/B test guidance."""
         from mp_mcp_server.prompts import experiment_analysis
 
-        result = str(experiment_analysis(experiment_name="button_color_test"))
+        result = str(experiment_analysis(experiment_name="button_color_test"))  # type: ignore[operator]
         assert "# A/B Test Analysis: button_color_test" in result
         assert "Statistical significance" in result
         assert "control" in result
@@ -130,14 +130,14 @@ class TestPromptFunctionality:
         """experiment_analysis should use default experiment name."""
         from mp_mcp_server.prompts import experiment_analysis
 
-        result = str(experiment_analysis())
+        result = str(experiment_analysis())  # type: ignore[operator]
         assert "homepage_redesign" in result
 
     def test_data_quality_audit_returns_content(self) -> None:
         """data_quality_audit should return audit checklist."""
         from mp_mcp_server.prompts import data_quality_audit
 
-        result = str(data_quality_audit(event="purchase"))
+        result = str(data_quality_audit(event="purchase"))  # type: ignore[operator]
         assert "# Data Quality Audit: purchase" in result
         assert "purchase" in result
         assert "Coverage" in result
@@ -147,7 +147,7 @@ class TestPromptFunctionality:
         """data_quality_audit should use default event."""
         from mp_mcp_server.prompts import data_quality_audit
 
-        result = str(data_quality_audit())
+        result = str(data_quality_audit())  # type: ignore[operator]
         assert "signup" in result
 
 

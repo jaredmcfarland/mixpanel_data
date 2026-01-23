@@ -20,7 +20,7 @@ class TestListEventsTools:
         """list_events should return event names from Workspace."""
         from mp_mcp_server.tools.discovery import list_events
 
-        result = list_events(mock_context)
+        result = list_events(mock_context)  # type: ignore[operator]
         assert result == ["signup", "login", "purchase"]
 
 
@@ -39,7 +39,7 @@ class TestListPropertiesTools:
         """list_properties should return property info from Workspace."""
         from mp_mcp_server.tools.discovery import list_properties
 
-        result = list_properties(mock_context, event="signup")
+        result = list_properties(mock_context, event="signup")  # type: ignore[operator]
         assert len(result) == 2
         assert result[0]["name"] == "browser"
 
@@ -51,7 +51,7 @@ class TestListPropertyValuesTools:
         """list_property_values should return sample values."""
         from mp_mcp_server.tools.discovery import list_property_values
 
-        result = list_property_values(
+        result = list_property_values(  # type: ignore[operator]
             mock_context, event="signup", property_name="browser"
         )
         assert result == ["Chrome", "Firefox", "Safari"]
@@ -64,7 +64,7 @@ class TestListFunnelsTools:
         """list_funnels should return funnel metadata."""
         from mp_mcp_server.tools.discovery import list_funnels
 
-        result = list_funnels(mock_context)
+        result = list_funnels(mock_context)  # type: ignore[operator]
         assert len(result) == 1
         assert result[0]["name"] == "Signup Funnel"
 
@@ -76,7 +76,7 @@ class TestListCohortsTools:
         """list_cohorts should return cohort metadata."""
         from mp_mcp_server.tools.discovery import list_cohorts
 
-        result = list_cohorts(mock_context)
+        result = list_cohorts(mock_context)  # type: ignore[operator]
         assert len(result) == 1
         assert result[0]["name"] == "Active Users"
 
@@ -90,7 +90,7 @@ class TestListBookmarksTools:
         """list_bookmarks should return saved report metadata with pagination info."""
         from mp_mcp_server.tools.discovery import list_bookmarks
 
-        result = list_bookmarks(mock_context)
+        result = list_bookmarks(mock_context)  # type: ignore[operator]
         # New format returns dict with bookmarks list and pagination metadata
         assert "bookmarks" in result
         assert "truncated" in result
@@ -108,7 +108,7 @@ class TestTopEventsTools:
         """top_events should return events ranked by activity."""
         from mp_mcp_server.tools.discovery import top_events
 
-        result = top_events(mock_context)
+        result = top_events(mock_context)  # type: ignore[operator]
         assert len(result) == 2
         assert result[0]["event"] == "login"
         assert result[0]["count"] == 5000
@@ -121,6 +121,6 @@ class TestWorkspaceInfoTools:
         """workspace_info should return current workspace state."""
         from mp_mcp_server.tools.discovery import workspace_info
 
-        result = workspace_info(mock_context)
+        result = workspace_info(mock_context)  # type: ignore[operator]
         assert result["project_id"] == 123456
         assert result["region"] == "us"

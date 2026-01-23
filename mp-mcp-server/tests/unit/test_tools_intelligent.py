@@ -108,7 +108,7 @@ class TestAskMixpanelTool:
             side_effect=Exception("Sampling not supported")
         )
 
-        result = await ask_mixpanel(
+        result = await ask_mixpanel(  # type: ignore[operator]
             mock_context,
             question="What events are most popular?",
         )
@@ -227,7 +227,7 @@ class TestDiagnoseMetricDropTool:
             side_effect=Exception("Sampling not supported")
         )
 
-        result = await diagnose_metric_drop(
+        result = await diagnose_metric_drop(  # type: ignore[operator]
             mock_context,
             event="signup",
             date="2024-01-10",
@@ -312,7 +312,7 @@ class TestFunnelOptimizationReportTool:
             }
         )
 
-        result = await funnel_optimization_report(
+        result = await funnel_optimization_report(  # type: ignore[operator]
             mock_context,
             funnel_id=123,
         )
@@ -402,7 +402,7 @@ class TestAskMixpanelSynthesis:
             side_effect=ValueError("Plan generation failed")
         )
 
-        result = await ask_mixpanel(
+        result = await ask_mixpanel(  # type: ignore[operator]
             mock_context,
             question="What events are most popular?",
         )
@@ -430,7 +430,7 @@ class TestAskMixpanelSynthesis:
         synthesis_error = ValueError("Synthesis failed")
         mock_context.sample = AsyncMock(side_effect=[plan_result, synthesis_error])
 
-        result = await ask_mixpanel(
+        result = await ask_mixpanel(  # type: ignore[operator]
             mock_context,
             question="What events are most popular?",
         )

@@ -121,7 +121,7 @@ class TestGuidedAnalysisTool:
         """guided_analysis should work with pre-selected focus area."""
         from mp_mcp_server.tools.interactive.guided import guided_analysis
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="retention",
         )
@@ -140,7 +140,7 @@ class TestGuidedAnalysisTool:
             side_effect=Exception("Elicitation not supported")
         )
 
-        result = await guided_analysis(mock_context)
+        result = await guided_analysis(mock_context)  # type: ignore[operator]
 
         assert "status" in result
         # When elicitation fails and no focus_area provided, returns guidance message
@@ -155,7 +155,7 @@ class TestGuidedAnalysisTool:
         """guided_analysis should accept custom date range."""
         from mp_mcp_server.tools.interactive.guided import guided_analysis
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="engagement",
             time_period="custom",
@@ -224,7 +224,7 @@ class TestSafeLargeFetchTool:
             MagicMock(to_dict=lambda: {"event": "login", "count": 100}),
         ]
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-01-07",  # Short range
@@ -248,7 +248,7 @@ class TestSafeLargeFetchTool:
             MagicMock(to_dict=lambda: {"event": "login", "count": 10000000}),
         ]
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-12-31",  # Long range
@@ -263,7 +263,7 @@ class TestSafeLargeFetchTool:
         """safe_large_fetch should accept event filter."""
         from mp_mcp_server.tools.interactive.safe_fetch import safe_large_fetch
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-01-31",
@@ -277,7 +277,7 @@ class TestSafeLargeFetchTool:
         """safe_large_fetch should accept custom table name."""
         from mp_mcp_server.tools.interactive.safe_fetch import safe_large_fetch
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-01-07",
@@ -483,7 +483,7 @@ class TestSafeFetchElicitation:
             MagicMock(to_dict=lambda: {"event": "login", "count": 10000000}),
         ]
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-12-31",
@@ -505,7 +505,7 @@ class TestSafeFetchElicitation:
             MagicMock(to_dict=lambda: {"event": "login", "count": 10000000}),
         ]
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-12-31",
@@ -533,7 +533,7 @@ class TestSafeFetchElicitation:
             MagicMock(to_dict=lambda: {"event": "login", "count": 10000000}),
         ]
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-12-31",
@@ -559,7 +559,7 @@ class TestSafeFetchElicitation:
             MagicMock(to_dict=lambda: {"event": "login", "count": 10000000}),
         ]
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-12-31",
@@ -582,7 +582,7 @@ class TestSafeFetchElicitation:
             Exception("Fetch failed")
         )
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-01-07",
@@ -620,7 +620,7 @@ class TestGuidedAnalysisEdgeCases:
         """guided_analysis should accept time_period parameter."""
         from mp_mcp_server.tools.interactive.guided import guided_analysis
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="retention",
             time_period="last_7_days",
@@ -635,7 +635,7 @@ class TestGuidedAnalysisEdgeCases:
         """guided_analysis should use default dates when not provided."""
         from mp_mcp_server.tools.interactive.guided import guided_analysis
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="engagement",
         )
@@ -813,7 +813,7 @@ class TestGuidedAnalysisEdgeCases:
             "signup",
         ]
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="revenue",
             time_period="last_30_days",
@@ -826,7 +826,7 @@ class TestGuidedAnalysisEdgeCases:
         """guided_analysis should handle last_90_days time period."""
         from mp_mcp_server.tools.interactive.guided import guided_analysis
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="conversion",
             time_period="last_90_days",
@@ -840,7 +840,7 @@ class TestGuidedAnalysisEdgeCases:
         """guided_analysis should accept custom date range."""
         from mp_mcp_server.tools.interactive.guided import guided_analysis
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="retention",
             time_period="custom",
@@ -1149,7 +1149,7 @@ class TestGuidedAnalysisElicitationFlows:
             )
         )
 
-        result = await guided_analysis(mock_context)
+        result = await guided_analysis(mock_context)  # type: ignore[operator]
 
         assert result["focus_area"] == "engagement"
         assert "User selected focus via elicitation" in result["workflow_steps"]
@@ -1170,7 +1170,7 @@ class TestGuidedAnalysisElicitationFlows:
             )
         )
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="conversion",
         )
@@ -1195,7 +1195,7 @@ class TestGuidedAnalysisElicitationFlows:
             )
         )
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="conversion",
         )
@@ -1219,7 +1219,7 @@ class TestGuidedAnalysisElicitationFlows:
             )
         )
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="retention",
         )
@@ -1235,7 +1235,7 @@ class TestGuidedAnalysisElicitationFlows:
         """guided_analysis should provide conversion-specific suggestions."""
         from mp_mcp_server.tools.interactive.guided import guided_analysis
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="conversion",
         )
@@ -1250,7 +1250,7 @@ class TestGuidedAnalysisElicitationFlows:
         """guided_analysis should provide engagement-specific suggestions."""
         from mp_mcp_server.tools.interactive.guided import guided_analysis
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="engagement",
         )
@@ -1270,7 +1270,7 @@ class TestGuidedAnalysisElicitationFlows:
             "signup",
         ]
 
-        result = await guided_analysis(
+        result = await guided_analysis(  # type: ignore[operator]
             mock_context,
             focus_area="revenue",
         )
@@ -1299,7 +1299,7 @@ class TestSafeFetchWithFetchResultVariations:
             fetch_result
         )
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-01-07",
@@ -1328,7 +1328,7 @@ class TestSafeFetchWithFetchResultVariations:
             fetch_result
         )
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-01-07",
@@ -1351,7 +1351,7 @@ class TestSafeFetchWithFetchResultVariations:
             "row_count": 200,
         }
 
-        result = await safe_large_fetch(
+        result = await safe_large_fetch(  # type: ignore[operator]
             mock_context,
             from_date="2024-01-01",
             to_date="2024-01-07",
@@ -1367,7 +1367,7 @@ class TestSafeFetchWithFetchResultVariations:
         """safe_large_fetch should use default dates when not provided."""
         from mp_mcp_server.tools.interactive.safe_fetch import safe_large_fetch
 
-        result = await safe_large_fetch(mock_context)
+        result = await safe_large_fetch(mock_context)  # type: ignore[operator]
 
         assert result["status"] == "completed"
         assert "estimation" in result

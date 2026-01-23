@@ -107,7 +107,7 @@ class TestCohortComparisonTool:
         ]
         mock_context.lifespan_context["workspace"].jql.return_value = jql_result
 
-        result = cohort_comparison(
+        result = cohort_comparison(  # type: ignore[operator]
             mock_context,
             cohort_a_filter='properties["sessions"] >= 10',
             cohort_b_filter='properties["sessions"] < 3',
@@ -192,7 +192,7 @@ class TestProductHealthDashboardTool:
         """product_health_dashboard should return AARRR metrics."""
         from mp_mcp_server.tools.composed.dashboard import product_health_dashboard
 
-        result = product_health_dashboard(mock_context)
+        result = product_health_dashboard(mock_context)  # type: ignore[operator]
 
         assert "period" in result
         assert "acquisition" in result
@@ -203,7 +203,7 @@ class TestProductHealthDashboardTool:
         """product_health_dashboard should accept custom events."""
         from mp_mcp_server.tools.composed.dashboard import product_health_dashboard
 
-        result = product_health_dashboard(
+        result = product_health_dashboard(  # type: ignore[operator]
             mock_context,
             acquisition_event="register",
             revenue_event="purchase",
@@ -264,7 +264,7 @@ class TestGQMInvestigationTool:
         """gqm_investigation should return investigation results."""
         from mp_mcp_server.tools.composed.gqm import gqm_investigation
 
-        result = gqm_investigation(
+        result = gqm_investigation(  # type: ignore[operator]
             mock_context,
             goal="understand why retention is declining",
         )
@@ -281,7 +281,7 @@ class TestGQMInvestigationTool:
         """gqm_investigation should classify the goal."""
         from mp_mcp_server.tools.composed.gqm import gqm_investigation
 
-        result = gqm_investigation(
+        result = gqm_investigation(  # type: ignore[operator]
             mock_context,
             goal="analyze signup performance",
         )
@@ -292,7 +292,7 @@ class TestGQMInvestigationTool:
         """gqm_investigation should accept custom dates."""
         from mp_mcp_server.tools.composed.gqm import gqm_investigation
 
-        result = gqm_investigation(
+        result = gqm_investigation(  # type: ignore[operator]
             mock_context,
             goal="retention analysis",
             from_date="2024-01-01",
@@ -891,7 +891,7 @@ class TestCohortComparison:
         ]
         mock_context.lifespan_context["workspace"].jql.return_value = jql_mock
 
-        result = cohort_comparison(
+        result = cohort_comparison(  # type: ignore[operator]
             mock_context,
             cohort_a_filter='properties["sessions"] >= 10',
             cohort_b_filter='properties["sessions"] < 3',
@@ -911,7 +911,7 @@ class TestCohortComparison:
             Exception("JQL error")
         )
 
-        result = cohort_comparison(
+        result = cohort_comparison(  # type: ignore[operator]
             mock_context,
             cohort_a_filter='properties["country"] == "US"',
             cohort_b_filter='properties["country"] == "UK"',
@@ -932,7 +932,7 @@ class TestCohortComparison:
         del jql_mock.raw  # Ensure .raw doesn't exist
         mock_context.lifespan_context["workspace"].jql.return_value = jql_mock
 
-        result = cohort_comparison(
+        result = cohort_comparison(  # type: ignore[operator]
             mock_context,
             cohort_a_filter='properties["sessions"] >= 10',
             cohort_b_filter='properties["sessions"] < 3',
@@ -957,7 +957,7 @@ class TestCohortComparison:
         ]
         mock_context.lifespan_context["workspace"].jql.return_value = jql_result
 
-        result = cohort_comparison(
+        result = cohort_comparison(  # type: ignore[operator]
             mock_context,
             cohort_a_filter='properties["sessions"] >= 10',
             cohort_b_filter='properties["sessions"] < 3',
