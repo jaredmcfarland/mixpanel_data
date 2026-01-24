@@ -2103,7 +2103,7 @@ except RateLimitError as e:
 import logging
 from datetime import datetime
 
-logger = logging.getLogger("mp_mcp-audit")
+logger = logging.getLogger("mp_mcp.audit")
 
 class AuditMiddleware(Middleware):
     """Log all tool calls for reproducibility."""
