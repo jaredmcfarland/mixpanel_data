@@ -3,12 +3,12 @@
 A complete programmable interface to Mixpanel analytics—available as both a Python library and CLI.
 
 !!! tip "AI-Friendly Documentation"
-    🤖 **[Explore on DeepWiki →](https://deepwiki.com/jaredmcfarland/mixpanel_data)**
+🤖 **[Explore on DeepWiki →](https://deepwiki.com/jaredmcfarland/mixpanel_data)**
 
     DeepWiki provides an AI-optimized view of this project—perfect for code assistants, agents, and LLM-powered workflows. Ask questions about the codebase, explore architecture, or get contextual help.
 
 !!! tip "Google Code Wiki"
-    🔍 **[Explore on Code Wiki →](https://codewiki.google/github.com/jaredmcfarland/mixpanel_data)**
+🔍 **[Explore on Code Wiki →](https://codewiki.google/github.com/jaredmcfarland/mixpanel_data)**
 
     Google's Code Wiki offers another AI-optimized interface for exploring this codebase—search, understand, and navigate the project with natural language queries.
 
@@ -18,7 +18,7 @@ Mixpanel's web UI is built for interactive exploration. But many workflows need 
 
 `mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—segmentation, funnels, retention, saved reports—plus capabilities like raw JQL execution and local SQL analysis are available as Python methods or shell commands.
 
-## Two Interfaces, One Capability Set
+## Three Interfaces, One Capability Set
 
 **Python Library** — For notebooks, scripts, and applications:
 
@@ -138,6 +138,20 @@ mp fetch events --stdout --from 2025-01-01 --to 2025-01-31 \
     | jq -r '.distinct_id' | sort -u | wc -l
 ```
 
+**MCP Server** — For AI assistants like Claude Desktop:
+
+The [`mp_mcp`](mcp/index.md) package exposes all mixpanel_data capabilities through the Model Context Protocol (MCP). AI assistants can query your analytics through natural conversation:
+
+| You Say                                        | What Happens                           |
+| ---------------------------------------------- | -------------------------------------- |
+| "What events are tracked in my project?"       | Discovers schema via `list_events`     |
+| "How many signups happened last week?"         | Runs segmentation query                |
+| "Why did conversions drop on January 7th?"     | AI-powered diagnosis across dimensions |
+| "Show me a product health dashboard"           | Orchestrates AARRR metrics analysis    |
+| "Fetch events from January and find top users" | Stores locally, then runs SQL          |
+
+The MCP server includes intelligent tools that synthesize insights, composed tools that orchestrate multi-query analysis, and interactive workflows with user confirmation for large operations. See the [MCP Server documentation](mcp/index.md) for setup and tool reference.
+
 ## Capabilities
 
 **Discovery** — Rapidly explore your project's data landscape:
@@ -187,11 +201,11 @@ The tool is designed to be self-documenting: comprehensive `--help` on every com
 
 This documentation is built with AI consumption in mind. In addition to the standard HTML pages, we provide:
 
-| Endpoint | Size | Use Case |
-|----------|------|----------|
-| [`llms.txt`](https://jaredmcfarland.github.io/mixpanel_data/llms.txt) | ~3KB | Structured index—discover what documentation exists |
-| [`llms-full.txt`](https://jaredmcfarland.github.io/mixpanel_data/llms-full.txt) | ~400KB | Complete documentation in one file—comprehensive search |
-| [`index.md`](https://jaredmcfarland.github.io/mixpanel_data/index.md) pages | Varies | Each HTML page has a corresponding `index.md` at the same path |
+| Endpoint                                    | Size   | Use Case                                                       |
+| ------------------------------------------- | ------ | -------------------------------------------------------------- |
+| <a href="llms.txt">`llms.txt`</a>           | ~3KB   | Structured index—discover what documentation exists            |
+| <a href="llms-full.txt">`llms-full.txt`</a> | ~400KB | Complete documentation in one file—comprehensive search        |
+| <a href="index.md">`index.md`</a> pages     | Varies | Each HTML page has a corresponding `index.md` at the same path |
 
 Every page also has a **Copy Markdown** button in the upper right corner—click it to copy the page content as markdown, ready to paste into your AI assistant's context.
 
@@ -203,3 +217,4 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Quick Start](getting-started/quickstart.md) — Your first queries in 5 minutes
 - [API Reference](api/index.md) — Complete Python API documentation
 - [CLI Reference](cli/index.md) — Command-line interface documentation
+- [MCP Server](mcp/index.md) — Expose analytics to AI assistants like Claude Desktop
