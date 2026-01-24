@@ -3,7 +3,7 @@
 Expose mixpanel_data analytics capabilities to AI assistants through the Model Context Protocol (MCP).
 
 !!! tip "Explore on DeepWiki"
-🤖 **[MCP Server Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.4-mcp-server-integration)**
+    🤖 **[MCP Server Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.4-mcp-server-integration)**
 
     Ask questions about tools, explore configuration options, or get help with AI assistant integration.
 

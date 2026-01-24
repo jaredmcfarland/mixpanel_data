@@ -57,7 +57,7 @@ Get sample values for a property.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `event` | string | Yes | Event name |
-| `property` | string | Yes | Property name |
+| `property_name` | string | Yes | Property name |
 | `limit` | int | No | Maximum values to return (default: 100) |
 
 **Returns:** Sample values for the property
@@ -271,7 +271,7 @@ Download events to local storage with progress reporting.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `table_name` | string | Yes | Target table name |
+| `table` | string | No | Target table name (auto-generated when omitted) |
 | `from_date` | string | Yes | Start date |
 | `to_date` | string | Yes | End date |
 | `events` | list[string] | No | Filter to specific events |
@@ -293,7 +293,7 @@ Download user profiles to local storage with progress reporting.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `table_name` | string | Yes | Target table name |
+| `table` | string | No | Target table name (auto-generated when omitted) |
 | `cohort_id` | int | No | Filter by cohort |
 | `where` | string | No | Filter expression |
 | `output_properties` | list[string] | No | Specific properties to include |
@@ -382,7 +382,7 @@ Get column information for a table.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `table_name` | string | Yes | Table to describe |
+| `table` | string | Yes | Table to describe |
 
 **Returns:** Column names, types, and descriptions
 
@@ -396,7 +396,7 @@ Get random sample rows from a table.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `table_name` | string | Yes | Table to sample |
+| `table` | string | Yes | Table to sample |
 | `limit` | int | No | Number of rows (default: 10) |
 
 **Returns:** Sample rows

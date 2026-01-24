@@ -3,7 +3,7 @@
 Set up the MCP server for use with Claude Desktop or other MCP clients.
 
 !!! tip "Explore on DeepWiki"
-🤖 **[Installation Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.4.1-mcp-server-setup)**
+    🤖 **[Installation Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.4.1-mcp-server-setup)**
 
     Get help with configuration, troubleshoot setup issues, or explore advanced options.
 
@@ -149,9 +149,8 @@ mp_mcp --help
 | Option        | Description                      | Default   |
 | ------------- | -------------------------------- | --------- |
 | `--account`   | Account name from config file    | `default` |
-| `--transport` | Transport type (`stdio`, `http`) | `stdio`   |
-| `--port`      | Port for HTTP transport          | `8000`    |
-| `--version`   | Show version and exit            | —         |
+| `--transport` | Transport type (`stdio`, `sse`) | `stdio`   |
+| `--port`      | Port for SSE transport          | `8000`    |
 | `--help`      | Show help and exit               | —         |
 
 ### Transport Options
@@ -162,10 +161,10 @@ mp_mcp --help
 mp_mcp
 ```
 
-**HTTP** — HTTP server for custom integrations:
+**SSE** — HTTP Server-Sent Events for custom integrations:
 
 ```bash
-mp_mcp --transport http --port 8000
+mp_mcp --transport sse --port 8000
 ```
 
 ## Multi-Account Setup

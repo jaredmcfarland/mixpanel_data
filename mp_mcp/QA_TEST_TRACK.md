@@ -15,14 +15,13 @@ Manual QA testing guide for mp_mcp with Claude Desktop.
 **Option A: Using uv (recommended)**
 
 ```bash
-cd /Users/jaredmcfarland/Developer/mixpanel_data/mp_mcp
+cd mp_mcp
 uv pip install -e .
 ```
 
 **Option B: Using pip**
 
 ```bash
-cd /Users/jaredmcfarland/Developer/mixpanel_data
 # Install mixpanel_data first (required dependency)
 pip install -e .
 # Then install the MCP server
@@ -38,16 +37,16 @@ mp_mcp --help
 **Expected output:**
 
 ```
-usage: mp_mcp [-h] [--account ACCOUNT] [--transport {stdio,http}] [--port PORT]
+usage: mp_mcp [-h] [--account ACCOUNT] [--transport {stdio,sse}] [--port PORT]
 
 MCP server for Mixpanel analytics
 
 options:
   -h, --help            show this help message and exit
   --account ACCOUNT     Named account from ~/.mp/config.toml
-  --transport {stdio,http}
-                        Transport type (default: stdio)
-  --port PORT           HTTP port (only used with --transport http)
+  --transport {stdio,sse}
+                        Transport type (default: stdio). 'sse' uses HTTP Server-Sent Events.
+  --port PORT           HTTP port (only used with --transport sse)
 ```
 
 ### 3. Configure Claude Desktop

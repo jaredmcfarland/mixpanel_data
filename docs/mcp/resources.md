@@ -130,7 +130,7 @@ Local SQL analysis workflow.
 
 ---
 
-### gqm_framework
+### gqm_decomposition
 
 Goal-Question-Metric investigation framework.
 

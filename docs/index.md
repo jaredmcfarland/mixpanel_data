@@ -3,12 +3,12 @@
 A complete programmable interface to Mixpanel analytics—available as both a Python library and CLI.
 
 !!! tip "AI-Friendly Documentation"
-🤖 **[Explore on DeepWiki →](https://deepwiki.com/jaredmcfarland/mixpanel_data)**
+    🤖 **[Explore on DeepWiki →](https://deepwiki.com/jaredmcfarland/mixpanel_data)**
 
     DeepWiki provides an AI-optimized view of this project—perfect for code assistants, agents, and LLM-powered workflows. Ask questions about the codebase, explore architecture, or get contextual help.
 
 !!! tip "Google Code Wiki"
-🔍 **[Explore on Code Wiki →](https://codewiki.google/github.com/jaredmcfarland/mixpanel_data)**
+    🔍 **[Explore on Code Wiki →](https://codewiki.google/github.com/jaredmcfarland/mixpanel_data)**
 
     Google's Code Wiki offers another AI-optimized interface for exploring this codebase—search, understand, and navigate the project with natural language queries.
 
