@@ -226,26 +226,31 @@ def _compute_retention(
         primary_metric = 0.0
         trend: dict[str, float] = {}
 
-        if "data" in data:
-            retention_data = data["data"]
-            # Look for day 7 retention
-            if isinstance(retention_data, dict):
-                # Try to find D7 retention rate
-                for key, value in retention_data.items():
-                    if isinstance(value, dict):
-                        # This might be a cohort with retention values
-                        if "7" in value or 7 in value:
-                            d7_val = value.get("7", value.get(7, 0))
-                            primary_metric = float(d7_val) if d7_val is not None else 0.0
-                            break
-                    elif isinstance(value, (int, float)) and "7" in str(key):
-                        primary_metric = float(value) / 100.0  # Convert to rate
-                        break
+        # Parse actual RetentionResult.to_dict() structure
+        cohorts_raw: list[dict[str, Any]] = data.get("cohorts", [])
 
-                # Build trend from cohort data
-                for key, value in retention_data.items():
-                    if isinstance(value, (int, float)):
-                        trend[str(key)] = float(value)
+        if cohorts_raw:
+            d7_values: list[float] = []
+
+            for cohort in cohorts_raw:
+                cohort_date: str = str(cohort.get("date", ""))
+                # Extract YYYY-MM-DD from datetime string
+                if cohort_date and len(cohort_date) >= 10:
+                    cohort_date = cohort_date[:10]
+
+                retention_array: list[float] = cohort.get("retention", [])
+
+                # Day 0 retention for trend (shows cohort activity over time)
+                if retention_array and cohort_date:
+                    trend[cohort_date] = float(retention_array[0])
+
+                # Day 7 retention (index 7) if available
+                if len(retention_array) > 7:
+                    d7_values.append(float(retention_array[7]))
+
+            # Primary metric: average D7 retention across all cohorts
+            if d7_values:
+                primary_metric = sum(d7_values) / len(d7_values)
 
         return AARRRMetrics(
             category="retention",

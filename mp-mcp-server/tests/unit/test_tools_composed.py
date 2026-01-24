@@ -62,40 +62,36 @@ class TestCohortHelpers:
         )
         assert "event_selectors" not in jql
 
-    def test_build_user_comparison_jql(self) -> None:
-        """_build_user_comparison_jql should generate valid JQL."""
-        from mp_mcp_server.tools.composed.cohort import _build_user_comparison_jql
+    def test_build_user_count_jql(self) -> None:
+        """_build_user_count_jql should generate valid JQL for single cohort."""
+        from mp_mcp_server.tools.composed.cohort import _build_user_count_jql
 
-        jql = _build_user_comparison_jql(
-            cohort_a_filter='properties["country"] == "US"',
-            cohort_b_filter='properties["country"] == "EU"',
+        jql = _build_user_count_jql(
+            cohort_filter='properties["country"] == "US"',
         )
         assert "function main()" in jql
         assert "groupByUser" in jql
+        assert ".reduce(mixpanel.reducer.count())" in jql
 
-    def test_build_user_comparison_jql_with_event_selector(self) -> None:
-        """_build_user_comparison_jql should include event_selectors when event provided."""
-        from mp_mcp_server.tools.composed.cohort import _build_user_comparison_jql
+    def test_build_user_count_jql_with_event_selector(self) -> None:
+        """_build_user_count_jql should include event_selectors when event provided."""
+        from mp_mcp_server.tools.composed.cohort import _build_user_count_jql
 
-        jql = _build_user_comparison_jql(
-            cohort_a_filter='properties["cluster"] == "prod-1"',
-            cohort_b_filter='properties["cluster"] == "prod-2"',
-            event="signup",
+        jql = _build_user_count_jql(
+            cohort_filter='properties["$browser"] == "Chrome"',
+            event="AI Prompt Sent",
         )
-        assert 'event_selectors: [{event: "signup"}]' in jql
+        assert 'event_selectors: [{event: "AI Prompt Sent"}]' in jql
+        assert ".reduce(mixpanel.reducer.count())" in jql
 
-    def test_build_user_comparison_jql_has_final_aggregation(self) -> None:
-        """_build_user_comparison_jql should have final groupBy for cohort aggregation."""
-        from mp_mcp_server.tools.composed.cohort import _build_user_comparison_jql
+    def test_build_user_count_jql_converts_properties(self) -> None:
+        """_build_user_count_jql should convert properties to event.properties."""
+        from mp_mcp_server.tools.composed.cohort import _build_user_count_jql
 
-        jql = _build_user_comparison_jql(
-            cohort_a_filter='properties["country"] == "US"',
-            cohort_b_filter='properties["country"] == "EU"',
+        jql = _build_user_count_jql(
+            cohort_filter='properties["$browser"] == "Chrome"',
         )
-        # Verify final aggregation is present (aggregates users to cohort counts)
-        assert ".groupBy([function(r)" in jql
-        assert "return r.key[0]" in jql
-        assert "mixpanel.reducer.count()" in jql
+        assert 'event.properties["$browser"]' in jql
 
     def test_parse_event_comparison_results_empty(self) -> None:
         """_parse_event_comparison_results should handle empty results."""
@@ -121,19 +117,39 @@ class TestCohortHelpers:
         assert result["cohort_b_frequency"]["login"] == 50
         assert result["cohort_a_frequency"]["signup"] == 30
 
-    def test_parse_user_comparison_results(self) -> None:
-        """_parse_user_comparison_results should parse user counts."""
-        from mp_mcp_server.tools.composed.cohort import _parse_user_comparison_results
+    def test_extract_user_count_from_list(self) -> None:
+        """_extract_user_count should extract count from JQL reduce result."""
+        from mp_mcp_server.tools.composed.cohort import _extract_user_count
 
-        jql_results = [
-            {"key": ["cohort_a"], "value": 500},
-            {"key": ["cohort_b"], "value": 200},
-        ]
+        # JQL .reduce(mixpanel.reducer.count()) returns [count]
+        assert _extract_user_count([414]) == 414
+        assert _extract_user_count([0]) == 0
+        assert _extract_user_count([]) == 0
 
-        result = _parse_user_comparison_results(jql_results)
-        assert result["cohort_a_users"] == 500
-        assert result["cohort_b_users"] == 200
-        assert result["user_ratio"] == 2.5
+    def test_extract_user_count_from_jql_result(self) -> None:
+        """_extract_user_count should handle JQLResult objects with .raw attribute."""
+        from mp_mcp_server.tools.composed.cohort import _extract_user_count
+
+        jql_result = MagicMock()
+        jql_result.raw = [360]
+        assert _extract_user_count(jql_result) == 360
+
+    def test_extract_user_count_handles_empty(self) -> None:
+        """_extract_user_count should return 0 for empty/invalid results."""
+        from mp_mcp_server.tools.composed.cohort import _extract_user_count
+
+        assert _extract_user_count([]) == 0
+        assert _extract_user_count(None) == 0
+        assert _extract_user_count({}) == 0
+
+    def test_compute_user_ratio(self) -> None:
+        """_compute_user_ratio should calculate ratio correctly."""
+        from mp_mcp_server.tools.composed.cohort import _compute_user_ratio
+
+        assert _compute_user_ratio(500, 200) == 2.5
+        assert _compute_user_ratio(414, 360) == 1.15
+        assert _compute_user_ratio(100, 0) == float("inf")
+        assert _compute_user_ratio(0, 100) == 0.0
 
 
 class TestCohortComparisonTool:
@@ -470,14 +486,29 @@ class TestDashboardComputeFunctions:
         assert result.by_segment is not None and "_error" in result.by_segment
 
     def test_compute_retention(self, mock_context: MagicMock) -> None:
-        """_compute_retention should compute retention metrics."""
+        """_compute_retention should compute retention metrics from cohorts structure."""
         from mp_mcp_server.tools.composed.dashboard import _compute_retention
 
+        # Mock actual RetentionResult.to_dict() structure
         mock_context.lifespan_context["workspace"].retention.return_value = MagicMock(
             to_dict=lambda: {
-                "data": {
-                    "cohort1": {7: 0.25},
-                }
+                "born_event": "login",
+                "return_event": "login",
+                "from_date": "2024-01-01",
+                "to_date": "2024-01-31",
+                "unit": "day",
+                "cohorts": [
+                    {
+                        "date": "2024-01-01T00:00:00",
+                        "size": 100,
+                        "retention": [1.0, 0.8, 0.6, 0.5, 0.4, 0.35, 0.32, 0.30],
+                    },
+                    {
+                        "date": "2024-01-02T00:00:00",
+                        "size": 120,
+                        "retention": [1.0, 0.75, 0.55, 0.45, 0.38, 0.33, 0.30, 0.28],
+                    },
+                ],
             }
         )
 
@@ -489,6 +520,13 @@ class TestDashboardComputeFunctions:
         )
 
         assert result.category == "retention"
+        # D7 average: (0.30 + 0.28) / 2 = 0.29
+        assert abs(result.primary_metric - 0.29) < 0.01
+        # Trend should have D0 retention for each cohort date
+        assert "2024-01-01" in result.trend
+        assert "2024-01-02" in result.trend
+        assert result.trend["2024-01-01"] == 1.0
+        assert result.trend["2024-01-02"] == 1.0
 
     def test_compute_retention_handles_error(self, mock_context: MagicMock) -> None:
         """_compute_retention should handle errors gracefully."""
@@ -823,18 +861,17 @@ class TestCohortHelpersExtended:
         assert "cohort_a" in jql
         assert "cohort_b" in jql
 
-    def test_build_user_comparison_jql_detailed(self) -> None:
-        """_build_user_comparison_jql should generate valid JQL."""
-        from mp_mcp_server.tools.composed.cohort import _build_user_comparison_jql
+    def test_build_user_count_jql_detailed(self) -> None:
+        """_build_user_count_jql should generate valid JQL for user counting."""
+        from mp_mcp_server.tools.composed.cohort import _build_user_count_jql
 
-        jql = _build_user_comparison_jql(
-            cohort_a_filter='properties["country"] == "US"',
-            cohort_b_filter='properties["country"] == "UK"',
+        jql = _build_user_count_jql(
+            cohort_filter='properties["country"] == "US"',
         )
 
         assert "function main()" in jql
         assert "groupByUser" in jql
-        assert "cohort_a" in jql
+        assert ".reduce(mixpanel.reducer.count())" in jql
 
     def test_parse_event_comparison_results_basic(self) -> None:
         """_parse_event_comparison_results should parse JQL results."""
@@ -890,28 +927,20 @@ class TestCohortHelpersExtended:
         assert result["cohort_a_frequency"] == {}
         assert result["cohort_b_frequency"] == {}
 
-    def test_parse_user_comparison_results(self) -> None:
-        """_parse_user_comparison_results should parse JQL results."""
-        from mp_mcp_server.tools.composed.cohort import _parse_user_comparison_results
+    def test_extract_user_count_with_dict_value(self) -> None:
+        """_extract_user_count should handle dict format results."""
+        from mp_mcp_server.tools.composed.cohort import _extract_user_count
 
-        jql_results = [
-            {"key": ["cohort_a"], "value": 500},
-            {"key": ["cohort_b"], "value": 300},
-        ]
+        # Some JQL results may return dict format
+        result = _extract_user_count([{"value": 500}])
+        assert result == 500
 
-        result = _parse_user_comparison_results(jql_results)
+    def test_extract_user_count_with_float(self) -> None:
+        """_extract_user_count should handle float values."""
+        from mp_mcp_server.tools.composed.cohort import _extract_user_count
 
-        assert result["cohort_a_users"] == 500
-        assert result["cohort_b_users"] == 300
-
-    def test_parse_user_comparison_results_empty(self) -> None:
-        """_parse_user_comparison_results should handle empty results."""
-        from mp_mcp_server.tools.composed.cohort import _parse_user_comparison_results
-
-        result = _parse_user_comparison_results([])
-
-        assert result["cohort_a_users"] == 0
-        assert result["cohort_b_users"] == 0
+        result = _extract_user_count([300.0])
+        assert result == 300
 
 
 class TestCohortComparison:

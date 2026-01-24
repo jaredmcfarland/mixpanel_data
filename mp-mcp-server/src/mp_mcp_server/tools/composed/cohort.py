@@ -4,7 +4,9 @@ This module provides the cohort_comparison tool that compares
 two user cohorts across behavioral dimensions using JQL to
 minimize API calls (respecting Mixpanel's 60 requests/hour limit).
 
-Uses 1-2 JQL calls instead of 80+ segmentation calls.
+Uses 3 JQL calls instead of 80+ segmentation calls:
+- 1 call for event frequency comparison (both cohorts combined)
+- 2 calls for user counts (1 per cohort, for reliability)
 
 Example:
     Ask Claude: "Compare power users vs casual users"
@@ -91,29 +93,26 @@ function main() {{
 """
 
 
-def _build_user_comparison_jql(
-    cohort_a_filter: str,
-    cohort_b_filter: str,
+def _build_user_count_jql(
+    cohort_filter: str,
     event: str | None = None,
 ) -> str:
-    """Build JQL script for unique user comparison.
+    """Build JQL script to count unique users in a single cohort.
 
-    Creates a JQL script that counts unique users per cohort,
-    providing a retention/engagement proxy. The query aggregates
-    to cohort-level counts (2-3 rows) to avoid result size limits.
+    Creates a JQL script that counts unique users matching the filter,
+    returning a single number. This simple approach is more reliable
+    than trying to count multiple cohorts in one query.
 
     Args:
-        cohort_a_filter: JavaScript filter expression for cohort A.
-        cohort_b_filter: JavaScript filter expression for cohort B.
+        cohort_filter: JavaScript filter expression for the cohort.
         event: Optional event name to scope the query. Required for
             high-volume projects to avoid timeouts.
 
     Returns:
-        JQL script string.
+        JQL script string that produces [count] as output.
     """
     # Auto-convert 'properties[' to 'event.properties[' for convenience
-    filter_a = cohort_a_filter.replace('properties["', 'event.properties["')
-    filter_b = cohort_b_filter.replace('properties["', 'event.properties["')
+    filter_expr = cohort_filter.replace('properties["', 'event.properties["')
 
     # Build event selector if provided (improves performance on high-volume projects)
     event_selector = ""
@@ -127,16 +126,10 @@ function main() {{
     to_date: params.to_date{event_selector}
   }})
   .filter(function(event) {{
-    var inA = {filter_a};
-    var inB = {filter_b};
-    return inA || inB;
+    return {filter_expr};
   }})
-  .groupByUser([function(event) {{
-    if ({filter_a}) return "cohort_a";
-    if ({filter_b}) return "cohort_b";
-    return "other";
-  }}], mixpanel.reducer.count())
-  .groupBy([function(r) {{ return r.key[0]; }}], mixpanel.reducer.count());
+  .groupByUser(mixpanel.reducer.count())
+  .reduce(mixpanel.reducer.count());
 }}
 """
 
@@ -234,40 +227,53 @@ def _parse_event_comparison_results(
     }
 
 
-def _parse_user_comparison_results(
-    jql_results: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Parse JQL results into user comparison structure.
+def _extract_user_count(jql_result: Any) -> int:  # noqa: ANN401
+    """Extract user count from JQL result.
+
+    The JQL query uses .reduce(mixpanel.reducer.count()) which returns
+    a single number in a list, e.g., [414].
 
     Args:
-        jql_results: Raw results from JQL query.
+        jql_result: Raw result from JQL query (JQLResult object or list).
 
     Returns:
-        Dictionary with user counts per cohort.
+        User count as integer, or 0 if result is empty/invalid.
     """
-    cohort_a_users = 0
-    cohort_b_users = 0
+    # Get the raw list from JQLResult if needed
+    if hasattr(jql_result, "raw"):
+        results_list = jql_result.raw
+    elif isinstance(jql_result, list):
+        results_list = jql_result
+    else:
+        return 0
 
-    for row in jql_results:
-        key = row.get("key", [])
-        value = row.get("value", 0)
+    # The reduce() returns a single value in a list: [414]
+    if results_list and len(results_list) > 0:
+        first_item = results_list[0]
+        # Could be just a number or could be wrapped in some structure
+        if isinstance(first_item, int):
+            return first_item
+        elif isinstance(first_item, dict) and "value" in first_item:
+            return int(first_item["value"])
+        elif isinstance(first_item, (int, float)):
+            return int(first_item)
 
-        if len(key) >= 1:
-            cohort = key[0]
-            if cohort == "cohort_a":
-                cohort_a_users = value
-            elif cohort == "cohort_b":
-                cohort_b_users = value
+    return 0
 
-    return {
-        "cohort_a_users": cohort_a_users,
-        "cohort_b_users": cohort_b_users,
-        "user_ratio": (
-            round(cohort_a_users / cohort_b_users, 2)
-            if cohort_b_users > 0
-            else float("inf")
-        ),
-    }
+
+def _compute_user_ratio(cohort_a_users: int, cohort_b_users: int) -> float:
+    """Compute user ratio between two cohorts.
+
+    Args:
+        cohort_a_users: User count for cohort A.
+        cohort_b_users: User count for cohort B.
+
+    Returns:
+        Ratio of cohort A to cohort B users, or infinity if B is 0.
+    """
+    if cohort_b_users > 0:
+        return round(cohort_a_users / cohort_b_users, 2)
+    return float("inf")
 
 
 @mcp.tool
@@ -403,50 +409,59 @@ def cohort_comparison(
             errors.append(error_msg)
             comparisons["event_frequency"] = {"error": error_msg}
 
-    # JQL call 2: User/retention comparison
+    # JQL calls 2-3: User/retention comparison (separate query per cohort)
     if "retention" in compare_dimensions:
+        cohort_a_users = 0
+        cohort_b_users = 0
+
+        # Query cohort A user count
         try:
-            jql_script = _build_user_comparison_jql(
-                cohort_a_filter, cohort_b_filter, event=acquisition_event
+            jql_script_a = _build_user_count_jql(
+                cohort_a_filter, event=acquisition_event
             )
-            jql_result = ws.jql(
-                script=jql_script,
+            jql_result_a = ws.jql(
+                script=jql_script_a,
                 params={"from_date": from_date, "to_date": to_date},
             )
-
-            # Parse results - JQLResult has a .raw property
-            if hasattr(jql_result, "raw"):
-                results_list = jql_result.raw
-            elif isinstance(jql_result, list):
-                results_list = jql_result
-            else:
-                results_list = []
-
-            user_data = _parse_user_comparison_results(results_list)
-
-            comparisons["retention"] = {
-                "cohort_a_users": user_data["cohort_a_users"],
-                "cohort_b_users": user_data["cohort_b_users"],
-                "user_ratio": user_data["user_ratio"],
-                "note": "User counts as retention proxy (unique users in period)",
-            }
-
-            # Add to key differences
-            if user_data["cohort_a_users"] > 0 and user_data["cohort_b_users"] > 0:
-                ratio = user_data["user_ratio"]
-                if ratio > 1.2:
-                    key_differences.append(
-                        f"{cohort_a_name} has {ratio:.1f}x more unique users"
-                    )
-                elif ratio < 0.8:
-                    key_differences.append(
-                        f"{cohort_b_name} has {1 / ratio:.1f}x more unique users"
-                    )
-
+            cohort_a_users = _extract_user_count(jql_result_a)
         except Exception as e:
-            error_msg = f"User comparison JQL failed: {e}"
+            error_msg = f"Cohort A user count JQL failed: {e}"
             errors.append(error_msg)
-            comparisons["retention"] = {"error": error_msg}
+
+        # Query cohort B user count
+        try:
+            jql_script_b = _build_user_count_jql(
+                cohort_b_filter, event=acquisition_event
+            )
+            jql_result_b = ws.jql(
+                script=jql_script_b,
+                params={"from_date": from_date, "to_date": to_date},
+            )
+            cohort_b_users = _extract_user_count(jql_result_b)
+        except Exception as e:
+            error_msg = f"Cohort B user count JQL failed: {e}"
+            errors.append(error_msg)
+
+        # Compute ratio and build comparison result
+        user_ratio = _compute_user_ratio(cohort_a_users, cohort_b_users)
+
+        comparisons["retention"] = {
+            "cohort_a_users": cohort_a_users,
+            "cohort_b_users": cohort_b_users,
+            "user_ratio": user_ratio,
+            "note": "User counts as retention proxy (unique users in period)",
+        }
+
+        # Add to key differences
+        if cohort_a_users > 0 and cohort_b_users > 0:
+            if user_ratio > 1.2:
+                key_differences.append(
+                    f"{cohort_a_name} has {user_ratio:.1f}x more unique users"
+                )
+            elif user_ratio < 0.8:
+                key_differences.append(
+                    f"{cohort_b_name} has {1 / user_ratio:.1f}x more unique users"
+                )
 
     # Update cohort metrics
     if (
@@ -483,7 +498,7 @@ def cohort_comparison(
 
     result_dict = asdict(result)
     result_dict["key_differences"] = key_differences
-    result_dict["api_calls_used"] = 2  # JQL is efficient!
+    result_dict["api_calls_used"] = 3  # 1 for events + 2 for user counts
 
     if errors:
         result_dict["errors"] = errors
