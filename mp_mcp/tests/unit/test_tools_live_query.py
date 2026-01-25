@@ -174,6 +174,64 @@ class TestQuerySavedReportTool:
         assert "bookmark_id" in result
         assert result["report_type"] == "insights"
 
+    def test_query_saved_report_accepts_bookmark_type(
+        self, mock_context: MagicMock
+    ) -> None:
+        """query_saved_report should accept bookmark_type parameter."""
+        from mp_mcp.tools.live_query import query_saved_report
+
+        result = query_saved_report(  # type: ignore[operator]
+            mock_context,
+            bookmark_id=12345,
+            bookmark_type="funnels",
+        )
+        assert "bookmark_id" in result
+        mock_context.lifespan_context[
+            "workspace"
+        ].query_saved_report.assert_called_with(
+            bookmark_id=12345,
+            bookmark_type="funnels",
+            from_date=None,
+            to_date=None,
+        )
+
+    def test_query_saved_report_accepts_dates(self, mock_context: MagicMock) -> None:
+        """query_saved_report should accept from_date and to_date parameters."""
+        from mp_mcp.tools.live_query import query_saved_report
+
+        result = query_saved_report(  # type: ignore[operator]
+            mock_context,
+            bookmark_id=12345,
+            bookmark_type="funnels",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+        )
+        assert "bookmark_id" in result
+        mock_context.lifespan_context[
+            "workspace"
+        ].query_saved_report.assert_called_with(
+            bookmark_id=12345,
+            bookmark_type="funnels",
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+        )
+
+    def test_query_saved_report_defaults_to_insights(
+        self, mock_context: MagicMock
+    ) -> None:
+        """query_saved_report should default bookmark_type to 'insights'."""
+        from mp_mcp.tools.live_query import query_saved_report
+
+        query_saved_report(mock_context, bookmark_id=12345)  # type: ignore[operator]
+        mock_context.lifespan_context[
+            "workspace"
+        ].query_saved_report.assert_called_with(
+            bookmark_id=12345,
+            bookmark_type="insights",
+            from_date=None,
+            to_date=None,
+        )
+
 
 class TestQueryFlowsTool:
     """Tests for the query_flows tool."""

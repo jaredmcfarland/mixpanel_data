@@ -398,32 +398,51 @@ def frequency(
 def query_saved_report(
     ctx: Context,
     bookmark_id: int,
+    bookmark_type: str = "insights",
+    from_date: str | None = None,
+    to_date: str | None = None,
 ) -> dict[str, Any]:
-    """Execute a saved Insights, Retention, or Funnel report.
+    """Execute a saved Insights, Retention, Funnel, or Flows report.
 
-    Runs a saved report by its bookmark ID. The report type is
-    automatically detected from the response. Use list_bookmarks()
-    to find available report IDs.
+    Runs a saved report by its bookmark ID, routing to the appropriate
+    Mixpanel API endpoint based on bookmark_type. Use list_bookmarks()
+    to find available report IDs and their types.
 
     Args:
         ctx: FastMCP context with workspace access.
         bookmark_id: ID of saved report (from list_bookmarks or Mixpanel URL).
+        bookmark_type: Type of bookmark - "insights", "funnels", "retention",
+            or "flows". Determines which API endpoint to use. Default: "insights".
+        from_date: Start date for query (YYYY-MM-DD). Required for funnels,
+            optional for others. Defaults to last 30 days for funnels.
+        to_date: End date for query (YYYY-MM-DD). Required for funnels,
+            optional for others. Defaults to today for funnels.
 
     Returns:
-        Dictionary with report data and report_type property.
+        Dictionary with report data. The report_type property indicates
+        the detected type ("insights", "retention", "funnel", or "flows").
 
     Raises:
         QueryError: If bookmark_id is invalid or report not found.
 
     Example:
-        Ask: "Run my saved conversion report (ID 12345)"
-        Uses: query_saved_report(bookmark_id=12345)
+        Ask: "Run my saved insights report (ID 12345)"
+        Uses: query_saved_report(bookmark_id=12345, bookmark_type="insights")
 
-        Ask: "Execute the report from this Mixpanel URL"
-        Uses: query_saved_report(bookmark_id=<extracted_id>)
+        Ask: "Query funnel report 67890 for January"
+        Uses: query_saved_report(bookmark_id=67890, bookmark_type="funnels",
+              from_date="2024-01-01", to_date="2024-01-31")
+
+        Ask: "Get retention data from saved report 11111"
+        Uses: query_saved_report(bookmark_id=11111, bookmark_type="retention")
     """
     ws = get_workspace(ctx)
-    result = ws.query_saved_report(bookmark_id=bookmark_id)
+    result = ws.query_saved_report(
+        bookmark_id=bookmark_id,
+        bookmark_type=bookmark_type,
+        from_date=from_date,
+        to_date=to_date,
+    )
     return result.to_dict()
 
 
