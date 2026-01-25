@@ -498,3 +498,58 @@ class TestQuerySavedReportRouting:
 
         with create_mock_client(test_credentials, handler) as client:
             client.query_saved_report(bookmark_id=12345, bookmark_type="flows")
+
+    def test_query_saved_report_funnels_only_to_date_derives_from_date(
+        self, test_credentials: Credentials
+    ) -> None:
+        """query_saved_report(bookmark_type='funnels', to_date) derives from_date correctly.
+
+        When only to_date is provided, from_date should be derived as 30 days
+        before to_date, not 30 days before today. This prevents inverted date
+        ranges when querying historical data.
+        """
+        historical_to_date = "2023-06-15"
+        expected_from_date = "2023-05-16"  # 30 days before 2023-06-15
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            assert f"from_date={expected_from_date}" in url_str
+            assert f"to_date={historical_to_date}" in url_str
+            return httpx.Response(
+                200,
+                json={"computed_at": "2023-06-15T10:00:00", "data": {}, "meta": {}},
+            )
+
+        with create_mock_client(test_credentials, handler) as client:
+            client.query_saved_report(
+                bookmark_id=12345,
+                bookmark_type="funnels",
+                to_date=historical_to_date,
+            )
+
+    def test_query_saved_report_funnels_only_from_date_derives_to_date(
+        self, test_credentials: Credentials
+    ) -> None:
+        """query_saved_report(bookmark_type='funnels', from_date) derives to_date correctly.
+
+        When only from_date is provided, to_date should be derived as 30 days
+        after from_date, but capped at today to avoid querying future dates.
+        """
+        historical_from_date = "2023-06-15"
+        expected_to_date = "2023-07-15"  # 30 days after 2023-06-15
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url_str = str(request.url)
+            assert f"from_date={historical_from_date}" in url_str
+            assert f"to_date={expected_to_date}" in url_str
+            return httpx.Response(
+                200,
+                json={"computed_at": "2023-07-15T10:00:00", "data": {}, "meta": {}},
+            )
+
+        with create_mock_client(test_credentials, handler) as client:
+            client.query_saved_report(
+                bookmark_id=12345,
+                bookmark_type="funnels",
+                from_date=historical_from_date,
+            )

@@ -8,19 +8,19 @@ Example:
     Claude uses: segmentation(event="login", from_date="2024-01-01", ...)
 """
 
-from typing import Any, Literal
+from typing import Any
 
 from fastmcp import Context
 
+from mixpanel_data import CountType, HourDayUnit, TimeUnit
 from mp_mcp.context import get_workspace
 from mp_mcp.errors import handle_errors
 from mp_mcp.server import mcp
 
-# Type aliases for parameters
-UnitType = Literal["day", "week", "month"]
-CountType = Literal["general", "unique", "average"]
-AddictionUnitType = Literal["hour", "day"]
-NumericUnitType = Literal["hour", "day"]
+# Semantic aliases pointing to canonical types from mixpanel_data
+UnitType = TimeUnit
+AddictionUnitType = HourDayUnit
+NumericUnitType = HourDayUnit
 
 
 @mcp.tool

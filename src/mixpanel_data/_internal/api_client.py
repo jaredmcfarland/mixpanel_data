@@ -1537,11 +1537,21 @@ class MixpanelAPIClient:
         elif bookmark_type == "funnels":
             url = self._build_url("query", "/funnels")
             # Funnels uses funnel_id instead of bookmark_id
-            # Default to last 30 days if dates not provided
-            if from_date is None:
-                from_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-            if to_date is None:
+            # Default to 30-day window, deriving missing date from the provided one
+            if from_date is None and to_date is None:
+                # Neither provided: use last 30 days from today
                 to_date = datetime.now().strftime("%Y-%m-%d")
+                from_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+            elif from_date is None and to_date is not None:
+                # Only to_date provided: derive from_date as 30 days before to_date
+                to_date_parsed = datetime.strptime(to_date, "%Y-%m-%d")
+                from_date = (to_date_parsed - timedelta(days=30)).strftime("%Y-%m-%d")
+            elif to_date is None and from_date is not None:
+                # Only from_date provided: derive to_date as 30 days after from_date
+                # but cap at today to avoid querying future dates
+                from_date_parsed = datetime.strptime(from_date, "%Y-%m-%d")
+                computed_to = from_date_parsed + timedelta(days=30)
+                to_date = min(computed_to, datetime.now()).strftime("%Y-%m-%d")
             params = {
                 "funnel_id": bookmark_id,
                 "from_date": from_date,
