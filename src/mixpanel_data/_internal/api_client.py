@@ -418,7 +418,7 @@ class MixpanelAPIClient:
         client = self._ensure_client()
         request_body = json_data or form_data
         if json_data is None:
-            json_data = dict()
+            json_data = {}
         json_data["query_origin"] = "mixpanel-data-cli"
 
         for attempt in range(self._max_retries + 1):
