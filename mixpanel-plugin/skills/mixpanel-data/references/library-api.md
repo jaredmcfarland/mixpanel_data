@@ -550,7 +550,7 @@ The `payload` dict for `create_feature_flag()` and `update_feature_flag()`:
 | `key` | str (1-255 chars) | Yes | Programmatic key (must be unique) |
 | `tags` | list[str] | Yes | Tags for organizing flags |
 | `status` | str | Yes | `"enabled"`, `"disabled"`, or `"archived"` |
-| `context` | str (1-255 chars) | Yes | Evaluation context identifier |
+| `context` | str (1-255 chars) | Yes | Variant assignment key. Built-in values: `"distinct_id"`, `"device_id"` |
 | `serving_method` | str | Yes | `"client"`, `"server"`, `"remote_or_local"`, or `"remote_only"` |
 | `ruleset` | dict | Yes | Variants and rollout rules (see below) |
 | `description` | str | No | Optional description |
@@ -603,7 +603,7 @@ The `payload` dict for `create_feature_flag()` and `update_feature_flag()`:
   "key": "dark_mode",
   "tags": ["ui", "experiment"],
   "status": "disabled",
-  "context": "user",
+  "context": "distinct_id",
   "serving_method": "client",
   "description": "Enable dark mode UI for selected users",
   "ruleset": {

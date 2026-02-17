@@ -91,7 +91,7 @@ Use AskUserQuestion to collect:
 - **Name**: Human-readable flag name (1-255 characters)
 - **Key**: Programmatic key used in code (1-255 characters, must be unique)
 - **Description**: Optional description of the flag's purpose
-- **Context**: Evaluation context (e.g., "user")
+- **Context**: Variant assignment key — built-in values are `"distinct_id"` or `"device_id"`
 - **Serving method**: How the flag is served — "client", "server", "remote_or_local", or "remote_only"
 
 ### 2. Configure Variants
@@ -130,7 +130,7 @@ Assemble the JSON payload and write to a temporary file:
   "key": "<key>",
   "tags": [],
   "status": "disabled",
-  "context": "<context>",
+  "context": "distinct_id",
   "serving_method": "<serving_method>",
   "description": "<description>",
   "ruleset": {

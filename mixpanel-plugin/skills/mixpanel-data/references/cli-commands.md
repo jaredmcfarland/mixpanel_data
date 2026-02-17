@@ -604,7 +604,7 @@ Minimal example:
   "key": "my_flag",
   "tags": [],
   "status": "disabled",
-  "context": "user",
+  "context": "distinct_id",
   "serving_method": "client",
   "ruleset": {
     "variants": [
