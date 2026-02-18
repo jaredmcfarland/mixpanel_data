@@ -21,6 +21,8 @@ from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.types import (
     ActivityFeedResult,
     EventCountsResult,
+    FeatureFlagListResult,
+    FeatureFlagResult,
     FetchResult,
     FrequencyResult,
     FunnelInfo,
@@ -3122,5 +3124,206 @@ class TestWorkspaceFetchProfilesParallel:
                 progress=False,
             )
             assert isinstance(result2, ParallelProfileResult)
+        finally:
+            ws.close()
+
+
+# =============================================================================
+# Feature Flag Tests
+# =============================================================================
+
+
+class TestFeatureFlags:
+    """Tests for feature flag methods."""
+
+    def test_feature_flags_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test feature_flags() delegates to FeatureFlagService.list_flags()."""
+        ws = workspace_factory()
+        try:
+            mock_ff_service = MagicMock()
+            mock_ff_service.list_flags.return_value = FeatureFlagListResult(
+                flags=[
+                    FeatureFlagResult(
+                        id="flag-1",
+                        name="Test Flag",
+                        key="test_flag",
+                        status="active",
+                    )
+                ]
+            )
+            ws._feature_flag = mock_ff_service
+
+            result = ws.feature_flags()
+
+            assert isinstance(result, FeatureFlagListResult)
+            assert len(result.flags) == 1
+            assert result.flags[0].name == "Test Flag"
+            mock_ff_service.list_flags.assert_called_once_with(
+                include_archived=False
+            )
+        finally:
+            ws.close()
+
+    def test_feature_flags_include_archived(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test feature_flags(include_archived=True) passes kwarg."""
+        ws = workspace_factory()
+        try:
+            mock_ff_service = MagicMock()
+            mock_ff_service.list_flags.return_value = FeatureFlagListResult(
+                flags=[]
+            )
+            ws._feature_flag = mock_ff_service
+
+            result = ws.feature_flags(include_archived=True)
+
+            assert isinstance(result, FeatureFlagListResult)
+            mock_ff_service.list_flags.assert_called_once_with(
+                include_archived=True
+            )
+        finally:
+            ws.close()
+
+    def test_feature_flag_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test feature_flag() delegates to FeatureFlagService.get_flag()."""
+        ws = workspace_factory()
+        try:
+            mock_ff_service = MagicMock()
+            mock_ff_service.get_flag.return_value = FeatureFlagResult(
+                id="flag-uuid-123",
+                name="My Flag",
+                key="my_flag",
+                status="enabled",
+            )
+            ws._feature_flag = mock_ff_service
+
+            result = ws.feature_flag("flag-uuid-123")
+
+            assert isinstance(result, FeatureFlagResult)
+            assert result.id == "flag-uuid-123"
+            assert result.name == "My Flag"
+            mock_ff_service.get_flag.assert_called_once_with("flag-uuid-123")
+        finally:
+            ws.close()
+
+    def test_create_feature_flag_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test create_feature_flag() delegates to FeatureFlagService.create_flag()."""
+        ws = workspace_factory()
+        try:
+            payload: dict[str, Any] = {
+                "name": "New Flag",
+                "key": "new_flag",
+                "ruleset": {},
+            }
+            mock_ff_service = MagicMock()
+            mock_ff_service.create_flag.return_value = FeatureFlagResult(
+                id="new-flag-id",
+                name="New Flag",
+                key="new_flag",
+                status="draft",
+            )
+            ws._feature_flag = mock_ff_service
+
+            result = ws.create_feature_flag(payload)
+
+            assert isinstance(result, FeatureFlagResult)
+            assert result.name == "New Flag"
+            mock_ff_service.create_flag.assert_called_once_with(payload)
+        finally:
+            ws.close()
+
+    def test_update_feature_flag_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test update_feature_flag() delegates to FeatureFlagService.update_flag()."""
+        ws = workspace_factory()
+        try:
+            payload: dict[str, Any] = {"name": "Updated Flag"}
+            mock_ff_service = MagicMock()
+            mock_ff_service.update_flag.return_value = FeatureFlagResult(
+                id="flag-uuid-456",
+                name="Updated Flag",
+                key="original_key",
+                status="enabled",
+            )
+            ws._feature_flag = mock_ff_service
+
+            result = ws.update_feature_flag("flag-uuid-456", payload)
+
+            assert isinstance(result, FeatureFlagResult)
+            assert result.name == "Updated Flag"
+            mock_ff_service.update_flag.assert_called_once_with(
+                "flag-uuid-456", payload
+            )
+        finally:
+            ws.close()
+
+    def test_delete_feature_flag_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test delete_feature_flag() delegates to FeatureFlagService.delete_flag()."""
+        ws = workspace_factory()
+        try:
+            mock_ff_service = MagicMock()
+            mock_ff_service.delete_flag.return_value = {"status": "ok"}
+            ws._feature_flag = mock_ff_service
+
+            result = ws.delete_feature_flag("flag-uuid-789")
+
+            assert result == {"status": "ok"}
+            mock_ff_service.delete_flag.assert_called_once_with("flag-uuid-789")
+        finally:
+            ws.close()
+
+    def test_archive_feature_flag_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test archive_feature_flag() delegates to FeatureFlagService.archive_flag()."""
+        ws = workspace_factory()
+        try:
+            mock_ff_service = MagicMock()
+            mock_ff_service.archive_flag.return_value = {"status": "ok"}
+            ws._feature_flag = mock_ff_service
+
+            result = ws.archive_feature_flag("flag-uuid-abc")
+
+            assert result == {"status": "ok"}
+            mock_ff_service.archive_flag.assert_called_once_with(
+                "flag-uuid-abc"
+            )
+        finally:
+            ws.close()
+
+    def test_restore_feature_flag_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Test restore_feature_flag() delegates to FeatureFlagService.restore_flag()."""
+        ws = workspace_factory()
+        try:
+            mock_ff_service = MagicMock()
+            mock_ff_service.restore_flag.return_value = {"status": "ok"}
+            ws._feature_flag = mock_ff_service
+
+            result = ws.restore_feature_flag("flag-uuid-def")
+
+            assert result == {"status": "ok"}
+            mock_ff_service.restore_flag.assert_called_once_with(
+                "flag-uuid-def"
+            )
         finally:
             ws.close()

@@ -166,7 +166,7 @@ class MixpanelAPIClient:
         """Build full URL for the given API type and path.
 
         Args:
-            api_type: One of "query", "export", or "engage".
+            api_type: One of "query", "export", "engage", or "app".
             path: API endpoint path (e.g., "/segmentation").
 
         Returns:
