@@ -105,8 +105,8 @@ def flags_list(
     **Output Structure (JSON):**
 
         [
-          {"id": "abc-123", "name": "Dark Mode", "key": "dark_mode", "status": "active", ...},
-          {"id": "def-456", "name": "New Checkout", "key": "new_checkout", "status": "draft", ...}
+          {"id": "abc-123", "name": "Dark Mode", "key": "dark_mode", "status": "enabled", ...},
+          {"id": "def-456", "name": "New Checkout", "key": "new_checkout", "status": "disabled", ...}
         ]
 
     **Examples:**
@@ -140,7 +140,7 @@ def flags_get(
 
     **Output Structure (JSON):**
 
-        {"id": "abc-123", "name": "Dark Mode", "key": "dark_mode", "status": "active", ...}
+        {"id": "abc-123", "name": "Dark Mode", "key": "dark_mode", "status": "enabled", ...}
 
     **Examples:**
 
@@ -284,16 +284,28 @@ def flags_delete(
         str,
         typer.Argument(help="Feature flag UUID to delete."),
     ],
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Skip confirmation prompt."),
+    ] = False,
 ) -> None:
     """Delete a feature flag.
 
     Cannot delete flags that are currently enabled. Disable the flag first,
-    or use 'mp flags archive' for a soft delete.
+    or use 'mp flags archive' for a soft delete. Use --force to skip the
+    confirmation prompt.
 
     **Examples:**
 
         mp flags delete abc-123-def
+        mp flags delete abc-123-def --force
     """
+    if not force:
+        confirm = typer.confirm(f"Delete feature flag '{flag_id}'?")
+        if not confirm:
+            err_console.print("[yellow]Cancelled[/yellow]")
+            raise typer.Exit(2)
+
     workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Deleting feature flag..."):

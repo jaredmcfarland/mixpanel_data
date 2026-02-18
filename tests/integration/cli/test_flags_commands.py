@@ -24,7 +24,7 @@ SAMPLE_FLAG = FeatureFlagResult(
     name="Dark Mode",
     key="dark_mode",
     description="Enable dark mode",
-    status="active",
+    status="enabled",
     tags=["ui", "experiment"],
     ruleset={"variants": [{"key": "on", "value": True}]},
     created="2024-01-01T00:00:00Z",
@@ -36,7 +36,7 @@ SAMPLE_FLAG_2 = FeatureFlagResult(
     id="xyz-789-uvw",
     name="New Checkout",
     key="new_checkout",
-    status="draft",
+    status="disabled",
     tags=[],
     ruleset={},
 )
@@ -391,21 +391,61 @@ class TestFlagsUpdate:
 class TestFlagsDelete:
     """Tests for mp flags delete command."""
 
-    def test_delete_flag(
+    def test_delete_flag_with_force(
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
-        """Test deleting a flag."""
+        """Test deleting a flag with --force skips confirmation."""
         mock_workspace.delete_feature_flag.return_value = {"status": "ok"}
 
         with patch(
             "mixpanel_data.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
-            result = cli_runner.invoke(app, ["flags", "delete", "abc-123-def"])
+            result = cli_runner.invoke(
+                app, ["flags", "delete", "abc-123-def", "--force"]
+            )
 
         assert result.exit_code == 0
         mock_workspace.delete_feature_flag.assert_called_once_with("abc-123-def")
         assert "deleted" in result.output.lower()
+
+    def test_delete_flag_confirm_yes(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test deleting a flag when user confirms the prompt."""
+        mock_workspace.delete_feature_flag.return_value = {"status": "ok"}
+
+        with patch(
+            "mixpanel_data.cli.commands.flags.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["flags", "delete", "abc-123-def"],
+                input="y\n",
+            )
+
+        assert result.exit_code == 0
+        mock_workspace.delete_feature_flag.assert_called_once_with("abc-123-def")
+        assert "deleted" in result.output.lower()
+
+    def test_delete_flag_confirm_decline(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test that declining confirmation cancels deletion."""
+        with patch(
+            "mixpanel_data.cli.commands.flags.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["flags", "delete", "abc-123-def"],
+                input="n\n",
+            )
+
+        assert result.exit_code == 2
+        assert "cancelled" in result.output.lower()
+        mock_workspace.delete_feature_flag.assert_not_called()
 
 
 # =============================================================================

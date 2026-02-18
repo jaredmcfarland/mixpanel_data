@@ -502,7 +502,7 @@ Returns `FeatureFlagResult(id, name, key, description, status, tags, ruleset, cr
 - `name` (str): Human-readable name
 - `key` (str): Programmatic key used in code
 - `description` (str | None): Optional description
-- `status` (str): Flag status (e.g., "active", "draft", "archived")
+- `status` (str): Flag status (e.g., "enabled", "disabled", "archived")
 - `tags` (list[str]): Tags for organizing flags
 - `ruleset` (dict): Ruleset config including variants and rollout conditions
 - `created` (str | None): ISO timestamp

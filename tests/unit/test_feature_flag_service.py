@@ -68,7 +68,7 @@ SAMPLE_FLAG: dict[str, Any] = {
     "name": "Test Flag",
     "key": "test_flag",
     "description": "A test feature flag",
-    "status": "active",
+    "status": "enabled",
     "tags": ["test", "experiment"],
     "ruleset": {"variants": [{"key": "on", "value": True}]},
     "created": "2024-01-01T00:00:00Z",
@@ -81,7 +81,7 @@ SAMPLE_FLAG_2: dict[str, Any] = {
     "name": "Another Flag",
     "key": "another_flag",
     "description": None,
-    "status": "draft",
+    "status": "disabled",
     "tags": [],
     "ruleset": {},
     "created": "2024-02-01T00:00:00Z",
@@ -107,7 +107,7 @@ class TestParseFlag:
         assert result.name == "Test Flag"
         assert result.key == "test_flag"
         assert result.description == "A test feature flag"
-        assert result.status == "active"
+        assert result.status == "enabled"
         assert result.tags == ["test", "experiment"]
         assert result.ruleset == {"variants": [{"key": "on", "value": True}]}
         assert result.created == "2024-01-01T00:00:00Z"
@@ -691,7 +691,7 @@ class TestFeatureFlagResultToDict:
         assert result["id"] == "abc-123-def"
         assert result["name"] == "Test Flag"
         assert result["key"] == "test_flag"
-        assert result["status"] == "active"
+        assert result["status"] == "enabled"
         assert result["tags"] == ["test", "experiment"]
         assert result["ruleset"] == {"variants": [{"key": "on", "value": True}]}
 

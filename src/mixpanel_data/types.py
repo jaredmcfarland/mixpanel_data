@@ -3335,7 +3335,7 @@ class FeatureFlagResult:
         name: Human-readable flag name.
         key: Programmatic key used in code to evaluate the flag.
         description: Optional description of the flag's purpose.
-        status: Flag status (e.g., "active", "draft", "archived").
+        status: Flag status (e.g., "enabled", "disabled", "archived").
         tags: List of tags for organizing flags.
         ruleset: Full ruleset configuration including variants and conditions.
         created: Creation timestamp (ISO format).
@@ -3364,7 +3364,7 @@ class FeatureFlagResult:
     """Optional description of the flag's purpose."""
 
     status: str = ""
-    """Flag status (e.g., 'active', 'draft', 'archived')."""
+    """Flag status (e.g., 'enabled', 'disabled', 'archived')."""
 
     tags: list[str] = field(default_factory=list)
     """List of tags for organizing flags."""
@@ -3410,11 +3410,12 @@ class FeatureFlagResult:
 
 
 @dataclass(frozen=True)
-class FeatureFlagListResult:
+class FeatureFlagListResult(ResultWithDataFrame):
     """Result from listing feature flags.
 
-    Contains a list of FeatureFlagResult objects with convenience
-    methods for serialization and DataFrame conversion.
+    Extends ResultWithDataFrame to provide lazy DataFrame conversion
+    and table output. Contains a list of FeatureFlagResult objects with
+    convenience methods for serialization and DataFrame conversion.
 
     Attributes:
         flags: List of feature flag results.
@@ -3431,9 +3432,6 @@ class FeatureFlagListResult:
 
     flags: list[FeatureFlagResult]
     """List of feature flag results."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
-    """Internal cache for lazy DataFrame conversion."""
 
     @property
     def df(self) -> pd.DataFrame:
@@ -3490,15 +3488,3 @@ class FeatureFlagListResult:
         """
         return [f.to_dict() for f in self.flags]
 
-    def to_table_dict(self) -> list[dict[str, Any]]:
-        """Convert to list of dicts for table formatting.
-
-        Returns:
-            List of flat dictionaries suitable for table display.
-        """
-        from typing import cast
-
-        df = self.df
-        if df.empty:
-            return []
-        return cast(list[dict[str, Any]], df.to_dict("records"))
