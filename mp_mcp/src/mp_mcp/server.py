@@ -160,4 +160,5 @@ from mp_mcp.tools import (  # noqa: E402, F401
     interactive,
     live_query,
     local,
+    workflows,
 )

@@ -823,3 +823,717 @@ class CacheEntry:
         import time
 
         return time.time() - self.created_at > self.ttl
+
+
+# ==============================================================================
+# Workflow Types (Operational Analytics Loop)
+# ==============================================================================
+
+
+@dataclass
+class DateRange:
+    """Date range for analytics queries.
+
+    Attributes:
+        from_date: Start date in YYYY-MM-DD format.
+        to_date: End date in YYYY-MM-DD format.
+
+    Example:
+        ```python
+        range = DateRange(from_date="2025-01-01", to_date="2025-01-31")
+        ```
+    """
+
+    from_date: str
+    """Start date in YYYY-MM-DD format."""
+
+    to_date: str
+    """End date in YYYY-MM-DD format."""
+
+
+@dataclass
+class Metric:
+    """A single metric with current and comparison values.
+
+    Attributes:
+        name: Metric identifier (e.g., "signups", "d7_retention").
+        display_name: Human-readable name.
+        current: Current period value.
+        previous: Comparison period value.
+        change_percent: Percentage change from previous.
+        trend: Direction indicator.
+        unit: Metric unit (e.g., "count", "percent", "currency").
+
+    Example:
+        ```python
+        metric = Metric(
+            name="signups",
+            display_name="Signups",
+            current=12450.0,
+            previous=14200.0,
+            change_percent=-12.3,
+            trend="down",
+        )
+        ```
+    """
+
+    name: str
+    """Metric identifier (e.g., "signups", "d7_retention")."""
+
+    display_name: str
+    """Human-readable name."""
+
+    current: float
+    """Current period value."""
+
+    previous: float
+    """Comparison period value."""
+
+    change_percent: float
+    """Percentage change from previous."""
+
+    trend: Literal["up", "down", "flat"]
+    """Direction indicator."""
+
+    unit: str = "count"
+    """Metric unit (e.g., "count", "percent", "currency")."""
+
+
+@dataclass
+class DataPoint:
+    """Single data point for time series.
+
+    Attributes:
+        date: Date in YYYY-MM-DD format.
+        value: Numeric value for that date.
+
+    Example:
+        ```python
+        point = DataPoint(date="2025-01-15", value=1234.5)
+        ```
+    """
+
+    date: str
+    """Date in YYYY-MM-DD format."""
+
+    value: float
+    """Numeric value for that date."""
+
+
+@dataclass
+class EventsSummary:
+    """Summary of tracked events.
+
+    Attributes:
+        total: Total number of distinct events.
+        top_events: List of most active event names.
+        categories: Event counts by category (if categorized).
+
+    Example:
+        ```python
+        summary = EventsSummary(
+            total=47,
+            top_events=["signup", "login", "purchase"],
+            categories={"acquisition": 5, "activation": 8},
+        )
+        ```
+    """
+
+    total: int
+    """Total number of distinct events."""
+
+    top_events: list[str]
+    """List of most active event names."""
+
+    categories: dict[str, int] = field(default_factory=dict)
+    """Event counts by category (if categorized)."""
+
+
+@dataclass
+class PropertiesSummary:
+    """Summary of event and user properties.
+
+    Attributes:
+        event_properties: Count of event properties.
+        user_properties: Count of user/profile properties.
+        common: Properties that appear across multiple events.
+
+    Example:
+        ```python
+        summary = PropertiesSummary(
+            event_properties=120,
+            user_properties=45,
+            common=["platform", "country", "user_id"],
+        )
+        ```
+    """
+
+    event_properties: int
+    """Count of event properties."""
+
+    user_properties: int
+    """Count of user/profile properties."""
+
+    common: list[str] = field(default_factory=list)
+    """Properties that appear across multiple events."""
+
+
+@dataclass
+class FunnelSummary:
+    """Summary of a saved funnel.
+
+    Attributes:
+        id: Funnel ID in Mixpanel.
+        name: Funnel name.
+        steps: Number of steps in the funnel.
+
+    Example:
+        ```python
+        summary = FunnelSummary(id=1, name="Signup Flow", steps=4)
+        ```
+    """
+
+    id: int
+    """Funnel ID in Mixpanel."""
+
+    name: str
+    """Funnel name."""
+
+    steps: int
+    """Number of steps in the funnel."""
+
+
+@dataclass
+class CohortSummary:
+    """Summary of a saved cohort.
+
+    Attributes:
+        id: Cohort ID in Mixpanel.
+        name: Cohort name.
+        count: Approximate user count.
+
+    Example:
+        ```python
+        summary = CohortSummary(id=101, name="Power Users", count=15000)
+        ```
+    """
+
+    id: int
+    """Cohort ID in Mixpanel."""
+
+    name: str
+    """Cohort name."""
+
+    count: int
+    """Approximate user count."""
+
+
+@dataclass
+class BookmarksSummary:
+    """Summary of saved reports/bookmarks.
+
+    Attributes:
+        total: Total number of saved reports.
+        by_type: Counts by report type (insight, board, etc.).
+
+    Example:
+        ```python
+        summary = BookmarksSummary(
+            total=12,
+            by_type={"insight": 8, "board": 4},
+        )
+        ```
+    """
+
+    total: int
+    """Total number of saved reports."""
+
+    by_type: dict[str, int] = field(default_factory=dict)
+    """Counts by report type (insight, board, etc.)."""
+
+
+@dataclass
+class ContextPackage:
+    """Complete project context for analytics workflow.
+
+    Aggregates project metadata, available events, funnels, cohorts,
+    and bookmarks to provide foundation for subsequent analysis.
+
+    Attributes:
+        project: Project metadata (id, name, region).
+        events: Summary of tracked events.
+        properties: Summary of available properties.
+        funnels: List of saved funnel summaries.
+        cohorts: List of saved cohort summaries.
+        bookmarks: Summary of saved reports.
+        date_range: Available data date range.
+        schemas: Optional Lexicon schema definitions.
+
+    Example:
+        ```python
+        context = ContextPackage(
+            project={"id": "123456", "name": "MyApp", "region": "us"},
+            events=EventsSummary(total=47, top_events=["signup", "login"]),
+            properties=PropertiesSummary(event_properties=120, user_properties=45),
+            funnels=[FunnelSummary(id=1, name="Signup Flow", steps=4)],
+            cohorts=[CohortSummary(id=101, name="Power Users", count=15000)],
+            bookmarks=BookmarksSummary(total=12, by_type={"insight": 8}),
+            date_range=DateRange(from_date="2024-01-01", to_date="2025-01-24"),
+        )
+        ```
+    """
+
+    project: dict[str, Any]
+    """Project metadata (id, name, region)."""
+
+    events: EventsSummary
+    """Summary of tracked events."""
+
+    properties: PropertiesSummary
+    """Summary of available properties."""
+
+    funnels: list[FunnelSummary]
+    """List of saved funnel summaries."""
+
+    cohorts: list[CohortSummary]
+    """List of saved cohort summaries."""
+
+    bookmarks: BookmarksSummary
+    """Summary of saved reports."""
+
+    date_range: DateRange
+    """Available data date range."""
+
+    schemas: list[dict[str, Any]] | None = None
+    """Optional Lexicon schema definitions."""
+
+
+@dataclass
+class HealthDashboard:
+    """Product health metrics dashboard with period comparison.
+
+    Provides current KPIs, comparison to baseline period,
+    and quick insights for monitoring product health.
+
+    Attributes:
+        period: Current analysis period.
+        comparison_period: Baseline period for comparison.
+        metrics: List of key metrics with current/previous values.
+        aarrr: Optional AARRR framework breakdown.
+        highlights: List of positive observations.
+        concerns: List of concerning observations.
+        daily_series: Time series data by metric name.
+
+    Example:
+        ```python
+        dashboard = HealthDashboard(
+            period=DateRange("2025-01-01", "2025-01-24"),
+            comparison_period=DateRange("2024-12-01", "2024-12-24"),
+            metrics=[
+                Metric("signups", "Signups", 12450, 14200, -12.3, "down"),
+            ],
+            highlights=["Activation rate improved 2pp"],
+            concerns=["Signups down 12%"],
+        )
+        ```
+    """
+
+    period: DateRange
+    """Current analysis period."""
+
+    comparison_period: DateRange
+    """Baseline period for comparison."""
+
+    metrics: list[Metric]
+    """List of key metrics with current/previous values."""
+
+    aarrr: dict[str, Any] | None = None
+    """Optional AARRR framework breakdown."""
+
+    highlights: list[str] = field(default_factory=list)
+    """List of positive observations."""
+
+    concerns: list[str] = field(default_factory=list)
+    """List of concerning observations."""
+
+    daily_series: dict[str, list[DataPoint]] = field(default_factory=dict)
+    """Time series data by metric name."""
+
+
+@dataclass
+class Anomaly:
+    """Detected anomaly or signal for investigation.
+
+    Represents a statistical anomaly detected during scan,
+    with unique ID for reference in investigate tool.
+
+    Attributes:
+        id: Unique identifier for this anomaly (deterministic).
+        type: Type of anomaly detected.
+        severity: Severity level based on magnitude and impact.
+        category: AARRR category or custom category.
+        summary: Human-readable description.
+        event: Primary event involved.
+        dimension: Property name if segment-specific.
+        dimension_value: Property value if segment-specific.
+        detected_at: Date when anomaly was detected.
+        magnitude: Size of change (absolute or percentage).
+        confidence: Statistical confidence (0.0 to 1.0).
+        context: Additional context for investigation.
+
+    Example:
+        ```python
+        anomaly = Anomaly(
+            id="signup_drop_2025-01-15_a3f2b1c9",
+            type="drop",
+            severity="high",
+            category="acquisition",
+            summary="Signup conversion dropped 23% on Jan 15",
+            event="signup",
+            detected_at="2025-01-15",
+            magnitude=23.0,
+            confidence=0.92,
+        )
+        ```
+    """
+
+    id: str
+    """Unique identifier for this anomaly (deterministic)."""
+
+    type: Literal["drop", "spike", "trend_change", "segment_shift"]
+    """Type of anomaly detected."""
+
+    severity: Literal["critical", "high", "medium", "low"]
+    """Severity level based on magnitude and impact."""
+
+    category: str
+    """AARRR category or custom category."""
+
+    summary: str
+    """Human-readable description."""
+
+    event: str
+    """Primary event involved."""
+
+    dimension: str | None = None
+    """Property name if segment-specific."""
+
+    dimension_value: str | None = None
+    """Property value if segment-specific."""
+
+    detected_at: str = ""
+    """Date when anomaly was detected."""
+
+    magnitude: float = 0.0
+    """Size of change (absolute or percentage)."""
+
+    confidence: float = 0.0
+    """Statistical confidence (0.0 to 1.0)."""
+
+    context: dict[str, Any] = field(default_factory=dict)
+    """Additional context for investigation."""
+
+
+@dataclass
+class ScanResults:
+    """Results from anomaly detection scan.
+
+    Contains ranked list of detected anomalies and metadata
+    about what was analyzed.
+
+    Attributes:
+        period: Date range that was scanned.
+        anomalies: List of detected anomalies, ranked by severity * confidence.
+        scan_coverage: What events/dimensions were analyzed.
+        baseline_stats: Baseline statistics for context.
+
+    Example:
+        ```python
+        results = ScanResults(
+            period=DateRange("2025-01-01", "2025-01-24"),
+            anomalies=[anomaly1, anomaly2],
+            scan_coverage={"events_scanned": 20, "dimensions_scanned": 5},
+            baseline_stats={"avg_daily_signups": 450},
+        )
+        ```
+    """
+
+    period: DateRange
+    """Date range that was scanned."""
+
+    anomalies: list[Anomaly]
+    """List of detected anomalies, ranked by severity * confidence."""
+
+    scan_coverage: dict[str, Any] = field(default_factory=dict)
+    """What events/dimensions were analyzed."""
+
+    baseline_stats: dict[str, Any] = field(default_factory=dict)
+    """Baseline statistics for context."""
+
+
+@dataclass
+class ContributingFactor:
+    """Factor contributing to an anomaly.
+
+    Attributes:
+        factor: Description of the factor (e.g., "Mobile Safari users").
+        contribution: Percentage of total change explained (0-100).
+        evidence: Supporting data or observation.
+        confidence: Confidence level in this factor.
+
+    Example:
+        ```python
+        factor = ContributingFactor(
+            factor="Mobile Safari iOS 17 users",
+            contribution=78.0,
+            evidence="67% drop in this segment vs 5% in others",
+            confidence="high",
+        )
+        ```
+    """
+
+    factor: str
+    """Description of the factor (e.g., "Mobile Safari users")."""
+
+    contribution: float
+    """Percentage of total change explained (0-100)."""
+
+    evidence: str
+    """Supporting data or observation."""
+
+    confidence: Literal["high", "medium", "low"]
+    """Confidence level in this factor."""
+
+
+@dataclass
+class TimelineEvent:
+    """Event in the anomaly timeline.
+
+    Attributes:
+        timestamp: When the event occurred.
+        description: What happened.
+        significance: How significant this event is.
+
+    Example:
+        ```python
+        event = TimelineEvent(
+            timestamp="2025-01-14 23:00",
+            description="Deploy detected",
+            significance="high",
+        )
+        ```
+    """
+
+    timestamp: str
+    """When the event occurred."""
+
+    description: str
+    """What happened."""
+
+    significance: Literal["high", "medium", "low"]
+    """How significant this event is."""
+
+
+@dataclass
+class Investigation:
+    """Complete root cause analysis for an anomaly.
+
+    Contains contributing factors, timeline, segment analysis,
+    and supporting evidence.
+
+    Attributes:
+        anomaly: The anomaly being investigated.
+        root_cause: Primary identified cause (if determined).
+        contributing_factors: Factors explaining the anomaly.
+        segments_analyzed: Segments that were analyzed.
+        timeline: Timeline of relevant events.
+        affected_vs_unaffected: Comparison of affected vs unaffected users.
+        confidence: Overall confidence in the analysis.
+        limitations: What couldn't be determined.
+        queries_run: List of queries executed for transparency.
+        data_points: Raw data supporting the analysis.
+
+    Example:
+        ```python
+        investigation = Investigation(
+            anomaly=anomaly,
+            root_cause="Email validation regex broke on iOS 17 Safari",
+            contributing_factors=[factor1, factor2],
+            timeline=[TimelineEvent("2025-01-14 23:00", "Deploy detected", "high")],
+            confidence="high",
+            limitations=["Cannot confirm code change without deploy logs"],
+        )
+        ```
+    """
+
+    anomaly: Anomaly
+    """The anomaly being investigated."""
+
+    root_cause: str | None = None
+    """Primary identified cause (if determined)."""
+
+    contributing_factors: list[ContributingFactor] = field(default_factory=list)
+    """Factors explaining the anomaly."""
+
+    segments_analyzed: list[dict[str, Any]] = field(default_factory=list)
+    """Segments that were analyzed."""
+
+    timeline: list[TimelineEvent] = field(default_factory=list)
+    """Timeline of relevant events."""
+
+    affected_vs_unaffected: dict[str, Any] = field(default_factory=dict)
+    """Comparison of affected vs unaffected users."""
+
+    confidence: Literal["high", "medium", "low"] = "medium"
+    """Overall confidence in the analysis."""
+
+    limitations: list[str] = field(default_factory=list)
+    """What couldn't be determined."""
+
+    queries_run: list[str] = field(default_factory=list)
+    """List of queries executed for transparency."""
+
+    data_points: dict[str, Any] = field(default_factory=dict)
+    """Raw data supporting the analysis."""
+
+
+@dataclass
+class Recommendation:
+    """Actionable recommendation from analysis.
+
+    Attributes:
+        action: What should be done.
+        priority: When it should be done.
+        impact: Expected impact of the action.
+        effort: Estimated effort to implement.
+        owner: Suggested owner (if determinable).
+
+    Example:
+        ```python
+        rec = Recommendation(
+            action="Verify iOS 17 Safari compatibility for all form validations",
+            priority="immediate",
+            impact="Recover 23% of lost signups",
+            effort="low",
+        )
+        ```
+    """
+
+    action: str
+    """What should be done."""
+
+    priority: Literal["immediate", "soon", "consider"]
+    """When it should be done."""
+
+    impact: str
+    """Expected impact of the action."""
+
+    effort: Literal["low", "medium", "high"]
+    """Estimated effort to implement."""
+
+    owner: str | None = None
+    """Suggested owner (if determinable)."""
+
+
+@dataclass
+class ReportSection:
+    """Section within a report.
+
+    Attributes:
+        title: Section heading.
+        content: Section content (markdown).
+        data: Optional structured data for the section.
+
+    Example:
+        ```python
+        section = ReportSection(
+            title="Root Cause Analysis",
+            content="The primary driver was...",
+            data={"drop_percent": 23.0},
+        )
+        ```
+    """
+
+    title: str
+    """Section heading."""
+
+    content: str
+    """Section content (markdown)."""
+
+    data: dict[str, Any] | None = None
+    """Optional structured data for the section."""
+
+
+@dataclass
+class Report:
+    """Synthesized findings report.
+
+    Complete report with executive summary, findings,
+    recommendations, and formatted output.
+
+    Attributes:
+        title: Report title.
+        generated_at: Timestamp when report was generated.
+        period_analyzed: Date range covered by analysis.
+        summary: Executive summary (2-3 sentences).
+        key_findings: Bullet-point key findings.
+        sections: Detailed report sections.
+        recommendations: Prioritized recommendations with effort/impact.
+        methodology: Optional methodology description.
+        queries_run: Optional list of queries for transparency.
+        suggested_follow_ups: Suggested next steps.
+        markdown: Full report in markdown format.
+        slack_blocks: Optional Slack block formatting.
+
+    Example:
+        ```python
+        report = Report(
+            title="Analytics Brief: Signup Conversion Issue",
+            generated_at="2025-01-24T10:30:00Z",
+            period_analyzed=DateRange("2025-01-01", "2025-01-24"),
+            summary="A deployment on January 14th broke email validation...",
+            key_findings=[
+                "Signup conversion dropped 23% starting January 15",
+                "Root cause: Email validation regex incompatible with iOS 17",
+            ],
+            recommendations=[rec1, rec2],
+            suggested_follow_ups=["Quantify revenue impact"],
+        )
+        ```
+    """
+
+    title: str
+    """Report title."""
+
+    generated_at: str
+    """Timestamp when report was generated."""
+
+    period_analyzed: DateRange
+    """Date range covered by analysis."""
+
+    summary: str
+    """Executive summary (2-3 sentences)."""
+
+    key_findings: list[str]
+    """Bullet-point key findings."""
+
+    sections: list[ReportSection] = field(default_factory=list)
+    """Detailed report sections."""
+
+    recommendations: list[Recommendation] = field(default_factory=list)
+    """Prioritized recommendations with effort/impact."""
+
+    methodology: str | None = None
+    """Optional methodology description."""
+
+    queries_run: list[str] | None = None
+    """Optional list of queries for transparency."""
+
+    suggested_follow_ups: list[str] = field(default_factory=list)
+    """Suggested next steps."""
+
+    markdown: str = ""
+    """Full report in markdown format."""
+
+    slack_blocks: list[dict[str, Any]] | None = None
+    """Optional Slack block formatting."""
