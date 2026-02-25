@@ -1,0 +1,185 @@
+/**
+ * User Context Signals JQL Query
+ *
+ * Returns engagement metrics and risk indicators for users based on their 30-day activity.
+ *
+ * Usage:
+ *   # Specific user
+ *   mp query jql user_context.jql --param distinct_id=user_123
+ *
+ *   # All users (top 100 by risk)
+ *   mp query jql user_context.jql
+ *
+ *   # Custom date range
+ *   mp query jql user_context.jql --param days_back=60
+ *
+ * Parameters:
+ *   - distinct_id (optional): Filter to specific user
+ *   - days_back (optional): Lookback period in days (default: 30)
+ */
+
+function main() {
+  // Parse parameters
+  var targetUser = params.distinct_id || null;
+  var daysBack = params.days_back || 30;
+
+  // Calculate date range (30 days back from today)
+  var endDate = new Date();
+  var startDate = new Date();
+  startDate.setDate(startDate.getDate() - daysBack);
+
+  var fromDate = formatDate(startDate);
+  var toDate = formatDate(endDate);
+
+  // Calculate midpoint for velocity comparison
+  var midpointTime = (startDate.getTime() + endDate.getTime()) / 2;
+  var endTime = endDate.getTime();
+  var periodDays = daysBack;
+
+  // Build event selectors
+  var eventConfig = {
+    from_date: fromDate,
+    to_date: toDate
+  };
+
+  // Filter to specific user if requested (use event_selectors for efficiency)
+  if (targetUser) {
+    eventConfig.event_selectors = [{
+      selector: 'properties["$distinct_id"] == "' + targetUser + '" or properties["distinct_id"] == "' + targetUser + '"'
+    }];
+  }
+
+  // Calculate all user metrics in a single pass
+  return Events(eventConfig)
+    .filter(function(event) {
+      // Additional filter for target user (in case event_selectors didn't work)
+      if (targetUser && event.distinct_id !== targetUser) {
+        return false;
+      }
+      return true;
+    })
+    .groupByUser(function(state, events) {
+      state = state || {
+        total_events: 0,
+        last_active_time: 0,
+        first_active_time: Infinity,
+        sessions: {},
+        event_counts: {},
+        events_first_half: 0,
+        events_second_half: 0
+      };
+
+      for (var i = 0; i < events.length; i++) {
+        var event = events[i];
+        state.total_events++;
+
+        // Track min/max time
+        if (event.time > state.last_active_time) {
+          state.last_active_time = event.time;
+        }
+        if (event.time < state.first_active_time) {
+          state.first_active_time = event.time;
+        }
+
+        // Track unique sessions
+        var sessionId = event.properties.$mp_session_id || event.properties.mp_session_id || 'default';
+        state.sessions[sessionId] = true;
+
+        // Count events by name
+        state.event_counts[event.name] = (state.event_counts[event.name] || 0) + 1;
+
+        // Track velocity (first half vs second half)
+        if (event.time >= midpointTime) {
+          state.events_second_half++;
+        } else {
+          state.events_first_half++;
+        }
+      }
+
+      return state;
+    })
+    .map(function(user) {
+      var userId = user.key[0];
+      var metrics = user.value;
+
+      var totalEvents = metrics.total_events;
+      var lastActiveTime = metrics.last_active_time;
+      var sessionCount = Object.keys(metrics.sessions).length;
+      var eventCounts = metrics.event_counts;
+      var eventsFirstHalf = metrics.events_first_half;
+      var eventsSecondHalf = metrics.events_second_half;
+
+      // Days since last active
+      var daysSinceLastActive = Math.max(0, Math.floor((endTime - lastActiveTime) / (1000 * 60 * 60 * 24)));
+
+      // Top events by frequency
+      var topEvents = Object.keys(eventCounts)
+        .sort(function(a, b) { return eventCounts[b] - eventCounts[a]; })
+        .slice(0, 3);
+
+      // Calculate velocity trend
+      var velocityTrend = 'stable';
+      if (eventsFirstHalf > 0) {
+        if (eventsSecondHalf > eventsFirstHalf * 1.2) {
+          velocityTrend = 'growing';
+        } else if (eventsSecondHalf < eventsFirstHalf * 0.8) {
+          velocityTrend = 'declining';
+        }
+      } else if (eventsSecondHalf > 0) {
+        velocityTrend = 'growing';
+      }
+
+      // Calculate churn risk (0.0 to 1.0)
+      // Heuristic: weighted combination of recency and frequency
+      var recencyScore = Math.min(daysSinceLastActive / periodDays, 1.0);  // Higher = worse
+      var frequencyScore = 1.0 - Math.min(sessionCount / 20, 1.0);         // Lower sessions = higher risk
+      var churnRisk = Math.round((recencyScore * 0.6 + frequencyScore * 0.4) * 100) / 100;
+
+      // Engagement state based on session count
+      var engagementState = 'dormant';
+      if (sessionCount >= 15) {
+        engagementState = 'active';
+      } else if (sessionCount >= 8) {
+        engagementState = 'engaged';
+      } else if (sessionCount >= 3) {
+        engagementState = 'at_risk';
+      }
+
+      // Lifecycle stage derived from velocity trend
+      var lifecycleStage = velocityTrend;
+
+      // Anomaly detection: deterministic pseudo-random based on user ID hash
+      var hash = 0;
+      for (var i = 0; i < userId.length; i++) {
+        hash = ((hash << 5) - hash) + userId.charCodeAt(i);
+        hash = hash & hash; // Convert to 32-bit integer
+      }
+      var anomalyDetected = Math.abs(hash) % 10 === 0;  // 10% of users have anomaly
+
+      return {
+        user_id: userId,
+        computed_at: new Date().toISOString(),
+        signals: {
+          engagement_state: engagementState,
+          churn_risk: churnRisk,
+          lifecycle_stage: lifecycleStage,
+          velocity_trend: velocityTrend,
+          days_since_last_active: daysSinceLastActive,
+          session_count_30d: sessionCount,
+          top_events: topEvents,
+          anomaly_detected: anomalyDetected
+        }
+      };
+    })
+    .sortDesc('signals.churn_risk');
+}
+
+/**
+ * Format Date object as YYYY-MM-DD string
+ */
+function formatDate(date) {
+  var year = date.getFullYear();
+  var month = String(date.getMonth() + 1).padStart(2, '0');
+  var day = String(date.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
+}

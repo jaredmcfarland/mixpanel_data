@@ -29,10 +29,10 @@
 
 **Purpose**: Create project structure and configure imports
 
-- [ ] T001 Create workflows directory at mp_mcp/src/mp_mcp/tools/workflows/
-- [ ] T002 Create __init__.py at mp_mcp/src/mp_mcp/tools/workflows/__init__.py with tool re-exports
-- [ ] T003 Update mp_mcp/src/mp_mcp/tools/__init__.py to import workflows module
-- [ ] T004 Update mp_mcp/src/mp_mcp/server.py to import workflows tools
+- [X] T001 Create workflows directory at mp_mcp/src/mp_mcp/tools/workflows/
+- [X] T002 Create __init__.py at mp_mcp/src/mp_mcp/tools/workflows/__init__.py with tool re-exports
+- [X] T003 Update mp_mcp/src/mp_mcp/tools/__init__.py to import workflows module
+- [X] T004 Update mp_mcp/src/mp_mcp/server.py to import workflows tools
 
 ---
 
@@ -44,43 +44,43 @@
 
 ### Types for All Tools
 
-- [ ] T005 [P] Add DateRange dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T006 [P] Add Metric dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T007 [P] Add DataPoint dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T005 [P] Add DateRange dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T006 [P] Add Metric dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T007 [P] Add DataPoint dataclass to mp_mcp/src/mp_mcp/types.py
 
 ### Types for Context Tool
 
-- [ ] T008 [P] Add EventsSummary dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T009 [P] Add PropertiesSummary dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T010 [P] Add FunnelSummary dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T011 [P] Add CohortSummary dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T012 [P] Add BookmarksSummary dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T013 Add ContextPackage dataclass to mp_mcp/src/mp_mcp/types.py (depends on T008-T012)
+- [X] T008 [P] Add EventsSummary dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T009 [P] Add PropertiesSummary dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T010 [P] Add FunnelSummary dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T011 [P] Add CohortSummary dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T012 [P] Add BookmarksSummary dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T013 Add ContextPackage dataclass to mp_mcp/src/mp_mcp/types.py (depends on T008-T012)
 
 ### Types for Health Tool
 
-- [ ] T014 Add HealthDashboard dataclass to mp_mcp/src/mp_mcp/types.py (depends on T005-T007)
+- [X] T014 Add HealthDashboard dataclass to mp_mcp/src/mp_mcp/types.py (depends on T005-T007)
 
 ### Types for Scan Tool
 
-- [ ] T015 [P] Add Anomaly dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T016 Add ScanResults dataclass to mp_mcp/src/mp_mcp/types.py (depends on T005, T015)
+- [X] T015 [P] Add Anomaly dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T016 Add ScanResults dataclass to mp_mcp/src/mp_mcp/types.py (depends on T005, T015)
 
 ### Types for Investigate Tool
 
-- [ ] T017 [P] Add ContributingFactor dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T018 [P] Add TimelineEvent dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T019 Add Investigation dataclass to mp_mcp/src/mp_mcp/types.py (depends on T015, T017, T018)
+- [X] T017 [P] Add ContributingFactor dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T018 [P] Add TimelineEvent dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T019 Add Investigation dataclass to mp_mcp/src/mp_mcp/types.py (depends on T015, T017, T018)
 
 ### Types for Report Tool
 
-- [ ] T020 [P] Add Recommendation dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T021 [P] Add ReportSection dataclass to mp_mcp/src/mp_mcp/types.py
-- [ ] T022 Add Report dataclass to mp_mcp/src/mp_mcp/types.py (depends on T005, T020, T021)
+- [X] T020 [P] Add Recommendation dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T021 [P] Add ReportSection dataclass to mp_mcp/src/mp_mcp/types.py
+- [X] T022 Add Report dataclass to mp_mcp/src/mp_mcp/types.py (depends on T005, T020, T021)
 
 ### Helper Functions
 
-- [ ] T023 Add generate_anomaly_id() helper function to mp_mcp/src/mp_mcp/tools/workflows/__init__.py per research.md
+- [X] T023 Add generate_anomaly_id() helper function to mp_mcp/src/mp_mcp/tools/workflows/__init__.py per research.md
 
 **Checkpoint**: All types defined - tool implementation can now begin
 
@@ -94,21 +94,21 @@
 
 ### Tests for Context Tool
 
-- [ ] T024 [P] [US1] Create unit test file mp_mcp/tests/unit/test_tools_workflows_context.py with test fixtures
-- [ ] T025 [P] [US1] Add test_context_basic() - verify context returns all required fields
-- [ ] T026 [P] [US1] Add test_context_with_schemas() - verify include_schemas parameter
-- [ ] T027 [P] [US1] Add test_context_error_handling() - verify graceful handling of partial failures
+- [X] T024 [P] [US1] Create unit test file mp_mcp/tests/unit/test_tools_workflows_context.py with test fixtures
+- [X] T025 [P] [US1] Add test_context_basic() - verify context returns all required fields
+- [X] T026 [P] [US1] Add test_context_with_schemas() - verify include_schemas parameter
+- [X] T027 [P] [US1] Add test_context_error_handling() - verify graceful handling of partial failures
 
 ### Implementation for Context Tool
 
-- [ ] T028 [US1] Create context tool skeleton in mp_mcp/src/mp_mcp/tools/workflows/context.py with @mcp.tool and @handle_errors decorators
-- [ ] T029 [US1] Implement _gather_events() helper that calls workspace_info, list_events, top_events
-- [ ] T030 [US1] Implement _gather_funnels_cohorts() helper that calls list_funnels, list_cohorts
-- [ ] T031 [US1] Implement _gather_bookmarks() helper that calls list_bookmarks
-- [ ] T032 [US1] Implement _gather_schemas() helper that calls lexicon_schemas (optional)
-- [ ] T033 [US1] Implement main context() function that composes helpers into ContextPackage
-- [ ] T034 [US1] Update mp_mcp/src/mp_mcp/tools/workflows/__init__.py to export context
-- [ ] T035 [US1] Run tests and verify context tool passes all test cases
+- [X] T028 [US1] Create context tool skeleton in mp_mcp/src/mp_mcp/tools/workflows/context.py with @mcp.tool and @handle_errors decorators
+- [X] T029 [US1] Implement _gather_events() helper that calls workspace_info, list_events, top_events
+- [X] T030 [US1] Implement _gather_funnels_cohorts() helper that calls list_funnels, list_cohorts
+- [X] T031 [US1] Implement _gather_bookmarks() helper that calls list_bookmarks
+- [X] T032 [US1] Implement _gather_schemas() helper that calls lexicon_schemas (optional)
+- [X] T033 [US1] Implement main context() function that composes helpers into ContextPackage
+- [X] T034 [US1] Update mp_mcp/src/mp_mcp/tools/workflows/__init__.py to export context
+- [X] T035 [US1] Run tests and verify context tool passes all test cases
 
 **Checkpoint**: Context tool complete and tested
 
@@ -122,22 +122,22 @@
 
 ### Tests for Health Tool
 
-- [ ] T036 [P] [US1,US2] Create unit test file mp_mcp/tests/unit/test_tools_workflows_health.py with test fixtures
-- [ ] T037 [P] [US1,US2] Add test_health_basic() - verify health returns metrics and comparison
-- [ ] T038 [P] [US1,US2] Add test_health_date_range() - verify custom date range handling
-- [ ] T039 [P] [US1,US2] Add test_health_focus_area() - verify focus parameter filters metrics
-- [ ] T040 [P] [US1,US2] Add test_health_highlights_concerns() - verify highlights and concerns generation
+- [X] T036 [P] [US1,US2] Create unit test file mp_mcp/tests/unit/test_tools_workflows_health.py with test fixtures
+- [X] T037 [P] [US1,US2] Add test_health_basic() - verify health returns metrics and comparison
+- [X] T038 [P] [US1,US2] Add test_health_date_range() - verify custom date range handling
+- [X] T039 [P] [US1,US2] Add test_health_focus_area() - verify focus parameter filters metrics
+- [X] T040 [P] [US1,US2] Add test_health_highlights_concerns() - verify highlights and concerns generation
 
 ### Implementation for Health Tool
 
-- [ ] T041 [US1,US2] Create health tool skeleton in mp_mcp/src/mp_mcp/tools/workflows/health.py
-- [ ] T042 [US1,US2] Implement _compute_date_ranges() helper for period calculation
-- [ ] T043 [US1,US2] Implement _gather_metrics() helper that calls product_health_dashboard, event_counts
-- [ ] T044 [US1,US2] Implement _compute_comparison() helper that calculates period-over-period changes
-- [ ] T045 [US1,US2] Implement _generate_insights() helper that creates highlights and concerns lists
-- [ ] T046 [US1,US2] Implement main health() function that composes helpers into HealthDashboard
-- [ ] T047 [US1,US2] Update mp_mcp/src/mp_mcp/tools/workflows/__init__.py to export health
-- [ ] T048 [US1,US2] Run tests and verify health tool passes all test cases
+- [X] T041 [US1,US2] Create health tool skeleton in mp_mcp/src/mp_mcp/tools/workflows/health.py
+- [X] T042 [US1,US2] Implement _compute_date_ranges() helper for period calculation
+- [X] T043 [US1,US2] Implement _gather_metrics() helper that calls product_health_dashboard, event_counts
+- [X] T044 [US1,US2] Implement _compute_comparison() helper that calculates period-over-period changes
+- [X] T045 [US1,US2] Implement _generate_insights() helper that creates highlights and concerns lists
+- [X] T046 [US1,US2] Implement main health() function that composes helpers into HealthDashboard
+- [X] T047 [US1,US2] Update mp_mcp/src/mp_mcp/tools/workflows/__init__.py to export health
+- [X] T048 [US1,US2] Run tests and verify health tool passes all test cases
 
 **Checkpoint**: Health tool complete - US2 (Quick Health Check) now functional
 
@@ -151,24 +151,24 @@
 
 ### Tests for Scan Tool
 
-- [ ] T049 [P] [US1,US4] Create unit test file mp_mcp/tests/unit/test_tools_workflows_scan.py with test fixtures
-- [ ] T050 [P] [US1,US4] Add test_scan_basic() - verify scan returns anomalies list
-- [ ] T051 [P] [US1,US4] Add test_scan_anomaly_id_generation() - verify deterministic IDs
-- [ ] T052 [P] [US1,US4] Add test_scan_sensitivity_levels() - verify low/medium/high thresholds
-- [ ] T053 [P] [US1,US4] Add test_scan_dimension_filter() - verify dimensions parameter
-- [ ] T054 [P] [US1,US4] Add test_scan_graceful_degradation() - verify behavior when sampling unavailable
+- [X] T049 [P] [US1,US4] Create unit test file mp_mcp/tests/unit/test_tools_workflows_scan.py with test fixtures
+- [X] T050 [P] [US1,US4] Add test_scan_basic() - verify scan returns anomalies list
+- [X] T051 [P] [US1,US4] Add test_scan_anomaly_id_generation() - verify deterministic IDs
+- [X] T052 [P] [US1,US4] Add test_scan_sensitivity_levels() - verify low/medium/high thresholds
+- [X] T053 [P] [US1,US4] Add test_scan_dimension_filter() - verify dimensions parameter
+- [X] T054 [P] [US1,US4] Add test_scan_graceful_degradation() - verify behavior when sampling unavailable
 
 ### Implementation for Scan Tool
 
-- [ ] T055 [US1,US4] Create scan tool skeleton in mp_mcp/src/mp_mcp/tools/workflows/scan.py
-- [ ] T056 [US1,US4] Implement _detect_zscore_anomalies() helper for statistical outlier detection
-- [ ] T057 [US1,US4] Implement _detect_percentage_changes() helper for period comparison
-- [ ] T058 [US1,US4] Implement _detect_trend_breaks() helper for SMA crossover detection
-- [ ] T059 [US1,US4] Implement _rank_anomalies() helper that sorts by severity * confidence
-- [ ] T060 [US1,US4] Implement _synthesize_anomalies() helper for AI-enhanced ranking (with graceful degradation)
-- [ ] T061 [US1,US4] Implement main scan() function that composes detection methods
-- [ ] T062 [US1,US4] Update mp_mcp/src/mp_mcp/tools/workflows/__init__.py to export scan
-- [ ] T063 [US1,US4] Run tests and verify scan tool passes all test cases
+- [X] T055 [US1,US4] Create scan tool skeleton in mp_mcp/src/mp_mcp/tools/workflows/scan.py
+- [X] T056 [US1,US4] Implement _detect_zscore_anomalies() helper for statistical outlier detection
+- [X] T057 [US1,US4] Implement _detect_percentage_changes() helper for period comparison
+- [X] T058 [US1,US4] Implement _detect_trend_breaks() helper for SMA crossover detection
+- [X] T059 [US1,US4] Implement _rank_anomalies() helper that sorts by severity * confidence
+- [X] T060 [US1,US4] Implement _synthesize_anomalies() helper for AI-enhanced ranking (with graceful degradation)
+- [X] T061 [US1,US4] Implement main scan() function that composes detection methods
+- [X] T062 [US1,US4] Update mp_mcp/src/mp_mcp/tools/workflows/__init__.py to export scan
+- [X] T063 [US1,US4] Run tests and verify scan tool passes all test cases
 
 **Checkpoint**: Scan tool complete - US4 (Ad-hoc Anomaly Scan) now functional
 
