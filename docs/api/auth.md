@@ -114,9 +114,7 @@ Immutable model for OAuth access and refresh tokens.
 
 Dynamic Client Registration metadata.
 
-**Key fields:** `client_id`, `client_secret`, `redirect_uris`, `created_at`, `expires_at`
-
-**Key methods:** `is_expired()`, `from_dcr_response(data)`
+**Key fields:** `client_id`, `region`, `redirect_uri`, `scope`, `created_at`
 
 ### OAuthStorage
 
@@ -127,11 +125,11 @@ from mixpanel_data._internal.auth.storage import OAuthStorage
 
 storage = OAuthStorage()
 tokens = storage.load_tokens(region="us")
-regions = storage.list_regions_with_tokens()
+storage.delete_tokens(region="us")
 storage.delete_all()  # Clear all regions
 ```
 
-**Key methods:** `load_tokens(region)`, `save_tokens(tokens, region)`, `delete_tokens(region)`, `load_client_info(region)`, `save_client_info(client_info, region)`, `delete_all()`, `list_regions_with_tokens()`
+**Key methods:** `load_tokens(region)`, `save_tokens(tokens, region)`, `delete_tokens(region)`, `load_client_info(region)`, `save_client_info(info)`, `delete_all()`
 
 ### PkceChallenge
 

@@ -3440,7 +3440,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     status: str
     """Response status (typically "ok")."""
 
-    results: list[Any]
+    results: list[T]
     """Page of results."""
 
     pagination: CursorPagination | None = None

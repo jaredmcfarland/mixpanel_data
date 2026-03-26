@@ -230,7 +230,9 @@ class OAuthFlow:
         def _run_callback() -> None:
             """Run the callback server in a thread."""
             try:
-                result = start_callback_server(state=state, timeout=300.0)
+                result = start_callback_server(
+                    state=state, timeout=300.0, port=bound_port
+                )
                 callback_result_holder.append(result)
             except Exception as exc:
                 callback_error_holder.append(exc)

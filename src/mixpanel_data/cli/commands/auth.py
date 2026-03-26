@@ -31,6 +31,7 @@ from mixpanel_data.cli.utils import (
     handle_errors,
     output_result,
 )
+from mixpanel_data.exceptions import AccountNotFoundError, ConfigError
 
 auth_app = typer.Typer(
     name="auth",
@@ -355,7 +356,7 @@ def _resolve_region(ctx: typer.Context, region: str | None) -> str:
         default_account = _find_default_account(config)
         if default_account is not None:
             return default_account.region
-    except Exception:  # noqa: BLE001
+    except (ConfigError, AccountNotFoundError, OSError):
         pass
     return "us"
 

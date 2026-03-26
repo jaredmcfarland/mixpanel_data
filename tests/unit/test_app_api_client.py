@@ -21,6 +21,7 @@ from mixpanel_data._internal.api_client import ENDPOINTS, MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, Credentials
 from mixpanel_data.exceptions import (
     AuthenticationError,
+    MixpanelDataError,
     QueryError,
     ServerError,
     WorkspaceScopeError,
@@ -604,13 +605,11 @@ class TestListWorkspacesEdgeCases:
     def test_list_workspaces_string_response(
         self, oauth_credentials: Credentials
     ) -> None:
-        """Verify list_workspaces() returns empty list when results is a string.
+        """Verify list_workspaces() raises on non-list results.
 
-        Bug B6: When the API returns ``{"results": "unexpected_string"}``,
+        When the API returns ``{"results": "unexpected_string"}``,
         ``app_request()`` unwraps results to the string ``"unexpected_string"``.
-        ``list_workspaces()`` then checks ``isinstance(results, list)`` which
-        is False, so it silently returns ``[]``. This documents the current
-        behavior — the string response is swallowed without error.
+        ``list_workspaces()`` validates the type and raises ``MixpanelDataError``.
         """
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -620,11 +619,11 @@ class TestListWorkspacesEdgeCases:
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client:
-            workspaces = client.list_workspaces()
-
-        # Bug B6: silently returns empty list instead of raising
-        assert workspaces == []
+        with (
+            client,
+            pytest.raises(MixpanelDataError, match="Unexpected response format"),
+        ):
+            client.list_workspaces()
 
     def test_list_workspaces_missing_required_fields(
         self, oauth_credentials: Credentials

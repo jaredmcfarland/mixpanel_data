@@ -78,25 +78,33 @@ class CallbackResult:
 def start_callback_server(
     state: str,
     timeout: float = 300.0,
+    port: int | None = None,
 ) -> tuple[CallbackResult, int]:
     """Start a local HTTP server to receive the OAuth callback.
 
-    Tries to bind to ports 19284-19287 on ``127.0.0.1``. Once bound, it waits
-    for a single GET request containing ``code`` and ``state`` query parameters.
-    The ``state`` must match the provided value (CSRF protection). An HTML
-    page is returned to the browser indicating success or failure.
+    When ``port`` is provided, binds only to that specific port (no scanning).
+    This avoids TOCTOU races when the caller has already probed for an
+    available port. When ``port`` is ``None``, tries ports 19284-19287 on
+    ``127.0.0.1`` in order. Once bound, the server waits for a single GET
+    request containing ``code`` and ``state`` query parameters. The ``state``
+    must match the provided value (CSRF protection). An HTML page is returned
+    to the browser indicating success or failure.
 
     Args:
         state: The expected state parameter for CSRF validation.
         timeout: Maximum seconds to wait for the callback (default 300).
+        port: Specific port to bind to. When provided, only this port is
+            attempted and no scanning occurs. When ``None``, ports
+            19284-19287 are tried in order.
 
     Returns:
         A tuple of ``(CallbackResult, port)`` where ``port`` is the bound port.
 
     Raises:
-        OAuthError: If all ports are busy (``OAUTH_PORT_ERROR``), the callback
-            times out (``OAUTH_TIMEOUT``), the state doesn't match, or the
-            provider returns an error parameter.
+        OAuthError: If all ports are busy (``OAUTH_PORT_ERROR``), the
+            requested port is unavailable, the callback times out
+            (``OAUTH_TIMEOUT``), the state doesn't match, or the provider
+            returns an error parameter.
 
     Example:
         ```python
@@ -108,13 +116,26 @@ def start_callback_server(
     server: HTTPServer | None = None
     bound_port: int = 0
 
-    for port in CALLBACK_PORTS:
+    if port is not None:
+        # Bind to the exact requested port — no scanning
         try:
             server = _create_server(port)
             bound_port = port
-            break
-        except OSError:
-            continue
+        except OSError as exc:
+            raise OAuthError(
+                f"OAuth callback port {port} is no longer available. "
+                "Another process may have claimed it. Please try again.",
+                code="OAUTH_PORT_ERROR",
+                details={"port": port},
+            ) from exc
+    else:
+        for candidate in CALLBACK_PORTS:
+            try:
+                server = _create_server(candidate)
+                bound_port = candidate
+                break
+            except OSError:
+                continue
 
     if server is None:
         raise OAuthError(

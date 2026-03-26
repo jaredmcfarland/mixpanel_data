@@ -217,8 +217,14 @@ class TestWorkspaceConstructionWithOAuth:
     def test_workspace_backward_compat_basic_auth(
         self,
         temp_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Workspace still works with Basic Auth credentials (regression)."""
+        # Isolate OAuth storage so real tokens on the machine are not found
+        oauth_dir = temp_dir / "empty_oauth"
+        oauth_dir.mkdir()
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(oauth_dir))
+
         basic_creds = _make_basic_credentials()
         transport = httpx.MockTransport(lambda _r: httpx.Response(200, json=[]))
         client = MixpanelAPIClient(basic_creds, _transport=transport)

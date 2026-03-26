@@ -583,7 +583,7 @@ class Workspace:
             ```
         """
         client = self._get_api_client()
-        return client._workspace_id
+        return client.workspace_id
 
     def set_workspace_id(self, workspace_id: int | None) -> None:
         """Set or clear the workspace ID for scoped App API requests.

@@ -710,6 +710,7 @@ class MixpanelAPIClient:
 
         # Build params with query_origin
         request_params: dict[str, str] = {}
+        request_params["query_origin"] = "mixpanel-data-cli"
         if params:
             request_params.update(params)
 
@@ -811,6 +812,15 @@ class MixpanelAPIClient:
             request_method=method,
             request_url=url,
         )
+
+    @property
+    def workspace_id(self) -> int | None:
+        """Return the explicit workspace ID, if set.
+
+        Returns:
+            The workspace ID set via ``set_workspace_id()``, or None.
+        """
+        return self._workspace_id
 
     def set_workspace_id(self, workspace_id: int | None) -> None:
         """Set or clear the explicit workspace ID for scoped requests.
@@ -973,9 +983,12 @@ class MixpanelAPIClient:
         path = f"/projects/{pid}/workspaces/public"
         results = self.app_request("GET", path)
 
-        if isinstance(results, list):
-            return [PublicWorkspace.model_validate(ws) for ws in results]
-        return []
+        if not isinstance(results, list):
+            raise MixpanelDataError(
+                f"Unexpected response format from list_workspaces: "
+                f"expected list, got {type(results).__name__}",
+            )
+        return [PublicWorkspace.model_validate(ws) for ws in results]
 
     # =========================================================================
     # Export API - Streaming

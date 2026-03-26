@@ -194,7 +194,7 @@ just mutate-check        # Check score meets 80% threshold
 | `MP_CONFIG_PATH` | Override config file location |
 
 Config file: `~/.mp/config.toml`
-OAuth tokens: `~/.mp/oauth/{region}/tokens.json`
+OAuth tokens: `~/.mp/oauth/tokens_{region}.json`
 
 ## Development
 

@@ -190,13 +190,12 @@ OAuth tokens are stored as JSON files:
 
 ```
 ~/.mp/oauth/
-├── us/
-│   ├── tokens.json        # Access/refresh tokens, expiry, scope
-│   └── client_info.json   # Dynamic client registration data
-├── eu/
-│   └── ...
-└── in/
-    └── ...
+├── tokens_us.json         # Access/refresh tokens, expiry, scope
+├── client_us.json         # Dynamic client registration data
+├── tokens_eu.json
+├── client_eu.json
+├── tokens_in.json
+└── client_in.json
 ```
 
 Tokens are automatically refreshed when expired. The client registration is cached per region.

@@ -11,6 +11,7 @@ class methods instead of accessing this module directly.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +32,15 @@ logger = logging.getLogger(__name__)
 #: Maximum number of pages to fetch before raising an error.
 #: Prevents infinite loops when the server returns a non-null cursor indefinitely.
 MAX_PAGES: int = 10000
+
+#: Maximum number of retries for rate-limited (429) responses per page request.
+MAX_RATE_LIMIT_RETRIES: int = 3
+
+#: Base delay in seconds for exponential backoff on 429 retries.
+_BACKOFF_BASE: float = 1.0
+
+#: Maximum backoff delay in seconds.
+_BACKOFF_MAX: float = 60.0
 
 
 def paginate_all(
@@ -101,8 +111,9 @@ def paginate_all(
                 details={"max_pages": MAX_PAGES, "path": path},
             )
 
-        # Build request params
+        # Build request params with query_origin
         request_params: dict[str, str] = {"page_size": str(page_size)}
+        request_params["query_origin"] = "mixpanel-data-cli"
         if params:
             request_params.update(params)
         if next_cursor is not None:
@@ -114,14 +125,59 @@ def paginate_all(
         headers = {"Authorization": auth_header}
 
         http_client = client._ensure_client()
+        response: httpx.Response | None = None
+
+        for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+            try:
+                response = http_client.request(
+                    "GET",
+                    url,
+                    params=request_params,
+                    headers=headers,
+                    timeout=client._timeout,
+                )
+            except httpx.HTTPError as exc:
+                raise MixpanelDataError(
+                    f"Network error during pagination: {exc}",
+                    code="NETWORK_ERROR",
+                    details={"path": path, "error": str(exc)},
+                ) from exc
+
+            # Handle 429 with retry/backoff
+            if response.status_code == 429:
+                if attempt >= MAX_RATE_LIMIT_RETRIES:
+                    retry_after_raw = response.headers.get("Retry-After")
+                    retry_after = int(retry_after_raw) if retry_after_raw else None
+                    raise RateLimitError(
+                        "Rate limit exceeded after max retries during pagination",
+                        retry_after=retry_after,
+                        status_code=429,
+                        response_body=response.text,
+                        request_method="GET",
+                        request_url=url,
+                    )
+                retry_after_raw = response.headers.get("Retry-After")
+                if retry_after_raw:
+                    wait_time = float(retry_after_raw)
+                else:
+                    wait_time = min(_BACKOFF_BASE * (2**attempt), _BACKOFF_MAX)
+                logger.warning(
+                    "Rate limited during pagination, retrying in %.1f seconds "
+                    "(attempt %d/%d)",
+                    wait_time,
+                    attempt + 1,
+                    MAX_RATE_LIMIT_RETRIES,
+                )
+                time.sleep(wait_time)
+                continue
+
+            # Not a 429 — break out of retry loop
+            break
+
+        # At this point response is guaranteed non-None
+        assert response is not None  # noqa: S101
+
         try:
-            response = http_client.request(
-                "GET",
-                url,
-                params=request_params,
-                headers=headers,
-                timeout=client._timeout,
-            )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
@@ -129,17 +185,6 @@ def paginate_all(
             if status == 401:
                 raise AuthenticationError(
                     f"Authentication failed during pagination: {body}",
-                    status_code=status,
-                    response_body=body,
-                    request_method="GET",
-                    request_url=url,
-                ) from exc
-            if status == 429:
-                retry_after_raw = exc.response.headers.get("Retry-After")
-                retry_after = int(retry_after_raw) if retry_after_raw else None
-                raise RateLimitError(
-                    f"Rate limited during pagination: {body}",
-                    retry_after=retry_after,
                     status_code=status,
                     response_body=body,
                     request_method="GET",

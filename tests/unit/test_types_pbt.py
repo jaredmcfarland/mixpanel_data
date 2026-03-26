@@ -1535,16 +1535,19 @@ class TestSavedReportResultProperties:
         )
 
         report_type = result.report_type
-        assert report_type in ("insights", "retention", "funnel")
+        assert report_type in ("insights", "retention", "funnel", "flows")
 
         # Verify detection logic
         has_retention = any("$retention" in h.lower() for h in headers)
         has_funnel = any("$funnel" in h.lower() for h in headers)
+        has_flows = any("$flows" in h.lower() for h in headers)
 
         if has_retention:
             assert report_type == "retention"
         elif has_funnel:
             assert report_type == "funnel"
+        elif has_flows:
+            assert report_type == "flows"
         else:
             assert report_type == "insights"
 

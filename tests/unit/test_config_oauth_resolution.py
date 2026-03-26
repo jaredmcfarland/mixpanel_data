@@ -72,7 +72,7 @@ def _make_expired_tokens(
     )
 
 
-class TestEnvVarsStillResolveToBaiscAuth:
+class TestEnvVarsStillResolveToBasicAuth:
     """Regression: env vars always produce Basic Auth credentials."""
 
     def test_env_vars_produce_basic_auth(

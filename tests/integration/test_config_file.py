@@ -177,7 +177,10 @@ class TestEnvironmentVariableIntegration:
             monkeypatch.setenv("MP_USERNAME", "env_user")
             # MP_SECRET, MP_PROJECT_ID, MP_REGION not set
 
-            creds = config.resolve_credentials()
+            # Use empty temp dir for OAuth storage to avoid picking up real tokens
+            oauth_dir = Path(tmpdir) / "oauth_empty"
+            oauth_dir.mkdir()
+            creds = config.resolve_credentials(_oauth_storage_dir=oauth_dir)
 
             # Should use file credentials since env vars are incomplete
             assert creds.username == "file_user"

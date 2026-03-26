@@ -102,7 +102,7 @@ class OAuthTokens(BaseModel):
 
         Raises:
             KeyError: If required keys are missing from ``data``.
-            TypeError: If ``expires_in`` is not an int.
+            ValueError: If ``expires_in`` cannot be converted to an int.
 
         Example:
             ```python
