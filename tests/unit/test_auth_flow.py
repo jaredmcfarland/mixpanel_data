@@ -555,7 +555,13 @@ class TestOAuthFlowRegionUrls:
         mock_browser.open.return_value = True
 
         opened_urls: list[str] = []
-        mock_browser.open.side_effect = lambda url: opened_urls.append(url) or True
+
+        def _capture_url(url: str) -> bool:
+            """Capture opened URL and return True to indicate success."""
+            opened_urls.append(url)
+            return True
+
+        mock_browser.open.side_effect = _capture_url
 
         transport = httpx.MockTransport(
             lambda _req: httpx.Response(200, json=_make_token_response())

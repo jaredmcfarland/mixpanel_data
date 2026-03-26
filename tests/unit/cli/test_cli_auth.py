@@ -360,7 +360,8 @@ class TestWorkspaceIdOption:
                         read_only=read_only,
                         workspace_id=workspace_id_val,
                     )
-                return ctx.obj["workspace"]
+                result: MagicMock = ctx.obj["workspace"]
+                return result
 
             with patch.object(utils_mod, "get_workspace", patched_get_workspace):
                 cli_runner.invoke(app, ["--workspace-id", "777", "inspect", "info"])
