@@ -20,6 +20,8 @@ MixpanelDataError
 │   ├── QueryError
 │   ├── ServerError
 │   └── JQLSyntaxError
+├── OAuthError
+├── WorkspaceScopeError
 ├── TableExistsError
 ├── TableNotFoundError
 ├── DatabaseLockedError
@@ -38,6 +40,10 @@ except mp.AuthenticationError as e:
     print(f"Auth failed: {e.message}")
 except mp.RateLimitError as e:
     print(f"Rate limited, retry after {e.retry_after}s")
+except mp.OAuthError as e:
+    print(f"OAuth error [{e.code}]: {e.message}")
+except mp.WorkspaceScopeError as e:
+    print(f"Workspace error [{e.code}]: {e.message}")
 except mp.MixpanelDataError as e:
     print(f"Error [{e.code}]: {e.message}")
 ```
@@ -94,6 +100,39 @@ except mp.MixpanelDataError as e:
       show_root_toc_entry: true
 
 ::: mixpanel_data.AccountExistsError
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## OAuth Exceptions
+
+Raised during OAuth 2.0 PKCE authentication flows.
+
+| Error Code | Raised When |
+|------------|-------------|
+| `OAUTH_TOKEN_ERROR` | Token exchange fails |
+| `OAUTH_REFRESH_ERROR` | Token refresh fails |
+| `OAUTH_REGISTRATION_ERROR` | Dynamic client registration fails |
+| `OAUTH_TIMEOUT` | Callback server times out waiting for authorization |
+| `OAUTH_PORT_ERROR` | Cannot bind to a local port for the callback server |
+| `OAUTH_BROWSER_ERROR` | Cannot open the authorization URL in the browser |
+
+::: mixpanel_data.OAuthError
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Workspace Exceptions
+
+Raised when workspace resolution fails for App API endpoints.
+
+| Error Code | Raised When |
+|------------|-------------|
+| `NO_WORKSPACES` | No workspaces found for the project |
+| `AMBIGUOUS_WORKSPACE` | Multiple workspaces found and none is marked as default |
+| `WORKSPACE_NOT_FOUND` | Specified workspace ID does not exist |
+
+::: mixpanel_data.WorkspaceScopeError
     options:
       show_root_heading: true
       show_root_toc_entry: true

@@ -1003,7 +1003,9 @@ class TestInMemoryIntegration:
                 }
                 for i in range(100)
             ]
-            events_meta = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
+            events_meta = TableMetadata(
+                type="events", fetched_at=datetime.now(timezone.utc)
+            )
             storage.create_events_table("events", iter(events), events_meta)
 
             # Create profiles table
@@ -1015,7 +1017,9 @@ class TestInMemoryIntegration:
                 }
                 for i in range(50)
             ]
-            profiles_meta = TableMetadata(type="profiles", fetched_at=datetime.now(timezone.utc))
+            profiles_meta = TableMetadata(
+                type="profiles", fetched_at=datetime.now(timezone.utc)
+            )
             storage.create_profiles_table("profiles", iter(profiles), profiles_meta)
 
             # Verify row counts
@@ -1101,7 +1105,9 @@ class TestInMemoryIntegration:
         with StorageEngine.memory() as storage:
             # Create empty events table
             events: list[dict[str, object]] = []
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
+            metadata = TableMetadata(
+                type="events", fetched_at=datetime.now(timezone.utc)
+            )
             row_count = storage.create_events_table(
                 "empty_events", iter(events), metadata
             )
@@ -1134,7 +1140,9 @@ class TestInMemoryIntegration:
                     "properties": {},
                 }
             ]
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
+            metadata = TableMetadata(
+                type="events", fetched_at=datetime.now(timezone.utc)
+            )
 
             # Create table
             storage.create_events_table("test_table", iter(events), metadata)

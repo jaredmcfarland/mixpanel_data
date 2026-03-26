@@ -21,9 +21,12 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Generic, Literal, TypeVar
 
 import pandas as pd
+from pydantic import BaseModel, ConfigDict
+
+T = TypeVar("T")
 
 # =============================================================================
 # Base Class for Result Types with DataFrame Conversion
@@ -3315,3 +3318,130 @@ class ParallelProfileResult:
             "fetched_at": self.fetched_at.isoformat(),
             "has_failures": self.has_failures,
         }
+
+
+# =============================================================================
+# App API Types (OAuth & Workspace Scoping)
+# =============================================================================
+
+
+class PublicWorkspace(BaseModel):
+    """A workspace within a Mixpanel project.
+
+    Represents a workspace as returned by the Mixpanel App API
+    ``GET /api/app/projects/{pid}/workspaces/public`` endpoint.
+    Extra fields from the API response are preserved via ``extra="allow"``.
+
+    Attributes:
+        id: Workspace identifier.
+        name: Human-readable workspace name.
+        project_id: Parent project identifier.
+        is_default: Whether this is the default workspace.
+        description: Workspace description, if set.
+        is_global: Whether workspace is global.
+        is_restricted: Whether workspace has restrictions.
+        is_visible: Whether workspace is visible.
+        created_iso: ISO 8601 creation timestamp.
+        creator_name: Name of workspace creator.
+
+    Example:
+        ```python
+        ws = PublicWorkspace(
+            id=1, name="Main", project_id=12345, is_default=True
+        )
+        assert ws.is_default is True
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Workspace identifier."""
+
+    name: str
+    """Human-readable workspace name."""
+
+    project_id: int
+    """Parent project identifier."""
+
+    is_default: bool
+    """Whether this is the default workspace."""
+
+    description: str | None = None
+    """Workspace description, if set."""
+
+    is_global: bool | None = None
+    """Whether workspace is global."""
+
+    is_restricted: bool | None = None
+    """Whether workspace has restrictions."""
+
+    is_visible: bool | None = None
+    """Whether workspace is visible."""
+
+    created_iso: str | None = None
+    """ISO 8601 creation timestamp."""
+
+    creator_name: str | None = None
+    """Name of workspace creator."""
+
+
+class CursorPagination(BaseModel):
+    """Cursor-based pagination metadata from App API responses.
+
+    Attributes:
+        page_size: Number of items per page.
+        next_cursor: Cursor for next page, or None if last page.
+        previous_cursor: Cursor for previous page.
+
+    Example:
+        ```python
+        pagination = CursorPagination(page_size=100, next_cursor="abc123")
+        assert pagination.next_cursor == "abc123"
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    page_size: int
+    """Number of items per page."""
+
+    next_cursor: str | None = None
+    """Cursor for next page (None = last page)."""
+
+    previous_cursor: str | None = None
+    """Cursor for previous page."""
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Paginated App API response wrapper.
+
+    Generic wrapper for paginated responses from the Mixpanel App API.
+    Contains the results list, status, and optional pagination metadata.
+
+    Attributes:
+        status: Response status (typically "ok").
+        results: Page of results.
+        pagination: Pagination metadata, or None for single-page responses.
+
+    Example:
+        ```python
+        response = PaginatedResponse[dict](
+            status="ok",
+            results=[{"id": 1}],
+            pagination=CursorPagination(page_size=100),
+        )
+        assert len(response.results) == 1
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    status: str
+    """Response status (typically "ok")."""
+
+    results: list[Any]
+    """Page of results."""
+
+    pagination: CursorPagination | None = None
+    """Pagination metadata, or None for single-page responses."""

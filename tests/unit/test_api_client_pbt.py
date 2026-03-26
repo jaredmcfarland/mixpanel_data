@@ -512,15 +512,19 @@ def _collect_lines_from_chunks(chunks: list[bytes]) -> list[str]:
 
 # Strategy for JSON-like line content (no newlines, no leading/trailing whitespace)
 # Use printable characters excluding newlines
-json_line_content = st.text(
-    alphabet=st.characters(
-        whitelist_categories=("L", "N", "P", "S"),
-        whitelist_characters='{}[]":, ',
-        blacklist_characters="\n\r",
-    ),
-    min_size=1,
-    max_size=100,
-).map(lambda s: s.strip()).filter(bool)
+json_line_content = (
+    st.text(
+        alphabet=st.characters(
+            whitelist_categories=("L", "N", "P", "S"),
+            whitelist_characters='{}[]":, ',
+            blacklist_characters="\n\r",
+        ),
+        min_size=1,
+        max_size=100,
+    )
+    .map(lambda s: s.strip())
+    .filter(bool)
+)
 
 # Strategy for JSONL documents (list of non-empty lines)
 jsonl_documents = st.lists(json_line_content, min_size=1, max_size=10)
@@ -648,7 +652,5 @@ class TestIterJsonlLinesProperties:
 
         # Should match input
         assert output_lines == lines, (
-            f"Byte-by-byte chunking failed!\n"
-            f"Input: {lines}\n"
-            f"Output: {output_lines}"
+            f"Byte-by-byte chunking failed!\nInput: {lines}\nOutput: {output_lines}"
         )

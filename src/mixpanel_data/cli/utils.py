@@ -34,11 +34,13 @@ from mixpanel_data.exceptions import (
     EventNotFoundError,
     JQLSyntaxError,
     MixpanelDataError,
+    OAuthError,
     QueryError,
     RateLimitError,
     ServerError,
     TableExistsError,
     TableNotFoundError,
+    WorkspaceScopeError,
 )
 
 if TYPE_CHECKING:
@@ -254,6 +256,16 @@ def handle_errors(func: F) -> F:
                 "Try again in a few moments."
             )
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
+        except OAuthError as e:
+            err_console.print(f"[red]OAuth error:[/red] {e.message}")
+            if e.code:
+                err_console.print(f"  [dim]Code:[/dim] {e.code}")
+            raise typer.Exit(ExitCode.AUTH_ERROR) from None
+        except WorkspaceScopeError as e:
+            err_console.print(f"[red]Workspace error:[/red] {e.message}")
+            if e.code:
+                err_console.print(f"  [dim]Code:[/dim] {e.code}")
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except ConfigError as e:
             err_console.print(f"[red]Configuration error:[/red] {e.message}")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
@@ -298,7 +310,10 @@ def get_workspace(ctx: typer.Context, *, read_only: bool = False) -> Workspace:
 
     if "workspace" not in ctx.obj or ctx.obj["workspace"] is None:
         account = ctx.obj.get("account")
-        ctx.obj["workspace"] = Workspace(account=account, read_only=read_only)
+        workspace_id: int | None = ctx.obj.get("workspace_id")
+        ctx.obj["workspace"] = Workspace(
+            account=account, read_only=read_only, workspace_id=workspace_id
+        )
     workspace: Workspace = ctx.obj["workspace"]
     return workspace
 

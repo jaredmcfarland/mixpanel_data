@@ -41,9 +41,17 @@ src/mixpanel_data/
 ├── exceptions.py            # Exception hierarchy
 ├── types.py                 # Result types (FetchResult, SegmentationResult, etc.)
 ├── _internal/               # Private implementation (do not import directly)
-│   ├── config.py            # ConfigManager, Credentials
-│   ├── api_client.py        # MixpanelAPIClient
+│   ├── config.py            # ConfigManager, Credentials, AuthMethod
+│   ├── api_client.py        # MixpanelAPIClient (Basic Auth + OAuth Bearer)
 │   ├── storage.py           # StorageEngine (DuckDB)
+│   ├── pagination.py        # Cursor-based App API pagination
+│   ├── auth/                # OAuth 2.0 PKCE authentication
+│   │   ├── flow.py          # OAuthFlow orchestrator
+│   │   ├── token.py         # OAuthTokens, OAuthClientInfo models
+│   │   ├── storage.py       # OAuthStorage (~/.mp/oauth/)
+│   │   ├── pkce.py          # PKCE challenge generation (RFC 7636)
+│   │   ├── callback_server.py  # Local HTTP callback server
+│   │   └── client_registration.py  # Dynamic Client Registration (RFC 7591)
 │   └── services/            # Discovery, Fetcher, LiveQuery services
 └── cli/
     ├── main.py              # Typer app entry point
@@ -170,6 +178,7 @@ just mutate-check        # Check score meets 80% threshold
 - **Explicit table management**: Tables never implicitly overwritten; `TableExistsError` if exists
 - **Streaming ingestion**: API returns iterators, storage accepts iterators (memory efficient)
 - **JSON property storage**: Properties stored as JSON columns, queried with `properties->>'$.field'`
+- **Dual authentication**: Service accounts (Basic Auth) and OAuth 2.0 PKCE with automatic credential resolution
 - **Immutable credentials**: Resolved once at Workspace construction
 - **Dependency injection**: Services accept dependencies as constructor arguments for testing
 
@@ -181,9 +190,11 @@ just mutate-check        # Check score meets 80% threshold
 | `MP_SECRET` | Service account secret |
 | `MP_PROJECT_ID` | Project ID |
 | `MP_REGION` | Data residency (us, eu, in) |
+| `MP_WORKSPACE_ID` | Workspace ID for App API operations |
 | `MP_CONFIG_PATH` | Override config file location |
 
 Config file: `~/.mp/config.toml`
+OAuth tokens: `~/.mp/oauth/{region}/tokens.json`
 
 ## Development
 
@@ -297,6 +308,8 @@ Skill(skill="mixpanel-data:mixpanel-analyst")  # Will fail!
 - DuckDB (via mixpanel_data Workspace - shared session state) (020-mcp-server)
 - Python 3.10+ + FastMCP 2.x, mixpanel_data, Pydantic v2 (021-mcp-server-v2)
 - DuckDB (via mixpanel_data.Workspace), in-memory for middleware caches (021-mcp-server-v2)
+- Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), Typer (CLI), Rich (output) (023-oauth-app-api-infra)
+- JSON files at `~/.mp/oauth/` (token + client info persistence); DuckDB unchanged (023-oauth-app-api-infra)
 
 ## Recent Changes
 - 017-parallel-export: Added Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies

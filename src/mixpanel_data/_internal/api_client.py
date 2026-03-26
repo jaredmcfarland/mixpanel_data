@@ -31,8 +31,9 @@ from mixpanel_data.exceptions import (
     QueryError,
     RateLimitError,
     ServerError,
+    WorkspaceScopeError,
 )
-from mixpanel_data.types import ProfilePageResult
+from mixpanel_data.types import ProfilePageResult, PublicWorkspace
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -150,6 +151,8 @@ class MixpanelAPIClient:
         self._max_retries = max_retries
         self._client: httpx.Client | None = None
         self._transport = _transport
+        self._workspace_id: int | None = None
+        self._cached_workspace_id: int | None = None
 
     def _get_auth_header(self) -> str:
         """Generate HTTP Basic auth header value.
@@ -653,6 +656,326 @@ class MixpanelAPIClient:
             except ValueError:
                 pass
         return None
+
+    # =========================================================================
+    # App API - OAuth/Bearer requests with workspace scoping
+    # =========================================================================
+
+    def app_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+        json_body: dict[str, Any] | None = None,
+    ) -> Any:
+        """Make an authenticated request to the Mixpanel App API.
+
+        Uses Bearer auth (OAuth) or Basic auth depending on credentials.
+        Builds the URL from the ``app`` endpoint for the configured region.
+        Unwraps the ``results`` field from the response JSON when present.
+
+        Args:
+            method: HTTP method (GET, POST, PATCH, DELETE, etc.).
+            path: API path (e.g., ``/projects/12345/dashboards``).
+            params: Optional query parameters.
+            json_body: Optional JSON request body.
+
+        Returns:
+            The ``results`` field from the response JSON if present,
+            otherwise the full response body. For 204 No Content responses,
+            returns ``{"status": "ok"}``.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Invalid parameters or resource not found (400, 404, 422).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            client = MixpanelAPIClient(oauth_credentials)
+            with client:
+                dashboards = client.app_request(
+                    "GET", "/projects/12345/dashboards"
+                )
+            ```
+        """
+        url = self._build_url("app", path)
+        auth_header = self._credentials.auth_header()
+        headers = {"Authorization": auth_header}
+
+        client = self._ensure_client()
+
+        # Build params with query_origin
+        request_params: dict[str, str] = {}
+        if params:
+            request_params.update(params)
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = client.request(
+                    method,
+                    url,
+                    params=request_params if request_params else None,
+                    json=json_body,
+                    headers=headers,
+                    timeout=self._timeout,
+                )
+
+                # Handle 204 No Content
+                if response.status_code == 204:
+                    return {"status": "ok"}
+
+                # Handle 429 rate limiting with retry
+                if response.status_code == 429:
+                    if attempt >= self._max_retries:
+                        retry_after = self._parse_retry_after(response)
+                        response_body: str | dict[str, Any] | None = None
+                        try:
+                            response_body = response.json()
+                        except json.JSONDecodeError:
+                            response_body = (
+                                response.text[:500] if response.text else None
+                            )
+                        raise RateLimitError(
+                            "Rate limit exceeded after max retries",
+                            retry_after=retry_after,
+                            status_code=response.status_code,
+                            response_body=response_body,
+                            request_method=method,
+                            request_url=url,
+                        )
+                    retry_after = self._parse_retry_after(response)
+                    if retry_after is not None:
+                        wait_time = float(retry_after)
+                    else:
+                        wait_time = self._calculate_backoff(attempt)
+                    logger.warning(
+                        "Rate limited, retrying in %.1f seconds (attempt %d/%d)",
+                        wait_time,
+                        attempt + 1,
+                        self._max_retries,
+                    )
+                    time.sleep(wait_time)
+                    continue
+
+                # Handle 422 as QueryError
+                if response.status_code == 422:
+                    err_body: str | dict[str, Any] | None = None
+                    try:
+                        err_body = response.json()
+                    except json.JSONDecodeError:
+                        err_body = response.text[:500] if response.text else None
+                    error_msg = "Unprocessable entity"
+                    if isinstance(err_body, dict):
+                        error_msg = str(err_body.get("error", error_msg))
+                    raise QueryError(
+                        error_msg,
+                        status_code=422,
+                        response_body=err_body,
+                        request_method=method,
+                        request_url=url,
+                        request_body=json_body,
+                    )
+
+                # Delegate other error codes to _handle_response
+                result = self._handle_response(
+                    response,
+                    request_method=method,
+                    request_url=url,
+                    request_params=request_params if request_params else None,
+                    request_body=json_body,
+                )
+
+                # Unwrap results field if present
+                if isinstance(result, dict) and "results" in result:
+                    return result["results"]
+                return result
+
+            except httpx.HTTPError as e:
+                raise MixpanelDataError(
+                    f"HTTP error: {e}",
+                    code="HTTP_ERROR",
+                    details={
+                        "error": str(e),
+                        "request_method": method,
+                        "request_url": url,
+                    },
+                ) from e
+
+        # Should not reach here, but satisfy type checker
+        raise RateLimitError(
+            "Rate limit exceeded after max retries",
+            request_method=method,
+            request_url=url,
+        )
+
+    def set_workspace_id(self, workspace_id: int | None) -> None:
+        """Set or clear the explicit workspace ID for scoped requests.
+
+        When set, ``maybe_scoped_path()`` will use workspace-scoped paths.
+        Setting to ``None`` clears both the explicit ID and the cached
+        auto-discovered ID, reverting to project-scoped paths.
+
+        Args:
+            workspace_id: Workspace ID to use, or None to clear.
+
+        Example:
+            ```python
+            client.set_workspace_id(789)
+            path = client.maybe_scoped_path("dashboards")
+            # "/workspaces/789/dashboards"
+
+            client.set_workspace_id(None)
+            path = client.maybe_scoped_path("dashboards")
+            # "/projects/12345/dashboards"
+            ```
+        """
+        self._workspace_id = workspace_id
+        if workspace_id is None:
+            self._cached_workspace_id = None
+
+    def resolve_workspace_id(self) -> int:
+        """Resolve the workspace ID to use for scoped requests.
+
+        Resolution order:
+        1. Explicit workspace ID (set via ``set_workspace_id()``)
+        2. Cached auto-discovered workspace ID
+        3. Auto-discover by calling ``list_workspaces()`` and finding
+           the default workspace (``is_default=True``), falling back
+           to the first workspace.
+
+        Returns:
+            The resolved workspace ID.
+
+        Raises:
+            WorkspaceScopeError: If no workspaces are found for the project.
+
+        Example:
+            ```python
+            client.set_workspace_id(42)
+            assert client.resolve_workspace_id() == 42
+
+            # Or auto-discover:
+            ws_id = client.resolve_workspace_id()
+            ```
+        """
+        if self._workspace_id is not None:
+            return self._workspace_id
+
+        if self._cached_workspace_id is not None:
+            return self._cached_workspace_id
+
+        workspaces = self.list_workspaces()
+        if not workspaces:
+            raise WorkspaceScopeError(
+                "No workspaces found for project "
+                f"'{self._credentials.project_id}'. "
+                "Ensure you have access to at least one workspace.",
+                code="NO_WORKSPACES",
+                details={"project_id": self._credentials.project_id},
+            )
+
+        # Prefer the default workspace
+        for ws in workspaces:
+            if ws.is_default:
+                self._cached_workspace_id = ws.id
+                return ws.id
+
+        # Fall back to first workspace
+        self._cached_workspace_id = workspaces[0].id
+        return workspaces[0].id
+
+    def maybe_scoped_path(self, domain_path: str) -> str:
+        """Build an optionally workspace-scoped API path.
+
+        If a workspace ID is set (via ``set_workspace_id()``), returns a
+        workspace-scoped path. Otherwise returns a project-scoped path.
+
+        Args:
+            domain_path: Domain-relative path (e.g., ``"dashboards"``).
+
+        Returns:
+            Workspace-scoped path ``/workspaces/{wid}/{domain_path}`` if
+            workspace is set, otherwise ``/projects/{pid}/{domain_path}``.
+
+        Example:
+            ```python
+            # No workspace set:
+            client.maybe_scoped_path("dashboards")
+            # "/projects/12345/dashboards"
+
+            # With workspace:
+            client.set_workspace_id(789)
+            client.maybe_scoped_path("dashboards")
+            # "/workspaces/789/dashboards"
+            ```
+        """
+        if self._workspace_id is not None:
+            return f"/workspaces/{self._workspace_id}/{domain_path}"
+        return f"/projects/{self._credentials.project_id}/{domain_path}"
+
+    def require_scoped_path(self, domain_path: str) -> str:
+        """Build a workspace-scoped API path, auto-discovering if needed.
+
+        Always returns a path scoped to both project and workspace. If no
+        workspace ID is set, auto-discovers one via ``resolve_workspace_id()``.
+
+        Args:
+            domain_path: Domain-relative path (e.g., ``"feature-flags"``).
+
+        Returns:
+            Path in format ``/projects/{pid}/workspaces/{wid}/{domain_path}``.
+
+        Raises:
+            WorkspaceScopeError: If no workspaces are found for the project.
+
+        Example:
+            ```python
+            client.set_workspace_id(789)
+            client.require_scoped_path("feature-flags")
+            # "/projects/12345/workspaces/789/feature-flags"
+
+            # Auto-discovers workspace if not set:
+            client.require_scoped_path("experiments")
+            # "/projects/12345/workspaces/100/experiments"
+            ```
+        """
+        ws_id = self.resolve_workspace_id()
+        pid = self._credentials.project_id
+        return f"/projects/{pid}/workspaces/{ws_id}/{domain_path}"
+
+    def list_workspaces(self) -> list[PublicWorkspace]:
+        """List all public workspaces for the current project.
+
+        Calls ``GET /api/app/projects/{pid}/workspaces/public``.
+
+        Returns:
+            List of PublicWorkspace models for the project.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                workspaces = client.list_workspaces()
+                for ws in workspaces:
+                    print(f"{ws.name} (id={ws.id}, default={ws.is_default})")
+            ```
+        """
+        pid = self._credentials.project_id
+        path = f"/projects/{pid}/workspaces/public"
+        results = self.app_request("GET", path)
+
+        if isinstance(results, list):
+            return [PublicWorkspace.model_validate(ws) for ws in results]
+        return []
 
     # =========================================================================
     # Export API - Streaming

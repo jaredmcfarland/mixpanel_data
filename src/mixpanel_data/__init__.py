@@ -18,11 +18,13 @@ from mixpanel_data.exceptions import (
     EventNotFoundError,
     JQLSyntaxError,
     MixpanelDataError,
+    OAuthError,
     QueryError,
     RateLimitError,
     ServerError,
     TableExistsError,
     TableNotFoundError,
+    WorkspaceScopeError,
 )
 from mixpanel_data.types import (
     ActivityFeedResult,
@@ -34,6 +36,7 @@ from mixpanel_data.types import (
     ColumnInfo,
     ColumnStatsResult,
     ColumnSummary,
+    CursorPagination,
     DailyCount,
     DailyCountsResult,
     EngagementBucket,
@@ -57,6 +60,7 @@ from mixpanel_data.types import (
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
+    PaginatedResponse,
     ParallelFetchResult,
     ParallelProfileResult,
     ProfilePageResult,
@@ -66,6 +70,7 @@ from mixpanel_data.types import (
     PropertyCoverageResult,
     PropertyDistributionResult,
     PropertyValueCount,
+    PublicWorkspace,
     RetentionResult,
     SavedCohort,
     SavedReportResult,
@@ -109,6 +114,8 @@ __all__ = [
     "DatabaseNotFoundError",
     "EventNotFoundError",
     "DateRangeTooLargeError",
+    "OAuthError",
+    "WorkspaceScopeError",
     # Result types
     "FetchResult",
     "ParallelFetchResult",
@@ -172,4 +179,8 @@ __all__ = [
     "EngagementBucket",
     "PropertyCoverageResult",
     "PropertyCoverage",
+    # App API types (Phase 023)
+    "PublicWorkspace",
+    "CursorPagination",
+    "PaginatedResponse",
 ]

@@ -971,3 +971,88 @@ class DateRangeTooLargeError(MixpanelDataError):
     def max_days(self) -> int:
         """Maximum allowed days."""
         return self._max_days
+
+
+# OAuth Exceptions
+
+
+class OAuthError(MixpanelDataError):
+    """OAuth authentication flow error.
+
+    Raised for failures during the OAuth 2.0 PKCE flow, including token
+    exchange, token refresh, client registration, callback timeout,
+    port unavailability, and browser launch failures.
+
+    Error codes:
+    - OAUTH_TOKEN_ERROR: Token exchange or validation failed
+    - OAUTH_REFRESH_ERROR: Token refresh failed
+    - OAUTH_REGISTRATION_ERROR: Dynamic Client Registration failed
+    - OAUTH_TIMEOUT: Callback server timed out waiting for authorization
+    - OAUTH_PORT_ERROR: All callback ports are occupied
+    - OAUTH_BROWSER_ERROR: Could not open browser for authorization
+
+    Example:
+        ```python
+        try:
+            flow = OAuthFlow(region="us")
+            tokens = flow.login()
+        except OAuthError as e:
+            print(f"OAuth failed: {e.message} (code: {e.code})")
+        ```
+    """
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "OAUTH_TOKEN_ERROR",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        """Initialize OAuthError.
+
+        Args:
+            message: Human-readable error message.
+            code: Machine-readable error code. One of: OAUTH_TOKEN_ERROR,
+                OAUTH_REFRESH_ERROR, OAUTH_REGISTRATION_ERROR, OAUTH_TIMEOUT,
+                OAUTH_PORT_ERROR, OAUTH_BROWSER_ERROR.
+            details: Additional structured data about the error.
+        """
+        super().__init__(message, code=code, details=details)
+
+
+class WorkspaceScopeError(MixpanelDataError):
+    """Workspace resolution error.
+
+    Raised when workspace resolution fails during App API requests.
+    This can occur when no workspaces are found, multiple workspaces
+    exist without a clear default, or an explicit workspace ID doesn't
+    match any available workspace.
+
+    Error codes:
+    - NO_WORKSPACES: Project has no accessible workspaces
+    - AMBIGUOUS_WORKSPACE: Multiple workspaces, none default; must specify --workspace-id
+    - WORKSPACE_NOT_FOUND: Explicit workspace ID doesn't match any workspace
+
+    Example:
+        ```python
+        try:
+            workspace_id = ws.resolve_workspace_id()
+        except WorkspaceScopeError as e:
+            print(f"Workspace issue: {e.message} (code: {e.code})")
+        ```
+    """
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "NO_WORKSPACES",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        """Initialize WorkspaceScopeError.
+
+        Args:
+            message: Human-readable error message.
+            code: Machine-readable error code. One of: NO_WORKSPACES,
+                AMBIGUOUS_WORKSPACE, WORKSPACE_NOT_FOUND.
+            details: Additional structured data about the error.
+        """
+        super().__init__(message, code=code, details=details)

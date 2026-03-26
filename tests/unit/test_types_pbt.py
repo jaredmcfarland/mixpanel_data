@@ -20,6 +20,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 from hypothesis import given
@@ -2637,3 +2638,183 @@ class TestPropertyCoverageResultProperties:
         df1 = result.df
         df2 = result.df
         assert df1 is df2
+
+
+# =============================================================================
+# OAuth Types PBT (Phase 023)
+# =============================================================================
+
+
+class TestPkceChallengePBT:
+    """Property-based tests for PKCE challenge generation."""
+
+    @given(st.integers(min_value=1, max_value=50))
+    def test_verifier_always_86_chars(self, _n: int) -> None:
+        """Every generated PKCE challenge has a 86-char verifier."""
+        from mixpanel_data._internal.auth.pkce import PkceChallenge
+
+        challenge = PkceChallenge.generate()
+        assert len(challenge.verifier) == 86
+
+    @given(st.integers(min_value=1, max_value=50))
+    def test_challenge_always_43_chars(self, _n: int) -> None:
+        """Every generated PKCE challenge has a 43-char SHA-256 hash."""
+        from mixpanel_data._internal.auth.pkce import PkceChallenge
+
+        challenge = PkceChallenge.generate()
+        assert len(challenge.challenge) == 43
+
+    @given(st.integers(min_value=1, max_value=50))
+    def test_verifier_is_base64url(self, _n: int) -> None:
+        """Verifier only contains base64url characters (no padding)."""
+        import re
+
+        from mixpanel_data._internal.auth.pkce import PkceChallenge
+
+        challenge = PkceChallenge.generate()
+        assert re.match(r"^[A-Za-z0-9_-]+$", challenge.verifier)
+
+    @given(st.integers(min_value=1, max_value=50))
+    def test_challenge_is_sha256_of_verifier(self, _n: int) -> None:
+        """Challenge is always SHA-256(verifier) in base64url no-pad."""
+        import base64
+        import hashlib
+
+        from mixpanel_data._internal.auth.pkce import PkceChallenge
+
+        pair = PkceChallenge.generate()
+        expected = (
+            base64.urlsafe_b64encode(
+                hashlib.sha256(pair.verifier.encode("ascii")).digest()
+            )
+            .rstrip(b"=")
+            .decode("ascii")
+        )
+        assert pair.challenge == expected
+
+    @given(st.integers(min_value=1, max_value=20))
+    def test_each_generation_unique(self, _n: int) -> None:
+        """Two consecutive generations produce different verifiers."""
+        from mixpanel_data._internal.auth.pkce import PkceChallenge
+
+        a = PkceChallenge.generate()
+        b = PkceChallenge.generate()
+        assert a.verifier != b.verifier
+
+
+class TestOAuthTokensRoundTripPBT:
+    """Property-based tests for OAuthTokens JSON round-trip via storage."""
+
+    @given(
+        scope=st.text(
+            alphabet=st.characters(whitelist_categories=("L", "Zs")),
+            min_size=1,
+            max_size=200,
+        ),
+        project_id=st.one_of(st.none(), st.text(min_size=1, max_size=20)),
+        expires_in=st.integers(min_value=60, max_value=86400),
+    )
+    def test_from_token_response_round_trip(
+        self, scope: str, project_id: str | None, expires_in: int
+    ) -> None:
+        """from_token_response always produces a valid OAuthTokens."""
+        from mixpanel_data._internal.auth.token import OAuthTokens
+
+        data = {
+            "access_token": "test_access_token",
+            "refresh_token": "test_refresh_token",
+            "expires_in": expires_in,
+            "scope": scope,
+            "token_type": "Bearer",
+        }
+        tokens = OAuthTokens.from_token_response(data, project_id=project_id)
+
+        assert tokens.access_token.get_secret_value() == "test_access_token"
+        assert tokens.scope == scope
+        assert tokens.project_id == project_id
+        assert tokens.token_type == "Bearer"
+
+    @given(buffer_seconds=st.integers(min_value=31, max_value=100000))
+    def test_not_expired_when_far_future(self, buffer_seconds: int) -> None:
+        """Tokens with expires_at far in the future are never expired."""
+        from mixpanel_data._internal.auth.token import OAuthTokens
+
+        tokens = OAuthTokens.from_token_response(
+            {
+                "access_token": "tok",
+                "expires_in": buffer_seconds,
+                "scope": "all",
+                "token_type": "Bearer",
+            }
+        )
+        assert not tokens.is_expired()
+
+    @given(seconds_past=st.integers(min_value=0, max_value=100000))
+    def test_expired_when_in_past(self, seconds_past: int) -> None:
+        """Tokens with expires_at in the past are always expired."""
+        from datetime import timedelta, timezone
+
+        from pydantic import SecretStr
+
+        from mixpanel_data._internal.auth.token import OAuthTokens
+
+        now = datetime.now(timezone.utc)
+        tokens = OAuthTokens(
+            access_token=SecretStr("tok"),
+            expires_at=now - timedelta(seconds=seconds_past),
+            scope="all",
+            token_type="Bearer",
+        )
+        assert tokens.is_expired()
+
+    @given(
+        access_token=st.text(
+            min_size=1,
+            max_size=500,
+            alphabet=st.characters(whitelist_categories=("L", "N", "P")),
+        ),
+        scope=st.text(min_size=1, max_size=200),
+        project_id=st.one_of(st.none(), st.text(min_size=1, max_size=20)),
+        expires_in=st.integers(min_value=31, max_value=86400),
+    )
+    def test_storage_save_load_round_trip(
+        self,
+        access_token: str,
+        scope: str,
+        project_id: str | None,
+        expires_in: int,
+    ) -> None:
+        """OAuthStorage save/load round-trips preserve all token fields.
+
+        Verifies that saving tokens to disk and loading them back yields
+        identical access_token, scope, and project_id values.
+
+        Args:
+            access_token: Randomly generated access token string.
+            scope: Randomly generated scope string.
+            project_id: Optional randomly generated project ID.
+            expires_in: Token lifetime in seconds (>30 to avoid expiry edge case).
+        """
+        import tempfile
+
+        from mixpanel_data._internal.auth.storage import OAuthStorage
+        from mixpanel_data._internal.auth.token import OAuthTokens
+
+        tokens = OAuthTokens.from_token_response(
+            {
+                "access_token": access_token,
+                "expires_in": expires_in,
+                "scope": scope,
+                "token_type": "Bearer",
+            },
+            project_id=project_id,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = OAuthStorage(storage_dir=Path(tmpdir))
+            storage.save_tokens(tokens, region="us")
+            loaded = storage.load_tokens(region="us")
+
+        assert loaded is not None
+        assert loaded.access_token.get_secret_value() == access_token
+        assert loaded.scope == scope
+        assert loaded.project_id == project_id
