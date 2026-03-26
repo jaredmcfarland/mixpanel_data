@@ -356,8 +356,16 @@ def _resolve_region(ctx: typer.Context, region: str | None) -> str:
         default_account = _find_default_account(config)
         if default_account is not None:
             return default_account.region
-    except (ConfigError, AccountNotFoundError, OSError):
-        pass
+    except (ConfigError, AccountNotFoundError) as exc:
+        err_console.print(
+            f"[yellow]Warning:[/yellow] Could not determine region from config: {exc}. "
+            "Defaulting to 'us'."
+        )
+    except OSError as exc:
+        err_console.print(
+            f"[yellow]Warning:[/yellow] Could not read config file: {exc}. "
+            "Defaulting to region 'us'."
+        )
     return "us"
 
 

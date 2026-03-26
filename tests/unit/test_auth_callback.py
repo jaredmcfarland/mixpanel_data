@@ -16,6 +16,7 @@ Verifies:
 
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
 
@@ -275,3 +276,66 @@ class TestStartCallbackServer:
         thread.join(timeout=5.0)
         assert len(result_holder) == 1
         assert resp.status_code == 200
+
+
+class TestCallbackHtmlSecurity:
+    """Tests for HTML security in callback responses."""
+
+    def test_state_mismatch_does_not_leak_expected_state(self) -> None:
+        """Verify that the browser HTML does NOT contain the expected state value."""
+        state = "secret-csrf-state-12345"
+        response_holder: list[httpx.Response] = []
+
+        def run_server() -> None:
+            """Run the callback server in a thread."""
+            with contextlib.suppress(OAuthError):
+                start_callback_server(state=state, timeout=10.0)
+
+        thread = threading.Thread(target=run_server, daemon=True)
+        thread.start()
+        time.sleep(0.3)
+
+        resp = httpx.get(
+            "http://localhost:19284/callback",
+            params={"code": "code1", "state": "wrong-state"},
+            follow_redirects=False,
+        )
+        response_holder.append(resp)
+
+        thread.join(timeout=5.0)
+        html_body = resp.text
+        # The expected state must NOT appear in the browser HTML
+        assert state not in html_body
+        # But the error page should still indicate a failure
+        assert "Authorization" in html_body or "mismatch" in html_body
+
+    def test_provider_error_description_is_html_escaped(self) -> None:
+        """Verify that provider error_description is HTML-escaped in the response."""
+        state = "escape-test"
+        response_holder: list[httpx.Response] = []
+
+        def run_server() -> None:
+            """Run the callback server in a thread."""
+            with contextlib.suppress(OAuthError):
+                start_callback_server(state=state, timeout=10.0)
+
+        thread = threading.Thread(target=run_server, daemon=True)
+        thread.start()
+        time.sleep(0.3)
+
+        xss_payload = '<script>alert("xss")</script>'
+        resp = httpx.get(
+            "http://localhost:19284/callback",
+            params={
+                "error": "server_error",
+                "error_description": xss_payload,
+            },
+            follow_redirects=False,
+        )
+        response_holder.append(resp)
+
+        thread.join(timeout=5.0)
+        html_body = resp.text
+        # Raw script tag must NOT appear in HTML — it should be escaped
+        assert "<script>" not in html_body
+        assert "&lt;script&gt;" in html_body

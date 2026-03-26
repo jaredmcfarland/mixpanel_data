@@ -20,6 +20,7 @@ Example:
 
 from __future__ import annotations
 
+import html as html_mod
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
@@ -220,8 +221,9 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             if error_desc:
                 message += f" - {error_desc}"
 
+            # Escape provider-supplied values to prevent HTML injection
             self._send_html(
-                _ERROR_HTML.format(message=message),
+                _ERROR_HTML.format(message=html_mod.escape(message)),
                 status=400,
             )
             handler_state["error"] = OAuthError(
@@ -237,7 +239,9 @@ class _CallbackHandler(BaseHTTPRequestHandler):
 
         if not code_list or not state_list:
             message = "Missing 'code' or 'state' parameter in callback"
-            self._send_html(_ERROR_HTML.format(message=message), status=400)
+            self._send_html(
+                _ERROR_HTML.format(message=html_mod.escape(message)), status=400
+            )
             handler_state["error"] = OAuthError(
                 message,
                 code="OAUTH_TOKEN_ERROR",
@@ -246,13 +250,15 @@ class _CallbackHandler(BaseHTTPRequestHandler):
 
         received_state = state_list[0]
         if received_state != expected_state:
-            message = (
-                f"State mismatch: expected '{expected_state}', "
-                f"got '{received_state}'. Possible CSRF attack."
+            # Don't leak the expected state to the browser — keep details
+            # only in the server-side exception for debugging.
+            browser_message = "State parameter mismatch. Authorization failed."
+            self._send_html(
+                _ERROR_HTML.format(message=html_mod.escape(browser_message)),
+                status=400,
             )
-            self._send_html(_ERROR_HTML.format(message=message), status=400)
             handler_state["error"] = OAuthError(
-                message,
+                "State mismatch: possible CSRF attack.",
                 code="OAUTH_TOKEN_ERROR",
                 details={
                     "expected_state": expected_state,

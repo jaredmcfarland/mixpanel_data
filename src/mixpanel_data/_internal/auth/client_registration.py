@@ -95,7 +95,13 @@ def ensure_client_registered(
         return cached
 
     # Register new client
-    base_url = OAUTH_BASE_URLS.get(region, OAUTH_BASE_URLS["us"])
+    if region not in OAUTH_BASE_URLS:
+        raise OAuthError(
+            f"Unknown region: {region!r}. Must be one of: "
+            f"{', '.join(sorted(OAUTH_BASE_URLS.keys()))}",
+            code="OAUTH_REGISTRATION_ERROR",
+        )
+    base_url = OAUTH_BASE_URLS[region]
     register_url = f"{base_url}mcp/register/"
 
     body: dict[str, object] = {

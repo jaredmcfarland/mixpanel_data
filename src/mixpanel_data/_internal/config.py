@@ -6,6 +6,8 @@ Configuration is stored in TOML format at ~/.mp/config.toml by default.
 
 from __future__ import annotations
 
+import base64
+import logging
 import os
 import sys
 from dataclasses import dataclass
@@ -26,6 +28,8 @@ from mixpanel_data.exceptions import (
     AccountNotFoundError,
     ConfigError,
 )
+
+logger = logging.getLogger(__name__)
 
 # Valid regions for Mixpanel data residency
 VALID_REGIONS = ("us", "eu", "in")
@@ -129,6 +133,8 @@ class Credentials(BaseModel):
                 raise ValueError(
                     "oauth_access_token is required when auth_method is oauth"
                 )
+            if not self.oauth_access_token.get_secret_value():
+                raise ValueError("oauth_access_token cannot be empty for oauth auth")
         return self
 
     def auth_header(self) -> str:
@@ -162,8 +168,6 @@ class Credentials(BaseModel):
             if self.oauth_access_token is None:
                 raise ValueError("No OAuth access token available")
             return f"Bearer {self.oauth_access_token.get_secret_value()}"
-
-        import base64
 
         raw = f"{self.username}:{self.secret.get_secret_value()}"
         encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
@@ -394,8 +398,13 @@ class ConfigManager:
         if tokens is None:
             return None
 
-        # Skip expired tokens
+        # Skip expired tokens — fall through to config file resolution
         if tokens.is_expired():
+            logger.debug(
+                "OAuth token for region '%s' is expired. "
+                "Run 'mp auth login' to refresh.",
+                region,
+            )
             return None
 
         # Use project_id from token if available, otherwise from config/env

@@ -756,3 +756,32 @@ class TestOAuthFlowNetworkErrors:
         with pytest.raises(OAuthError) as exc_info:
             flow.refresh_tokens(tokens=tokens, client_id="cid")
         assert exc_info.value.code == "OAUTH_REFRESH_ERROR"
+
+
+class TestOAuthFlowRegionValidation:
+    """Tests for region validation in OAuthFlow.__init__."""
+
+    def test_invalid_region_raises_oauth_error(self, tmp_path: Path) -> None:
+        """Verify that an invalid region raises OAuthError with OAUTH_CONFIG_ERROR."""
+        with pytest.raises(OAuthError) as exc_info:
+            OAuthFlow(region="uk", storage=OAuthStorage(storage_dir=tmp_path))
+        assert exc_info.value.code == "OAUTH_CONFIG_ERROR"
+        assert "uk" in str(exc_info.value)
+
+    def test_uppercase_region_raises_oauth_error(self, tmp_path: Path) -> None:
+        """Verify that an uppercase region is rejected (case-sensitive)."""
+        with pytest.raises(OAuthError) as exc_info:
+            OAuthFlow(region="US", storage=OAuthStorage(storage_dir=tmp_path))
+        assert exc_info.value.code == "OAUTH_CONFIG_ERROR"
+
+    def test_empty_region_raises_oauth_error(self, tmp_path: Path) -> None:
+        """Verify that an empty region is rejected."""
+        with pytest.raises(OAuthError) as exc_info:
+            OAuthFlow(region="", storage=OAuthStorage(storage_dir=tmp_path))
+        assert exc_info.value.code == "OAUTH_CONFIG_ERROR"
+
+    @pytest.mark.parametrize("region", ["us", "eu", "in"])
+    def test_valid_regions_accepted(self, tmp_path: Path, region: str) -> None:
+        """Verify that valid regions are accepted without error."""
+        flow = OAuthFlow(region=region, storage=OAuthStorage(storage_dir=tmp_path))
+        assert flow.region == region

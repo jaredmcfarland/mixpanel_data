@@ -20,13 +20,18 @@ Example:
 
 from __future__ import annotations
 
+import json
 import secrets
+import socket
+import threading
+import time
 import webbrowser
 from urllib.parse import urlencode
 
 import httpx
 
 from mixpanel_data._internal.auth.callback_server import (
+    CALLBACK_PORTS,
     CallbackResult,
     start_callback_server,
 )
@@ -82,10 +87,16 @@ class OAuthFlow:
             flow = OAuthFlow(region="us", storage=OAuthStorage(Path("/tmp")))
             ```
         """
+        if region not in OAUTH_BASE_URLS:
+            raise OAuthError(
+                f"Unknown region: {region!r}. Must be one of: "
+                f"{', '.join(sorted(OAUTH_BASE_URLS.keys()))}",
+                code="OAUTH_CONFIG_ERROR",
+            )
         self._region = region
         self._storage = storage or OAuthStorage()
         self._http_client = http_client or httpx.Client()
-        self._base_url = OAUTH_BASE_URLS.get(region, OAUTH_BASE_URLS["us"])
+        self._base_url = OAUTH_BASE_URLS[region]
 
     @property
     def region(self) -> str:
@@ -176,29 +187,11 @@ class OAuthFlow:
         pkce = PkceChallenge.generate()
         state = secrets.token_urlsafe(32)
 
-        # Step 2: Start callback server (gets port)
-        # We need to start the server first to know which port we got,
-        # then use that port for registration and the authorize URL.
-        # But start_callback_server blocks... so we need a different approach.
-        # We'll register with a predicted port, then start the server.
-
-        # Try to find an available port by attempting registration with each
-        import socket
-
-        bound_port: int | None = None
-        for port in [19284, 19285, 19286, 19287]:
-            try:
-                test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                test_sock.bind(("127.0.0.1", port))
-                test_sock.close()
-                bound_port = port
-                break
-            except OSError:
-                continue
-
+        # Step 2: Find an available callback port by probing before binding
+        bound_port = _find_available_port()
         if bound_port is None:
             raise OAuthError(
-                "All OAuth callback ports (19284-19287) are busy.",
+                f"All OAuth callback ports ({CALLBACK_PORTS}) are busy.",
                 code="OAUTH_PORT_ERROR",
             )
 
@@ -221,9 +214,6 @@ class OAuthFlow:
         )
 
         # Step 5: Start callback server in background, then open browser
-        # The callback server needs to be running before the browser redirects
-        import threading
-
         callback_result_holder: list[tuple[CallbackResult, int]] = []
         callback_error_holder: list[Exception] = []
 
@@ -240,9 +230,7 @@ class OAuthFlow:
         callback_thread = threading.Thread(target=_run_callback, daemon=True)
         callback_thread.start()
 
-        # Small delay to ensure server is listening
-        import time
-
+        # Small delay to ensure server is listening before opening browser
         time.sleep(0.1)
 
         # Open browser
@@ -325,8 +313,6 @@ class OAuthFlow:
             )
             ```
         """
-        token_url = f"{self._base_url}token/"
-
         form_data: dict[str, str] = {
             "grant_type": "authorization_code",
             "code": code,
@@ -334,45 +320,12 @@ class OAuthFlow:
             "client_id": client_id,
             "code_verifier": verifier,
         }
-
-        try:
-            response = self._http_client.post(token_url, data=form_data)
-        except httpx.HTTPError as exc:
-            raise OAuthError(
-                f"Token exchange request failed: {exc}",
-                code="OAUTH_TOKEN_ERROR",
-                details={"url": token_url},
-            ) from exc
-
-        if response.status_code != 200:
-            raise OAuthError(
-                f"Token exchange failed with status {response.status_code}: "
-                f"{response.text}",
-                code="OAUTH_TOKEN_ERROR",
-                details={
-                    "status_code": response.status_code,
-                    "response_body": response.text,
-                },
-            )
-
-        try:
-            data: dict[str, object] = response.json()
-        except Exception as exc:
-            raise OAuthError(
-                f"Token exchange returned non-JSON response: "
-                f"{response.headers.get('content-type', 'unknown')}",
-                code="OAUTH_TOKEN_ERROR",
-                details={"response_body": response.text},
-            ) from exc
-
-        try:
-            return OAuthTokens.from_token_response(data, project_id=project_id)
-        except (KeyError, TypeError, ValueError) as exc:
-            raise OAuthError(
-                f"Token exchange response missing required fields: {exc}",
-                code="OAUTH_TOKEN_ERROR",
-                details={"response_data": str(data)},
-            ) from exc
+        return self._post_token_request(
+            form_data,
+            operation="Token exchange",
+            error_code="OAUTH_TOKEN_ERROR",
+            project_id=project_id,
+        )
 
     def refresh_tokens(
         self,
@@ -406,28 +359,61 @@ class OAuthFlow:
                 code="OAUTH_REFRESH_ERROR",
             )
 
-        token_url = f"{self._base_url}token/"
-
         form_data: dict[str, str] = {
             "grant_type": "refresh_token",
             "refresh_token": tokens.refresh_token.get_secret_value(),
             "client_id": client_id,
         }
+        return self._post_token_request(
+            form_data,
+            operation="Token refresh",
+            error_code="OAUTH_REFRESH_ERROR",
+            project_id=tokens.project_id,
+        )
+
+    def _post_token_request(
+        self,
+        form_data: dict[str, str],
+        *,
+        operation: str,
+        error_code: str,
+        project_id: str | None = None,
+    ) -> OAuthTokens:
+        """POST form data to the token endpoint and parse the response.
+
+        Shared implementation for both token exchange and token refresh
+        requests, which follow the same request/response pattern.
+
+        Args:
+            form_data: Form-encoded body to POST.
+            operation: Human-readable name for error messages
+                (e.g., ``"Token exchange"`` or ``"Token refresh"``).
+            error_code: OAuthError code to use on failure.
+            project_id: Optional project ID to attach to the returned tokens.
+
+        Returns:
+            Parsed OAuthTokens from the token endpoint response.
+
+        Raises:
+            OAuthError: If the request fails, returns a non-200 status,
+                returns non-JSON, or is missing required fields.
+        """
+        token_url = f"{self._base_url}token/"
 
         try:
             response = self._http_client.post(token_url, data=form_data)
         except httpx.HTTPError as exc:
             raise OAuthError(
-                f"Token refresh request failed: {exc}",
-                code="OAUTH_REFRESH_ERROR",
+                f"{operation} request failed: {exc}",
+                code=error_code,
                 details={"url": token_url},
             ) from exc
 
         if response.status_code != 200:
             raise OAuthError(
-                f"Token refresh failed with status {response.status_code}: "
+                f"{operation} failed with status {response.status_code}: "
                 f"{response.text}",
-                code="OAUTH_REFRESH_ERROR",
+                code=error_code,
                 details={
                     "status_code": response.status_code,
                     "response_body": response.text,
@@ -436,20 +422,20 @@ class OAuthFlow:
 
         try:
             data: dict[str, object] = response.json()
-        except Exception as exc:
+        except (json.JSONDecodeError, ValueError) as exc:
             raise OAuthError(
-                f"Token refresh returned non-JSON response: "
+                f"{operation} returned non-JSON response: "
                 f"{response.headers.get('content-type', 'unknown')}",
-                code="OAUTH_REFRESH_ERROR",
+                code=error_code,
                 details={"response_body": response.text},
             ) from exc
 
         try:
-            return OAuthTokens.from_token_response(data, project_id=tokens.project_id)
+            return OAuthTokens.from_token_response(data, project_id=project_id)
         except (KeyError, TypeError, ValueError) as exc:
             raise OAuthError(
-                f"Token refresh response missing required fields: {exc}",
-                code="OAUTH_REFRESH_ERROR",
+                f"{operation} response missing required fields: {exc}",
+                code=error_code,
                 details={"response_data": str(data)},
             ) from exc
 
@@ -484,3 +470,22 @@ class OAuthFlow:
             "code_challenge_method": "S256",
         }
         return f"{self._base_url}authorize/?{urlencode(params)}"
+
+
+def _find_available_port() -> int | None:
+    """Probe CALLBACK_PORTS to find one that is not currently in use.
+
+    Binds and immediately releases each candidate port on 127.0.0.1.
+    Returns the first available port, or None if all are occupied.
+
+    Returns:
+        An available port number, or None.
+    """
+    for port in CALLBACK_PORTS:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as test_sock:
+                test_sock.bind(("127.0.0.1", port))
+            return port
+        except OSError:
+            continue
+    return None

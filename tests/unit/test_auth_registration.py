@@ -436,3 +436,26 @@ class TestEnsureClientRegisteredRobustness:
                 storage=storage,
             )
         assert exc_info.value.code == "OAUTH_REGISTRATION_ERROR"
+
+
+class TestEnsureClientRegisteredRegionValidation:
+    """Tests for region validation in ensure_client_registered."""
+
+    def test_invalid_region_raises_oauth_error(self, tmp_path: Path) -> None:
+        """Verify that an invalid region raises OAuthError before making any request."""
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                lambda _req: httpx.Response(200, json={"client_id": "nope"})
+            )
+        )
+        storage = OAuthStorage(storage_dir=tmp_path)
+
+        with pytest.raises(OAuthError) as exc_info:
+            ensure_client_registered(
+                http_client=client,
+                region="xx",
+                redirect_uri="http://localhost:19284/callback",
+                storage=storage,
+            )
+        assert exc_info.value.code == "OAUTH_REGISTRATION_ERROR"
+        assert "xx" in str(exc_info.value)

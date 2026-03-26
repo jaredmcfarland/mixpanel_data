@@ -212,8 +212,7 @@ class OAuthStorage:
                 type(parsed).__name__,
             )
             return None
-        raw: dict[str, Any] = parsed
-        return raw
+        return parsed
 
     def _tokens_path(self, region: str) -> Path:
         """Return the file path for tokens of a given region.

@@ -10,6 +10,7 @@ class methods instead of accessing this module directly.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from collections.abc import Iterator
@@ -82,9 +83,9 @@ def paginate_all(
     Raises:
         AuthenticationError: Invalid credentials (401).
         RateLimitError: Rate limit exceeded after max retries (429).
-        QueryError: Invalid parameters (400, 404, 422).
         ServerError: Server-side errors (5xx).
-        MixpanelDataError: Network/connection errors.
+        MixpanelDataError: Client errors (400, 404, 422), network/connection
+            errors, or pagination limit exceeded.
 
     Example:
         ```python
@@ -97,11 +98,9 @@ def paginate_all(
         ```
     """
     next_cursor: str | None = None
-    is_first_page = True
     page_count = 0
 
-    while is_first_page or next_cursor is not None:
-        is_first_page = False
+    while True:
         page_count += 1
 
         if page_count > MAX_PAGES:
@@ -112,8 +111,10 @@ def paginate_all(
             )
 
         # Build request params with query_origin
-        request_params: dict[str, str] = {"page_size": str(page_size)}
-        request_params["query_origin"] = "mixpanel-data-cli"
+        request_params: dict[str, str] = {
+            "page_size": str(page_size),
+            "query_origin": "mixpanel-data-cli",
+        }
         if params:
             request_params.update(params)
         if next_cursor is not None:
@@ -147,7 +148,10 @@ def paginate_all(
             if response.status_code == 429:
                 if attempt >= MAX_RATE_LIMIT_RETRIES:
                     retry_after_raw = response.headers.get("Retry-After")
-                    retry_after = int(retry_after_raw) if retry_after_raw else None
+                    retry_after: int | None = None
+                    if retry_after_raw:
+                        with contextlib.suppress(ValueError):
+                            retry_after = int(retry_after_raw)
                     raise RateLimitError(
                         "Rate limit exceeded after max retries during pagination",
                         retry_after=retry_after,
@@ -157,8 +161,12 @@ def paginate_all(
                         request_url=url,
                     )
                 retry_after_raw = response.headers.get("Retry-After")
+                wait_time: float
                 if retry_after_raw:
-                    wait_time = float(retry_after_raw)
+                    try:
+                        wait_time = float(retry_after_raw)
+                    except ValueError:
+                        wait_time = min(_BACKOFF_BASE * (2**attempt), _BACKOFF_MAX)
                 else:
                     wait_time = min(_BACKOFF_BASE * (2**attempt), _BACKOFF_MAX)
                 logger.warning(
@@ -229,3 +237,6 @@ def paginate_all(
             next_cursor = pagination.get("next_cursor")
         else:
             next_cursor = None
+
+        if next_cursor is None:
+            break

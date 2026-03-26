@@ -1,7 +1,7 @@
 """Mixpanel API Client.
 
 Low-level HTTP client for all Mixpanel APIs. Handles:
-- Service account authentication via HTTP Basic auth
+- Authentication via HTTP Basic auth (service accounts) or OAuth 2.0 Bearer tokens
 - Regional endpoint routing (US, EU, India)
 - Automatic rate limit handling with exponential backoff
 - Streaming JSONL parsing for large exports
@@ -169,7 +169,7 @@ class MixpanelAPIClient:
         """Build full URL for the given API type and path.
 
         Args:
-            api_type: One of "query", "export", or "engage".
+            api_type: One of "query", "export", "engage", or "app".
             path: API endpoint path (e.g., "/segmentation").
 
         Returns:
@@ -709,8 +709,7 @@ class MixpanelAPIClient:
         client = self._ensure_client()
 
         # Build params with query_origin
-        request_params: dict[str, str] = {}
-        request_params["query_origin"] = "mixpanel-data-cli"
+        request_params: dict[str, str] = {"query_origin": "mixpanel-data-cli"}
         if params:
             request_params.update(params)
 
@@ -719,7 +718,7 @@ class MixpanelAPIClient:
                 response = client.request(
                     method,
                     url,
-                    params=request_params if request_params else None,
+                    params=request_params,
                     json=json_body,
                     headers=headers,
                     timeout=self._timeout,
@@ -786,7 +785,7 @@ class MixpanelAPIClient:
                     response,
                     request_method=method,
                     request_url=url,
-                    request_params=request_params if request_params else None,
+                    request_params=request_params,
                     request_body=json_body,
                 )
 
