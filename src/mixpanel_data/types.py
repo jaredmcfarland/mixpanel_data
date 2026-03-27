@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 T = TypeVar("T")
 
@@ -3445,3 +3445,1198 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
     pagination: CursorPagination | None = None
     """Pagination metadata, or None for single-page responses."""
+
+
+# =============================================================================
+# Dashboard Types (Phase 024)
+# =============================================================================
+
+
+class Dashboard(BaseModel):
+    """A Mixpanel dashboard as returned by the App API.
+
+    Represents the full dashboard entity including metadata, permissions,
+    and optional layout/content fields. Extra fields from API evolution
+    are preserved via ``extra="allow"``.
+
+    Attributes:
+        id: Unique dashboard identifier.
+        title: Dashboard title.
+        description: Dashboard description.
+        is_private: Whether the dashboard is private.
+        is_restricted: Whether the dashboard has restricted access.
+        creator_id: ID of the dashboard creator.
+        creator_name: Name of the dashboard creator.
+        creator_email: Email of the dashboard creator.
+        created: Creation timestamp (lenient parsing).
+        modified: Last modification timestamp.
+        is_favorited: Whether the current user has favorited this dashboard.
+        pinned_date: Date the dashboard was pinned, if any.
+        layout_version: Layout version metadata.
+        unique_view_count: Number of unique viewers.
+        total_view_count: Total view count.
+        last_modified_by_id: ID of the last modifier.
+        last_modified_by_name: Name of the last modifier.
+        last_modified_by_email: Email of the last modifier.
+        filters: Dashboard-level filters.
+        breakdowns: Dashboard-level breakdowns.
+        time_filter: Dashboard-level time filter.
+        generation_type: How the dashboard was generated.
+        parent_dashboard_id: Parent dashboard ID for nested dashboards.
+        child_dashboards: Child dashboard references.
+        can_update_basic: Permission flag.
+        can_share: Permission flag.
+        can_view: Permission flag.
+        can_update_restricted: Permission flag.
+        can_update_visibility: Permission flag.
+        is_superadmin: Whether current user is superadmin.
+        allow_staff_override: Whether staff override is allowed.
+        can_pin: Whether current user can pin.
+        is_shared_with_project: Whether shared with the project.
+        creator: Creator identifier string.
+        ancestors: Ancestor dashboard references.
+        layout: Dashboard layout data.
+        contents: Dashboard contents data.
+        num_active_public_links: Number of active public links.
+        new_content: New content data.
+        template_type: Template type if created from a template.
+
+    Example:
+        ```python
+        dashboard = Dashboard(
+            id=1, title="Q1 Metrics", is_private=False,
+            is_restricted=False, is_favorited=False,
+            can_update_basic=True, can_share=True, can_view=True,
+            can_update_restricted=False, can_update_visibility=False,
+            is_superadmin=False, allow_staff_override=False,
+            can_pin=True, is_shared_with_project=True, ancestors=[],
+        )
+        assert dashboard.title == "Q1 Metrics"
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Unique dashboard identifier."""
+
+    title: str
+    """Dashboard title."""
+
+    description: str | None = None
+    """Dashboard description."""
+
+    is_private: bool = False
+    """Whether the dashboard is private."""
+
+    is_restricted: bool = False
+    """Whether the dashboard has restricted access."""
+
+    creator_id: int | None = None
+    """ID of the dashboard creator."""
+
+    creator_name: str | None = None
+    """Name of the dashboard creator."""
+
+    creator_email: str | None = None
+    """Email of the dashboard creator."""
+
+    created: datetime | None = None
+    """Creation timestamp."""
+
+    modified: datetime | None = None
+    """Last modification timestamp."""
+
+    is_favorited: bool = False
+    """Whether the current user has favorited this dashboard."""
+
+    pinned_date: str | None = None
+    """Date the dashboard was pinned, if any."""
+
+    layout_version: Any | None = None
+    """Layout version metadata."""
+
+    unique_view_count: int | None = None
+    """Number of unique viewers."""
+
+    total_view_count: int | None = None
+    """Total view count."""
+
+    last_modified_by_id: int | None = None
+    """ID of the last modifier."""
+
+    last_modified_by_name: str | None = None
+    """Name of the last modifier."""
+
+    last_modified_by_email: str | None = None
+    """Email of the last modifier."""
+
+    filters: list[Any] | None = None
+    """Dashboard-level filters."""
+
+    breakdowns: list[Any] | None = None
+    """Dashboard-level breakdowns."""
+
+    time_filter: Any | None = None
+    """Dashboard-level time filter."""
+
+    generation_type: str | None = None
+    """How the dashboard was generated."""
+
+    parent_dashboard_id: int | None = None
+    """Parent dashboard ID for nested dashboards."""
+
+    child_dashboards: list[Any] | None = None
+    """Child dashboard references."""
+
+    can_update_basic: bool = False
+    """Permission: can update basic fields."""
+
+    can_share: bool = False
+    """Permission: can share."""
+
+    can_view: bool = False
+    """Permission: can view."""
+
+    can_update_restricted: bool = False
+    """Permission: can update restricted fields."""
+
+    can_update_visibility: bool = False
+    """Permission: can update visibility."""
+
+    is_superadmin: bool = False
+    """Whether current user is superadmin."""
+
+    allow_staff_override: bool = False
+    """Whether staff override is allowed."""
+
+    can_pin: bool = False
+    """Whether current user can pin."""
+
+    is_shared_with_project: bool = False
+    """Whether shared with the project."""
+
+    creator: str | None = None
+    """Creator identifier string."""
+
+    ancestors: list[Any] = []  # noqa: RUF012
+    """Ancestor dashboard references."""
+
+    layout: Any | None = None
+    """Dashboard layout data."""
+
+    contents: Any | None = None
+    """Dashboard contents data."""
+
+    num_active_public_links: int | None = None
+    """Number of active public links."""
+
+    new_content: Any | None = None
+    """New content data."""
+
+    template_type: str | None = None
+    """Template type if created from a template."""
+
+
+class CreateDashboardParams(BaseModel):
+    """Parameters for creating a new dashboard.
+
+    Attributes:
+        title: Dashboard title (required).
+        description: Dashboard description.
+        is_private: Whether the dashboard should be private.
+        is_restricted: Whether the dashboard should have restricted access.
+        filters: Dashboard-level filters.
+        breakdowns: Dashboard-level breakdowns.
+        time_filter: Dashboard-level time filter.
+        duplicate: ID of dashboard to duplicate.
+
+    Example:
+        ```python
+        params = CreateDashboardParams(title="Q1 Metrics")
+        data = params.model_dump(exclude_none=True)
+        # {"title": "Q1 Metrics"}
+        ```
+    """
+
+    title: str
+    """Dashboard title (required)."""
+
+    description: str | None = None
+    """Dashboard description."""
+
+    is_private: bool | None = None
+    """Whether the dashboard should be private."""
+
+    is_restricted: bool | None = None
+    """Whether the dashboard should have restricted access."""
+
+    filters: list[Any] | None = None
+    """Dashboard-level filters."""
+
+    breakdowns: list[Any] | None = None
+    """Dashboard-level breakdowns."""
+
+    time_filter: Any | None = None
+    """Dashboard-level time filter."""
+
+    duplicate: int | None = None
+    """ID of dashboard to duplicate."""
+
+
+class UpdateDashboardParams(BaseModel):
+    """Parameters for updating an existing dashboard.
+
+    All fields are optional — only provided fields are sent to the API.
+
+    Attributes:
+        title: New dashboard title.
+        description: New dashboard description.
+        is_private: New privacy setting.
+        is_restricted: New restriction setting.
+        filters: New dashboard-level filters.
+        breakdowns: New dashboard-level breakdowns.
+        time_filter: New dashboard-level time filter.
+        layout: New dashboard layout data.
+        content: New dashboard content data.
+
+    Example:
+        ```python
+        params = UpdateDashboardParams(title="Q1 Metrics v2")
+        data = params.model_dump(exclude_none=True)
+        # {"title": "Q1 Metrics v2"}
+        ```
+    """
+
+    title: str | None = None
+    """New dashboard title."""
+
+    description: str | None = None
+    """New dashboard description."""
+
+    is_private: bool | None = None
+    """New privacy setting."""
+
+    is_restricted: bool | None = None
+    """New restriction setting."""
+
+    filters: list[Any] | None = None
+    """New dashboard-level filters."""
+
+    breakdowns: list[Any] | None = None
+    """New dashboard-level breakdowns."""
+
+    time_filter: Any | None = None
+    """New dashboard-level time filter."""
+
+    layout: Any | None = None
+    """New dashboard layout data."""
+
+    content: Any | None = None
+    """New dashboard content data."""
+
+
+# =============================================================================
+# Blueprint Types (Phase 024)
+# =============================================================================
+
+
+class BlueprintTemplate(BaseModel):
+    """A dashboard blueprint template.
+
+    Attributes:
+        title_key: Template title key.
+        description_key: Template description key.
+        alternative_description_key: Alternative description key.
+        number_of_reports: Number of reports in the template.
+
+    Example:
+        ```python
+        template = BlueprintTemplate(
+            title_key="onboarding", description_key="Get started"
+        )
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    title_key: str
+    """Template title key."""
+
+    description_key: str
+    """Template description key."""
+
+    alternative_description_key: str | None = None
+    """Alternative description key."""
+
+    number_of_reports: int | None = None
+    """Number of reports in the template."""
+
+
+class BlueprintConfig(BaseModel):
+    """Configuration for a dashboard blueprint.
+
+    Attributes:
+        variables: Template variable mappings.
+
+    Example:
+        ```python
+        config = BlueprintConfig(variables={"event": "Signup"})
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    variables: dict[str, str]
+    """Template variable mappings."""
+
+
+class BlueprintCard(BaseModel):
+    """A card in a blueprint dashboard.
+
+    Attributes:
+        card_type: Card type (serialized as ``"type"``).
+        text_card_id: Text card ID, if applicable.
+        bookmark_id: Bookmark ID, if applicable.
+        markdown: Markdown content for text cards.
+        name: Card name.
+        params: Card parameters.
+
+    Example:
+        ```python
+        card = BlueprintCard(card_type="report", bookmark_id=123)
+        data = card.model_dump(by_alias=True, exclude_none=True)
+        # {"type": "report", "bookmark_id": 123}
+        ```
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    card_type: str = ""
+    """Card type (serialized as ``"type"``)."""
+
+    text_card_id: int | None = None
+    """Text card ID, if applicable."""
+
+    bookmark_id: int | None = None
+    """Bookmark ID, if applicable."""
+
+    markdown: str | None = None
+    """Markdown content for text cards."""
+
+    name: str | None = None
+    """Card name."""
+
+    params: Any | None = None
+    """Card parameters."""
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Serialize with ``card_type`` renamed to ``type``.
+
+        Args:
+            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
+
+        Returns:
+            Dict with ``card_type`` serialized as ``type``.
+        """
+        data = super().model_dump(**kwargs)
+        if "card_type" in data:
+            data["type"] = data.pop("card_type")
+        return data
+
+
+class BlueprintFinishParams(BaseModel):
+    """Parameters for finalizing a blueprint dashboard.
+
+    Attributes:
+        dashboard_id: ID of the blueprint dashboard to finalize.
+        cards: List of cards to include.
+
+    Example:
+        ```python
+        params = BlueprintFinishParams(
+            dashboard_id=1,
+            cards=[BlueprintCard(card_type="report", bookmark_id=123)],
+        )
+        ```
+    """
+
+    dashboard_id: int
+    """ID of the blueprint dashboard to finalize."""
+
+    cards: list[BlueprintCard]
+    """List of cards to include."""
+
+
+class RcaSourceData(BaseModel):
+    """Source data for RCA dashboard creation.
+
+    Attributes:
+        source_type: Source type (serialized as ``"type"``).
+        date: Date string.
+        metric_source: Whether this is a metric source.
+
+    Example:
+        ```python
+        data = RcaSourceData(source_type="anomaly", date="2025-01-01")
+        dumped = data.model_dump(exclude_none=True)
+        # {"type": "anomaly", "date": "2025-01-01"}
+        ```
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    source_type: str = ""
+    """Source type (serialized as ``"type"``)."""
+
+    date: str | None = None
+    """Date string."""
+
+    metric_source: bool | None = None
+    """Whether this is a metric source."""
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Serialize with ``source_type`` renamed to ``type``.
+
+        Args:
+            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
+
+        Returns:
+            Dict with ``source_type`` serialized as ``type``.
+        """
+        data = super().model_dump(**kwargs)
+        if "source_type" in data:
+            data["type"] = data.pop("source_type")
+        return data
+
+
+class CreateRcaDashboardParams(BaseModel):
+    """Parameters for creating an RCA dashboard.
+
+    Attributes:
+        rca_source_id: Source ID for RCA analysis.
+        rca_source_data: Source data configuration.
+
+    Example:
+        ```python
+        params = CreateRcaDashboardParams(
+            rca_source_id=42,
+            rca_source_data=RcaSourceData(source_type="anomaly"),
+        )
+        ```
+    """
+
+    rca_source_id: int
+    """Source ID for RCA analysis."""
+
+    rca_source_data: RcaSourceData
+    """Source data configuration."""
+
+
+class UpdateReportLinkParams(BaseModel):
+    """Parameters for updating a report link on a dashboard.
+
+    Attributes:
+        link_type: Link type (serialized as ``"type"``).
+
+    Example:
+        ```python
+        params = UpdateReportLinkParams(link_type="embedded")
+        data = params.model_dump(exclude_none=True)
+        # {"type": "embedded"}
+        ```
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    link_type: str = ""
+    """Link type (serialized as ``"type"``)."""
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Serialize with ``link_type`` renamed to ``type``.
+
+        Args:
+            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
+
+        Returns:
+            Dict with ``link_type`` serialized as ``type``.
+        """
+        data = super().model_dump(**kwargs)
+        if "link_type" in data:
+            data["type"] = data.pop("link_type")
+        return data
+
+
+class UpdateTextCardParams(BaseModel):
+    """Parameters for updating a text card on a dashboard.
+
+    Attributes:
+        markdown: Markdown content for the text card.
+
+    Example:
+        ```python
+        params = UpdateTextCardParams(markdown="# Hello")
+        ```
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    markdown: str | None = None
+    """Markdown content for the text card."""
+
+
+# =============================================================================
+# Bookmark/Report Types (Phase 024)
+# =============================================================================
+
+
+class BookmarkMetadata(BaseModel):
+    """Metadata associated with a bookmark/report.
+
+    Contains optional display and calculation settings that vary by
+    bookmark type (insights, funnels, retention, etc.).
+
+    Attributes:
+        table_display_mode: Table display mode setting.
+        compare_enabled: Whether comparison is enabled.
+        compare_filters: Comparison filter settings.
+        retention_calculation_type: Retention calculation method.
+        event_name: Associated event name.
+        funnel_conversion_window: Funnel conversion window in days.
+        funnel_breakdown_limit: Maximum funnel breakdown count.
+
+    Example:
+        ```python
+        meta = BookmarkMetadata(
+            table_display_mode="linear",
+            compare_enabled=True,
+        )
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    table_display_mode: str | None = None
+    """Table display mode setting."""
+
+    compare_enabled: bool | None = None
+    """Whether comparison is enabled."""
+
+    compare_filters: list[Any] | None = None
+    """Comparison filter settings."""
+
+    retention_calculation_type: str | None = None
+    """Retention calculation method."""
+
+    event_name: str | None = None
+    """Associated event name."""
+
+    funnel_conversion_window: int | None = None
+    """Funnel conversion window in days."""
+
+    funnel_breakdown_limit: int | None = None
+    """Maximum funnel breakdown count."""
+
+
+class Bookmark(BaseModel):
+    """A Mixpanel bookmark (saved report) as returned by the App API.
+
+    Represents the full bookmark entity including query parameters,
+    metadata, and permissions. The ``bookmark_type`` field is aliased
+    from ``"type"`` in the API response.
+
+    Attributes:
+        id: Unique bookmark identifier.
+        project_id: Parent project identifier.
+        name: Bookmark name.
+        bookmark_type: Report type (aliased from ``"type"``).
+        description: Bookmark description.
+        icon: Bookmark icon.
+        params: Query parameters (JSON value defining the report).
+        dashboard_id: Associated dashboard ID.
+        include_in_dashboard: Whether included in dashboard.
+        is_default: Whether this is a default bookmark.
+        creator_id: ID of the creator.
+        creator_name: Name of the creator.
+        creator_email: Email of the creator.
+        created: Creation timestamp.
+        modified: Last modification timestamp.
+        last_modified_by_id: ID of the last modifier.
+        last_modified_by_name: Name of the last modifier.
+        last_modified_by_email: Email of the last modifier.
+        metadata: Report-specific metadata.
+        is_visibility_restricted: Visibility restriction flag.
+        is_modification_restricted: Modification restriction flag.
+        can_update_basic: Permission flag.
+        can_view: Permission flag.
+        can_share: Permission flag.
+        generation_type: How the bookmark was generated.
+        original_type: Original report type before conversion.
+        unique_view_count: Number of unique viewers.
+        total_view_count: Total view count.
+
+    Example:
+        ```python
+        bookmark = Bookmark(
+            id=1, name="Signup Funnel", bookmark_type="funnels",
+            params={"events": [{"event": "Signup"}]},
+        )
+        assert bookmark.bookmark_type == "funnels"
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow", populate_by_name=True)
+
+    id: int
+    """Unique bookmark identifier."""
+
+    project_id: int | None = None
+    """Parent project identifier."""
+
+    name: str
+    """Bookmark name."""
+
+    bookmark_type: str = Field(alias="type")
+    """Report type (aliased from ``"type"``)."""
+
+    description: str | None = None
+    """Bookmark description."""
+
+    icon: str | None = None
+    """Bookmark icon."""
+
+    params: Any = None
+    """Query parameters (JSON value defining the report)."""
+
+    dashboard_id: int | None = None
+    """Associated dashboard ID."""
+
+    include_in_dashboard: bool | None = None
+    """Whether included in dashboard."""
+
+    is_default: bool | None = None
+    """Whether this is a default bookmark."""
+
+    creator_id: int | None = None
+    """ID of the creator."""
+
+    creator_name: str | None = None
+    """Name of the creator."""
+
+    creator_email: str | None = None
+    """Email of the creator."""
+
+    created: datetime | None = None
+    """Creation timestamp."""
+
+    modified: datetime | None = None
+    """Last modification timestamp."""
+
+    last_modified_by_id: int | None = None
+    """ID of the last modifier."""
+
+    last_modified_by_name: str | None = None
+    """Name of the last modifier."""
+
+    last_modified_by_email: str | None = None
+    """Email of the last modifier."""
+
+    metadata: BookmarkMetadata | None = None
+    """Report-specific metadata."""
+
+    is_visibility_restricted: bool | None = None
+    """Visibility restriction flag."""
+
+    is_modification_restricted: bool | None = None
+    """Modification restriction flag."""
+
+    can_update_basic: bool | None = None
+    """Permission: can update basic fields."""
+
+    can_view: bool | None = None
+    """Permission: can view."""
+
+    can_share: bool | None = None
+    """Permission: can share."""
+
+    generation_type: str | None = None
+    """How the bookmark was generated."""
+
+    original_type: str | None = None
+    """Original report type before conversion."""
+
+    unique_view_count: int | None = None
+    """Number of unique viewers."""
+
+    total_view_count: int | None = None
+    """Total view count."""
+
+
+class CreateBookmarkParams(BaseModel):
+    """Parameters for creating a new bookmark/report.
+
+    Attributes:
+        name: Bookmark name (required).
+        bookmark_type: Report type (required, serialized as ``"type"``).
+        params: Query parameters (required).
+        description: Bookmark description.
+        icon: Bookmark icon.
+        dashboard_id: Dashboard to associate with.
+        is_visibility_restricted: Visibility restriction flag.
+        is_modification_restricted: Modification restriction flag.
+
+    Example:
+        ```python
+        params = CreateBookmarkParams(
+            name="Signup Funnel",
+            bookmark_type="funnels",
+            params={"events": [{"event": "Signup"}]},
+        )
+        data = params.model_dump(exclude_none=True)
+        ```
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    """Bookmark name (required)."""
+
+    bookmark_type: str
+    """Report type (required, serialized as ``"type"``)."""
+
+    params: Any
+    """Query parameters (required)."""
+
+    description: str | None = None
+    """Bookmark description."""
+
+    icon: str | None = None
+    """Bookmark icon."""
+
+    dashboard_id: int | None = None
+    """Dashboard to associate with."""
+
+    is_visibility_restricted: bool | None = None
+    """Visibility restriction flag."""
+
+    is_modification_restricted: bool | None = None
+    """Modification restriction flag."""
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Serialize with ``bookmark_type`` renamed to ``type``.
+
+        Args:
+            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
+
+        Returns:
+            Dict with ``bookmark_type`` serialized as ``type``.
+        """
+        data = super().model_dump(**kwargs)
+        if "bookmark_type" in data:
+            data["type"] = data.pop("bookmark_type")
+        return data
+
+
+class UpdateBookmarkParams(BaseModel):
+    """Parameters for updating an existing bookmark/report.
+
+    All fields are optional — only provided fields are sent to the API.
+
+    Attributes:
+        name: New bookmark name.
+        params: New query parameters.
+        description: New bookmark description.
+        icon: New bookmark icon.
+        dashboard_id: New associated dashboard ID.
+        is_visibility_restricted: New visibility restriction.
+        is_modification_restricted: New modification restriction.
+        deleted: Soft-delete flag.
+
+    Example:
+        ```python
+        params = UpdateBookmarkParams(name="Updated Funnel")
+        data = params.model_dump(exclude_none=True)
+        # {"name": "Updated Funnel"}
+        ```
+    """
+
+    name: str | None = None
+    """New bookmark name."""
+
+    params: Any | None = None
+    """New query parameters."""
+
+    description: str | None = None
+    """New bookmark description."""
+
+    icon: str | None = None
+    """New bookmark icon."""
+
+    dashboard_id: int | None = None
+    """New associated dashboard ID."""
+
+    is_visibility_restricted: bool | None = None
+    """New visibility restriction."""
+
+    is_modification_restricted: bool | None = None
+    """New modification restriction."""
+
+    deleted: bool | None = None
+    """Soft-delete flag."""
+
+
+class BulkUpdateBookmarkEntry(BaseModel):
+    """Entry for bulk-updating bookmarks.
+
+    Attributes:
+        id: Bookmark ID to update (required).
+        name: New bookmark name.
+        params: New query parameters.
+        description: New bookmark description.
+        icon: New bookmark icon.
+        is_visibility_restricted: New visibility restriction.
+        is_modification_restricted: New modification restriction.
+
+    Example:
+        ```python
+        entry = BulkUpdateBookmarkEntry(id=123, name="Renamed")
+        ```
+    """
+
+    id: int
+    """Bookmark ID to update (required)."""
+
+    name: str | None = None
+    """New bookmark name."""
+
+    params: Any | None = None
+    """New query parameters."""
+
+    description: str | None = None
+    """New bookmark description."""
+
+    icon: str | None = None
+    """New bookmark icon."""
+
+    is_visibility_restricted: bool | None = None
+    """New visibility restriction."""
+
+    is_modification_restricted: bool | None = None
+    """New modification restriction."""
+
+
+class BookmarkHistoryPagination(BaseModel):
+    """Pagination metadata for bookmark history responses.
+
+    Attributes:
+        next_cursor: Cursor for next page.
+        previous_cursor: Cursor for previous page.
+        page_size: Number of items per page.
+
+    Example:
+        ```python
+        pagination = BookmarkHistoryPagination(page_size=20)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    next_cursor: str | None = None
+    """Cursor for next page."""
+
+    previous_cursor: str | None = None
+    """Cursor for previous page."""
+
+    page_size: int = 0
+    """Number of items per page."""
+
+
+class BookmarkHistoryResponse(BaseModel):
+    """Response from the bookmark history endpoint.
+
+    Attributes:
+        results: List of history entries.
+        pagination: Pagination metadata.
+
+    Example:
+        ```python
+        response = BookmarkHistoryResponse(results=[{"action": "created"}])
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    results: list[Any] = []  # noqa: RUF012
+    """List of history entries."""
+
+    pagination: BookmarkHistoryPagination | None = None
+    """Pagination metadata."""
+
+
+# =============================================================================
+# Cohort Types (Phase 024)
+# =============================================================================
+
+
+class CohortCreator(BaseModel):
+    """Creator information for a cohort.
+
+    Attributes:
+        id: Creator user ID.
+        name: Creator name.
+        email: Creator email.
+
+    Example:
+        ```python
+        creator = CohortCreator(id=1, name="Alice", email="alice@example.com")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int | None = None
+    """Creator user ID."""
+
+    name: str | None = None
+    """Creator name."""
+
+    email: str | None = None
+    """Creator email."""
+
+
+class Cohort(BaseModel):
+    """A Mixpanel cohort as returned by the App API.
+
+    Represents the full cohort entity with definition, metadata, and
+    cross-references. Extra fields from API evolution are preserved
+    via ``extra="allow"``.
+
+    Attributes:
+        id: Unique cohort identifier.
+        name: Cohort name.
+        description: Cohort description.
+        count: Number of users in the cohort.
+        is_visible: Whether the cohort is visible.
+        is_locked: Whether the cohort is locked.
+        data_group_id: Data group identifier.
+        last_edited: Last edited timestamp string.
+        created_by: Creator information.
+        referenced_by: IDs of entities referencing this cohort.
+        verified: Whether the cohort is verified.
+        last_queried: Last queried timestamp string.
+        referenced_directly_by: IDs of entities directly referencing this cohort.
+        active_integrations: Active integration IDs.
+
+    Example:
+        ```python
+        cohort = Cohort(id=1, name="Power Users")
+        assert cohort.name == "Power Users"
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Unique cohort identifier."""
+
+    name: str
+    """Cohort name."""
+
+    description: str | None = None
+    """Cohort description."""
+
+    count: int | None = None
+    """Number of users in the cohort."""
+
+    is_visible: bool | None = None
+    """Whether the cohort is visible."""
+
+    is_locked: bool | None = None
+    """Whether the cohort is locked."""
+
+    data_group_id: str | None = None
+    """Data group identifier."""
+
+    last_edited: str | None = None
+    """Last edited timestamp string."""
+
+    created_by: CohortCreator | None = None
+    """Creator information."""
+
+    referenced_by: list[int] | None = None
+    """IDs of entities referencing this cohort."""
+
+    verified: bool = False
+    """Whether the cohort is verified."""
+
+    last_queried: str | None = None
+    """Last queried timestamp string."""
+
+    referenced_directly_by: list[int] = []  # noqa: RUF012
+    """IDs of entities directly referencing this cohort."""
+
+    active_integrations: list[int] = []  # noqa: RUF012
+    """Active integration IDs."""
+
+
+class CreateCohortParams(BaseModel):
+    """Parameters for creating a new cohort.
+
+    The ``definition`` dict is flattened into the top-level JSON payload
+    at serialization time, matching the Rust ``#[serde(flatten)]`` behavior.
+
+    Attributes:
+        name: Cohort name (required).
+        description: Cohort description.
+        data_group_id: Data group identifier.
+        is_locked: Whether the cohort should be locked.
+        is_visible: Whether the cohort should be visible.
+        deleted: Soft-delete flag.
+        definition: Cohort definition (flattened into payload).
+
+    Example:
+        ```python
+        params = CreateCohortParams(name="Power Users")
+        data = params.model_dump(exclude_none=True)
+        # {"name": "Power Users"}
+        ```
+    """
+
+    name: str
+    """Cohort name (required)."""
+
+    description: str | None = None
+    """Cohort description."""
+
+    data_group_id: str | None = None
+    """Data group identifier."""
+
+    is_locked: bool | None = None
+    """Whether the cohort should be locked."""
+
+    is_visible: bool | None = None
+    """Whether the cohort should be visible."""
+
+    deleted: bool | None = None
+    """Soft-delete flag."""
+
+    definition: dict[str, Any] | None = None
+    """Cohort definition (flattened into payload)."""
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Serialize with ``definition`` flattened into the top level.
+
+        Args:
+            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
+
+        Returns:
+            Dict with ``definition`` fields merged into the top level.
+        """
+        data = super().model_dump(**kwargs)
+        definition = data.pop("definition", None)
+        if definition:
+            data.update(definition)
+        return data
+
+
+class UpdateCohortParams(BaseModel):
+    """Parameters for updating an existing cohort.
+
+    All fields are optional — only provided fields are sent to the API.
+    The ``definition`` dict is flattened into the payload.
+
+    Attributes:
+        name: New cohort name.
+        description: New cohort description.
+        data_group_id: New data group identifier.
+        is_locked: New lock setting.
+        is_visible: New visibility setting.
+        deleted: Soft-delete flag.
+        definition: New cohort definition (flattened into payload).
+
+    Example:
+        ```python
+        params = UpdateCohortParams(name="Updated Cohort")
+        data = params.model_dump(exclude_none=True)
+        # {"name": "Updated Cohort"}
+        ```
+    """
+
+    name: str | None = None
+    """New cohort name."""
+
+    description: str | None = None
+    """New cohort description."""
+
+    data_group_id: str | None = None
+    """New data group identifier."""
+
+    is_locked: bool | None = None
+    """New lock setting."""
+
+    is_visible: bool | None = None
+    """New visibility setting."""
+
+    deleted: bool | None = None
+    """Soft-delete flag."""
+
+    definition: dict[str, Any] | None = None
+    """New cohort definition (flattened into payload)."""
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Serialize with ``definition`` flattened into the top level.
+
+        Args:
+            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
+
+        Returns:
+            Dict with ``definition`` fields merged into the top level.
+        """
+        data = super().model_dump(**kwargs)
+        definition = data.pop("definition", None)
+        if definition:
+            data.update(definition)
+        return data
+
+
+class BulkUpdateCohortEntry(BaseModel):
+    """Entry for bulk-updating cohorts.
+
+    Attributes:
+        id: Cohort ID to update (required).
+        name: New cohort name.
+        description: New cohort description.
+        definition: New cohort definition (flattened into payload).
+
+    Example:
+        ```python
+        entry = BulkUpdateCohortEntry(id=1, name="Renamed")
+        ```
+    """
+
+    id: int
+    """Cohort ID to update (required)."""
+
+    name: str | None = None
+    """New cohort name."""
+
+    description: str | None = None
+    """New cohort description."""
+
+    definition: dict[str, Any] | None = None
+    """New cohort definition (flattened into payload)."""
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Serialize with ``definition`` flattened into the top level.
+
+        Args:
+            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
+
+        Returns:
+            Dict with ``definition`` fields merged into the top level.
+        """
+        data = super().model_dump(**kwargs)
+        definition = data.pop("definition", None)
+        if definition:
+            data.update(definition)
+        return data

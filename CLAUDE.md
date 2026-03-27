@@ -310,6 +310,8 @@ Skill(skill="mixpanel-data:mixpanel-analyst")  # Will fail!
 - DuckDB (via mixpanel_data.Workspace), in-memory for middleware caches (021-mcp-server-v2)
 - Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), Typer (CLI), Rich (output) (023-oauth-app-api-infra)
 - JSON files at `~/.mp/oauth/` (token + client info persistence); DuckDB unchanged (023-oauth-app-api-infra)
+- Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), Typer (CLI), Rich (output) (024-core-entity-crud)
+- DuckDB (local analysis), Mixpanel App API (remote CRUD) (024-core-entity-crud)
 
 ## Recent Changes
 - 017-parallel-export: Added Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies

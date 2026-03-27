@@ -708,8 +708,9 @@ class MixpanelAPIClient:
 
         client = self._ensure_client()
 
-        # Build params with query_origin
-        request_params: dict[str, str] = {"query_origin": "mixpanel-data-cli"}
+        # Pass through caller-supplied params only (no query_origin —
+        # some App API endpoints reject unknown query parameters).
+        request_params: dict[str, str] = {}
         if params:
             request_params.update(params)
 
@@ -2251,3 +2252,1215 @@ class MixpanelAPIClient:
             "name": name,
             "schemaJson": schema_json,
         }
+
+    # =========================================================================
+    # Dashboard CRUD (Phase 024)
+    # =========================================================================
+
+    def list_dashboards(self, *, ids: list[int] | None = None) -> list[dict[str, Any]]:
+        """List dashboards for the current project/workspace.
+
+        Calls ``GET /api/app/projects/{pid}/dashboards`` (or workspace-scoped).
+
+        Args:
+            ids: Optional list of dashboard IDs to filter. When provided, only
+                dashboards matching these IDs are returned.
+
+        Returns:
+            List of dashboard dictionaries. Each dictionary contains at minimum
+            ``id``, ``title``, and ``created_at`` fields.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                dashboards = client.list_dashboards()
+                for d in dashboards:
+                    print(f"{d['id']}: {d['title']}")
+            ```
+        """
+        path = self.maybe_scoped_path("dashboards")
+        params: dict[str, str] = {}
+        if ids:
+            params["ids"] = ",".join(str(i) for i in ids)
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_dashboards: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_dashboard(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new dashboard.
+
+        Calls ``POST /api/app/projects/{pid}/dashboards`` (or workspace-scoped).
+
+        Args:
+            body: Dashboard creation payload. Must include ``title`` at minimum.
+                May also include ``description``, ``layout``, and ``reports``.
+
+        Returns:
+            Dictionary representing the newly created dashboard, including
+            its ``id`` and other metadata.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid payload or missing required fields (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                dashboard = client.create_dashboard({"title": "My Dashboard"})
+                print(f"Created dashboard {dashboard['id']}")
+            ```
+        """
+        path = self.maybe_scoped_path("dashboards")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_dashboard: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_dashboard(self, dashboard_id: int) -> dict[str, Any]:
+        """Get a single dashboard by ID.
+
+        Calls ``GET /api/app/projects/{pid}/dashboards/{dashboard_id}``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+
+        Returns:
+            Dictionary representing the dashboard, including ``id``, ``title``,
+            ``description``, ``layout``, and ``reports``.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404) or invalid ID (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                dashboard = client.get_dashboard(12345)
+                print(dashboard["title"])
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_dashboard: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_dashboard(
+        self, dashboard_id: int, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update an existing dashboard (partial update).
+
+        Calls ``PATCH /api/app/projects/{pid}/dashboards/{dashboard_id}``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+            body: Partial update payload. May include ``title``, ``description``,
+                ``layout``, or other mutable dashboard fields.
+
+        Returns:
+            Dictionary representing the updated dashboard.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404) or invalid payload (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_dashboard(12345, {"title": "New Title"})
+                print(updated["title"])
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_dashboard: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_dashboard(self, dashboard_id: int) -> None:
+        """Delete a single dashboard.
+
+        Calls ``DELETE /api/app/projects/{pid}/dashboards/{dashboard_id}``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404) or invalid ID (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_dashboard(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}")
+        self.app_request("DELETE", path)
+
+    def bulk_delete_dashboards(self, ids: list[int]) -> None:
+        """Delete multiple dashboards at once.
+
+        Calls ``DELETE /api/app/projects/{pid}/dashboards``
+        (or workspace-scoped) with a JSON body containing the IDs.
+
+        Args:
+            ids: List of dashboard IDs to delete.
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid IDs or API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.bulk_delete_dashboards([111, 222, 333])
+            ```
+        """
+        path = self.maybe_scoped_path("dashboards")
+        self.app_request("DELETE", path, json_body={"ids": ids})
+
+    def favorite_dashboard(self, dashboard_id: int) -> None:
+        """Mark a dashboard as a favorite for the current user.
+
+        Calls ``PUT /api/app/projects/{pid}/dashboards/{dashboard_id}/favorites``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.favorite_dashboard(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}/favorites")
+        self.app_request("POST", path)
+
+    def unfavorite_dashboard(self, dashboard_id: int) -> None:
+        """Remove a dashboard from the current user's favorites.
+
+        Calls ``DELETE /api/app/projects/{pid}/dashboards/{dashboard_id}/favorites``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.unfavorite_dashboard(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}/favorites")
+        self.app_request("DELETE", path)
+
+    def pin_dashboard(self, dashboard_id: int) -> None:
+        """Pin a dashboard for the current project/workspace.
+
+        Calls ``PUT /api/app/projects/{pid}/dashboards/{dashboard_id}/pin``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.pin_dashboard(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}/pin")
+        self.app_request("POST", path)
+
+    def unpin_dashboard(self, dashboard_id: int) -> None:
+        """Unpin a dashboard from the current project/workspace.
+
+        Calls ``DELETE /api/app/projects/{pid}/dashboards/{dashboard_id}/pin``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.unpin_dashboard(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}/pin")
+        self.app_request("DELETE", path)
+
+    def remove_report_from_dashboard(
+        self, dashboard_id: int, bookmark_id: int
+    ) -> dict[str, Any]:
+        """Remove a report (bookmark) from a dashboard.
+
+        Calls ``DELETE /api/app/projects/{pid}/dashboards/{dashboard_id}/reports/{bookmark_id}``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+            bookmark_id: The numeric bookmark/report identifier to remove.
+
+        Returns:
+            Dictionary with the API response, typically confirming removal.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard or report not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.remove_report_from_dashboard(12345, 67890)
+            ```
+        """
+        path = self.maybe_scoped_path(
+            f"dashboards/{dashboard_id}/reports/{bookmark_id}"
+        )
+        result = self.app_request("DELETE", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from remove_report_from_dashboard: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def list_blueprint_templates(
+        self, *, include_reports: bool = False
+    ) -> list[dict[str, Any]]:
+        """List available dashboard blueprint templates.
+
+        Calls ``GET /api/app/projects/{pid}/dashboards/blueprints``
+        (or workspace-scoped).
+
+        Args:
+            include_reports: When True, include report details in each
+                blueprint template. Defaults to False.
+
+        Returns:
+            List of blueprint template dictionaries, each containing
+            ``template_type`` and template metadata.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                templates = client.list_blueprint_templates(include_reports=True)
+                for t in templates:
+                    print(t["template_type"])
+            ```
+        """
+        path = self.maybe_scoped_path("dashboards/blueprints-all")
+        params: dict[str, str] = {}
+        if include_reports:
+            params["include_reports"] = "true"
+        result = self.app_request("GET", path, params=params if params else None)
+        # The blueprints-all endpoint returns {"templates": {name: data, ...}}
+        if isinstance(result, dict) and "templates" in result:
+            templates = result["templates"]
+            if isinstance(templates, dict):
+                # Convert {name: data} to [{...data, "name": name}, ...]
+                return [
+                    {**data, "name": name}
+                    for name, data in templates.items()
+                    if isinstance(data, dict)
+                ]
+            if isinstance(templates, list):
+                return templates
+        if isinstance(result, list):
+            return result
+        raise MixpanelDataError(
+            f"Unexpected response from list_blueprint_templates: "
+            f"expected templates dict, got {type(result).__name__}",
+        )
+
+    def create_blueprint(self, template_type: str) -> dict[str, Any]:
+        """Create a dashboard from a blueprint template.
+
+        Calls ``POST /api/app/projects/{pid}/dashboards/blueprints``
+        (or workspace-scoped).
+
+        Args:
+            template_type: The blueprint template type identifier
+                (e.g., ``"company_kpis"``, ``"marketing"``).
+
+        Returns:
+            Dictionary representing the newly created dashboard from the
+            blueprint, including its ``id`` and populated reports.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid template type (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                dashboard = client.create_blueprint("company_kpis")
+                print(f"Created blueprint dashboard {dashboard['id']}")
+            ```
+        """
+        path = self.maybe_scoped_path("dashboards/blueprints")
+        result = self.app_request(
+            "POST", path, json_body={"template_type": template_type}
+        )
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_blueprint: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_blueprint_config(self, dashboard_id: int) -> dict[str, Any]:
+        """Get the blueprint configuration for a dashboard.
+
+        Calls ``GET /api/app/projects/{pid}/dashboards/{dashboard_id}/blueprint-config``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+
+        Returns:
+            Dictionary containing the blueprint configuration, including
+            template type and customization settings.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found or not a blueprint (404/400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                config = client.get_blueprint_config(12345)
+                print(config["template_type"])
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}/blueprint-config")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_blueprint_config: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_blueprint_cohorts(self, cohorts: list[dict[str, Any]]) -> None:
+        """Update cohort mappings for blueprint dashboards.
+
+        Calls ``PUT /api/app/projects/{pid}/dashboards/blueprints/cohorts``
+        (or workspace-scoped).
+
+        Args:
+            cohorts: List of cohort mapping dictionaries. Each entry maps a
+                blueprint cohort placeholder to an actual cohort ID.
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid cohort mappings (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.update_blueprint_cohorts([
+                    {"placeholder": "new_users", "cohort_id": 42}
+                ])
+            ```
+        """
+        path = self.maybe_scoped_path("dashboards/blueprints/cohorts")
+        self.app_request("PUT", path, json_body={"cohorts": cohorts})
+
+    def finalize_blueprint(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Finalize a blueprint dashboard after configuration.
+
+        Calls ``POST /api/app/projects/{pid}/dashboards/blueprints/finish``
+        (or workspace-scoped).
+
+        Args:
+            body: Finalization payload containing the blueprint dashboard ID
+                and any final configuration overrides.
+
+        Returns:
+            Dictionary representing the finalized dashboard.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid payload or blueprint not found (400/404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.finalize_blueprint({"dashboard_id": 12345})
+                print(f"Finalized: {result['id']}")
+            ```
+        """
+        path = self.maybe_scoped_path("dashboards/blueprints/finish")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from finalize_blueprint: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def create_rca_dashboard(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a root-cause-analysis (RCA) dashboard.
+
+        Calls ``POST /api/app/projects/{pid}/dashboards/rca``
+        (or workspace-scoped).
+
+        Args:
+            body: RCA dashboard creation payload, typically including the
+                metric event, time range, and analysis parameters.
+
+        Returns:
+            Dictionary representing the newly created RCA dashboard.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid payload (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                rca = client.create_rca_dashboard({
+                    "event": "purchase",
+                    "from_date": "2025-01-01",
+                    "to_date": "2025-01-31",
+                })
+                print(f"RCA dashboard: {rca['id']}")
+            ```
+        """
+        path = self.maybe_scoped_path("dashboards/rca")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_rca_dashboard: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_bookmark_dashboard_ids(self, bookmark_id: int) -> list[int]:
+        """Get dashboard IDs that contain a specific bookmark/report.
+
+        Calls ``GET /api/app/projects/{pid}/dashboards/bookmark/{bookmark_id}``
+        (or workspace-scoped).
+
+        Args:
+            bookmark_id: The numeric bookmark/report identifier.
+
+        Returns:
+            List of integer dashboard IDs that contain the specified bookmark.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Bookmark not found (404) or invalid ID (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                dashboard_ids = client.get_bookmark_dashboard_ids(67890)
+                print(f"Report is on dashboards: {dashboard_ids}")
+            ```
+        """
+        path = self.maybe_scoped_path(
+            f"dashboards/bookmarks/{bookmark_id}/dashboard-ids"
+        )
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from get_bookmark_dashboard_ids: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def get_dashboard_erf(self, dashboard_id: int) -> dict[str, Any]:
+        """Get the ERF (Event Reference Format) data for a dashboard.
+
+        Calls ``GET /api/app/projects/{pid}/dashboards/{dashboard_id}/erf``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+
+        Returns:
+            Dictionary containing the ERF data for the dashboard, describing
+            the events and properties referenced by its reports.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404) or invalid ID (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                erf = client.get_dashboard_erf(12345)
+                print(erf)
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}/erf")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_dashboard_erf: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_report_link(
+        self, dashboard_id: int, report_link_id: int, body: dict[str, Any]
+    ) -> None:
+        """Update a report link on a dashboard.
+
+        Calls ``PATCH /api/app/projects/{pid}/dashboards/{dashboard_id}/report-links/{report_link_id}``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+            report_link_id: The numeric report link identifier.
+            body: Partial update payload for the report link (e.g., position,
+                size, or display settings).
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard or report link not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.update_report_link(12345, 99, {"position": {"x": 0, "y": 1}})
+            ```
+        """
+        path = self.maybe_scoped_path(
+            f"dashboards/{dashboard_id}/report-links/{report_link_id}"
+        )
+        self.app_request("PATCH", path, json_body=body)
+
+    def update_text_card(
+        self, dashboard_id: int, text_card_id: int, body: dict[str, Any]
+    ) -> None:
+        """Update a text card on a dashboard.
+
+        Calls ``PATCH /api/app/projects/{pid}/dashboards/{dashboard_id}/text-cards/{text_card_id}``
+        (or workspace-scoped).
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+            text_card_id: The numeric text card identifier.
+            body: Partial update payload for the text card (e.g., ``text``,
+                ``position``, or ``size``).
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard or text card not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.update_text_card(12345, 55, {"text": "Updated heading"})
+            ```
+        """
+        path = self.maybe_scoped_path(
+            f"dashboards/{dashboard_id}/text-cards/{text_card_id}"
+        )
+        self.app_request("PATCH", path, json_body=body)
+
+    # =========================================================================
+    # Bookmark/Report CRUD (Phase 024)
+    # =========================================================================
+
+    def list_bookmarks_v2(
+        self,
+        *,
+        bookmark_type: str | None = None,
+        ids: list[int] | None = None,
+    ) -> list[dict[str, Any]]:
+        """List bookmarks (saved reports) via the App API v2 endpoint.
+
+        Retrieves metadata for saved Insights, Funnels, Retention, Flows,
+        and other report types. Supports filtering by type and by explicit
+        bookmark IDs.
+
+        Args:
+            bookmark_type: Optional report-type filter (e.g., ``"insights"``,
+                ``"funnels"``, ``"retention"``).
+            ids: Optional list of bookmark IDs to retrieve.
+
+        Returns:
+            A list of bookmark dicts, each containing keys such as ``id``,
+            ``name``, ``type``, and ``params``.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: Invalid parameters (400/403).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                bookmarks = client.list_bookmarks_v2(bookmark_type="funnels")
+            ```
+        """
+        path = self.maybe_scoped_path("bookmarks")
+        params: dict[str, str] = {}
+        if bookmark_type:
+            params["type"] = bookmark_type
+        if ids:
+            params["ids"] = ",".join(str(i) for i in ids)
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_bookmarks_v2: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_bookmark(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new bookmark (saved report).
+
+        Args:
+            body: Bookmark creation payload with ``name``, ``type``, and
+                ``params`` fields.
+
+        Returns:
+            The newly created bookmark dict with assigned ``id``.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: Invalid payload (400/422).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                bookmark = client.create_bookmark({
+                    "name": "Daily Active Users",
+                    "type": "insights",
+                    "params": {"event": ["login"]},
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("bookmarks")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_bookmark: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_bookmark(self, bookmark_id: int) -> dict[str, Any]:
+        """Retrieve a single bookmark by ID.
+
+        Args:
+            bookmark_id: Unique identifier of the bookmark.
+
+        Returns:
+            Bookmark dict with ``id``, ``name``, ``type``, and ``params``.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: Bookmark not found (404).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                bookmark = client.get_bookmark(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_bookmark: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_bookmark(self, bookmark_id: int, body: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing bookmark (partial update via PATCH).
+
+        Args:
+            bookmark_id: Unique identifier of the bookmark.
+            body: Fields to update (e.g., ``name``, ``description``).
+
+        Returns:
+            The updated bookmark dict.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: Bookmark not found or invalid payload (400/404/422).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_bookmark(12345, {"name": "Renamed"})
+            ```
+        """
+        path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_bookmark: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_bookmark(self, bookmark_id: int) -> None:
+        """Delete a bookmark (saved report).
+
+        Args:
+            bookmark_id: Unique identifier of the bookmark to delete.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: Bookmark not found (404).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_bookmark(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}")
+        self.app_request("DELETE", path)
+
+    def bulk_delete_bookmarks(self, ids: list[int]) -> None:
+        """Delete multiple bookmarks in a single request.
+
+        Args:
+            ids: List of bookmark IDs to delete.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: One or more IDs not found (400/404).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.bulk_delete_bookmarks([123, 456])
+            ```
+        """
+        path = self.maybe_scoped_path("bookmarks")
+        self.app_request("DELETE", path, json_body={"ids": ids})
+
+    def bulk_update_bookmarks(self, entries: list[dict[str, Any]]) -> None:
+        """Update multiple bookmarks in a single request.
+
+        Args:
+            entries: List of update dicts, each with ``id`` and fields to update.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: Invalid entries or IDs not found (400/404/422).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.bulk_update_bookmarks([
+                    {"id": 123, "name": "Updated Report"},
+                ])
+            ```
+        """
+        path = self.maybe_scoped_path("bookmarks")
+        self.app_request("PATCH", path, json_body={"bookmarks": entries})
+
+    def bookmark_linked_dashboard_ids(self, bookmark_id: int) -> list[int]:
+        """Get dashboard IDs linked to a bookmark.
+
+        Args:
+            bookmark_id: Unique identifier of the bookmark.
+
+        Returns:
+            List of integer dashboard IDs. Empty list if not linked.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: Bookmark not found (404).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                dash_ids = client.bookmark_linked_dashboard_ids(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}/linked-dashboard-ids")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from bookmark_linked_dashboard_ids: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def get_bookmark_history(
+        self,
+        bookmark_id: int,
+        *,
+        cursor: str | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        """Get the change history for a bookmark.
+
+        Args:
+            bookmark_id: Unique identifier of the bookmark.
+            cursor: Opaque pagination cursor from a previous call.
+            page_size: Maximum entries per page.
+
+        Returns:
+            Dict with ``results`` (history entries) and ``pagination``.
+
+        Raises:
+            AuthenticationError: Invalid or expired credentials (401).
+            QueryError: Bookmark not found (404).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                page = client.get_bookmark_history(12345, page_size=10)
+            ```
+        """
+        path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}/history")
+        params: dict[str, str] = {}
+        if cursor:
+            params["cursor"] = cursor
+        if page_size is not None:
+            params["page_size"] = str(page_size)
+        result = self.app_request("GET", path, params=params if params else None)
+        # app_request() unwraps "results" from the response, so we get the
+        # history entries list directly. Wrap it back for the caller.
+        if isinstance(result, list):
+            return {"results": result, "pagination": None}
+        if isinstance(result, dict):
+            return result
+        raise MixpanelDataError(
+            f"Unexpected response from get_bookmark_history: "
+            f"expected list or dict, got {type(result).__name__}",
+        )
+
+    # =========================================================================
+    # Cohort CRUD (Phase 024)
+    # =========================================================================
+
+    def list_cohorts_app(
+        self,
+        *,
+        data_group_id: str | None = None,
+        ids: list[int] | None = None,
+    ) -> list[dict[str, Any]]:
+        """List cohorts via the App API.
+
+        Args:
+            data_group_id: Optional data group filter.
+            ids: Optional list of cohort IDs to retrieve.
+
+        Returns:
+            List of cohort dictionaries with ``id``, ``name``, ``count``, etc.
+
+        Raises:
+            AuthenticationError: Invalid or missing credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Bad request (400/404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                cohorts = client.list_cohorts_app()
+            ```
+        """
+        path = self.maybe_scoped_path("cohorts")
+        params: dict[str, str] = {}
+        if data_group_id:
+            params["data_group_id"] = data_group_id
+        if ids:
+            params["ids"] = ",".join(str(i) for i in ids)
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_cohorts_app: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def get_cohort(self, cohort_id: int) -> dict[str, Any]:
+        """Get a single cohort by ID via the App API.
+
+        Args:
+            cohort_id: Numeric identifier of the cohort.
+
+        Returns:
+            Cohort dict with ``id``, ``name``, ``description``, ``count``, etc.
+
+        Raises:
+            AuthenticationError: Invalid or missing credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Cohort not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                cohort = client.get_cohort(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"cohorts/{cohort_id}")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_cohort: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def create_cohort(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new cohort via the App API.
+
+        Args:
+            body: Cohort definition with ``name`` and optional fields.
+
+        Returns:
+            The newly created cohort dict with assigned ``id``.
+
+        Raises:
+            AuthenticationError: Invalid or missing credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Invalid cohort definition (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                cohort = client.create_cohort({"name": "Power Users"})
+            ```
+        """
+        path = self.maybe_scoped_path("cohorts")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_cohort: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_cohort(self, cohort_id: int, body: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing cohort via the App API.
+
+        Args:
+            cohort_id: Numeric identifier of the cohort.
+            body: Fields to update (e.g., ``name``, ``description``).
+
+        Returns:
+            The updated cohort dict.
+
+        Raises:
+            AuthenticationError: Invalid or missing credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Cohort not found or invalid update (400/404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_cohort(12345, {"name": "Renamed"})
+            ```
+        """
+        path = self.maybe_scoped_path(f"cohorts/{cohort_id}")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_cohort: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_cohort(self, cohort_id: int) -> None:
+        """Delete a single cohort via the App API.
+
+        Args:
+            cohort_id: Numeric identifier of the cohort to delete.
+
+        Raises:
+            AuthenticationError: Invalid or missing credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Cohort not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_cohort(12345)
+            ```
+        """
+        path = self.maybe_scoped_path(f"cohorts/{cohort_id}")
+        self.app_request("DELETE", path)
+
+    def bulk_delete_cohorts(self, ids: list[int]) -> None:
+        """Delete multiple cohorts in a single request.
+
+        Args:
+            ids: List of cohort IDs to delete.
+
+        Raises:
+            AuthenticationError: Invalid or missing credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: One or more IDs not found (400/404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.bulk_delete_cohorts([123, 456])
+            ```
+        """
+        path = self.maybe_scoped_path("cohorts")
+        self.app_request("DELETE", path, json_body={"ids": ids})
+
+    def bulk_update_cohorts(self, entries: list[dict[str, Any]]) -> None:
+        """Update multiple cohorts in a single request.
+
+        Args:
+            entries: List of cohort update dicts, each with ``id`` and
+                fields to update.
+
+        Raises:
+            AuthenticationError: Invalid or missing credentials (401).
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Invalid entries or IDs not found (400/404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.bulk_update_cohorts([
+                    {"id": 123, "name": "Renamed Cohort"},
+                ])
+            ```
+        """
+        path = self.maybe_scoped_path("cohorts")
+        self.app_request("PATCH", path, json_body={"cohorts": entries})

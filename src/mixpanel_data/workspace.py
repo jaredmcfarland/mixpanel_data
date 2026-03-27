@@ -51,15 +51,28 @@ from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data._internal.transforms import transform_event, transform_profile
 from mixpanel_data._literal_types import TableType
-from mixpanel_data.exceptions import ConfigError, QueryError
+from mixpanel_data.exceptions import ConfigError, MixpanelDataError, QueryError
 from mixpanel_data.types import (
     ActivityFeedResult,
     BatchProgress,
+    BlueprintConfig,
+    BlueprintFinishParams,
+    BlueprintTemplate,
+    Bookmark,
+    BookmarkHistoryResponse,
     BookmarkInfo,
     BookmarkType,
+    BulkUpdateBookmarkEntry,
+    BulkUpdateCohortEntry,
+    Cohort,
     ColumnStatsResult,
     ColumnSummary,
+    CreateBookmarkParams,
+    CreateCohortParams,
+    CreateDashboardParams,
+    CreateRcaDashboardParams,
     DailyCountsResult,
+    Dashboard,
     EngagementDistributionResult,
     EntityType,
     EventBreakdownResult,
@@ -92,6 +105,11 @@ from mixpanel_data.types import (
     TableInfo,
     TableSchema,
     TopEvent,
+    UpdateBookmarkParams,
+    UpdateCohortParams,
+    UpdateDashboardParams,
+    UpdateReportLinkParams,
+    UpdateTextCardParams,
     WorkspaceInfo,
 )
 
@@ -2735,3 +2753,1045 @@ class Workspace:
                 print(schema)
         """
         return self._require_api_client()
+
+    # =========================================================================
+    # DASHBOARD CRUD (Phase 024)
+    # =========================================================================
+
+    def list_dashboards(self, *, ids: list[int] | None = None) -> list[Dashboard]:
+        """List dashboards for the current project/workspace.
+
+        Retrieves all dashboards visible to the authenticated user,
+        optionally filtered by specific IDs.
+
+        Args:
+            ids: Optional list of dashboard IDs to filter by.
+
+        Returns:
+            List of ``Dashboard`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dashboards = ws.list_dashboards()
+            for d in dashboards:
+                print(f"{d.title} (id={d.id})")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.list_dashboards(ids=ids)
+        return [Dashboard.model_validate(d) for d in raw]
+
+    def create_dashboard(self, params: CreateDashboardParams) -> Dashboard:
+        """Create a new dashboard.
+
+        Args:
+            params: Dashboard creation parameters.
+
+        Returns:
+            The newly created ``Dashboard``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400, 422).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dashboard = ws.create_dashboard(
+                CreateDashboardParams(title="Q1 Metrics")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.create_dashboard(params.model_dump(exclude_none=True))
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for create_dashboard",
+            )
+        return Dashboard.model_validate(raw)
+
+    def get_dashboard(self, dashboard_id: int) -> Dashboard:
+        """Get a single dashboard by ID.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+
+        Returns:
+            The ``Dashboard`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dashboard = ws.get_dashboard(12345)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_dashboard(dashboard_id)
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for get_dashboard",
+            )
+        return Dashboard.model_validate(raw)
+
+    def update_dashboard(
+        self, dashboard_id: int, params: UpdateDashboardParams
+    ) -> Dashboard:
+        """Update an existing dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+            params: Fields to update.
+
+        Returns:
+            The updated ``Dashboard``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found or invalid params (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            updated = ws.update_dashboard(
+                12345, UpdateDashboardParams(title="New Title")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.update_dashboard(
+            dashboard_id, params.model_dump(exclude_none=True)
+        )
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for update_dashboard",
+            )
+        return Dashboard.model_validate(raw)
+
+    def delete_dashboard(self, dashboard_id: int) -> None:
+        """Delete a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_dashboard(12345)
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_dashboard(dashboard_id)
+
+    def bulk_delete_dashboards(self, ids: list[int]) -> None:
+        """Delete multiple dashboards.
+
+        Args:
+            ids: List of dashboard IDs to delete.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: One or more IDs not found (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.bulk_delete_dashboards([1, 2, 3])
+            ```
+        """
+        client = self._require_api_client()
+        client.bulk_delete_dashboards(ids)
+
+    # =========================================================================
+    # DASHBOARD ADVANCED OPERATIONS (Phase 024)
+    # =========================================================================
+
+    def favorite_dashboard(self, dashboard_id: int) -> None:
+        """Favorite a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.favorite_dashboard(12345)
+            ```
+        """
+        client = self._require_api_client()
+        client.favorite_dashboard(dashboard_id)
+
+    def unfavorite_dashboard(self, dashboard_id: int) -> None:
+        """Unfavorite a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.unfavorite_dashboard(12345)
+            ```
+        """
+        client = self._require_api_client()
+        client.unfavorite_dashboard(dashboard_id)
+
+    def pin_dashboard(self, dashboard_id: int) -> None:
+        """Pin a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.pin_dashboard(12345)
+            ```
+        """
+        client = self._require_api_client()
+        client.pin_dashboard(dashboard_id)
+
+    def unpin_dashboard(self, dashboard_id: int) -> None:
+        """Unpin a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.unpin_dashboard(12345)
+            ```
+        """
+        client = self._require_api_client()
+        client.unpin_dashboard(dashboard_id)
+
+    def remove_report_from_dashboard(
+        self, dashboard_id: int, bookmark_id: int
+    ) -> Dashboard:
+        """Remove a report from a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+            bookmark_id: Bookmark/report identifier to remove.
+
+        Returns:
+            The updated ``Dashboard``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard or bookmark not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            updated = ws.remove_report_from_dashboard(12345, 42)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.remove_report_from_dashboard(dashboard_id, bookmark_id)
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for remove_report_from_dashboard",
+            )
+        return Dashboard.model_validate(raw)
+
+    def list_blueprint_templates(
+        self, *, include_reports: bool = False
+    ) -> list[BlueprintTemplate]:
+        """List available dashboard blueprint templates.
+
+        Args:
+            include_reports: Whether to include report details.
+
+        Returns:
+            List of ``BlueprintTemplate`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            templates = ws.list_blueprint_templates()
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.list_blueprint_templates(include_reports=include_reports)
+        return [BlueprintTemplate.model_validate(t) for t in raw]
+
+    def create_blueprint(self, template_type: str) -> Dashboard:
+        """Create a dashboard from a blueprint template.
+
+        Args:
+            template_type: Blueprint template type identifier.
+
+        Returns:
+            The newly created ``Dashboard``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid template type (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dashboard = ws.create_blueprint("onboarding")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.create_blueprint(template_type)
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for create_blueprint",
+            )
+        return Dashboard.model_validate(raw)
+
+    def get_blueprint_config(self, dashboard_id: int) -> BlueprintConfig:
+        """Get the blueprint configuration for a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+
+        Returns:
+            ``BlueprintConfig`` with template variables.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            config = ws.get_blueprint_config(12345)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_blueprint_config(dashboard_id)
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for get_blueprint_config",
+            )
+        return BlueprintConfig.model_validate(raw)
+
+    def update_blueprint_cohorts(self, cohorts: list[dict[str, Any]]) -> None:
+        """Update cohorts for blueprint configuration.
+
+        Args:
+            cohorts: List of cohort configuration dicts.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid cohort configuration (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.update_blueprint_cohorts([{"id": 1, "name": "Test"}])
+            ```
+        """
+        client = self._require_api_client()
+        client.update_blueprint_cohorts(cohorts)
+
+    def finalize_blueprint(self, params: BlueprintFinishParams) -> Dashboard:
+        """Finalize a blueprint dashboard with cards.
+
+        Args:
+            params: Blueprint finalization parameters.
+
+        Returns:
+            The finalized ``Dashboard``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dashboard = ws.finalize_blueprint(
+                BlueprintFinishParams(
+                    dashboard_id=1,
+                    cards=[BlueprintCard(card_type="report", bookmark_id=42)],
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        # Re-serialize cards to trigger BlueprintCard.model_dump() field rename
+        if "cards" in body:
+            body["cards"] = [c.model_dump(exclude_none=True) for c in params.cards]
+        raw = client.finalize_blueprint(body)
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for finalize_blueprint",
+            )
+        return Dashboard.model_validate(raw)
+
+    def create_rca_dashboard(self, params: CreateRcaDashboardParams) -> Dashboard:
+        """Create an RCA (Root Cause Analysis) dashboard.
+
+        Args:
+            params: RCA dashboard parameters.
+
+        Returns:
+            The newly created ``Dashboard``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dashboard = ws.create_rca_dashboard(
+                CreateRcaDashboardParams(
+                    rca_source_id=42,
+                    rca_source_data=RcaSourceData(source_type="anomaly"),
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        # Re-serialize to trigger RcaSourceData.model_dump() field rename
+        body["rca_source_data"] = params.rca_source_data.model_dump(exclude_none=True)
+        raw = client.create_rca_dashboard(body)
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for create_rca_dashboard",
+            )
+        return Dashboard.model_validate(raw)
+
+    def get_bookmark_dashboard_ids(self, bookmark_id: int) -> list[int]:
+        """Get dashboard IDs containing a bookmark/report.
+
+        Args:
+            bookmark_id: Bookmark identifier.
+
+        Returns:
+            List of dashboard IDs.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Bookmark not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dash_ids = ws.get_bookmark_dashboard_ids(42)
+            ```
+        """
+        client = self._require_api_client()
+        return client.get_bookmark_dashboard_ids(bookmark_id)
+
+    def get_dashboard_erf(self, dashboard_id: int) -> dict[str, Any]:
+        """Get ERF (Entity Relationship Framework) metrics for a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+
+        Returns:
+            Dict with ERF metrics data.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            erf = ws.get_dashboard_erf(12345)
+            ```
+        """
+        client = self._require_api_client()
+        return client.get_dashboard_erf(dashboard_id)
+
+    def update_report_link(
+        self,
+        dashboard_id: int,
+        report_link_id: int,
+        params: UpdateReportLinkParams,
+    ) -> None:
+        """Update a report link on a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+            report_link_id: Report link identifier.
+            params: Update parameters.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard or link not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.update_report_link(
+                12345, 42, UpdateReportLinkParams(link_type="embedded")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        client.update_report_link(
+            dashboard_id,
+            report_link_id,
+            params.model_dump(exclude_none=True),
+        )
+
+    def update_text_card(
+        self,
+        dashboard_id: int,
+        text_card_id: int,
+        params: UpdateTextCardParams,
+    ) -> None:
+        """Update a text card on a dashboard.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+            text_card_id: Text card identifier.
+            params: Update parameters.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard or text card not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.update_text_card(
+                12345, 99, UpdateTextCardParams(markdown="# Hello")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        client.update_text_card(
+            dashboard_id,
+            text_card_id,
+            params.model_dump(exclude_none=True),
+        )
+
+    # =========================================================================
+    # BOOKMARK/REPORT CRUD (Phase 024)
+    # =========================================================================
+
+    def list_bookmarks_v2(
+        self,
+        *,
+        bookmark_type: str | None = None,
+        ids: list[int] | None = None,
+    ) -> list[Bookmark]:
+        """List bookmarks/reports via the App API v2 endpoint.
+
+        Args:
+            bookmark_type: Optional report type filter (e.g., ``"funnels"``).
+            ids: Optional list of bookmark IDs to filter by.
+
+        Returns:
+            List of ``Bookmark`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            reports = ws.list_bookmarks_v2(bookmark_type="funnels")
+            for r in reports:
+                print(f"{r.name} ({r.bookmark_type})")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.list_bookmarks_v2(bookmark_type=bookmark_type, ids=ids)
+        return [Bookmark.model_validate(b) for b in raw]
+
+    def create_bookmark(self, params: CreateBookmarkParams) -> Bookmark:
+        """Create a new bookmark (saved report).
+
+        Args:
+            params: Bookmark creation parameters.
+
+        Returns:
+            The newly created ``Bookmark``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400, 422).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            report = ws.create_bookmark(CreateBookmarkParams(
+                name="Signup Funnel",
+                bookmark_type="funnels",
+                params={"events": [{"event": "Signup"}]},
+            ))
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.create_bookmark(params.model_dump(exclude_none=True))
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for create_bookmark",
+            )
+        return Bookmark.model_validate(raw)
+
+    def get_bookmark(self, bookmark_id: int) -> Bookmark:
+        """Get a single bookmark by ID.
+
+        Args:
+            bookmark_id: Bookmark identifier.
+
+        Returns:
+            The ``Bookmark`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Bookmark not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            report = ws.get_bookmark(12345)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_bookmark(bookmark_id)
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for get_bookmark",
+            )
+        return Bookmark.model_validate(raw)
+
+    def update_bookmark(
+        self, bookmark_id: int, params: UpdateBookmarkParams
+    ) -> Bookmark:
+        """Update an existing bookmark.
+
+        Args:
+            bookmark_id: Bookmark identifier.
+            params: Fields to update.
+
+        Returns:
+            The updated ``Bookmark``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Bookmark not found or invalid params (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            updated = ws.update_bookmark(
+                12345, UpdateBookmarkParams(name="Renamed")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.update_bookmark(bookmark_id, params.model_dump(exclude_none=True))
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for update_bookmark",
+            )
+        return Bookmark.model_validate(raw)
+
+    def delete_bookmark(self, bookmark_id: int) -> None:
+        """Delete a bookmark.
+
+        Args:
+            bookmark_id: Bookmark identifier.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Bookmark not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_bookmark(12345)
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_bookmark(bookmark_id)
+
+    def bulk_delete_bookmarks(self, ids: list[int]) -> None:
+        """Delete multiple bookmarks.
+
+        Args:
+            ids: List of bookmark IDs to delete.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: One or more IDs not found (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.bulk_delete_bookmarks([1, 2, 3])
+            ```
+        """
+        client = self._require_api_client()
+        client.bulk_delete_bookmarks(ids)
+
+    def bulk_update_bookmarks(self, entries: list[BulkUpdateBookmarkEntry]) -> None:
+        """Update multiple bookmarks.
+
+        Args:
+            entries: List of bookmark update entries.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid entries or IDs not found (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.bulk_update_bookmarks([
+                BulkUpdateBookmarkEntry(id=1, name="Renamed"),
+            ])
+            ```
+        """
+        client = self._require_api_client()
+        client.bulk_update_bookmarks([e.model_dump(exclude_none=True) for e in entries])
+
+    def bookmark_linked_dashboard_ids(self, bookmark_id: int) -> list[int]:
+        """Get dashboard IDs linked to a bookmark.
+
+        Args:
+            bookmark_id: Bookmark identifier.
+
+        Returns:
+            List of dashboard IDs.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Bookmark not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dash_ids = ws.bookmark_linked_dashboard_ids(42)
+            ```
+        """
+        client = self._require_api_client()
+        return client.bookmark_linked_dashboard_ids(bookmark_id)
+
+    def get_bookmark_history(
+        self,
+        bookmark_id: int,
+        *,
+        cursor: str | None = None,
+        page_size: int | None = None,
+    ) -> BookmarkHistoryResponse:
+        """Get the change history for a bookmark.
+
+        Args:
+            bookmark_id: Bookmark identifier.
+            cursor: Opaque pagination cursor.
+            page_size: Maximum entries per page.
+
+        Returns:
+            ``BookmarkHistoryResponse`` with results and pagination.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Bookmark not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            history = ws.get_bookmark_history(12345, page_size=10)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_bookmark_history(
+            bookmark_id, cursor=cursor, page_size=page_size
+        )
+        return BookmarkHistoryResponse.model_validate(raw)
+
+    # =========================================================================
+    # COHORT CRUD (Phase 024)
+    # =========================================================================
+
+    def list_cohorts_full(
+        self,
+        *,
+        data_group_id: str | None = None,
+        ids: list[int] | None = None,
+    ) -> list[Cohort]:
+        """List cohorts via the App API (full detail).
+
+        Unlike ``cohorts()`` which uses the discovery endpoint, this method
+        uses the App API and returns full ``Cohort`` objects with all metadata.
+
+        Args:
+            data_group_id: Optional data group filter.
+            ids: Optional list of cohort IDs to filter by.
+
+        Returns:
+            List of ``Cohort`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            cohorts = ws.list_cohorts_full()
+            for c in cohorts:
+                print(f"{c.name} ({c.count} users)")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.list_cohorts_app(data_group_id=data_group_id, ids=ids)
+        return [Cohort.model_validate(c) for c in raw]
+
+    def get_cohort(self, cohort_id: int) -> Cohort:
+        """Get a single cohort by ID via the App API.
+
+        Args:
+            cohort_id: Cohort identifier.
+
+        Returns:
+            The ``Cohort`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Cohort not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            cohort = ws.get_cohort(12345)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_cohort(cohort_id)
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for get_cohort",
+            )
+        return Cohort.model_validate(raw)
+
+    def create_cohort(self, params: CreateCohortParams) -> Cohort:
+        """Create a new cohort.
+
+        Args:
+            params: Cohort creation parameters.
+
+        Returns:
+            The newly created ``Cohort``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            cohort = ws.create_cohort(
+                CreateCohortParams(name="Power Users")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.create_cohort(params.model_dump(exclude_none=True))
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for create_cohort",
+            )
+        return Cohort.model_validate(raw)
+
+    def update_cohort(self, cohort_id: int, params: UpdateCohortParams) -> Cohort:
+        """Update an existing cohort.
+
+        Args:
+            cohort_id: Cohort identifier.
+            params: Fields to update.
+
+        Returns:
+            The updated ``Cohort``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Cohort not found or invalid params (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            updated = ws.update_cohort(
+                12345, UpdateCohortParams(name="Renamed")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.update_cohort(cohort_id, params.model_dump(exclude_none=True))
+        if not raw:
+            raise MixpanelDataError(
+                "API returned empty response for update_cohort",
+            )
+        return Cohort.model_validate(raw)
+
+    def delete_cohort(self, cohort_id: int) -> None:
+        """Delete a cohort.
+
+        Args:
+            cohort_id: Cohort identifier.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Cohort not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_cohort(12345)
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_cohort(cohort_id)
+
+    def bulk_delete_cohorts(self, ids: list[int]) -> None:
+        """Delete multiple cohorts.
+
+        Args:
+            ids: List of cohort IDs to delete.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: One or more IDs not found (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.bulk_delete_cohorts([1, 2, 3])
+            ```
+        """
+        client = self._require_api_client()
+        client.bulk_delete_cohorts(ids)
+
+    def bulk_update_cohorts(self, entries: list[BulkUpdateCohortEntry]) -> None:
+        """Update multiple cohorts.
+
+        Args:
+            entries: List of cohort update entries.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid entries or IDs not found (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.bulk_update_cohorts([
+                BulkUpdateCohortEntry(id=1, name="Renamed"),
+            ])
+            ```
+        """
+        client = self._require_api_client()
+        client.bulk_update_cohorts([e.model_dump(exclude_none=True) for e in entries])

@@ -12,6 +12,13 @@ from typer.testing import CliRunner
 
 from mixpanel_data._internal.config import AccountInfo
 from mixpanel_data.types import (
+    BlueprintConfig,
+    BlueprintTemplate,
+    Bookmark,
+    BookmarkHistoryPagination,
+    BookmarkHistoryResponse,
+    Cohort,
+    Dashboard,
     FetchResult,
     SegmentationResult,
     TableInfo,
@@ -78,6 +85,61 @@ def mock_workspace() -> MagicMock:
         total=500,
         series={"$overall": {"2024-01-01": 100}},
     )
+
+    # Phase 024: Dashboard CRUD mocks
+    mock_dash = Dashboard(id=1, title="Test Dashboard")
+    workspace.list_dashboards.return_value = [mock_dash]
+    workspace.create_dashboard.return_value = mock_dash
+    workspace.get_dashboard.return_value = mock_dash
+    workspace.update_dashboard.return_value = mock_dash
+    workspace.delete_dashboard.return_value = None
+    workspace.bulk_delete_dashboards.return_value = None
+    workspace.favorite_dashboard.return_value = None
+    workspace.unfavorite_dashboard.return_value = None
+    workspace.pin_dashboard.return_value = None
+    workspace.unpin_dashboard.return_value = None
+    workspace.remove_report_from_dashboard.return_value = mock_dash
+    workspace.list_blueprint_templates.return_value = [
+        BlueprintTemplate(title_key="onboarding", description_key="Get started")
+    ]
+    workspace.create_blueprint.return_value = mock_dash
+    workspace.get_blueprint_config.return_value = BlueprintConfig(
+        variables={"event": "Signup"}
+    )
+    workspace.update_blueprint_cohorts.return_value = None
+    workspace.finalize_blueprint.return_value = mock_dash
+    workspace.create_rca_dashboard.return_value = mock_dash
+    workspace.get_bookmark_dashboard_ids.return_value = [1, 2]
+    workspace.get_dashboard_erf.return_value = {"metrics": []}
+    workspace.update_report_link.return_value = None
+    workspace.update_text_card.return_value = None
+
+    # Phase 024: Bookmark/Report CRUD mocks
+    mock_bookmark = Bookmark(
+        id=1, name="Test Report", bookmark_type="insights", params={}
+    )
+    workspace.list_bookmarks_v2.return_value = [mock_bookmark]
+    workspace.create_bookmark.return_value = mock_bookmark
+    workspace.get_bookmark.return_value = mock_bookmark
+    workspace.update_bookmark.return_value = mock_bookmark
+    workspace.delete_bookmark.return_value = None
+    workspace.bulk_delete_bookmarks.return_value = None
+    workspace.bulk_update_bookmarks.return_value = None
+    workspace.bookmark_linked_dashboard_ids.return_value = [10, 20]
+    workspace.get_bookmark_history.return_value = BookmarkHistoryResponse(
+        results=[],
+        pagination=BookmarkHistoryPagination(page_size=20),
+    )
+
+    # Phase 024: Cohort CRUD mocks
+    mock_cohort = Cohort(id=1, name="Power Users")
+    workspace.list_cohorts_full.return_value = [mock_cohort]
+    workspace.get_cohort.return_value = mock_cohort
+    workspace.create_cohort.return_value = mock_cohort
+    workspace.update_cohort.return_value = mock_cohort
+    workspace.delete_cohort.return_value = None
+    workspace.bulk_delete_cohorts.return_value = None
+    workspace.bulk_update_cohorts.return_value = None
 
     return workspace
 
