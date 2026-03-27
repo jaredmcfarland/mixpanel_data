@@ -2651,7 +2651,9 @@ class TestInMemoryMode:
                     "properties": {"key": "value"},
                 }
             ]
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
+            metadata = TableMetadata(
+                type="events", fetched_at=datetime.now(timezone.utc)
+            )
 
             row_count = storage.create_events_table("events", iter(events), metadata)
             assert row_count == 1
@@ -2701,7 +2703,9 @@ class TestInMemoryMode:
                     "properties": {},
                 }
             ]
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
+            metadata = TableMetadata(
+                type="events", fetched_at=datetime.now(timezone.utc)
+            )
             storage.create_events_table("my_events", iter(events), metadata)
 
             # Introspection should work
@@ -2725,7 +2729,9 @@ class TestInMemoryMode:
                     "last_seen": datetime.now(timezone.utc),
                 }
             ]
-            metadata = TableMetadata(type="profiles", fetched_at=datetime.now(timezone.utc))
+            metadata = TableMetadata(
+                type="profiles", fetched_at=datetime.now(timezone.utc)
+            )
 
             row_count = storage.create_profiles_table(
                 "profiles", iter(profiles), metadata
@@ -2751,7 +2757,9 @@ class TestInMemoryMode:
                 }
                 for i in range(5)
             ]
-            metadata = TableMetadata(type="events", fetched_at=datetime.now(timezone.utc))
+            metadata = TableMetadata(
+                type="events", fetched_at=datetime.now(timezone.utc)
+            )
             storage.create_events_table("events", iter(events), metadata)
 
             # execute_df

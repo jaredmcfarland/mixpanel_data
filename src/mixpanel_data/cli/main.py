@@ -88,6 +88,14 @@ def main(
             envvar="MP_ACCOUNT",
         ),
     ] = None,
+    workspace_id: Annotated[
+        int | None,
+        typer.Option(
+            "--workspace-id",
+            envvar="MP_WORKSPACE_ID",
+            help="Workspace ID for App API operations.",
+        ),
+    ] = None,
     quiet: Annotated[
         bool,
         typer.Option(
@@ -121,6 +129,7 @@ def main(
     """
     ctx.ensure_object(dict)
     ctx.obj["account"] = account
+    ctx.obj["workspace_id"] = workspace_id
     ctx.obj["quiet"] = quiet
     ctx.obj["verbose"] = verbose
     ctx.obj["workspace"] = None

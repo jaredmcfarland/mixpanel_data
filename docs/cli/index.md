@@ -26,6 +26,7 @@ mp --version
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--account` | `-a` | Account name to use (overrides default) |
+| `--workspace-id` | | Workspace ID for App API operations (env: `MP_WORKSPACE_ID`) |
 | `--quiet` | `-q` | Suppress progress output |
 | `--verbose` | `-v` | Enable debug output |
 | `--version` | | Show version and exit |
@@ -33,18 +34,22 @@ mp --version
 
 ## Command Groups
 
-### auth — Account Management
+### auth — Account & Authentication Management
 
-Manage stored credentials and accounts.
+Manage stored credentials, accounts, and OAuth authentication.
 
 | Command | Description |
 |---------|-------------|
-| `mp auth list` | List configured accounts |
-| `mp auth add` | Add a new account |
-| `mp auth remove` | Remove an account |
+| `mp auth list` | List configured service accounts |
+| `mp auth add` | Add a new service account |
+| `mp auth remove` | Remove a service account |
 | `mp auth switch` | Set the default account |
 | `mp auth show` | Display account details |
 | `mp auth test` | Test account credentials |
+| `mp auth login` | OAuth 2.0 login via browser |
+| `mp auth logout` | Remove stored OAuth tokens |
+| `mp auth status` | Show OAuth authentication state per region |
+| `mp auth token` | Output raw OAuth access token (for piping) |
 
 ### fetch — Data Fetching
 
@@ -298,6 +303,9 @@ mp query sql "SELECT * FROM events" --format jsonl | python process.py
 | 5 | Rate limit exceeded | `RateLimitError` |
 | 130 | Interrupted | Ctrl+C |
 
+!!! note "OAuth and Workspace Errors"
+    `OAuthError` maps to exit code 2 (authentication error). `WorkspaceScopeError` maps to exit code 1 (general error).
+
 ## Environment Variables
 
 | Variable | Description |
@@ -306,6 +314,7 @@ mp query sql "SELECT * FROM events" --format jsonl | python process.py
 | `MP_SECRET` | Service account secret |
 | `MP_PROJECT_ID` | Project ID |
 | `MP_REGION` | Data residency region |
+| `MP_WORKSPACE_ID` | Workspace ID for App API operations |
 | `MP_ACCOUNT` | Account name to use |
 | `MP_CONFIG_PATH` | Override config file path |
 

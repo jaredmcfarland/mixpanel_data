@@ -7,6 +7,10 @@ This module provides commands for managing Mixpanel accounts:
 - switch: Set default account
 - show: Display account details
 - test: Test account credentials
+- login: OAuth 2.0 PKCE login
+- logout: Remove OAuth tokens
+- status: Show OAuth auth state
+- token: Output raw access token
 """
 
 from __future__ import annotations
@@ -17,6 +21,8 @@ from typing import Annotated
 
 import typer
 
+from mixpanel_data._internal.auth.flow import OAuthFlow
+from mixpanel_data._internal.auth.storage import OAuthStorage
 from mixpanel_data._internal.config import AccountInfo, ConfigManager
 from mixpanel_data.cli.options import FormatOption
 from mixpanel_data.cli.utils import (
@@ -25,6 +31,7 @@ from mixpanel_data.cli.utils import (
     handle_errors,
     output_result,
 )
+from mixpanel_data.exceptions import AccountNotFoundError, ConfigError
 
 auth_app = typer.Typer(
     name="auth",
@@ -325,3 +332,209 @@ def test_account(
     # and API testing. Exceptions are handled by @handle_errors decorator.
     result = Workspace.test_credentials(name)
     output_result(ctx, result, format=format)
+
+
+def _resolve_region(ctx: typer.Context, region: str | None) -> str:
+    """Resolve the region from option, config default account, or fallback.
+
+    Priority order:
+    1. Explicit ``--region`` option
+    2. Default account's region from config
+    3. ``"us"`` fallback
+
+    Args:
+        ctx: Typer context with global options in obj dict.
+        region: Explicit region from ``--region`` option, or None.
+
+    Returns:
+        Resolved region string (``us``, ``eu``, or ``in``).
+    """
+    if region is not None:
+        return region
+    try:
+        config = get_config(ctx)
+        default_account = _find_default_account(config)
+        if default_account is not None:
+            return default_account.region
+    except (ConfigError, AccountNotFoundError) as exc:
+        err_console.print(
+            f"[yellow]Warning:[/yellow] Could not determine region from config: {exc}. "
+            "Defaulting to 'us'."
+        )
+    except OSError as exc:
+        err_console.print(
+            f"[yellow]Warning:[/yellow] Could not read config file: {exc}. "
+            "Defaulting to region 'us'."
+        )
+    return "us"
+
+
+@auth_app.command("login")
+@handle_errors
+def login(
+    ctx: typer.Context,
+    region: Annotated[
+        str | None,
+        typer.Option("--region", help="Region (us, eu, in)."),
+    ] = None,
+    project_id: Annotated[
+        str | None,
+        typer.Option(
+            "--project-id", help="Mixpanel project ID to associate with tokens."
+        ),
+    ] = None,
+    format: FormatOption = "json",
+) -> None:
+    """Log in via OAuth 2.0 PKCE flow.
+
+    Opens a browser for Mixpanel authorization. After approving,
+    tokens are saved locally for subsequent API calls.
+
+    Examples:
+
+        mp auth login
+        mp auth login --region eu
+        mp auth login --project-id 12345
+    """
+    resolved_region = _resolve_region(ctx, region)
+    flow = OAuthFlow(region=resolved_region)
+    tokens = flow.login(project_id=project_id)
+
+    output_result(
+        ctx,
+        {
+            "status": "login_success",
+            "region": resolved_region,
+            "scope": tokens.scope,
+            "expires_at": tokens.expires_at.isoformat(),
+        },
+        format=format,
+    )
+
+
+@auth_app.command("logout")
+@handle_errors
+def logout(
+    ctx: typer.Context,
+    region: Annotated[
+        str | None,
+        typer.Option("--region", help="Region (us, eu, in)."),
+    ] = None,
+    format: FormatOption = "json",
+) -> None:
+    """Remove stored OAuth tokens.
+
+    With ``--region``, removes tokens for that region only. Without
+    ``--region``, removes all stored tokens and client info.
+
+    Examples:
+
+        mp auth logout
+        mp auth logout --region us
+    """
+    storage = OAuthStorage()
+    if region is not None:
+        storage.delete_tokens(region)
+        output_result(
+            ctx,
+            {"status": "logout_success", "region": region, "removed": "tokens"},
+            format=format,
+        )
+    else:
+        storage.delete_all()
+        output_result(
+            ctx,
+            {"status": "logout_success", "region": "all", "removed": "all"},
+            format=format,
+        )
+
+
+@auth_app.command("status")
+@handle_errors
+def auth_status(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+) -> None:
+    """Show OAuth authentication state per region.
+
+    Checks for stored tokens across all regions (us, eu, in) and
+    displays authentication status, token expiry, and project ID.
+
+    Examples:
+
+        mp auth status
+        mp auth status --format table
+    """
+    storage = OAuthStorage()
+    regions: list[str] = ["us", "eu", "in"]
+    statuses: list[dict[str, object]] = []
+
+    for rgn in regions:
+        tokens = storage.load_tokens(region=rgn)
+        if tokens is not None:
+            is_expired = tokens.is_expired()
+            statuses.append(
+                {
+                    "region": rgn,
+                    "authenticated": True,
+                    "token_type": tokens.token_type,
+                    "scope": tokens.scope,
+                    "expires_at": tokens.expires_at.isoformat(),
+                    "is_expired": is_expired,
+                    "project_id": tokens.project_id,
+                }
+            )
+        else:
+            statuses.append(
+                {
+                    "region": rgn,
+                    "authenticated": False,
+                    "token_type": None,
+                    "scope": None,
+                    "expires_at": None,
+                    "is_expired": None,
+                    "project_id": None,
+                }
+            )
+
+    output_result(
+        ctx,
+        statuses,
+        columns=[
+            "region",
+            "authenticated",
+            "token_type",
+            "expires_at",
+            "is_expired",
+            "project_id",
+        ],
+        format=format,
+    )
+
+
+@auth_app.command("token")
+@handle_errors
+def auth_token(
+    ctx: typer.Context,
+    region: Annotated[
+        str | None,
+        typer.Option("--region", help="Region (us, eu, in)."),
+    ] = None,
+) -> None:
+    """Output a valid OAuth access token to stdout.
+
+    Loads the stored token, refreshes if expired, and prints the
+    raw access token string. Suitable for piping to other tools.
+
+    Exit code 2 if no valid token is available.
+
+    Examples:
+
+        mp auth token
+        mp auth token --region eu
+        curl -H "Authorization: Bearer $(mp auth token)" https://...
+    """
+    resolved_region = _resolve_region(ctx, region)
+    flow = OAuthFlow(region=resolved_region)
+    token = flow.get_valid_token(region=resolved_region)
+    print(token)

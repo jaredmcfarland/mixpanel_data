@@ -11,6 +11,25 @@ All result types are immutable frozen dataclasses with:
 - JSON serialization via the `.to_dict()` method
 - Full type hints for IDE/mypy support
 
+## App API Types
+
+Types for the Mixpanel App API infrastructure.
+
+::: mixpanel_data.PublicWorkspace
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CursorPagination
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.PaginatedResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Fetch Results
 
 ::: mixpanel_data.FetchResult

@@ -6,9 +6,12 @@ Configuration is stored in TOML format at ~/.mp/config.toml by default.
 
 from __future__ import annotations
 
+import base64
+import logging
 import os
 import sys
 from dataclasses import dataclass
+from enum import Enum
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -18,7 +21,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import tomli_w
-from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, SecretStr, field_validator, model_validator
 
 from mixpanel_data.exceptions import (
     AccountExistsError,
@@ -26,9 +29,36 @@ from mixpanel_data.exceptions import (
     ConfigError,
 )
 
+logger = logging.getLogger(__name__)
+
 # Valid regions for Mixpanel data residency
 VALID_REGIONS = ("us", "eu", "in")
 RegionType = Literal["us", "eu", "in"]
+
+
+class AuthMethod(str, Enum):
+    """Authentication method for Mixpanel API requests.
+
+    Determines how the ``Authorization`` header is constructed:
+
+    - ``basic``: Uses HTTP Basic Auth with service account username/secret.
+    - ``oauth``: Uses OAuth 2.0 Bearer token.
+
+    Example:
+        ```python
+        method = AuthMethod.basic
+        assert method.value == "basic"
+
+        method = AuthMethod.oauth
+        assert method.value == "oauth"
+        ```
+    """
+
+    basic = "basic"
+    """HTTP Basic Auth with service account credentials."""
+
+    oauth = "oauth"
+    """OAuth 2.0 Bearer token authentication."""
 
 
 class Credentials(BaseModel):
@@ -38,21 +68,31 @@ class Credentials(BaseModel):
     - All fields are validated on construction
     - The secret is never exposed in repr/str output
     - The object cannot be modified after creation
+
+    Supports both Basic Auth (service account) and OAuth 2.0 Bearer token
+    authentication. When ``auth_method`` is ``oauth``, the ``username`` and
+    ``secret`` fields may be empty strings.
     """
 
     model_config = ConfigDict(frozen=True)
 
     username: str
-    """Service account username."""
+    """Service account username (may be empty for OAuth)."""
 
     secret: SecretStr
-    """Service account secret (redacted in output)."""
+    """Service account secret (redacted in output; may be empty for OAuth)."""
 
     project_id: str
     """Mixpanel project identifier."""
 
     region: RegionType
     """Data residency region (us, eu, or in)."""
+
+    auth_method: AuthMethod = AuthMethod.basic
+    """Authentication method (basic or oauth). Defaults to basic."""
+
+    oauth_access_token: SecretStr | None = None
+    """OAuth 2.0 access token, required when auth_method is oauth."""
 
     @field_validator("region", mode="before")
     @classmethod
@@ -66,13 +106,72 @@ class Credentials(BaseModel):
             raise ValueError(f"Region must be one of: {valid}. Got: {v}")
         return v_lower
 
-    @field_validator("username", "project_id")
-    @classmethod
-    def validate_non_empty(cls, v: str) -> str:
-        """Validate string fields are non-empty."""
-        if not v or not v.strip():
-            raise ValueError("Field cannot be empty")
-        return v
+    @model_validator(mode="after")
+    def validate_credentials(self) -> Credentials:
+        """Validate credential fields based on auth method.
+
+        For basic auth, username and project_id must be non-empty.
+        For OAuth, username may be empty but project_id must still be non-empty,
+        and oauth_access_token must be provided.
+
+        Returns:
+            The validated Credentials instance.
+
+        Raises:
+            ValueError: If required fields are missing for the auth method.
+        """
+        if not self.project_id or not self.project_id.strip():
+            raise ValueError("project_id cannot be empty")
+
+        if self.auth_method == AuthMethod.basic:
+            if not self.username or not self.username.strip():
+                raise ValueError("username cannot be empty for basic auth")
+            if not self.secret.get_secret_value():
+                raise ValueError("secret cannot be empty for basic auth")
+        elif self.auth_method == AuthMethod.oauth:
+            if self.oauth_access_token is None:
+                raise ValueError(
+                    "oauth_access_token is required when auth_method is oauth"
+                )
+            if not self.oauth_access_token.get_secret_value():
+                raise ValueError("oauth_access_token cannot be empty for oauth auth")
+        return self
+
+    def auth_header(self) -> str:
+        """Build the Authorization header value for API requests.
+
+        Returns:
+            For basic auth: ``"Basic <base64(username:secret)>"``.
+            For OAuth: ``"Bearer <access_token>"``.
+
+        Raises:
+            ValueError: If auth_method is oauth but no access token is set.
+
+        Example:
+            ```python
+            creds = Credentials(
+                username="sa-user", secret=SecretStr("sa-secret"),
+                project_id="123", region="us",
+            )
+            assert creds.auth_header().startswith("Basic ")
+
+            oauth_creds = Credentials(
+                username="", secret=SecretStr(""),
+                project_id="123", region="us",
+                auth_method=AuthMethod.oauth,
+                oauth_access_token=SecretStr("my-token"),
+            )
+            assert oauth_creds.auth_header() == "Bearer my-token"
+            ```
+        """
+        if self.auth_method == AuthMethod.oauth:
+            if self.oauth_access_token is None:
+                raise ValueError("No OAuth access token available")
+            return f"Bearer {self.oauth_access_token.get_secret_value()}"
+
+        raw = f"{self.username}:{self.secret.get_secret_value()}"
+        encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
+        return f"Basic {encoded}"
 
     def __repr__(self) -> str:
         """Return string representation with redacted secret."""
@@ -178,16 +277,32 @@ class ConfigManager:
         accounts = config.get("accounts", {})
         return list(accounts.keys())
 
-    def resolve_credentials(self, account: str | None = None) -> Credentials:
+    def resolve_credentials(
+        self,
+        account: str | None = None,
+        *,
+        _oauth_storage_dir: Path | None = None,
+    ) -> Credentials:
         """Resolve credentials using priority order.
 
         Resolution order:
         1. Environment variables (MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION)
-        2. Named account from config file (if account parameter provided)
-        3. Default account from config file
+        2. OAuth tokens from local storage (if no explicit account requested)
+        3. Named account from config file (if account parameter provided)
+        4. Default account from config file
+
+        For OAuth resolution, the region and project_id are determined from:
+        - ``MP_PROJECT_ID`` / ``MP_REGION`` env vars (partial env mode), or
+        - The default account in the config file.
+
+        Expired OAuth tokens are skipped, falling through to config file
+        resolution.
 
         Args:
             account: Optional account name to use instead of default.
+                When provided, OAuth resolution is skipped.
+            _oauth_storage_dir: Override OAuth storage directory for testing.
+                If ``None``, uses the default ``OAuthStorage`` directory.
 
         Returns:
             Immutable Credentials object.
@@ -195,13 +310,28 @@ class ConfigManager:
         Raises:
             ConfigError: If no credentials can be resolved.
             AccountNotFoundError: If named account doesn't exist.
+
+        Example:
+            ```python
+            config = ConfigManager()
+            creds = config.resolve_credentials()
+            print(creds.auth_method)  # AuthMethod.basic or AuthMethod.oauth
+            ```
         """
-        # Priority 1: Environment variables
+        # Priority 1: Environment variables (all four must be set)
         env_creds = self._resolve_from_env()
         if env_creds is not None:
             return env_creds
 
-        # Priority 2 & 3: Config file (named account or default)
+        # Priority 2: OAuth tokens (only when no explicit account requested)
+        if account is None:
+            oauth_creds = self._resolve_from_oauth(
+                _oauth_storage_dir=_oauth_storage_dir,
+            )
+            if oauth_creds is not None:
+                return oauth_creds
+
+        # Priority 3 & 4: Config file (named account or default)
         config = self._read_config()
         accounts = config.get("accounts", {})
 
@@ -237,6 +367,94 @@ class ConfigManager:
             project_id=account_data["project_id"],
             region=account_data["region"],
         )
+
+    def _resolve_from_oauth(
+        self,
+        *,
+        _oauth_storage_dir: Path | None = None,
+    ) -> Credentials | None:
+        """Attempt to resolve credentials from stored OAuth tokens.
+
+        Checks for valid (non-expired) OAuth tokens in local storage.
+        The region for token lookup is determined from ``MP_REGION`` env var
+        or the default account in the config file.
+
+        Args:
+            _oauth_storage_dir: Override OAuth storage directory for testing.
+
+        Returns:
+            Credentials with ``auth_method=AuthMethod.oauth`` if valid tokens
+            are found, ``None`` otherwise.
+        """
+        from mixpanel_data._internal.auth.storage import OAuthStorage
+
+        # Determine region and project_id for token lookup
+        region, project_id = self._resolve_region_and_project_for_oauth()
+        if region is None:
+            return None
+
+        storage = OAuthStorage(storage_dir=_oauth_storage_dir)
+        tokens = storage.load_tokens(region)
+        if tokens is None:
+            return None
+
+        # Skip expired tokens — fall through to config file resolution
+        if tokens.is_expired():
+            logger.debug(
+                "OAuth token for region '%s' is expired. "
+                "Run 'mp auth login' to refresh.",
+                region,
+            )
+            return None
+
+        # Use project_id from token if available, otherwise from config/env
+        resolved_project_id = tokens.project_id or project_id
+        if resolved_project_id is None:
+            return None
+
+        return Credentials(
+            username="",
+            secret=SecretStr(""),
+            project_id=resolved_project_id,
+            region=cast(RegionType, region),
+            auth_method=AuthMethod.oauth,
+            oauth_access_token=SecretStr(tokens.access_token.get_secret_value()),
+        )
+
+    def _resolve_region_and_project_for_oauth(
+        self,
+    ) -> tuple[str | None, str | None]:
+        """Determine region and project_id for OAuth token lookup.
+
+        Checks in order:
+        1. ``MP_REGION`` / ``MP_PROJECT_ID`` environment variables
+        2. Default account from config file
+
+        Returns:
+            Tuple of ``(region, project_id)``. Either or both may be
+            ``None`` if not determinable.
+        """
+        # Check env vars first (partial env mode)
+        env_region = os.environ.get("MP_REGION")
+        env_project_id = os.environ.get("MP_PROJECT_ID")
+
+        if env_region and env_region in VALID_REGIONS:
+            return env_region, env_project_id
+
+        # Fall back to config file default account
+        config = self._read_config()
+        accounts = config.get("accounts", {})
+        if not accounts:
+            return None, None
+
+        default_name = config.get("default")
+        if default_name and isinstance(default_name, str) and default_name in accounts:
+            account_data = accounts[default_name]
+            return account_data.get("region"), account_data.get("project_id")
+
+        # Use first account as fallback
+        first_account = next(iter(accounts.values()))
+        return first_account.get("region"), first_account.get("project_id")
 
     def _resolve_from_env(self) -> Credentials | None:
         """Attempt to resolve credentials from environment variables.

@@ -1,6 +1,6 @@
 # mixpanel_data
 
-A complete programmable interface to Mixpanel analytics—available as both a Python library and CLI.
+A complete programmable interface to Mixpanel analytics—available as both a Python library and CLI. Supports service account and OAuth 2.0 authentication.
 
 !!! tip "AI-Friendly Documentation"
     🤖 **[Explore on DeepWiki →](https://deepwiki.com/jaredmcfarland/mixpanel_data)**

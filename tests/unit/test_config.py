@@ -335,12 +335,18 @@ class TestCredentialResolution:
         assert creds.region == "eu"
 
     def test_resolve_falls_back_to_default(
-        self, config_manager: ConfigManager, sample_credentials: dict[str, str]
+        self,
+        config_manager: ConfigManager,
+        sample_credentials: dict[str, str],
+        temp_dir: Path,
     ) -> None:
         """Should fall back to default account from config."""
         config_manager.add_account(**sample_credentials)
 
-        creds = config_manager.resolve_credentials()
+        # Use empty temp dir for OAuth storage to avoid picking up real tokens
+        oauth_dir = temp_dir / "oauth_empty"
+        oauth_dir.mkdir()
+        creds = config_manager.resolve_credentials(_oauth_storage_dir=oauth_dir)
 
         assert creds.username == "sa_test_user"
         assert creds.project_id == "12345"

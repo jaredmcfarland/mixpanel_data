@@ -43,7 +43,9 @@ class TestTransformEvent:
 
         assert result["event_name"] == "Sign Up"
         # Unix timestamp 1609459200 = 2021-01-01 00:00:00 UTC
-        assert result["event_time"] == datetime(2021, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        assert result["event_time"] == datetime(
+            2021, 1, 1, 0, 0, 0, tzinfo=timezone.utc
+        )
         assert result["distinct_id"] == "user_123"
         assert result["insert_id"] == "abc-123-def"
         assert result["properties"] == {"browser": "Chrome", "country": "US"}
@@ -128,7 +130,9 @@ class TestTransformEvent:
         assert result["event_name"] == "No Properties"
         assert result["distinct_id"] == ""
         # Unix timestamp 0 = 1970-01-01 00:00:00 UTC (epoch)
-        assert result["event_time"] == datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        assert result["event_time"] == datetime(
+            1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc
+        )
 
 
 class TestTransformProfile:

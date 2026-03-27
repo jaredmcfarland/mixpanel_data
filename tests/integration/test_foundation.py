@@ -49,8 +49,10 @@ class TestFoundationLayerWorkflow:
             assert len(accounts) == 1
             assert accounts[0].name == "production"
 
-            # Retrieve credentials
-            creds = config.resolve_credentials()
+            # Retrieve credentials (use empty OAuth dir to avoid real tokens)
+            oauth_dir = Path(tmpdir) / "oauth_empty"
+            oauth_dir.mkdir()
+            creds = config.resolve_credentials(_oauth_storage_dir=oauth_dir)
             assert creds.username == "sa_test_user"
             assert creds.project_id == "12345"
 

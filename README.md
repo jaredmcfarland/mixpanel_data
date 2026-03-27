@@ -29,10 +29,19 @@ mp --version
 
 ## Quick Start
 
-### 1. Configure Service Account Credentials
+### 1. Authenticate
+
+**Option A: OAuth Login (interactive, recommended)**
 
 ```bash
-# Interactive prompt (secure, recommended)
+mp auth login --region us --project-id 12345  # Opens browser
+mp auth status  # Verify connection
+```
+
+**Option B: Service Account (scripts, CI/CD)**
+
+```bash
+# Interactive prompt (secure)
 mp auth add production --username sa_xxx --project 12345 --region us
 # You'll be prompted for the service account secret with hidden input
 
@@ -167,7 +176,7 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 ## CLI Reference
 
-**`mp auth`** — Manage accounts: `list`, `add`, `remove`, `switch`, `show`, `test`
+**`mp auth`** — Authentication: `login`, `logout`, `status`, `token` (OAuth); `list`, `add`, `remove`, `switch`, `show`, `test` (service accounts)
 
 **`mp fetch`** — Extract data: `events`, `profiles` (add `--parallel` for up to 10x faster event exports or 5x faster profile exports, `--stdout` to stream as JSONL)
 
@@ -236,6 +245,7 @@ Key design features:
 - **Structured output**: All CLI commands support `--format json` for machine-readable responses, plus `--jq` for inline filtering
 - **Parallel fetching**: Up to 10x faster event exports for large date ranges, 5x faster profile exports via `--parallel` or `parallel=True`
 - **Local SQL iteration**: Fetch once, query repeatedly—no re-fetching needed
+- **Dual authentication**: Service accounts (Basic Auth) for automation, OAuth 2.0 PKCE for interactive use
 - **Typed exceptions**: Error codes and context for programmatic handling
 
 ## Claude Code Plugin

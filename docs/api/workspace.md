@@ -136,6 +136,10 @@ ws.fetch_profiles(
         - open
         - close
         - test_credentials
+        - workspace_id
+        - set_workspace_id
+        - list_workspaces
+        - resolve_workspace_id
         - events
         - properties
         - property_values

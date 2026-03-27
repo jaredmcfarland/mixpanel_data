@@ -12,12 +12,12 @@ This guide walks you through your first queries with mixpanel_data in about 5 mi
 You'll need:
 
 - mixpanel_data installed (`pip install git+https://github.com/jaredmcfarland/mixpanel_data.git`)
-- A Mixpanel service account with username, secret, and project ID
+- **Either** a Mixpanel service account (username, secret, project ID) **or** a Mixpanel user account (for OAuth login)
 - Your project's data residency region (us, eu, or in)
 
-## Step 1: Set Up Service Account Credentials
+## Step 1: Set Up Credentials
 
-### Option A: Environment Variables
+### Option A: Environment Variables (Service Account)
 
 ```bash
 export MP_USERNAME="sa_abc123..."
@@ -26,7 +26,7 @@ export MP_PROJECT_ID="12345"
 export MP_REGION="us"
 ```
 
-### Option B: Using the CLI
+### Option B: Config File (Service Account)
 
 ```bash
 # Interactive prompt (secure, recommended)
@@ -48,6 +48,20 @@ MP_SECRET=your-secret mp auth add production --username sa_abc123... --project 1
 # Via stdin
 echo "$SECRET" | mp auth add production --username sa_abc123... --project 12345 --secret-stdin
 ```
+
+### Option C: OAuth Login (Interactive)
+
+For interactive use without managing service account credentials:
+
+```bash
+# Login via browser (opens Mixpanel authorization page)
+mp auth login --region us --project-id 12345
+
+# Check your auth status
+mp auth status
+```
+
+OAuth tokens are stored locally at `~/.mp/oauth/` and automatically refreshed when expired. See [Configuration](configuration.md#oauth-authentication) for details.
 
 ## Step 2: Test Your Connection
 

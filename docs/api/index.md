@@ -20,7 +20,13 @@ result = ws.segmentation(...)
 from mixpanel_data import Workspace, FetchResult, MixpanelDataError
 
 # Auth utilities
-from mixpanel_data.auth import ConfigManager, Credentials
+from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
+
+# OAuth and workspace exceptions
+from mixpanel_data import OAuthError, WorkspaceScopeError
+
+# App API types
+from mixpanel_data import PublicWorkspace, CursorPagination, PaginatedResponse
 ```
 
 ## Core Components
@@ -43,8 +49,11 @@ The main entry point for all operations:
 Credential and account management:
 
 - **ConfigManager** — Manage accounts in config file
-- **Credentials** — Credential container with secrets
+- **Credentials** — Credential container with secrets (Basic Auth and OAuth)
+- **AuthMethod** — Authentication method enum (`basic`, `oauth`)
 - **AccountInfo** — Account metadata (without secrets)
+- **OAuthFlow** — OAuth 2.0 PKCE login flow orchestration
+- **OAuthStorage** — Local token and client info persistence
 
 [View Auth API](auth.md)
 
@@ -55,6 +64,8 @@ Structured error handling:
 - **MixpanelDataError** — Base exception
 - **APIError** — HTTP/API errors
 - **ConfigError** — Configuration errors
+- **OAuthError** — OAuth authentication errors
+- **WorkspaceScopeError** — Workspace resolution errors
 - **TableExistsError** / **TableNotFoundError** — Storage errors
 
 [View Exceptions](exceptions.md)

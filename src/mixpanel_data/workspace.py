@@ -82,6 +82,7 @@ from mixpanel_data.types import (
     PropertyCountsResult,
     PropertyCoverageResult,
     PropertyDistributionResult,
+    PublicWorkspace,
     RetentionResult,
     SavedCohort,
     SavedReportResult,
@@ -188,6 +189,7 @@ class Workspace:
         region: str | None = None,
         path: str | Path | None = None,
         read_only: bool = False,
+        workspace_id: int | None = None,
         # Dependency injection for testing
         _config_manager: ConfigManager | None = None,
         _api_client: MixpanelAPIClient | None = None,
@@ -197,8 +199,9 @@ class Workspace:
 
         Credentials are resolved in priority order:
         1. Environment variables (MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION)
-        2. Named account from config file (if account parameter specified)
-        3. Default account from config file
+        2. OAuth tokens from local storage (if available and not expired)
+        3. Named account from config file (if account parameter specified)
+        4. Default account from config file
 
         Args:
             account: Named account from config file to use.
@@ -207,6 +210,8 @@ class Workspace:
             path: Path to database file. If None, uses default location.
             read_only: If True, open database in read-only mode allowing
                 concurrent reads. Defaults to False (write access).
+            workspace_id: Optional workspace ID for scoped App API requests.
+                If provided, the API client will use workspace-scoped paths.
             _config_manager: Injected ConfigManager for testing.
             _api_client: Injected MixpanelAPIClient for testing.
             _storage: Injected StorageEngine for testing.
@@ -266,6 +271,11 @@ class Workspace:
         self._discovery: DiscoveryService | None = None
         self._fetcher: FetcherService | None = None
         self._live_query: LiveQueryService | None = None
+
+        # Set workspace_id on the api_client if provided
+        self._initial_workspace_id = workspace_id
+        if workspace_id is not None and self._api_client is not None:
+            self._api_client.set_workspace_id(workspace_id)
 
     @classmethod
     @contextmanager
@@ -528,6 +538,8 @@ class Workspace:
                     "Use Workspace() with credentials instead of Workspace.open()."
                 )
             self._api_client = MixpanelAPIClient(self._credentials)
+            if self._initial_workspace_id is not None:
+                self._api_client.set_workspace_id(self._initial_workspace_id)
         return self._api_client
 
     def _require_api_client(self) -> MixpanelAPIClient:
@@ -545,6 +557,108 @@ class Workspace:
                 "Use Workspace() with credentials instead of Workspace.open()."
             )
         return self._get_api_client()
+
+    # =========================================================================
+    # WORKSPACE MANAGEMENT
+    # =========================================================================
+
+    @property
+    def workspace_id(self) -> int | None:
+        """Return the currently set workspace ID, or None if not set.
+
+        This returns the explicit workspace ID set via ``set_workspace_id()``
+        or the constructor's ``workspace_id`` parameter. It does NOT
+        auto-discover a workspace ID (use ``resolve_workspace_id()`` for that).
+
+        Returns:
+            The workspace ID if explicitly set, ``None`` otherwise.
+
+        Example:
+            ```python
+            ws = Workspace(workspace_id=42)
+            assert ws.workspace_id == 42
+
+            ws2 = Workspace()
+            assert ws2.workspace_id is None
+            ```
+        """
+        client = self._get_api_client()
+        return client.workspace_id
+
+    def set_workspace_id(self, workspace_id: int | None) -> None:
+        """Set or clear the workspace ID for scoped App API requests.
+
+        When set, App API requests that use ``maybe_scoped_path()`` or
+        ``require_scoped_path()`` will target the specified workspace.
+        Setting to ``None`` clears the workspace scope.
+
+        Args:
+            workspace_id: Workspace ID to use, or ``None`` to clear.
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.set_workspace_id(789)
+            assert ws.workspace_id == 789
+
+            ws.set_workspace_id(None)
+            assert ws.workspace_id is None
+            ```
+        """
+        self._initial_workspace_id = workspace_id
+        client = self._get_api_client()
+        client.set_workspace_id(workspace_id)
+
+    def list_workspaces(self) -> list[PublicWorkspace]:
+        """List all public workspaces for the current project.
+
+        Delegates to the API client's ``list_workspaces()`` method, which
+        calls ``GET /api/app/projects/{pid}/workspaces/public``.
+
+        Returns:
+            List of ``PublicWorkspace`` models for the project.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            workspaces = ws.list_workspaces()
+            for w in workspaces:
+                print(f"{w.name} (id={w.id}, default={w.is_default})")
+            ```
+        """
+        client = self._require_api_client()
+        return client.list_workspaces()
+
+    def resolve_workspace_id(self) -> int:
+        """Resolve the workspace ID for scoped requests.
+
+        Resolution order:
+        1. Explicit workspace ID (set via ``set_workspace_id()``)
+        2. Cached auto-discovered workspace ID
+        3. Auto-discover by listing workspaces and finding the default
+
+        Returns:
+            The resolved workspace ID.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            WorkspaceScopeError: If no workspaces are found for the project.
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws_id = ws.resolve_workspace_id()
+            print(f"Using workspace {ws_id}")
+            ```
+        """
+        client = self._require_api_client()
+        return client.resolve_workspace_id()
 
     @staticmethod
     def _try_float(value: Any) -> float | None:
