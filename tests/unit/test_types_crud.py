@@ -148,9 +148,9 @@ class TestBlueprintTypes:
     """Tests for BlueprintCard, BlueprintConfig, BlueprintFinishParams, and related types."""
 
     def test_blueprint_card_type_rename(self) -> None:
-        """BlueprintCard serializes card_type as 'type' in output."""
+        """BlueprintCard serializes card_type as 'type' via by_alias."""
         card = BlueprintCard(card_type="report")
-        data = card.model_dump()
+        data = card.model_dump(by_alias=True)
         assert "type" in data
         assert "card_type" not in data
         assert data["type"] == "report"
@@ -158,23 +158,23 @@ class TestBlueprintTypes:
     def test_blueprint_card_exclude_none(self) -> None:
         """BlueprintCard excludes None fields and renames card_type to type."""
         card = BlueprintCard(card_type="report", bookmark_id=123)
-        data = card.model_dump(exclude_none=True)
+        data = card.model_dump(by_alias=True, exclude_none=True)
         assert data == {"type": "report", "bookmark_id": 123}
         assert "text_card_id" not in data
         assert "markdown" not in data
 
     def test_rca_source_data_type_rename(self) -> None:
-        """RcaSourceData serializes source_type as 'type' in output."""
+        """RcaSourceData serializes source_type as 'type' via by_alias."""
         rca = RcaSourceData(source_type="anomaly")
-        data = rca.model_dump(exclude_none=True)
+        data = rca.model_dump(by_alias=True, exclude_none=True)
         assert "type" in data
         assert "source_type" not in data
         assert data["type"] == "anomaly"
 
     def test_update_report_link_type_rename(self) -> None:
-        """UpdateReportLinkParams serializes link_type as 'type' in output."""
+        """UpdateReportLinkParams serializes link_type as 'type' via by_alias."""
         params = UpdateReportLinkParams(link_type="embedded")
-        data = params.model_dump(exclude_none=True)
+        data = params.model_dump(by_alias=True, exclude_none=True)
         assert "type" in data
         assert "link_type" not in data
         assert data["type"] == "embedded"
@@ -185,16 +185,12 @@ class TestBlueprintTypes:
             dashboard_id=1,
             cards=[BlueprintCard(card_type="report")],
         )
-        data = params.model_dump()
+        data = params.model_dump(by_alias=True)
         assert data["dashboard_id"] == 1
         assert isinstance(data["cards"], list)
         assert len(data["cards"]) == 1
-        # Nested model uses field name; call card.model_dump() for type rename
-        assert data["cards"][0]["card_type"] == "report"
-        # Verify individual card model_dump does the rename
-        card_data = params.cards[0].model_dump()
-        assert card_data["type"] == "report"
-        assert "card_type" not in card_data
+        assert data["cards"][0]["type"] == "report"
+        assert "card_type" not in data["cards"][0]
 
     def test_blueprint_config_frozen(self) -> None:
         """BlueprintConfig is frozen and rejects attribute assignment."""
@@ -246,9 +242,9 @@ class TestBookmarkTypes:
         assert meta.model_extra["unknown_x"] == 42
 
     def test_create_bookmark_type_rename(self) -> None:
-        """CreateBookmarkParams serializes bookmark_type as 'type' in output."""
+        """CreateBookmarkParams serializes bookmark_type as 'type' via by_alias."""
         params = CreateBookmarkParams(name="X", bookmark_type="funnels", params={})
-        data = params.model_dump(exclude_none=True)
+        data = params.model_dump(by_alias=True, exclude_none=True)
         assert "type" in data
         assert "bookmark_type" not in data
         assert data["type"] == "funnels"
@@ -256,7 +252,7 @@ class TestBookmarkTypes:
     def test_create_bookmark_exclude_none(self) -> None:
         """CreateBookmarkParams excludes None description from output."""
         params = CreateBookmarkParams(name="X", bookmark_type="funnels", params={})
-        data = params.model_dump(exclude_none=True)
+        data = params.model_dump(by_alias=True, exclude_none=True)
         assert "description" not in data
         assert "icon" not in data
 

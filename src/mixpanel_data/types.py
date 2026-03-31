@@ -3619,7 +3619,7 @@ class Dashboard(BaseModel):
     creator: str | None = None
     """Creator identifier string."""
 
-    ancestors: list[Any] = []  # noqa: RUF012
+    ancestors: list[Any] = Field(default_factory=list)
     """Ancestor dashboard references."""
 
     layout: Any | None = None
@@ -3812,7 +3812,7 @@ class BlueprintCard(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    card_type: str = ""
+    card_type: str = Field(default="", alias="type")
     """Card type (serialized as ``"type"``)."""
 
     text_card_id: int | None = None
@@ -3829,20 +3829,6 @@ class BlueprintCard(BaseModel):
 
     params: Any | None = None
     """Card parameters."""
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
-        """Serialize with ``card_type`` renamed to ``type``.
-
-        Args:
-            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
-
-        Returns:
-            Dict with ``card_type`` serialized as ``type``.
-        """
-        data = super().model_dump(**kwargs)
-        if "card_type" in data:
-            data["type"] = data.pop("card_type")
-        return data
 
 
 class BlueprintFinishParams(BaseModel):
@@ -3879,14 +3865,14 @@ class RcaSourceData(BaseModel):
     Example:
         ```python
         data = RcaSourceData(source_type="anomaly", date="2025-01-01")
-        dumped = data.model_dump(exclude_none=True)
+        dumped = data.model_dump(by_alias=True, exclude_none=True)
         # {"type": "anomaly", "date": "2025-01-01"}
         ```
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    source_type: str = ""
+    source_type: str = Field(default="", alias="type")
     """Source type (serialized as ``"type"``)."""
 
     date: str | None = None
@@ -3894,20 +3880,6 @@ class RcaSourceData(BaseModel):
 
     metric_source: bool | None = None
     """Whether this is a metric source."""
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
-        """Serialize with ``source_type`` renamed to ``type``.
-
-        Args:
-            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
-
-        Returns:
-            Dict with ``source_type`` serialized as ``type``.
-        """
-        data = super().model_dump(**kwargs)
-        if "source_type" in data:
-            data["type"] = data.pop("source_type")
-        return data
 
 
 class CreateRcaDashboardParams(BaseModel):
@@ -3942,29 +3914,15 @@ class UpdateReportLinkParams(BaseModel):
     Example:
         ```python
         params = UpdateReportLinkParams(link_type="embedded")
-        data = params.model_dump(exclude_none=True)
+        data = params.model_dump(by_alias=True, exclude_none=True)
         # {"type": "embedded"}
         ```
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    link_type: str = ""
+    link_type: str = Field(default="", alias="type")
     """Link type (serialized as ``"type"``)."""
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
-        """Serialize with ``link_type`` renamed to ``type``.
-
-        Args:
-            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
-
-        Returns:
-            Dict with ``link_type`` serialized as ``type``.
-        """
-        data = super().model_dump(**kwargs)
-        if "link_type" in data:
-            data["type"] = data.pop("link_type")
-        return data
 
 
 class UpdateTextCardParams(BaseModel):
@@ -4192,7 +4150,7 @@ class CreateBookmarkParams(BaseModel):
             bookmark_type="funnels",
             params={"events": [{"event": "Signup"}]},
         )
-        data = params.model_dump(exclude_none=True)
+        data = params.model_dump(by_alias=True, exclude_none=True)
         ```
     """
 
@@ -4201,7 +4159,7 @@ class CreateBookmarkParams(BaseModel):
     name: str
     """Bookmark name (required)."""
 
-    bookmark_type: str
+    bookmark_type: str = Field(alias="type")
     """Report type (required, serialized as ``"type"``)."""
 
     params: Any
@@ -4221,20 +4179,6 @@ class CreateBookmarkParams(BaseModel):
 
     is_modification_restricted: bool | None = None
     """Modification restriction flag."""
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
-        """Serialize with ``bookmark_type`` renamed to ``type``.
-
-        Args:
-            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
-
-        Returns:
-            Dict with ``bookmark_type`` serialized as ``type``.
-        """
-        data = super().model_dump(**kwargs)
-        if "bookmark_type" in data:
-            data["type"] = data.pop("bookmark_type")
-        return data
 
 
 class UpdateBookmarkParams(BaseModel):
@@ -4366,7 +4310,7 @@ class BookmarkHistoryResponse(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="allow")
 
-    results: list[Any] = []  # noqa: RUF012
+    results: list[Any] = Field(default_factory=list)
     """List of history entries."""
 
     pagination: BookmarkHistoryPagination | None = None
@@ -4472,10 +4416,10 @@ class Cohort(BaseModel):
     last_queried: str | None = None
     """Last queried timestamp string."""
 
-    referenced_directly_by: list[int] = []  # noqa: RUF012
+    referenced_directly_by: list[int] = Field(default_factory=list)
     """IDs of entities directly referencing this cohort."""
 
-    active_integrations: list[int] = []  # noqa: RUF012
+    active_integrations: list[int] = Field(default_factory=list)
     """Active integration IDs."""
 
 

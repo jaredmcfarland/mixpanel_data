@@ -141,7 +141,11 @@ def create_cohort(
 
     parsed_definition: dict[str, object] | None = None
     if definition is not None:
-        parsed_definition = json.loads(definition)
+        try:
+            parsed_definition = json.loads(definition)
+        except json.JSONDecodeError as exc:
+            err_console.print(f"[red]Invalid JSON for --definition:[/red] {exc.msg}")
+            raise typer.Exit(code=1) from None
 
     params = CreateCohortParams(
         name=name,
@@ -248,7 +252,11 @@ def update_cohort(
 
     parsed_definition: dict[str, object] | None = None
     if definition is not None:
-        parsed_definition = json.loads(definition)
+        try:
+            parsed_definition = json.loads(definition)
+        except json.JSONDecodeError as exc:
+            err_console.print(f"[red]Invalid JSON for --definition:[/red] {exc.msg}")
+            raise typer.Exit(code=1) from None
 
     params = UpdateCohortParams(
         name=name,
@@ -355,7 +363,11 @@ def bulk_update_cohorts(
     """
     from mixpanel_data.types import BulkUpdateCohortEntry
 
-    raw_entries: list[dict[str, object]] = json.loads(entries)
+    try:
+        raw_entries: list[dict[str, object]] = json.loads(entries)
+    except json.JSONDecodeError as exc:
+        err_console.print(f"[red]Invalid JSON for --entries:[/red] {exc.msg}")
+        raise typer.Exit(code=1) from None
     parsed_entries = [BulkUpdateCohortEntry.model_validate(e) for e in raw_entries]
 
     workspace = get_workspace(ctx)

@@ -2461,7 +2461,7 @@ class MixpanelAPIClient:
     def favorite_dashboard(self, dashboard_id: int) -> None:
         """Mark a dashboard as a favorite for the current user.
 
-        Calls ``PUT /api/app/projects/{pid}/dashboards/{dashboard_id}/favorites``
+        Calls ``POST /api/app/projects/{pid}/dashboards/{dashboard_id}/favorites``
         (or workspace-scoped).
 
         Args:
@@ -2515,7 +2515,7 @@ class MixpanelAPIClient:
     def pin_dashboard(self, dashboard_id: int) -> None:
         """Pin a dashboard for the current project/workspace.
 
-        Calls ``PUT /api/app/projects/{pid}/dashboards/{dashboard_id}/pin``
+        Calls ``POST /api/app/projects/{pid}/dashboards/{dashboard_id}/pin``
         (or workspace-scoped).
 
         Args:
@@ -2838,7 +2838,7 @@ class MixpanelAPIClient:
     def get_bookmark_dashboard_ids(self, bookmark_id: int) -> list[int]:
         """Get dashboard IDs that contain a specific bookmark/report.
 
-        Calls ``GET /api/app/projects/{pid}/dashboards/bookmark/{bookmark_id}``
+        Calls ``GET /api/app/projects/{pid}/dashboards/bookmarks/{bookmark_id}/dashboard-ids``
         (or workspace-scoped).
 
         Args:

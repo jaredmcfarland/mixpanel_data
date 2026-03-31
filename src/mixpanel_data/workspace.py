@@ -3178,10 +3178,7 @@ class Workspace:
             ```
         """
         client = self._require_api_client()
-        body = params.model_dump(exclude_none=True)
-        # Re-serialize cards to trigger BlueprintCard.model_dump() field rename
-        if "cards" in body:
-            body["cards"] = [c.model_dump(exclude_none=True) for c in params.cards]
+        body = params.model_dump(exclude_none=True, by_alias=True)
         raw = client.finalize_blueprint(body)
         if not raw:
             raise MixpanelDataError(
@@ -3216,9 +3213,7 @@ class Workspace:
             ```
         """
         client = self._require_api_client()
-        body = params.model_dump(exclude_none=True)
-        # Re-serialize to trigger RcaSourceData.model_dump() field rename
-        body["rca_source_data"] = params.rca_source_data.model_dump(exclude_none=True)
+        body = params.model_dump(exclude_none=True, by_alias=True)
         raw = client.create_rca_dashboard(body)
         if not raw:
             raise MixpanelDataError(
@@ -3305,7 +3300,7 @@ class Workspace:
         client.update_report_link(
             dashboard_id,
             report_link_id,
-            params.model_dump(exclude_none=True),
+            params.model_dump(by_alias=True, exclude_none=True),
         )
 
     def update_text_card(
@@ -3349,7 +3344,7 @@ class Workspace:
     def list_bookmarks_v2(
         self,
         *,
-        bookmark_type: str | None = None,
+        bookmark_type: BookmarkType | None = None,
         ids: list[int] | None = None,
     ) -> list[Bookmark]:
         """List bookmarks/reports via the App API v2 endpoint.
@@ -3405,7 +3400,9 @@ class Workspace:
             ```
         """
         client = self._require_api_client()
-        raw = client.create_bookmark(params.model_dump(exclude_none=True))
+        raw = client.create_bookmark(
+            params.model_dump(by_alias=True, exclude_none=True)
+        )
         if not raw:
             raise MixpanelDataError(
                 "API returned empty response for create_bookmark",

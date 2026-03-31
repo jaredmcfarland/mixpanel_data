@@ -18,7 +18,7 @@ via the App API:
 from __future__ import annotations
 
 import json
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 
@@ -82,10 +82,11 @@ def list_reports(
     parsed_ids: list[int] | None = None
     if ids:
         parsed_ids = [int(i.strip()) for i in ids.split(",")]
+    from mixpanel_data.types import BookmarkType
+
+    typed_bt = cast(BookmarkType, bookmark_type) if bookmark_type else None
     with status_spinner(ctx, "Fetching bookmarks..."):
-        bookmarks = workspace.list_bookmarks_v2(
-            bookmark_type=bookmark_type, ids=parsed_ids
-        )
+        bookmarks = workspace.list_bookmarks_v2(bookmark_type=typed_bt, ids=parsed_ids)
     output_result(
         ctx,
         [b.model_dump() for b in bookmarks],
@@ -149,7 +150,11 @@ def create_report(
     from mixpanel_data.types import CreateBookmarkParams
 
     workspace = get_workspace(ctx)
-    parsed_params = json.loads(params)
+    try:
+        parsed_params = json.loads(params)
+    except json.JSONDecodeError as exc:
+        err_console.print(f"[red]Invalid JSON for --params:[/red] {exc.msg}")
+        raise typer.Exit(code=1) from None
     create_params = CreateBookmarkParams(
         name=name,
         bookmark_type=bookmark_type,
@@ -255,7 +260,14 @@ def update_report(
     from mixpanel_data.types import UpdateBookmarkParams
 
     workspace = get_workspace(ctx)
-    parsed_params = json.loads(params) if params else None
+    if params:
+        try:
+            parsed_params = json.loads(params)
+        except json.JSONDecodeError as exc:
+            err_console.print(f"[red]Invalid JSON for --params:[/red] {exc.msg}")
+            raise typer.Exit(code=1) from None
+    else:
+        parsed_params = None
     update_params = UpdateBookmarkParams(
         name=name,
         params=parsed_params,
@@ -361,7 +373,11 @@ def bulk_update_reports(
     from mixpanel_data.types import BulkUpdateBookmarkEntry
 
     workspace = get_workspace(ctx)
-    parsed_entries = json.loads(entries)
+    try:
+        parsed_entries = json.loads(entries)
+    except json.JSONDecodeError as exc:
+        err_console.print(f"[red]Invalid JSON for --entries:[/red] {exc.msg}")
+        raise typer.Exit(code=1) from None
     entry_objs = [BulkUpdateBookmarkEntry.model_validate(e) for e in parsed_entries]
     with status_spinner(ctx, f"Updating {len(entry_objs)} bookmarks..."):
         workspace.bulk_update_bookmarks(entry_objs)

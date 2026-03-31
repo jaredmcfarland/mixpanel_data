@@ -512,7 +512,11 @@ def dashboards_rca(
     """
     from mixpanel_data.types import CreateRcaDashboardParams, RcaSourceData
 
-    parsed_data: dict[str, Any] = json.loads(source_data)
+    try:
+        parsed_data: dict[str, Any] = json.loads(source_data)
+    except json.JSONDecodeError as exc:
+        err_console.print(f"[red]Invalid JSON for --source-data:[/red] {exc.msg}")
+        raise typer.Exit(code=1) from None
     rca_source = RcaSourceData.model_validate(parsed_data)
     params = CreateRcaDashboardParams(
         rca_source_id=source_id,
