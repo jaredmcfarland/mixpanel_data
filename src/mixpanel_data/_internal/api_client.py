@@ -2460,8 +2460,8 @@ class MixpanelAPIClient:
                 client.bulk_delete_dashboards([111, 222, 333])
             ```
         """
-        path = self.maybe_scoped_path("dashboards")
-        self.app_request("DELETE", path, json_body={"ids": ids})
+        path = self.maybe_scoped_path("dashboards/bulk-delete")
+        self.app_request("POST", path, json_body={"dashboard_ids": ids})
 
     def favorite_dashboard(self, dashboard_id: int) -> None:
         """Mark a dashboard as a favorite for the current user.
@@ -2599,14 +2599,15 @@ class MixpanelAPIClient:
                 client.remove_report_from_dashboard(12345, 67890)
             ```
         """
-        path = self.maybe_scoped_path(
-            f"dashboards/{dashboard_id}/reports/{bookmark_id}"
-        )
-        result = self.app_request("DELETE", path)
-        # 204 No Content returns synthetic {"status": "ok"} — return None
-        # so the caller can re-fetch the dashboard for current state.
-        if isinstance(result, dict) and result == {"status": "ok"}:
-            return None
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}")
+        body: dict[str, Any] = {
+            "content": {
+                "action": "delete",
+                "content_type": "report",
+                "content_id": bookmark_id,
+            }
+        }
+        result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
             raise MixpanelDataError(
                 f"Unexpected response from remove_report_from_dashboard: "
@@ -3028,18 +3029,23 @@ class MixpanelAPIClient:
             ```
         """
         path = self.maybe_scoped_path("bookmarks")
-        params: dict[str, str] = {}
+        params: dict[str, str] = {"v": "2"}
         if bookmark_type:
             params["type"] = bookmark_type
         if ids:
             params["ids"] = ",".join(str(i) for i in ids)
-        result = self.app_request("GET", path, params=params if params else None)
-        if not isinstance(result, list):
-            raise MixpanelDataError(
-                f"Unexpected response from list_bookmarks_v2: "
-                f"expected list, got {type(result).__name__}",
-            )
-        return result
+        result = self.app_request("GET", path, params=params)
+        # v2 envelope: {"results": {"results": [...]}}
+        if isinstance(result, dict) and "results" in result:
+            inner = result["results"]
+            if isinstance(inner, list):
+                return inner
+        if isinstance(result, list):
+            return result
+        raise MixpanelDataError(
+            f"Unexpected response from list_bookmarks_v2: "
+            f"expected list or v2 envelope, got {type(result).__name__}",
+        )
 
     def create_bookmark(self, body: dict[str, Any]) -> dict[str, Any]:
         """Create a new bookmark (saved report).
@@ -3068,7 +3074,8 @@ class MixpanelAPIClient:
             ```
         """
         path = self.maybe_scoped_path("bookmarks")
-        result = self.app_request("POST", path, json_body=body)
+        body_v2 = {**body, "v": 2}
+        result = self.app_request("POST", path, json_body=body_v2)
         if not isinstance(result, dict):
             raise MixpanelDataError(
                 f"Unexpected response from create_bookmark: "
@@ -3098,7 +3105,7 @@ class MixpanelAPIClient:
             ```
         """
         path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}")
-        result = self.app_request("GET", path)
+        result = self.app_request("GET", path, params={"v": "2"})
         if not isinstance(result, dict):
             raise MixpanelDataError(
                 f"Unexpected response from get_bookmark: "
@@ -3129,7 +3136,8 @@ class MixpanelAPIClient:
             ```
         """
         path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}")
-        result = self.app_request("PATCH", path, json_body=body)
+        body_v2 = {**body, "v": 2}
+        result = self.app_request("PATCH", path, json_body=body_v2)
         if not isinstance(result, dict):
             raise MixpanelDataError(
                 f"Unexpected response from update_bookmark: "
@@ -3176,8 +3184,8 @@ class MixpanelAPIClient:
                 client.bulk_delete_bookmarks([123, 456])
             ```
         """
-        path = self.maybe_scoped_path("bookmarks")
-        self.app_request("DELETE", path, json_body={"ids": ids})
+        path = self.maybe_scoped_path("bookmarks/bulk-delete")
+        self.app_request("POST", path, json_body={"bookmark_ids": ids})
 
     def bulk_update_bookmarks(self, entries: list[dict[str, Any]]) -> None:
         """Update multiple bookmarks in a single request.
@@ -3199,8 +3207,8 @@ class MixpanelAPIClient:
                 ])
             ```
         """
-        path = self.maybe_scoped_path("bookmarks")
-        self.app_request("PATCH", path, json_body={"bookmarks": entries})
+        path = self.maybe_scoped_path("bookmarks/bulk-update")
+        self.app_request("POST", path, json_body={"bookmarks": entries})
 
     def bookmark_linked_dashboard_ids(self, bookmark_id: int) -> list[int]:
         """Get dashboard IDs linked to a bookmark.
@@ -3467,8 +3475,8 @@ class MixpanelAPIClient:
                 client.bulk_delete_cohorts([123, 456])
             ```
         """
-        path = self.maybe_scoped_path("cohorts")
-        self.app_request("DELETE", path, json_body={"ids": ids})
+        path = self.maybe_scoped_path("cohorts/bulk-delete")
+        self.app_request("POST", path, json_body={"cohort_ids": ids})
 
     def bulk_update_cohorts(self, entries: list[dict[str, Any]]) -> None:
         """Update multiple cohorts in a single request.
@@ -3491,5 +3499,5 @@ class MixpanelAPIClient:
                 ])
             ```
         """
-        path = self.maybe_scoped_path("cohorts")
-        self.app_request("PATCH", path, json_body={"cohorts": entries})
+        path = self.maybe_scoped_path("cohorts/bulk-update")
+        self.app_request("POST", path, json_body={"cohorts": entries})

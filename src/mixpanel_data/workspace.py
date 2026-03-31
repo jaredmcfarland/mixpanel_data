@@ -3040,9 +3040,6 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.remove_report_from_dashboard(dashboard_id, bookmark_id)
-        if raw is None:
-            # 204 No Content — re-fetch for current state
-            return self.get_dashboard(dashboard_id)
         return Dashboard.model_validate(raw)
 
     def list_blueprint_templates(

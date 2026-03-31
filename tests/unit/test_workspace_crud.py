@@ -1493,20 +1493,17 @@ class TestWorkspaceBlueprintCohorts:
         }
 
 
-class TestRemoveReportFromDashboard204:
-    """Tests for remove_report_from_dashboard on 204 responses."""
+class TestRemoveReportFromDashboard:
+    """Tests for remove_report_from_dashboard using PATCH with content action."""
 
-    def test_remove_report_refetches_on_204(self, temp_dir: Path) -> None:
-        """remove_report_from_dashboard() re-fetches dashboard on 204."""
+    def test_remove_report_returns_dashboard(self, temp_dir: Path) -> None:
+        """remove_report_from_dashboard() sends PATCH and returns updated dashboard."""
         call_count = 0
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Return 204 for DELETE, dashboard for GET."""
+            """Return updated dashboard for PATCH request."""
             nonlocal call_count
             call_count += 1
-            if request.method == "DELETE":
-                return httpx.Response(204)
-            # GET request (re-fetch)
             return httpx.Response(
                 200,
                 json={
@@ -1520,7 +1517,7 @@ class TestRemoveReportFromDashboard204:
 
         assert isinstance(result, Dashboard)
         assert result.title == "Updated Dashboard"
-        assert call_count == 2  # DELETE + GET
+        assert call_count == 1  # Single PATCH request
 
 
 class TestConfigErrorOnNullClient:

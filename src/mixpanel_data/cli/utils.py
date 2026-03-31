@@ -205,7 +205,11 @@ def handle_errors(func: F) -> F:
             if e.response_body:
                 if isinstance(e.response_body, dict):
                     api_error = e.response_body.get("error", "")
-                    if api_error and api_error not in e.message:
+                    if (
+                        api_error
+                        and isinstance(api_error, str)
+                        and api_error not in e.message
+                    ):
                         err_console.print(f"  [dim]API error:[/dim] {api_error}")
                 elif (
                     isinstance(e.response_body, str)

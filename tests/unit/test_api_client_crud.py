@@ -227,19 +227,23 @@ class TestBulkDeleteDashboards:
     """Tests for bulk_delete_dashboards() API client method."""
 
     def test_bulk_deletes_dashboards(self, oauth_credentials: Credentials) -> None:
-        """bulk_delete_dashboards() sends DELETE with ids body."""
-        captured: list[Any] = []
+        """bulk_delete_dashboards() sends POST to bulk-delete with dashboard_ids body."""
+        captured: list[tuple[str, str, Any]] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Capture body."""
-            captured.append(json.loads(request.content))
+            """Capture method, URL, and body."""
+            captured.append(
+                (request.method, str(request.url), json.loads(request.content))
+            )
             return httpx.Response(204)
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
             client.bulk_delete_dashboards([1, 2, 3])
 
-        assert captured[0] == {"ids": [1, 2, 3]}
+        assert captured[0][0] == "POST"
+        assert "/dashboards/bulk-delete" in captured[0][1]
+        assert captured[0][2] == {"dashboard_ids": [1, 2, 3]}
 
 
 # =============================================================================
@@ -315,12 +319,14 @@ class TestDashboardOrganization:
         assert "/dashboards/1/pin" in captured[0][1]
 
     def test_remove_report_from_dashboard(self, oauth_credentials: Credentials) -> None:
-        """remove_report_from_dashboard() sends DELETE and returns dashboard."""
-        captured_urls: list[str] = []
+        """remove_report_from_dashboard() sends PATCH with content action and returns dashboard."""
+        captured: list[tuple[str, str, Any]] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Capture URL."""
-            captured_urls.append(str(request.url))
+            """Capture method, URL, and body."""
+            captured.append(
+                (request.method, str(request.url), json.loads(request.content))
+            )
             return httpx.Response(
                 200,
                 json={"status": "ok", "results": {"id": 1, "title": "Dash"}},
@@ -330,7 +336,15 @@ class TestDashboardOrganization:
         with client:
             result = client.remove_report_from_dashboard(1, 42)
 
-        assert "/dashboards/1/reports/42" in captured_urls[0]
+        assert captured[0][0] == "PATCH"
+        assert "/dashboards/1" in captured[0][1]
+        assert captured[0][2] == {
+            "content": {
+                "action": "delete",
+                "content_type": "report",
+                "content_id": 42,
+            }
+        }
         assert result is not None
         assert result["id"] == 1
 
@@ -724,19 +738,23 @@ class TestBookmarkCRUD:
         assert captured_methods[0] == "DELETE"
 
     def test_bulk_delete_bookmarks(self, oauth_credentials: Credentials) -> None:
-        """bulk_delete_bookmarks() sends DELETE with ids body."""
-        captured: list[Any] = []
+        """bulk_delete_bookmarks() sends POST to bulk-delete with bookmark_ids body."""
+        captured: list[tuple[str, str, Any]] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Capture body."""
-            captured.append(json.loads(request.content))
+            """Capture method, URL, and body."""
+            captured.append(
+                (request.method, str(request.url), json.loads(request.content))
+            )
             return httpx.Response(204)
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
             client.bulk_delete_bookmarks([1, 2])
 
-        assert captured[0] == {"ids": [1, 2]}
+        assert captured[0][0] == "POST"
+        assert "/bookmarks/bulk-delete" in captured[0][1]
+        assert captured[0][2] == {"bookmark_ids": [1, 2]}
 
     def test_bulk_update_bookmarks(self, oauth_credentials: Credentials) -> None:
         """bulk_update_bookmarks() sends PATCH with entries."""
@@ -986,19 +1004,23 @@ class TestCohortCRUD:
         assert captured_methods[0] == "DELETE"
 
     def test_bulk_delete_cohorts(self, oauth_credentials: Credentials) -> None:
-        """bulk_delete_cohorts() sends DELETE with ids body."""
-        captured: list[Any] = []
+        """bulk_delete_cohorts() sends POST to bulk-delete with cohort_ids body."""
+        captured: list[tuple[str, str, Any]] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Capture body."""
-            captured.append(json.loads(request.content))
+            """Capture method, URL, and body."""
+            captured.append(
+                (request.method, str(request.url), json.loads(request.content))
+            )
             return httpx.Response(204)
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
             client.bulk_delete_cohorts([1, 2])
 
-        assert captured[0] == {"ids": [1, 2]}
+        assert captured[0][0] == "POST"
+        assert "/cohorts/bulk-delete" in captured[0][1]
+        assert captured[0][2] == {"cohort_ids": [1, 2]}
 
     def test_bulk_update_cohorts(self, oauth_credentials: Credentials) -> None:
         """bulk_update_cohorts() sends PATCH with entries."""

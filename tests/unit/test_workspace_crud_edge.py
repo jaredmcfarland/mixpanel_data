@@ -292,7 +292,7 @@ class TestWorkspaceMethodDelegation:
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Capture request body for bulk bookmark update."""
-            if request.method == "PATCH" and "bookmarks" in str(request.url):
+            if request.method == "POST" and "bookmarks/bulk-update" in str(request.url):
                 captured["body"] = json.loads(request.content)
                 return httpx.Response(204)
             return httpx.Response(200, json={"status": "ok", "results": []})
@@ -311,7 +311,7 @@ class TestWorkspaceMethodDelegation:
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Capture request body for bulk cohort update."""
-            if request.method == "PATCH" and "cohorts" in str(request.url):
+            if request.method == "POST" and "cohorts/bulk-update" in str(request.url):
                 captured["body"] = json.loads(request.content)
                 return httpx.Response(204)
             return httpx.Response(200, json={"status": "ok", "results": []})
