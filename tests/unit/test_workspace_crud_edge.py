@@ -22,7 +22,6 @@ from pydantic import SecretStr
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
 from mixpanel_data._internal.storage import StorageEngine
-from mixpanel_data.exceptions import MixpanelDataError
 from mixpanel_data.types import (
     BlueprintCard,
     BlueprintFinishParams,
@@ -241,25 +240,35 @@ class TestEmptyResponseHandling:
     """Tests verifying behavior when API returns empty or minimal responses (Bug B3)."""
 
     def test_create_dashboard_empty_response_raises(self, temp_dir: Path) -> None:
-        """Verify create_dashboard raises MixpanelDataError when response is empty dict."""
+        """Verify create_dashboard raises ValidationError when response is empty dict.
+
+        An empty dict ``{}`` passes the ``is None`` check but fails Pydantic
+        validation because required fields (``id``, ``title``) are missing.
+        """
+        from pydantic import ValidationError
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return an empty results dict for dashboard creation."""
             return httpx.Response(200, json={"status": "ok", "results": {}})
 
         ws = _make_workspace(temp_dir, handler)
-        with pytest.raises(MixpanelDataError, match="empty response"):
+        with pytest.raises(ValidationError):
             ws.create_dashboard(CreateDashboardParams(title="X"))
 
     def test_get_bookmark_empty_response_raises(self, temp_dir: Path) -> None:
-        """Verify get_bookmark raises MixpanelDataError when response is empty dict."""
+        """Verify get_bookmark raises ValidationError when response is empty dict.
+
+        An empty dict ``{}`` passes the ``is None`` check but fails Pydantic
+        validation because required fields (``id``, ``name``, ``type``) are missing.
+        """
+        from pydantic import ValidationError
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return an empty results dict for bookmark retrieval."""
             return httpx.Response(200, json={"status": "ok", "results": {}})
 
         ws = _make_workspace(temp_dir, handler)
-        with pytest.raises(MixpanelDataError, match="empty response"):
+        with pytest.raises(ValidationError):
             ws.get_bookmark(1)
 
     def test_list_dashboards_empty_list_ok(self, temp_dir: Path) -> None:

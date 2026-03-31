@@ -668,6 +668,7 @@ class MixpanelAPIClient:
         *,
         params: dict[str, str] | None = None,
         json_body: dict[str, Any] | None = None,
+        _raw: bool = False,
     ) -> Any:
         """Make an authenticated request to the Mixpanel App API.
 
@@ -680,11 +681,15 @@ class MixpanelAPIClient:
             path: API path (e.g., ``/projects/12345/dashboards``).
             params: Optional query parameters.
             json_body: Optional JSON request body.
+            _raw: If True, return the full response dict without unwrapping
+                the ``results`` field. Useful for endpoints that include
+                pagination metadata alongside results.
 
         Returns:
             The ``results`` field from the response JSON if present,
             otherwise the full response body. For 204 No Content responses,
-            returns ``{"status": "ok"}``.
+            returns ``{"status": "ok"}``. When ``_raw`` is True, the full
+            response dict is returned without unwrapping ``results``.
 
         Raises:
             AuthenticationError: Invalid credentials (401).
@@ -790,8 +795,8 @@ class MixpanelAPIClient:
                     request_body=json_body,
                 )
 
-                # Unwrap results field if present
-                if isinstance(result, dict) and "results" in result:
+                # Unwrap results field if present (unless _raw requested)
+                if not _raw and isinstance(result, dict) and "results" in result:
                     return result["results"]
                 return result
 
@@ -2268,7 +2273,7 @@ class MixpanelAPIClient:
 
         Returns:
             List of dashboard dictionaries. Each dictionary contains at minimum
-            ``id``, ``title``, and ``created_at`` fields.
+            ``id``, ``title``, and ``created`` fields.
 
         Raises:
             AuthenticationError: Invalid credentials (401).
@@ -2568,7 +2573,7 @@ class MixpanelAPIClient:
 
     def remove_report_from_dashboard(
         self, dashboard_id: int, bookmark_id: int
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         """Remove a report (bookmark) from a dashboard.
 
         Calls ``DELETE /api/app/projects/{pid}/dashboards/{dashboard_id}/reports/{bookmark_id}``
@@ -2579,7 +2584,8 @@ class MixpanelAPIClient:
             bookmark_id: The numeric bookmark/report identifier to remove.
 
         Returns:
-            Dictionary with the API response, typically confirming removal.
+            Dictionary representing the updated dashboard after report removal,
+            or None if the API returned 204 No Content.
 
         Raises:
             AuthenticationError: Invalid credentials (401).
@@ -2597,6 +2603,10 @@ class MixpanelAPIClient:
             f"dashboards/{dashboard_id}/reports/{bookmark_id}"
         )
         result = self.app_request("DELETE", path)
+        # 204 No Content returns synthetic {"status": "ok"} — return None
+        # so the caller can re-fetch the dashboard for current state.
+        if isinstance(result, dict) and result == {"status": "ok"}:
+            return None
         if not isinstance(result, dict):
             raise MixpanelDataError(
                 f"Unexpected response from remove_report_from_dashboard: "
@@ -2644,11 +2654,17 @@ class MixpanelAPIClient:
             templates = result["templates"]
             if isinstance(templates, dict):
                 # Convert {name: data} to [{...data, "name": name}, ...]
-                return [
-                    {**data, "name": name}
-                    for name, data in templates.items()
-                    if isinstance(data, dict)
-                ]
+                results: list[dict[str, Any]] = []
+                for name, data in templates.items():
+                    if isinstance(data, dict):
+                        results.append({**data, "name": name})
+                    else:
+                        logger.warning(
+                            "Skipping blueprint template %r: expected dict, got %s",
+                            name,
+                            type(data).__name__,
+                        )
+                return results
             if isinstance(templates, list):
                 return templates
         if isinstance(result, list):
@@ -2872,7 +2888,7 @@ class MixpanelAPIClient:
         return result
 
     def get_dashboard_erf(self, dashboard_id: int) -> dict[str, Any]:
-        """Get the ERF (Event Reference Format) data for a dashboard.
+        """Get ERF data for a dashboard.
 
         Calls ``GET /api/app/projects/{pid}/dashboards/{dashboard_id}/erf``
         (or workspace-scoped).
@@ -2882,7 +2898,7 @@ class MixpanelAPIClient:
 
         Returns:
             Dictionary containing the ERF data for the dashboard, describing
-            the events and properties referenced by its reports.
+            the ERF metrics for the dashboard.
 
         Raises:
             AuthenticationError: Invalid credentials (401).
@@ -2984,7 +3000,7 @@ class MixpanelAPIClient:
         bookmark_type: str | None = None,
         ids: list[int] | None = None,
     ) -> list[dict[str, Any]]:
-        """List bookmarks (saved reports) via the App API v2 endpoint.
+        """List bookmarks (saved reports) via the App API.
 
         Retrieves metadata for saved Insights, Funnels, Retention, Flows,
         and other report types. Supports filtering by type and by explicit
@@ -3251,16 +3267,29 @@ class MixpanelAPIClient:
             params["cursor"] = cursor
         if page_size is not None:
             params["page_size"] = str(page_size)
-        result = self.app_request("GET", path, params=params if params else None)
-        # app_request() unwraps "results" from the response, so we get the
-        # history entries list directly. Wrap it back for the caller.
+        result = self.app_request(
+            "GET", path, params=params if params else None, _raw=True
+        )
+        if isinstance(result, dict):
+            # The raw response is {"status": "ok", "results": <inner>}.
+            # <inner> may be the history dict {"results": [...], "pagination": {...}}
+            # or already a list if the API returns results directly.
+            inner = result.get("results", result)
+            if isinstance(inner, dict) and "results" in inner:
+                # inner is {"results": [...], "pagination": {...}} — use as-is
+                if "pagination" not in inner:
+                    inner["pagination"] = None
+                return inner
+            if isinstance(inner, list):
+                # Flat list of history entries — wrap with pagination
+                return {"results": inner, "pagination": None}
+            # Unexpected dict shape — return with defaults
+            return {"results": inner, "pagination": None}
         if isinstance(result, list):
             return {"results": result, "pagination": None}
-        if isinstance(result, dict):
-            return result
         raise MixpanelDataError(
             f"Unexpected response from get_bookmark_history: "
-            f"expected list or dict, got {type(result).__name__}",
+            f"expected dict, got {type(result).__name__}",
         )
 
     # =========================================================================

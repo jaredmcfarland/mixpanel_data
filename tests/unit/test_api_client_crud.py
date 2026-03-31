@@ -331,6 +331,7 @@ class TestDashboardOrganization:
             result = client.remove_report_from_dashboard(1, 42)
 
         assert "/dashboards/1/reports/42" in captured_urls[0]
+        assert result is not None
         assert result["id"] == 1
 
 
@@ -375,6 +376,55 @@ class TestBlueprintOperations:
             client.list_blueprint_templates(include_reports=True)
 
         assert "include_reports=true" in captured_urls[0]
+
+    def test_list_blueprint_templates_dict_of_dicts(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """list_blueprint_templates() converts dict-of-dicts to list with name."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return templates in dict-of-dicts format."""
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {
+                        "templates": {
+                            "onboarding": {"title_key": "Get Started", "reports": []},
+                            "marketing": {"title_key": "Marketing KPIs"},
+                        }
+                    },
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.list_blueprint_templates()
+
+        assert len(result) == 2
+        names = {t["name"] for t in result}
+        assert names == {"onboarding", "marketing"}
+        onboarding = next(t for t in result if t["name"] == "onboarding")
+        assert onboarding["title_key"] == "Get Started"
+
+    def test_update_blueprint_cohorts(self, oauth_credentials: Credentials) -> None:
+        """update_blueprint_cohorts() sends PUT with cohort mappings."""
+        captured: list[Any] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture body."""
+            captured.append(json.loads(request.content))
+            return httpx.Response(204)
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            client.update_blueprint_cohorts(
+                [{"placeholder": "new_users", "cohort_id": 42}]
+            )
+
+        assert captured[0] == {
+            "cohorts": [{"placeholder": "new_users", "cohort_id": 42}]
+        }
 
     def test_create_blueprint(self, oauth_credentials: Credentials) -> None:
         """create_blueprint() sends POST with template_type."""
@@ -763,6 +813,36 @@ class TestBookmarkCRUD:
 
         assert "cursor=abc" in captured_urls[0]
         assert "page_size=10" in captured_urls[0]
+
+    def test_get_bookmark_history_preserves_pagination(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """get_bookmark_history() preserves pagination data from API response."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return history with pagination cursor."""
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {
+                        "results": [{"action": "created"}],
+                        "pagination": {
+                            "page_size": 10,
+                            "next_cursor": "cursor_abc",
+                            "previous_cursor": None,
+                        },
+                    },
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.get_bookmark_history(1)
+
+        assert result["pagination"] is not None
+        assert result["pagination"]["next_cursor"] == "cursor_abc"
+        assert result["pagination"]["page_size"] == 10
 
 
 # =============================================================================

@@ -3812,7 +3812,7 @@ class BlueprintCard(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    card_type: str = Field(default="", alias="type")
+    card_type: str = Field(alias="type")
     """Card type (serialized as ``"type"``)."""
 
     text_card_id: int | None = None
@@ -3827,7 +3827,7 @@ class BlueprintCard(BaseModel):
     name: str | None = None
     """Card name."""
 
-    params: Any | None = None
+    params: dict[str, Any] | None = None
     """Card parameters."""
 
 
@@ -3872,7 +3872,7 @@ class RcaSourceData(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    source_type: str = Field(default="", alias="type")
+    source_type: str = Field(alias="type")
     """Source type (serialized as ``"type"``)."""
 
     date: str | None = None
@@ -3921,7 +3921,7 @@ class UpdateReportLinkParams(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    link_type: str = Field(default="", alias="type")
+    link_type: str = Field(alias="type")
     """Link type (serialized as ``"type"``)."""
 
 
@@ -4063,7 +4063,7 @@ class Bookmark(BaseModel):
     icon: str | None = None
     """Bookmark icon."""
 
-    params: Any = None
+    params: dict[str, Any] | None = None
     """Query parameters (JSON value defining the report)."""
 
     dashboard_id: int | None = None
@@ -4162,7 +4162,7 @@ class CreateBookmarkParams(BaseModel):
     bookmark_type: str = Field(alias="type")
     """Report type (required, serialized as ``"type"``)."""
 
-    params: Any
+    params: dict[str, Any]
     """Query parameters (required)."""
 
     description: str | None = None
@@ -4207,7 +4207,7 @@ class UpdateBookmarkParams(BaseModel):
     name: str | None = None
     """New bookmark name."""
 
-    params: Any | None = None
+    params: dict[str, Any] | None = None
     """New query parameters."""
 
     description: str | None = None
@@ -4253,7 +4253,7 @@ class BulkUpdateBookmarkEntry(BaseModel):
     name: str | None = None
     """New bookmark name."""
 
-    params: Any | None = None
+    params: dict[str, Any] | None = None
     """New query parameters."""
 
     description: str | None = None
@@ -4423,11 +4423,38 @@ class Cohort(BaseModel):
     """Active integration IDs."""
 
 
-class CreateCohortParams(BaseModel):
+class _DefinitionFlatteningModel(BaseModel):
+    """Base model that flattens a ``definition`` dict into the top-level payload.
+
+    Subclasses must declare a ``definition: dict[str, Any] | None`` field.
+    During serialization, the definition's keys are merged into the
+    top-level dict and the ``definition`` key is removed.
+    """
+
+    definition: dict[str, Any] | None = None
+    """Definition dict (flattened into payload during serialization)."""
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Serialize with ``definition`` flattened into the top level.
+
+        Args:
+            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
+
+        Returns:
+            Dict with ``definition`` fields merged into the top level.
+        """
+        data = super().model_dump(**kwargs)
+        definition = data.pop("definition", None)
+        if definition:
+            data.update(definition)
+        return data
+
+
+class CreateCohortParams(_DefinitionFlatteningModel):
     """Parameters for creating a new cohort.
 
     The ``definition`` dict is flattened into the top-level JSON payload
-    at serialization time, matching the Rust ``#[serde(flatten)]`` behavior.
+    at serialization time — its keys become top-level fields in the request body.
 
     Attributes:
         name: Cohort name (required).
@@ -4436,7 +4463,6 @@ class CreateCohortParams(BaseModel):
         is_locked: Whether the cohort should be locked.
         is_visible: Whether the cohort should be visible.
         deleted: Soft-delete flag.
-        definition: Cohort definition (flattened into payload).
 
     Example:
         ```python
@@ -4464,26 +4490,8 @@ class CreateCohortParams(BaseModel):
     deleted: bool | None = None
     """Soft-delete flag."""
 
-    definition: dict[str, Any] | None = None
-    """Cohort definition (flattened into payload)."""
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
-        """Serialize with ``definition`` flattened into the top level.
-
-        Args:
-            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
-
-        Returns:
-            Dict with ``definition`` fields merged into the top level.
-        """
-        data = super().model_dump(**kwargs)
-        definition = data.pop("definition", None)
-        if definition:
-            data.update(definition)
-        return data
-
-
-class UpdateCohortParams(BaseModel):
+class UpdateCohortParams(_DefinitionFlatteningModel):
     """Parameters for updating an existing cohort.
 
     All fields are optional — only provided fields are sent to the API.
@@ -4496,7 +4504,6 @@ class UpdateCohortParams(BaseModel):
         is_locked: New lock setting.
         is_visible: New visibility setting.
         deleted: Soft-delete flag.
-        definition: New cohort definition (flattened into payload).
 
     Example:
         ```python
@@ -4524,33 +4531,14 @@ class UpdateCohortParams(BaseModel):
     deleted: bool | None = None
     """Soft-delete flag."""
 
-    definition: dict[str, Any] | None = None
-    """New cohort definition (flattened into payload)."""
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
-        """Serialize with ``definition`` flattened into the top level.
-
-        Args:
-            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
-
-        Returns:
-            Dict with ``definition`` fields merged into the top level.
-        """
-        data = super().model_dump(**kwargs)
-        definition = data.pop("definition", None)
-        if definition:
-            data.update(definition)
-        return data
-
-
-class BulkUpdateCohortEntry(BaseModel):
+class BulkUpdateCohortEntry(_DefinitionFlatteningModel):
     """Entry for bulk-updating cohorts.
 
     Attributes:
         id: Cohort ID to update (required).
         name: New cohort name.
         description: New cohort description.
-        definition: New cohort definition (flattened into payload).
 
     Example:
         ```python
@@ -4566,21 +4554,3 @@ class BulkUpdateCohortEntry(BaseModel):
 
     description: str | None = None
     """New cohort description."""
-
-    definition: dict[str, Any] | None = None
-    """New cohort definition (flattened into payload)."""
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
-        """Serialize with ``definition`` flattened into the top level.
-
-        Args:
-            **kwargs: Keyword arguments passed to ``BaseModel.model_dump()``.
-
-        Returns:
-            Dict with ``definition`` fields merged into the top level.
-        """
-        data = super().model_dump(**kwargs)
-        definition = data.pop("definition", None)
-        if definition:
-            data.update(definition)
-        return data

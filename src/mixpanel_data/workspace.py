@@ -2813,7 +2813,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.create_dashboard(params.model_dump(exclude_none=True))
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for create_dashboard",
             )
@@ -2842,7 +2842,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.get_dashboard(dashboard_id)
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for get_dashboard",
             )
@@ -2878,7 +2878,7 @@ class Workspace:
         raw = client.update_dashboard(
             dashboard_id, params.model_dump(exclude_none=True)
         )
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for update_dashboard",
             )
@@ -3040,10 +3040,9 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.remove_report_from_dashboard(dashboard_id, bookmark_id)
-        if not raw:
-            raise MixpanelDataError(
-                "API returned empty response for remove_report_from_dashboard",
-            )
+        if raw is None:
+            # 204 No Content — re-fetch for current state
+            return self.get_dashboard(dashboard_id)
         return Dashboard.model_validate(raw)
 
     def list_blueprint_templates(
@@ -3095,7 +3094,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.create_blueprint(template_type)
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for create_blueprint",
             )
@@ -3124,7 +3123,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.get_blueprint_config(dashboard_id)
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for get_blueprint_config",
             )
@@ -3180,7 +3179,7 @@ class Workspace:
         client = self._require_api_client()
         body = params.model_dump(exclude_none=True, by_alias=True)
         raw = client.finalize_blueprint(body)
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for finalize_blueprint",
             )
@@ -3215,7 +3214,7 @@ class Workspace:
         client = self._require_api_client()
         body = params.model_dump(exclude_none=True, by_alias=True)
         raw = client.create_rca_dashboard(body)
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for create_rca_dashboard",
             )
@@ -3246,7 +3245,7 @@ class Workspace:
         return client.get_bookmark_dashboard_ids(bookmark_id)
 
     def get_dashboard_erf(self, dashboard_id: int) -> dict[str, Any]:
-        """Get ERF (Entity Relationship Framework) metrics for a dashboard.
+        """Get ERF data for a dashboard.
 
         Args:
             dashboard_id: Dashboard identifier.
@@ -3403,7 +3402,7 @@ class Workspace:
         raw = client.create_bookmark(
             params.model_dump(by_alias=True, exclude_none=True)
         )
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for create_bookmark",
             )
@@ -3432,7 +3431,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.get_bookmark(bookmark_id)
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for get_bookmark",
             )
@@ -3466,7 +3465,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.update_bookmark(bookmark_id, params.model_dump(exclude_none=True))
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for update_bookmark",
             )
@@ -3659,7 +3658,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.get_cohort(cohort_id)
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for get_cohort",
             )
@@ -3690,7 +3689,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.create_cohort(params.model_dump(exclude_none=True))
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for create_cohort",
             )
@@ -3722,7 +3721,7 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.update_cohort(cohort_id, params.model_dump(exclude_none=True))
-        if not raw:
+        if raw is None:
             raise MixpanelDataError(
                 "API returned empty response for update_cohort",
             )

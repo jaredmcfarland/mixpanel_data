@@ -1464,3 +1464,81 @@ class TestWorkspaceCohortCRUD:
         cohort = ws.update_cohort(1, params)
 
         assert cohort.is_locked is False
+
+
+# =============================================================================
+# Additional Coverage (PR Review Findings)
+# =============================================================================
+
+
+class TestWorkspaceBlueprintCohorts:
+    """Tests for update_blueprint_cohorts workspace method."""
+
+    def test_update_blueprint_cohorts(self, temp_dir: Path) -> None:
+        """update_blueprint_cohorts() delegates to API client."""
+        captured: list[Any] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture request body."""
+            import json
+
+            captured.append(json.loads(request.content))
+            return httpx.Response(204)
+
+        ws = _make_workspace(temp_dir, handler)
+        ws.update_blueprint_cohorts([{"placeholder": "new_users", "cohort_id": 42}])
+
+        assert captured[0] == {
+            "cohorts": [{"placeholder": "new_users", "cohort_id": 42}]
+        }
+
+
+class TestRemoveReportFromDashboard204:
+    """Tests for remove_report_from_dashboard on 204 responses."""
+
+    def test_remove_report_refetches_on_204(self, temp_dir: Path) -> None:
+        """remove_report_from_dashboard() re-fetches dashboard on 204."""
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return 204 for DELETE, dashboard for GET."""
+            nonlocal call_count
+            call_count += 1
+            if request.method == "DELETE":
+                return httpx.Response(204)
+            # GET request (re-fetch)
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {"id": 1, "title": "Updated Dashboard"},
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        result = ws.remove_report_from_dashboard(1, 42)
+
+        assert isinstance(result, Dashboard)
+        assert result.title == "Updated Dashboard"
+        assert call_count == 2  # DELETE + GET
+
+
+class TestConfigErrorOnNullClient:
+    """Test that CRUD methods raise ConfigError without credentials."""
+
+    def test_crud_without_credentials_raises(self, temp_dir: Path) -> None:
+        """CRUD methods raise ConfigError when called without API client."""
+        import pytest
+
+        from mixpanel_data.exceptions import ConfigError
+
+        # Create a DuckDB file for Workspace.open()
+        db_path = temp_dir / "query_only.db"
+        storage = StorageEngine(path=db_path)
+        storage.close()
+
+        # Query-only workspace (no credentials, no API client)
+        ws = Workspace.open(str(db_path))
+
+        with pytest.raises(ConfigError):
+            ws.list_dashboards()

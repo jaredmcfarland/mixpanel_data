@@ -82,9 +82,20 @@ def list_reports(
     parsed_ids: list[int] | None = None
     if ids:
         parsed_ids = [int(i.strip()) for i in ids.split(",")]
+    from typing import get_args
+
     from mixpanel_data.types import BookmarkType
 
-    typed_bt = cast(BookmarkType, bookmark_type) if bookmark_type else None
+    typed_bt: BookmarkType | None = None
+    if bookmark_type:
+        valid_types = get_args(BookmarkType)
+        if bookmark_type not in valid_types:
+            err_console.print(
+                f"[red]Invalid --type:[/red] '{bookmark_type}'. "
+                f"Valid types: {', '.join(valid_types)}"
+            )
+            raise typer.Exit(code=1)
+        typed_bt = cast(BookmarkType, bookmark_type)
     with status_spinner(ctx, "Fetching bookmarks..."):
         bookmarks = workspace.list_bookmarks_v2(bookmark_type=typed_bt, ids=parsed_ids)
     output_result(

@@ -539,7 +539,7 @@ def dashboards_erf(
     format: FormatOption = "json",
     jq_filter: JqOption = None,
 ) -> None:
-    """Get ERF (Entity Relationship Framework) metrics for a dashboard.
+    """Get ERF data for a dashboard.
 
     Retrieves the ERF metrics data associated with the specified dashboard.
 

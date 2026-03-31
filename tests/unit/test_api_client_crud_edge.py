@@ -214,6 +214,36 @@ class TestListMethodResponseHandling:
 
         assert result == [{"template_type": "company_kpis"}]
 
+    def test_list_blueprint_templates_skips_non_dict_entries(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """list_blueprint_templates() logs warning for non-dict template entries."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return templates with mixed types."""
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {
+                        "templates": {
+                            "valid": {"title_key": "OK"},
+                            "invalid_string": "not a dict",
+                            "invalid_none": None,
+                        }
+                    },
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.list_blueprint_templates()
+
+        # Only the valid dict entry should be returned
+        assert len(result) == 1
+        assert result[0]["name"] == "valid"
+        assert result[0]["title_key"] == "OK"
+
     def test_list_dashboards_non_list_raises(
         self, oauth_credentials: Credentials
     ) -> None:
