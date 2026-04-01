@@ -66,6 +66,16 @@ ws = Workspace.open("existing.db")
 
 **Cohort CRUD**: `list_cohorts_full()`, `get_cohort()`, `create_cohort()`, `update_cohort()`, `delete_cohort()`, `bulk_delete_cohorts()`, `bulk_update_cohorts()`
 
+**Feature Flag CRUD**: `list_feature_flags()`, `create_feature_flag()`, `get_feature_flag()`, `update_feature_flag()`, `delete_feature_flag()`, `archive_feature_flag()`, `restore_feature_flag()`, `duplicate_feature_flag()`, `set_flag_test_users()`, `get_flag_history()`, `get_flag_limits()`
+
+**Experiment CRUD**: `list_experiments()`, `create_experiment()`, `get_experiment()`, `update_experiment()`, `delete_experiment()`, `launch_experiment()`, `conclude_experiment()`, `decide_experiment()`, `archive_experiment()`, `restore_experiment()`, `duplicate_experiment()`, `list_erf_experiments()`
+
+**Annotation CRUD**: `list_annotations()`, `create_annotation()`, `get_annotation()`, `update_annotation()`, `delete_annotation()`, `list_annotation_tags()`, `create_annotation_tag()`
+
+**Webhook CRUD**: `list_webhooks()`, `create_webhook()`, `update_webhook()`, `delete_webhook()`, `test_webhook()`
+
+**Alert CRUD**: `list_alerts()`, `create_alert()`, `get_alert()`, `update_alert()`, `delete_alert()`, `bulk_delete_alerts()`, `get_alert_count()`, `get_alert_history()`, `test_alert()`, `get_alert_screenshot_url()`, `validate_alerts_for_bookmark()`
+
 **Escape Hatches**: `connection` (DuckDB), `api` (MixpanelAPIClient)
 
 ## Exception Hierarchy

@@ -136,6 +136,11 @@ flag = ws.create_feature_flag(mp.CreateFeatureFlagParams(name="Dark Mode", key="
 experiments = ws.list_experiments()
 exp = ws.create_experiment(mp.CreateExperimentParams(name="Checkout Flow Test"))
 
+# Operational tooling
+alerts = ws.list_alerts()
+annotations = ws.list_annotations(from_date="2025-01-01")
+webhooks = ws.list_webhooks()
+
 # Fetch events into local DuckDB for SQL analysis
 ws.fetch_events("jan", from_date="2025-01-01", to_date="2025-01-31")
 
@@ -202,6 +207,12 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp experiments`** — Experiment management: `list`, `create`, `get`, `update`, `delete`, `launch`, `conclude`, `decide`, `archive`, `restore`, `duplicate`, `erf`
 
+**`mp alerts`** — Alert management: `list`, `create`, `get`, `update`, `delete`, `bulk-delete`, `count`, `history`, `test`, `screenshot`, `validate`
+
+**`mp annotations`** — Annotation management: `list`, `create`, `get`, `update`, `delete`, plus `tags list` and `tags create`
+
+**`mp webhooks`** — Webhook management: `list`, `create`, `update`, `delete`, `test`
+
 **`mp inspect`** — Discover schema: `events`, `properties`, `funnels`, `cohorts`, `bookmarks`; local DB: `tables`, `schema`, `drop`, and 5 more
 
 All commands support `--format` (`json`, `jsonl`, `table`, `csv`, `plain`) and `--help`.
@@ -260,7 +271,7 @@ The entire surface area is self-documenting. Every CLI command supports `--help`
 
 Key design features:
 
-- **Entity CRUD**: Full lifecycle management of dashboards, reports, cohorts, feature flags, and experiments via Mixpanel App API
+- **Entity CRUD**: Full lifecycle management of dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks via Mixpanel App API
 - **Discoverable schema**: `list_events()`, `list_properties()`, `list_funnels()`, `list_cohorts()`, `list_bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
 - **Structured output**: All CLI commands support `--format json` for machine-readable responses, plus `--jq` for inline filtering

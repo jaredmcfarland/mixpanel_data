@@ -526,3 +526,153 @@ Types for parallel profile fetching with page-based progress tracking.
     options:
       show_root_heading: true
       show_root_toc_entry: true
+
+## Annotation Types
+
+::: mixpanel_data.Annotation
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AnnotationUser
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AnnotationTag
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateAnnotationParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateAnnotationParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateAnnotationTagParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Webhook Enums
+
+::: mixpanel_data.WebhookAuthType
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Webhook Types
+
+::: mixpanel_data.ProjectWebhook
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateWebhookParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateWebhookParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.WebhookTestParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.WebhookTestResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.WebhookMutationResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Alert Enums
+
+::: mixpanel_data.AlertFrequencyPreset
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Alert Types
+
+::: mixpanel_data.CustomAlert
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertBookmark
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertCreator
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertWorkspace
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertProject
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateAlertParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateAlertParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertCount
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertHistoryPagination
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertHistoryResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertScreenshotResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AlertValidation
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.ValidateAlertsForBookmarkParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.ValidateAlertsForBookmarkResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true

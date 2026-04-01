@@ -1,13 +1,13 @@
 # Entity Management
 
-Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, and experiments programmatically. Full CRUD operations with bulk support.
+Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, experiments, alerts, annotations, and webhooks programmatically. Full CRUD operations with bulk support.
 
 !!! note "Prerequisites"
     Entity management requires **authentication** — service account or OAuth credentials.
 
     **Scoping differs by entity type:**
 
-    - **Dashboards, reports, cohorts** require a **workspace ID** — set via `MP_WORKSPACE_ID` env var, `--workspace-id` CLI flag, or `ws.set_workspace_id()`. Find yours with `mp inspect info` or `ws.info()`.
+    - **Dashboards, reports, cohorts, alerts, annotations, webhooks** require a **workspace ID** — set via `MP_WORKSPACE_ID` env var, `--workspace-id` CLI flag, or `ws.set_workspace_id()`. Find yours with `mp inspect info` or `ws.info()`.
     - **Feature flags and experiments** are **project-scoped** and do NOT require a workspace ID.
 
 ## Dashboards
@@ -761,8 +761,427 @@ List experiments in ERF (Experiment Results Framework) format:
 
 ---
 
+## Alerts
+
+Custom alerts monitor saved reports and notify when conditions are met. Alerts are **workspace-scoped** and linked to bookmarks (saved reports).
+
+### List Alerts
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    # List all alerts
+    alerts = ws.list_alerts()
+    for a in alerts:
+        print(f"{a.id}: {a.name} (paused={a.paused})")
+
+    # Filter by linked bookmark
+    alerts = ws.list_alerts(bookmark_id=12345)
+    ```
+
+=== "CLI"
+
+    ```bash
+    # List all alerts
+    mp alerts list
+
+    # Filter by bookmark
+    mp alerts list --bookmark-id 12345
+
+    # Table format
+    mp alerts list --format table
+    ```
+
+### Create an Alert
+
+=== "Python"
+
+    ```python
+    alert = ws.create_alert(mp.CreateAlertParams(
+        bookmark_id=12345,
+        name="Daily signups drop",
+        condition={
+            "keys": [{"header": "Signup", "value": "Signup"}],
+            "type": "absolute",
+            "op": "<",
+            "value": 100,
+        },
+        frequency=mp.AlertFrequencyPreset.DAILY,
+        paused=False,
+        subscriptions=[{"type": "email", "value": "team@example.com"}],
+    ))
+    print(f"Created alert {alert.id}: {alert.name}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp alerts create \
+        --bookmark-id 12345 \
+        --name "Daily signups drop" \
+        --condition '{"keys": [{"header": "Signup", "value": "Signup"}], "type": "absolute", "op": "<", "value": 100}' \
+        --frequency 86400 \
+        --subscriptions '[{"type": "email", "value": "team@example.com"}]'
+    ```
+
+### Get, Update, Delete
+
+=== "Python"
+
+    ```python
+    # Get
+    alert = ws.get_alert(42)
+
+    # Update (PATCH semantics)
+    updated = ws.update_alert(42, mp.UpdateAlertParams(
+        name="Updated alert name",
+        paused=True,
+    ))
+
+    # Delete
+    ws.delete_alert(42)
+
+    # Bulk delete
+    ws.bulk_delete_alerts([42, 43, 44])
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Get
+    mp alerts get 42
+
+    # Update
+    mp alerts update 42 --name "Updated alert name" --paused
+
+    # Delete
+    mp alerts delete 42
+
+    # Bulk delete
+    mp alerts bulk-delete --ids 42,43,44
+    ```
+
+### Monitoring
+
+=== "Python"
+
+    ```python
+    # Check alert count and limits
+    count = ws.get_alert_count()
+    print(f"{count.anomaly_alerts_count}/{count.alert_limit} alerts")
+
+    # View trigger history (paginated)
+    history = ws.get_alert_history(42, page_size=10)
+    for entry in history.results:
+        print(entry)
+
+    # Send a test notification
+    result = ws.test_alert(mp.CreateAlertParams(
+        bookmark_id=12345,
+        name="Test",
+        condition={"type": "absolute", "op": "<", "value": 100},
+        frequency=86400,
+        paused=False,
+        subscriptions=[{"type": "email", "value": "me@example.com"}],
+    ))
+
+    # Get screenshot URL
+    screenshot = ws.get_alert_screenshot_url("gcs-key-here")
+    print(screenshot.signed_url)
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Alert count and limits
+    mp alerts count
+
+    # Trigger history
+    mp alerts history 42 --page-size 10
+
+    # Test notification
+    mp alerts test \
+        --bookmark-id 12345 \
+        --name "Test" \
+        --condition '{"type": "absolute", "op": "<", "value": 100}' \
+        --frequency 86400 \
+        --subscriptions '[{"type": "email", "value": "me@example.com"}]'
+
+    # Screenshot URL
+    mp alerts screenshot --gcs-key "gcs-key-here"
+    ```
+
+### Validate Alerts
+
+Check whether alerts are compatible with a bookmark configuration:
+
+=== "Python"
+
+    ```python
+    result = ws.validate_alerts_for_bookmark(mp.ValidateAlertsForBookmarkParams(
+        alert_ids=[1, 2, 3],
+        bookmark_type="insights",
+        bookmark_params={"event": "Signup"},
+    ))
+    if result.invalid_count > 0:
+        for v in result.alert_validations:
+            if not v.valid:
+                print(f"{v.alert_name}: {v.reason}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp alerts validate \
+        --alert-ids 1,2,3 \
+        --bookmark-type insights \
+        --bookmark-params '{"event": "Signup"}'
+    ```
+
+---
+
+## Annotations
+
+Timeline annotations mark important events (releases, incidents, campaigns) on your Mixpanel charts.
+
+### List Annotations
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    # List all annotations
+    annotations = ws.list_annotations()
+
+    # Filter by date range
+    annotations = ws.list_annotations(
+        from_date="2025-01-01",
+        to_date="2025-03-31",
+    )
+
+    # Filter by tags
+    annotations = ws.list_annotations(tags=[1, 2])
+
+    for ann in annotations:
+        print(f"{ann.date}: {ann.description}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    # List all annotations
+    mp annotations list
+
+    # Filter by date range
+    mp annotations list --from-date 2025-01-01 --to-date 2025-03-31
+
+    # Filter by tags
+    mp annotations list --tags 1,2
+    ```
+
+### Create an Annotation
+
+!!! note "Date Format"
+    Annotation dates must use `%Y-%m-%d %H:%M:%S` format (e.g., `"2025-03-31 00:00:00"`).
+
+=== "Python"
+
+    ```python
+    annotation = ws.create_annotation(mp.CreateAnnotationParams(
+        date="2025-03-31 00:00:00",
+        description="v2.5 release",
+        tags=[1],  # Optional tag IDs
+    ))
+    print(f"Created annotation {annotation.id}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp annotations create \
+        --date "2025-03-31 00:00:00" \
+        --description "v2.5 release" \
+        --tags 1
+    ```
+
+### Get, Update, Delete
+
+!!! note "Immutable Date"
+    The annotation date cannot be changed after creation. Only `description` and `tags` are updatable.
+
+=== "Python"
+
+    ```python
+    # Get
+    ann = ws.get_annotation(123)
+
+    # Update (description and tags only)
+    updated = ws.update_annotation(123, mp.UpdateAnnotationParams(
+        description="v2.5 release (hotfix applied)",
+    ))
+
+    # Delete
+    ws.delete_annotation(123)
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Get
+    mp annotations get 123
+
+    # Update
+    mp annotations update 123 --description "v2.5 release (hotfix applied)"
+
+    # Delete
+    mp annotations delete 123
+    ```
+
+### Annotation Tags
+
+Organize annotations with tags:
+
+=== "Python"
+
+    ```python
+    # List tags
+    tags = ws.list_annotation_tags()
+    for t in tags:
+        print(f"{t.id}: {t.name}")
+
+    # Create a tag
+    tag = ws.create_annotation_tag(mp.CreateAnnotationTagParams(name="releases"))
+    ```
+
+=== "CLI"
+
+    ```bash
+    # List tags
+    mp annotations tags list
+
+    # Create a tag
+    mp annotations tags create --name releases
+    ```
+
+---
+
+## Webhooks
+
+Project webhooks receive HTTP notifications when events occur in your Mixpanel project.
+
+### List Webhooks
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    webhooks = ws.list_webhooks()
+    for wh in webhooks:
+        print(f"{wh.id}: {wh.name} ({wh.url}) enabled={wh.is_enabled}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp webhooks list
+    mp webhooks list --format table
+    ```
+
+### Create a Webhook
+
+=== "Python"
+
+    ```python
+    result = ws.create_webhook(mp.CreateWebhookParams(
+        name="Pipeline webhook",
+        url="https://example.com/webhook",
+    ))
+    print(f"Created webhook {result.id}")
+
+    # With basic auth
+    result = ws.create_webhook(mp.CreateWebhookParams(
+        name="Authenticated webhook",
+        url="https://example.com/webhook",
+        auth_type=mp.WebhookAuthType.BASIC,
+        username="user",
+        password="secret",
+    ))
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Simple webhook
+    mp webhooks create --name "Pipeline webhook" --url https://example.com/webhook
+
+    # With basic auth
+    mp webhooks create \
+        --name "Authenticated webhook" \
+        --url https://example.com/webhook \
+        --auth-type basic \
+        --username user \
+        --password secret
+    ```
+
+### Update, Delete
+
+=== "Python"
+
+    ```python
+    # Update (PATCH semantics)
+    result = ws.update_webhook("wh-uuid-123", mp.UpdateWebhookParams(
+        name="Updated webhook",
+        is_enabled=False,
+    ))
+
+    # Delete
+    ws.delete_webhook("wh-uuid-123")
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Update
+    mp webhooks update wh-uuid-123 --name "Updated webhook" --disable
+
+    # Delete
+    mp webhooks delete wh-uuid-123
+    ```
+
+### Test Connectivity
+
+=== "Python"
+
+    ```python
+    result = ws.test_webhook(mp.WebhookTestParams(
+        url="https://example.com/webhook",
+    ))
+    if result.success:
+        print(f"Webhook reachable (HTTP {result.status_code})")
+    else:
+        print(f"Webhook failed: {result.message}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp webhooks test --url https://example.com/webhook
+    ```
+
+---
+
 ## Next Steps
 
 - [API Reference — Workspace](../api/workspace.md) — Complete method signatures and docstrings
-- [API Reference — Types](../api/types.md) — Dashboard, Bookmark, Cohort, Feature Flag, and Experiment type definitions
+- [API Reference — Types](../api/types.md) — Dashboard, Bookmark, Cohort, Feature Flag, Experiment, Alert, Annotation, and Webhook type definitions
 - [CLI Reference](../cli/index.md) — Full CLI command documentation

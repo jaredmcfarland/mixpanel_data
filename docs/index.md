@@ -41,6 +41,11 @@ cohort = ws.create_cohort(mp.CreateCohortParams(name="Power Users"))
 flags = ws.list_feature_flags()
 experiments = ws.list_experiments()
 
+# Operational tooling
+alerts = ws.list_alerts()
+annotations = ws.list_annotations(from_date="2025-01-01")
+webhooks = ws.list_webhooks()
+
 # Live queries—use discovered data to construct accurate queries
 segmentation = ws.segmentation(
     event=events[0].name,
@@ -118,6 +123,9 @@ mp reports list --type insights
 mp cohorts create --name "Power Users"
 mp flags list
 mp experiments list
+mp alerts list
+mp annotations list --from-date 2025-01-01
+mp webhooks list
 
 # Live queries against Mixpanel API
 mp query segmentation "Purchase" \
@@ -198,12 +206,15 @@ Discovery commands let you survey what exists before writing queries—no guessi
 
 **Entity Management** — Create, update, and delete Mixpanel entities:
 
-- Full CRUD for dashboards, reports (bookmarks), cohorts, feature flags, and experiments
+- Full CRUD for dashboards, reports (bookmarks), cohorts, feature flags, experiments, alerts, annotations, and webhooks
 - Bulk operations for efficient batch management
 - Dashboard features: favorites, pins, blueprint templates, RCA dashboards
 - Report history tracking and linked dashboard discovery
 - Feature flag lifecycle (enable/disable/archive) with test users and history
 - Experiment lifecycle management (draft/launch/conclude/decide)
+- Alert monitoring: trigger history, test notifications, screenshot URLs, bookmark validation
+- Timeline annotations with tagging system
+- Webhook management with connectivity testing
 
 **Streaming** — Process data without storage:
 
@@ -238,6 +249,6 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Installation](getting-started/installation.md) — Get started with pip or uv
 - [Quick Start](getting-started/quickstart.md) — Your first queries in 5 minutes
 - [API Reference](api/index.md) — Complete Python API documentation
-- [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
+- [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks
 - [CLI Reference](cli/index.md) — Command-line interface documentation
 - [MCP Server](mcp/index.md) — Expose analytics to AI assistants like Claude Desktop

@@ -260,6 +260,50 @@ Manage Mixpanel experiments via the App API. Experiments are project-scoped (no 
 | `mp experiments duplicate` | Duplicate an experiment |
 | `mp experiments erf` | List ERF experiments |
 
+### alerts — Alert Management
+
+Manage Mixpanel custom alerts via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp alerts list` | List custom alerts |
+| `mp alerts create` | Create a new alert |
+| `mp alerts get` | Get alert by ID |
+| `mp alerts update` | Update an alert |
+| `mp alerts delete` | Delete an alert |
+| `mp alerts bulk-delete` | Delete multiple alerts |
+| `mp alerts count` | Get alert count and limits |
+| `mp alerts history` | View alert trigger history |
+| `mp alerts test` | Send a test notification |
+| `mp alerts screenshot` | Get alert screenshot URL |
+| `mp alerts validate` | Validate alerts against a bookmark |
+
+### annotations — Annotation Management
+
+Manage timeline annotations via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp annotations list` | List annotations with optional date/tag filters |
+| `mp annotations create` | Create a new annotation |
+| `mp annotations get` | Get annotation by ID |
+| `mp annotations update` | Update an annotation |
+| `mp annotations delete` | Delete an annotation |
+| `mp annotations tags list` | List annotation tags |
+| `mp annotations tags create` | Create a new annotation tag |
+
+### webhooks — Webhook Management
+
+Manage project webhooks via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp webhooks list` | List project webhooks |
+| `mp webhooks create` | Create a new webhook |
+| `mp webhooks update` | Update a webhook |
+| `mp webhooks delete` | Delete a webhook |
+| `mp webhooks test` | Test webhook connectivity |
+
 ## Output Formats
 
 All commands support the `--format` option:

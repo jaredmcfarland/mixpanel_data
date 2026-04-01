@@ -17,6 +17,7 @@ Workspace orchestrates four internal services and provides direct App API access
 - **StorageEngine** — Local SQL query execution
 - **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts via Mixpanel App API (workspace-scoped)
 - **Feature Management** — Create, read, update, delete feature flags and experiments via Mixpanel App API (project-scoped)
+- **Operational Tooling** — Manage alerts, annotations, and webhooks via Mixpanel App API (workspace-scoped)
 
 ## Key Features
 
