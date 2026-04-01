@@ -140,6 +140,8 @@ def main(
 # These imports are done here to avoid circular imports
 def _register_commands() -> None:
     """Register all command groups with the main app."""
+    from mixpanel_data.cli.commands.alerts import alerts_app
+    from mixpanel_data.cli.commands.annotations import annotations_app
     from mixpanel_data.cli.commands.auth import auth_app
     from mixpanel_data.cli.commands.cohorts import cohorts_app
     from mixpanel_data.cli.commands.dashboards import dashboards_app
@@ -149,6 +151,7 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.inspect import inspect_app
     from mixpanel_data.cli.commands.query import query_app
     from mixpanel_data.cli.commands.reports import reports_app
+    from mixpanel_data.cli.commands.webhooks import webhooks_app
 
     app.add_typer(auth_app, name="auth", help="Manage authentication and accounts.")
     app.add_typer(fetch_app, name="fetch", help="Fetch data from Mixpanel.")
@@ -167,6 +170,11 @@ def _register_commands() -> None:
         help="Manage Mixpanel experiments.",
     )
     app.add_typer(flags_app, name="flags", help="Manage Mixpanel feature flags.")
+    app.add_typer(alerts_app, name="alerts", help="Manage Mixpanel custom alerts.")
+    app.add_typer(
+        annotations_app, name="annotations", help="Manage timeline annotations."
+    )
+    app.add_typer(webhooks_app, name="webhooks", help="Manage project webhooks.")
 
 
 # Register commands when module is imported

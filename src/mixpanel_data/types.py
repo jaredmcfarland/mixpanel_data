@@ -5314,3 +5314,857 @@ class DuplicateExperimentParams(BaseModel):
 
     name: str
     """Name for the duplicated experiment (required)."""
+
+
+# =============================================================================
+# Operational Tooling — Annotations (Phase 026)
+# =============================================================================
+
+
+class AnnotationUser(BaseModel):
+    """Nested user info for annotation creator.
+
+    Attributes:
+        id: User ID.
+        first_name: First name.
+        last_name: Last name.
+
+    Example:
+        ```python
+        user = AnnotationUser(id=1, first_name="Alice", last_name="Smith")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """User ID."""
+
+    first_name: str
+    """First name."""
+
+    last_name: str
+    """Last name."""
+
+
+class AnnotationTag(BaseModel):
+    """Annotation tag for categorization.
+
+    Attributes:
+        id: Tag ID.
+        name: Tag name.
+        project_id: Project ID.
+        has_annotations: Whether tag has annotations.
+
+    Example:
+        ```python
+        tag = AnnotationTag(id=1, name="releases")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Tag ID."""
+
+    name: str
+    """Tag name."""
+
+    project_id: int | None = None
+    """Project ID."""
+
+    has_annotations: bool | None = None
+    """Whether tag has annotations."""
+
+
+class Annotation(BaseModel):
+    """Response model for a timeline annotation.
+
+    Attributes:
+        id: Annotation ID.
+        project_id: Project ID.
+        date: Annotation date (ISO format).
+        description: Annotation text.
+        user: Creator user info.
+        tags: Associated tags.
+
+    Example:
+        ```python
+        annotation = Annotation.model_validate(api_response)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Annotation ID."""
+
+    project_id: int
+    """Project ID."""
+
+    date: str
+    """Annotation date (ISO format)."""
+
+    description: str
+    """Annotation text."""
+
+    user: AnnotationUser | None = None
+    """Creator user info."""
+
+    tags: list[AnnotationTag] = Field(default_factory=list)
+    """Associated tags."""
+
+
+class CreateAnnotationParams(BaseModel):
+    """Parameters for creating a new annotation.
+
+    Attributes:
+        date: Date string (ISO format, required).
+        description: Annotation text (required).
+        tags: Tag IDs to associate.
+        user_id: Creator user ID.
+
+    Example:
+        ```python
+        params = CreateAnnotationParams(
+            date="2026-03-31", description="v2.5 release"
+        )
+        ```
+    """
+
+    date: str
+    """Date string (ISO format)."""
+
+    description: str
+    """Annotation text."""
+
+    tags: list[int] | None = None
+    """Tag IDs to associate."""
+
+    user_id: int | None = None
+    """Creator user ID."""
+
+
+class UpdateAnnotationParams(BaseModel):
+    """Parameters for updating an annotation (PATCH semantics).
+
+    Attributes:
+        description: New description.
+        tags: New tag IDs.
+
+    Example:
+        ```python
+        params = UpdateAnnotationParams(description="Updated text")
+        ```
+    """
+
+    description: str | None = None
+    """New description."""
+
+    tags: list[int] | None = None
+    """New tag IDs."""
+
+
+class CreateAnnotationTagParams(BaseModel):
+    """Parameters for creating an annotation tag.
+
+    Attributes:
+        name: Tag name (required).
+
+    Example:
+        ```python
+        params = CreateAnnotationTagParams(name="releases")
+        ```
+    """
+
+    name: str
+    """Tag name."""
+
+
+# =============================================================================
+# Operational Tooling — Webhooks (Phase 026)
+# =============================================================================
+
+
+class WebhookAuthType(str, Enum):
+    """Authentication type for webhooks.
+
+    Values:
+        BASIC: HTTP Basic authentication.
+        UNKNOWN: Unknown/unsupported auth type.
+    """
+
+    BASIC = "basic"
+    UNKNOWN = "unknown"
+
+
+class ProjectWebhook(BaseModel):
+    """Response model for a project webhook.
+
+    Attributes:
+        id: Webhook ID (UUID string).
+        name: Webhook name.
+        url: Webhook URL.
+        is_enabled: Whether enabled.
+        auth_type: Authentication type.
+        created: Creation timestamp.
+        modified: Last modified timestamp.
+        creator_id: Creator user ID.
+        creator_name: Creator name.
+
+    Example:
+        ```python
+        webhook = ProjectWebhook.model_validate(api_response)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: str
+    """Webhook ID (UUID string)."""
+
+    name: str
+    """Webhook name."""
+
+    url: str
+    """Webhook URL."""
+
+    is_enabled: bool
+    """Whether enabled."""
+
+    auth_type: str | None = None
+    """Authentication type."""
+
+    created: str | None = None
+    """Creation timestamp."""
+
+    modified: str | None = None
+    """Last modified timestamp."""
+
+    creator_id: int | None = None
+    """Creator user ID."""
+
+    creator_name: str | None = None
+    """Creator name."""
+
+
+class CreateWebhookParams(BaseModel):
+    """Parameters for creating a webhook.
+
+    Attributes:
+        name: Webhook name (required).
+        url: Webhook URL (required).
+        auth_type: Auth type ("basic" or None).
+        username: Basic auth username.
+        password: Basic auth password.
+
+    Example:
+        ```python
+        params = CreateWebhookParams(
+            name="Pipeline webhook",
+            url="https://example.com/webhook",
+        )
+        ```
+    """
+
+    name: str
+    """Webhook name."""
+
+    url: str
+    """Webhook URL."""
+
+    auth_type: str | None = None
+    """Auth type ("basic" or None)."""
+
+    username: str | None = None
+    """Basic auth username."""
+
+    password: str | None = None
+    """Basic auth password."""
+
+
+class UpdateWebhookParams(BaseModel):
+    """Parameters for updating a webhook (PATCH semantics).
+
+    Attributes:
+        name: New name.
+        url: New URL.
+        auth_type: New auth type.
+        username: New username.
+        password: New password.
+        is_enabled: New enabled state.
+
+    Example:
+        ```python
+        params = UpdateWebhookParams(name="Updated name")
+        ```
+    """
+
+    name: str | None = None
+    """New name."""
+
+    url: str | None = None
+    """New URL."""
+
+    auth_type: str | None = None
+    """New auth type."""
+
+    username: str | None = None
+    """New username."""
+
+    password: str | None = None
+    """New password."""
+
+    is_enabled: bool | None = None
+    """New enabled state."""
+
+
+class WebhookTestParams(BaseModel):
+    """Parameters for testing webhook connectivity.
+
+    Attributes:
+        url: URL to test (required).
+        name: Webhook name.
+        auth_type: Auth type.
+        username: Username for auth.
+        password: Password for auth.
+
+    Example:
+        ```python
+        params = WebhookTestParams(url="https://example.com/webhook")
+        ```
+    """
+
+    url: str
+    """URL to test."""
+
+    name: str | None = None
+    """Webhook name."""
+
+    auth_type: str | None = None
+    """Auth type."""
+
+    username: str | None = None
+    """Username for auth."""
+
+    password: str | None = None
+    """Password for auth."""
+
+
+class WebhookTestResult(BaseModel):
+    """Response model for webhook connectivity test.
+
+    Attributes:
+        success: Whether test succeeded.
+        status_code: HTTP status code.
+        message: Descriptive message.
+
+    Example:
+        ```python
+        result = WebhookTestResult.model_validate(api_response)
+        if result.success:
+            print("Webhook is reachable")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    success: bool
+    """Whether test succeeded."""
+
+    status_code: int
+    """HTTP status code."""
+
+    message: str
+    """Descriptive message."""
+
+
+class WebhookMutationResult(BaseModel):
+    """Response model for webhook create/update (returns id + name only).
+
+    Attributes:
+        id: Webhook ID.
+        name: Webhook name.
+
+    Example:
+        ```python
+        result = WebhookMutationResult.model_validate(api_response)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: str
+    """Webhook ID."""
+
+    name: str
+    """Webhook name."""
+
+
+# =============================================================================
+# Operational Tooling — Alerts (Phase 026)
+# =============================================================================
+
+
+class AlertFrequencyPreset(int, Enum):
+    """Preset frequency values for alert check intervals.
+
+    Values:
+        HOURLY: Check every hour (3600 seconds).
+        DAILY: Check every day (86400 seconds).
+        WEEKLY: Check every week (604800 seconds).
+    """
+
+    HOURLY = 3600
+    DAILY = 86400
+    WEEKLY = 604800
+
+
+class AlertBookmark(BaseModel):
+    """Nested bookmark info for an alert.
+
+    Attributes:
+        id: Bookmark ID.
+        name: Bookmark name.
+        type: Bookmark type.
+
+    Example:
+        ```python
+        bookmark = AlertBookmark(id=1, name="Daily Signups")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Bookmark ID."""
+
+    name: str | None = None
+    """Bookmark name."""
+
+    type: str | None = None
+    """Bookmark type."""
+
+
+class AlertCreator(BaseModel):
+    """Nested creator info for an alert.
+
+    Attributes:
+        id: User ID.
+        first_name: First name.
+        last_name: Last name.
+        email: Email.
+
+    Example:
+        ```python
+        creator = AlertCreator(id=1, email="alice@example.com")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """User ID."""
+
+    first_name: str | None = None
+    """First name."""
+
+    last_name: str | None = None
+    """Last name."""
+
+    email: str | None = None
+    """Email."""
+
+
+class AlertWorkspace(BaseModel):
+    """Nested workspace info for an alert.
+
+    Attributes:
+        id: Workspace ID.
+        name: Workspace name.
+
+    Example:
+        ```python
+        ws = AlertWorkspace(id=100, name="Production")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Workspace ID."""
+
+    name: str | None = None
+    """Workspace name."""
+
+
+class AlertProject(BaseModel):
+    """Nested project info for an alert.
+
+    Attributes:
+        id: Project ID.
+        name: Project name.
+
+    Example:
+        ```python
+        proj = AlertProject(id=12345, name="My App")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Project ID."""
+
+    name: str | None = None
+    """Project name."""
+
+
+class CustomAlert(BaseModel):
+    """Response model for a custom alert.
+
+    Attributes:
+        id: Alert ID.
+        name: Alert name.
+        bookmark: Linked saved report.
+        condition: Trigger condition (opaque JSON).
+        frequency: Check frequency in seconds.
+        paused: Whether alert is paused.
+        subscriptions: Notification targets.
+        notification_windows: Notification window config.
+        creator: Creator user info.
+        workspace: Workspace metadata.
+        project: Project metadata.
+        created: Creation timestamp.
+        modified: Last modified timestamp.
+        last_checked: Last check timestamp.
+        last_fired: Last trigger timestamp.
+        valid: Whether alert is valid.
+        results: Latest evaluation results.
+
+    Example:
+        ```python
+        alert = CustomAlert.model_validate(api_response)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int
+    """Alert ID."""
+
+    name: str
+    """Alert name."""
+
+    bookmark: AlertBookmark | None = None
+    """Linked saved report."""
+
+    condition: dict[str, Any] = Field(default_factory=dict)
+    """Trigger condition (opaque JSON)."""
+
+    frequency: int = 0
+    """Check frequency in seconds."""
+
+    paused: bool = False
+    """Whether alert is paused."""
+
+    subscriptions: list[dict[str, Any]] = Field(default_factory=list)
+    """Notification targets."""
+
+    notification_windows: dict[str, Any] | None = None
+    """Notification window config."""
+
+    creator: AlertCreator | None = None
+    """Creator user info."""
+
+    workspace: AlertWorkspace | None = None
+    """Workspace metadata."""
+
+    project: AlertProject | None = None
+    """Project metadata."""
+
+    created: str = ""
+    """Creation timestamp."""
+
+    modified: str = ""
+    """Last modified timestamp."""
+
+    last_checked: str | None = None
+    """Last check timestamp."""
+
+    last_fired: str | None = None
+    """Last trigger timestamp."""
+
+    valid: bool = True
+    """Whether alert is valid."""
+
+    results: dict[str, Any] | None = None
+    """Latest evaluation results."""
+
+
+class CreateAlertParams(BaseModel):
+    """Parameters for creating a new alert.
+
+    Attributes:
+        bookmark_id: ID of linked bookmark (required).
+        name: Alert name (required).
+        condition: Trigger condition JSON (required).
+        frequency: Check frequency in seconds (required).
+        paused: Start paused or active (required).
+        subscriptions: Notification targets (required).
+        notification_windows: Notification window config.
+
+    Example:
+        ```python
+        params = CreateAlertParams(
+            bookmark_id=12345,
+            name="Daily signups drop",
+            condition={"operator": "less_than", "value": 100},
+            frequency=86400,
+            paused=False,
+            subscriptions=[{"type": "email", "value": "team@example.com"}],
+        )
+        ```
+    """
+
+    bookmark_id: int
+    """ID of linked bookmark."""
+
+    name: str
+    """Alert name."""
+
+    condition: dict[str, Any]
+    """Trigger condition JSON."""
+
+    frequency: int
+    """Check frequency in seconds."""
+
+    paused: bool
+    """Start paused or active."""
+
+    subscriptions: list[dict[str, Any]]
+    """Notification targets."""
+
+    notification_windows: dict[str, Any] | None = None
+    """Notification window config."""
+
+
+class UpdateAlertParams(BaseModel):
+    """Parameters for updating an alert (PATCH semantics).
+
+    Attributes:
+        name: New name.
+        bookmark_id: New bookmark ID.
+        condition: New condition.
+        frequency: New frequency.
+        paused: New pause state.
+        subscriptions: New subscriptions.
+        notification_windows: New notification windows.
+
+    Example:
+        ```python
+        params = UpdateAlertParams(name="Updated alert", paused=True)
+        ```
+    """
+
+    name: str | None = None
+    """New name."""
+
+    bookmark_id: int | None = None
+    """New bookmark ID."""
+
+    condition: dict[str, Any] | None = None
+    """New condition."""
+
+    frequency: int | None = None
+    """New frequency."""
+
+    paused: bool | None = None
+    """New pause state."""
+
+    subscriptions: list[dict[str, Any]] | None = None
+    """New subscriptions."""
+
+    notification_windows: dict[str, Any] | None = None
+    """New notification windows."""
+
+
+class AlertCount(BaseModel):
+    """Response model for alert count and limits.
+
+    Attributes:
+        anomaly_alerts_count: Current alert count.
+        alert_limit: Account limit.
+        is_below_limit: Whether below limit.
+
+    Example:
+        ```python
+        count = AlertCount.model_validate(api_response)
+        if count.is_below_limit:
+            print(f"{count.anomaly_alerts_count}/{count.alert_limit}")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    anomaly_alerts_count: int
+    """Current alert count."""
+
+    alert_limit: int
+    """Account limit."""
+
+    is_below_limit: bool
+    """Whether below limit."""
+
+
+class AlertHistoryPagination(BaseModel):
+    """Pagination metadata for alert history.
+
+    Attributes:
+        next_cursor: Next page cursor.
+        previous_cursor: Previous page cursor.
+        page_size: Page size.
+
+    Example:
+        ```python
+        pagination = AlertHistoryPagination(page_size=20)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    next_cursor: str | None = None
+    """Next page cursor."""
+
+    previous_cursor: str | None = None
+    """Previous page cursor."""
+
+    page_size: int = 20
+    """Page size."""
+
+
+class AlertHistoryResponse(BaseModel):
+    """Response model for alert history (paginated).
+
+    Attributes:
+        results: History entries.
+        pagination: Pagination metadata.
+
+    Example:
+        ```python
+        history = AlertHistoryResponse.model_validate(api_response)
+        for entry in history.results:
+            print(entry)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    results: list[dict[str, Any]] = Field(default_factory=list)
+    """History entries."""
+
+    pagination: AlertHistoryPagination | None = None
+    """Pagination metadata."""
+
+
+class AlertScreenshotResponse(BaseModel):
+    """Response model for alert screenshot URL.
+
+    Attributes:
+        signed_url: Signed GCS URL for screenshot.
+
+    Example:
+        ```python
+        resp = AlertScreenshotResponse.model_validate(api_response)
+        print(resp.signed_url)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    signed_url: str
+    """Signed GCS URL for screenshot."""
+
+
+class AlertValidation(BaseModel):
+    """Per-alert validation result.
+
+    Attributes:
+        alert_id: Alert ID.
+        alert_name: Alert name.
+        valid: Whether valid.
+        reason: Reason if invalid.
+
+    Example:
+        ```python
+        v = AlertValidation(alert_id=1, alert_name="Test", valid=True)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    alert_id: int
+    """Alert ID."""
+
+    alert_name: str
+    """Alert name."""
+
+    valid: bool
+    """Whether valid."""
+
+    reason: str | None = None
+    """Reason if invalid."""
+
+
+class ValidateAlertsForBookmarkParams(BaseModel):
+    """Parameters for validating alerts against a bookmark.
+
+    Attributes:
+        alert_ids: Alert IDs to validate (required).
+        bookmark_type: Bookmark type to validate against (required).
+        bookmark_params: Bookmark params JSON (required).
+
+    Example:
+        ```python
+        params = ValidateAlertsForBookmarkParams(
+            alert_ids=[1, 2],
+            bookmark_type="insights",
+            bookmark_params={"event": "Signup"},
+        )
+        ```
+    """
+
+    alert_ids: list[int]
+    """Alert IDs to validate."""
+
+    bookmark_type: str
+    """Bookmark type to validate against."""
+
+    bookmark_params: dict[str, Any]
+    """Bookmark params JSON."""
+
+
+class ValidateAlertsForBookmarkResponse(BaseModel):
+    """Response model for alert-bookmark validation.
+
+    Attributes:
+        alert_validations: Per-alert validation results.
+        invalid_count: Count of invalid alerts.
+
+    Example:
+        ```python
+        resp = ValidateAlertsForBookmarkResponse.model_validate(api_response)
+        if resp.invalid_count > 0:
+            for v in resp.alert_validations:
+                if not v.valid:
+                    print(f"{v.alert_name}: {v.reason}")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    alert_validations: list[AlertValidation] = Field(default_factory=list)
+    """Per-alert validation results."""
+
+    invalid_count: int = 0
+    """Count of invalid alerts."""

@@ -12,12 +12,19 @@ from typer.testing import CliRunner
 
 from mixpanel_data._internal.config import AccountInfo
 from mixpanel_data.types import (
+    AlertCount,
+    AlertHistoryPagination,
+    AlertHistoryResponse,
+    AlertScreenshotResponse,
+    Annotation,
+    AnnotationTag,
     BlueprintConfig,
     BlueprintTemplate,
     Bookmark,
     BookmarkHistoryPagination,
     BookmarkHistoryResponse,
     Cohort,
+    CustomAlert,
     Dashboard,
     Experiment,
     ExperimentStatus,
@@ -27,9 +34,13 @@ from mixpanel_data.types import (
     FlagContractStatus,
     FlagHistoryResponse,
     FlagLimitsResponse,
+    ProjectWebhook,
     SegmentationResult,
     ServingMethod,
     TableInfo,
+    ValidateAlertsForBookmarkResponse,
+    WebhookMutationResult,
+    WebhookTestResult,
     WorkspaceInfo,
 )
 
@@ -194,6 +205,85 @@ def mock_workspace() -> MagicMock:
         is_trial=False,
         current_usage=5,
         contract_status=FlagContractStatus.ACTIVE,
+    )
+
+    # Phase 026: Annotation mocks
+    mock_annotation = Annotation(
+        id=1,
+        project_id=12345,
+        date="2026-03-31",
+        description="Test annotation",
+        tags=[],
+    )
+    workspace.list_annotations.return_value = [mock_annotation]
+    workspace.create_annotation.return_value = mock_annotation
+    workspace.get_annotation.return_value = mock_annotation
+    workspace.update_annotation.return_value = mock_annotation
+    workspace.delete_annotation.return_value = None
+    workspace.list_annotation_tags.return_value = [
+        AnnotationTag(id=1, name="releases"),
+    ]
+    workspace.create_annotation_tag.return_value = AnnotationTag(id=2, name="new-tag")
+
+    # Phase 026: Webhook mocks
+    mock_webhook = ProjectWebhook(
+        id="wh-uuid-123",
+        name="Test Webhook",
+        url="https://example.com/webhook",
+        is_enabled=True,
+    )
+    workspace.list_webhooks.return_value = [mock_webhook]
+    workspace.create_webhook.return_value = WebhookMutationResult(
+        id="wh-uuid-123",
+        name="Test Webhook",
+    )
+    workspace.update_webhook.return_value = WebhookMutationResult(
+        id="wh-uuid-123",
+        name="Updated Webhook",
+    )
+    workspace.delete_webhook.return_value = None
+    workspace.test_webhook.return_value = WebhookTestResult(
+        success=True,
+        status_code=200,
+        message="OK",
+    )
+
+    # Phase 026: Alert mocks
+    mock_alert = CustomAlert(
+        id=1,
+        name="Test Alert",
+        condition={"operator": "less_than", "value": 100},
+        frequency=86400,
+        paused=False,
+        subscriptions=[{"type": "email", "value": "test@example.com"}],
+        created="2026-01-01T00:00:00Z",
+        modified="2026-01-01T00:00:00Z",
+        valid=True,
+    )
+    workspace.list_alerts.return_value = [mock_alert]
+    workspace.create_alert.return_value = mock_alert
+    workspace.get_alert.return_value = mock_alert
+    workspace.update_alert.return_value = mock_alert
+    workspace.delete_alert.return_value = None
+    workspace.bulk_delete_alerts.return_value = None
+    workspace.get_alert_count.return_value = AlertCount(
+        anomaly_alerts_count=5,
+        alert_limit=100,
+        is_below_limit=True,
+    )
+    workspace.get_alert_history.return_value = AlertHistoryResponse(
+        results=[],
+        pagination=AlertHistoryPagination(page_size=20),
+    )
+    workspace.test_alert.return_value = {"status": "ok"}
+    workspace.get_alert_screenshot_url.return_value = AlertScreenshotResponse(
+        signed_url="https://storage.googleapis.com/screenshot.png",
+    )
+    workspace.validate_alerts_for_bookmark.return_value = (
+        ValidateAlertsForBookmarkResponse(
+            alert_validations=[],
+            invalid_count=0,
+        )
     )
 
     return workspace

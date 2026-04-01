@@ -314,6 +314,8 @@ Skill(skill="mixpanel-data:mixpanel-analyst")  # Will fail!
 - Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), Typer (CLI), Rich (output) (024-core-entity-crud)
 - DuckDB (local analysis), Mixpanel App API (remote CRUD) (024-core-entity-crud)
 - N/A (remote CRUD via Mixpanel App API; no local DuckDB involvement) (025-feature-management)
+- Python 3.10+ (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), Typer (CLI), Rich (output) (026-operational-tooling)
+- N/A (remote CRUD via Mixpanel App API; no DuckDB involvement) (026-operational-tooling)
 
 ## Recent Changes
 - 017-parallel-export: Added Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies
