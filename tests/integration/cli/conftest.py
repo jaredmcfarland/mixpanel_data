@@ -19,8 +19,16 @@ from mixpanel_data.types import (
     BookmarkHistoryResponse,
     Cohort,
     Dashboard,
+    Experiment,
+    ExperimentStatus,
+    FeatureFlag,
+    FeatureFlagStatus,
     FetchResult,
+    FlagContractStatus,
+    FlagHistoryResponse,
+    FlagLimitsResponse,
     SegmentationResult,
+    ServingMethod,
     TableInfo,
     WorkspaceInfo,
 )
@@ -140,6 +148,53 @@ def mock_workspace() -> MagicMock:
     workspace.delete_cohort.return_value = None
     workspace.bulk_delete_cohorts.return_value = None
     workspace.bulk_update_cohorts.return_value = None
+
+    # Phase 025: Experiment CRUD mocks
+    mock_experiment = Experiment(
+        id="xyz-456", name="Test Experiment", status=ExperimentStatus.DRAFT
+    )
+    workspace.list_experiments.return_value = [mock_experiment]
+    workspace.create_experiment.return_value = mock_experiment
+    workspace.get_experiment.return_value = mock_experiment
+    workspace.update_experiment.return_value = mock_experiment
+    workspace.delete_experiment.return_value = None
+    workspace.launch_experiment.return_value = mock_experiment
+    workspace.conclude_experiment.return_value = mock_experiment
+    workspace.decide_experiment.return_value = mock_experiment
+    workspace.archive_experiment.return_value = None
+    workspace.restore_experiment.return_value = mock_experiment
+    workspace.duplicate_experiment.return_value = mock_experiment
+    workspace.list_erf_experiments.return_value = [{"id": "xyz-456", "name": "Test"}]
+
+    # Phase 025: Feature Flag mocks
+    mock_flag = FeatureFlag(
+        id="abc-123",
+        project_id=12345,
+        name="Test Flag",
+        key="test_flag",
+        status=FeatureFlagStatus.DISABLED,
+        context="default",
+        serving_method=ServingMethod.CLIENT,
+        ruleset={},
+        created="2026-01-01T00:00:00Z",
+        modified="2026-01-01T00:00:00Z",
+    )
+    workspace.list_feature_flags.return_value = [mock_flag]
+    workspace.create_feature_flag.return_value = mock_flag
+    workspace.get_feature_flag.return_value = mock_flag
+    workspace.update_feature_flag.return_value = mock_flag
+    workspace.delete_feature_flag.return_value = None
+    workspace.archive_feature_flag.return_value = None
+    workspace.restore_feature_flag.return_value = mock_flag
+    workspace.duplicate_feature_flag.return_value = mock_flag
+    workspace.set_flag_test_users.return_value = None
+    workspace.get_flag_history.return_value = FlagHistoryResponse(events=[], count=0)
+    workspace.get_flag_limits.return_value = FlagLimitsResponse(
+        limit=100,
+        is_trial=False,
+        current_usage=5,
+        contract_status=FlagContractStatus.ACTIVE,
+    )
 
     return workspace
 

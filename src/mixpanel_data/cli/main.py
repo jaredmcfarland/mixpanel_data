@@ -143,7 +143,9 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.auth import auth_app
     from mixpanel_data.cli.commands.cohorts import cohorts_app
     from mixpanel_data.cli.commands.dashboards import dashboards_app
+    from mixpanel_data.cli.commands.experiments import experiments_app
     from mixpanel_data.cli.commands.fetch import fetch_app
+    from mixpanel_data.cli.commands.flags import flags_app
     from mixpanel_data.cli.commands.inspect import inspect_app
     from mixpanel_data.cli.commands.query import query_app
     from mixpanel_data.cli.commands.reports import reports_app
@@ -159,6 +161,12 @@ def _register_commands() -> None:
         reports_app, name="reports", help="Manage Mixpanel reports (bookmarks)."
     )
     app.add_typer(cohorts_app, name="cohorts", help="Manage Mixpanel cohorts.")
+    app.add_typer(
+        experiments_app,
+        name="experiments",
+        help="Manage Mixpanel experiments.",
+    )
+    app.add_typer(flags_app, name="flags", help="Manage Mixpanel feature flags.")
 
 
 # Register commands when module is imported

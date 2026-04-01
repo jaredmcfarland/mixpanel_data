@@ -107,7 +107,10 @@ disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-vv --tb=short"
+addopts = "-vv --tb=short -m 'not live'"
+markers = [
+    "live: marks tests as live API tests (deselect with '-m \"not live\"')",
+]
 
 [tool.coverage.run]
 source = ["src/mixpanel_data"]

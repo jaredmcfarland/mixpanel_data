@@ -3501,3 +3501,738 @@ class MixpanelAPIClient:
         """
         path = self.maybe_scoped_path("cohorts/bulk-update")
         self.app_request("POST", path, json_body={"cohorts": entries})
+
+    # =========================================================================
+    # Feature Flag CRUD (Phase 025)
+    # =========================================================================
+
+    def list_feature_flags(
+        self, *, include_archived: bool = False
+    ) -> list[dict[str, Any]]:
+        """List feature flags for the current project/workspace.
+
+        Calls ``GET /api/app/projects/{pid}/workspaces/{wid}/feature-flags/``.
+
+        Args:
+            include_archived: When True, include archived flags in results.
+
+        Returns:
+            List of feature flag dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                flags = client.list_feature_flags()
+            ```
+        """
+        path = self.require_scoped_path("feature-flags")
+        params: dict[str, str] = {}
+        if include_archived:
+            params["include_archived"] = "true"
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_feature_flags: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_feature_flag(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new feature flag.
+
+        Calls ``POST /api/app/projects/{pid}/workspaces/{wid}/feature-flags/``.
+
+        Args:
+            body: Flag creation payload with ``name`` and ``key`` required.
+
+        Returns:
+            Dictionary representing the newly created flag.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Duplicate key or invalid payload (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                flag = client.create_feature_flag({"name": "X", "key": "x"})
+            ```
+        """
+        path = self.require_scoped_path("feature-flags")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_feature_flag: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_feature_flag(self, flag_id: str) -> dict[str, Any]:
+        """Get a single feature flag by ID.
+
+        Calls ``GET /api/app/projects/{pid}/workspaces/{wid}/feature-flags/{id}/``.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Returns:
+            Dictionary representing the flag.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404) or invalid ID (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                flag = client.get_feature_flag("abc-123")
+            ```
+        """
+        path = self.require_scoped_path(f"feature-flags/{flag_id}/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_feature_flag: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_feature_flag(self, flag_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Update a feature flag (full replacement).
+
+        Calls ``PUT /api/app/projects/{pid}/workspaces/{wid}/feature-flags/{id}/``.
+
+        Args:
+            flag_id: Feature flag UUID.
+            body: Complete flag configuration (PUT semantics).
+
+        Returns:
+            Dictionary representing the updated flag.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404) or invalid payload (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_feature_flag("abc-123", body)
+            ```
+        """
+        path = self.require_scoped_path(f"feature-flags/{flag_id}/")
+        result = self.app_request("PUT", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_feature_flag: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_feature_flag(self, flag_id: str) -> None:
+        """Delete a feature flag.
+
+        Calls ``DELETE /api/app/projects/{pid}/workspaces/{wid}/feature-flags/{id}/``.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_feature_flag("abc-123")
+            ```
+        """
+        path = self.require_scoped_path(f"feature-flags/{flag_id}/")
+        self.app_request("DELETE", path)
+
+    def archive_feature_flag(self, flag_id: str) -> None:
+        """Archive a feature flag (soft-delete).
+
+        Calls ``POST /api/app/projects/{pid}/workspaces/{wid}/feature-flags/{id}/archive/``.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.archive_feature_flag("abc-123")
+            ```
+        """
+        path = self.require_scoped_path(f"feature-flags/{flag_id}/archive/")
+        self.app_request("POST", path)
+
+    def restore_feature_flag(self, flag_id: str) -> dict[str, Any]:
+        """Restore an archived feature flag.
+
+        Calls ``DELETE /api/app/projects/{pid}/workspaces/{wid}/feature-flags/{id}/archive/``.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Returns:
+            Dictionary representing the restored flag.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                flag = client.restore_feature_flag("abc-123")
+            ```
+        """
+        path = self.require_scoped_path(f"feature-flags/{flag_id}/archive/")
+        result = self.app_request("DELETE", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from restore_feature_flag: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def duplicate_feature_flag(self, flag_id: str) -> dict[str, Any]:
+        """Duplicate a feature flag.
+
+        Calls ``POST /api/app/projects/{pid}/workspaces/{wid}/feature-flags/{id}/duplicate/``.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Returns:
+            Dictionary representing the new duplicate flag.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                dup = client.duplicate_feature_flag("abc-123")
+            ```
+        """
+        path = self.require_scoped_path(f"feature-flags/{flag_id}/duplicate/")
+        result = self.app_request("POST", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from duplicate_feature_flag: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def set_flag_test_users(self, flag_id: str, body: dict[str, Any]) -> None:
+        """Set test user variant overrides for a feature flag.
+
+        Calls ``PUT /api/app/projects/{pid}/workspaces/{wid}/feature-flags/{id}/test-users/``.
+
+        Args:
+            flag_id: Feature flag UUID.
+            body: Test user mapping (variant key → user distinct ID).
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404) or invalid payload (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.set_flag_test_users("abc-123", {"users": {"on": "uid"}})
+            ```
+        """
+        path = self.require_scoped_path(f"feature-flags/{flag_id}/test-users/")
+        self.app_request("PUT", path, json_body=body)
+
+    def get_flag_history(
+        self, flag_id: str, *, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        """Get change history for a feature flag.
+
+        Calls ``GET /api/app/projects/{pid}/workspaces/{wid}/feature-flags/{id}/history/``.
+
+        Args:
+            flag_id: Feature flag UUID.
+            params: Optional query parameters (page, page_size).
+
+        Returns:
+            Dictionary with ``events`` and ``count`` fields.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                history = client.get_flag_history("abc-123")
+            ```
+        """
+        path = self.require_scoped_path(f"feature-flags/{flag_id}/history/")
+        result = self.app_request("GET", path, params=params)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_flag_history: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_flag_limits(self) -> dict[str, Any]:
+        """Get account-level feature flag limits and usage.
+
+        Calls ``GET /api/app/projects/{pid}/feature-flags/limits/``
+        (uses maybe_scoped_path, not require_scoped_path).
+
+        Returns:
+            Dictionary with ``limit``, ``is_trial``, ``current_usage``,
+            ``contract_status`` fields.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                limits = client.get_flag_limits()
+            ```
+        """
+        path = self.maybe_scoped_path("feature-flags/limits/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_flag_limits: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
+    # Experiment CRUD & Lifecycle (Phase 025)
+    # =========================================================================
+
+    def list_experiments(
+        self, *, include_archived: bool = False
+    ) -> list[dict[str, Any]]:
+        """List experiments for the current project.
+
+        Calls ``GET /api/app/projects/{pid}/experiments/``
+        (optionally workspace-scoped).
+
+        Args:
+            include_archived: When True, include archived experiments.
+
+        Returns:
+            List of experiment dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                experiments = client.list_experiments()
+            ```
+        """
+        path = self.maybe_scoped_path("experiments")
+        params: dict[str, str] = {}
+        if include_archived:
+            params["include_archived"] = "true"
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_experiments: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_experiment(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new experiment.
+
+        Calls ``POST /api/app/projects/{pid}/experiments/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Experiment creation payload with ``name`` required.
+
+        Returns:
+            Dictionary representing the newly created experiment.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid payload (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                exp = client.create_experiment({"name": "Test"})
+            ```
+        """
+        path = self.maybe_scoped_path("experiments/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_experiment: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_experiment(self, experiment_id: str) -> dict[str, Any]:
+        """Get a single experiment by ID.
+
+        Calls ``GET /api/app/projects/{pid}/experiments/{id}``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Returns:
+            Dictionary representing the experiment.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                exp = client.get_experiment("xyz-456")
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_experiment: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_experiment(
+        self, experiment_id: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update an experiment (partial update).
+
+        Calls ``PATCH /api/app/projects/{pid}/experiments/{id}``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+            body: Partial update payload (PATCH semantics).
+
+        Returns:
+            Dictionary representing the updated experiment.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404) or invalid payload (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_experiment("xyz-456", {"name": "New"})
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_experiment: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_experiment(self, experiment_id: str) -> None:
+        """Delete an experiment.
+
+        Calls ``DELETE /api/app/projects/{pid}/experiments/{id}``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_experiment("xyz-456")
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}")
+        self.app_request("DELETE", path)
+
+    def launch_experiment(self, experiment_id: str) -> dict[str, Any]:
+        """Launch an experiment (Draft → Active).
+
+        Calls ``PUT /api/app/projects/{pid}/experiments/{id}/launch``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Returns:
+            Dictionary representing the launched experiment.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid state transition (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                launched = client.launch_experiment("xyz-456")
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}/launch")
+        result = self.app_request("PUT", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from launch_experiment: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def conclude_experiment(
+        self, experiment_id: str, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Conclude an experiment (Active → Concluded).
+
+        Always sends a JSON body (empty ``{}`` if no params provided).
+        Calls ``PUT /api/app/projects/{pid}/experiments/{id}/force_conclude``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+            body: Optional conclude parameters. Defaults to empty dict.
+
+        Returns:
+            Dictionary representing the concluded experiment.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid state transition (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                concluded = client.conclude_experiment("xyz-456")
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}/force_conclude")
+        result = self.app_request("PUT", path, json_body=body or {})
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from conclude_experiment: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def decide_experiment(
+        self, experiment_id: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Record an experiment decision (Concluded → Success/Fail).
+
+        Calls ``PATCH /api/app/projects/{pid}/experiments/{id}/decide``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+            body: Decision payload with ``success`` required.
+
+        Returns:
+            Dictionary representing the decided experiment.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid state transition (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                decided = client.decide_experiment("xyz-456", {"success": True})
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}/decide")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from decide_experiment: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def archive_experiment(self, experiment_id: str) -> None:
+        """Archive an experiment.
+
+        Calls ``POST /api/app/projects/{pid}/experiments/{id}/archive``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.archive_experiment("xyz-456")
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}/archive")
+        self.app_request("POST", path)
+
+    def restore_experiment(self, experiment_id: str) -> dict[str, Any]:
+        """Restore an archived experiment.
+
+        Calls ``DELETE /api/app/projects/{pid}/experiments/{id}/archive``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Returns:
+            Dictionary representing the restored experiment.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                exp = client.restore_experiment("xyz-456")
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}/archive")
+        result = self.app_request("DELETE", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from restore_experiment: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def duplicate_experiment(
+        self, experiment_id: str, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Duplicate an experiment.
+
+        Calls ``POST /api/app/projects/{pid}/experiments/{id}/duplicate``
+        (no trailing slash).
+
+        Args:
+            experiment_id: Experiment UUID.
+            body: Optional duplication parameters (e.g. new name).
+
+        Returns:
+            Dictionary representing the duplicated experiment.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                dup = client.duplicate_experiment("xyz-456", {"name": "Copy"})
+            ```
+        """
+        path = self.maybe_scoped_path(f"experiments/{experiment_id}/duplicate")
+        result = self.app_request("POST", path, json_body=body if body else None)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from duplicate_experiment: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def list_erf_experiments(self) -> list[dict[str, Any]]:
+        """List experiments in ERF (Experiment Results Framework) format.
+
+        Calls ``GET /api/app/projects/{pid}/experiments/erf/``
+        (optionally workspace-scoped).
+
+        Returns:
+            List of experiment dictionaries in ERF format.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                erf = client.list_erf_experiments()
+            ```
+        """
+        path = self.maybe_scoped_path("experiments/erf/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_erf_experiments: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
