@@ -47,7 +47,7 @@ The main entry point for all operations:
 - **Streaming** — Stream data directly without storage (ETL, pipelines)
 - **Local Queries** — SQL queries against DuckDB
 - **Live Queries** — Real-time analytics from Mixpanel API
-- **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts
+- **Entity CRUD** — Create, read, update, delete dashboards, reports, cohorts, feature flags, and experiments
 - **Introspection** — Examine local tables and schemas
 
 [View Workspace API](workspace.md)

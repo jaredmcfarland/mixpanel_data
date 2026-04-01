@@ -428,3 +428,101 @@ Types for parallel profile fetching with page-based progress tracking.
     options:
       show_root_heading: true
       show_root_toc_entry: true
+
+## Feature Flag Enums
+
+::: mixpanel_data.FeatureFlagStatus
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.ServingMethod
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FlagContractStatus
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Feature Flag Types
+
+::: mixpanel_data.FeatureFlag
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateFeatureFlagParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateFeatureFlagParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.SetTestUsersParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FlagHistoryParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FlagHistoryResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FlagLimitsResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Experiment Enums
+
+::: mixpanel_data.ExperimentStatus
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Experiment Types
+
+::: mixpanel_data.ExperimentCreator
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.Experiment
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateExperimentParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateExperimentParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.ExperimentConcludeParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.ExperimentDecideParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.DuplicateExperimentParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true

@@ -1,14 +1,14 @@
 # Entity Management
 
-Manage Mixpanel dashboards, reports (bookmarks), and cohorts programmatically. Full CRUD operations with bulk support.
+Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, and experiments programmatically. Full CRUD operations with bulk support.
 
 !!! note "Prerequisites"
-    Entity management requires:
+    Entity management requires **authentication** — service account or OAuth credentials.
 
-    - **Authentication** — Service account or OAuth credentials
-    - **Workspace ID** — Set via `MP_WORKSPACE_ID` env var, `--workspace-id` CLI flag, or `ws.set_workspace_id()`
+    **Scoping differs by entity type:**
 
-    Find your workspace ID with `mp inspect info` or `ws.info()`.
+    - **Dashboards, reports, cohorts** require a **workspace ID** — set via `MP_WORKSPACE_ID` env var, `--workspace-id` CLI flag, or `ws.set_workspace_id()`. Find yours with `mp inspect info` or `ws.info()`.
+    - **Feature flags and experiments** are **project-scoped** and do NOT require a workspace ID.
 
 ## Dashboards
 
@@ -439,8 +439,330 @@ Reports in Mixpanel are stored as "bookmarks". Each bookmark has a type (insight
 
 ---
 
+## Feature Flags
+
+Feature flags are **project-scoped** — no workspace ID required. They use **UUID string IDs** (not integer IDs like dashboards/reports/cohorts).
+
+!!! warning "PUT Semantics"
+    Feature flag `update` uses **full replacement** (PUT semantics). All required fields (`name`, `key`, `status`, `ruleset`) must be provided on every update — even if you're only changing one field.
+
+### List Feature Flags
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    # List all flags (excludes archived by default)
+    flags = ws.list_feature_flags()
+    for f in flags:
+        print(f"{f.name} ({f.key}): {f.status.value}")
+
+    # Include archived flags
+    flags = ws.list_feature_flags(include_archived=True)
+    ```
+
+=== "CLI"
+
+    ```bash
+    # List all flags
+    mp flags list
+
+    # Include archived
+    mp flags list --include-archived
+
+    # Table format
+    mp flags list --format table
+    ```
+
+### Create a Feature Flag
+
+=== "Python"
+
+    ```python
+    flag = ws.create_feature_flag(mp.CreateFeatureFlagParams(
+        name="Dark Mode",
+        key="dark_mode",
+        description="Enable dark mode UI",
+        tags=["ui", "frontend"],
+    ))
+    print(f"Created flag {flag.id}: {flag.key}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp flags create --name "Dark Mode" --key dark_mode \
+        --description "Enable dark mode UI" --tags "ui,frontend"
+    ```
+
+### Get, Update, Delete
+
+=== "Python"
+
+    ```python
+    # Get a flag by UUID
+    flag = ws.get_feature_flag("abc-123-uuid")
+
+    # Update (PUT — all required fields must be provided)
+    updated = ws.update_feature_flag("abc-123-uuid", mp.UpdateFeatureFlagParams(
+        name="Dark Mode",
+        key="dark_mode",
+        status=mp.FeatureFlagStatus.ENABLED,
+        ruleset=flag.ruleset,  # Must provide complete ruleset
+    ))
+
+    # Delete
+    ws.delete_feature_flag("abc-123-uuid")
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Get details
+    mp flags get abc-123-uuid
+
+    # Update (all required fields)
+    mp flags update abc-123-uuid \
+        --name "Dark Mode" --key dark_mode \
+        --status enabled --ruleset '{"variants": [], "rollout": []}'
+
+    # Delete
+    mp flags delete abc-123-uuid
+    ```
+
+### Archive, Restore, Duplicate
+
+=== "Python"
+
+    ```python
+    # Archive (soft-delete)
+    ws.archive_feature_flag("abc-123-uuid")
+
+    # Restore an archived flag
+    restored = ws.restore_feature_flag("abc-123-uuid")
+
+    # Duplicate
+    copy = ws.duplicate_feature_flag("abc-123-uuid")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp flags archive abc-123-uuid
+    mp flags restore abc-123-uuid
+    mp flags duplicate abc-123-uuid
+    ```
+
+### Test Users and History
+
+=== "Python"
+
+    ```python
+    # Assign test users to specific variants
+    ws.set_flag_test_users("abc-123-uuid", mp.SetTestUsersParams(
+        users={"On": "user-1", "Off": "user-2"}
+    ))
+
+    # View change history
+    history = ws.get_flag_history("abc-123-uuid")
+    print(f"{history.count} changes")
+
+    # Check account limits
+    limits = ws.get_flag_limits()
+    print(f"Using {limits.current_usage}/{limits.limit} flags")
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Set test users
+    mp flags set-test-users abc-123-uuid \
+        --users '{"On": "user-1", "Off": "user-2"}'
+
+    # View history
+    mp flags history abc-123-uuid
+
+    # Check limits
+    mp flags limits
+    ```
+
+---
+
+## Experiments
+
+Experiments are **project-scoped** — no workspace ID required. They have a distinct lifecycle with managed state transitions:
+
+```
+Draft → Active (launch) → Concluded (conclude) → Success/Fail (decide)
+```
+
+!!! info "PATCH Semantics"
+    Experiment `update` uses **partial update** (PATCH semantics). Only provide the fields you want to change.
+
+### List Experiments
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    experiments = ws.list_experiments()
+    for e in experiments:
+        print(f"{e.name}: {e.status.value if e.status else 'unknown'}")
+
+    # Include archived
+    experiments = ws.list_experiments(include_archived=True)
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp experiments list
+    mp experiments list --include-archived
+    ```
+
+### Create an Experiment
+
+=== "Python"
+
+    ```python
+    exp = ws.create_experiment(mp.CreateExperimentParams(
+        name="Checkout Flow Test",
+        description="Test simplified checkout",
+        hypothesis="Simpler checkout increases conversions by 10%",
+    ))
+    print(f"Created experiment {exp.id}: {exp.name}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp experiments create --name "Checkout Flow Test" \
+        --description "Test simplified checkout" \
+        --hypothesis "Simpler checkout increases conversions by 10%"
+    ```
+
+### Get, Update, Delete
+
+=== "Python"
+
+    ```python
+    # Get
+    exp = ws.get_experiment("xyz-456-uuid")
+
+    # Update (PATCH — only changed fields)
+    updated = ws.update_experiment("xyz-456-uuid", mp.UpdateExperimentParams(
+        description="Updated hypothesis and metrics",
+    ))
+
+    # Delete
+    ws.delete_experiment("xyz-456-uuid")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp experiments get xyz-456-uuid
+    mp experiments update xyz-456-uuid --description "Updated"
+    mp experiments delete xyz-456-uuid
+    ```
+
+### Experiment Lifecycle
+
+The key differentiator of experiments: a managed lifecycle with state transitions.
+
+=== "Python"
+
+    ```python
+    # 1. Create (starts in Draft)
+    exp = ws.create_experiment(mp.CreateExperimentParams(
+        name="Pricing Page Test"
+    ))
+
+    # 2. Launch (Draft → Active)
+    launched = ws.launch_experiment(exp.id)
+
+    # 3. Conclude (Active → Concluded)
+    concluded = ws.conclude_experiment(exp.id)
+    # Or with an explicit end date:
+    concluded = ws.conclude_experiment(
+        exp.id,
+        params=mp.ExperimentConcludeParams(end_date="2026-04-01"),
+    )
+
+    # 4. Decide (Concluded → Success or Fail)
+    decided = ws.decide_experiment(exp.id, mp.ExperimentDecideParams(
+        success=True,
+        variant="simplified",
+        message="15% conversion lift confirmed",
+    ))
+    ```
+
+=== "CLI"
+
+    ```bash
+    # Launch
+    mp experiments launch xyz-456-uuid
+
+    # Conclude
+    mp experiments conclude xyz-456-uuid
+    mp experiments conclude xyz-456-uuid --end-date 2026-04-01
+
+    # Decide as success
+    mp experiments decide xyz-456-uuid --success \
+        --variant simplified --message "15% conversion lift confirmed"
+
+    # Decide as failure
+    mp experiments decide xyz-456-uuid --no-success \
+        --message "No significant difference"
+    ```
+
+### Archive, Restore, Duplicate
+
+=== "Python"
+
+    ```python
+    ws.archive_experiment("xyz-456-uuid")
+    restored = ws.restore_experiment("xyz-456-uuid")
+    dup = ws.duplicate_experiment(
+        "xyz-456-uuid",
+        mp.DuplicateExperimentParams(name="Pricing Page Test v2"),
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp experiments archive xyz-456-uuid
+    mp experiments restore xyz-456-uuid
+    mp experiments duplicate xyz-456-uuid --name "Pricing Page Test v2"
+    ```
+
+### ERF Experiments
+
+List experiments in ERF (Experiment Results Framework) format:
+
+=== "Python"
+
+    ```python
+    erf = ws.list_erf_experiments()
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp experiments erf
+    ```
+
+---
+
 ## Next Steps
 
 - [API Reference — Workspace](../api/workspace.md) — Complete method signatures and docstrings
-- [API Reference — Types](../api/types.md) — Dashboard, Bookmark, Cohort type definitions
+- [API Reference — Types](../api/types.md) — Dashboard, Bookmark, Cohort, Feature Flag, and Experiment type definitions
 - [CLI Reference](../cli/index.md) — Full CLI command documentation

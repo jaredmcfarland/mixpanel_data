@@ -15,7 +15,8 @@ Workspace orchestrates four internal services and provides direct App API access
 - **FetcherService** — Data ingestion from Mixpanel to DuckDB, or streaming without storage
 - **LiveQueryService** — Real-time analytics queries
 - **StorageEngine** — Local SQL query execution
-- **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts via Mixpanel App API
+- **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts via Mixpanel App API (workspace-scoped)
+- **Feature Management** — Create, read, update, delete feature flags and experiments via Mixpanel App API (project-scoped)
 
 ## Key Features
 
@@ -88,7 +89,7 @@ Duplicate events (by `insert_id`) and profiles (by `distinct_id`) are automatica
 
 ### Entity CRUD
 
-Manage dashboards, reports (bookmarks), and cohorts programmatically via the Mixpanel App API:
+Manage dashboards, reports (bookmarks), and cohorts programmatically via the Mixpanel App API (workspace-scoped):
 
 ```python
 import mixpanel_data as mp
@@ -114,7 +115,36 @@ cohort = ws.create_cohort(mp.CreateCohortParams(name="Power Users"))
 ws.update_cohort(cohort.id, mp.UpdateCohortParams(name="Super Users"))
 ```
 
-All entity CRUD operations require a workspace ID, set via `MP_WORKSPACE_ID` environment variable, `--workspace-id` CLI flag, or `ws.set_workspace_id()`. See the [Entity Management guide](../guide/entity-management.md) for complete coverage.
+Dashboard, report, and cohort operations require a workspace ID, set via `MP_WORKSPACE_ID` environment variable, `--workspace-id` CLI flag, or `ws.set_workspace_id()`.
+
+### Feature Flags & Experiments
+
+Manage feature flags and experiments programmatically. Unlike dashboards/reports/cohorts, these are **project-scoped** and do not require a workspace ID.
+
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+
+# Feature Flags
+flags = ws.list_feature_flags()
+flag = ws.create_feature_flag(mp.CreateFeatureFlagParams(
+    name="Dark Mode", key="dark_mode"
+))
+ws.update_feature_flag(flag.id, mp.UpdateFeatureFlagParams(
+    name="Dark Mode", key="dark_mode",
+    status=mp.FeatureFlagStatus.ENABLED,
+    ruleset=flag.ruleset,
+))
+
+# Experiments (full lifecycle)
+exp = ws.create_experiment(mp.CreateExperimentParams(name="Checkout Flow Test"))
+launched = ws.launch_experiment(exp.id)
+concluded = ws.conclude_experiment(exp.id)
+decided = ws.decide_experiment(exp.id, mp.ExperimentDecideParams(success=True))
+```
+
+Feature flag `update` uses **PUT semantics** (all required fields must be provided). Experiment `update` uses **PATCH semantics** (only changed fields needed). See the [Entity Management guide](../guide/entity-management.md) for complete coverage.
 
 ### Advanced Profile Fetching
 
@@ -259,3 +289,28 @@ ws.fetch_profiles(
         - delete_cohort
         - bulk_delete_cohorts
         - bulk_update_cohorts
+        # Feature Flag CRUD
+        - list_feature_flags
+        - create_feature_flag
+        - get_feature_flag
+        - update_feature_flag
+        - delete_feature_flag
+        - archive_feature_flag
+        - restore_feature_flag
+        - duplicate_feature_flag
+        - set_flag_test_users
+        - get_flag_history
+        - get_flag_limits
+        # Experiment CRUD
+        - list_experiments
+        - create_experiment
+        - get_experiment
+        - update_experiment
+        - delete_experiment
+        - launch_experiment
+        - conclude_experiment
+        - decide_experiment
+        - archive_experiment
+        - restore_experiment
+        - duplicate_experiment
+        - list_erf_experiments

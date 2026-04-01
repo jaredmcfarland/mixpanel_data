@@ -321,7 +321,7 @@ For real-time analytics, query Mixpanel directly:
 
 ## Step 8: Manage Entities (Optional)
 
-Create, update, and delete dashboards, reports, and cohorts:
+Create, update, and delete dashboards, reports, cohorts, feature flags, and experiments:
 
 === "CLI"
 
@@ -334,6 +334,10 @@ Create, update, and delete dashboards, reports, and cohorts:
 
     # List saved reports
     mp reports list --type insights
+
+    # Feature flags and experiments
+    mp flags list
+    mp experiments create --name "Checkout Flow Test"
     ```
 
 === "Python"
@@ -346,9 +350,13 @@ Create, update, and delete dashboards, reports, and cohorts:
     dashboards = ws.list_dashboards()
     cohort = ws.create_cohort(mp.CreateCohortParams(name="Premium Users"))
     reports = ws.list_bookmarks_v2(bookmark_type="insights")
+
+    # Feature flags and experiments
+    flags = ws.list_feature_flags()
+    exp = ws.create_experiment(mp.CreateExperimentParams(name="Checkout Flow Test"))
     ```
 
-See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, and cohort operations.
+See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, cohort, feature flag, and experiment operations.
 
 ## Alternative: Stream Data Without Storage
 
@@ -399,7 +407,7 @@ with mp.Workspace.memory() as ws:
 ## Next Steps
 
 - [Configuration](configuration.md) — Multiple accounts and advanced settings
-- [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, and cohorts
+- [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
 - [Fetching Data](../guide/fetching.md) — Filtering and progress callbacks
 - [Streaming Data](../guide/streaming.md) — Process data without local storage
 - [SQL Queries](../guide/sql-queries.md) — DuckDB JSON syntax and patterns
