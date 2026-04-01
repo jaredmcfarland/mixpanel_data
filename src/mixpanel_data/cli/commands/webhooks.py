@@ -11,7 +11,7 @@ This module provides commands for managing Mixpanel project webhooks:
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -107,7 +107,7 @@ def webhooks_create(
     """
     from mixpanel_data.types import CreateWebhookParams
 
-    kwargs: dict[str, object] = {"name": name, "url": url}
+    kwargs: dict[str, Any] = {"name": name, "url": url}
     if auth_type is not None:
         kwargs["auth_type"] = auth_type
     if username is not None:
@@ -176,7 +176,7 @@ def webhooks_update(
     """
     from mixpanel_data.types import UpdateWebhookParams
 
-    kwargs: dict[str, object] = {}
+    kwargs: dict[str, Any] = {}
     if name is not None:
         kwargs["name"] = name
     if url is not None:
@@ -263,7 +263,7 @@ def webhooks_test(
     """
     from mixpanel_data.types import WebhookTestParams
 
-    kwargs: dict[str, object] = {"url": url}
+    kwargs: dict[str, Any] = {"url": url}
     if name is not None:
         kwargs["name"] = name
     if auth_type is not None:

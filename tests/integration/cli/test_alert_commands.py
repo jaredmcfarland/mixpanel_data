@@ -308,7 +308,7 @@ class TestAlertsTest:
             )
         assert result.exit_code == 0
         data = json.loads(result.stdout)
-        assert data["status"] == "ok"
+        assert data["status"] == "sent"
 
 
 class TestAlertsScreenshot:

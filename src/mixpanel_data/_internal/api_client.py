@@ -4929,12 +4929,12 @@ class MixpanelAPIClient:
                 return inner
             if isinstance(inner, list):
                 return {"results": inner, "pagination": None}
-            return {"results": inner, "pagination": None}
-        if isinstance(result, list):
+        elif isinstance(result, list):
             return {"results": result, "pagination": None}
+
         raise MixpanelDataError(
             f"Unexpected response from get_alert_history: "
-            f"expected dict, got {type(result).__name__}",
+            f"got {type(result).__name__} without results list",
         )
 
     def test_alert(self, body: dict[str, Any]) -> dict[str, Any]:

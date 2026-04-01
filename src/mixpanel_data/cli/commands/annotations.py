@@ -22,6 +22,7 @@ import typer
 
 from mixpanel_data.cli.options import FormatOption, JqOption
 from mixpanel_data.cli.utils import (
+    ExitCode,
     err_console,
     get_workspace,
     handle_errors,
@@ -82,7 +83,11 @@ def annotations_list(
     """
     tag_ids: list[int] | None = None
     if tags:
-        tag_ids = [int(t.strip()) for t in tags.split(",") if t.strip()]
+        try:
+            tag_ids = [int(t.strip()) for t in tags.split(",") if t.strip()]
+        except ValueError as exc:
+            err_console.print(f"[red]Invalid tag IDs:[/red] {exc}")
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     workspace = get_workspace(ctx)
     with status_spinner(ctx, "Fetching annotations..."):
@@ -138,7 +143,11 @@ def annotations_create(
 
     kwargs: dict[str, Any] = {"date": date, "description": description}
     if tags is not None:
-        kwargs["tags"] = [int(t.strip()) for t in tags.split(",") if t.strip()]
+        try:
+            kwargs["tags"] = [int(t.strip()) for t in tags.split(",") if t.strip()]
+        except ValueError as exc:
+            err_console.print(f"[red]Invalid tag IDs:[/red] {exc}")
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
     if user_id is not None:
         kwargs["user_id"] = user_id
 
@@ -214,7 +223,11 @@ def annotations_update(
     if description is not None:
         kwargs["description"] = description
     if tags is not None:
-        kwargs["tags"] = [int(t.strip()) for t in tags.split(",") if t.strip()]
+        try:
+            kwargs["tags"] = [int(t.strip()) for t in tags.split(",") if t.strip()]
+        except ValueError as exc:
+            err_console.print(f"[red]Invalid tag IDs:[/red] {exc}")
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     params = UpdateAnnotationParams(**kwargs)
     workspace = get_workspace(ctx)

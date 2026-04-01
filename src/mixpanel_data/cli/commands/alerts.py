@@ -27,6 +27,7 @@ import typer
 
 from mixpanel_data.cli.options import FormatOption, JqOption
 from mixpanel_data.cli.utils import (
+    ExitCode,
     err_console,
     get_workspace,
     handle_errors,
@@ -152,7 +153,7 @@ def alerts_create(
         parsed_condition: dict[str, Any] = json.loads(condition)
     except json.JSONDecodeError as exc:
         err_console.print(f"[red]Invalid JSON for --condition:[/red] {exc}")
-        raise typer.Exit(code=1) from None
+        raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     parsed_subscriptions: list[dict[str, Any]] = []
     if subscriptions is not None:
@@ -160,7 +161,7 @@ def alerts_create(
             parsed_subscriptions = json.loads(subscriptions)
         except json.JSONDecodeError as exc:
             err_console.print(f"[red]Invalid JSON for --subscriptions:[/red] {exc}")
-            raise typer.Exit(code=1) from None
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     kwargs: dict[str, Any] = {
         "bookmark_id": bookmark_id,
@@ -178,7 +179,7 @@ def alerts_create(
             err_console.print(
                 f"[red]Invalid JSON for --notification-windows:[/red] {exc}"
             )
-            raise typer.Exit(code=1) from None
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     params = CreateAlertParams(**kwargs)
     workspace = get_workspace(ctx)
@@ -288,7 +289,7 @@ def alerts_update(
             kwargs["condition"] = json.loads(condition)
         except json.JSONDecodeError as exc:
             err_console.print(f"[red]Invalid JSON for --condition:[/red] {exc}")
-            raise typer.Exit(code=1) from None
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
     if frequency is not None:
         kwargs["frequency"] = frequency
     if paused is not None:
@@ -298,7 +299,7 @@ def alerts_update(
             kwargs["subscriptions"] = json.loads(subscriptions)
         except json.JSONDecodeError as exc:
             err_console.print(f"[red]Invalid JSON for --subscriptions:[/red] {exc}")
-            raise typer.Exit(code=1) from None
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
     if notification_windows is not None:
         try:
             kwargs["notification_windows"] = json.loads(notification_windows)
@@ -306,7 +307,7 @@ def alerts_update(
             err_console.print(
                 f"[red]Invalid JSON for --notification-windows:[/red] {exc}"
             )
-            raise typer.Exit(code=1) from None
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     params = UpdateAlertParams(**kwargs)
     workspace = get_workspace(ctx)
@@ -360,7 +361,7 @@ def alerts_bulk_delete(
         id_list = [int(x.strip()) for x in ids.split(",") if x.strip()]
     except ValueError as exc:
         err_console.print(f"[red]Invalid alert IDs:[/red] {exc}")
-        raise typer.Exit(code=1) from None
+        raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     workspace = get_workspace(ctx)
     with status_spinner(ctx, "Deleting alerts..."):
@@ -488,7 +489,7 @@ def alerts_test(
         parsed_condition: dict[str, Any] = json.loads(condition)
     except json.JSONDecodeError as exc:
         err_console.print(f"[red]Invalid JSON for --condition:[/red] {exc}")
-        raise typer.Exit(code=1) from None
+        raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     parsed_subscriptions: list[dict[str, Any]] = []
     if subscriptions is not None:
@@ -496,7 +497,7 @@ def alerts_test(
             parsed_subscriptions = json.loads(subscriptions)
         except json.JSONDecodeError as exc:
             err_console.print(f"[red]Invalid JSON for --subscriptions:[/red] {exc}")
-            raise typer.Exit(code=1) from None
+            raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     params = CreateAlertParams(
         bookmark_id=bookmark_id,
@@ -578,13 +579,13 @@ def alerts_validate(
         id_list = [int(x.strip()) for x in alert_ids.split(",") if x.strip()]
     except ValueError as exc:
         err_console.print(f"[red]Invalid alert IDs:[/red] {exc}")
-        raise typer.Exit(code=1) from None
+        raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     try:
         parsed_params: dict[str, Any] = json.loads(bookmark_params)
     except json.JSONDecodeError as exc:
         err_console.print(f"[red]Invalid JSON for --bookmark-params:[/red] {exc}")
-        raise typer.Exit(code=1) from None
+        raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     params = ValidateAlertsForBookmarkParams(
         alert_ids=id_list,

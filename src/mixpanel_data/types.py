@@ -5532,7 +5532,7 @@ class ProjectWebhook(BaseModel):
     is_enabled: bool
     """Whether enabled."""
 
-    auth_type: str | None = None
+    auth_type: WebhookAuthType | None = None
     """Authentication type."""
 
     created: str | None = None
@@ -5573,8 +5573,8 @@ class CreateWebhookParams(BaseModel):
     url: str
     """Webhook URL."""
 
-    auth_type: str | None = None
-    """Auth type ("basic" or None)."""
+    auth_type: WebhookAuthType | None = None
+    """Auth type (e.g. WebhookAuthType.BASIC)."""
 
     username: str | None = None
     """Basic auth username."""
@@ -5606,7 +5606,7 @@ class UpdateWebhookParams(BaseModel):
     url: str | None = None
     """New URL."""
 
-    auth_type: str | None = None
+    auth_type: WebhookAuthType | None = None
     """New auth type."""
 
     username: str | None = None
@@ -5641,7 +5641,7 @@ class WebhookTestParams(BaseModel):
     name: str | None = None
     """Webhook name."""
 
-    auth_type: str | None = None
+    auth_type: WebhookAuthType | None = None
     """Auth type."""
 
     username: str | None = None

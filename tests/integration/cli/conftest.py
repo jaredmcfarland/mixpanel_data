@@ -275,7 +275,7 @@ def mock_workspace() -> MagicMock:
         results=[],
         pagination=AlertHistoryPagination(page_size=20),
     )
-    workspace.test_alert.return_value = {"status": "ok"}
+    workspace.test_alert.return_value = {"status": "sent"}
     workspace.get_alert_screenshot_url.return_value = AlertScreenshotResponse(
         signed_url="https://storage.googleapis.com/screenshot.png",
     )
