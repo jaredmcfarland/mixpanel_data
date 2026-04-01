@@ -132,7 +132,7 @@ def experiments_create(
         try:
             parsed_settings = json.loads(settings)
         except json.JSONDecodeError as exc:
-            err_console.print(f"[red]Invalid JSON for --settings:[/red] {exc.msg}")
+            err_console.print(f"[red]Invalid JSON for --settings:[/red] {exc}")
             raise typer.Exit(code=1) from None
 
     params = CreateExperimentParams(
@@ -252,21 +252,21 @@ def experiments_update(
         try:
             parsed_variants = json.loads(variants)
         except json.JSONDecodeError as exc:
-            err_console.print(f"[red]Invalid JSON for --variants:[/red] {exc.msg}")
+            err_console.print(f"[red]Invalid JSON for --variants:[/red] {exc}")
             raise typer.Exit(code=1) from None
 
     if metrics is not None:
         try:
             parsed_metrics = json.loads(metrics)
         except json.JSONDecodeError as exc:
-            err_console.print(f"[red]Invalid JSON for --metrics:[/red] {exc.msg}")
+            err_console.print(f"[red]Invalid JSON for --metrics:[/red] {exc}")
             raise typer.Exit(code=1) from None
 
     if settings is not None:
         try:
             parsed_settings = json.loads(settings)
         except json.JSONDecodeError as exc:
-            err_console.print(f"[red]Invalid JSON for --settings:[/red] {exc.msg}")
+            err_console.print(f"[red]Invalid JSON for --settings:[/red] {exc}")
             raise typer.Exit(code=1) from None
 
     if tags is not None:
@@ -328,7 +328,7 @@ def experiments_launch(
 ) -> None:
     """Launch a draft experiment.
 
-    Transitions an experiment from draft to running status.
+    Transitions an experiment from draft to active status.
 
     Args:
         ctx: Typer context with global options.
@@ -357,9 +357,9 @@ def experiments_conclude(
     format: FormatOption = "json",
     jq_filter: JqOption = None,
 ) -> None:
-    """Conclude a running experiment.
+    """Conclude an active experiment.
 
-    Transitions an experiment from running to concluded status,
+    Transitions an experiment from active to concluded status,
     optionally specifying an end date.
 
     Args:

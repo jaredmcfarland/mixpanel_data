@@ -158,7 +158,7 @@ def flags_create(
         try:
             kwargs["ruleset"] = json.loads(ruleset)
         except json.JSONDecodeError as exc:
-            err_console.print(f"[red]Invalid JSON for --ruleset:[/red] {exc.msg}")
+            err_console.print(f"[red]Invalid JSON for --ruleset:[/red] {exc}")
             raise typer.Exit(code=1) from None
 
     params = CreateFeatureFlagParams(**kwargs)
@@ -272,7 +272,7 @@ def flags_update(
     try:
         parsed_ruleset: dict[str, Any] = json.loads(ruleset)
     except json.JSONDecodeError as exc:
-        err_console.print(f"[red]Invalid JSON for --ruleset:[/red] {exc.msg}")
+        err_console.print(f"[red]Invalid JSON for --ruleset:[/red] {exc}")
         raise typer.Exit(code=1) from None
 
     kwargs: dict[str, Any] = {
@@ -441,7 +441,7 @@ def flags_set_test_users(
     try:
         parsed_users: dict[str, str] = json.loads(users)
     except json.JSONDecodeError as exc:
-        err_console.print(f"[red]Invalid JSON for --users:[/red] {exc.msg}")
+        err_console.print(f"[red]Invalid JSON for --users:[/red] {exc}")
         raise typer.Exit(code=1) from None
 
     params = SetTestUsersParams(users=parsed_users)

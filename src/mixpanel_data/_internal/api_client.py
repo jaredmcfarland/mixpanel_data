@@ -3566,7 +3566,7 @@ class MixpanelAPIClient:
                 flag = client.create_feature_flag({"name": "X", "key": "x"})
             ```
         """
-        path = self.require_scoped_path("feature-flags")
+        path = self.require_scoped_path("feature-flags/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
             raise MixpanelDataError(
@@ -3813,7 +3813,7 @@ class MixpanelAPIClient:
         """Get account-level feature flag limits and usage.
 
         Calls ``GET /api/app/projects/{pid}/feature-flags/limits/``
-        (uses maybe_scoped_path, not require_scoped_path).
+        (project-scoped; does not require a workspace ID).
 
         Returns:
             Dictionary with ``limit``, ``is_trial``, ``current_usage``,
