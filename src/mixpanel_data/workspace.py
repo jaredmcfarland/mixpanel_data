@@ -4417,14 +4417,16 @@ class Workspace:
     def duplicate_experiment(
         self,
         experiment_id: str,
-        *,
-        params: DuplicateExperimentParams | None = None,
+        params: DuplicateExperimentParams,
     ) -> Experiment:
         """Duplicate an experiment.
 
+        A name is required because the Mixpanel API returns an empty
+        response body when duplicating without one.
+
         Args:
             experiment_id: Experiment UUID.
-            params: Optional parameters (e.g. new name).
+            params: Duplication parameters (``name`` is required).
 
         Returns:
             The newly created duplicate ``Experiment``.
@@ -4438,11 +4440,14 @@ class Workspace:
         Example:
             ```python
             ws = Workspace()
-            dup = ws.duplicate_experiment("xyz-456-uuid")
+            dup = ws.duplicate_experiment(
+                "xyz-456-uuid",
+                DuplicateExperimentParams(name="Copy"),
+            )
             ```
         """
         client = self._require_api_client()
-        body = params.model_dump(exclude_none=True) if params else None
+        body = params.model_dump(exclude_none=True)
         raw = client.duplicate_experiment(experiment_id, body)
         return Experiment.model_validate(raw)
 

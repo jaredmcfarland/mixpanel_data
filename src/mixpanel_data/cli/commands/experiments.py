@@ -499,35 +499,31 @@ def experiments_duplicate(
         typer.Argument(help="Experiment ID."),
     ],
     name: Annotated[
-        str | None,
-        typer.Option("--name", help="Name for the duplicated experiment."),
-    ] = None,
+        str,
+        typer.Option("--name", help="Name for the duplicated experiment (required)."),
+    ],
     format: FormatOption = "json",
     jq_filter: JqOption = None,
 ) -> None:
     """Duplicate an experiment.
 
-    Creates a copy of the specified experiment, optionally with
-    a new name.
+    Creates a copy of the specified experiment with a new name.
+    A name is required because the Mixpanel API does not support
+    duplication without one.
 
     Args:
         ctx: Typer context with global options.
         experiment_id: Experiment identifier.
-        name: Optional name for the duplicated experiment.
+        name: Name for the duplicated experiment (required).
         format: Output format.
         jq_filter: Optional jq filter expression.
     """
     from mixpanel_data.types import DuplicateExperimentParams
 
     workspace = get_workspace(ctx)
-    params: DuplicateExperimentParams | None = None
-    if name is not None:
-        params = DuplicateExperimentParams(name=name)
+    params = DuplicateExperimentParams(name=name)
     with status_spinner(ctx, "Duplicating experiment..."):
-        if params is not None:
-            result = workspace.duplicate_experiment(experiment_id, params=params)
-        else:
-            result = workspace.duplicate_experiment(experiment_id)
+        result = workspace.duplicate_experiment(experiment_id, params)
     output_result(ctx, result.model_dump(), format=format, jq_filter=jq_filter)
 
 

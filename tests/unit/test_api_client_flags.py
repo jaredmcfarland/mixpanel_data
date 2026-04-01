@@ -601,8 +601,10 @@ class TestGetFlagLimits:
 
         assert captured_methods[0] == "GET"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
-        """get_flag_limits() uses maybe_scoped_path (not require_scoped_path)."""
+    def test_always_uses_project_scoped_path(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """get_flag_limits() always uses project-scoped path, even with workspace set."""
         captured_urls: list[str] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -621,9 +623,10 @@ class TestGetFlagLimits:
                 },
             )
 
+        # Client has workspace_id=100 set, but limits should still be project-scoped
         client = create_mock_client(oauth_credentials, handler)
         with client:
             client.get_flag_limits()
 
-        # maybe_scoped_path uses workspace when workspace_id is set
-        assert "/feature-flags/limits" in captured_urls[0]
+        assert "/projects/12345/feature-flags/limits" in captured_urls[0]
+        assert "/workspaces/" not in captured_urls[0]

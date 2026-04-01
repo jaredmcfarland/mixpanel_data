@@ -3813,7 +3813,7 @@ class MixpanelAPIClient:
         """Get account-level feature flag limits and usage.
 
         Calls ``GET /api/app/projects/{pid}/feature-flags/limits/``
-        (project-scoped; does not require a workspace ID).
+        (always project-scoped; does not require a workspace ID).
 
         Returns:
             Dictionary with ``limit``, ``is_trial``, ``current_usage``,
@@ -3831,7 +3831,8 @@ class MixpanelAPIClient:
                 limits = client.get_flag_limits()
             ```
         """
-        path = self.maybe_scoped_path("feature-flags/limits/")
+        pid = self._credentials.project_id
+        path = f"/projects/{pid}/feature-flags/limits/"
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
             raise MixpanelDataError(

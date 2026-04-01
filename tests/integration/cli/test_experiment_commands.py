@@ -361,24 +361,16 @@ class TestExperimentsRestore:
 class TestExperimentsDuplicate:
     """Tests for mp experiments duplicate command."""
 
-    def test_duplicate_no_name(
-        self, cli_runner: CliRunner, mock_workspace: MagicMock
-    ) -> None:
-        """Test duplicating an experiment without a new name."""
-        with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
-            return_value=mock_workspace,
-        ):
-            result = cli_runner.invoke(app, ["experiments", "duplicate", "xyz-456"])
-        assert result.exit_code == 0
-        data = json.loads(result.stdout)
-        assert data["id"] == "xyz-456"
-        mock_workspace.duplicate_experiment.assert_called_once_with("xyz-456")
+    def test_duplicate_requires_name(self, cli_runner: CliRunner) -> None:
+        """Test that duplicating without --name fails."""
+        result = cli_runner.invoke(app, ["experiments", "duplicate", "xyz-456"])
+        assert result.exit_code != 0
+        assert "--name" in result.output or "Missing" in result.output
 
     def test_duplicate_with_name(
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
-        """Test duplicating an experiment with a new name."""
+        """Test duplicating an experiment with a name."""
         with patch(
             "mixpanel_data.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
@@ -389,8 +381,8 @@ class TestExperimentsDuplicate:
             )
         assert result.exit_code == 0
         mock_workspace.duplicate_experiment.assert_called_once()
-        params = mock_workspace.duplicate_experiment.call_args[1]["params"]
-        assert params.name == "Clone"
+        call_args = mock_workspace.duplicate_experiment.call_args
+        assert call_args[0][1].name == "Clone"
 
 
 class TestExperimentsErf:

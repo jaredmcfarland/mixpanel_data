@@ -543,7 +543,6 @@ class TestExperimentArchiveRestoreDuplicate:
         name = _unique_name("exp-mgmt")
         exp = ws.create_experiment(CreateExperimentParams(name=name))
         dup1_id: str | None = None
-        dup2_id: str | None = None
         try:
             # Archive
             ws.archive_experiment(exp.id)
@@ -561,29 +560,18 @@ class TestExperimentArchiveRestoreDuplicate:
             assert isinstance(restored, Experiment)
             assert restored.id == exp.id
 
-            # Duplicate with name (required — API returns empty body without name)
+            # Duplicate with name (required — API returns empty body without one)
             dup1 = ws.duplicate_experiment(
                 exp.id,
-                params=DuplicateExperimentParams(name=_unique_name("exp-dup1")),
+                DuplicateExperimentParams(name=_unique_name("exp-dup1")),
             )
             dup1_id = dup1.id
             assert dup1.id != exp.id
-
-            # Duplicate without name — API returns empty body, causing parse error.
-            # This is a known API limitation: name param is effectively required.
-            try:
-                dup2 = ws.duplicate_experiment(exp.id)
-                dup2_id = dup2.id
-                assert dup2.id != exp.id
-            except (QueryError, Exception):
-                pytest.xfail("Experiment duplicate without name returns empty body")
 
         finally:
             ws.delete_experiment(exp.id)
             if dup1_id:
                 ws.delete_experiment(dup1_id)
-            if dup2_id:
-                ws.delete_experiment(dup2_id)
 
 
 class TestExperimentErrors:

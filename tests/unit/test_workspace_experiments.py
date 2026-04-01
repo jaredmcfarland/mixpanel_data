@@ -430,8 +430,8 @@ class TestWorkspaceExperimentManagement:
         assert experiment.id == "dup-789"
         assert experiment.name == "Copy of Test Experiment"
 
-    def test_duplicate_experiment_without_params(self, temp_dir: Path) -> None:
-        """duplicate_experiment() without params returns the duplicated Experiment."""
+    def test_duplicate_experiment_requires_params(self, temp_dir: Path) -> None:
+        """duplicate_experiment() requires params with a name."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return duplicated experiment."""
@@ -439,15 +439,17 @@ class TestWorkspaceExperimentManagement:
                 200,
                 json={
                     "status": "ok",
-                    "results": _experiment_json("dup-789", "Test Experiment (copy)"),
+                    "results": _experiment_json("dup-789", "Auto Copy"),
                 },
             )
 
         ws = _make_workspace(temp_dir, handler)
-        experiment = ws.duplicate_experiment("xyz-456")
+        params = DuplicateExperimentParams(name="Auto Copy")
+        experiment = ws.duplicate_experiment("xyz-456", params)
 
         assert isinstance(experiment, Experiment)
         assert experiment.id == "dup-789"
+        assert experiment.name == "Auto Copy"
 
     def test_list_erf_experiments(self, temp_dir: Path) -> None:
         """list_erf_experiments() returns list of dicts."""
