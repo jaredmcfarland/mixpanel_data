@@ -319,6 +319,37 @@ For real-time analytics, query Mixpanel directly:
     print(result.df)
     ```
 
+## Step 8: Manage Entities (Optional)
+
+Create, update, and delete dashboards, reports, and cohorts:
+
+=== "CLI"
+
+    ```bash
+    # List your dashboards
+    mp dashboards list
+
+    # Create a cohort
+    mp cohorts create --name "Premium Users"
+
+    # List saved reports
+    mp reports list --type insights
+    ```
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    dashboards = ws.list_dashboards()
+    cohort = ws.create_cohort(mp.CreateCohortParams(name="Premium Users"))
+    reports = ws.list_bookmarks_v2(bookmark_type="insights")
+    ```
+
+See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, and cohort operations.
+
 ## Alternative: Stream Data Without Storage
 
 For ETL pipelines or one-time processing, stream data directly without storing:
@@ -368,6 +399,7 @@ with mp.Workspace.memory() as ws:
 ## Next Steps
 
 - [Configuration](configuration.md) — Multiple accounts and advanced settings
+- [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, and cohorts
 - [Fetching Data](../guide/fetching.md) — Filtering and progress callbacks
 - [Streaming Data](../guide/streaming.md) — Process data without local storage
 - [SQL Queries](../guide/sql-queries.md) — DuckDB JSON syntax and patterns

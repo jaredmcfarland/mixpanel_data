@@ -20,6 +20,7 @@ from enum import IntEnum
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 import jq  # type: ignore[import-not-found]
+import pydantic
 import typer
 from rich.console import Console
 
@@ -204,7 +205,11 @@ def handle_errors(func: F) -> F:
             if e.response_body:
                 if isinstance(e.response_body, dict):
                     api_error = e.response_body.get("error", "")
-                    if api_error and api_error not in e.message:
+                    if (
+                        api_error
+                        and isinstance(api_error, str)
+                        and api_error not in e.message
+                    ):
                         err_console.print(f"  [dim]API error:[/dim] {api_error}")
                 elif (
                     isinstance(e.response_body, str)
@@ -271,6 +276,13 @@ def handle_errors(func: F) -> F:
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except MixpanelDataError as e:
             err_console.print(f"[red]Error:[/red] {e.message}")
+            raise typer.Exit(ExitCode.GENERAL_ERROR) from None
+        except pydantic.ValidationError as e:
+            err_console.print(
+                "[red]API response parsing error:[/red] "
+                "unexpected data format from Mixpanel API"
+            )
+            err_console.print(f"  [dim]{e}[/dim]")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except ValueError as e:
             # Handle validation errors (e.g., invalid date format)

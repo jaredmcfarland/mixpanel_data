@@ -168,6 +168,61 @@ Explore schema and local database.
 | `mp inspect engagement` | User engagement distribution (JQL) |
 | `mp inspect coverage` | Property coverage analysis (JQL) |
 
+### dashboards — Dashboard Management
+
+Manage Mixpanel dashboards via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp dashboards list` | List dashboards |
+| `mp dashboards create` | Create a new dashboard |
+| `mp dashboards get` | Get dashboard by ID |
+| `mp dashboards update` | Update a dashboard |
+| `mp dashboards delete` | Delete a dashboard |
+| `mp dashboards bulk-delete` | Delete multiple dashboards |
+| `mp dashboards favorite` | Favorite a dashboard |
+| `mp dashboards unfavorite` | Unfavorite a dashboard |
+| `mp dashboards pin` | Pin a dashboard |
+| `mp dashboards unpin` | Unpin a dashboard |
+| `mp dashboards remove-report` | Remove a report from a dashboard |
+| `mp dashboards blueprints` | List blueprint templates |
+| `mp dashboards blueprint-create` | Create dashboard from blueprint |
+| `mp dashboards rca` | Create RCA dashboard |
+| `mp dashboards erf` | Get dashboard ERF metrics |
+| `mp dashboards update-report-link` | Update a report link on a dashboard |
+| `mp dashboards update-text-card` | Update a text card on a dashboard |
+
+### reports — Report Management
+
+Manage Mixpanel reports (bookmarks) via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp reports list` | List reports with optional type/ID filters |
+| `mp reports create` | Create a new report |
+| `mp reports get` | Get report by ID |
+| `mp reports update` | Update a report |
+| `mp reports delete` | Delete a report |
+| `mp reports bulk-delete` | Delete multiple reports |
+| `mp reports bulk-update` | Update multiple reports |
+| `mp reports linked-dashboards` | Get dashboards containing a report |
+| `mp reports dashboard-ids` | Get dashboard IDs for a report |
+| `mp reports history` | Get report change history |
+
+### cohorts — Cohort Management
+
+Manage Mixpanel cohorts via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp cohorts list` | List cohorts with optional filters |
+| `mp cohorts create` | Create a new cohort |
+| `mp cohorts get` | Get cohort by ID |
+| `mp cohorts update` | Update a cohort |
+| `mp cohorts delete` | Delete a cohort |
+| `mp cohorts bulk-delete` | Delete multiple cohorts |
+| `mp cohorts bulk-update` | Update multiple cohorts |
+
 ## Output Formats
 
 All commands support the `--format` option:
