@@ -174,6 +174,24 @@ class TestExperiment:
         assert exp.last_modified_by_name == "Bob"
         assert exp.last_modified_by_email == "bob@example.com"
 
+    def test_list_shaped_variants_and_metrics(self) -> None:
+        """Experiment accepts list-shaped variants and metrics from API."""
+        exp = Experiment(
+            id="list-exp",
+            name="List Shape Test",
+            variants=[
+                {"key": "control", "weight": 50},
+                {"key": "treatment", "weight": 50},
+            ],
+            metrics=[
+                {"event": "Purchase", "type": "primary"},
+            ],
+        )
+        assert isinstance(exp.variants, list)
+        assert len(exp.variants) == 2
+        assert isinstance(exp.metrics, list)
+        assert len(exp.metrics) == 1
+
     def test_frozen(self) -> None:
         """Experiment model is frozen and rejects attribute assignment."""
         exp = Experiment(id="xyz-456", name="Test")

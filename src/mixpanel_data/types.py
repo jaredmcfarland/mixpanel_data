@@ -5000,7 +5000,7 @@ class FlagHistoryResponse(BaseModel):
         ```
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="allow")
 
     events: list[list[Any]]
     """Array of event arrays."""
@@ -5028,7 +5028,7 @@ class FlagLimitsResponse(BaseModel):
         ```
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="allow")
 
     limit: int
     """Maximum allowed flags."""
@@ -5099,10 +5099,10 @@ class Experiment(BaseModel):
     status: ExperimentStatus | None = None
     """Current lifecycle status."""
 
-    variants: Any = None
+    variants: list[Any] | dict[str, Any] | None = None
     """Variant configuration (list from API, may also be dict)."""
 
-    metrics: Any = None
+    metrics: list[Any] | dict[str, Any] | None = None
     """Success metrics (list from API, may also be dict)."""
 
     settings: dict[str, Any] | None = None
@@ -5229,10 +5229,10 @@ class UpdateExperimentParams(BaseModel):
     hypothesis: str | None = None
     """Updated hypothesis."""
 
-    variants: Any = None
+    variants: list[Any] | dict[str, Any] | None = None
     """Updated variant config (list or dict)."""
 
-    metrics: Any = None
+    metrics: list[Any] | dict[str, Any] | None = None
     """Updated metrics (list or dict)."""
 
     settings: dict[str, Any] | None = None

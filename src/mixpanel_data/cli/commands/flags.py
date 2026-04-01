@@ -149,9 +149,9 @@ def flags_create(
     if description is not None:
         kwargs["description"] = description
     if status is not None:
-        kwargs["status"] = FeatureFlagStatus(status)
+        kwargs["status"] = FeatureFlagStatus(status.lower())
     if tags is not None:
-        kwargs["tags"] = [t.strip() for t in tags.split(",")]
+        kwargs["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
     if serving_method is not None:
         kwargs["serving_method"] = ServingMethod(serving_method)
     if ruleset is not None:
@@ -230,6 +230,10 @@ def flags_update(
         str | None,
         typer.Option("--tags", help="Comma-separated tags."),
     ] = None,
+    context: Annotated[
+        str | None,
+        typer.Option("--context", help="Flag context identifier (e.g. 'distinct_id')."),
+    ] = None,
     serving_method: Annotated[
         str | None,
         typer.Option(
@@ -254,6 +258,7 @@ def flags_update(
         ruleset: Complete ruleset as JSON string (required).
         description: Optional flag description.
         tags: Comma-separated tags.
+        context: Optional flag context identifier.
         serving_method: Serving method.
         format: Output format.
         jq_filter: Optional jq filter expression.
@@ -273,13 +278,15 @@ def flags_update(
     kwargs: dict[str, Any] = {
         "name": name,
         "key": key,
-        "status": FeatureFlagStatus(status),
+        "status": FeatureFlagStatus(status.lower()),
         "ruleset": parsed_ruleset,
     }
     if description is not None:
         kwargs["description"] = description
     if tags is not None:
-        kwargs["tags"] = [t.strip() for t in tags.split(",")]
+        kwargs["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+    if context is not None:
+        kwargs["context"] = context
     if serving_method is not None:
         kwargs["serving_method"] = ServingMethod(serving_method)
 

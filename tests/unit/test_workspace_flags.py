@@ -201,6 +201,8 @@ class TestWorkspaceFeatureFlagCRUD:
 
         assert len(flags) == 1
         assert isinstance(flags[0], FeatureFlag)
+        assert len(captured_url) == 1
+        assert "include_archived=true" in captured_url[0]
 
     def test_list_feature_flags_type_check(self, temp_dir: Path) -> None:
         """list_feature_flags() returns FeatureFlag instances with correct fields."""

@@ -3531,7 +3531,7 @@ class MixpanelAPIClient:
                 flags = client.list_feature_flags()
             ```
         """
-        path = self.require_scoped_path("feature-flags")
+        path = self.require_scoped_path("feature-flags/")
         params: dict[str, str] = {}
         if include_archived:
             params["include_archived"] = "true"
@@ -3870,7 +3870,7 @@ class MixpanelAPIClient:
                 experiments = client.list_experiments()
             ```
         """
-        path = self.maybe_scoped_path("experiments")
+        path = self.maybe_scoped_path("experiments/")
         params: dict[str, str] = {}
         if include_archived:
             params["include_archived"] = "true"

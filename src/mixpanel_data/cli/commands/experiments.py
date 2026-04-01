@@ -270,7 +270,7 @@ def experiments_update(
             raise typer.Exit(code=1) from None
 
     if tags is not None:
-        tag_list = [t.strip() for t in tags.split(",")]
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
 
     params = UpdateExperimentParams(
         name=name,
