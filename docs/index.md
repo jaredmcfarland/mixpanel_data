@@ -38,6 +38,8 @@ bookmarks = ws.list_bookmarks()
 # Manage entities
 dashboards = ws.list_dashboards()
 cohort = ws.create_cohort(mp.CreateCohortParams(name="Power Users"))
+flags = ws.list_feature_flags()
+experiments = ws.list_experiments()
 
 # Live queries—use discovered data to construct accurate queries
 segmentation = ws.segmentation(
@@ -114,6 +116,8 @@ mp inspect bookmarks
 mp dashboards list
 mp reports list --type insights
 mp cohorts create --name "Power Users"
+mp flags list
+mp experiments list
 
 # Live queries against Mixpanel API
 mp query segmentation "Purchase" \
@@ -194,10 +198,12 @@ Discovery commands let you survey what exists before writing queries—no guessi
 
 **Entity Management** — Create, update, and delete Mixpanel entities:
 
-- Full CRUD for dashboards, reports (bookmarks), and cohorts
+- Full CRUD for dashboards, reports (bookmarks), cohorts, feature flags, and experiments
 - Bulk operations for efficient batch management
 - Dashboard features: favorites, pins, blueprint templates, RCA dashboards
 - Report history tracking and linked dashboard discovery
+- Feature flag lifecycle (enable/disable/archive) with test users and history
+- Experiment lifecycle management (draft/launch/conclude/decide)
 
 **Streaming** — Process data without storage:
 
@@ -232,6 +238,6 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Installation](getting-started/installation.md) — Get started with pip or uv
 - [Quick Start](getting-started/quickstart.md) — Your first queries in 5 minutes
 - [API Reference](api/index.md) — Complete Python API documentation
-- [Entity Management](guide/entity-management.md) — Manage dashboards, reports, and cohorts
+- [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
 - [CLI Reference](cli/index.md) — Command-line interface documentation
 - [MCP Server](mcp/index.md) — Expose analytics to AI assistants like Claude Desktop

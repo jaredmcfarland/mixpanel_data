@@ -20,6 +20,7 @@ import math
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
@@ -4554,3 +4555,762 @@ class BulkUpdateCohortEntry(_DefinitionFlatteningModel):
 
     description: str | None = None
     """New cohort description."""
+
+
+# =============================================================================
+# Feature Flag & Experiment Types (Phase 025)
+# =============================================================================
+
+
+class FeatureFlagStatus(str, Enum):
+    """Lifecycle state of a feature flag.
+
+    Attributes:
+        ENABLED: Flag is active and serving variants.
+        DISABLED: Flag is inactive (default state).
+        ARCHIVED: Flag is soft-deleted, excluded from default listings.
+
+    Example:
+        ```python
+        status = FeatureFlagStatus.ENABLED
+        assert status.value == "enabled"
+        ```
+    """
+
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+    ARCHIVED = "archived"
+
+
+class ServingMethod(str, Enum):
+    """Controls how flag values are delivered to clients.
+
+    Attributes:
+        CLIENT: Client-side evaluation (default).
+        SERVER: Server-side evaluation only.
+        REMOTE_OR_LOCAL: Remote preferred, local fallback.
+        REMOTE_ONLY: Remote evaluation only.
+
+    Example:
+        ```python
+        method = ServingMethod.CLIENT
+        assert method.value == "client"
+        ```
+    """
+
+    CLIENT = "client"
+    SERVER = "server"
+    REMOTE_OR_LOCAL = "remote_or_local"
+    REMOTE_ONLY = "remote_only"
+
+
+class FlagContractStatus(str, Enum):
+    """Account-level flag contract status.
+
+    Attributes:
+        ACTIVE: Active contract.
+        GRACE_PERIOD: Contract in grace period.
+        EXPIRED: Contract expired.
+
+    Example:
+        ```python
+        status = FlagContractStatus.ACTIVE
+        assert status.value == "active"
+        ```
+    """
+
+    ACTIVE = "active"
+    GRACE_PERIOD = "grace_period"
+    EXPIRED = "expired"
+
+
+class ExperimentStatus(str, Enum):
+    """Lifecycle state of an experiment.
+
+    State transitions: ``draft`` → ``active`` (launch) → ``concluded``
+    (conclude) → ``success`` | ``fail`` (decide).
+
+    Attributes:
+        DRAFT: Experiment created but not started.
+        ACTIVE: Experiment running, collecting data.
+        CONCLUDED: Experiment stopped, awaiting decision.
+        SUCCESS: Experiment decided as successful.
+        FAIL: Experiment decided as failed.
+
+    Example:
+        ```python
+        status = ExperimentStatus.DRAFT
+        assert status.value == "draft"
+        ```
+    """
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    CONCLUDED = "concluded"
+    SUCCESS = "success"
+    FAIL = "fail"
+
+
+class ExperimentCreator(BaseModel):
+    """Creator metadata for an experiment.
+
+    Attributes:
+        id: Creator's user ID.
+        first_name: Creator's first name.
+        last_name: Creator's last name.
+
+    Example:
+        ```python
+        creator = ExperimentCreator(id=1, first_name="Alice", last_name="Smith")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    id: int | None = None
+    """Creator's user ID."""
+
+    first_name: str | None = None
+    """Creator's first name."""
+
+    last_name: str | None = None
+    """Creator's last name."""
+
+
+class FeatureFlag(BaseModel):
+    """A Mixpanel feature flag as returned by the App API.
+
+    Represents the full feature flag entity including configuration,
+    metadata, and permissions. Extra fields from API evolution are
+    preserved via ``extra="allow"``.
+
+    Attributes:
+        id: Unique identifier (UUID).
+        project_id: Project this flag belongs to.
+        name: Human-readable name.
+        key: Machine-readable key (unique per project).
+        description: Optional description.
+        status: Current lifecycle status.
+        tags: Tags for organization.
+        experiment_id: Linked experiment ID if flag backs an experiment.
+        context: Flag context identifier.
+        data_group_id: Data group identifier.
+        serving_method: How flag values are delivered.
+        ruleset: Variants, rollout rules, and test overrides.
+        hash_salt: Salt for deterministic variant assignment.
+        workspace_id: Workspace this flag belongs to.
+        content_type: Content type identifier.
+        created: ISO 8601 creation timestamp.
+        modified: ISO 8601 last-modified timestamp.
+        enabled_at: Timestamp when flag was last enabled.
+        deleted: Timestamp when flag was deleted.
+        creator_id: Creator's user ID.
+        creator_name: Creator's display name.
+        creator_email: Creator's email.
+        last_modified_by_id: Last modifier's user ID.
+        last_modified_by_name: Last modifier's display name.
+        last_modified_by_email: Last modifier's email.
+        is_favorited: Whether current user has favorited.
+        pinned_date: Date flag was pinned.
+        can_edit: Permission: can current user edit.
+
+    Example:
+        ```python
+        flag = FeatureFlag(
+            id="abc-123",
+            project_id=12345,
+            name="Dark Mode",
+            key="dark_mode",
+            status=FeatureFlagStatus.DISABLED,
+            context="default",
+            serving_method=ServingMethod.CLIENT,
+            ruleset={"variants": []},
+            created="2026-01-01T00:00:00Z",
+            modified="2026-01-01T00:00:00Z",
+        )
+        assert flag.key == "dark_mode"
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow", populate_by_name=True)
+
+    id: str
+    """Unique identifier (UUID)."""
+
+    project_id: int
+    """Project this flag belongs to."""
+
+    name: str
+    """Human-readable name."""
+
+    key: str
+    """Machine-readable key (unique per project)."""
+
+    description: str | None = None
+    """Optional description."""
+
+    status: FeatureFlagStatus = FeatureFlagStatus.DISABLED
+    """Current lifecycle status."""
+
+    tags: list[str] = Field(default_factory=list)
+    """Tags for organization."""
+
+    experiment_id: str | None = None
+    """Linked experiment ID if flag backs an experiment."""
+
+    context: str = ""
+    """Flag context identifier."""
+
+    data_group_id: str | None = None
+    """Data group identifier."""
+
+    serving_method: ServingMethod = ServingMethod.CLIENT
+    """How flag values are delivered."""
+
+    ruleset: dict[str, Any] = Field(default_factory=dict)
+    """Variants, rollout rules, and test overrides."""
+
+    hash_salt: str | None = None
+    """Salt for deterministic variant assignment."""
+
+    workspace_id: int | None = None
+    """Workspace this flag belongs to."""
+
+    content_type: str | None = None
+    """Content type identifier."""
+
+    created: str = ""
+    """ISO 8601 creation timestamp."""
+
+    modified: str = ""
+    """ISO 8601 last-modified timestamp."""
+
+    enabled_at: str | None = None
+    """Timestamp when flag was last enabled."""
+
+    deleted: str | None = None
+    """Timestamp when flag was deleted."""
+
+    creator_id: int | None = None
+    """Creator's user ID."""
+
+    creator_name: str | None = None
+    """Creator's display name."""
+
+    creator_email: str | None = None
+    """Creator's email."""
+
+    last_modified_by_id: int | None = None
+    """Last modifier's user ID."""
+
+    last_modified_by_name: str | None = None
+    """Last modifier's display name."""
+
+    last_modified_by_email: str | None = None
+    """Last modifier's email."""
+
+    is_favorited: bool | None = None
+    """Whether current user has favorited."""
+
+    pinned_date: str | None = None
+    """Date flag was pinned."""
+
+    can_edit: bool = False
+    """Permission: can current user edit."""
+
+
+class CreateFeatureFlagParams(BaseModel):
+    """Parameters for creating a new feature flag.
+
+    The Mixpanel API requires ``name``, ``key``, ``context``,
+    ``serving_method``, ``tags``, and ``ruleset`` (with ``variants``
+    and ``rollout`` sub-fields). Sensible defaults are provided for
+    the non-obvious required fields so that minimal usage works::
+
+        CreateFeatureFlagParams(name="Dark Mode", key="dark_mode")
+
+    Attributes:
+        name: Flag name (required).
+        key: Unique machine-readable key (required).
+        description: Optional description.
+        status: Initial status (defaults to disabled).
+        tags: Tags for organization (required by API, defaults to empty list).
+        context: Flag context identifier (required by API, defaults
+            to ``"distinct_id"``).
+        serving_method: How flag values are delivered (required by API,
+            defaults to ``ServingMethod.CLIENT``).
+        ruleset: Ruleset with ``variants`` and ``rollout`` keys
+            (required by API, defaults to a simple On/Off toggle).
+
+    Example:
+        ```python
+        params = CreateFeatureFlagParams(name="Dark Mode", key="dark_mode")
+        data = params.model_dump(exclude_none=True)
+        ```
+    """
+
+    name: str
+    """Flag name (required)."""
+
+    key: str
+    """Unique machine-readable key (required)."""
+
+    description: str | None = None
+    """Optional description."""
+
+    status: FeatureFlagStatus | None = None
+    """Initial status (defaults to disabled)."""
+
+    tags: list[str] = Field(default_factory=list)
+    """Tags for organization (required by API, defaults to empty list)."""
+
+    context: str = "distinct_id"
+    """Flag context identifier (required by API)."""
+
+    serving_method: ServingMethod = ServingMethod.CLIENT
+    """How flag values are delivered (required by API)."""
+
+    ruleset: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "variants": [
+                {
+                    "key": "On",
+                    "value": True,
+                    "is_control": False,
+                    "split": 1.0,
+                    "is_sticky": False,
+                },
+                {
+                    "key": "Off",
+                    "value": False,
+                    "is_control": True,
+                    "split": 0.0,
+                    "is_sticky": False,
+                },
+            ],
+            "rollout": [],
+        }
+    )
+    """Ruleset with variants and rollout (required by API)."""
+
+
+class UpdateFeatureFlagParams(BaseModel):
+    """Parameters for updating an existing feature flag (PUT semantics).
+
+    All required fields must always be provided since this performs a
+    full replacement, not a partial update. The API requires ``tags``,
+    ``context``, and ``serving_method`` in addition to ``name``, ``key``,
+    ``status``, and ``ruleset``.
+
+    Attributes:
+        name: Flag name (required).
+        key: Unique key (required).
+        status: Target status (required).
+        ruleset: Complete ruleset — replaces existing (required).
+        description: Optional description.
+        tags: Tags for organization (required by API, defaults to empty list).
+        context: Flag context identifier (required by API, defaults
+            to ``"distinct_id"``).
+        serving_method: How flag values are delivered (required by API,
+            defaults to ``ServingMethod.CLIENT``).
+
+    Example:
+        ```python
+        params = UpdateFeatureFlagParams(
+            name="Dark Mode",
+            key="dark_mode",
+            status=FeatureFlagStatus.ENABLED,
+            ruleset={"variants": [], "rollout": []},
+        )
+        ```
+    """
+
+    name: str
+    """Flag name (required)."""
+
+    key: str
+    """Unique key (required)."""
+
+    status: FeatureFlagStatus
+    """Target status (required)."""
+
+    ruleset: dict[str, Any]
+    """Complete ruleset — replaces existing (required)."""
+
+    description: str | None = None
+    """Optional description."""
+
+    tags: list[str] = Field(default_factory=list)
+    """Tags for organization (required by API, defaults to empty list)."""
+
+    context: str = "distinct_id"
+    """Flag context identifier (required by API)."""
+
+    serving_method: ServingMethod = ServingMethod.CLIENT
+    """How flag values are delivered (required by API)."""
+
+
+class SetTestUsersParams(BaseModel):
+    """Parameters for setting test user variant overrides on a flag.
+
+    Attributes:
+        users: Mapping of variant keys to user distinct IDs.
+
+    Example:
+        ```python
+        params = SetTestUsersParams(users={"on": "user-1", "off": "user-2"})
+        ```
+    """
+
+    users: dict[str, str]
+    """Mapping of variant keys to user distinct IDs."""
+
+
+class FlagHistoryParams(BaseModel):
+    """Parameters for querying feature flag change history.
+
+    Attributes:
+        page: Pagination cursor.
+        page_size: Results per page.
+
+    Example:
+        ```python
+        params = FlagHistoryParams(page_size=50)
+        ```
+    """
+
+    page: str | None = None
+    """Pagination cursor."""
+
+    page_size: int | None = None
+    """Results per page."""
+
+
+class FlagHistoryResponse(BaseModel):
+    """Paginated change history for a feature flag.
+
+    Attributes:
+        events: Array of event arrays.
+        count: Total number of events.
+
+    Example:
+        ```python
+        response = FlagHistoryResponse(events=[[1, "change"]], count=1)
+        assert response.count == 1
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    events: list[list[Any]]
+    """Array of event arrays."""
+
+    count: int
+    """Total number of events."""
+
+
+class FlagLimitsResponse(BaseModel):
+    """Account-level feature flag usage and limits.
+
+    Attributes:
+        limit: Maximum allowed flags.
+        is_trial: Whether account is on trial.
+        current_usage: Current number of flags.
+        contract_status: Contract status.
+
+    Example:
+        ```python
+        limits = FlagLimitsResponse(
+            limit=100, is_trial=False, current_usage=42,
+            contract_status=FlagContractStatus.ACTIVE,
+        )
+        assert limits.current_usage == 42
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    limit: int
+    """Maximum allowed flags."""
+
+    is_trial: bool
+    """Whether account is on trial."""
+
+    current_usage: int
+    """Current number of flags."""
+
+    contract_status: FlagContractStatus
+    """Contract status."""
+
+
+class Experiment(BaseModel):
+    """A Mixpanel A/B experiment as returned by the App API.
+
+    Represents the full experiment entity including lifecycle state,
+    variants, metrics, and metadata. Extra fields from API evolution
+    are preserved via ``extra="allow"``.
+
+    Attributes:
+        id: Unique identifier (UUID).
+        name: Human-readable name.
+        description: Optional description.
+        hypothesis: Experiment hypothesis.
+        status: Current lifecycle status.
+        variants: Variant configuration.
+        metrics: Success metrics.
+        settings: Experiment settings.
+        exposures_cache: Cached exposure data.
+        results_cache: Cached result data.
+        start_date: ISO 8601 start date.
+        end_date: ISO 8601 end date.
+        created: ISO 8601 creation timestamp.
+        updated: ISO 8601 last-updated timestamp.
+        creator: Creator metadata.
+        feature_flag: Linked feature flag data.
+        is_favorited: Whether current user has favorited.
+        pinned_date: Date experiment was pinned.
+        tags: Tags for organization.
+        can_edit: Permission: can current user edit.
+        last_modified_by_id: Last modifier's user ID.
+        last_modified_by_name: Last modifier's display name.
+        last_modified_by_email: Last modifier's email.
+
+    Example:
+        ```python
+        exp = Experiment(id="xyz-456", name="Checkout Flow Test")
+        assert exp.name == "Checkout Flow Test"
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow", populate_by_name=True)
+
+    id: str
+    """Unique identifier (UUID)."""
+
+    name: str
+    """Human-readable name."""
+
+    description: str | None = None
+    """Optional description."""
+
+    hypothesis: str | None = None
+    """Experiment hypothesis."""
+
+    status: ExperimentStatus | None = None
+    """Current lifecycle status."""
+
+    variants: list[Any] | dict[str, Any] | None = None
+    """Variant configuration (list from API, may also be dict)."""
+
+    metrics: list[Any] | dict[str, Any] | None = None
+    """Success metrics (list from API, may also be dict)."""
+
+    settings: dict[str, Any] | None = None
+    """Experiment settings."""
+
+    exposures_cache: dict[str, Any] | None = None
+    """Cached exposure data."""
+
+    results_cache: dict[str, Any] | None = None
+    """Cached result data."""
+
+    start_date: str | None = None
+    """ISO 8601 start date."""
+
+    end_date: str | None = None
+    """ISO 8601 end date."""
+
+    created: str | None = None
+    """ISO 8601 creation timestamp."""
+
+    updated: str | None = None
+    """ISO 8601 last-updated timestamp."""
+
+    creator: ExperimentCreator | None = None
+    """Creator metadata."""
+
+    feature_flag: dict[str, Any] | None = None
+    """Linked feature flag data."""
+
+    is_favorited: bool | None = None
+    """Whether current user has favorited."""
+
+    pinned_date: str | None = None
+    """Date experiment was pinned."""
+
+    tags: list[str] | None = None
+    """Tags for organization."""
+
+    can_edit: bool | None = None
+    """Permission: can current user edit."""
+
+    last_modified_by_id: int | None = None
+    """Last modifier's user ID."""
+
+    last_modified_by_name: str | None = None
+    """Last modifier's display name."""
+
+    last_modified_by_email: str | None = None
+    """Last modifier's email."""
+
+
+class CreateExperimentParams(BaseModel):
+    """Parameters for creating a new experiment.
+
+    Attributes:
+        name: Experiment name (required).
+        description: Optional description.
+        hypothesis: Experiment hypothesis.
+        settings: Experiment settings.
+        access_type: Access control type.
+        can_edit: Edit permission.
+
+    Example:
+        ```python
+        params = CreateExperimentParams(name="Checkout Flow Test")
+        data = params.model_dump(exclude_none=True)
+        # {"name": "Checkout Flow Test"}
+        ```
+    """
+
+    name: str
+    """Experiment name (required)."""
+
+    description: str | None = None
+    """Optional description."""
+
+    hypothesis: str | None = None
+    """Experiment hypothesis."""
+
+    settings: dict[str, Any] | None = None
+    """Experiment settings."""
+
+    access_type: str | None = None
+    """Access control type."""
+
+    can_edit: bool | None = None
+    """Edit permission."""
+
+
+class UpdateExperimentParams(BaseModel):
+    """Parameters for updating an existing experiment (PATCH semantics).
+
+    All fields optional — only provided fields are updated.
+
+    Attributes:
+        name: Updated name.
+        description: Updated description.
+        hypothesis: Updated hypothesis.
+        variants: Updated variant config.
+        metrics: Updated metrics.
+        settings: Updated settings.
+        start_date: Updated start date.
+        end_date: Updated end date.
+        tags: Updated tags.
+        exposures_cache: Updated exposures cache.
+        results_cache: Updated results cache.
+        status: Updated status.
+        global_access_type: Updated access type.
+
+    Example:
+        ```python
+        params = UpdateExperimentParams(description="Updated")
+        data = params.model_dump(exclude_none=True)
+        # {"description": "Updated"}
+        ```
+    """
+
+    name: str | None = None
+    """Updated name."""
+
+    description: str | None = None
+    """Updated description."""
+
+    hypothesis: str | None = None
+    """Updated hypothesis."""
+
+    variants: list[Any] | dict[str, Any] | None = None
+    """Updated variant config (list or dict)."""
+
+    metrics: list[Any] | dict[str, Any] | None = None
+    """Updated metrics (list or dict)."""
+
+    settings: dict[str, Any] | None = None
+    """Updated settings."""
+
+    start_date: str | None = None
+    """Updated start date."""
+
+    end_date: str | None = None
+    """Updated end date."""
+
+    tags: list[str] | None = None
+    """Updated tags."""
+
+    exposures_cache: dict[str, Any] | None = None
+    """Updated exposures cache."""
+
+    results_cache: dict[str, Any] | None = None
+    """Updated results cache."""
+
+    status: ExperimentStatus | None = None
+    """Updated status."""
+
+    global_access_type: str | None = None
+    """Updated access type."""
+
+
+class ExperimentConcludeParams(BaseModel):
+    """Parameters for concluding an experiment.
+
+    Attributes:
+        end_date: Override end date (ISO 8601).
+
+    Example:
+        ```python
+        params = ExperimentConcludeParams(end_date="2026-04-01")
+        ```
+    """
+
+    end_date: str | None = None
+    """Override end date (ISO 8601)."""
+
+
+class ExperimentDecideParams(BaseModel):
+    """Parameters for recording an experiment decision.
+
+    Attributes:
+        success: Whether the experiment succeeded (required).
+        variant: Winning variant key.
+        message: Decision summary message.
+
+    Example:
+        ```python
+        params = ExperimentDecideParams(success=True, variant="simplified")
+        ```
+    """
+
+    success: bool
+    """Whether the experiment succeeded (required)."""
+
+    variant: str | None = None
+    """Winning variant key."""
+
+    message: str | None = None
+    """Decision summary message."""
+
+
+class DuplicateExperimentParams(BaseModel):
+    """Parameters for duplicating an experiment.
+
+    Attributes:
+        name: Name for the duplicated experiment (required).
+
+    Example:
+        ```python
+        params = DuplicateExperimentParams(name="Checkout Flow Test v2")
+        ```
+    """
+
+    name: str
+    """Name for the duplicated experiment (required)."""

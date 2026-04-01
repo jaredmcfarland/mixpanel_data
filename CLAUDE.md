@@ -29,7 +29,7 @@ Infrastructure           → ConfigManager, MixpanelAPIClient, StorageEngine (Du
 **Four capability areas:**
 - **Discovery**: Explore schema (events, properties, funnels, cohorts, bookmarks)
 - **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention, JQL)
-- **Entity CRUD**: Create, read, update, delete dashboards, reports (bookmarks), and cohorts via App API
+- **Entity CRUD**: Create, read, update, delete dashboards, reports (bookmarks), cohorts, feature flags, and experiments via App API
 - **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
 
 ## Package Structure
@@ -56,7 +56,7 @@ src/mixpanel_data/
 │   └── services/            # Discovery, Fetcher, LiveQuery services
 └── cli/
     ├── main.py              # Typer app entry point
-    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts command groups
+    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts, flags, experiments command groups
     ├── formatters.py        # JSON, JSONL, Table, CSV, Plain output
     └── utils.py             # Error handling, console helpers
 ```
@@ -313,6 +313,7 @@ Skill(skill="mixpanel-data:mixpanel-analyst")  # Will fail!
 - JSON files at `~/.mp/oauth/` (token + client info persistence); DuckDB unchanged (023-oauth-app-api-infra)
 - Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), Typer (CLI), Rich (output) (024-core-entity-crud)
 - DuckDB (local analysis), Mixpanel App API (remote CRUD) (024-core-entity-crud)
+- N/A (remote CRUD via Mixpanel App API; no local DuckDB involvement) (025-feature-management)
 
 ## Recent Changes
 - 017-parallel-export: Added Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies

@@ -70,15 +70,24 @@ from mixpanel_data.types import (
     CreateBookmarkParams,
     CreateCohortParams,
     CreateDashboardParams,
+    CreateExperimentParams,
+    CreateFeatureFlagParams,
     CreateRcaDashboardParams,
     DailyCountsResult,
     Dashboard,
+    DuplicateExperimentParams,
     EngagementDistributionResult,
     EntityType,
     EventBreakdownResult,
     EventCountsResult,
     EventStats,
+    Experiment,
+    ExperimentConcludeParams,
+    ExperimentDecideParams,
+    FeatureFlag,
     FetchResult,
+    FlagHistoryResponse,
+    FlagLimitsResponse,
     FlowsResult,
     FrequencyResult,
     FunnelInfo,
@@ -100,6 +109,7 @@ from mixpanel_data.types import (
     SavedCohort,
     SavedReportResult,
     SegmentationResult,
+    SetTestUsersParams,
     SQLResult,
     SummaryResult,
     TableInfo,
@@ -108,6 +118,8 @@ from mixpanel_data.types import (
     UpdateBookmarkParams,
     UpdateCohortParams,
     UpdateDashboardParams,
+    UpdateExperimentParams,
+    UpdateFeatureFlagParams,
     UpdateReportLinkParams,
     UpdateTextCardParams,
     WorkspaceInfo,
@@ -3788,3 +3800,674 @@ class Workspace:
         """
         client = self._require_api_client()
         client.bulk_update_cohorts([e.model_dump(exclude_none=True) for e in entries])
+
+    # =========================================================================
+    # FEATURE FLAG CRUD (Phase 025)
+    # =========================================================================
+
+    def list_feature_flags(
+        self, *, include_archived: bool = False
+    ) -> list[FeatureFlag]:
+        """List feature flags for the current project/workspace.
+
+        Args:
+            include_archived: When True, include archived flags.
+
+        Returns:
+            List of ``FeatureFlag`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            flags = ws.list_feature_flags()
+            for f in flags:
+                print(f"{f.name} ({f.key})")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.list_feature_flags(include_archived=include_archived)
+        return [FeatureFlag.model_validate(f) for f in raw]
+
+    def create_feature_flag(self, params: CreateFeatureFlagParams) -> FeatureFlag:
+        """Create a new feature flag.
+
+        Args:
+            params: Flag creation parameters.
+
+        Returns:
+            The newly created ``FeatureFlag``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Duplicate key or invalid parameters (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            flag = ws.create_feature_flag(
+                CreateFeatureFlagParams(name="Dark Mode", key="dark_mode")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.create_feature_flag(params.model_dump(exclude_none=True))
+        if raw is None:
+            raise MixpanelDataError(
+                "API returned empty response for create_feature_flag",
+            )
+        return FeatureFlag.model_validate(raw)
+
+    def get_feature_flag(self, flag_id: str) -> FeatureFlag:
+        """Get a single feature flag by ID.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Returns:
+            The ``FeatureFlag`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            flag = ws.get_feature_flag("abc-123-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_feature_flag(flag_id)
+        if raw is None:
+            raise MixpanelDataError(
+                "API returned empty response for get_feature_flag",
+            )
+        return FeatureFlag.model_validate(raw)
+
+    def update_feature_flag(
+        self, flag_id: str, params: UpdateFeatureFlagParams
+    ) -> FeatureFlag:
+        """Update a feature flag (full replacement, PUT semantics).
+
+        Args:
+            flag_id: Feature flag UUID.
+            params: Complete flag configuration.
+
+        Returns:
+            The updated ``FeatureFlag``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found or invalid params (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            updated = ws.update_feature_flag(
+                "abc-123", UpdateFeatureFlagParams(
+                    name="X", key="x",
+                    status=FeatureFlagStatus.ENABLED,
+                    ruleset={"variants": []},
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.update_feature_flag(flag_id, params.model_dump(exclude_none=True))
+        if raw is None:
+            raise MixpanelDataError(
+                "API returned empty response for update_feature_flag",
+            )
+        return FeatureFlag.model_validate(raw)
+
+    def delete_feature_flag(self, flag_id: str) -> None:
+        """Delete a feature flag.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_feature_flag("abc-123-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_feature_flag(flag_id)
+
+    # =========================================================================
+    # FEATURE FLAG LIFECYCLE (Phase 025)
+    # =========================================================================
+
+    def archive_feature_flag(self, flag_id: str) -> None:
+        """Archive a feature flag (soft-delete).
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.archive_feature_flag("abc-123-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        client.archive_feature_flag(flag_id)
+
+    def restore_feature_flag(self, flag_id: str) -> FeatureFlag:
+        """Restore an archived feature flag.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Returns:
+            The restored ``FeatureFlag``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            restored = ws.restore_feature_flag("abc-123-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.restore_feature_flag(flag_id)
+        return FeatureFlag.model_validate(raw)
+
+    def duplicate_feature_flag(self, flag_id: str) -> FeatureFlag:
+        """Duplicate a feature flag.
+
+        Args:
+            flag_id: Feature flag UUID.
+
+        Returns:
+            The newly created duplicate ``FeatureFlag``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dup = ws.duplicate_feature_flag("abc-123-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.duplicate_feature_flag(flag_id)
+        return FeatureFlag.model_validate(raw)
+
+    # =========================================================================
+    # FEATURE FLAG OPERATIONS (Phase 025)
+    # =========================================================================
+
+    def set_flag_test_users(self, flag_id: str, params: SetTestUsersParams) -> None:
+        """Set test user variant overrides for a feature flag.
+
+        Args:
+            flag_id: Feature flag UUID.
+            params: Test user mapping.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404) or invalid payload (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.set_flag_test_users(
+                "abc-123",
+                SetTestUsersParams(users={"on": "user-1"}),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        client.set_flag_test_users(flag_id, params.model_dump())
+
+    def get_flag_history(
+        self,
+        flag_id: str,
+        *,
+        page: str | None = None,
+        page_size: int | None = None,
+    ) -> FlagHistoryResponse:
+        """Get paginated change history for a feature flag.
+
+        Args:
+            flag_id: Feature flag UUID.
+            page: Pagination cursor.
+            page_size: Results per page.
+
+        Returns:
+            ``FlagHistoryResponse`` with events and count.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Flag not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            history = ws.get_flag_history("abc-123", page_size=50)
+            ```
+        """
+        client = self._require_api_client()
+        query_params: dict[str, str] = {}
+        if page is not None:
+            query_params["page"] = page
+        if page_size is not None:
+            query_params["page_size"] = str(page_size)
+        raw = client.get_flag_history(
+            flag_id, params=query_params if query_params else None
+        )
+        return FlagHistoryResponse.model_validate(raw)
+
+    def get_flag_limits(self) -> FlagLimitsResponse:
+        """Get account-level feature flag limits and usage.
+
+        Returns:
+            ``FlagLimitsResponse`` with limit, usage, trial, and contract status.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            limits = ws.get_flag_limits()
+            print(f"{limits.current_usage}/{limits.limit}")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_flag_limits()
+        return FlagLimitsResponse.model_validate(raw)
+
+    # =========================================================================
+    # EXPERIMENT CRUD (Phase 025)
+    # =========================================================================
+
+    def list_experiments(self, *, include_archived: bool = False) -> list[Experiment]:
+        """List experiments for the current project.
+
+        Args:
+            include_archived: When True, include archived experiments.
+
+        Returns:
+            List of ``Experiment`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            experiments = ws.list_experiments()
+            for e in experiments:
+                print(f"{e.name} (status={e.status})")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.list_experiments(include_archived=include_archived)
+        return [Experiment.model_validate(e) for e in raw]
+
+    def create_experiment(self, params: CreateExperimentParams) -> Experiment:
+        """Create a new experiment in Draft status.
+
+        Args:
+            params: Experiment creation parameters.
+
+        Returns:
+            The newly created ``Experiment``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            exp = ws.create_experiment(
+                CreateExperimentParams(name="Checkout Flow Test")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.create_experiment(params.model_dump(exclude_none=True))
+        if raw is None:
+            raise MixpanelDataError(
+                "API returned empty response for create_experiment",
+            )
+        return Experiment.model_validate(raw)
+
+    def get_experiment(self, experiment_id: str) -> Experiment:
+        """Get a single experiment by ID.
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Returns:
+            The ``Experiment`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            exp = ws.get_experiment("xyz-456-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_experiment(experiment_id)
+        if raw is None:
+            raise MixpanelDataError(
+                "API returned empty response for get_experiment",
+            )
+        return Experiment.model_validate(raw)
+
+    def update_experiment(
+        self, experiment_id: str, params: UpdateExperimentParams
+    ) -> Experiment:
+        """Update an experiment (PATCH semantics).
+
+        Args:
+            experiment_id: Experiment UUID.
+            params: Fields to update.
+
+        Returns:
+            The updated ``Experiment``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found or invalid params (400, 404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            updated = ws.update_experiment(
+                "xyz-456", UpdateExperimentParams(description="Updated")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.update_experiment(
+            experiment_id, params.model_dump(exclude_none=True)
+        )
+        if raw is None:
+            raise MixpanelDataError(
+                "API returned empty response for update_experiment",
+            )
+        return Experiment.model_validate(raw)
+
+    def delete_experiment(self, experiment_id: str) -> None:
+        """Delete an experiment.
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_experiment("xyz-456-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_experiment(experiment_id)
+
+    # =========================================================================
+    # EXPERIMENT LIFECYCLE (Phase 025)
+    # =========================================================================
+
+    def launch_experiment(self, experiment_id: str) -> Experiment:
+        """Launch an experiment (Draft → Active).
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Returns:
+            The launched ``Experiment`` with updated status.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid state transition (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            launched = ws.launch_experiment("xyz-456-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.launch_experiment(experiment_id)
+        return Experiment.model_validate(raw)
+
+    def conclude_experiment(
+        self,
+        experiment_id: str,
+        *,
+        params: ExperimentConcludeParams | None = None,
+    ) -> Experiment:
+        """Conclude an experiment (Active → Concluded).
+
+        Always sends a JSON body (empty ``{}`` if no params).
+
+        Args:
+            experiment_id: Experiment UUID.
+            params: Optional conclude parameters (e.g. end date override).
+
+        Returns:
+            The concluded ``Experiment``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid state transition (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            concluded = ws.conclude_experiment("xyz-456-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True) if params else {}
+        raw = client.conclude_experiment(experiment_id, body)
+        return Experiment.model_validate(raw)
+
+    def decide_experiment(
+        self, experiment_id: str, params: ExperimentDecideParams
+    ) -> Experiment:
+        """Record the experiment decision (Concluded → Success/Fail).
+
+        Args:
+            experiment_id: Experiment UUID.
+            params: Decision parameters (success, variant, message).
+
+        Returns:
+            The decided ``Experiment`` with terminal status.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid state transition (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            decided = ws.decide_experiment(
+                "xyz-456",
+                ExperimentDecideParams(success=True, variant="simplified"),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.decide_experiment(
+            experiment_id, params.model_dump(exclude_none=True)
+        )
+        return Experiment.model_validate(raw)
+
+    # =========================================================================
+    # EXPERIMENT MANAGEMENT (Phase 025)
+    # =========================================================================
+
+    def archive_experiment(self, experiment_id: str) -> None:
+        """Archive an experiment.
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.archive_experiment("xyz-456-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        client.archive_experiment(experiment_id)
+
+    def restore_experiment(self, experiment_id: str) -> Experiment:
+        """Restore an archived experiment.
+
+        Args:
+            experiment_id: Experiment UUID.
+
+        Returns:
+            The restored ``Experiment``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            restored = ws.restore_experiment("xyz-456-uuid")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.restore_experiment(experiment_id)
+        return Experiment.model_validate(raw)
+
+    def duplicate_experiment(
+        self,
+        experiment_id: str,
+        params: DuplicateExperimentParams,
+    ) -> Experiment:
+        """Duplicate an experiment.
+
+        A name is required because the Mixpanel API returns an empty
+        response body when duplicating without one.
+
+        Args:
+            experiment_id: Experiment UUID.
+            params: Duplication parameters (``name`` is required).
+
+        Returns:
+            The newly created duplicate ``Experiment``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Experiment not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            dup = ws.duplicate_experiment(
+                "xyz-456-uuid",
+                DuplicateExperimentParams(name="Copy"),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.duplicate_experiment(experiment_id, body)
+        return Experiment.model_validate(raw)
+
+    def list_erf_experiments(self) -> list[dict[str, Any]]:
+        """List experiments in ERF (Experiment Results Framework) format.
+
+        Returns:
+            List of experiment dicts in ERF format.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            erf = ws.list_erf_experiments()
+            ```
+        """
+        client = self._require_api_client()
+        return client.list_erf_experiments()

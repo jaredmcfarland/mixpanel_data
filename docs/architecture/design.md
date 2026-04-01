@@ -42,6 +42,7 @@ The `Workspace` class is the unified entry point that coordinates all services:
 
 - **Credential Resolution** — Env vars → named account → default account
 - **Service Orchestration** — Creates and manages service instances
+- **Entity CRUD** — Direct App API access for dashboards, reports, cohorts (workspace-scoped) and feature flags, experiments (project-scoped)
 - **Resource Management** — Context manager support for cleanup
 
 ### Services
@@ -215,7 +216,7 @@ src/mixpanel_data/
 │       └── live_query.py    # LiveQueryService
 └── cli/
     ├── main.py              # Typer app entry point
-    ├── commands/            # Command implementations
+    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts, flags, experiments
     ├── formatters.py        # Output formatters
     └── utils.py             # CLI utilities
 ```

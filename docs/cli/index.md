@@ -223,6 +223,43 @@ Manage Mixpanel cohorts via the App API.
 | `mp cohorts bulk-delete` | Delete multiple cohorts |
 | `mp cohorts bulk-update` | Update multiple cohorts |
 
+### flags — Feature Flag Management
+
+Manage Mixpanel feature flags via the App API. Feature flags are project-scoped (no workspace ID required).
+
+| Command | Description |
+|---------|-------------|
+| `mp flags list` | List feature flags |
+| `mp flags create` | Create a new feature flag |
+| `mp flags get` | Get feature flag by ID |
+| `mp flags update` | Update a feature flag (full replacement) |
+| `mp flags delete` | Delete a feature flag |
+| `mp flags archive` | Archive a feature flag |
+| `mp flags restore` | Restore an archived feature flag |
+| `mp flags duplicate` | Duplicate a feature flag |
+| `mp flags set-test-users` | Set test user variant overrides |
+| `mp flags history` | View flag change history |
+| `mp flags limits` | View account-level flag usage and limits |
+
+### experiments — Experiment Management
+
+Manage Mixpanel experiments via the App API. Experiments are project-scoped (no workspace ID required).
+
+| Command | Description |
+|---------|-------------|
+| `mp experiments list` | List experiments |
+| `mp experiments create` | Create a new experiment |
+| `mp experiments get` | Get experiment by ID |
+| `mp experiments update` | Update an experiment |
+| `mp experiments delete` | Delete an experiment |
+| `mp experiments launch` | Launch a draft experiment |
+| `mp experiments conclude` | Conclude an active experiment |
+| `mp experiments decide` | Decide experiment outcome |
+| `mp experiments archive` | Archive an experiment |
+| `mp experiments restore` | Restore an archived experiment |
+| `mp experiments duplicate` | Duplicate an experiment |
+| `mp experiments erf` | List ERF experiments |
+
 ## Output Formats
 
 All commands support the `--format` option:
