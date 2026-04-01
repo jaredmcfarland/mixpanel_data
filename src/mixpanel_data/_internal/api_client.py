@@ -4237,3 +4237,809 @@ class MixpanelAPIClient:
                 f"expected list, got {type(result).__name__}",
             )
         return result
+
+    # =========================================================================
+    # Annotations (Phase 026)
+    # =========================================================================
+
+    def list_annotations(
+        self,
+        *,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        tags: list[int] | None = None,
+    ) -> list[dict[str, Any]]:
+        """List timeline annotations for the project.
+
+        Calls ``GET /api/app/projects/{pid}/annotations/``
+        (optionally workspace-scoped).
+
+        Args:
+            from_date: Start date filter (ISO format, e.g. ``"2026-01-01"``).
+            to_date: End date filter (ISO format, e.g. ``"2026-03-31"``).
+            tags: Tag IDs to filter by.
+
+        Returns:
+            List of annotation dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                annotations = client.list_annotations(from_date="2026-01-01")
+            ```
+        """
+        path = self.maybe_scoped_path("annotations/")
+        params: dict[str, str] = {}
+        if from_date:
+            params["fromDate"] = from_date
+        if to_date:
+            params["toDate"] = to_date
+        if tags:
+            params["tags"] = ",".join(str(t) for t in tags)
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_annotations: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_annotation(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new timeline annotation.
+
+        Calls ``POST /api/app/projects/{pid}/annotations/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Annotation data (date, description, optional tags/user_id).
+
+        Returns:
+            Dictionary representing the created annotation.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                ann = client.create_annotation(
+                    {"date": "2026-03-31", "description": "v2.5 release"}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("annotations/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_annotation: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_annotation(self, annotation_id: int) -> dict[str, Any]:
+        """Get a single annotation by ID.
+
+        Calls ``GET /api/app/projects/{pid}/annotations/{id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            annotation_id: Annotation ID.
+
+        Returns:
+            Dictionary representing the annotation.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Annotation not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                ann = client.get_annotation(42)
+            ```
+        """
+        path = self.maybe_scoped_path(f"annotations/{annotation_id}/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_annotation: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_annotation(
+        self, annotation_id: int, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update an annotation (PATCH semantics).
+
+        Calls ``PATCH /api/app/projects/{pid}/annotations/{id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            annotation_id: Annotation ID.
+            body: Fields to update (description, tags).
+
+        Returns:
+            Dictionary representing the updated annotation.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Annotation not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                ann = client.update_annotation(42, {"description": "Updated"})
+            ```
+        """
+        path = self.maybe_scoped_path(f"annotations/{annotation_id}/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_annotation: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_annotation(self, annotation_id: int) -> None:
+        """Delete an annotation.
+
+        Calls ``DELETE /api/app/projects/{pid}/annotations/{id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            annotation_id: Annotation ID.
+
+        Returns:
+            None.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Annotation not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_annotation(42)
+            ```
+        """
+        path = self.maybe_scoped_path(f"annotations/{annotation_id}/")
+        self.app_request("DELETE", path)
+
+    def list_annotation_tags(self) -> list[dict[str, Any]]:
+        """List annotation tags for the project.
+
+        Calls ``GET /api/app/projects/{pid}/annotations/tags/``
+        (optionally workspace-scoped).
+
+        Returns:
+            List of annotation tag dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                tags = client.list_annotation_tags()
+            ```
+        """
+        path = self.maybe_scoped_path("annotations/tags/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_annotation_tags: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_annotation_tag(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new annotation tag.
+
+        Calls ``POST /api/app/projects/{pid}/annotations/tags/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Tag data (name).
+
+        Returns:
+            Dictionary representing the created tag.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                tag = client.create_annotation_tag({"name": "releases"})
+            ```
+        """
+        path = self.maybe_scoped_path("annotations/tags/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_annotation_tag: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
+    # Webhook CRUD (Phase 026)
+    # =========================================================================
+
+    def list_webhooks(self) -> list[dict[str, Any]]:
+        """List all webhooks for the current project.
+
+        Calls ``GET /api/app/projects/{pid}/webhooks/``
+        (optionally workspace-scoped).
+
+        Returns:
+            List of webhook dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400, 404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                webhooks = client.list_webhooks()
+            ```
+        """
+        path = self.maybe_scoped_path("webhooks/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_webhooks: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_webhook(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new webhook.
+
+        Calls ``POST /api/app/projects/{pid}/webhooks/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Webhook creation parameters (name, url, auth_type, etc.).
+
+        Returns:
+            Dictionary with the created webhook's id and name.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.create_webhook({"name": "My Hook", "url": "https://..."})
+            ```
+        """
+        path = self.maybe_scoped_path("webhooks/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_webhook: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_webhook(self, webhook_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing webhook.
+
+        Calls ``PATCH /api/app/projects/{pid}/webhooks/{webhook_id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            webhook_id: Webhook UUID string.
+            body: Fields to update.
+
+        Returns:
+            Dictionary with the updated webhook's id and name.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Webhook not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.update_webhook("wh-uuid", {"name": "Renamed"})
+            ```
+        """
+        path = self.maybe_scoped_path(f"webhooks/{webhook_id}/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_webhook: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_webhook(self, webhook_id: str) -> None:
+        """Delete a webhook.
+
+        Calls ``DELETE /api/app/projects/{pid}/webhooks/{webhook_id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            webhook_id: Webhook UUID string.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Webhook not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_webhook("wh-uuid")
+            ```
+        """
+        path = self.maybe_scoped_path(f"webhooks/{webhook_id}/")
+        self.app_request("DELETE", path)
+
+    def test_webhook(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Test webhook connectivity.
+
+        Calls ``POST /api/app/projects/{pid}/webhooks/test/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Webhook test parameters (url, auth_type, etc.).
+
+        Returns:
+            Dictionary with test results (success, status_code, message).
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.test_webhook({"url": "https://example.com/hook"})
+            ```
+        """
+        path = self.maybe_scoped_path("webhooks/test/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from test_webhook: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
+    # Alert CRUD (Phase 026)
+    # =========================================================================
+
+    def list_alerts(
+        self,
+        *,
+        bookmark_id: int | None = None,
+        skip_user_filter: bool | None = None,
+    ) -> list[dict[str, Any]]:
+        """List custom alerts for the current project.
+
+        Calls ``GET /api/app/projects/{pid}/alerts/custom/``
+        (optionally workspace-scoped).
+
+        Args:
+            bookmark_id: Filter alerts by linked bookmark ID.
+            skip_user_filter: If True, list alerts for all users.
+
+        Returns:
+            List of alert dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                alerts = client.list_alerts()
+            ```
+        """
+        path = self.maybe_scoped_path("alerts/custom/")
+        params: dict[str, str] = {}
+        if bookmark_id is not None:
+            params["bookmark_id"] = str(bookmark_id)
+        if skip_user_filter is not None:
+            params["skip_user_filter"] = str(skip_user_filter).lower()
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_alerts: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_alert(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new custom alert.
+
+        Calls ``POST /api/app/projects/{pid}/alerts/custom/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Alert creation parameters (name, condition, frequency, etc.).
+
+        Returns:
+            Dictionary representing the created alert.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                alert = client.create_alert({"name": "Drop", "frequency": 86400})
+            ```
+        """
+        path = self.maybe_scoped_path("alerts/custom/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_alert: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_alert(self, alert_id: int) -> dict[str, Any]:
+        """Get a single custom alert by ID.
+
+        Calls ``GET /api/app/projects/{pid}/alerts/custom/{alert_id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            alert_id: Alert ID (integer).
+
+        Returns:
+            Dictionary representing the alert.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Alert not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                alert = client.get_alert(42)
+            ```
+        """
+        path = self.maybe_scoped_path(f"alerts/custom/{alert_id}/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_alert: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_alert(self, alert_id: int, body: dict[str, Any]) -> dict[str, Any]:
+        """Update a custom alert (PATCH semantics).
+
+        Calls ``PATCH /api/app/projects/{pid}/alerts/custom/{alert_id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            alert_id: Alert ID (integer).
+            body: Fields to update.
+
+        Returns:
+            Dictionary representing the updated alert.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Alert not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_alert(42, {"name": "Renamed"})
+            ```
+        """
+        path = self.maybe_scoped_path(f"alerts/custom/{alert_id}/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_alert: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_alert(self, alert_id: int) -> None:
+        """Delete a custom alert.
+
+        Calls ``DELETE /api/app/projects/{pid}/alerts/custom/{alert_id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            alert_id: Alert ID (integer).
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Alert not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_alert(42)
+            ```
+        """
+        path = self.maybe_scoped_path(f"alerts/custom/{alert_id}/")
+        self.app_request("DELETE", path)
+
+    def bulk_delete_alerts(self, ids: list[int]) -> None:
+        """Bulk-delete custom alerts.
+
+        Calls ``POST /api/app/projects/{pid}/alerts/custom/bulk-delete/``
+        (optionally workspace-scoped).
+
+        Args:
+            ids: List of alert IDs to delete.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.bulk_delete_alerts([1, 2, 3])
+            ```
+        """
+        path = self.maybe_scoped_path("alerts/custom/bulk-delete/")
+        self.app_request("POST", path, json_body={"alert_ids": ids})
+
+    def get_alert_count(self, *, alert_type: str | None = None) -> dict[str, Any]:
+        """Get alert count and limits.
+
+        Calls ``GET /api/app/projects/{pid}/alerts/custom/alert-count/``
+        (optionally workspace-scoped).
+
+        Args:
+            alert_type: Optional filter by alert type.
+
+        Returns:
+            Dictionary with count and limit info.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                count = client.get_alert_count()
+            ```
+        """
+        path = self.maybe_scoped_path("alerts/custom/alert-count/")
+        params: dict[str, str] = {}
+        if alert_type is not None:
+            params["type"] = alert_type
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_alert_count: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_alert_history(
+        self,
+        alert_id: int,
+        *,
+        page_size: int | None = None,
+        next_cursor: str | None = None,
+        previous_cursor: str | None = None,
+    ) -> dict[str, Any]:
+        """Get alert trigger history (paginated).
+
+        Calls ``GET /api/app/projects/{pid}/alerts/custom/{alert_id}/history/``
+        (optionally workspace-scoped). Uses ``_raw=True`` to preserve
+        pagination metadata alongside results.
+
+        Args:
+            alert_id: Alert ID (integer).
+            page_size: Number of results per page.
+            next_cursor: Cursor for the next page.
+            previous_cursor: Cursor for the previous page.
+
+        Returns:
+            Dictionary with ``results`` list and ``pagination`` metadata.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Alert not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                history = client.get_alert_history(42, page_size=10)
+            ```
+        """
+        path = self.maybe_scoped_path(f"alerts/custom/{alert_id}/history/")
+        params: dict[str, str] = {}
+        if page_size is not None:
+            params["page_size"] = str(page_size)
+        if next_cursor is not None:
+            params["next_cursor"] = next_cursor
+        if previous_cursor is not None:
+            params["previous_cursor"] = previous_cursor
+        result = self.app_request(
+            "GET", path, params=params if params else None, _raw=True
+        )
+        if isinstance(result, dict):
+            if "results" not in result:
+                raise MixpanelDataError(
+                    "Unexpected response from get_alert_history: "
+                    "dict missing 'results' key",
+                )
+            inner = result["results"]
+            if isinstance(inner, dict) and "results" in inner:
+                if "pagination" not in inner:
+                    inner["pagination"] = None
+                return inner
+            if isinstance(inner, list):
+                return {"results": inner, "pagination": None}
+        elif isinstance(result, list):
+            return {"results": result, "pagination": None}
+
+        raise MixpanelDataError(
+            f"Unexpected response from get_alert_history: "
+            f"got {type(result).__name__} without results list",
+        )
+
+    def test_alert(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Send a test alert notification.
+
+        Calls ``POST /api/app/projects/{pid}/alerts/custom/test/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Alert parameters for the test (same shape as create).
+
+        Returns:
+            Dictionary with test result status.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.test_alert({"name": "Test", "frequency": 86400})
+            ```
+        """
+        path = self.maybe_scoped_path("alerts/custom/test/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from test_alert: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_alert_screenshot_url(self, gcs_key: str) -> dict[str, Any]:
+        """Get a signed URL for an alert screenshot.
+
+        Calls ``GET /api/app/projects/{pid}/alerts/custom/screenshot/``
+        (optionally workspace-scoped).
+
+        Args:
+            gcs_key: GCS object key for the screenshot.
+
+        Returns:
+            Dictionary with ``signed_url`` field.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Screenshot not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                url = client.get_alert_screenshot_url("screenshots/abc.png")
+            ```
+        """
+        path = self.maybe_scoped_path("alerts/custom/screenshot/")
+        result = self.app_request("GET", path, params={"gcs_key": gcs_key})
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_alert_screenshot_url: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def validate_alerts_for_bookmark(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Validate alerts against a bookmark configuration.
+
+        Calls ``POST /api/app/projects/{pid}/alerts/custom/validate-alerts-for-bookmark/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Validation parameters (alert_ids, bookmark_type, bookmark_params).
+
+        Returns:
+            Dictionary with ``alert_validations`` list and ``invalid_count``.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.validate_alerts_for_bookmark({
+                    "alert_ids": [1, 2],
+                    "bookmark_type": "insights",
+                    "bookmark_params": {"event": "Signup"},
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("alerts/custom/validate-alerts-for-bookmark/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from validate_alerts_for_bookmark: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result

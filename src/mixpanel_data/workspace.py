@@ -54,6 +54,11 @@ from mixpanel_data._literal_types import TableType
 from mixpanel_data.exceptions import ConfigError, MixpanelDataError, QueryError
 from mixpanel_data.types import (
     ActivityFeedResult,
+    AlertCount,
+    AlertHistoryResponse,
+    AlertScreenshotResponse,
+    Annotation,
+    AnnotationTag,
     BatchProgress,
     BlueprintConfig,
     BlueprintFinishParams,
@@ -67,12 +72,17 @@ from mixpanel_data.types import (
     Cohort,
     ColumnStatsResult,
     ColumnSummary,
+    CreateAlertParams,
+    CreateAnnotationParams,
+    CreateAnnotationTagParams,
     CreateBookmarkParams,
     CreateCohortParams,
     CreateDashboardParams,
     CreateExperimentParams,
     CreateFeatureFlagParams,
     CreateRcaDashboardParams,
+    CreateWebhookParams,
+    CustomAlert,
     DailyCountsResult,
     Dashboard,
     DuplicateExperimentParams,
@@ -101,6 +111,7 @@ from mixpanel_data.types import (
     ParallelFetchResult,
     ParallelProfileResult,
     ProfileProgress,
+    ProjectWebhook,
     PropertyCountsResult,
     PropertyCoverageResult,
     PropertyDistributionResult,
@@ -115,6 +126,8 @@ from mixpanel_data.types import (
     TableInfo,
     TableSchema,
     TopEvent,
+    UpdateAlertParams,
+    UpdateAnnotationParams,
     UpdateBookmarkParams,
     UpdateCohortParams,
     UpdateDashboardParams,
@@ -122,6 +135,12 @@ from mixpanel_data.types import (
     UpdateFeatureFlagParams,
     UpdateReportLinkParams,
     UpdateTextCardParams,
+    UpdateWebhookParams,
+    ValidateAlertsForBookmarkParams,
+    ValidateAlertsForBookmarkResponse,
+    WebhookMutationResult,
+    WebhookTestParams,
+    WebhookTestResult,
     WorkspaceInfo,
 )
 
@@ -4471,3 +4490,682 @@ class Workspace:
         """
         client = self._require_api_client()
         return client.list_erf_experiments()
+
+    # =========================================================================
+    # Annotations (Phase 026)
+    # =========================================================================
+
+    def list_annotations(
+        self,
+        *,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        tags: list[int] | None = None,
+    ) -> list[Annotation]:
+        """List timeline annotations for the project.
+
+        Args:
+            from_date: Start date filter (ISO format, e.g. ``"2026-01-01"``).
+            to_date: End date filter (ISO format, e.g. ``"2026-03-31"``).
+            tags: Tag IDs to filter by.
+
+        Returns:
+            List of ``Annotation`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            annotations = ws.list_annotations(from_date="2026-01-01")
+            for ann in annotations:
+                print(f"{ann.date}: {ann.description}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_annotations(
+            from_date=from_date, to_date=to_date, tags=tags
+        )
+        return [Annotation.model_validate(item) for item in raw_list]
+
+    def create_annotation(self, params: CreateAnnotationParams) -> Annotation:
+        """Create a new timeline annotation.
+
+        Args:
+            params: Annotation creation parameters (date, description required).
+
+        Returns:
+            The created ``Annotation``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ann = ws.create_annotation(
+                CreateAnnotationParams(
+                    date="2026-03-31", description="v2.5 release"
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.create_annotation(body)
+        return Annotation.model_validate(raw)
+
+    def get_annotation(self, annotation_id: int) -> Annotation:
+        """Get a single annotation by ID.
+
+        Args:
+            annotation_id: Annotation ID.
+
+        Returns:
+            The ``Annotation`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Annotation not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ann = ws.get_annotation(42)
+            print(ann.description)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_annotation(annotation_id)
+        return Annotation.model_validate(raw)
+
+    def update_annotation(
+        self, annotation_id: int, params: UpdateAnnotationParams
+    ) -> Annotation:
+        """Update an annotation (PATCH semantics).
+
+        Args:
+            annotation_id: Annotation ID.
+            params: Fields to update (description, tags).
+
+        Returns:
+            The updated ``Annotation``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Annotation not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ann = ws.update_annotation(
+                42, UpdateAnnotationParams(description="Updated text")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.update_annotation(annotation_id, body)
+        return Annotation.model_validate(raw)
+
+    def delete_annotation(self, annotation_id: int) -> None:
+        """Delete an annotation.
+
+        Args:
+            annotation_id: Annotation ID.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Annotation not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_annotation(42)
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_annotation(annotation_id)
+
+    def list_annotation_tags(self) -> list[AnnotationTag]:
+        """List annotation tags for the project.
+
+        Returns:
+            List of ``AnnotationTag`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            tags = ws.list_annotation_tags()
+            for tag in tags:
+                print(tag.name)
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_annotation_tags()
+        return [AnnotationTag.model_validate(item) for item in raw_list]
+
+    def create_annotation_tag(self, params: CreateAnnotationTagParams) -> AnnotationTag:
+        """Create a new annotation tag.
+
+        Args:
+            params: Tag creation parameters (name required).
+
+        Returns:
+            The created ``AnnotationTag``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            tag = ws.create_annotation_tag(
+                CreateAnnotationTagParams(name="releases")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.create_annotation_tag(body)
+        return AnnotationTag.model_validate(raw)
+
+    # =========================================================================
+    # Webhook CRUD (Phase 026)
+    # =========================================================================
+
+    def list_webhooks(self) -> list[ProjectWebhook]:
+        """List all webhooks for the current project.
+
+        Returns:
+            List of ``ProjectWebhook`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            webhooks = ws.list_webhooks()
+            for wh in webhooks:
+                print(f"{wh.name} -> {wh.url}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_webhooks()
+        return [ProjectWebhook.model_validate(item) for item in raw_list]
+
+    def create_webhook(self, params: CreateWebhookParams) -> WebhookMutationResult:
+        """Create a new webhook.
+
+        Args:
+            params: Webhook creation parameters.
+
+        Returns:
+            ``WebhookMutationResult`` with the new webhook's id and name.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            result = ws.create_webhook(
+                CreateWebhookParams(name="Pipeline", url="https://example.com/hook")
+            )
+            print(result.id)
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.create_webhook(body)
+        return WebhookMutationResult.model_validate(raw)
+
+    def update_webhook(
+        self, webhook_id: str, params: UpdateWebhookParams
+    ) -> WebhookMutationResult:
+        """Update an existing webhook.
+
+        Args:
+            webhook_id: Webhook UUID string.
+            params: Fields to update (PATCH semantics).
+
+        Returns:
+            ``WebhookMutationResult`` with the updated webhook's id and name.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Webhook not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            result = ws.update_webhook(
+                "wh-uuid-123",
+                UpdateWebhookParams(name="Renamed Hook"),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.update_webhook(webhook_id, body)
+        return WebhookMutationResult.model_validate(raw)
+
+    def delete_webhook(self, webhook_id: str) -> None:
+        """Delete a webhook.
+
+        Args:
+            webhook_id: Webhook UUID string.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Webhook not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_webhook("wh-uuid-123")
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_webhook(webhook_id)
+
+    def test_webhook(self, params: WebhookTestParams) -> WebhookTestResult:
+        """Test webhook connectivity.
+
+        Args:
+            params: Webhook test parameters (url is required).
+
+        Returns:
+            ``WebhookTestResult`` with success, status_code, and message.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            result = ws.test_webhook(
+                WebhookTestParams(url="https://example.com/hook")
+            )
+            if result.success:
+                print("Webhook is reachable")
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.test_webhook(body)
+        return WebhookTestResult.model_validate(raw)
+
+    # =========================================================================
+    # Alert CRUD (Phase 026)
+    # =========================================================================
+
+    def list_alerts(
+        self,
+        *,
+        bookmark_id: int | None = None,
+        skip_user_filter: bool | None = None,
+    ) -> list[CustomAlert]:
+        """List custom alerts for the current project.
+
+        Args:
+            bookmark_id: Filter alerts by linked bookmark ID.
+            skip_user_filter: If True, list alerts for all users.
+
+        Returns:
+            List of ``CustomAlert`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            alerts = ws.list_alerts()
+            for alert in alerts:
+                print(f"{alert.name} (paused={alert.paused})")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_alerts(
+            bookmark_id=bookmark_id, skip_user_filter=skip_user_filter
+        )
+        return [CustomAlert.model_validate(item) for item in raw_list]
+
+    def create_alert(self, params: CreateAlertParams) -> CustomAlert:
+        """Create a new custom alert.
+
+        Args:
+            params: Alert creation parameters (bookmark_id, name, condition,
+                frequency, paused, and subscriptions are required).
+
+        Returns:
+            The created ``CustomAlert``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            alert = ws.create_alert(
+                CreateAlertParams(
+                    bookmark_id=123,
+                    name="Daily signups drop",
+                    condition={"operator": "less_than", "value": 100},
+                    frequency=86400,
+                    paused=False,
+                    subscriptions=[{"type": "email", "value": "team@co.com"}],
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.create_alert(body)
+        return CustomAlert.model_validate(raw)
+
+    def get_alert(self, alert_id: int) -> CustomAlert:
+        """Get a single custom alert by ID.
+
+        Args:
+            alert_id: Alert ID (integer).
+
+        Returns:
+            The ``CustomAlert`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Alert not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            alert = ws.get_alert(42)
+            print(alert.name)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_alert(alert_id)
+        return CustomAlert.model_validate(raw)
+
+    def update_alert(self, alert_id: int, params: UpdateAlertParams) -> CustomAlert:
+        """Update a custom alert (PATCH semantics).
+
+        Args:
+            alert_id: Alert ID (integer).
+            params: Fields to update.
+
+        Returns:
+            The updated ``CustomAlert``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Alert not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            alert = ws.update_alert(
+                42, UpdateAlertParams(name="Renamed alert")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.update_alert(alert_id, body)
+        return CustomAlert.model_validate(raw)
+
+    def delete_alert(self, alert_id: int) -> None:
+        """Delete a custom alert.
+
+        Args:
+            alert_id: Alert ID (integer).
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Alert not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_alert(42)
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_alert(alert_id)
+
+    def bulk_delete_alerts(self, ids: list[int]) -> None:
+        """Bulk-delete custom alerts.
+
+        Args:
+            ids: List of alert IDs to delete.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.bulk_delete_alerts([1, 2, 3])
+            ```
+        """
+        client = self._require_api_client()
+        client.bulk_delete_alerts(ids)
+
+    def get_alert_count(self, *, alert_type: str | None = None) -> AlertCount:
+        """Get alert count and limits.
+
+        Args:
+            alert_type: Optional filter by alert type.
+
+        Returns:
+            ``AlertCount`` with count, limit, and is_below_limit.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            count = ws.get_alert_count()
+            if count.is_below_limit:
+                print(f"{count.anomaly_alerts_count}/{count.alert_limit}")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_alert_count(alert_type=alert_type)
+        return AlertCount.model_validate(raw)
+
+    def get_alert_history(
+        self,
+        alert_id: int,
+        *,
+        page_size: int | None = None,
+        next_cursor: str | None = None,
+        previous_cursor: str | None = None,
+    ) -> AlertHistoryResponse:
+        """Get alert trigger history (paginated).
+
+        Args:
+            alert_id: Alert ID (integer).
+            page_size: Number of results per page.
+            next_cursor: Cursor for the next page.
+            previous_cursor: Cursor for the previous page.
+
+        Returns:
+            ``AlertHistoryResponse`` with results and pagination metadata.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Alert not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            history = ws.get_alert_history(42, page_size=10)
+            for entry in history.results:
+                print(entry)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_alert_history(
+            alert_id,
+            page_size=page_size,
+            next_cursor=next_cursor,
+            previous_cursor=previous_cursor,
+        )
+        return AlertHistoryResponse.model_validate(raw)
+
+    def test_alert(self, params: CreateAlertParams) -> dict[str, Any]:
+        """Send a test alert notification.
+
+        Args:
+            params: Alert parameters for the test (same shape as create).
+
+        Returns:
+            Dictionary with test result status (opaque response).
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            result = ws.test_alert(
+                CreateAlertParams(
+                    bookmark_id=123, name="Test",
+                    condition={}, frequency=86400,
+                    paused=False, subscriptions=[],
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        return client.test_alert(body)
+
+    def get_alert_screenshot_url(self, gcs_key: str) -> AlertScreenshotResponse:
+        """Get a signed URL for an alert screenshot.
+
+        Args:
+            gcs_key: GCS object key for the screenshot.
+
+        Returns:
+            ``AlertScreenshotResponse`` with the signed URL.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Screenshot not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            resp = ws.get_alert_screenshot_url("screenshots/abc.png")
+            print(resp.signed_url)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_alert_screenshot_url(gcs_key)
+        return AlertScreenshotResponse.model_validate(raw)
+
+    def validate_alerts_for_bookmark(
+        self, params: ValidateAlertsForBookmarkParams
+    ) -> ValidateAlertsForBookmarkResponse:
+        """Validate alerts against a bookmark configuration.
+
+        Args:
+            params: Validation parameters (alert_ids, bookmark_type,
+                bookmark_params are required).
+
+        Returns:
+            ``ValidateAlertsForBookmarkResponse`` with per-alert validations
+            and invalid count.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            resp = ws.validate_alerts_for_bookmark(
+                ValidateAlertsForBookmarkParams(
+                    alert_ids=[1, 2],
+                    bookmark_type="insights",
+                    bookmark_params={"event": "Signup"},
+                )
+            )
+            if resp.invalid_count > 0:
+                for v in resp.alert_validations:
+                    if not v.valid:
+                        print(f"{v.alert_name}: {v.reason}")
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.validate_alerts_for_bookmark(body)
+        return ValidateAlertsForBookmarkResponse.model_validate(raw)
