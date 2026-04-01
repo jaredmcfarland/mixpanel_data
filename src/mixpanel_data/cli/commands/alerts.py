@@ -363,6 +363,10 @@ def alerts_bulk_delete(
         err_console.print(f"[red]Invalid alert IDs:[/red] {exc}")
         raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
+    if not id_list:
+        err_console.print("[red]No valid alert IDs provided.[/red]")
+        raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
+
     workspace = get_workspace(ctx)
     with status_spinner(ctx, "Deleting alerts..."):
         workspace.bulk_delete_alerts(id_list)
@@ -579,6 +583,10 @@ def alerts_validate(
         id_list = [int(x.strip()) for x in alert_ids.split(",") if x.strip()]
     except ValueError as exc:
         err_console.print(f"[red]Invalid alert IDs:[/red] {exc}")
+        raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
+
+    if not id_list:
+        err_console.print("[red]No valid alert IDs provided.[/red]")
         raise typer.Exit(code=ExitCode.INVALID_ARGS) from None
 
     try:

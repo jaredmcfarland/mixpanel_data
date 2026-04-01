@@ -212,6 +212,17 @@ class TestAlertsBulkDelete:
             )
         assert result.exit_code != 0
 
+    def test_bulk_delete_empty_ids(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Test bulk-delete with empty IDs fails."""
+        with patch(
+            "mixpanel_data.cli.commands.alerts.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(app, ["alerts", "bulk-delete", "--ids", ","])
+        assert result.exit_code != 0
+
 
 class TestAlertsCount:
     """Tests for mp alerts count command."""

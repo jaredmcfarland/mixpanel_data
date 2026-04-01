@@ -5403,7 +5403,7 @@ class Annotation(BaseModel):
     """Project ID."""
 
     date: str
-    """Annotation date (ISO format)."""
+    """Annotation date (``%Y-%m-%d %H:%M:%S`` format)."""
 
     description: str
     """Annotation text."""
@@ -5419,24 +5419,24 @@ class CreateAnnotationParams(BaseModel):
     """Parameters for creating a new annotation.
 
     Attributes:
-        date: Date string (ISO format, required).
-        description: Annotation text (required).
+        date: Date string in ``%Y-%m-%d %H:%M:%S`` format (required).
+        description: Annotation text (max 512 characters, required).
         tags: Tag IDs to associate.
         user_id: Creator user ID.
 
     Example:
         ```python
         params = CreateAnnotationParams(
-            date="2026-03-31", description="v2.5 release"
+            date="2026-03-31 00:00:00", description="v2.5 release"
         )
         ```
     """
 
     date: str
-    """Date string (ISO format)."""
+    """Date string in ``%Y-%m-%d %H:%M:%S`` format."""
 
-    description: str
-    """Annotation text."""
+    description: str = Field(max_length=512)
+    """Annotation text (max 512 characters)."""
 
     tags: list[int] | None = None
     """Tag IDs to associate."""
@@ -5448,8 +5448,11 @@ class CreateAnnotationParams(BaseModel):
 class UpdateAnnotationParams(BaseModel):
     """Parameters for updating an annotation (PATCH semantics).
 
+    Only ``description`` and ``tags`` can be changed after creation;
+    the annotation date is immutable.
+
     Attributes:
-        description: New description.
+        description: New description (max 512 characters).
         tags: New tag IDs.
 
     Example:
@@ -5458,8 +5461,8 @@ class UpdateAnnotationParams(BaseModel):
         ```
     """
 
-    description: str | None = None
-    """New description."""
+    description: str | None = Field(default=None, max_length=512)
+    """New description (max 512 characters)."""
 
     tags: list[int] | None = None
     """New tag IDs."""
@@ -5491,11 +5494,9 @@ class WebhookAuthType(str, Enum):
 
     Values:
         BASIC: HTTP Basic authentication.
-        UNKNOWN: Unknown/unsupported auth type.
     """
 
     BASIC = "basic"
-    UNKNOWN = "unknown"
 
 
 class ProjectWebhook(BaseModel):
@@ -5919,8 +5920,13 @@ class CreateAlertParams(BaseModel):
         params = CreateAlertParams(
             bookmark_id=12345,
             name="Daily signups drop",
-            condition={"operator": "less_than", "value": 100},
-            frequency=86400,
+            condition={
+                "keys": [{"header": "Signup", "value": "Signup"}],
+                "type": "absolute",
+                "op": "<",
+                "value": 100,
+            },
+            frequency=AlertFrequencyPreset.DAILY,
             paused=False,
             subscriptions=[{"type": "email", "value": "team@example.com"}],
         )
@@ -5930,14 +5936,14 @@ class CreateAlertParams(BaseModel):
     bookmark_id: int
     """ID of linked bookmark."""
 
-    name: str
-    """Alert name."""
+    name: str = Field(max_length=50)
+    """Alert name (max 50 characters)."""
 
     condition: dict[str, Any]
     """Trigger condition JSON."""
 
     frequency: int
-    """Check frequency in seconds."""
+    """Check frequency in seconds. See ``AlertFrequencyPreset`` for common values."""
 
     paused: bool
     """Start paused or active."""
@@ -6134,10 +6140,10 @@ class ValidateAlertsForBookmarkParams(BaseModel):
         ```
     """
 
-    alert_ids: list[int]
-    """Alert IDs to validate."""
+    alert_ids: list[int] = Field(min_length=1)
+    """Alert IDs to validate (must not be empty)."""
 
-    bookmark_type: str
+    bookmark_type: Literal["insights", "funnels"]
     """Bookmark type to validate against."""
 
     bookmark_params: dict[str, Any]

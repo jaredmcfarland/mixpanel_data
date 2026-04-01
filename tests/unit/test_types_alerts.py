@@ -291,6 +291,18 @@ class TestCreateAlertParams:
         data = params.model_dump(exclude_none=True)
         assert "notification_windows" in data
 
+    def test_name_max_length(self) -> None:
+        """CreateAlertParams rejects names longer than 50 characters."""
+        with pytest.raises(ValidationError):
+            CreateAlertParams(
+                bookmark_id=1,
+                name="A" * 51,
+                condition={},
+                frequency=3600,
+                paused=False,
+                subscriptions=[],
+            )
+
     def test_missing_required_raises(self) -> None:
         """CreateAlertParams raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
@@ -539,6 +551,24 @@ class TestValidateAlertsForBookmarkParams:
         """ValidateAlertsForBookmarkParams raises when fields missing."""
         with pytest.raises(ValidationError):
             ValidateAlertsForBookmarkParams(alert_ids=[1])  # type: ignore[call-arg]
+
+    def test_empty_alert_ids_raises(self) -> None:
+        """ValidateAlertsForBookmarkParams rejects empty alert_ids."""
+        with pytest.raises(ValidationError):
+            ValidateAlertsForBookmarkParams(
+                alert_ids=[],
+                bookmark_type="insights",
+                bookmark_params={"event": "Signup"},
+            )
+
+    def test_invalid_bookmark_type_raises(self) -> None:
+        """ValidateAlertsForBookmarkParams rejects invalid bookmark_type."""
+        with pytest.raises(ValidationError):
+            ValidateAlertsForBookmarkParams(
+                alert_ids=[1],
+                bookmark_type="retention",
+                bookmark_params={},
+            )
 
 
 # =============================================================================

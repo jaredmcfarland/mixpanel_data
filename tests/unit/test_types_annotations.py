@@ -251,6 +251,11 @@ class TestCreateAnnotationParams:
         data = params.model_dump(exclude_none=True)
         assert data["tags"] == [1]
 
+    def test_description_max_length(self) -> None:
+        """CreateAnnotationParams rejects descriptions over 512 characters."""
+        with pytest.raises(ValidationError):
+            CreateAnnotationParams(date="2026-03-31 00:00:00", description="A" * 513)
+
     def test_missing_required_raises(self) -> None:
         """CreateAnnotationParams raises for missing required fields."""
         with pytest.raises(ValidationError):

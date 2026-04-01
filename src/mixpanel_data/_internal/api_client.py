@@ -192,7 +192,6 @@ class MixpanelAPIClient:
             self._client = httpx.Client(
                 timeout=self._timeout,
                 transport=self._transport,
-                headers={},
             )
         return self._client
 
@@ -4922,7 +4921,12 @@ class MixpanelAPIClient:
             "GET", path, params=params if params else None, _raw=True
         )
         if isinstance(result, dict):
-            inner = result.get("results", result)
+            if "results" not in result:
+                raise MixpanelDataError(
+                    "Unexpected response from get_alert_history: "
+                    "dict missing 'results' key",
+                )
+            inner = result["results"]
             if isinstance(inner, dict) and "results" in inner:
                 if "pagination" not in inner:
                     inner["pagination"] = None

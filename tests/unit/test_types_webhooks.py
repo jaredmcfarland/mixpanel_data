@@ -34,18 +34,14 @@ class TestWebhookAuthTypeEnum:
         """WebhookAuthType.BASIC has value 'basic'."""
         assert WebhookAuthType.BASIC.value == "basic"
 
-    def test_unknown_value(self) -> None:
-        """WebhookAuthType.UNKNOWN has value 'unknown'."""
-        assert WebhookAuthType.UNKNOWN.value == "unknown"
-
     def test_is_str_subclass(self) -> None:
         """WebhookAuthType members are also strings."""
         assert isinstance(WebhookAuthType.BASIC, str)
         assert WebhookAuthType.BASIC.value == "basic"
 
     def test_all_members(self) -> None:
-        """WebhookAuthType has exactly two members."""
-        assert len(WebhookAuthType) == 2
+        """WebhookAuthType has exactly one member."""
+        assert len(WebhookAuthType) == 1
 
 
 # =============================================================================
