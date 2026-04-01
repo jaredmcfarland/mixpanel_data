@@ -7,6 +7,9 @@ Query Mixpanel's analytics APIs directly for real-time data without fetching to 
 
     Ask questions about segmentation, funnels, retention, JQL, or other live query methods.
 
+!!! tip "Looking for entity management?"
+    To create, update, or delete dashboards, reports, or cohorts, see the [Entity Management guide](entity-management.md).
+
 ## When to Use Live Queries
 
 Use live queries when:

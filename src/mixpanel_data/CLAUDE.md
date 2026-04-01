@@ -60,6 +60,12 @@ ws = Workspace.open("existing.db")
 
 **Table Management**: `drop()`, `drop_all()`
 
+**Dashboard CRUD**: `list_dashboards()`, `create_dashboard()`, `get_dashboard()`, `update_dashboard()`, `delete_dashboard()`, `bulk_delete_dashboards()`, `favorite_dashboard()`, `unfavorite_dashboard()`, `pin_dashboard()`, `unpin_dashboard()`, `remove_report_from_dashboard()`, `list_blueprint_templates()`, `create_blueprint()`, `get_blueprint_config()`, `update_blueprint_cohorts()`, `finalize_blueprint()`, `create_rca_dashboard()`, `get_bookmark_dashboard_ids()`, `get_dashboard_erf()`, `update_report_link()`, `update_text_card()`
+
+**Report/Bookmark CRUD**: `list_bookmarks_v2()`, `create_bookmark()`, `get_bookmark()`, `update_bookmark()`, `delete_bookmark()`, `bulk_delete_bookmarks()`, `bulk_update_bookmarks()`, `bookmark_linked_dashboard_ids()`, `get_bookmark_history()`
+
+**Cohort CRUD**: `list_cohorts_full()`, `get_cohort()`, `create_cohort()`, `update_cohort()`, `delete_cohort()`, `bulk_delete_cohorts()`, `bulk_update_cohorts()`
+
 **Escape Hatches**: `connection` (DuckDB), `api` (MixpanelAPIClient)
 
 ## Exception Hierarchy
@@ -87,7 +93,7 @@ All frozen dataclasses with:
 - `.df` property: Lazy DataFrame conversion (cached)
 - `.to_dict()`: JSON-serializable output
 
-Key types: `FetchResult`, `SegmentationResult`, `FunnelResult`, `RetentionResult`, `JQLResult`, `SavedReportResult`, `FlowsResult`, `BookmarkInfo`, `PropertyDistributionResult`, `NumericPropertySummaryResult`, `DailyCountsResult`, `EngagementDistributionResult`, `PropertyCoverageResult`, `TableInfo`, `TableSchema`, `WorkspaceInfo`
+Key types: `FetchResult`, `SegmentationResult`, `FunnelResult`, `RetentionResult`, `JQLResult`, `SavedReportResult`, `FlowsResult`, `BookmarkInfo`, `PropertyDistributionResult`, `NumericPropertySummaryResult`, `DailyCountsResult`, `EngagementDistributionResult`, `PropertyCoverageResult`, `TableInfo`, `TableSchema`, `WorkspaceInfo`, `Dashboard`, `CreateDashboardParams`, `UpdateDashboardParams`, `Bookmark`, `CreateBookmarkParams`, `UpdateBookmarkParams`, `Cohort`, `CreateCohortParams`, `UpdateCohortParams`, `BlueprintTemplate`, `BlueprintConfig`, `BookmarkHistoryResponse`
 
 ## Type Aliases
 

@@ -9,12 +9,13 @@ The `Workspace` class is the unified entry point for all Mixpanel data operation
 
 ## Overview
 
-Workspace orchestrates four internal services:
+Workspace orchestrates four internal services and provides direct App API access:
 
 - **DiscoveryService** — Schema exploration (events, properties, funnels, cohorts)
 - **FetcherService** — Data ingestion from Mixpanel to DuckDB, or streaming without storage
 - **LiveQueryService** — Real-time analytics queries
 - **StorageEngine** — Local SQL query execution
+- **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts via Mixpanel App API
 
 ## Key Features
 
@@ -84,6 +85,36 @@ This is useful for:
 - **Retrying failed parallel batches**: Use append mode to retry specific date ranges
 
 Duplicate events (by `insert_id`) and profiles (by `distinct_id`) are automatically skipped via `INSERT OR IGNORE`.
+
+### Entity CRUD
+
+Manage dashboards, reports (bookmarks), and cohorts programmatically via the Mixpanel App API:
+
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+
+# Dashboards
+dashboards = ws.list_dashboards()
+new_dash = ws.create_dashboard(mp.CreateDashboardParams(title="Q1 Metrics"))
+ws.update_dashboard(new_dash.id, mp.UpdateDashboardParams(title="Q1 Metrics v2"))
+ws.favorite_dashboard(new_dash.id)
+
+# Reports (Bookmarks)
+reports = ws.list_bookmarks_v2()
+report = ws.create_bookmark(mp.CreateBookmarkParams(
+    name="Daily Signups",
+    bookmark_type="insights"
+))
+
+# Cohorts
+cohorts = ws.list_cohorts_full()
+cohort = ws.create_cohort(mp.CreateCohortParams(name="Power Users"))
+ws.update_cohort(cohort.id, mp.UpdateCohortParams(name="Super Users"))
+```
+
+All entity CRUD operations require a workspace ID, set via `MP_WORKSPACE_ID` environment variable, `--workspace-id` CLI flag, or `ws.set_workspace_id()`. See the [Entity Management guide](../guide/entity-management.md) for complete coverage.
 
 ### Advanced Profile Fetching
 
@@ -188,3 +219,43 @@ ws.fetch_profiles(
         - connection
         - db_path
         - api
+        # Dashboard CRUD
+        - list_dashboards
+        - create_dashboard
+        - get_dashboard
+        - update_dashboard
+        - delete_dashboard
+        - bulk_delete_dashboards
+        - favorite_dashboard
+        - unfavorite_dashboard
+        - pin_dashboard
+        - unpin_dashboard
+        - remove_report_from_dashboard
+        - list_blueprint_templates
+        - create_blueprint
+        - get_blueprint_config
+        - update_blueprint_cohorts
+        - finalize_blueprint
+        - create_rca_dashboard
+        - get_bookmark_dashboard_ids
+        - get_dashboard_erf
+        - update_report_link
+        - update_text_card
+        # Report/Bookmark CRUD
+        - list_bookmarks_v2
+        - create_bookmark
+        - get_bookmark
+        - update_bookmark
+        - delete_bookmark
+        - bulk_delete_bookmarks
+        - bulk_update_bookmarks
+        - bookmark_linked_dashboard_ids
+        - get_bookmark_history
+        # Cohort CRUD
+        - list_cohorts_full
+        - get_cohort
+        - create_cohort
+        - update_cohort
+        - delete_cohort
+        - bulk_delete_cohorts
+        - bulk_update_cohorts

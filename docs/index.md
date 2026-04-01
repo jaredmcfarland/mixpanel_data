@@ -35,6 +35,10 @@ funnels = ws.list_funnels()
 cohorts = ws.list_cohorts()
 bookmarks = ws.list_bookmarks()
 
+# Manage entities
+dashboards = ws.list_dashboards()
+cohort = ws.create_cohort(mp.CreateCohortParams(name="Power Users"))
+
 # Live queries—use discovered data to construct accurate queries
 segmentation = ws.segmentation(
     event=events[0].name,
@@ -105,6 +109,11 @@ mp inspect top-events
 mp inspect funnels
 mp inspect cohorts
 mp inspect bookmarks
+
+# Manage entities
+mp dashboards list
+mp reports list --type insights
+mp cohorts create --name "Power Users"
 
 # Live queries against Mixpanel API
 mp query segmentation "Purchase" \
@@ -183,6 +192,13 @@ Discovery commands let you survey what exists before writing queries—no guessi
 - Introspect tables, sample data, analyze distributions
 - Iterate on analysis without repeated API calls
 
+**Entity Management** — Create, update, and delete Mixpanel entities:
+
+- Full CRUD for dashboards, reports (bookmarks), and cohorts
+- Bulk operations for efficient batch management
+- Dashboard features: favorites, pins, blueprint templates, RCA dashboards
+- Report history tracking and linked dashboard discovery
+
 **Streaming** — Process data without storage:
 
 - Stream events directly for ETL pipelines
@@ -216,5 +232,6 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Installation](getting-started/installation.md) — Get started with pip or uv
 - [Quick Start](getting-started/quickstart.md) — Your first queries in 5 minutes
 - [API Reference](api/index.md) — Complete Python API documentation
+- [Entity Management](guide/entity-management.md) — Manage dashboards, reports, and cohorts
 - [CLI Reference](cli/index.md) — Command-line interface documentation
 - [MCP Server](mcp/index.md) — Expose analytics to AI assistants like Claude Desktop

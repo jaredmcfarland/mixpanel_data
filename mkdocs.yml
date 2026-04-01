@@ -83,6 +83,7 @@ plugins:
           - guide/streaming.md
           - guide/sql-queries.md
           - guide/live-analytics.md
+          - guide/entity-management.md
           - guide/discovery.md
         API Reference:
           - api/index.md
@@ -139,6 +140,7 @@ plugins:
           - guide/streaming.md: "Stream data without storage for ETL"
           - guide/sql-queries.md: "Query with DuckDB SQL and JSON operators"
           - guide/live-analytics.md: "Segmentation, funnels, retention, JQL"
+          - guide/entity-management.md: "Create, update, delete dashboards, reports, and cohorts"
           - guide/discovery.md: "Explore schema, events, properties, cohorts"
         API Reference:
           - api/index.md: "Python API overview"
@@ -186,6 +188,7 @@ nav:
       - Streaming Data: guide/streaming.md
       - Local SQL Queries: guide/sql-queries.md
       - Live Analytics: guide/live-analytics.md
+      - Entity Management: guide/entity-management.md
       - Data Discovery: guide/discovery.md
   - API Reference:
       - Overview: api/index.md

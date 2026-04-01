@@ -27,6 +27,13 @@ from mixpanel_data import OAuthError, WorkspaceScopeError
 
 # App API types
 from mixpanel_data import PublicWorkspace, CursorPagination, PaginatedResponse
+
+# Entity CRUD types
+from mixpanel_data import (
+    Dashboard, CreateDashboardParams, UpdateDashboardParams,
+    Bookmark, CreateBookmarkParams, UpdateBookmarkParams,
+    Cohort, CreateCohortParams, UpdateCohortParams,
+)
 ```
 
 ## Core Components
@@ -40,6 +47,7 @@ The main entry point for all operations:
 - **Streaming** — Stream data directly without storage (ETL, pipelines)
 - **Local Queries** — SQL queries against DuckDB
 - **Live Queries** — Real-time analytics from Mixpanel API
+- **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts
 - **Introspection** — Examine local tables and schemas
 
 [View Workspace API](workspace.md)
@@ -78,6 +86,7 @@ Typed results for all operations:
 - **SegmentationResult** — Time-series data
 - **FunnelResult** — Funnel conversion data
 - **RetentionResult** — Retention cohort data
+- **Dashboard**, **Bookmark**, **Cohort** — Entity models for CRUD operations
 - And many more...
 
 [View Result Types](types.md)

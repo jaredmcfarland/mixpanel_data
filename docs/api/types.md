@@ -307,3 +307,124 @@ Types for parallel profile fetching with page-based progress tracking.
     options:
       show_root_heading: true
       show_root_toc_entry: true
+
+## Dashboard CRUD Types
+
+::: mixpanel_data.Dashboard
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateDashboardParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateDashboardParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BlueprintTemplate
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BlueprintConfig
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BlueprintCard
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BlueprintFinishParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateRcaDashboardParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.RcaSourceData
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateReportLinkParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateTextCardParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Report CRUD Types
+
+::: mixpanel_data.Bookmark
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BookmarkMetadata
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateBookmarkParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateBookmarkParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkUpdateBookmarkEntry
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BookmarkHistoryResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BookmarkHistoryPagination
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Cohort CRUD Types
+
+::: mixpanel_data.Cohort
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CohortCreator
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateCohortParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateCohortParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkUpdateCohortEntry
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true

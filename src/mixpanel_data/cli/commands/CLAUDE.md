@@ -10,6 +10,9 @@ Typer command groups for the `mp` CLI. Each file defines a subcommand group.
 | `fetch.py` | `mp fetch` | Data fetching (events, profiles) |
 | `inspect.py` | `mp inspect` | Database inspection (tables, schema, info) |
 | `query.py` | `mp query` | Query execution (sql, segmentation, funnel, retention, jql) |
+| `dashboards.py` | `mp dashboards` | Dashboard CRUD (list, create, get, update, delete, favorite, pin, blueprints, RCA) |
+| `reports.py` | `mp reports` | Report/bookmark CRUD (list, create, get, update, delete, bulk operations, history) |
+| `cohorts.py` | `mp cohorts` | Cohort CRUD (list, create, get, update, delete, bulk operations) |
 
 ## Command Pattern
 

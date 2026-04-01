@@ -11,7 +11,7 @@ A complete programmable interface to Mixpanel analytics—Python library and CLI
 
 Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_data** provides a unified interface: discover your schema, run analytics queries, and extract data—all through consistent Python methods or CLI commands.
 
-Core analytics—segmentation, funnels, retention, saved reports—plus capabilities like raw JQL execution and local SQL analysis via [DuckDB](https://duckdb.org).
+Core analytics—segmentation, funnels, retention, saved reports—plus entity management (dashboards, reports, cohorts), raw JQL execution, and local SQL analysis via [DuckDB](https://duckdb.org).
 
 ## Installation
 
@@ -126,6 +126,10 @@ funnel = ws.funnel(
     to_date="2025-01-31"
 )
 
+# Manage entities
+dashboards = ws.list_dashboards()
+cohort = ws.create_cohort(mp.CreateCohortParams(name="Power Users"))
+
 # Fetch events into local DuckDB for SQL analysis
 ws.fetch_events("jan", from_date="2025-01-01", to_date="2025-01-31")
 
@@ -181,6 +185,12 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 **`mp fetch`** — Extract data: `events`, `profiles` (add `--parallel` for up to 10x faster event exports or 5x faster profile exports, `--stdout` to stream as JSONL)
 
 **`mp query`** — Run analytics: `sql`, `segmentation`, `funnel`, `retention`, `jql`, `saved-report`, `flows`, and 7 more
+
+**`mp dashboards`** — Dashboard management: `list`, `create`, `get`, `update`, `delete`, `favorite`, `pin`, blueprints, and more
+
+**`mp reports`** — Report management: `list`, `create`, `get`, `update`, `delete`, bulk operations, history
+
+**`mp cohorts`** — Cohort management: `list`, `create`, `get`, `update`, `delete`, bulk operations
 
 **`mp inspect`** — Discover schema: `events`, `properties`, `funnels`, `cohorts`, `bookmarks`; local DB: `tables`, `schema`, `drop`, and 5 more
 
@@ -240,6 +250,7 @@ The entire surface area is self-documenting. Every CLI command supports `--help`
 
 Key design features:
 
+- **Entity CRUD**: Full lifecycle management of dashboards, reports, and cohorts via Mixpanel App API
 - **Discoverable schema**: `list_events()`, `list_properties()`, `list_funnels()`, `list_cohorts()`, `list_bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
 - **Structured output**: All CLI commands support `--format json` for machine-readable responses, plus `--jq` for inline filtering

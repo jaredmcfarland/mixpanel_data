@@ -10,6 +10,9 @@ The `mp` command-line interface for `mixpanel_data`—a complete programmable in
 | `fetch` | Data retrieval into local DuckDB (events, profiles) |
 | `query` | Live Mixpanel API queries (segmentation, funnels, retention, JQL) |
 | `inspect` | Local database introspection (tables, schema, sample, stats) |
+| `dashboards` | Dashboard CRUD (list, create, get, update, delete, favorite, pin, blueprints) |
+| `reports` | Report/bookmark CRUD (list, create, get, update, delete, bulk ops, history) |
+| `cohorts` | Cohort CRUD (list, create, get, update, delete, bulk ops) |
 
 ## Files
 
