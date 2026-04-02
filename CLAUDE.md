@@ -29,7 +29,7 @@ Infrastructure           → ConfigManager, MixpanelAPIClient, StorageEngine (Du
 **Four capability areas:**
 - **Discovery**: Explore schema (events, properties, funnels, cohorts, bookmarks)
 - **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention, JQL)
-- **Entity CRUD**: Create, read, update, delete dashboards, reports (bookmarks), cohorts, feature flags, experiments, alerts, annotations, and webhooks via App API
+- **Entity CRUD & Data Governance**: Create, read, update, delete dashboards, reports (bookmarks), cohorts, feature flags, experiments, alerts, annotations, webhooks, Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via App API
 - **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
 
 ## Package Structure
@@ -56,7 +56,7 @@ src/mixpanel_data/
 │   └── services/            # Discovery, Fetcher, LiveQuery services
 └── cli/
     ├── main.py              # Typer app entry point
-    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts, flags, experiments, alerts, annotations, webhooks command groups
+    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts, flags, experiments, alerts, annotations, webhooks, lexicon, drop-filters, custom-properties, custom-events, lookup-tables command groups
     ├── formatters.py        # JSON, JSONL, Table, CSV, Plain output
     └── utils.py             # Error handling, console helpers
 ```

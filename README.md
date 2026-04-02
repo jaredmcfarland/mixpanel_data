@@ -141,6 +141,12 @@ alerts = ws.list_alerts()
 annotations = ws.list_annotations(from_date="2025-01-01")
 webhooks = ws.list_webhooks()
 
+# Data governance
+event_defs = ws.get_event_definitions(names=["Signup"])
+drop_filters = ws.list_drop_filters()
+custom_props = ws.list_custom_properties()
+lookup_tables = ws.list_lookup_tables()
+
 # Fetch events into local DuckDB for SQL analysis
 ws.fetch_events("jan", from_date="2025-01-01", to_date="2025-01-31")
 
@@ -213,6 +219,16 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp webhooks`** — Webhook management: `list`, `create`, `update`, `delete`, `test`
 
+**`mp lexicon`** — Lexicon management: `events get/update/delete/bulk-update`, `properties get/update/bulk-update`, `tags list/create/update/delete`, `tracking-metadata`, `event-history`, `property-history`, `export`
+
+**`mp drop-filters`** — Drop filter management: `list`, `create`, `update`, `delete`, `limits`
+
+**`mp custom-properties`** — Custom property management: `list`, `get`, `create`, `update`, `delete`, `validate`
+
+**`mp custom-events`** — Custom event management: `list`, `update`, `delete`
+
+**`mp lookup-tables`** — Lookup table management: `list`, `upload`, `update`, `delete`, `download`, `upload-url`, `download-url`
+
 **`mp inspect`** — Discover schema: `events`, `properties`, `funnels`, `cohorts`, `bookmarks`; local DB: `tables`, `schema`, `drop`, and 5 more
 
 All commands support `--format` (`json`, `jsonl`, `table`, `csv`, `plain`) and `--help`.
@@ -271,7 +287,7 @@ The entire surface area is self-documenting. Every CLI command supports `--help`
 
 Key design features:
 
-- **Entity CRUD**: Full lifecycle management of dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks via Mixpanel App API
+- **Entity CRUD & Data Governance**: Full lifecycle management of dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, webhooks, plus Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via Mixpanel App API
 - **Discoverable schema**: `list_events()`, `list_properties()`, `list_funnels()`, `list_cohorts()`, `list_bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
 - **Structured output**: All CLI commands support `--format json` for machine-readable responses, plus `--jq` for inline filtering

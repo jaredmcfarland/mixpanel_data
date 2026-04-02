@@ -34,6 +34,14 @@ from mixpanel_data import (
     Bookmark, CreateBookmarkParams, UpdateBookmarkParams,
     Cohort, CreateCohortParams, UpdateCohortParams,
 )
+
+# Data governance types
+from mixpanel_data import (
+    EventDefinition, UpdateEventDefinitionParams,
+    DropFilter, CreateDropFilterParams,
+    CustomProperty, CreateCustomPropertyParams,
+    LookupTable, UploadLookupTableParams,
+)
 ```
 
 ## Core Components
@@ -47,7 +55,7 @@ The main entry point for all operations:
 - **Streaming** — Stream data directly without storage (ETL, pipelines)
 - **Local Queries** — SQL queries against DuckDB
 - **Live Queries** — Real-time analytics from Mixpanel API
-- **Entity CRUD** — Create, read, update, delete dashboards, reports, cohorts, feature flags, and experiments
+- **Entity CRUD & Data Governance** — Create, read, update, delete dashboards, reports, cohorts, feature flags, experiments, plus Lexicon definitions, drop filters, custom properties, custom events, and lookup tables
 - **Introspection** — Examine local tables and schemas
 
 [View Workspace API](workspace.md)
@@ -87,6 +95,7 @@ Typed results for all operations:
 - **FunnelResult** — Funnel conversion data
 - **RetentionResult** — Retention cohort data
 - **Dashboard**, **Bookmark**, **Cohort** — Entity models for CRUD operations
+- **EventDefinition**, **DropFilter**, **CustomProperty**, **LookupTable** — Data governance models
 - And many more...
 
 [View Result Types](types.md)

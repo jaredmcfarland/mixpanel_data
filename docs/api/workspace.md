@@ -18,6 +18,7 @@ Workspace orchestrates four internal services and provides direct App API access
 - **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts via Mixpanel App API (workspace-scoped)
 - **Feature Management** — Create, read, update, delete feature flags and experiments via Mixpanel App API (project-scoped)
 - **Operational Tooling** — Manage alerts, annotations, and webhooks via Mixpanel App API (workspace-scoped)
+- **Data Governance** — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via Mixpanel App API (workspace-scoped)
 
 ## Key Features
 
@@ -146,6 +147,42 @@ decided = ws.decide_experiment(exp.id, mp.ExperimentDecideParams(success=True))
 ```
 
 Feature flag `update` uses **PUT semantics** (all required fields must be provided). Experiment `update` uses **PATCH semantics** (only changed fields needed). See the [Entity Management guide](../guide/entity-management.md) for complete coverage.
+
+### Data Governance
+
+Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables programmatically. All operations are **workspace-scoped**.
+
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+
+# Lexicon — Event and property definitions
+defs = ws.get_event_definitions(names=["Signup", "Login"])
+ws.update_event_definition("Signup", mp.UpdateEventDefinitionParams(verified=True))
+tags = ws.list_lexicon_tags()
+
+# Drop filters
+filters = ws.list_drop_filters()
+ws.create_drop_filter(mp.CreateDropFilterParams(
+    event_name="Debug Event", filters={"property": "env", "value": "test"},
+))
+
+# Custom properties
+props = ws.list_custom_properties()
+prop = ws.get_custom_property("abc123")
+
+# Lookup tables
+tables = ws.list_lookup_tables()
+table = ws.upload_lookup_table(mp.UploadLookupTableParams(
+    name="Countries", file_path="/path/to/countries.csv",
+))
+
+# Custom events
+events = ws.list_custom_events()
+```
+
+See the [Data Governance guide](../guide/data-governance.md) for complete coverage.
 
 ### Advanced Profile Fetching
 
@@ -315,3 +352,75 @@ ws.fetch_profiles(
         - restore_experiment
         - duplicate_experiment
         - list_erf_experiments
+        # Alert CRUD
+        - list_alerts
+        - create_alert
+        - get_alert
+        - update_alert
+        - delete_alert
+        - bulk_delete_alerts
+        - get_alert_count
+        - get_alert_history
+        - test_alert
+        - get_alert_screenshot_url
+        - validate_alerts_for_bookmark
+        # Annotation CRUD
+        - list_annotations
+        - create_annotation
+        - get_annotation
+        - update_annotation
+        - delete_annotation
+        - list_annotation_tags
+        - create_annotation_tag
+        # Webhook CRUD
+        - list_webhooks
+        - create_webhook
+        - update_webhook
+        - delete_webhook
+        - test_webhook
+        # Lexicon — Event Definitions
+        - get_event_definitions
+        - update_event_definition
+        - delete_event_definition
+        - bulk_update_event_definitions
+        # Lexicon — Property Definitions
+        - get_property_definitions
+        - update_property_definition
+        - bulk_update_property_definitions
+        # Lexicon — Tags
+        - list_lexicon_tags
+        - create_lexicon_tag
+        - update_lexicon_tag
+        - delete_lexicon_tag
+        # Lexicon — Tracking & History
+        - get_tracking_metadata
+        - get_event_history
+        - get_property_history
+        - export_lexicon
+        # Drop Filter CRUD
+        - list_drop_filters
+        - create_drop_filter
+        - update_drop_filter
+        - delete_drop_filter
+        - get_drop_filter_limits
+        # Custom Property CRUD
+        - list_custom_properties
+        - create_custom_property
+        - get_custom_property
+        - update_custom_property
+        - delete_custom_property
+        - validate_custom_property
+        # Lookup Table CRUD
+        - list_lookup_tables
+        - upload_lookup_table
+        - mark_lookup_table_ready
+        - get_lookup_upload_url
+        - get_lookup_upload_status
+        - update_lookup_table
+        - delete_lookup_tables
+        - download_lookup_table
+        - get_lookup_download_url
+        # Custom Event CRUD
+        - list_custom_events
+        - update_custom_event
+        - delete_custom_event

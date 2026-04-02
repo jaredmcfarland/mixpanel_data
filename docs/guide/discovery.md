@@ -205,6 +205,9 @@ meta.team_contacts      # ["Analytics Team"]
 !!! warning "Rate Limit"
     The Lexicon API has a strict rate limit of **5 requests per minute**. Schema results are cached for the session to minimize API calls.
 
+!!! tip "Write Operations"
+    The Lexicon schemas shown here are **read-only discovery** methods. For full CRUD operations on Lexicon definitions (update, delete events/properties, manage tags, bulk updates), see the [Data Governance guide](data-governance.md).
+
 ## Top Events
 
 Get today's most active events:
