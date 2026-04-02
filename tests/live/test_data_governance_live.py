@@ -119,13 +119,13 @@ def cleanup_stale_qa_objects(ws: Workspace) -> None:
     Args:
         ws: Workspace fixture.
     """
-    # Tags (list_lexicon_tags returns plain strings)
+    # Tags (list_lexicon_tags returns LexiconTag objects)
     with contextlib.suppress(Exception):
         tags = ws.list_lexicon_tags()
-        for tag_name in tags:
-            if tag_name.startswith(QA_PREFIX):
+        for tag in tags:
+            if tag.name.startswith(QA_PREFIX):
                 with contextlib.suppress(Exception):
-                    ws.delete_lexicon_tag(tag_name)
+                    ws.delete_lexicon_tag(tag.name)
 
     # Drop filters (may fail if account lacks event_deletion permission)
     with contextlib.suppress(Exception):
@@ -188,7 +188,7 @@ class TestTagsCRUD:
 
             # Verify in list
             tags = ws.list_lexicon_tags()
-            tag_names = tags
+            tag_names = [t.name for t in tags]
             assert name in tag_names
 
             # Update
@@ -201,7 +201,7 @@ class TestTagsCRUD:
 
             # Verify absent
             tags_after = ws.list_lexicon_tags()
-            tag_names_after = tags_after
+            tag_names_after = [t.name for t in tags_after]
             assert new_name not in tag_names_after
             created = None  # already deleted
 
@@ -1527,7 +1527,7 @@ class TestLookupTablesCRUD:
                     file_path=str(csv_path),
                 )
             )
-            table_id = int(result_dict["id"])
+            table_id = result_dict.id
             result = ws.download_lookup_table(table_id, file_name="export.csv")
             assert isinstance(result, bytes)
             decoded = result.decode("utf-8", errors="replace")
@@ -1650,7 +1650,7 @@ class TestLookupTablesCLI:
                     file_path=str(csv_path),
                 )
             )
-            table_id = int(result["id"])
+            table_id = result.id
             r = _mp(
                 "lookup-tables",
                 "download",

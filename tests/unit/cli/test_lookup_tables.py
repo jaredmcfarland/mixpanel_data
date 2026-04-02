@@ -79,11 +79,13 @@ class TestLookupTablesUpload:
         csv_file.write_text("id,name\n1,foo\n2,bar\n")
 
         mock_ws = MagicMock()
-        mock_ws.upload_lookup_table.return_value = {
-            "data_group_id": 10,
-            "name": "my-table",
-            "row_count": 2,
-        }
+        mock_ws.upload_lookup_table.return_value = MagicMock(
+            model_dump=lambda: {
+                "data_group_id": 10,
+                "name": "my-table",
+                "row_count": 2,
+            }
+        )
         mock_get_ws.return_value = mock_ws
 
         result = runner.invoke(
@@ -129,10 +131,12 @@ class TestLookupTablesUpload:
         csv_file.write_text("id,name\n1,foo\n")
 
         mock_ws = MagicMock()
-        mock_ws.upload_lookup_table.return_value = {
-            "data_group_id": 5,
-            "name": "replace-table",
-        }
+        mock_ws.upload_lookup_table.return_value = MagicMock(
+            model_dump=lambda: {
+                "data_group_id": 5,
+                "name": "replace-table",
+            }
+        )
         mock_get_ws.return_value = mock_ws
 
         result = runner.invoke(

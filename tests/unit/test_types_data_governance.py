@@ -953,6 +953,38 @@ class TestCreateCustomPropertyParams:
         assert params.is_visible is True
         assert params.data_group_id == "group-1"
 
+    def test_camel_case_input_via_model_validate(self) -> None:
+        """CreateCustomPropertyParams validates correctly with camelCase keys."""
+        params = CreateCustomPropertyParams.model_validate(
+            {
+                "name": "Revenue Per User",
+                "resourceType": "events",
+                "displayFormula": "A / B",
+                "composedProperties": {
+                    "A": {"resourceType": "events", "type": "number"},
+                    "B": {"resourceType": "events", "type": "number"},
+                },
+            }
+        )
+        assert params.name == "Revenue Per User"
+        assert params.display_formula == "A / B"
+        assert params.composed_properties is not None
+
+    def test_camel_case_validation_errors(self) -> None:
+        """CreateCustomPropertyParams validator catches errors with camelCase keys."""
+        with pytest.raises(ValidationError):
+            CreateCustomPropertyParams.model_validate(
+                {
+                    "name": "Invalid",
+                    "resourceType": "events",
+                    "displayFormula": "A / B",
+                    "composedProperties": {
+                        "A": {"resourceType": "events"},
+                    },
+                    "behavior": {"type": "count"},
+                }
+            )
+
 
 # =============================================================================
 # UpdateCustomPropertyParams Tests

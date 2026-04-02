@@ -6883,42 +6883,33 @@ class CreateCustomPropertyParams(BaseModel):
     behavior: Any | None = None
     """Behavior specification (mutually exclusive with display_formula)."""
 
-    @classmethod
-    def _validate_formula_behavior(cls, values: dict[str, Any]) -> dict[str, Any]:
+    @model_validator(mode="after")
+    def _validate_formula_behavior(self) -> CreateCustomPropertyParams:
         """Validate mutual exclusion of display_formula and behavior.
 
-        Args:
-            values: Field values being validated.
-
         Returns:
-            The validated values dict.
+            The validated instance.
 
         Raises:
             ValueError: If validation rules are violated.
         """
-        formula = values.get("display_formula")
-        behavior = values.get("behavior")
-        composed = values.get("composed_properties")
-
-        if formula is not None and behavior is not None:
+        if self.display_formula is not None and self.behavior is not None:
             msg = "display_formula and behavior are mutually exclusive"
             raise ValueError(msg)
 
-        if behavior is not None and composed is not None:
+        if self.behavior is not None and self.composed_properties is not None:
             msg = "behavior and composed_properties are mutually exclusive"
             raise ValueError(msg)
 
-        if formula is not None and composed is None:
+        if self.display_formula is not None and self.composed_properties is None:
             msg = "display_formula requires composed_properties"
             raise ValueError(msg)
 
-        if formula is None and behavior is None:
+        if self.display_formula is None and self.behavior is None:
             msg = "one of display_formula or behavior must be set"
             raise ValueError(msg)
 
-        return values
-
-    _check_formula_behavior = model_validator(mode="before")(_validate_formula_behavior)
+        return self
 
 
 class UpdateCustomPropertyParams(BaseModel):

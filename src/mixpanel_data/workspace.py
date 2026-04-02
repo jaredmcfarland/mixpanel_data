@@ -5422,13 +5422,11 @@ class Workspace:
 
     # ---- Tags ----
 
-    def list_lexicon_tags(self) -> list[str]:
+    def list_lexicon_tags(self) -> list[LexiconTag]:
         """List all Lexicon tags.
 
-        The API returns tag names as plain strings (not structured objects).
-
         Returns:
-            List of tag name strings.
+            List of ``LexiconTag`` objects with ``id`` and ``name`` fields.
 
         Raises:
             ConfigError: If credentials are not available.
@@ -5439,13 +5437,13 @@ class Workspace:
             ```python
             ws = Workspace()
             tags = ws.list_lexicon_tags()
-            for name in tags:
-                print(name)
+            for tag in tags:
+                print(f"{tag.id}: {tag.name}")
             ```
         """
         client = self._require_api_client()
         raw_list = client.list_lexicon_tags()
-        return [str(x) for x in raw_list]
+        return [LexiconTag.model_validate(x) for x in raw_list]
 
     def create_lexicon_tag(self, params: CreateTagParams) -> LexiconTag:
         """Create a new Lexicon tag.
@@ -5543,7 +5541,7 @@ class Workspace:
             ws = Workspace()
             filters = ws.list_drop_filters()
             for f in filters:
-                print(f"{f.event_name}: {f.status}")
+                print(f"{f.event_name}: active={f.active}")
             ```
         """
         client = self._require_api_client()
@@ -5652,7 +5650,7 @@ class Workspace:
             ```python
             ws = Workspace()
             limits = ws.get_drop_filter_limits()
-            print(f"{limits.count}/{limits.limit} filters used")
+            print(f"Drop filter limit: {limits.filter_limit}")
             ```
         """
         client = self._require_api_client()
@@ -5679,7 +5677,7 @@ class Workspace:
             ws = Workspace()
             props = ws.list_custom_properties()
             for p in props:
-                print(f"{p.name}: {p.definition}")
+                print(f"{p.name}: {p.display_formula}")
             ```
         """
         client = self._require_api_client()
@@ -5693,7 +5691,7 @@ class Workspace:
 
         Args:
             params: Custom property creation parameters (name,
-                definition, resource_type are required).
+                display_formula or behavior, resource_type are required).
 
         Returns:
             The created ``CustomProperty``.
@@ -5710,7 +5708,8 @@ class Workspace:
             prop = ws.create_custom_property(
                 CreateCustomPropertyParams(
                     name="Full Name",
-                    definition="...",
+                    display_formula='concat(properties["first"], " ", properties["last"])',
+                    composed_properties={"first": ComposedPropertyValue(resource_type="event"), "last": ComposedPropertyValue(resource_type="event")},
                     resource_type="event",
                 )
             )
@@ -5823,7 +5822,8 @@ class Workspace:
             result = ws.validate_custom_property(
                 CreateCustomPropertyParams(
                     name="Full Name",
-                    definition="...",
+                    display_formula='concat(properties["first"], " ", properties["last"])',
+                    composed_properties={"first": ComposedPropertyValue(resource_type="event"), "last": ComposedPropertyValue(resource_type="event")},
                     resource_type="event",
                 )
             )
@@ -5866,7 +5866,7 @@ class Workspace:
         raw_list = client.list_lookup_tables(data_group_id=data_group_id)
         return [LookupTable.model_validate(x) for x in raw_list]
 
-    def upload_lookup_table(self, params: UploadLookupTableParams) -> dict[str, Any]:
+    def upload_lookup_table(self, params: UploadLookupTableParams) -> LookupTable:
         """Upload a CSV file as a new lookup table.
 
         Performs a 3-step upload process:
@@ -5879,7 +5879,7 @@ class Workspace:
                 (path to the CSV file), and optional ``data_group_id``.
 
         Returns:
-            Registration response dict (contains ``id`` of the created table).
+            The created ``LookupTable`` object.
 
         Raises:
             ConfigError: If credentials are not available.
@@ -5918,7 +5918,8 @@ class Workspace:
         if params.data_group_id is not None:
             form_data["data-group-id"] = str(params.data_group_id)
 
-        return client.register_lookup_table(form_data)
+        raw = client.register_lookup_table(form_data)
+        return LookupTable.model_validate(raw)
 
     def mark_lookup_table_ready(
         self, params: MarkLookupTableReadyParams

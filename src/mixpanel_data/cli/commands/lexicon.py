@@ -99,7 +99,7 @@ def events_get(
         jq_filter: Optional jq filter expression.
     """
     workspace = get_workspace(ctx)
-    name_list = [n.strip() for n in names.split(",")]
+    name_list = [n.strip() for n in names.split(",") if n.strip()]
     with status_spinner(ctx, "Fetching event definitions..."):
         result = workspace.get_event_definitions(names=name_list)
     output_result(
@@ -171,7 +171,7 @@ def events_update(
     if description is not None:
         kwargs["description"] = description
     if tags is not None:
-        kwargs["tags"] = [t.strip() for t in tags.split(",")]
+        kwargs["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
 
     params = UpdateEventDefinitionParams(**kwargs)
     workspace = get_workspace(ctx)
@@ -284,7 +284,7 @@ def properties_get(
         jq_filter: Optional jq filter expression.
     """
     workspace = get_workspace(ctx)
-    name_list = [n.strip() for n in names.split(",")]
+    name_list = [n.strip() for n in names.split(",") if n.strip()]
     kwargs: dict[str, Any] = {"names": name_list}
     if resource_type is not None:
         kwargs["resource_type"] = resource_type
@@ -433,7 +433,7 @@ def tags_list(
         result = workspace.list_lexicon_tags()
     output_result(
         ctx,
-        result,
+        [t.model_dump() for t in result],
         format=format,
         jq_filter=jq_filter,
     )
@@ -648,7 +648,7 @@ def lexicon_export(
     workspace = get_workspace(ctx)
     kwargs: dict[str, Any] = {}
     if types is not None:
-        kwargs["export_types"] = [t.strip() for t in types.split(",")]
+        kwargs["export_types"] = [t.strip() for t in types.split(",") if t.strip()]
     with status_spinner(ctx, "Exporting Lexicon definitions..."):
         result = workspace.export_lexicon(**kwargs)
     output_result(ctx, result, format=format, jq_filter=jq_filter)

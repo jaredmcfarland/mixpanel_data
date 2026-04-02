@@ -119,7 +119,7 @@ def lookup_tables_upload(
     workspace = get_workspace(ctx)
     with status_spinner(ctx, "Uploading lookup table..."):
         result = workspace.upload_lookup_table(params)
-    output_result(ctx, result, format=format, jq_filter=jq_filter)
+    output_result(ctx, result.model_dump(), format=format, jq_filter=jq_filter)
 
 
 @lookup_tables_app.command("update")

@@ -520,15 +520,18 @@ class TestListLexiconTags:
     """Tests for Workspace.list_lexicon_tags()."""
 
     def test_returns_list_of_tags(self, temp_dir: Path) -> None:
-        """list_lexicon_tags() returns list of tag name strings."""
+        """list_lexicon_tags() returns list of LexiconTag objects."""
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Return tag list (API returns plain strings)."""
+            """Return tag list (API returns tag objects with id/name)."""
             return httpx.Response(
                 200,
                 json={
                     "status": "ok",
-                    "results": ["core-metrics", "growth"],
+                    "results": [
+                        {"id": 1, "name": "core-metrics"},
+                        {"id": 2, "name": "growth"},
+                    ],
                 },
             )
 
@@ -536,9 +539,11 @@ class TestListLexiconTags:
         tags = ws.list_lexicon_tags()
 
         assert len(tags) == 2
-        assert isinstance(tags[0], str)
-        assert tags[0] == "core-metrics"
-        assert tags[1] == "growth"
+        assert isinstance(tags[0], LexiconTag)
+        assert tags[0].id == 1
+        assert tags[0].name == "core-metrics"
+        assert tags[1].id == 2
+        assert tags[1].name == "growth"
 
     def test_returns_empty_list(self, temp_dir: Path) -> None:
         """list_lexicon_tags() returns empty list when no tags exist."""
@@ -1299,7 +1304,9 @@ class TestUploadLookupTable:
         params = UploadLookupTableParams(name="Products", file_path=str(csv_path))
         result = ws.upload_lookup_table(params)
 
-        assert isinstance(result, dict)
+        assert isinstance(result, LookupTable)
+        assert result.name == "Products"
+        assert result.id == 99
         assert request_count[0] >= 2  # At least upload URL + register
 
 
