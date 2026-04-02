@@ -107,6 +107,10 @@ ENDPOINTS: dict[str, dict[str, str]] = {
 }
 
 
+_INTERNAL_SOURCE_HEADER = "Internal-Source"
+_INTERNAL_SOURCE_VALUE = "mixpanel.data"
+
+
 class MixpanelAPIClient:
     """Low-level HTTP client for Mixpanel APIs.
 
@@ -192,6 +196,7 @@ class MixpanelAPIClient:
             self._client = httpx.Client(
                 timeout=self._timeout,
                 transport=self._transport,
+                headers={_INTERNAL_SOURCE_HEADER: _INTERNAL_SOURCE_VALUE},
             )
         return self._client
 
@@ -5043,3 +5048,1420 @@ class MixpanelAPIClient:
                 f"expected dict, got {type(result).__name__}",
             )
         return result
+
+    # =========================================================================
+    # Data Governance — Data Definitions / Lexicon (Phase 027)
+    # =========================================================================
+
+    def get_event_definitions(self, names: list[str]) -> list[dict[str, Any]]:
+        """Get event definitions by name from the Lexicon.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/events/``
+        (optionally workspace-scoped).
+
+        Args:
+            names: List of event names to look up.
+
+        Returns:
+            List of event definition dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400/404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                defs = client.get_event_definitions(["Signup", "Login"])
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/")
+        params: dict[str, str | list[str]] = {"name[]": names}
+        result = self.app_request("GET", path, params=params)  # type: ignore[arg-type]
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from get_event_definitions: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def update_event_definition(
+        self, name: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update an event definition in the Lexicon.
+
+        Calls ``PATCH /api/app/projects/{pid}/data-definitions/events/``
+        (optionally workspace-scoped).
+
+        Args:
+            name: Event name to update.
+            body: Fields to update (description, hidden, dropped, tags, etc.).
+
+        Returns:
+            Dictionary representing the updated event definition.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_event_definition(
+                    "Signup", {"description": "User signs up"}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/")
+        payload = {**body, "name": name}
+        result = self.app_request("PATCH", path, json_body=payload)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_event_definition: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_event_definition(self, name: str) -> None:
+        """Delete an event definition from the Lexicon.
+
+        Calls ``DELETE /api/app/projects/{pid}/data-definitions/events/``
+        (optionally workspace-scoped).
+
+        Args:
+            name: Event name to delete.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_event_definition("OldEvent")
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/")
+        self.app_request("DELETE", path, json_body={"name": name})
+
+    def bulk_update_event_definitions(
+        self, body: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Bulk-update event definitions in the Lexicon.
+
+        Calls ``PATCH /api/app/projects/{pid}/data-definitions/events/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Dictionary with ``events`` key containing a list of
+                event definition updates.
+
+        Returns:
+            List of updated event definition dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.bulk_update_event_definitions({
+                    "events": [
+                        {"event_name": "Signup", "description": "Sign up"},
+                        {"event_name": "Login", "description": "Log in"},
+                    ]
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from bulk_update_event_definitions: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def get_property_definitions(
+        self,
+        names: list[str],
+        resource_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get property definitions by name from the Lexicon.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/properties/``
+        (optionally workspace-scoped).
+
+        Args:
+            names: List of property names to look up.
+            resource_type: Optional resource type filter
+                (e.g., ``"event"``, ``"profile"``).
+
+        Returns:
+            List of property definition dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400/404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                props = client.get_property_definitions(["plan", "country"])
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/properties/")
+        params: dict[str, str | list[str]] = {"name[]": names}
+        if resource_type is not None:
+            params["resource_type"] = resource_type
+        result = self.app_request("GET", path, params=params)  # type: ignore[arg-type]
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from get_property_definitions: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def update_property_definition(
+        self, name: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a property definition in the Lexicon.
+
+        Calls ``PATCH /api/app/projects/{pid}/data-definitions/properties/``
+        (optionally workspace-scoped).
+
+        Args:
+            name: Property name to update.
+            body: Fields to update (description, hidden, dropped, tags, etc.).
+
+        Returns:
+            Dictionary representing the updated property definition.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_property_definition(
+                    "plan", {"description": "Subscription plan"}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/properties/")
+        payload = {**body, "name": name}
+        result = self.app_request("PATCH", path, json_body=payload)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_property_definition: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def bulk_update_property_definitions(
+        self, body: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Bulk-update property definitions in the Lexicon.
+
+        Calls ``PATCH /api/app/projects/{pid}/data-definitions/properties/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Dictionary with ``properties`` key containing a list of
+                property definition updates.
+
+        Returns:
+            List of updated property definition dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.bulk_update_property_definitions({
+                    "properties": [
+                        {"property_name": "plan", "description": "Plan"},
+                        {"property_name": "country", "description": "Country"},
+                    ]
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/properties/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from bulk_update_property_definitions: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def list_lexicon_tags(self) -> list[dict[str, Any]]:
+        """List all Lexicon tags for the project.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/tags/``
+        (optionally workspace-scoped).
+
+        Returns:
+            List of tag dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                tags = client.list_lexicon_tags()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/tags/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_lexicon_tags: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_lexicon_tag(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new Lexicon tag.
+
+        Calls ``POST /api/app/projects/{pid}/data-definitions/tags/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Tag creation parameters (name, color, etc.).
+
+        Returns:
+            Dictionary representing the created tag.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                tag = client.create_lexicon_tag({"name": "Core Events"})
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/tags/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_lexicon_tag: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_lexicon_tag(self, tag_id: int, body: dict[str, Any]) -> dict[str, Any]:
+        """Update a Lexicon tag.
+
+        Calls ``PATCH /api/app/projects/{pid}/data-definitions/tags/{tag_id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            tag_id: Tag ID (integer).
+            body: Fields to update (name, color, etc.).
+
+        Returns:
+            Dictionary representing the updated tag.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Tag not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_lexicon_tag(1, {"name": "Renamed"})
+            ```
+        """
+        path = self.maybe_scoped_path(f"data-definitions/tags/{tag_id}/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_lexicon_tag: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_lexicon_tag(self, name: str) -> None:
+        """Delete a Lexicon tag by name.
+
+        Uses ``POST /api/app/projects/{pid}/data-definitions/tags/``
+        with ``delete: True`` (the API uses POST, not DELETE, for tag removal).
+
+        Args:
+            name: Name of the tag to delete.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Tag not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_lexicon_tag("Old Tag")
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/tags/")
+        self.app_request("POST", path, json_body={"delete": True, "name": name})
+
+    def get_tracking_metadata(self, event_name: str) -> dict[str, Any]:
+        """Get tracking metadata for an event.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/events/tracking-metadata/``
+        (optionally workspace-scoped).
+
+        Args:
+            event_name: Name of the event.
+
+        Returns:
+            Dictionary with tracking metadata (volumes, first/last seen, etc.).
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                meta = client.get_tracking_metadata("Signup")
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/tracking-metadata/")
+        result = self.app_request("GET", path, params={"event_name": event_name})
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_tracking_metadata: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_event_history(self, event_name: str) -> list[dict[str, Any]]:
+        """Get change history for an event definition.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/events/{event_name}/history/``
+        (optionally workspace-scoped).
+
+        Args:
+            event_name: Name of the event.
+
+        Returns:
+            List of history entry dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                history = client.get_event_history("Signup")
+            ```
+        """
+        path = self.maybe_scoped_path(f"data-definitions/events/{event_name}/history/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from get_event_history: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def get_property_history(
+        self, property_name: str, entity_type: str
+    ) -> list[dict[str, Any]]:
+        """Get change history for a property definition.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/properties/{property_name}/history/``
+        (optionally workspace-scoped).
+
+        Args:
+            property_name: Name of the property.
+            entity_type: Entity type (e.g., ``"event"``, ``"profile"``).
+
+        Returns:
+            List of history entry dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                history = client.get_property_history("plan", "event")
+            ```
+        """
+        path = self.maybe_scoped_path(
+            f"data-definitions/properties/{property_name}/history/"
+        )
+        result = self.app_request("GET", path, params={"entity_type": entity_type})
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from get_property_history: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def export_lexicon(self, export_types: list[str] | None = None) -> dict[str, Any]:
+        """Export Lexicon data definitions.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/export/``
+        (optionally workspace-scoped).
+
+        Args:
+            export_types: Optional list of types to export. Valid values:
+                ``"All Events and Properties"``,
+                ``"All User Profile Properties"``.
+
+        Returns:
+            Dictionary containing exported definitions.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                export = client.export_lexicon(["events"])
+            ```
+        """
+        import json as _json
+
+        path = self.maybe_scoped_path("data-definitions/export/")
+        _default_types = [
+            "All Events and Properties",
+            "All User Profile Properties",
+        ]
+        types_to_export = export_types if export_types is not None else _default_types
+        params = {"export_type": _json.dumps(types_to_export)}
+        result = self.app_request("GET", path, params=params)
+        if isinstance(result, str):
+            # Async export — returns status message
+            return {"status": "pending", "message": result}
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from export_lexicon: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
+    # Data Governance — Drop Filters (Phase 027)
+    # =========================================================================
+
+    def list_drop_filters(self) -> list[dict[str, Any]]:
+        """List all drop filters for the project.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/events/drop-filters/``
+        (optionally workspace-scoped).
+
+        Returns:
+            List of drop filter dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                filters = client.list_drop_filters()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/drop-filters/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_drop_filters: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_drop_filter(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        """Create a new drop filter.
+
+        Calls ``POST /api/app/projects/{pid}/data-definitions/events/drop-filters/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Drop filter creation parameters (event_name, filters, etc.).
+
+        Returns:
+            List of all drop filter dictionaries after creation.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                filters = client.create_drop_filter({
+                    "event_name": "Noise", "query": {}
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/drop-filters/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from create_drop_filter: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def update_drop_filter(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        """Update an existing drop filter.
+
+        Calls ``PATCH /api/app/projects/{pid}/data-definitions/events/drop-filters/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Drop filter update parameters (id, filters, etc.).
+
+        Returns:
+            List of all drop filter dictionaries after update.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400) or not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                filters = client.update_drop_filter({
+                    "id": 1, "query": {"property": "bot"}
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/drop-filters/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from update_drop_filter: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_drop_filter(self, drop_filter_id: int) -> list[dict[str, Any]]:
+        """Delete a drop filter by ID.
+
+        Calls ``DELETE /api/app/projects/{pid}/data-definitions/events/drop-filters/``
+        (optionally workspace-scoped).
+
+        Args:
+            drop_filter_id: ID of the drop filter to delete.
+
+        Returns:
+            List of all drop filter dictionaries after deletion.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Drop filter not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                filters = client.delete_drop_filter(42)
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/drop-filters/")
+        result = self.app_request("DELETE", path, json_body={"id": drop_filter_id})
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from delete_drop_filter: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def get_drop_filter_limits(self) -> dict[str, Any]:
+        """Get drop filter usage limits for the project.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/events/drop-filters/limits/``
+        (optionally workspace-scoped).
+
+        Returns:
+            Dictionary with limit information (max filters, current count, etc.).
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                limits = client.get_drop_filter_limits()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/drop-filters/limits/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_drop_filter_limits: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
+    # Data Governance — Custom Properties (Phase 027)
+    # =========================================================================
+
+    def list_custom_properties(self) -> list[dict[str, Any]]:
+        """List all custom properties for the project.
+
+        Calls ``GET /api/app/projects/{pid}/custom_properties/``
+        (optionally workspace-scoped).
+
+        Returns:
+            List of custom property dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                props = client.list_custom_properties()
+            ```
+        """
+        path = self.maybe_scoped_path("custom_properties/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_custom_properties: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_custom_property(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Create a new custom property.
+
+        Calls ``POST /api/app/projects/{pid}/custom_properties/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Custom property definition (name, expression, type, etc.).
+
+        Returns:
+            Dictionary representing the created custom property.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                prop = client.create_custom_property({
+                    "name": "Is Paying",
+                    "expression": "...",
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("custom_properties/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_custom_property: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def get_custom_property(self, property_id: str) -> dict[str, Any]:
+        """Get a single custom property by ID.
+
+        Calls ``GET /api/app/projects/{pid}/custom_properties/{property_id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            property_id: Custom property ID (string).
+
+        Returns:
+            Dictionary representing the custom property.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                prop = client.get_custom_property("abc-123")
+            ```
+        """
+        path = self.maybe_scoped_path(f"custom_properties/{property_id}/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_custom_property: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_custom_property(
+        self, property_id: str, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a custom property (full replacement).
+
+        Calls ``PUT /api/app/projects/{pid}/custom_properties/{property_id}/``
+        (optionally workspace-scoped). Uses PUT (full replacement), not PATCH.
+
+        Args:
+            property_id: Custom property ID (string).
+            body: Full custom property definition to replace.
+
+        Returns:
+            Dictionary representing the updated custom property.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_custom_property(
+                    "abc-123", {"name": "Is Paying", "expression": "..."}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path(f"custom_properties/{property_id}/")
+        result = self.app_request("PUT", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_custom_property: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_custom_property(self, property_id: str) -> None:
+        """Delete a custom property.
+
+        Calls ``DELETE /api/app/projects/{pid}/custom_properties/{property_id}/``
+        (optionally workspace-scoped).
+
+        Args:
+            property_id: Custom property ID (string).
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_custom_property("abc-123")
+            ```
+        """
+        path = self.maybe_scoped_path(f"custom_properties/{property_id}/")
+        self.app_request("DELETE", path)
+
+    def validate_custom_property(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Validate a custom property expression without creating it.
+
+        Calls ``POST /api/app/projects/{pid}/custom_properties/validate/``
+        (optionally workspace-scoped).
+
+        Args:
+            body: Custom property definition to validate.
+
+        Returns:
+            Dictionary with validation result (valid, errors, etc.).
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.validate_custom_property({
+                    "name": "Is Paying",
+                    "expression": "...",
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("custom_properties/validate/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from validate_custom_property: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
+    # Data Governance — Lookup Tables (Phase 027)
+    # =========================================================================
+
+    def list_lookup_tables(
+        self, *, data_group_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """List lookup tables for the project.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/lookup-tables/``
+        (optionally workspace-scoped).
+
+        Args:
+            data_group_id: Optional filter by data group ID.
+
+        Returns:
+            List of lookup table dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                tables = client.list_lookup_tables()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/lookup-tables/")
+        params: dict[str, str] = {}
+        if data_group_id is not None:
+            params["data-group-id"] = str(data_group_id)
+        result = self.app_request("GET", path, params=params if params else None)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_lookup_tables: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def get_lookup_upload_url(self, content_type: str = "text/csv") -> dict[str, Any]:
+        """Get a signed upload URL for lookup table CSV data.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/lookup-tables/upload-url/``
+        (optionally workspace-scoped).
+
+        Args:
+            content_type: MIME type of the upload (default ``"text/csv"``).
+
+        Returns:
+            Dictionary with ``url`` and ``upload_id`` fields.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                info = client.get_lookup_upload_url()
+                # info["url"], info["upload_id"]
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/lookup-tables/upload-url/")
+        result = self.app_request("GET", path, params={"content-type": content_type})
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_lookup_upload_url: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def upload_to_signed_url(self, url: str, csv_bytes: bytes) -> None:
+        """Upload CSV data to a signed GCS URL.
+
+        Performs a direct ``PUT`` to the external signed URL (no Mixpanel auth).
+        Uses a fresh HTTP client to avoid sending default headers
+        (e.g., ``Internal-Source``) that would invalidate the GCS signature.
+
+        Args:
+            url: Signed upload URL (from ``get_lookup_upload_url()``).
+            csv_bytes: Raw CSV content as bytes.
+
+        Raises:
+            MixpanelDataError: Upload failed (non-2xx response).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                info = client.get_lookup_upload_url()
+                client.upload_to_signed_url(info["url"], b"id,name\\n1,foo")
+            ```
+        """
+        # Use a clean client without default headers — the shared client
+        # has Internal-Source header that GCS includes in signature
+        # validation, causing SignatureDoesNotMatch errors.
+        if self._transport is not None:
+            # Test mode: use the mock transport
+            upload_client = httpx.Client(
+                transport=self._transport, timeout=self._timeout
+            )
+        else:
+            upload_client = httpx.Client(timeout=self._timeout)
+        try:
+            response = upload_client.put(
+                url,
+                content=csv_bytes,
+                headers={"Content-Type": "text/csv"},
+            )
+        finally:
+            upload_client.close()
+        if response.status_code >= 300:
+            raise MixpanelDataError(
+                f"Upload to signed URL failed with status "
+                f"{response.status_code}: {response.text[:500]}",
+                code="UPLOAD_ERROR",
+                details={
+                    "status_code": response.status_code,
+                    "url": url,
+                },
+            )
+
+    def register_lookup_table(self, form_data: dict[str, str]) -> dict[str, Any]:
+        """Register a lookup table with form-encoded data.
+
+        Calls ``POST /api/app/projects/{pid}/data-definitions/lookup-tables/``
+        (optionally workspace-scoped) with form-encoded body.
+
+        Args:
+            form_data: Form fields for table registration
+                (name, upload_id, column mappings, etc.).
+
+        Returns:
+            Dictionary representing the registered lookup table.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                table = client.register_lookup_table({
+                    "name": "Plans",
+                    "upload_id": "abc-123",
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/lookup-tables/")
+        url = self._build_url("app", path)
+        auth_header = self._credentials.auth_header()
+        client = self._ensure_client()
+        response = client.request(
+            "POST",
+            url,
+            data=form_data,
+            headers={"Authorization": auth_header},
+            timeout=self._timeout,
+        )
+        if response.status_code >= 400:
+            self._handle_response(
+                response,
+                request_method="POST",
+                request_url=url,
+                request_params=None,
+                request_body=form_data,
+            )
+        body: Any = response.json()
+        if isinstance(body, dict) and "results" in body:
+            body = body["results"]
+        if not isinstance(body, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from register_lookup_table: "
+                f"expected dict, got {type(body).__name__}",
+            )
+        return body
+
+    def mark_lookup_table_ready(self, form_data: dict[str, str]) -> dict[str, Any]:
+        """Mark a lookup table upload as ready with form-encoded data.
+
+        Uses the same endpoint as ``register_lookup_table()`` — calls
+        ``POST /api/app/projects/{pid}/data-definitions/lookup-tables/``
+        with form-encoded body containing the ``ready`` flag.
+
+        Args:
+            form_data: Form fields including ready status and upload metadata.
+
+        Returns:
+            Dictionary representing the lookup table status.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.mark_lookup_table_ready({
+                    "upload_id": "abc-123",
+                    "ready": "true",
+                })
+            ```
+        """
+        return self.register_lookup_table(form_data)
+
+    def get_lookup_upload_status(self, upload_id: str) -> dict[str, Any]:
+        """Get the upload status for a lookup table upload.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/lookup-tables/upload-status/``
+        (optionally workspace-scoped).
+
+        Args:
+            upload_id: Upload ID (from ``get_lookup_upload_url()``).
+
+        Returns:
+            Dictionary with upload status information.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Upload not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                status = client.get_lookup_upload_status("abc-123")
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/lookup-tables/upload-status/")
+        result = self.app_request("GET", path, params={"upload-id": upload_id})
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_lookup_upload_status: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_lookup_table(
+        self, data_group_id: int, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a lookup table's metadata.
+
+        Calls ``PATCH /api/app/projects/{pid}/data-definitions/lookup-tables/``
+        (optionally workspace-scoped).
+
+        Args:
+            data_group_id: Data group ID of the lookup table.
+            body: Fields to update (name, description, etc.).
+
+        Returns:
+            Dictionary representing the updated lookup table.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Table not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_lookup_table(
+                    42, {"name": "Renamed Table"}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/lookup-tables/")
+        payload = {**body, "data-group-id": data_group_id}
+        result = self.app_request("PATCH", path, json_body=payload)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_lookup_table: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_lookup_tables(self, data_group_ids: list[int]) -> None:
+        """Delete one or more lookup tables.
+
+        Calls ``DELETE /api/app/projects/{pid}/data-definitions/lookup-tables/``
+        (optionally workspace-scoped).
+
+        Args:
+            data_group_ids: List of data group IDs to delete.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Table(s) not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_lookup_tables([1, 2, 3])
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/lookup-tables/")
+        self.app_request("DELETE", path, json_body={"data-group-ids": data_group_ids})
+
+    def download_lookup_table(
+        self,
+        data_group_id: int,
+        *,
+        file_name: str | None = None,
+        limit: int | None = None,
+    ) -> bytes:
+        """Download lookup table data as CSV bytes.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/lookup-tables/download/``
+        (optionally workspace-scoped). Returns raw bytes (not JSON).
+
+        Args:
+            data_group_id: Data group ID of the lookup table.
+            file_name: Optional file name filter.
+            limit: Optional row limit.
+
+        Returns:
+            Raw CSV content as bytes.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Table not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                csv_data = client.download_lookup_table(42)
+                with open("table.csv", "wb") as f:
+                    f.write(csv_data)
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/lookup-tables/download/")
+        url = self._build_url("app", path)
+        auth_header = self._credentials.auth_header()
+        client = self._ensure_client()
+        params: dict[str, str] = {
+            "data-group-id": str(data_group_id),
+        }
+        if file_name is not None:
+            params["file-name"] = file_name
+        if limit is not None:
+            params["limit"] = str(limit)
+        response = client.request(
+            "GET",
+            url,
+            params=params,
+            headers={"Authorization": auth_header},
+            timeout=self._timeout,
+        )
+        if response.status_code >= 400:
+            # Delegate error handling
+            self._handle_response(
+                response,
+                request_method="GET",
+                request_url=url,
+                request_params=params,
+                request_body=None,
+            )
+        return response.content
+
+    def get_lookup_download_url(self, data_group_id: int) -> str:
+        """Get a download URL for lookup table data.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/lookup-tables/download-url/``
+        (optionally workspace-scoped).
+
+        Args:
+            data_group_id: Data group ID of the lookup table.
+
+        Returns:
+            Signed download URL string.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Table not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                url = client.get_lookup_download_url(42)
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/lookup-tables/download-url/")
+        result = self.app_request(
+            "GET",
+            path,
+            params={"data-group-id": str(data_group_id)},
+        )
+        if isinstance(result, dict):
+            # Extract URL from response dict
+            url = result.get("url") or result.get("download_url", "")
+            if isinstance(url, str) and url:
+                return url
+            raise MixpanelDataError(
+                "No download URL found in response",
+                code="MISSING_URL",
+                details={"response": result},
+            )
+        if isinstance(result, str):
+            return result
+        raise MixpanelDataError(
+            f"Unexpected response from get_lookup_download_url: "
+            f"expected dict or str, got {type(result).__name__}",
+        )
+
+    # =============================================================================
+    # Data Governance — Custom Events (Phase 027)
+    # =============================================================================
+
+    def list_custom_events(self) -> list[dict[str, Any]]:
+        """List custom events for the current project.
+
+        Calls ``GET /api/app/projects/{pid}/data-definitions/events/``
+        with a filter for custom events (optionally workspace-scoped).
+
+        Returns:
+            List of custom event definition dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: API error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                events = client.list_custom_events()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/")
+        result = self.app_request("GET", path, params={"custom_event": "true"})
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_custom_events: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def update_custom_event(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Update a custom event definition.
+
+        Calls ``PATCH /api/app/projects/{pid}/data-definitions/events/``
+        (optionally workspace-scoped).
+
+        Args:
+            name: Custom event name.
+            body: Fields to update.
+
+        Returns:
+            Dictionary representing the updated custom event.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_custom_event(
+                    "MyCustomEvent", {"hidden": True}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/")
+        payload = {**body, "name": name}
+        result = self.app_request("PATCH", path, json_body=payload)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_custom_event: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_custom_event(self, name: str) -> None:
+        """Delete a custom event definition.
+
+        Calls ``DELETE /api/app/projects/{pid}/data-definitions/events/``
+        (optionally workspace-scoped).
+
+        Args:
+            name: Custom event name.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.delete_custom_event("MyCustomEvent")
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/")
+        self.app_request("DELETE", path, json_body={"name": name})
