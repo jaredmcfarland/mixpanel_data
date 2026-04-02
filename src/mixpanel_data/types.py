@@ -6188,7 +6188,7 @@ class PropertyResourceType(str, Enum):
     Values:
         EVENT: Event property.
         USER: User profile property.
-        GROUP: Group profile property (wire format: ``groupprofile``).
+        GROUPPROFILE: Group profile property (wire format: ``groupprofile``).
     """
 
     EVENT = "event"
@@ -6646,7 +6646,7 @@ class CreateDropFilterParams(BaseModel):
     event_name: str
     """Event name to filter."""
 
-    filters: Any
+    filters: Any  # Any justified: API accepts polymorphic filter JSON
     """Filter condition JSON."""
 
 
@@ -6671,7 +6671,7 @@ class UpdateDropFilterParams(BaseModel):
     event_name: str | None = None
     """New event name."""
 
-    filters: Any | None = None
+    filters: Any | None = None  # Any justified: API accepts polymorphic filter JSON
     """New filter condition JSON."""
 
     active: bool | None = None
@@ -6746,7 +6746,9 @@ class ComposedPropertyValue(BaseModel):
     resource_type: str
     """Resource type."""
 
-    behavior: Any | None = None
+    behavior: Any | None = (
+        None  # Any justified: API behavior spec varies by resource type
+    )
     """Behavior specification."""
 
     join_property_type: str | None = None
@@ -6880,7 +6882,9 @@ class CreateCustomPropertyParams(BaseModel):
     data_group_id: str | None = None
     """Data group identifier."""
 
-    behavior: Any | None = None
+    behavior: Any | None = (
+        None  # Any justified: API behavior spec varies by resource type
+    )
     """Behavior specification (mutually exclusive with display_formula)."""
 
     @model_validator(mode="after")

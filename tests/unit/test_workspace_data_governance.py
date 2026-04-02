@@ -1309,6 +1309,178 @@ class TestUploadLookupTable:
         assert result.id == 99
         assert request_count[0] >= 2  # At least upload URL + register
 
+    def test_async_upload_polls_until_complete(self, temp_dir: Path) -> None:
+        """upload_lookup_table() polls status for async uploads (>= 5 MB).
+
+        When the API returns {"uploadId": "..."} instead of a full table
+        object, the method should poll get_lookup_upload_status() until
+        the upload completes, then return the resulting LookupTable.
+        """
+        poll_count: list[int] = [0]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Simulate async upload: register returns uploadId, poll returns SUCCESS."""
+            url = str(request.url)
+
+            # Step 1: Get upload URL
+            if "upload-url" in url or "upload_url" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ok",
+                        "results": {
+                            "url": "https://storage.googleapis.com/upload",
+                            "path": "gs://bucket/path",
+                            "key": "product_id",
+                        },
+                    },
+                )
+
+            # Step 2: Upload to GCS
+            if "storage.googleapis.com" in url:
+                return httpx.Response(200)
+
+            # Step 3: Register returns async token (simulating >= 5 MB)
+            if "upload-status" not in url and request.method == "POST":
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ok",
+                        "results": {"uploadId": "task-abc-123"},
+                    },
+                )
+
+            # Step 4: Poll upload status
+            poll_count[0] += 1
+            if poll_count[0] < 2:
+                return httpx.Response(
+                    200,
+                    json={"status": "ok", "results": {"uploadStatus": "PENDING"}},
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {
+                        "uploadStatus": "SUCCESS",
+                        "result": _lookup_table_json(99, "BigTable"),
+                    },
+                },
+            )
+
+        csv_path = temp_dir / "big.csv"
+        csv_path.write_text("product_id,name\n1,Widget\n")
+
+        ws = _make_workspace(temp_dir, handler)
+        params = UploadLookupTableParams(name="BigTable", file_path=str(csv_path))
+        result = ws.upload_lookup_table(params, poll_interval=0.01)
+
+        assert isinstance(result, LookupTable)
+        assert result.name == "BigTable"
+        assert result.id == 99
+        assert poll_count[0] >= 2  # Polled at least twice
+
+    def test_async_upload_timeout_raises(self, temp_dir: Path) -> None:
+        """upload_lookup_table() raises MixpanelDataError on async timeout.
+
+        When polling exceeds max_poll_seconds, a clear timeout error
+        should be raised with the upload ID for manual follow-up.
+        """
+        import pytest
+
+        from mixpanel_data.exceptions import MixpanelDataError
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Always return PENDING to trigger timeout."""
+            url = str(request.url)
+
+            if "upload-url" in url or "upload_url" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ok",
+                        "results": {
+                            "url": "https://storage.googleapis.com/upload",
+                            "path": "gs://bucket/path",
+                            "key": "product_id",
+                        },
+                    },
+                )
+            if "storage.googleapis.com" in url:
+                return httpx.Response(200)
+            if "upload-status" not in url and request.method == "POST":
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ok",
+                        "results": {"uploadId": "task-timeout"},
+                    },
+                )
+            # Always PENDING
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": {"uploadStatus": "PENDING"}},
+            )
+
+        csv_path = temp_dir / "big.csv"
+        csv_path.write_text("product_id,name\n1,Widget\n")
+
+        ws = _make_workspace(temp_dir, handler)
+        params = UploadLookupTableParams(name="BigTable", file_path=str(csv_path))
+
+        with pytest.raises(MixpanelDataError, match="timed out"):
+            ws.upload_lookup_table(params, poll_interval=0.01, max_poll_seconds=0.05)
+
+    def test_async_upload_failure_raises(self, temp_dir: Path) -> None:
+        """upload_lookup_table() raises MixpanelDataError on async failure.
+
+        When the upload task fails (status FAILURE), a clear error should
+        be raised with the failure details.
+        """
+        import pytest
+
+        from mixpanel_data.exceptions import MixpanelDataError
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return FAILURE on status poll."""
+            url = str(request.url)
+
+            if "upload-url" in url or "upload_url" in url:
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ok",
+                        "results": {
+                            "url": "https://storage.googleapis.com/upload",
+                            "path": "gs://bucket/path",
+                            "key": "product_id",
+                        },
+                    },
+                )
+            if "storage.googleapis.com" in url:
+                return httpx.Response(200)
+            if "upload-status" not in url and request.method == "POST":
+                return httpx.Response(
+                    200,
+                    json={
+                        "status": "ok",
+                        "results": {"uploadId": "task-fail"},
+                    },
+                )
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": {"uploadStatus": "FAILURE"}},
+            )
+
+        csv_path = temp_dir / "bad.csv"
+        csv_path.write_text("product_id,name\n1,Widget\n")
+
+        ws = _make_workspace(temp_dir, handler)
+        params = UploadLookupTableParams(name="BadTable", file_path=str(csv_path))
+
+        with pytest.raises(MixpanelDataError, match="failed"):
+            ws.upload_lookup_table(params, poll_interval=0.01)
+
 
 class TestMarkLookupTableReady:
     """Tests for Workspace.mark_lookup_table_ready()."""

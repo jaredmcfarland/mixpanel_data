@@ -20,6 +20,7 @@ import time
 from collections.abc import Callable, Iterator
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
+from urllib.parse import quote
 
 import httpx
 
@@ -5204,7 +5205,7 @@ class MixpanelAPIClient:
         Args:
             names: List of property names to look up.
             resource_type: Optional resource type filter
-                (e.g., ``"event"``, ``"profile"``).
+                (e.g., ``"event"``, ``"user"``, ``"groupprofile"``).
 
         Returns:
             List of property definition dictionaries.
@@ -5350,7 +5351,7 @@ class MixpanelAPIClient:
         (optionally workspace-scoped).
 
         Args:
-            body: Tag creation parameters (name, color, etc.).
+            body: Tag creation parameters (name).
 
         Returns:
             Dictionary representing the created tag.
@@ -5384,7 +5385,7 @@ class MixpanelAPIClient:
 
         Args:
             tag_id: Tag ID (integer).
-            body: Fields to update (name, color, etc.).
+            body: Fields to update (name).
 
         Returns:
             Dictionary representing the updated tag.
@@ -5491,7 +5492,9 @@ class MixpanelAPIClient:
                 history = client.get_event_history("Signup")
             ```
         """
-        path = self.maybe_scoped_path(f"data-definitions/events/{event_name}/history/")
+        path = self.maybe_scoped_path(
+            f"data-definitions/events/{quote(event_name, safe='')}/history/"
+        )
         result = self.app_request("GET", path)
         if not isinstance(result, list):
             raise MixpanelDataError(
@@ -5510,7 +5513,7 @@ class MixpanelAPIClient:
 
         Args:
             property_name: Name of the property.
-            entity_type: Entity type (e.g., ``"event"``, ``"profile"``).
+            entity_type: Entity type (e.g., ``"event"``, ``"user"``, ``"groupprofile"``).
 
         Returns:
             List of history entry dictionaries.
@@ -5528,7 +5531,7 @@ class MixpanelAPIClient:
             ```
         """
         path = self.maybe_scoped_path(
-            f"data-definitions/properties/{property_name}/history/"
+            f"data-definitions/properties/{quote(property_name, safe='')}/history/"
         )
         result = self.app_request("GET", path, params={"entity_type": entity_type})
         if not isinstance(result, list):
@@ -5561,18 +5564,18 @@ class MixpanelAPIClient:
         Example:
             ```python
             with MixpanelAPIClient(credentials) as client:
-                export = client.export_lexicon(["events"])
+                export = client.export_lexicon(
+                    ["All Events and Properties"]
+                )
             ```
         """
-        import json as _json
-
         path = self.maybe_scoped_path("data-definitions/export/")
         _default_types = [
             "All Events and Properties",
             "All User Profile Properties",
         ]
         types_to_export = export_types if export_types is not None else _default_types
-        params = {"export_type": _json.dumps(types_to_export)}
+        params = {"export_type": json.dumps(types_to_export)}
         result = self.app_request("GET", path, params=params)
         if isinstance(result, str):
             # Async export — returns status message
@@ -6004,19 +6007,19 @@ class MixpanelAPIClient:
             content_type: MIME type of the upload (default ``"text/csv"``).
 
         Returns:
-            Dictionary with ``url`` and ``upload_id`` fields.
+            Dictionary with ``url``, ``path``, and ``key`` fields.
 
         Raises:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelDataError: Network/connection errors or missing fields.
 
         Example:
             ```python
             with MixpanelAPIClient(credentials) as client:
                 info = client.get_lookup_upload_url()
-                # info["url"], info["upload_id"]
+                # info["url"], info["path"], info["key"]
             ```
         """
         path = self.maybe_scoped_path("data-definitions/lookup-tables/upload-url/")
@@ -6026,6 +6029,13 @@ class MixpanelAPIClient:
                 f"Unexpected response from get_lookup_upload_url: "
                 f"expected dict, got {type(result).__name__}",
             )
+        for required_key in ("url", "path", "key"):
+            if required_key not in result:
+                raise MixpanelDataError(
+                    f"get_lookup_upload_url response missing required "
+                    f"field '{required_key}': {result}",
+                    code="MISSING_FIELD",
+                )
         return result
 
     def upload_to_signed_url(self, url: str, csv_bytes: bytes) -> None:
@@ -6065,6 +6075,12 @@ class MixpanelAPIClient:
                 content=csv_bytes,
                 headers={"Content-Type": "text/csv"},
             )
+        except httpx.HTTPError as e:
+            raise MixpanelDataError(
+                f"Upload to signed URL failed: {e}",
+                code="UPLOAD_ERROR",
+                details={"url": url},
+            ) from e
         finally:
             upload_client.close()
         if response.status_code >= 300:
@@ -6086,7 +6102,7 @@ class MixpanelAPIClient:
 
         Args:
             form_data: Form fields for table registration
-                (name, upload_id, column mappings, etc.).
+                (name, path, key, and optionally data-group-id).
 
         Returns:
             Dictionary representing the registered lookup table.
@@ -6102,7 +6118,8 @@ class MixpanelAPIClient:
             with MixpanelAPIClient(credentials) as client:
                 table = client.register_lookup_table({
                     "name": "Plans",
-                    "upload_id": "abc-123",
+                    "path": "gs://bucket/path",
+                    "key": "id",
                 })
             ```
         """
@@ -6125,7 +6142,14 @@ class MixpanelAPIClient:
                 request_params=None,
                 request_body=form_data,
             )
-        body: Any = response.json()
+        try:
+            body: Any = response.json()
+        except json.JSONDecodeError as e:
+            raise MixpanelDataError(
+                f"register_lookup_table returned non-JSON response "
+                f"(status {response.status_code}): {response.text[:500]}",
+                code="INVALID_RESPONSE",
+            ) from e
         if isinstance(body, dict) and "results" in body:
             body = body["results"]
         if not isinstance(body, dict):

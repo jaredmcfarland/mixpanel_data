@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data.exceptions import MixpanelDataError
 
 # =============================================================================
 # Fixtures
@@ -1828,3 +1829,125 @@ class TestGetLookupDownloadUrl:
             client.get_lookup_download_url(5)
 
         assert captured_methods[0] == "GET"
+
+
+# =============================================================================
+# Error-Path Tests
+# =============================================================================
+
+
+class TestExportLexiconAsyncStringResponse:
+    """Tests for export_lexicon() handling async string responses."""
+
+    def test_export_lexicon_async_string_response(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """Test export_lexicon handles async string response from API.
+
+        When the Mixpanel API returns a plain string (e.g., an async export status
+        message) instead of a dict, export_lexicon() should wrap it in a dict
+        with ``status`` and ``message`` keys.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a string result instead of a dict."""
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": "Export in progress",
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.export_lexicon()
+
+        assert result == {"status": "pending", "message": "Export in progress"}
+
+
+class TestGetLookupUploadUrlMissingKeys:
+    """Tests for get_lookup_upload_url() response validation."""
+
+    def test_get_lookup_upload_url_missing_keys(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """Test get_lookup_upload_url raises MixpanelDataError when keys are missing.
+
+        The response dict must contain ``url``, ``path``, and ``key`` fields.
+        When any are missing, the method should raise MixpanelDataError to signal
+        an invalid API response.
+
+        Note: This test validates the fix that adds key validation to
+        get_lookup_upload_url(). It will fail until the fix is applied.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a response missing required keys."""
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {"url": "https://example.com"},
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError):
+            client.get_lookup_upload_url()
+
+
+class TestUploadToSignedUrlNetworkFailure:
+    """Tests for upload_to_signed_url() network error handling."""
+
+    def test_upload_to_signed_url_network_failure(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """Test upload_to_signed_url wraps ConnectError in MixpanelDataError.
+
+        When the PUT request to the signed URL fails with a network error
+        (e.g., ``httpx.ConnectError``), the method should catch it and raise
+        ``MixpanelDataError`` instead.
+
+        Note: This test validates the fix that adds ConnectError handling to
+        upload_to_signed_url(). It will fail until the fix is applied.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Simulate a network failure by raising ConnectError."""
+            raise httpx.ConnectError("Connection refused")
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError):
+            client.upload_to_signed_url(
+                "https://storage.example.com/upload", b"col1,col2\na,b"
+            )
+
+
+class TestRegisterLookupTableNonJsonResponse:
+    """Tests for register_lookup_table() non-JSON response handling."""
+
+    def test_register_lookup_table_non_json_response(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """Test register_lookup_table raises MixpanelDataError for non-JSON 200 response.
+
+        When the server returns a 200 response with a body that is not valid JSON,
+        ``register_lookup_table()`` should raise ``MixpanelDataError`` instead of
+        propagating the raw JSON decode error.
+
+        Note: This test validates the fix that adds try/except around response.json()
+        in register_lookup_table(). It will fail until the fix is applied.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a non-JSON 200 response."""
+            return httpx.Response(
+                200,
+                text="<html>Server Error</html>",
+                headers={"content-type": "text/html"},
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError):
+            client.register_lookup_table({"name": "Test Table"})

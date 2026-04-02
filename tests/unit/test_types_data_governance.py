@@ -1232,3 +1232,133 @@ class TestUpdateLookupTableParams:
         params = UpdateLookupTableParams(name="Renamed Table")
         data = params.model_dump(exclude_none=True)
         assert data == {"name": "Renamed Table"}
+
+
+# =============================================================================
+# by_alias=True Serialization Tests
+# =============================================================================
+
+
+class TestByAliasSerialization:
+    """Test by_alias=True produces camelCase keys for models using alias_generator=to_camel."""
+
+    def test_bulk_property_update_by_alias(self) -> None:
+        """Verify BulkPropertyUpdate serializes to camelCase with by_alias=True."""
+        update = BulkPropertyUpdate(
+            name="test_prop",
+            resource_type="event",
+            data_group_id="group-1",
+            description="test",
+        )
+        dumped = update.model_dump(exclude_none=True, by_alias=True)
+        assert "resourceType" in dumped
+        assert "dataGroupId" in dumped
+        assert "resource_type" not in dumped
+        assert "data_group_id" not in dumped
+        assert dumped["resourceType"] == "event"
+        assert dumped["dataGroupId"] == "group-1"
+        assert dumped["name"] == "test_prop"
+
+    def test_bulk_property_update_without_alias(self) -> None:
+        """Verify BulkPropertyUpdate uses snake_case keys without by_alias."""
+        update = BulkPropertyUpdate(
+            name="test_prop",
+            resource_type="event",
+        )
+        dumped = update.model_dump(exclude_none=True)
+        assert "resource_type" in dumped
+        assert "resourceType" not in dumped
+
+    def test_create_custom_property_params_by_alias(self) -> None:
+        """Verify CreateCustomPropertyParams serializes to camelCase with by_alias=True."""
+        params = CreateCustomPropertyParams(
+            name="Revenue Per User",
+            resource_type="events",
+            display_formula="A / B",
+            composed_properties={
+                "A": ComposedPropertyValue(resource_type="events", type="number"),
+                "B": ComposedPropertyValue(resource_type="events", type="number"),
+            },
+            is_locked=False,
+            is_visible=True,
+            data_group_id="group-1",
+        )
+        dumped = params.model_dump(exclude_none=True, by_alias=True)
+        assert "displayFormula" in dumped
+        assert "composedProperties" in dumped
+        assert "resourceType" in dumped
+        assert "isLocked" in dumped
+        assert "isVisible" in dumped
+        assert "dataGroupId" in dumped
+        # Ensure snake_case keys are NOT present
+        assert "display_formula" not in dumped
+        assert "composed_properties" not in dumped
+        assert "resource_type" not in dumped
+        assert "is_locked" not in dumped
+        assert "is_visible" not in dumped
+        assert "data_group_id" not in dumped
+        # Verify values
+        assert dumped["displayFormula"] == "A / B"
+        assert dumped["resourceType"] == "events"
+        assert dumped["isLocked"] is False
+        assert dumped["isVisible"] is True
+
+    def test_create_custom_property_params_nested_alias(self) -> None:
+        """Verify nested ComposedPropertyValue also serializes to camelCase."""
+        params = CreateCustomPropertyParams(
+            name="Test",
+            resource_type="events",
+            display_formula="A",
+            composed_properties={
+                "A": ComposedPropertyValue(
+                    resource_type="events",
+                    type="number",
+                    type_cast="string",
+                    join_property_type="event",
+                ),
+            },
+        )
+        dumped = params.model_dump(exclude_none=True, by_alias=True)
+        nested = dumped["composedProperties"]["A"]
+        assert "resourceType" in nested
+        assert "typeCast" in nested
+        assert "joinPropertyType" in nested
+        assert "resource_type" not in nested
+        assert "type_cast" not in nested
+        assert "join_property_type" not in nested
+
+    def test_update_custom_property_params_by_alias(self) -> None:
+        """Verify UpdateCustomPropertyParams serializes to camelCase with by_alias=True."""
+        params = UpdateCustomPropertyParams(
+            name="Updated",
+            description="New description",
+            display_formula="A + B",
+            composed_properties={
+                "A": ComposedPropertyValue(resource_type="events"),
+            },
+            is_locked=True,
+            is_visible=False,
+        )
+        dumped = params.model_dump(exclude_none=True, by_alias=True)
+        assert "displayFormula" in dumped
+        assert "composedProperties" in dumped
+        assert "isLocked" in dumped
+        assert "isVisible" in dumped
+        # Ensure snake_case keys are NOT present
+        assert "display_formula" not in dumped
+        assert "composed_properties" not in dumped
+        assert "is_locked" not in dumped
+        assert "is_visible" not in dumped
+        # Verify values
+        assert dumped["displayFormula"] == "A + B"
+        assert dumped["isLocked"] is True
+        assert dumped["isVisible"] is False
+
+    def test_update_custom_property_params_partial_alias(self) -> None:
+        """Verify UpdateCustomPropertyParams partial update uses camelCase with by_alias."""
+        params = UpdateCustomPropertyParams(name="Renamed", is_visible=False)
+        dumped = params.model_dump(exclude_none=True, by_alias=True)
+        assert "isVisible" in dumped
+        assert "is_visible" not in dumped
+        assert dumped["isVisible"] is False
+        assert dumped["name"] == "Renamed"

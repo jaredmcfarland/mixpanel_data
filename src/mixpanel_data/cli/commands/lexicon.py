@@ -100,6 +100,9 @@ def events_get(
     """
     workspace = get_workspace(ctx)
     name_list = [n.strip() for n in names.split(",") if n.strip()]
+    if not name_list:
+        err_console.print("[red]No valid event names provided.[/red]")
+        raise typer.Exit(code=ExitCode.INVALID_ARGS)
     with status_spinner(ctx, "Fetching event definitions..."):
         result = workspace.get_event_definitions(names=name_list)
     output_result(
@@ -285,6 +288,9 @@ def properties_get(
     """
     workspace = get_workspace(ctx)
     name_list = [n.strip() for n in names.split(",") if n.strip()]
+    if not name_list:
+        err_console.print("[red]No valid property names provided.[/red]")
+        raise typer.Exit(code=ExitCode.INVALID_ARGS)
     kwargs: dict[str, Any] = {"names": name_list}
     if resource_type is not None:
         kwargs["resource_type"] = resource_type
@@ -651,4 +657,9 @@ def lexicon_export(
         kwargs["export_types"] = [t.strip() for t in types.split(",") if t.strip()]
     with status_spinner(ctx, "Exporting Lexicon definitions..."):
         result = workspace.export_lexicon(**kwargs)
+    if isinstance(result, dict) and result.get("status") == "pending":
+        err_console.print(
+            f"[yellow]Export is processing asynchronously:[/yellow] "
+            f"{result.get('message', 'Check back later.')}"
+        )
     output_result(ctx, result, format=format, jq_filter=jq_filter)
