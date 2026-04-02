@@ -1,4 +1,5 @@
 # ruff: noqa: ARG001
+# mypy: warn-unused-ignores=false
 """Tests for Phase 027 Data Governance types.
 
 Tests round-trip serialization, frozen immutability, extra field preservation,
@@ -153,7 +154,7 @@ class TestEventDefinitionModel:
         """EventDefinition is frozen and rejects attribute assignment."""
         event = EventDefinition(id=1, name="Signup")
         with pytest.raises(ValidationError):
-            event.name = "Login"  # type: ignore
+            event.name = "Login"  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """EventDefinition preserves unknown fields via extra='allow'."""
@@ -164,7 +165,7 @@ class TestEventDefinitionModel:
     def test_missing_required_raises(self) -> None:
         """EventDefinition raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            EventDefinition(id=1)  # type: ignore
+            EventDefinition(id=1)
 
     def test_model_validate_api_shape(self) -> None:
         """EventDefinition parses a dict matching API response shape."""
@@ -224,7 +225,7 @@ class TestPropertyDefinitionModel:
         """PropertyDefinition is frozen and rejects attribute assignment."""
         prop = PropertyDefinition(id=1, name="$browser")
         with pytest.raises(ValidationError):
-            prop.name = "$os"  # type: ignore
+            prop.name = "$os"  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """PropertyDefinition preserves unknown fields via extra='allow'."""
@@ -235,7 +236,7 @@ class TestPropertyDefinitionModel:
     def test_missing_required_raises(self) -> None:
         """PropertyDefinition raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            PropertyDefinition(id=1)  # type: ignore
+            PropertyDefinition(id=1)
 
 
 # =============================================================================
@@ -392,7 +393,7 @@ class TestBulkUpdateEventsParams:
     def test_missing_required_raises(self) -> None:
         """BulkUpdateEventsParams raises ValidationError when events missing."""
         with pytest.raises(ValidationError):
-            BulkUpdateEventsParams()  # type: ignore
+            BulkUpdateEventsParams()  # type: ignore[call-arg]
 
     def test_model_dump(self) -> None:
         """BulkUpdateEventsParams serializes correctly."""
@@ -443,7 +444,7 @@ class TestBulkPropertyUpdateModel:
     def test_missing_required_raises(self) -> None:
         """BulkPropertyUpdate raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            BulkPropertyUpdate(name="$browser")  # type: ignore
+            BulkPropertyUpdate(name="$browser")
 
 
 # =============================================================================
@@ -466,7 +467,7 @@ class TestBulkUpdatePropertiesParams:
     def test_missing_required_raises(self) -> None:
         """BulkUpdatePropertiesParams raises ValidationError when properties missing."""
         with pytest.raises(ValidationError):
-            BulkUpdatePropertiesParams()  # type: ignore
+            BulkUpdatePropertiesParams()  # type: ignore[call-arg]
 
 
 # =============================================================================
@@ -487,7 +488,7 @@ class TestLexiconTagModel:
         """LexiconTag is frozen and rejects attribute assignment."""
         tag = LexiconTag(id=1, name="core")
         with pytest.raises(ValidationError):
-            tag.name = "new"  # type: ignore
+            tag.name = "new"  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """LexiconTag preserves unknown fields via extra='allow'."""
@@ -498,7 +499,7 @@ class TestLexiconTagModel:
     def test_missing_required_raises(self) -> None:
         """LexiconTag raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            LexiconTag(id=1)  # type: ignore
+            LexiconTag(id=1)
 
 
 # =============================================================================
@@ -517,7 +518,7 @@ class TestCreateTagParams:
     def test_missing_required_raises(self) -> None:
         """CreateTagParams raises ValidationError when name missing."""
         with pytest.raises(ValidationError):
-            CreateTagParams()  # type: ignore
+            CreateTagParams()  # type: ignore[call-arg]
 
     def test_model_dump(self) -> None:
         """CreateTagParams serializes correctly."""
@@ -588,7 +589,7 @@ class TestDropFilterModel:
         """DropFilter is frozen and rejects attribute assignment."""
         df = DropFilter(id=1, event_name="Signup")
         with pytest.raises(ValidationError):
-            df.event_name = "Login"  # type: ignore
+            df.event_name = "Login"  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """DropFilter preserves unknown fields via extra='allow'."""
@@ -599,7 +600,7 @@ class TestDropFilterModel:
     def test_missing_required_raises(self) -> None:
         """DropFilter raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            DropFilter(id=1)  # type: ignore
+            DropFilter(id=1)
 
 
 # =============================================================================
@@ -622,7 +623,7 @@ class TestCreateDropFilterParams:
     def test_missing_required_raises(self) -> None:
         """CreateDropFilterParams raises ValidationError when fields missing."""
         with pytest.raises(ValidationError):
-            CreateDropFilterParams(event_name="Signup")  # type: ignore
+            CreateDropFilterParams(event_name="Signup")  # type: ignore[call-arg]
 
     def test_model_dump(self) -> None:
         """CreateDropFilterParams serializes correctly."""
@@ -671,7 +672,7 @@ class TestUpdateDropFilterParams:
     def test_missing_required_raises(self) -> None:
         """UpdateDropFilterParams raises ValidationError when id missing."""
         with pytest.raises(ValidationError):
-            UpdateDropFilterParams()  # type: ignore
+            UpdateDropFilterParams()  # type: ignore[call-arg]
 
 
 # =============================================================================
@@ -691,7 +692,7 @@ class TestDropFilterLimitsResponseModel:
         """DropFilterLimitsResponse is frozen and rejects attribute assignment."""
         resp = DropFilterLimitsResponse(filter_limit=100)
         with pytest.raises(ValidationError):
-            resp.filter_limit = 200  # type: ignore
+            resp.filter_limit = 200  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """DropFilterLimitsResponse preserves unknown fields via extra='allow'."""
@@ -702,7 +703,7 @@ class TestDropFilterLimitsResponseModel:
     def test_missing_required_raises(self) -> None:
         """DropFilterLimitsResponse raises ValidationError when filter_limit missing."""
         with pytest.raises(ValidationError):
-            DropFilterLimitsResponse()  # type: ignore
+            DropFilterLimitsResponse()
 
 
 # =============================================================================
@@ -740,7 +741,7 @@ class TestComposedPropertyValueModel:
         """ComposedPropertyValue is frozen and rejects attribute assignment."""
         cpv = ComposedPropertyValue(resource_type="events")
         with pytest.raises(ValidationError):
-            cpv.resource_type = "people"  # type: ignore
+            cpv.resource_type = "people"  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """ComposedPropertyValue preserves unknown fields via extra='allow'."""
@@ -809,7 +810,7 @@ class TestCustomPropertyModel:
         """CustomProperty is frozen and rejects attribute assignment."""
         cp = CustomProperty(custom_property_id=1, name="Test", resource_type="events")
         with pytest.raises(ValidationError):
-            cp.name = "new"  # type: ignore
+            cp.name = "new"  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """CustomProperty preserves unknown fields via extra='allow'."""
@@ -822,7 +823,7 @@ class TestCustomPropertyModel:
     def test_missing_required_raises(self) -> None:
         """CustomProperty raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            CustomProperty(custom_property_id=1, name="Test")  # type: ignore
+            CustomProperty(custom_property_id=1, name="Test")
 
     def test_model_validate_api_shape(self) -> None:
         """CustomProperty parses a dict matching API response shape."""
@@ -930,7 +931,7 @@ class TestCreateCustomPropertyParams:
     def test_missing_required_raises(self) -> None:
         """CreateCustomPropertyParams raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            CreateCustomPropertyParams(name="Test")  # type: ignore
+            CreateCustomPropertyParams(name="Test")
 
     def test_all_optional_fields(self) -> None:
         """CreateCustomPropertyParams with all optional fields stores correctly."""
@@ -1035,7 +1036,7 @@ class TestLookupTableModel:
         """LookupTable is frozen and rejects attribute assignment."""
         lt = LookupTable(id=1, name="Countries")
         with pytest.raises(ValidationError):
-            lt.name = "Regions"  # type: ignore
+            lt.name = "Regions"  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """LookupTable preserves unknown fields via extra='allow'."""
@@ -1046,7 +1047,7 @@ class TestLookupTableModel:
     def test_missing_required_raises(self) -> None:
         """LookupTable raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            LookupTable(id=1)  # type: ignore
+            LookupTable(id=1)
 
 
 # =============================================================================
@@ -1074,7 +1075,7 @@ class TestUploadLookupTableParams:
     def test_missing_required_raises(self) -> None:
         """UploadLookupTableParams raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            UploadLookupTableParams(name="Countries")  # type: ignore
+            UploadLookupTableParams(name="Countries")  # type: ignore[call-arg]
 
     def test_name_max_length(self) -> None:
         """UploadLookupTableParams rejects names longer than 255 characters."""
@@ -1125,7 +1126,7 @@ class TestMarkLookupTableReadyParams:
     def test_missing_required_raises(self) -> None:
         """MarkLookupTableReadyParams raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            MarkLookupTableReadyParams(name="Countries")  # type: ignore
+            MarkLookupTableReadyParams(name="Countries")  # type: ignore[call-arg]
 
     def test_exclude_none(self) -> None:
         """MarkLookupTableReadyParams excludes None fields when serializing."""
@@ -1159,7 +1160,7 @@ class TestLookupTableUploadUrlModel:
             url="https://example.com", path="/path", key="key"
         )
         with pytest.raises(ValidationError):
-            upload_url.url = "new"  # type: ignore
+            upload_url.url = "new"  # type: ignore[misc]
 
     def test_extra_fields_preserved(self) -> None:
         """LookupTableUploadUrl preserves unknown fields via extra='allow'."""
@@ -1172,7 +1173,7 @@ class TestLookupTableUploadUrlModel:
     def test_missing_required_raises(self) -> None:
         """LookupTableUploadUrl raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            LookupTableUploadUrl(url="https://example.com")  # type: ignore
+            LookupTableUploadUrl(url="https://example.com")
 
 
 # =============================================================================
