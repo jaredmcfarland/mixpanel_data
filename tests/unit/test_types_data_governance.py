@@ -164,7 +164,7 @@ class TestEventDefinitionModel:
     def test_missing_required_raises(self) -> None:
         """EventDefinition raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            EventDefinition(id=1)  # type: ignore[call-arg]
+            EventDefinition(id=1)  # type: ignore
 
     def test_model_validate_api_shape(self) -> None:
         """EventDefinition parses a dict matching API response shape."""
@@ -235,7 +235,7 @@ class TestPropertyDefinitionModel:
     def test_missing_required_raises(self) -> None:
         """PropertyDefinition raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            PropertyDefinition(id=1)  # type: ignore[call-arg]
+            PropertyDefinition(id=1)  # type: ignore
 
 
 # =============================================================================
@@ -392,7 +392,7 @@ class TestBulkUpdateEventsParams:
     def test_missing_required_raises(self) -> None:
         """BulkUpdateEventsParams raises ValidationError when events missing."""
         with pytest.raises(ValidationError):
-            BulkUpdateEventsParams()  # type: ignore[call-arg]
+            BulkUpdateEventsParams()  # type: ignore
 
     def test_model_dump(self) -> None:
         """BulkUpdateEventsParams serializes correctly."""
@@ -443,7 +443,7 @@ class TestBulkPropertyUpdateModel:
     def test_missing_required_raises(self) -> None:
         """BulkPropertyUpdate raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            BulkPropertyUpdate(name="$browser")  # type: ignore[call-arg]
+            BulkPropertyUpdate(name="$browser")  # type: ignore
 
 
 # =============================================================================
@@ -466,7 +466,7 @@ class TestBulkUpdatePropertiesParams:
     def test_missing_required_raises(self) -> None:
         """BulkUpdatePropertiesParams raises ValidationError when properties missing."""
         with pytest.raises(ValidationError):
-            BulkUpdatePropertiesParams()  # type: ignore[call-arg]
+            BulkUpdatePropertiesParams()  # type: ignore
 
 
 # =============================================================================
@@ -498,7 +498,7 @@ class TestLexiconTagModel:
     def test_missing_required_raises(self) -> None:
         """LexiconTag raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            LexiconTag(id=1)  # type: ignore[call-arg]
+            LexiconTag(id=1)  # type: ignore
 
 
 # =============================================================================
@@ -517,7 +517,7 @@ class TestCreateTagParams:
     def test_missing_required_raises(self) -> None:
         """CreateTagParams raises ValidationError when name missing."""
         with pytest.raises(ValidationError):
-            CreateTagParams()  # type: ignore[call-arg]
+            CreateTagParams()  # type: ignore
 
     def test_model_dump(self) -> None:
         """CreateTagParams serializes correctly."""
@@ -599,7 +599,7 @@ class TestDropFilterModel:
     def test_missing_required_raises(self) -> None:
         """DropFilter raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            DropFilter(id=1)  # type: ignore[call-arg]
+            DropFilter(id=1)  # type: ignore
 
 
 # =============================================================================
@@ -622,7 +622,7 @@ class TestCreateDropFilterParams:
     def test_missing_required_raises(self) -> None:
         """CreateDropFilterParams raises ValidationError when fields missing."""
         with pytest.raises(ValidationError):
-            CreateDropFilterParams(event_name="Signup")  # type: ignore[call-arg]
+            CreateDropFilterParams(event_name="Signup")  # type: ignore
 
     def test_model_dump(self) -> None:
         """CreateDropFilterParams serializes correctly."""
@@ -671,7 +671,7 @@ class TestUpdateDropFilterParams:
     def test_missing_required_raises(self) -> None:
         """UpdateDropFilterParams raises ValidationError when id missing."""
         with pytest.raises(ValidationError):
-            UpdateDropFilterParams()  # type: ignore[call-arg]
+            UpdateDropFilterParams()  # type: ignore
 
 
 # =============================================================================
@@ -702,7 +702,7 @@ class TestDropFilterLimitsResponseModel:
     def test_missing_required_raises(self) -> None:
         """DropFilterLimitsResponse raises ValidationError when filter_limit missing."""
         with pytest.raises(ValidationError):
-            DropFilterLimitsResponse()  # type: ignore[call-arg]
+            DropFilterLimitsResponse()  # type: ignore
 
 
 # =============================================================================
@@ -822,7 +822,7 @@ class TestCustomPropertyModel:
     def test_missing_required_raises(self) -> None:
         """CustomProperty raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            CustomProperty(custom_property_id=1, name="Test")  # type: ignore[call-arg]
+            CustomProperty(custom_property_id=1, name="Test")  # type: ignore
 
     def test_model_validate_api_shape(self) -> None:
         """CustomProperty parses a dict matching API response shape."""
@@ -930,7 +930,7 @@ class TestCreateCustomPropertyParams:
     def test_missing_required_raises(self) -> None:
         """CreateCustomPropertyParams raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            CreateCustomPropertyParams(name="Test")  # type: ignore[call-arg]
+            CreateCustomPropertyParams(name="Test")  # type: ignore
 
     def test_all_optional_fields(self) -> None:
         """CreateCustomPropertyParams with all optional fields stores correctly."""
@@ -1046,7 +1046,7 @@ class TestLookupTableModel:
     def test_missing_required_raises(self) -> None:
         """LookupTable raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            LookupTable(id=1)  # type: ignore[call-arg]
+            LookupTable(id=1)  # type: ignore
 
 
 # =============================================================================
@@ -1074,7 +1074,7 @@ class TestUploadLookupTableParams:
     def test_missing_required_raises(self) -> None:
         """UploadLookupTableParams raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            UploadLookupTableParams(name="Countries")  # type: ignore[call-arg]
+            UploadLookupTableParams(name="Countries")  # type: ignore
 
     def test_name_max_length(self) -> None:
         """UploadLookupTableParams rejects names longer than 255 characters."""
@@ -1125,7 +1125,7 @@ class TestMarkLookupTableReadyParams:
     def test_missing_required_raises(self) -> None:
         """MarkLookupTableReadyParams raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            MarkLookupTableReadyParams(name="Countries")  # type: ignore[call-arg]
+            MarkLookupTableReadyParams(name="Countries")  # type: ignore
 
     def test_exclude_none(self) -> None:
         """MarkLookupTableReadyParams excludes None fields when serializing."""
@@ -1172,7 +1172,7 @@ class TestLookupTableUploadUrlModel:
     def test_missing_required_raises(self) -> None:
         """LookupTableUploadUrl raises ValidationError when required fields missing."""
         with pytest.raises(ValidationError):
-            LookupTableUploadUrl(url="https://example.com")  # type: ignore[call-arg]
+            LookupTableUploadUrl(url="https://example.com")  # type: ignore
 
 
 # =============================================================================
