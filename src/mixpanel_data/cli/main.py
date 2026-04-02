@@ -144,11 +144,16 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.annotations import annotations_app
     from mixpanel_data.cli.commands.auth import auth_app
     from mixpanel_data.cli.commands.cohorts import cohorts_app
+    from mixpanel_data.cli.commands.custom_events import custom_events_app
+    from mixpanel_data.cli.commands.custom_properties import custom_properties_app
     from mixpanel_data.cli.commands.dashboards import dashboards_app
+    from mixpanel_data.cli.commands.drop_filters import drop_filters_app
     from mixpanel_data.cli.commands.experiments import experiments_app
     from mixpanel_data.cli.commands.fetch import fetch_app
     from mixpanel_data.cli.commands.flags import flags_app
     from mixpanel_data.cli.commands.inspect import inspect_app
+    from mixpanel_data.cli.commands.lexicon import lexicon_app
+    from mixpanel_data.cli.commands.lookup_tables import lookup_tables_app
     from mixpanel_data.cli.commands.query import query_app
     from mixpanel_data.cli.commands.reports import reports_app
     from mixpanel_data.cli.commands.webhooks import webhooks_app
@@ -175,6 +180,19 @@ def _register_commands() -> None:
         annotations_app, name="annotations", help="Manage timeline annotations."
     )
     app.add_typer(webhooks_app, name="webhooks", help="Manage project webhooks.")
+    app.add_typer(lexicon_app, name="lexicon", help="Manage Lexicon data definitions.")
+    app.add_typer(drop_filters_app, name="drop-filters", help="Manage drop filters.")
+    app.add_typer(
+        custom_properties_app,
+        name="custom-properties",
+        help="Manage custom properties.",
+    )
+    app.add_typer(custom_events_app, name="custom-events", help="Manage custom events.")
+    app.add_typer(
+        lookup_tables_app,
+        name="lookup-tables",
+        help="Manage lookup tables.",
+    )
 
 
 # Register commands when module is imported

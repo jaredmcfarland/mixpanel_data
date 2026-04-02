@@ -33,7 +33,9 @@ Example:
 
 from __future__ import annotations
 
+import logging
 import sys
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
@@ -69,6 +71,8 @@ from mixpanel_data.types import (
     BookmarkType,
     BulkUpdateBookmarkEntry,
     BulkUpdateCohortEntry,
+    BulkUpdateEventsParams,
+    BulkUpdatePropertiesParams,
     Cohort,
     ColumnStatsResult,
     ColumnSummary,
@@ -77,19 +81,26 @@ from mixpanel_data.types import (
     CreateAnnotationTagParams,
     CreateBookmarkParams,
     CreateCohortParams,
+    CreateCustomPropertyParams,
     CreateDashboardParams,
+    CreateDropFilterParams,
     CreateExperimentParams,
     CreateFeatureFlagParams,
     CreateRcaDashboardParams,
+    CreateTagParams,
     CreateWebhookParams,
     CustomAlert,
+    CustomProperty,
     DailyCountsResult,
     Dashboard,
+    DropFilter,
+    DropFilterLimitsResponse,
     DuplicateExperimentParams,
     EngagementDistributionResult,
     EntityType,
     EventBreakdownResult,
     EventCountsResult,
+    EventDefinition,
     EventStats,
     Experiment,
     ExperimentConcludeParams,
@@ -104,6 +115,10 @@ from mixpanel_data.types import (
     FunnelResult,
     JQLResult,
     LexiconSchema,
+    LexiconTag,
+    LookupTable,
+    LookupTableUploadUrl,
+    MarkLookupTableReadyParams,
     NumericAverageResult,
     NumericBucketResult,
     NumericPropertySummaryResult,
@@ -114,6 +129,7 @@ from mixpanel_data.types import (
     ProjectWebhook,
     PropertyCountsResult,
     PropertyCoverageResult,
+    PropertyDefinition,
     PropertyDistributionResult,
     PublicWorkspace,
     RetentionResult,
@@ -130,12 +146,19 @@ from mixpanel_data.types import (
     UpdateAnnotationParams,
     UpdateBookmarkParams,
     UpdateCohortParams,
+    UpdateCustomPropertyParams,
     UpdateDashboardParams,
+    UpdateDropFilterParams,
+    UpdateEventDefinitionParams,
     UpdateExperimentParams,
     UpdateFeatureFlagParams,
+    UpdateLookupTableParams,
+    UpdatePropertyDefinitionParams,
     UpdateReportLinkParams,
+    UpdateTagParams,
     UpdateTextCardParams,
     UpdateWebhookParams,
+    UploadLookupTableParams,
     ValidateAlertsForBookmarkParams,
     ValidateAlertsForBookmarkResponse,
     WebhookMutationResult,
@@ -5169,3 +5192,1239 @@ class Workspace:
         body = params.model_dump(exclude_none=True)
         raw = client.validate_alerts_for_bookmark(body)
         return ValidateAlertsForBookmarkResponse.model_validate(raw)
+
+    # =============================================================================
+    # Data Governance — Data Definitions / Lexicon (Phase 027)
+    # =============================================================================
+
+    def get_event_definitions(self, *, names: list[str]) -> list[EventDefinition]:
+        """Get event definitions from Lexicon by name.
+
+        Retrieves metadata (description, tags, visibility, etc.) for the
+        specified events from the Mixpanel Lexicon.
+
+        Args:
+            names: List of event names to look up.
+
+        Returns:
+            List of ``EventDefinition`` objects for the requested events.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            defs = ws.get_event_definitions(names=["Signup", "Login"])
+            for d in defs:
+                print(f"{d.name}: {d.description}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.get_event_definitions(names)
+        return [EventDefinition.model_validate(x) for x in raw_list]
+
+    def update_event_definition(
+        self, event_name: str, params: UpdateEventDefinitionParams
+    ) -> EventDefinition:
+        """Update an event definition in Lexicon.
+
+        Args:
+            event_name: Name of the event to update.
+            params: Fields to update (hidden, dropped, merged,
+                verified, tags, description).
+
+        Returns:
+            The updated ``EventDefinition``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            definition = ws.update_event_definition(
+                "Signup",
+                UpdateEventDefinitionParams(description="User signed up"),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.update_event_definition(event_name, body)
+        return EventDefinition.model_validate(raw)
+
+    def delete_event_definition(self, event_name: str) -> None:
+        """Delete an event definition from Lexicon.
+
+        Args:
+            event_name: Name of the event to delete.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_event_definition("OldEvent")
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_event_definition(event_name)
+
+    def bulk_update_event_definitions(
+        self, params: BulkUpdateEventsParams
+    ) -> list[EventDefinition]:
+        """Bulk-update event definitions in Lexicon.
+
+        Args:
+            params: Bulk update parameters containing a list of event
+                updates (name + fields to change).
+
+        Returns:
+            List of updated ``EventDefinition`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            defs = ws.bulk_update_event_definitions(
+                BulkUpdateEventsParams(events=[
+                    {"name": "Signup", "description": "User signed up"},
+                    {"name": "Login", "hidden": True},
+                ])
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw_list = client.bulk_update_event_definitions(body)
+        return [EventDefinition.model_validate(x) for x in raw_list]
+
+    def get_property_definitions(
+        self,
+        *,
+        names: list[str],
+        resource_type: str | None = None,
+    ) -> list[PropertyDefinition]:
+        """Get property definitions from Lexicon by name.
+
+        Retrieves metadata (description, tags, visibility, etc.) for the
+        specified properties from the Mixpanel Lexicon.
+
+        Args:
+            names: List of property names to look up.
+            resource_type: Optional resource type filter (e.g. ``"event"``,
+                ``"user"``, ``"groupprofile"``).
+
+        Returns:
+            List of ``PropertyDefinition`` objects for the requested properties.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            defs = ws.get_property_definitions(
+                names=["plan_type", "country"],
+                resource_type="event",
+            )
+            for d in defs:
+                print(f"{d.name}: {d.description}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.get_property_definitions(names, resource_type=resource_type)
+        return [PropertyDefinition.model_validate(x) for x in raw_list]
+
+    def update_property_definition(
+        self, property_name: str, params: UpdatePropertyDefinitionParams
+    ) -> PropertyDefinition:
+        """Update a property definition in Lexicon.
+
+        Args:
+            property_name: Name of the property to update.
+            params: Fields to update (hidden, dropped, merged,
+                sensitive, description).
+
+        Returns:
+            The updated ``PropertyDefinition``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            definition = ws.update_property_definition(
+                "plan_type",
+                UpdatePropertyDefinitionParams(description="User plan tier"),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.update_property_definition(property_name, body)
+        return PropertyDefinition.model_validate(raw)
+
+    def bulk_update_property_definitions(
+        self, params: BulkUpdatePropertiesParams
+    ) -> list[PropertyDefinition]:
+        """Bulk-update property definitions in Lexicon.
+
+        Args:
+            params: Bulk update parameters containing a list of property
+                updates (name + fields to change).
+
+        Returns:
+            List of updated ``PropertyDefinition`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            defs = ws.bulk_update_property_definitions(
+                BulkUpdatePropertiesParams(properties=[
+                    {"name": "plan_type", "description": "User plan tier"},
+                    {"name": "country", "hidden": True},
+                ])
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True, by_alias=True)
+        raw_list = client.bulk_update_property_definitions(body)
+        return [PropertyDefinition.model_validate(x) for x in raw_list]
+
+    # ---- Tags ----
+
+    def list_lexicon_tags(self) -> list[LexiconTag]:
+        """List all Lexicon tags.
+
+        Returns:
+            List of ``LexiconTag`` objects with ``id`` and ``name`` fields.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            tags = ws.list_lexicon_tags()
+            for tag in tags:
+                print(f"{tag.id}: {tag.name}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_lexicon_tags()
+        return [LexiconTag.model_validate(x) for x in raw_list]
+
+    def create_lexicon_tag(self, params: CreateTagParams) -> LexiconTag:
+        """Create a new Lexicon tag.
+
+        Args:
+            params: Tag creation parameters (name is required).
+
+        Returns:
+            The created ``LexiconTag``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400) or tag already exists.
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            tag = ws.create_lexicon_tag(CreateTagParams(name="core-events"))
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.create_lexicon_tag(body)
+        return LexiconTag.model_validate(raw)
+
+    def update_lexicon_tag(self, tag_id: int, params: UpdateTagParams) -> LexiconTag:
+        """Update a Lexicon tag.
+
+        Args:
+            tag_id: Tag ID (integer).
+            params: Fields to update (e.g. name).
+
+        Returns:
+            The updated ``LexiconTag``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Tag not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            tag = ws.update_lexicon_tag(
+                5, UpdateTagParams(name="renamed-tag")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.update_lexicon_tag(tag_id, body)
+        return LexiconTag.model_validate(raw)
+
+    def delete_lexicon_tag(self, tag_name: str) -> None:
+        """Delete a Lexicon tag by name.
+
+        Args:
+            tag_name: Name of the tag to delete.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Tag not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_lexicon_tag("deprecated-tag")
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_lexicon_tag(tag_name)
+
+    # =============================================================================
+    # Data Governance — Drop Filters (Phase 027)
+    # =============================================================================
+
+    def list_drop_filters(self) -> list[DropFilter]:
+        """List all drop filters.
+
+        Returns:
+            List of ``DropFilter`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            filters = ws.list_drop_filters()
+            for f in filters:
+                print(f"{f.event_name}: active={f.active}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_drop_filters()
+        return [DropFilter.model_validate(x) for x in raw_list]
+
+    def create_drop_filter(self, params: CreateDropFilterParams) -> list[DropFilter]:
+        """Create a new drop filter.
+
+        Args:
+            params: Drop filter creation parameters.
+
+        Returns:
+            Full list of ``DropFilter`` objects after creation.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            filters = ws.create_drop_filter(
+                CreateDropFilterParams(
+                    event_name="Debug Event",
+                    filters={"property": "env", "value": "test"},
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw_list = client.create_drop_filter(body)
+        return [DropFilter.model_validate(x) for x in raw_list]
+
+    def update_drop_filter(self, params: UpdateDropFilterParams) -> list[DropFilter]:
+        """Update a drop filter.
+
+        Args:
+            params: Drop filter update parameters (must include the filter ID).
+
+        Returns:
+            Full list of ``DropFilter`` objects after update.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Filter not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            filters = ws.update_drop_filter(
+                UpdateDropFilterParams(
+                    id=42, event_name="Debug Event v2"
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw_list = client.update_drop_filter(body)
+        return [DropFilter.model_validate(x) for x in raw_list]
+
+    def delete_drop_filter(self, drop_filter_id: int) -> list[DropFilter]:
+        """Delete a drop filter.
+
+        Args:
+            drop_filter_id: Drop filter ID (integer).
+
+        Returns:
+            Full list of remaining ``DropFilter`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Filter not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            remaining = ws.delete_drop_filter(42)
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.delete_drop_filter(drop_filter_id)
+        return [DropFilter.model_validate(x) for x in raw_list]
+
+    def get_drop_filter_limits(self) -> DropFilterLimitsResponse:
+        """Get drop filter usage limits.
+
+        Returns:
+            ``DropFilterLimitsResponse`` with the maximum allowed
+            drop filters for the project.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            limits = ws.get_drop_filter_limits()
+            print(f"Drop filter limit: {limits.filter_limit}")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_drop_filter_limits()
+        return DropFilterLimitsResponse.model_validate(raw)
+
+    # =============================================================================
+    # Data Governance — Custom Properties (Phase 027)
+    # =============================================================================
+
+    def list_custom_properties(self) -> list[CustomProperty]:
+        """List all custom properties.
+
+        Returns:
+            List of ``CustomProperty`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            props = ws.list_custom_properties()
+            for p in props:
+                print(f"{p.name}: {p.display_formula}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_custom_properties()
+        return [CustomProperty.model_validate(x) for x in raw_list]
+
+    def create_custom_property(
+        self, params: CreateCustomPropertyParams
+    ) -> CustomProperty:
+        """Create a new custom property.
+
+        Args:
+            params: Custom property creation parameters (name,
+                display_formula or behavior, resource_type are required).
+
+        Returns:
+            The created ``CustomProperty``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            prop = ws.create_custom_property(
+                CreateCustomPropertyParams(
+                    name="Full Name",
+                    display_formula='concat(properties["first"], " ", properties["last"])',
+                    composed_properties={"first": ComposedPropertyValue(resource_type="event"), "last": ComposedPropertyValue(resource_type="event")},
+                    resource_type="event",
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True, by_alias=True)
+        raw = client.create_custom_property(body)
+        return CustomProperty.model_validate(raw)
+
+    def get_custom_property(self, property_id: str) -> CustomProperty:
+        """Get a custom property by ID.
+
+        Args:
+            property_id: Custom property ID (string).
+
+        Returns:
+            The ``CustomProperty`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            prop = ws.get_custom_property("abc123")
+            print(prop.name)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_custom_property(property_id)
+        return CustomProperty.model_validate(raw)
+
+    def update_custom_property(
+        self, property_id: str, params: UpdateCustomPropertyParams
+    ) -> CustomProperty:
+        """Update a custom property.
+
+        Args:
+            property_id: Custom property ID (string).
+            params: Fields to update.
+
+        Returns:
+            The updated ``CustomProperty``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            prop = ws.update_custom_property(
+                "abc123",
+                UpdateCustomPropertyParams(name="Renamed Property"),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True, by_alias=True)
+        raw = client.update_custom_property(property_id, body)
+        return CustomProperty.model_validate(raw)
+
+    def delete_custom_property(self, property_id: str) -> None:
+        """Delete a custom property.
+
+        Args:
+            property_id: Custom property ID (string).
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_custom_property("abc123")
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_custom_property(property_id)
+
+    def validate_custom_property(
+        self, params: CreateCustomPropertyParams
+    ) -> dict[str, Any]:
+        """Validate a custom property definition without creating it.
+
+        Args:
+            params: Custom property parameters to validate.
+
+        Returns:
+            Validation result as a raw dictionary.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            result = ws.validate_custom_property(
+                CreateCustomPropertyParams(
+                    name="Full Name",
+                    display_formula='concat(properties["first"], " ", properties["last"])',
+                    composed_properties={"first": ComposedPropertyValue(resource_type="event"), "last": ComposedPropertyValue(resource_type="event")},
+                    resource_type="event",
+                )
+            )
+            print(result)
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True, by_alias=True)
+        return client.validate_custom_property(body)
+
+    # =============================================================================
+    # Data Governance — Lookup Tables (Phase 027)
+    # =============================================================================
+
+    def list_lookup_tables(
+        self, *, data_group_id: int | None = None
+    ) -> list[LookupTable]:
+        """List lookup tables.
+
+        Args:
+            data_group_id: Optional filter by data group ID.
+
+        Returns:
+            List of ``LookupTable`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            tables = ws.list_lookup_tables()
+            for t in tables:
+                print(f"{t.name} (mapped={t.has_mapped_properties})")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_lookup_tables(data_group_id=data_group_id)
+        return [LookupTable.model_validate(x) for x in raw_list]
+
+    def upload_lookup_table(
+        self,
+        params: UploadLookupTableParams,
+        *,
+        poll_interval: float = 2.0,
+        max_poll_seconds: float = 300.0,
+    ) -> LookupTable:
+        """Upload a CSV file as a new lookup table.
+
+        Performs a 3-step upload process:
+        1. Obtains a signed upload URL from the API.
+        2. Uploads the CSV file to the signed URL.
+        3. Registers the lookup table with the uploaded data.
+
+        For files >= 5 MB, the API processes the upload asynchronously.
+        This method automatically polls until processing completes.
+
+        Args:
+            params: Upload parameters including ``name``, ``file_path``
+                (path to the CSV file), and optional ``data_group_id``.
+            poll_interval: Seconds between status polls for async uploads.
+            max_poll_seconds: Maximum seconds to wait for async processing.
+
+        Returns:
+            The created ``LookupTable`` object.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400) or file not found.
+            ServerError: Server-side errors (5xx).
+            FileNotFoundError: If the CSV file does not exist.
+            MixpanelDataError: Async processing timed out or failed.
+
+        Example:
+            ```python
+            ws = Workspace()
+            table = ws.upload_lookup_table(
+                UploadLookupTableParams(
+                    name="Country Codes",
+                    file_path="/path/to/countries.csv",
+                )
+            )
+            print(f"Created: {table.name}")
+            ```
+        """
+        client = self._require_api_client()
+        logger = logging.getLogger(__name__)
+
+        # Step 1: Get signed upload URL
+        url_info = client.get_lookup_upload_url()
+
+        # Step 2: Read and upload the CSV file
+        csv_bytes = Path(params.file_path).read_bytes()
+        client.upload_to_signed_url(url_info["url"], csv_bytes)
+
+        # Step 3: Register the lookup table
+        form_data: dict[str, str] = {
+            "name": params.name,
+            "path": url_info["path"],
+            "key": url_info["key"],
+        }
+        if params.data_group_id is not None:
+            form_data["data-group-id"] = str(params.data_group_id)
+
+        raw = client.register_lookup_table(form_data)
+
+        # The API returns {"uploadId": "..."} for files >= 5 MB,
+        # indicating async processing via Celery.
+        upload_id = raw.get("uploadId") if isinstance(raw, dict) else None
+        if upload_id is not None:
+            logger.info(
+                "Lookup table upload is processing asynchronously "
+                "(uploadId=%s), polling for completion...",
+                upload_id,
+            )
+            raw = self._poll_lookup_upload(
+                client, upload_id, poll_interval, max_poll_seconds
+            )
+
+        return LookupTable.model_validate(raw)
+
+    def _poll_lookup_upload(
+        self,
+        client: MixpanelAPIClient,
+        upload_id: str,
+        poll_interval: float,
+        max_poll_seconds: float,
+    ) -> dict[str, Any]:
+        """Poll for async lookup table upload completion.
+
+        Args:
+            client: API client instance.
+            upload_id: Async upload task ID.
+            poll_interval: Seconds between polls.
+            max_poll_seconds: Maximum total wait time.
+
+        Returns:
+            The result dictionary from the completed upload.
+
+        Raises:
+            MixpanelDataError: If polling times out or the task fails.
+        """
+        logger = logging.getLogger(__name__)
+        deadline = time.monotonic() + max_poll_seconds
+
+        while time.monotonic() < deadline:
+            time.sleep(poll_interval)
+            status = client.get_lookup_upload_status(upload_id)
+            upload_status = status.get("uploadStatus", "UNKNOWN")
+
+            if upload_status == "SUCCESS":
+                result = status.get("result")
+                if isinstance(result, dict):
+                    return result
+                raise MixpanelDataError(
+                    f"Lookup table upload succeeded but returned "
+                    f"unexpected result: {status}",
+                    code="INVALID_RESPONSE",
+                )
+
+            if upload_status in ("FAILURE", "REVOKED"):
+                raise MixpanelDataError(
+                    f"Lookup table upload failed with status "
+                    f"'{upload_status}': {status}",
+                    code="UPLOAD_FAILED",
+                    details={"upload_id": upload_id, "status": status},
+                )
+
+            if upload_status == "NOTFOUND":
+                raise MixpanelDataError(
+                    f"Lookup table upload not found (uploadId={upload_id}). "
+                    f"The upload may have expired.",
+                    code="UPLOAD_NOT_FOUND",
+                    details={"upload_id": upload_id},
+                )
+
+            logger.debug(
+                "Lookup table upload status: %s (uploadId=%s)",
+                upload_status,
+                upload_id,
+            )
+
+        raise MixpanelDataError(
+            f"Lookup table upload timed out after {max_poll_seconds}s "
+            f"(uploadId={upload_id}). Use get_lookup_upload_status() "
+            f"to check progress manually.",
+            code="UPLOAD_TIMEOUT",
+            details={"upload_id": upload_id},
+        )
+
+    def mark_lookup_table_ready(
+        self, params: MarkLookupTableReadyParams
+    ) -> LookupTable:
+        """Mark a lookup table as ready after upload.
+
+        Args:
+            params: Parameters including ``name``, ``key``, and optional
+                ``data_group_id``.
+
+        Returns:
+            The updated ``LookupTable``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            table = ws.mark_lookup_table_ready(
+                MarkLookupTableReadyParams(
+                    name="Country Codes",
+                    key="uploads/abc123.csv",
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        form_data: dict[str, str] = {
+            "name": params.name,
+            "key": params.key,
+        }
+        if params.data_group_id is not None:
+            form_data["data-group-id"] = str(params.data_group_id)
+
+        raw = client.mark_lookup_table_ready(form_data)
+        return LookupTable.model_validate(raw)
+
+    def get_lookup_upload_url(
+        self, content_type: str = "text/csv"
+    ) -> LookupTableUploadUrl:
+        """Get a signed URL for uploading lookup table data.
+
+        Args:
+            content_type: MIME type of the file to upload
+                (default: ``"text/csv"``).
+
+        Returns:
+            ``LookupTableUploadUrl`` with the signed URL, path, and key.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            url_info = ws.get_lookup_upload_url()
+            print(url_info.url)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_lookup_upload_url(content_type)
+        return LookupTableUploadUrl.model_validate(raw)
+
+    def get_lookup_upload_status(self, upload_id: str) -> dict[str, Any]:
+        """Get the processing status of a lookup table upload.
+
+        Args:
+            upload_id: Upload ID returned from the upload process.
+
+        Returns:
+            Raw status dictionary with processing details.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Upload not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            status = ws.get_lookup_upload_status("upload-abc123")
+            print(status["state"])
+            ```
+        """
+        client = self._require_api_client()
+        return client.get_lookup_upload_status(upload_id)
+
+    def update_lookup_table(
+        self, data_group_id: int, params: UpdateLookupTableParams
+    ) -> LookupTable:
+        """Update a lookup table.
+
+        Args:
+            data_group_id: Data group ID of the lookup table.
+            params: Fields to update.
+
+        Returns:
+            The updated ``LookupTable``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Table not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            table = ws.update_lookup_table(
+                123,
+                UpdateLookupTableParams(name="Renamed Table"),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.update_lookup_table(data_group_id, body)
+        return LookupTable.model_validate(raw)
+
+    def delete_lookup_tables(self, data_group_ids: list[int]) -> None:
+        """Delete one or more lookup tables.
+
+        Args:
+            data_group_ids: List of data group IDs to delete.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_lookup_tables([123, 456])
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_lookup_tables(data_group_ids)
+
+    def download_lookup_table(
+        self,
+        data_group_id: int,
+        *,
+        file_name: str | None = None,
+        limit: int | None = None,
+    ) -> bytes:
+        """Download lookup table data as raw bytes (CSV).
+
+        Args:
+            data_group_id: Data group ID of the lookup table.
+            file_name: Optional file name filter.
+            limit: Optional row limit.
+
+        Returns:
+            Raw CSV bytes of the lookup table data.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Table not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            csv_data = ws.download_lookup_table(123)
+            Path("output.csv").write_bytes(csv_data)
+            ```
+        """
+        client = self._require_api_client()
+        return client.download_lookup_table(
+            data_group_id, file_name=file_name, limit=limit
+        )
+
+    def get_lookup_download_url(self, data_group_id: int) -> str:
+        """Get a signed download URL for a lookup table.
+
+        Args:
+            data_group_id: Data group ID of the lookup table.
+
+        Returns:
+            Signed URL string for downloading the lookup table data.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Table not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            url = ws.get_lookup_download_url(123)
+            print(url)
+            ```
+        """
+        client = self._require_api_client()
+        return client.get_lookup_download_url(data_group_id)
+
+    # =============================================================================
+    # Data Governance — Custom Events (Phase 027)
+    # =============================================================================
+
+    def list_custom_events(self) -> list[EventDefinition]:
+        """List all custom events.
+
+        Returns:
+            List of ``EventDefinition`` objects for custom events.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            events = ws.list_custom_events()
+            for e in events:
+                print(e.name)
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_custom_events()
+        return [EventDefinition.model_validate(x) for x in raw_list]
+
+    def update_custom_event(
+        self, event_name: str, params: UpdateEventDefinitionParams
+    ) -> EventDefinition:
+        """Update a custom event definition.
+
+        Args:
+            event_name: Name of the custom event to update.
+            params: Fields to update (description, display_name, etc.).
+
+        Returns:
+            The updated ``EventDefinition``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404) or validation error (400).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            event = ws.update_custom_event(
+                "My Custom Event",
+                UpdateEventDefinitionParams(description="Updated desc"),
+            )
+            ```
+        """
+        client = self._require_api_client()
+        body = params.model_dump(exclude_none=True)
+        raw = client.update_custom_event(event_name, body)
+        return EventDefinition.model_validate(raw)
+
+    def delete_custom_event(self, event_name: str) -> None:
+        """Delete a custom event.
+
+        Args:
+            event_name: Name of the custom event to delete.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_custom_event("My Custom Event")
+            ```
+        """
+        client = self._require_api_client()
+        client.delete_custom_event(event_name)
+
+    # =============================================================================
+    # Data Governance — Tracking & History (Phase 027)
+    # =============================================================================
+
+    def get_tracking_metadata(self, event_name: str) -> dict[str, Any]:
+        """Get tracking metadata for an event.
+
+        Retrieves information about how an event is being tracked
+        (sources, SDKs, volume, etc.).
+
+        Args:
+            event_name: Name of the event.
+
+        Returns:
+            Raw tracking metadata dictionary.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            metadata = ws.get_tracking_metadata("Signup")
+            print(metadata)
+            ```
+        """
+        client = self._require_api_client()
+        return client.get_tracking_metadata(event_name)
+
+    def get_event_history(self, event_name: str) -> list[dict[str, Any]]:
+        """Get change history for an event definition.
+
+        Args:
+            event_name: Name of the event.
+
+        Returns:
+            List of history entries (raw dictionaries) showing changes
+            to the event definition over time.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Event not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            history = ws.get_event_history("Signup")
+            for entry in history:
+                print(f"{entry['timestamp']}: {entry['action']}")
+            ```
+        """
+        client = self._require_api_client()
+        return client.get_event_history(event_name)
+
+    def get_property_history(
+        self, property_name: str, entity_type: str
+    ) -> list[dict[str, Any]]:
+        """Get change history for a property definition.
+
+        Args:
+            property_name: Name of the property.
+            entity_type: Entity type (e.g. ``"event"``, ``"user"``,
+                ``"group"``).
+
+        Returns:
+            List of history entries (raw dictionaries) showing changes
+            to the property definition over time.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Property not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            history = ws.get_property_history("plan_type", "event")
+            for entry in history:
+                print(f"{entry['timestamp']}: {entry['action']}")
+            ```
+        """
+        client = self._require_api_client()
+        return client.get_property_history(property_name, entity_type)
+
+    # ---- Export ----
+
+    def export_lexicon(
+        self, *, export_types: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Export Lexicon data definitions.
+
+        Exports event and property definitions from Lexicon, optionally
+        filtered by type.
+
+        Args:
+            export_types: Optional list of types to export (e.g.
+                ``["All Events and Properties", "All User Profile Properties"]``).
+
+        Returns:
+            Raw export dictionary containing the exported definitions.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            export = ws.export_lexicon(
+                export_types=["All Events and Properties"]
+            )
+            print(len(export.get("events", [])))
+            ```
+        """
+        client = self._require_api_client()
+        return client.export_lexicon(export_types=export_types)

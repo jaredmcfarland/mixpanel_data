@@ -1,6 +1,6 @@
 # Entity Management
 
-Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, experiments, alerts, annotations, and webhooks programmatically. Full CRUD operations with bulk support.
+Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, experiments, alerts, annotations, and webhooks programmatically. Full CRUD operations with bulk support. For data governance operations (Lexicon definitions, drop filters, custom properties, custom events, and lookup tables), see the [Data Governance guide](data-governance.md).
 
 !!! note "Prerequisites"
     Entity management requires **authentication** — service account or OAuth credentials.
@@ -1185,3 +1185,4 @@ Project webhooks receive HTTP notifications when events occur in your Mixpanel p
 - [API Reference — Workspace](../api/workspace.md) — Complete method signatures and docstrings
 - [API Reference — Types](../api/types.md) — Dashboard, Bookmark, Cohort, Feature Flag, Experiment, Alert, Annotation, and Webhook type definitions
 - [CLI Reference](../cli/index.md) — Full CLI command documentation
+- [Data Governance Guide](data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables

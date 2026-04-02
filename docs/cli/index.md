@@ -304,6 +304,77 @@ Manage project webhooks via the App API.
 | `mp webhooks delete` | Delete a webhook |
 | `mp webhooks test` | Test webhook connectivity |
 
+### lexicon — Data Governance: Lexicon Management
+
+Manage Lexicon data definitions, tags, and metadata via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp lexicon events get` | Get event definitions by name |
+| `mp lexicon events update` | Update an event definition |
+| `mp lexicon events delete` | Delete an event definition |
+| `mp lexicon events bulk-update` | Bulk-update event definitions |
+| `mp lexicon properties get` | Get property definitions by name |
+| `mp lexicon properties update` | Update a property definition |
+| `mp lexicon properties bulk-update` | Bulk-update property definitions |
+| `mp lexicon tags list` | List all Lexicon tags |
+| `mp lexicon tags create` | Create a new tag |
+| `mp lexicon tags update` | Update a tag |
+| `mp lexicon tags delete` | Delete a tag |
+| `mp lexicon tracking-metadata` | Get tracking metadata for an event |
+| `mp lexicon event-history` | Get change history for an event |
+| `mp lexicon property-history` | Get change history for a property |
+| `mp lexicon export` | Export Lexicon data definitions |
+
+### drop-filters — Data Governance: Drop Filter Management
+
+Manage event drop filters via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp drop-filters list` | List all drop filters |
+| `mp drop-filters create` | Create a new drop filter |
+| `mp drop-filters update` | Update a drop filter |
+| `mp drop-filters delete` | Delete a drop filter |
+| `mp drop-filters limits` | Get drop filter usage limits |
+
+### custom-properties — Data Governance: Custom Property Management
+
+Manage custom computed properties via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp custom-properties list` | List all custom properties |
+| `mp custom-properties get` | Get a custom property by ID |
+| `mp custom-properties create` | Create a new custom property |
+| `mp custom-properties update` | Update a custom property |
+| `mp custom-properties delete` | Delete a custom property |
+| `mp custom-properties validate` | Validate a custom property definition |
+
+### custom-events — Data Governance: Custom Event Management
+
+Manage custom composite events via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp custom-events list` | List all custom events |
+| `mp custom-events update` | Update a custom event |
+| `mp custom-events delete` | Delete a custom event |
+
+### lookup-tables — Data Governance: Lookup Table Management
+
+Manage CSV-based lookup tables for property enrichment via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp lookup-tables list` | List lookup tables |
+| `mp lookup-tables upload` | Upload a CSV as a new lookup table |
+| `mp lookup-tables update` | Update a lookup table |
+| `mp lookup-tables delete` | Delete lookup tables |
+| `mp lookup-tables download` | Download lookup table data as CSV |
+| `mp lookup-tables upload-url` | Get a signed upload URL |
+| `mp lookup-tables download-url` | Get a signed download URL |
+
 ## Output Formats
 
 All commands support the `--format` option:

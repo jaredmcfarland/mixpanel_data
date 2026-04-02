@@ -76,6 +76,16 @@ ws = Workspace.open("existing.db")
 
 **Alert CRUD**: `list_alerts()`, `create_alert()`, `get_alert()`, `update_alert()`, `delete_alert()`, `bulk_delete_alerts()`, `get_alert_count()`, `get_alert_history()`, `test_alert()`, `get_alert_screenshot_url()`, `validate_alerts_for_bookmark()`
 
+**Data Governance — Lexicon**: `get_event_definitions()`, `update_event_definition()`, `delete_event_definition()`, `bulk_update_event_definitions()`, `get_property_definitions()`, `update_property_definition()`, `bulk_update_property_definitions()`, `list_lexicon_tags()`, `create_lexicon_tag()`, `update_lexicon_tag()`, `delete_lexicon_tag()`, `get_tracking_metadata()`, `get_event_history()`, `get_property_history()`, `export_lexicon()`
+
+**Data Governance — Drop Filters**: `list_drop_filters()`, `create_drop_filter()`, `update_drop_filter()`, `delete_drop_filter()`, `get_drop_filter_limits()`
+
+**Data Governance — Custom Properties**: `list_custom_properties()`, `create_custom_property()`, `get_custom_property()`, `update_custom_property()`, `delete_custom_property()`, `validate_custom_property()`
+
+**Data Governance — Lookup Tables**: `list_lookup_tables()`, `upload_lookup_table()`, `mark_lookup_table_ready()`, `get_lookup_upload_url()`, `get_lookup_upload_status()`, `update_lookup_table()`, `delete_lookup_tables()`, `download_lookup_table()`, `get_lookup_download_url()`
+
+**Data Governance — Custom Events**: `list_custom_events()`, `update_custom_event()`, `delete_custom_event()`
+
 **Escape Hatches**: `connection` (DuckDB), `api` (MixpanelAPIClient)
 
 ## Exception Hierarchy

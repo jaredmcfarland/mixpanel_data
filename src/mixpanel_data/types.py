@@ -25,7 +25,8 @@ from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic.alias_generators import to_camel
 
 T = TypeVar("T")
 
@@ -6174,3 +6175,930 @@ class ValidateAlertsForBookmarkResponse(BaseModel):
 
     invalid_count: int = 0
     """Count of invalid alerts."""
+
+
+# =============================================================================
+# Data Governance — Data Definitions / Lexicon (Phase 027)
+# =============================================================================
+
+
+class PropertyResourceType(str, Enum):
+    """Resource type for property definitions.
+
+    Values:
+        EVENT: Event property.
+        USER: User profile property.
+        GROUPPROFILE: Group profile property (wire format: ``groupprofile``).
+    """
+
+    EVENT = "event"
+    USER = "user"
+    GROUPPROFILE = "groupprofile"
+
+
+class EventDefinition(BaseModel):
+    """A Mixpanel event definition from the Lexicon.
+
+    Attributes:
+        id: Server-assigned event ID.
+        name: Event name (unique identifier).
+        display_name: Human-readable name.
+        description: Event description.
+        hidden: Whether hidden from UI.
+        dropped: Whether data is dropped at ingestion.
+        merged: Whether merged into another event.
+        verified: Whether verified by governance team.
+        tags: Assigned tag names.
+        custom_event_id: Links to custom event.
+        last_modified: ISO 8601 timestamp.
+        status: Event status.
+        platforms: Tracking platforms.
+        created_utc: ISO 8601 creation timestamp.
+        modified_utc: ISO 8601 modification timestamp.
+
+    Example:
+        ```python
+        ev = EventDefinition(id=1, name="Purchase")
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    id: int
+    """Server-assigned event ID."""
+
+    name: str
+    """Event name (unique identifier)."""
+
+    display_name: str | None = None
+    """Human-readable name."""
+
+    description: str | None = None
+    """Event description."""
+
+    hidden: bool | None = None
+    """Whether hidden from UI."""
+
+    dropped: bool | None = None
+    """Whether data is dropped at ingestion."""
+
+    merged: bool | None = None
+    """Whether merged into another event."""
+
+    verified: bool | None = None
+    """Whether verified by governance team."""
+
+    tags: list[str] | None = None
+    """Assigned tag names."""
+
+    custom_event_id: int | None = None
+    """Links to custom event."""
+
+    last_modified: str | None = None
+    """ISO 8601 timestamp."""
+
+    status: str | None = None
+    """Event status."""
+
+    platforms: list[str] | None = None
+    """Tracking platforms."""
+
+    created_utc: str | None = None
+    """ISO 8601 creation timestamp."""
+
+    modified_utc: str | None = None
+    """ISO 8601 modification timestamp."""
+
+
+class PropertyDefinition(BaseModel):
+    """A Mixpanel property definition from the Lexicon.
+
+    Attributes:
+        id: Server-assigned property ID.
+        name: Property name.
+        resource_type: Property resource type (event, user, groupprofile).
+        description: Property description.
+        hidden: Whether hidden from UI.
+        dropped: Whether data is dropped.
+        merged: Whether merged into another property.
+        sensitive: PII flag.
+        data_group_id: Data group identifier.
+
+    Example:
+        ```python
+        prop = PropertyDefinition(id=1, name="$browser")
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    id: int | None = None
+    """Server-assigned property ID (may be absent for custom properties)."""
+
+    name: str
+    """Property name."""
+
+    resource_type: str | None = None
+    """Property resource type (event, user, groupprofile)."""
+
+    description: str | None = None
+    """Property description."""
+
+    hidden: bool | None = None
+    """Whether hidden from UI."""
+
+    dropped: bool | None = None
+    """Whether data is dropped."""
+
+    merged: bool | None = None
+    """Whether merged into another property."""
+
+    sensitive: bool | None = None
+    """PII flag."""
+
+    data_group_id: str | None = None
+    """Data group identifier."""
+
+
+class UpdateEventDefinitionParams(BaseModel):
+    """Parameters for updating an event definition (PATCH semantics).
+
+    All fields are optional; only set fields are sent.
+
+    Attributes:
+        hidden: Whether hidden from UI.
+        dropped: Whether data is dropped.
+        merged: Whether merged.
+        verified: Whether verified.
+        tags: Tag names to assign.
+        description: Event description.
+
+    Example:
+        ```python
+        params = UpdateEventDefinitionParams(
+            description="User completed a purchase", verified=True
+        )
+        ```
+    """
+
+    hidden: bool | None = None
+    """Whether hidden from UI."""
+
+    dropped: bool | None = None
+    """Whether data is dropped."""
+
+    merged: bool | None = None
+    """Whether merged."""
+
+    verified: bool | None = None
+    """Whether verified."""
+
+    tags: list[str] | None = None
+    """Tag names to assign."""
+
+    description: str | None = None
+    """Event description."""
+
+
+class UpdatePropertyDefinitionParams(BaseModel):
+    """Parameters for updating a property definition (PATCH semantics).
+
+    All fields are optional; only set fields are sent.
+
+    Attributes:
+        hidden: Whether hidden from UI.
+        dropped: Whether data is dropped.
+        merged: Whether merged.
+        sensitive: PII flag.
+        description: Property description.
+
+    Example:
+        ```python
+        params = UpdatePropertyDefinitionParams(sensitive=True)
+        ```
+    """
+
+    hidden: bool | None = None
+    """Whether hidden from UI."""
+
+    dropped: bool | None = None
+    """Whether data is dropped."""
+
+    merged: bool | None = None
+    """Whether merged."""
+
+    sensitive: bool | None = None
+    """PII flag."""
+
+    description: str | None = None
+    """Property description."""
+
+
+class BulkEventUpdate(BaseModel):
+    """A single event update entry for bulk operations.
+
+    Attributes:
+        name: Event name (identifier).
+        id: Alternative identifier.
+        hidden: Whether hidden from UI.
+        dropped: Whether data is dropped.
+        merged: Whether merged.
+        verified: Whether verified.
+        tags: Tag names.
+        contacts: Contact emails.
+        team_contacts: Team contact emails.
+
+    Example:
+        ```python
+        entry = BulkEventUpdate(name="OldEvent", hidden=True)
+        ```
+    """
+
+    name: str | None = None
+    """Event name (identifier)."""
+
+    id: int | None = None
+    """Alternative identifier."""
+
+    hidden: bool | None = None
+    """Whether hidden from UI."""
+
+    dropped: bool | None = None
+    """Whether data is dropped."""
+
+    merged: bool | None = None
+    """Whether merged."""
+
+    verified: bool | None = None
+    """Whether verified."""
+
+    tags: list[str] | None = None
+    """Tag names."""
+
+    contacts: list[str] | None = None
+    """Contact emails."""
+
+    team_contacts: list[str] | None = None
+    """Team contact emails."""
+
+
+class BulkUpdateEventsParams(BaseModel):
+    """Parameters for bulk-updating event definitions.
+
+    Attributes:
+        events: List of event update entries (required).
+
+    Example:
+        ```python
+        params = BulkUpdateEventsParams(
+            events=[BulkEventUpdate(name="E1", hidden=True)]
+        )
+        ```
+    """
+
+    events: list[BulkEventUpdate]
+    """List of event update entries."""
+
+
+class BulkPropertyUpdate(BaseModel):
+    """A single property update entry for bulk operations.
+
+    Uses camelCase serialization to match the Django API contract.
+
+    Attributes:
+        name: Property name (required).
+        resource_type: Resource type (required).
+        id: Property ID.
+        hidden: Whether hidden from UI.
+        dropped: Whether data is dropped.
+        sensitive: PII flag.
+        data_group_id: Data group identifier.
+
+    Example:
+        ```python
+        entry = BulkPropertyUpdate(name="$browser", resource_type="event")
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    name: str
+    """Property name."""
+
+    resource_type: str
+    """Resource type (event, user, groupprofile)."""
+
+    id: int | None = None
+    """Property ID."""
+
+    hidden: bool | None = None
+    """Whether hidden from UI."""
+
+    dropped: bool | None = None
+    """Whether data is dropped."""
+
+    sensitive: bool | None = None
+    """PII flag."""
+
+    data_group_id: str | None = None
+    """Data group identifier."""
+
+
+class BulkUpdatePropertiesParams(BaseModel):
+    """Parameters for bulk-updating property definitions.
+
+    Attributes:
+        properties: List of property update entries (required).
+
+    Example:
+        ```python
+        params = BulkUpdatePropertiesParams(
+            properties=[BulkPropertyUpdate(name="$browser", resource_type="event")]
+        )
+        ```
+    """
+
+    properties: list[BulkPropertyUpdate]
+    """List of property update entries."""
+
+
+class LexiconTag(BaseModel):
+    """A Lexicon tag for categorizing event/property definitions.
+
+    Attributes:
+        id: Server-assigned tag ID.
+        name: Tag name.
+
+    Example:
+        ```python
+        tag = LexiconTag(id=1, name="core-metrics")
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    id: int
+    """Server-assigned tag ID."""
+
+    name: str
+    """Tag name."""
+
+
+class CreateTagParams(BaseModel):
+    """Parameters for creating a Lexicon tag.
+
+    Attributes:
+        name: Tag name (required, non-empty).
+
+    Example:
+        ```python
+        params = CreateTagParams(name="core-metrics")
+        ```
+    """
+
+    name: str
+    """Tag name."""
+
+
+class UpdateTagParams(BaseModel):
+    """Parameters for updating a Lexicon tag.
+
+    Attributes:
+        name: New tag name.
+
+    Example:
+        ```python
+        params = UpdateTagParams(name="key-metrics")
+        ```
+    """
+
+    name: str | None = None
+    """New tag name."""
+
+
+# =============================================================================
+# Data Governance — Drop Filters (Phase 027)
+# =============================================================================
+
+
+class DropFilter(BaseModel):
+    """A drop filter for discarding events at ingestion.
+
+    Attributes:
+        id: Server-assigned filter ID.
+        event_name: Event name to filter.
+        filters: Filter condition JSON.
+        active: Whether the filter is active.
+        display_name: Human-readable name.
+        created: ISO 8601 creation timestamp.
+
+    Example:
+        ```python
+        df = DropFilter(id=1, event_name="debug_log")
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    id: int
+    """Server-assigned filter ID."""
+
+    event_name: str
+    """Event name to filter."""
+
+    filters: list[Any] | None = None
+    """Filter condition JSON."""
+
+    active: bool | None = None
+    """Whether the filter is active."""
+
+    display_name: str | None = None
+    """Human-readable name."""
+
+    created: str | None = None
+    """ISO 8601 creation timestamp."""
+
+
+class CreateDropFilterParams(BaseModel):
+    """Parameters for creating a drop filter.
+
+    Attributes:
+        event_name: Event name to filter (required).
+        filters: Filter condition JSON (required).
+
+    Example:
+        ```python
+        params = CreateDropFilterParams(
+            event_name="debug_log",
+            filters={"property": "env", "operator": "equals", "value": "test"},
+        )
+        ```
+    """
+
+    event_name: str
+    """Event name to filter."""
+
+    filters: Any  # Any justified: API accepts polymorphic filter JSON
+    """Filter condition JSON."""
+
+
+class UpdateDropFilterParams(BaseModel):
+    """Parameters for updating a drop filter.
+
+    Attributes:
+        id: Drop filter ID (required).
+        event_name: New event name.
+        filters: New filter condition JSON.
+        active: Whether the filter is active.
+
+    Example:
+        ```python
+        params = UpdateDropFilterParams(id=123, active=False)
+        ```
+    """
+
+    id: int
+    """Drop filter ID."""
+
+    event_name: str | None = None
+    """New event name."""
+
+    filters: Any | None = None  # Any justified: API accepts polymorphic filter JSON
+    """New filter condition JSON."""
+
+    active: bool | None = None
+    """Whether the filter is active."""
+
+
+class DropFilterLimitsResponse(BaseModel):
+    """Response model for drop filter limits.
+
+    Attributes:
+        filter_limit: Maximum allowed filters.
+
+    Example:
+        ```python
+        limits = DropFilterLimitsResponse(filter_limit=10)
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    filter_limit: int
+    """Maximum allowed filters."""
+
+
+# =============================================================================
+# Data Governance — Custom Properties (Phase 027)
+# =============================================================================
+
+
+class CustomPropertyResourceType(str, Enum):
+    """Resource type for custom properties.
+
+    Values:
+        EVENTS: Event-level custom property.
+        PEOPLE: User profile custom property.
+        GROUP_PROFILES: Group profile custom property.
+    """
+
+    EVENTS = "events"
+    PEOPLE = "people"
+    GROUP_PROFILES = "group_profiles"
+
+
+class ComposedPropertyValue(BaseModel):
+    """A composed property reference within a custom property formula.
+
+    Attributes:
+        type: Property type.
+        type_cast: Type cast instruction.
+        resource_type: Resource type (required).
+        behavior: Behavior specification.
+        join_property_type: Join property type.
+
+    Example:
+        ```python
+        cpv = ComposedPropertyValue(resource_type="event")
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    type: str | None = None
+    """Property type."""
+
+    type_cast: str | None = None
+    """Type cast instruction."""
+
+    resource_type: str
+    """Resource type."""
+
+    behavior: Any | None = (
+        None  # Any justified: API behavior spec varies by resource type
+    )
+    """Behavior specification."""
+
+    join_property_type: str | None = None
+    """Join property type."""
+
+
+class CustomProperty(BaseModel):
+    """A Mixpanel custom property (computed/formula property).
+
+    Attributes:
+        custom_property_id: Server-assigned property ID.
+        name: Property name.
+        description: Property description.
+        resource_type: Resource type (events, people, group_profiles).
+        property_type: Property type.
+        display_formula: Formula expression.
+        composed_properties: Referenced properties in formula.
+        is_locked: Whether the property is locked.
+        is_visible: Whether the property is visible.
+        data_group_id: Data group identifier.
+        created: ISO 8601 creation timestamp.
+        modified: ISO 8601 modification timestamp.
+        example_value: Example value.
+
+    Example:
+        ```python
+        cp = CustomProperty(
+            custom_property_id=1, name="Revenue", resource_type="events"
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    custom_property_id: int
+    """Server-assigned property ID."""
+
+    name: str
+    """Property name."""
+
+    description: str | None = None
+    """Property description."""
+
+    resource_type: str
+    """Resource type (events, people, group_profiles)."""
+
+    property_type: str | None = None
+    """Property type."""
+
+    display_formula: str | None = None
+    """Formula expression."""
+
+    composed_properties: dict[str, ComposedPropertyValue] | None = None
+    """Referenced properties in formula."""
+
+    is_locked: bool | None = None
+    """Whether the property is locked."""
+
+    is_visible: bool | None = None
+    """Whether the property is visible."""
+
+    data_group_id: str | None = None
+    """Data group identifier."""
+
+    created: str | None = None
+    """ISO 8601 creation timestamp."""
+
+    modified: str | None = None
+    """ISO 8601 modification timestamp."""
+
+    example_value: str | None = None
+    """Example value."""
+
+
+class CreateCustomPropertyParams(BaseModel):
+    """Parameters for creating a custom property.
+
+    Validation rules:
+    - ``display_formula`` and ``behavior`` are mutually exclusive.
+    - ``behavior`` and ``composed_properties`` are mutually exclusive.
+    - ``display_formula`` requires ``composed_properties``.
+    - One of ``display_formula`` or ``behavior`` must be set.
+
+    Attributes:
+        name: Property name (required).
+        resource_type: Resource type (required).
+        description: Property description.
+        display_formula: Formula expression (mutually exclusive with behavior).
+        composed_properties: Referenced properties (required if display_formula set).
+        is_locked: Whether the property is locked.
+        is_visible: Whether the property is visible.
+        data_group_id: Data group identifier.
+        behavior: Behavior specification (mutually exclusive with display_formula).
+
+    Example:
+        ```python
+        params = CreateCustomPropertyParams(
+            name="Revenue Per User",
+            resource_type="events",
+            display_formula='number(properties["amount"])',
+            composed_properties={"amount": ComposedPropertyValue(resource_type="event")},
+        )
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    name: str
+    """Property name."""
+
+    resource_type: str
+    """Resource type (events, people, group_profiles)."""
+
+    description: str | None = None
+    """Property description."""
+
+    display_formula: str | None = None
+    """Formula expression (mutually exclusive with behavior)."""
+
+    composed_properties: dict[str, ComposedPropertyValue] | None = None
+    """Referenced properties (required if display_formula set)."""
+
+    is_locked: bool | None = None
+    """Whether the property is locked."""
+
+    is_visible: bool | None = None
+    """Whether the property is visible."""
+
+    data_group_id: str | None = None
+    """Data group identifier."""
+
+    behavior: Any | None = (
+        None  # Any justified: API behavior spec varies by resource type
+    )
+    """Behavior specification (mutually exclusive with display_formula)."""
+
+    @model_validator(mode="after")
+    def _validate_formula_behavior(self) -> CreateCustomPropertyParams:
+        """Validate mutual exclusion of display_formula and behavior.
+
+        Returns:
+            The validated instance.
+
+        Raises:
+            ValueError: If validation rules are violated.
+        """
+        if self.display_formula is not None and self.behavior is not None:
+            msg = "display_formula and behavior are mutually exclusive"
+            raise ValueError(msg)
+
+        if self.behavior is not None and self.composed_properties is not None:
+            msg = "behavior and composed_properties are mutually exclusive"
+            raise ValueError(msg)
+
+        if self.display_formula is not None and self.composed_properties is None:
+            msg = "display_formula requires composed_properties"
+            raise ValueError(msg)
+
+        if self.display_formula is None and self.behavior is None:
+            msg = "one of display_formula or behavior must be set"
+            raise ValueError(msg)
+
+        return self
+
+
+class UpdateCustomPropertyParams(BaseModel):
+    """Parameters for updating a custom property (PUT — full replacement).
+
+    Note: ``resource_type`` and ``data_group_id`` are immutable.
+
+    Attributes:
+        name: Property name.
+        description: Property description.
+        display_formula: Formula expression.
+        composed_properties: Referenced properties.
+        is_locked: Whether the property is locked.
+        is_visible: Whether the property is visible.
+
+    Example:
+        ```python
+        params = UpdateCustomPropertyParams(name="Updated Name")
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    name: str | None = None
+    """Property name."""
+
+    description: str | None = None
+    """Property description."""
+
+    display_formula: str | None = None
+    """Formula expression."""
+
+    composed_properties: dict[str, ComposedPropertyValue] | None = None
+    """Referenced properties."""
+
+    is_locked: bool | None = None
+    """Whether the property is locked."""
+
+    is_visible: bool | None = None
+    """Whether the property is visible."""
+
+
+# =============================================================================
+# Data Governance — Lookup Tables (Phase 027)
+# =============================================================================
+
+
+class LookupTable(BaseModel):
+    """A Mixpanel lookup table.
+
+    Attributes:
+        id: Server-assigned table ID.
+        name: Table name.
+        token: Table token.
+        created_at: ISO 8601 creation timestamp.
+        last_modified_at: ISO 8601 modification timestamp.
+        has_mapped_properties: Whether the table has mapped properties.
+
+    Example:
+        ```python
+        lt = LookupTable(id=1, name="Product Catalog")
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    id: int
+    """Server-assigned table ID."""
+
+    name: str
+    """Table name."""
+
+    token: str | None = None
+    """Table token."""
+
+    created_at: str | None = None
+    """ISO 8601 creation timestamp."""
+
+    last_modified_at: str | None = None
+    """ISO 8601 modification timestamp."""
+
+    has_mapped_properties: bool | None = None
+    """Whether the table has mapped properties."""
+
+
+class UploadLookupTableParams(BaseModel):
+    """Parameters for uploading a lookup table CSV.
+
+    The upload is a 3-step process handled by the workspace method:
+    1. Get a signed upload URL
+    2. Upload CSV to signed URL
+    3. Register the table
+
+    Attributes:
+        name: Table name (1-255 characters, required).
+        file_path: Path to local CSV file (required).
+        data_group_id: For replacing an existing table.
+
+    Example:
+        ```python
+        params = UploadLookupTableParams(
+            name="Product Catalog", file_path="/path/to/products.csv"
+        )
+        ```
+    """
+
+    name: str = Field(min_length=1, max_length=255)
+    """Table name (1-255 characters)."""
+
+    file_path: str
+    """Path to local CSV file."""
+
+    data_group_id: int | None = None
+    """For replacing an existing table."""
+
+
+class MarkLookupTableReadyParams(BaseModel):
+    """Parameters for marking a lookup table as ready.
+
+    Attributes:
+        name: Table name (required).
+        key: Primary key column name (required).
+        data_group_id: For replacing an existing table.
+
+    Example:
+        ```python
+        params = MarkLookupTableReadyParams(name="Products", key="product_id")
+        ```
+    """
+
+    name: str
+    """Table name."""
+
+    key: str
+    """Primary key column name."""
+
+    data_group_id: int | None = None
+    """For replacing an existing table."""
+
+
+class LookupTableUploadUrl(BaseModel):
+    """Response model for lookup table upload URL request.
+
+    Attributes:
+        url: Signed GCS upload URL.
+        path: GCS path for registration.
+        key: Primary key column name.
+
+    Example:
+        ```python
+        upload = LookupTableUploadUrl(
+            url="https://storage.googleapis.com/...",
+            path="gs://bucket/path",
+            key="id",
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    url: str
+    """Signed GCS upload URL."""
+
+    path: str
+    """GCS path for registration."""
+
+    key: str
+    """Primary key column name."""
+
+
+class UpdateLookupTableParams(BaseModel):
+    """Parameters for updating a lookup table.
+
+    Attributes:
+        name: New table name.
+
+    Example:
+        ```python
+        params = UpdateLookupTableParams(name="Updated Catalog")
+        ```
+    """
+
+    name: str | None = None
+    """New table name."""

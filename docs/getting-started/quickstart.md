@@ -319,7 +319,7 @@ For real-time analytics, query Mixpanel directly:
     print(result.df)
     ```
 
-## Step 8: Manage Entities (Optional)
+## Step 8: Manage Entities & Data Governance (Optional)
 
 Create, update, and delete dashboards, reports, cohorts, feature flags, and experiments:
 
@@ -338,6 +338,12 @@ Create, update, and delete dashboards, reports, cohorts, feature flags, and expe
     # Feature flags and experiments
     mp flags list
     mp experiments create --name "Checkout Flow Test"
+
+    # Data governance
+    mp lexicon events get --names Signup
+    mp drop-filters list
+    mp custom-properties list
+    mp lookup-tables list
     ```
 
 === "Python"
@@ -354,9 +360,13 @@ Create, update, and delete dashboards, reports, cohorts, feature flags, and expe
     # Feature flags and experiments
     flags = ws.list_feature_flags()
     exp = ws.create_experiment(mp.CreateExperimentParams(name="Checkout Flow Test"))
+
+    # Data governance
+    event_defs = ws.get_event_definitions(names=["Signup"])
+    drop_filters = ws.list_drop_filters()
     ```
 
-See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, cohort, feature flag, and experiment operations.
+See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, cohort, feature flag, and experiment operations. See the [Data Governance guide](../guide/data-governance.md) for Lexicon definitions, drop filters, custom properties, custom events, and lookup tables.
 
 ## Alternative: Stream Data Without Storage
 
@@ -408,6 +418,7 @@ with mp.Workspace.memory() as ws:
 
 - [Configuration](configuration.md) — Multiple accounts and advanced settings
 - [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
+- [Data Governance](../guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, and lookup tables
 - [Fetching Data](../guide/fetching.md) — Filtering and progress callbacks
 - [Streaming Data](../guide/streaming.md) — Process data without local storage
 - [SQL Queries](../guide/sql-queries.md) — DuckDB JSON syntax and patterns

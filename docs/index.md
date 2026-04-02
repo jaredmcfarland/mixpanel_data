@@ -46,6 +46,12 @@ alerts = ws.list_alerts()
 annotations = ws.list_annotations(from_date="2025-01-01")
 webhooks = ws.list_webhooks()
 
+# Data governance
+event_defs = ws.get_event_definitions(names=["Signup"])
+drop_filters = ws.list_drop_filters()
+custom_props = ws.list_custom_properties()
+lookup_tables = ws.list_lookup_tables()
+
 # Live queries—use discovered data to construct accurate queries
 segmentation = ws.segmentation(
     event=events[0].name,
@@ -126,6 +132,12 @@ mp experiments list
 mp alerts list
 mp annotations list --from-date 2025-01-01
 mp webhooks list
+
+# Data governance
+mp lexicon events get --names Signup,Login
+mp drop-filters list
+mp custom-properties list
+mp lookup-tables list
 
 # Live queries against Mixpanel API
 mp query segmentation "Purchase" \
@@ -216,6 +228,15 @@ Discovery commands let you survey what exists before writing queries—no guessi
 - Timeline annotations with tagging system
 - Webhook management with connectivity testing
 
+**Data Governance** — Define and control your data taxonomy:
+
+- Lexicon definitions: manage event and property metadata, tags, descriptions, visibility
+- Drop filters: suppress unwanted events at ingestion
+- Custom properties: create computed properties from formulas or behaviors
+- Custom events: manage composite event definitions
+- Lookup tables: upload, download, and manage CSV reference data for property enrichment
+- Tracking metadata, change history, and bulk export for audit and governance workflows
+
 **Streaming** — Process data without storage:
 
 - Stream events directly for ETL pipelines
@@ -250,5 +271,6 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Quick Start](getting-started/quickstart.md) — Your first queries in 5 minutes
 - [API Reference](api/index.md) — Complete Python API documentation
 - [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks
+- [Data Governance](guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables
 - [CLI Reference](cli/index.md) — Command-line interface documentation
 - [MCP Server](mcp/index.md) — Expose analytics to AI assistants like Claude Desktop

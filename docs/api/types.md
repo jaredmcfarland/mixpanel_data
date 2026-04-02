@@ -676,3 +676,147 @@ Types for parallel profile fetching with page-based progress tracking.
     options:
       show_root_heading: true
       show_root_toc_entry: true
+
+## Data Governance Enums
+
+::: mixpanel_data.PropertyResourceType
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CustomPropertyResourceType
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Event Definition Types
+
+::: mixpanel_data.EventDefinition
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateEventDefinitionParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkEventUpdate
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkUpdateEventsParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Property Definition Types
+
+::: mixpanel_data.PropertyDefinition
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdatePropertyDefinitionParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkPropertyUpdate
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkUpdatePropertiesParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Lexicon Tag Types
+
+::: mixpanel_data.LexiconTag
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateTagParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateTagParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Drop Filter Types
+
+::: mixpanel_data.DropFilter
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateDropFilterParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateDropFilterParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.DropFilterLimitsResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Custom Property Types
+
+::: mixpanel_data.ComposedPropertyValue
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CustomProperty
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateCustomPropertyParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateCustomPropertyParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Lookup Table Types
+
+::: mixpanel_data.LookupTable
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UploadLookupTableParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.MarkLookupTableReadyParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.LookupTableUploadUrl
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateLookupTableParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
