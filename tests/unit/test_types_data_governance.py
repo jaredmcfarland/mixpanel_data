@@ -153,7 +153,7 @@ class TestEventDefinitionModel:
         """EventDefinition is frozen and rejects attribute assignment."""
         event = EventDefinition(id=1, name="Signup")
         with pytest.raises(ValidationError):
-            event.name = "Login"  # type: ignore[misc]
+            event.name = "Login"  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """EventDefinition preserves unknown fields via extra='allow'."""
@@ -224,7 +224,7 @@ class TestPropertyDefinitionModel:
         """PropertyDefinition is frozen and rejects attribute assignment."""
         prop = PropertyDefinition(id=1, name="$browser")
         with pytest.raises(ValidationError):
-            prop.name = "$os"  # type: ignore[misc]
+            prop.name = "$os"  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """PropertyDefinition preserves unknown fields via extra='allow'."""
@@ -487,7 +487,7 @@ class TestLexiconTagModel:
         """LexiconTag is frozen and rejects attribute assignment."""
         tag = LexiconTag(id=1, name="core")
         with pytest.raises(ValidationError):
-            tag.name = "new"  # type: ignore[misc]
+            tag.name = "new"  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """LexiconTag preserves unknown fields via extra='allow'."""
@@ -588,7 +588,7 @@ class TestDropFilterModel:
         """DropFilter is frozen and rejects attribute assignment."""
         df = DropFilter(id=1, event_name="Signup")
         with pytest.raises(ValidationError):
-            df.event_name = "Login"  # type: ignore[misc]
+            df.event_name = "Login"  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """DropFilter preserves unknown fields via extra='allow'."""
@@ -691,7 +691,7 @@ class TestDropFilterLimitsResponseModel:
         """DropFilterLimitsResponse is frozen and rejects attribute assignment."""
         resp = DropFilterLimitsResponse(filter_limit=100)
         with pytest.raises(ValidationError):
-            resp.filter_limit = 200  # type: ignore[misc]
+            resp.filter_limit = 200  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """DropFilterLimitsResponse preserves unknown fields via extra='allow'."""
@@ -740,7 +740,7 @@ class TestComposedPropertyValueModel:
         """ComposedPropertyValue is frozen and rejects attribute assignment."""
         cpv = ComposedPropertyValue(resource_type="events")
         with pytest.raises(ValidationError):
-            cpv.resource_type = "people"  # type: ignore[misc]
+            cpv.resource_type = "people"  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """ComposedPropertyValue preserves unknown fields via extra='allow'."""
@@ -809,7 +809,7 @@ class TestCustomPropertyModel:
         """CustomProperty is frozen and rejects attribute assignment."""
         cp = CustomProperty(custom_property_id=1, name="Test", resource_type="events")
         with pytest.raises(ValidationError):
-            cp.name = "new"  # type: ignore[misc]
+            cp.name = "new"  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """CustomProperty preserves unknown fields via extra='allow'."""
@@ -1035,7 +1035,7 @@ class TestLookupTableModel:
         """LookupTable is frozen and rejects attribute assignment."""
         lt = LookupTable(id=1, name="Countries")
         with pytest.raises(ValidationError):
-            lt.name = "Regions"  # type: ignore[misc]
+            lt.name = "Regions"  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """LookupTable preserves unknown fields via extra='allow'."""
@@ -1159,7 +1159,7 @@ class TestLookupTableUploadUrlModel:
             url="https://example.com", path="/path", key="key"
         )
         with pytest.raises(ValidationError):
-            upload_url.url = "new"  # type: ignore[misc]
+            upload_url.url = "new"  # type: ignore[assignment]
 
     def test_extra_fields_preserved(self) -> None:
         """LookupTableUploadUrl preserves unknown fields via extra='allow'."""

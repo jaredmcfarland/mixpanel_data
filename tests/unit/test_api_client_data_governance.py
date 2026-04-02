@@ -197,11 +197,10 @@ class TestDeleteEventDefinition:
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
-            result = client.delete_event_definition("Signup")
+            client.delete_event_definition("Signup")
 
         assert captured[0][0] == "DELETE"
         assert captured[0][1] == {"name": "Signup"}
-        assert result is None
 
     def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
         """delete_event_definition() uses maybe_scoped_path for URL building."""
@@ -573,11 +572,10 @@ class TestDeleteLexiconTag:
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
-            result = client.delete_lexicon_tag("old-tag")
+            client.delete_lexicon_tag("old-tag")
 
         assert captured[0][0] == "POST"
         assert captured[0][1] == {"delete": True, "name": "old-tag"}
-        assert result is None
 
     def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
         """delete_lexicon_tag() uses maybe_scoped_path for URL building."""
@@ -1006,10 +1004,9 @@ class TestDeleteCustomProperty:
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
-            result = client.delete_custom_property("cp-42")
+            client.delete_custom_property("cp-42")
 
         assert captured_methods[0] == "DELETE"
-        assert result is None
 
     def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
         """delete_custom_property() includes property ID in URL path."""
@@ -1477,12 +1474,11 @@ class TestUploadToSignedUrl:
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
-            result = client.upload_to_signed_url(
+            client.upload_to_signed_url(
                 "https://storage.googleapis.com/upload", b"col1,col2\na,b"
             )
 
         assert captured[0][0] == "PUT"
-        assert result is None
 
     def test_targets_external_url(self, oauth_credentials: Credentials) -> None:
         """upload_to_signed_url() sends PUT to the provided external URL."""
@@ -1569,7 +1565,7 @@ class TestMarkLookupTableReady:
         client = create_mock_client(oauth_credentials, handler)
         with client:
             result = client.mark_lookup_table_ready(
-                {"data_group_id": 10, "status": "ready"}
+                {"data_group_id": "10", "status": "ready"}
             )
 
         assert captured[0][0] == "POST"
@@ -1589,7 +1585,7 @@ class TestMarkLookupTableReady:
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
-            client.mark_lookup_table_ready({"data_group_id": 1})
+            client.mark_lookup_table_ready({"data_group_id": "1"})
 
         assert "/data-definitions/lookup-tables/" in captured_urls[0]
 
@@ -1697,11 +1693,10 @@ class TestDeleteLookupTables:
 
         client = create_mock_client(oauth_credentials, handler)
         with client:
-            result = client.delete_lookup_tables([1, 2, 3])
+            client.delete_lookup_tables([1, 2, 3])
 
         assert captured[0][0] == "DELETE"
         assert captured[0][1] == {"data-group-ids": [1, 2, 3]}
-        assert result is None
 
     def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
         """delete_lookup_tables() uses maybe_scoped_path for URL building."""
