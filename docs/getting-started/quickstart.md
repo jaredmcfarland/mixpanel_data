@@ -344,6 +344,9 @@ Create, update, and delete dashboards, reports, cohorts, feature flags, and expe
     mp drop-filters list
     mp custom-properties list
     mp lookup-tables list
+    mp schemas list
+    mp lexicon enforcement get
+    mp lexicon audit
     ```
 
 === "Python"
@@ -364,9 +367,11 @@ Create, update, and delete dashboards, reports, cohorts, feature flags, and expe
     # Data governance
     event_defs = ws.get_event_definitions(names=["Signup"])
     drop_filters = ws.list_drop_filters()
+    schemas = ws.list_schema_registry()
+    audit = ws.run_audit()
     ```
 
-See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, cohort, feature flag, and experiment operations. See the [Data Governance guide](../guide/data-governance.md) for Lexicon definitions, drop filters, custom properties, custom events, and lookup tables.
+See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, cohort, feature flag, and experiment operations. See the [Data Governance guide](../guide/data-governance.md) for Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, and event deletion requests.
 
 ## Alternative: Stream Data Without Storage
 

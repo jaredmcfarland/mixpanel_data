@@ -820,3 +820,113 @@ Types for parallel profile fetching with page-based progress tracking.
     options:
       show_root_heading: true
       show_root_toc_entry: true
+
+## Schema Registry Types
+
+Types for managing JSON Schema Draft 7 definitions in the schema registry.
+
+::: mixpanel_data.SchemaEntry
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkCreateSchemasParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkCreateSchemasResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkPatchResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.DeleteSchemasResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Schema Enforcement Types
+
+Types for configuring schema enforcement policies.
+
+::: mixpanel_data.SchemaEnforcementConfig
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.InitSchemaEnforcementParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateSchemaEnforcementParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.ReplaceSchemaEnforcementParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Data Audit Types
+
+Types for schema audit operations and violation reporting.
+
+::: mixpanel_data.AuditViolation
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.AuditResponse
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Data Volume Anomaly Types
+
+Types for monitoring and managing data volume anomalies.
+
+::: mixpanel_data.DataVolumeAnomaly
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.UpdateAnomalyParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkAnomalyEntry
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.BulkUpdateAnomalyParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Event Deletion Request Types
+
+Types for managing event deletion requests.
+
+::: mixpanel_data.EventDeletionRequest
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CreateDeletionRequestParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.PreviewDeletionFiltersParams
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true

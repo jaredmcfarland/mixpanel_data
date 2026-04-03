@@ -1,6 +1,6 @@
 # Data Governance
 
-Manage Mixpanel data governance programmatically: Lexicon definitions (events, properties, tags), drop filters, custom properties, custom events, and lookup tables. Full CRUD operations with bulk support.
+Manage Mixpanel data governance programmatically: Lexicon definitions (events, properties, tags), drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, volume anomalies, and event deletion requests. Full CRUD operations with bulk support.
 
 !!! note "Prerequisites"
     Data governance requires **authentication** — service account or OAuth credentials.
@@ -809,9 +809,487 @@ For manual upload workflows or integration with external tools:
 
 ---
 
+## Schema Registry
+
+Manage JSON Schema Draft 7 definitions in Mixpanel's schema registry. Schemas define the expected structure of events, custom events, and profiles.
+
+### List Schema Entries
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    # List all schemas
+    schemas = ws.list_schema_registry()
+    for s in schemas:
+        print(f"{s.entity_type}/{s.name}: v{s.version}")
+
+    # Filter by entity type
+    event_schemas = ws.list_schema_registry(entity_type="event")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp schemas list
+    mp schemas list --entity-type event
+    mp schemas list --format table
+    ```
+
+### Create a Schema
+
+=== "Python"
+
+    ```python
+    result = ws.create_schema(
+        entity_type="event",
+        entity_name="Purchase",
+        schema_json={
+            "properties": {
+                "amount": {"type": "number"},
+                "currency": {"type": "string"},
+            },
+            "required": ["amount"],
+        },
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp schemas create --entity-type event --entity-name "Purchase" \
+        --schema-json '{"properties": {"amount": {"type": "number"}}}'
+    ```
+
+### Bulk Create Schemas
+
+=== "Python"
+
+    ```python
+    params = mp.BulkCreateSchemasParams(
+        entries=[
+            mp.SchemaEntry(
+                name="Login",
+                entity_type="event",
+                schema_definition={"properties": {"method": {"type": "string"}}},
+            ),
+            mp.SchemaEntry(
+                name="Signup",
+                entity_type="event",
+                schema_definition={"properties": {"source": {"type": "string"}}},
+            ),
+        ],
+        truncate=False,
+        entity_type="event",
+    )
+    result = ws.create_schemas_bulk(params)
+    print(f"Added: {result.added}, Deleted: {result.deleted}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp schemas create-bulk \
+        --entries-json '[{"name": "Login", "entityType": "event", "schemaDefinition": {"properties": {"method": {"type": "string"}}}}]'
+
+    # With truncate (replaces all existing schemas of this type)
+    mp schemas create-bulk --entries-json '[...]' --truncate
+    ```
+
+### Update a Schema (Merge Semantics)
+
+=== "Python"
+
+    ```python
+    result = ws.update_schema(
+        entity_type="event",
+        entity_name="Purchase",
+        schema_json={
+            "properties": {
+                "discount_code": {"type": "string"},
+            },
+        },
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp schemas update --entity-type event --entity-name "Purchase" \
+        --schema-json '{"properties": {"discount_code": {"type": "string"}}}'
+    ```
+
+### Bulk Update Schemas
+
+=== "Python"
+
+    ```python
+    params = mp.BulkCreateSchemasParams(
+        entries=[
+            mp.SchemaEntry(
+                name="Login",
+                entity_type="event",
+                schema_definition={"properties": {"ip_address": {"type": "string"}}},
+            ),
+        ],
+        entity_type="event",
+    )
+    results = ws.update_schemas_bulk(params)
+    for r in results:
+        print(f"{r.name}: {r.status}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp schemas update-bulk --entries-json '[{"name": "Login", "entityType": "event", "schemaDefinition": {...}}]'
+    ```
+
+### Delete Schemas
+
+!!! warning "Destructive Operation"
+    Schema deletion is irreversible. The CLI prompts for confirmation before proceeding.
+
+=== "Python"
+
+    ```python
+    # Delete a specific schema
+    result = ws.delete_schemas(entity_type="event", entity_name="Purchase")
+    print(f"Deleted: {result.delete_count}")
+
+    # Delete all schemas of a type
+    result = ws.delete_schemas(entity_type="event")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp schemas delete --entity-type event --entity-name "Purchase"
+    mp schemas delete --entity-type event
+    ```
+
+---
+
+## Schema Enforcement
+
+Configure how Mixpanel handles events that don't match defined schemas. Enforcement actions include "Warn and Accept", "Warn and Hide", and "Warn and Drop".
+
+### Get Enforcement Settings
+
+=== "Python"
+
+    ```python
+    config = ws.get_schema_enforcement()
+    print(f"State: {config.state}")
+    print(f"Rule: {config.rule_event}")
+
+    # Get specific fields only
+    config = ws.get_schema_enforcement(fields="state,ruleEvent")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon enforcement get
+    mp lexicon enforcement get --fields "state,ruleEvent"
+    mp lexicon enforcement get --format table
+    ```
+
+### Initialize Enforcement
+
+=== "Python"
+
+    ```python
+    result = ws.init_schema_enforcement(
+        mp.InitSchemaEnforcementParams(rule_event="Warn and Accept"),
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon enforcement init --rule-event "Warn and Accept"
+    ```
+
+### Update Enforcement (PATCH)
+
+=== "Python"
+
+    ```python
+    result = ws.update_schema_enforcement(
+        mp.UpdateSchemaEnforcementParams(
+            rule_event="Warn and Drop",
+            notification_emails=["data-team@example.com"],
+        ),
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon enforcement update \
+        --params-json '{"ruleEvent": "Warn and Drop", "notificationEmails": ["data-team@example.com"]}'
+    ```
+
+### Replace Enforcement (PUT)
+
+!!! warning "Full Replacement"
+    PUT semantics replace the entire enforcement configuration. All fields must be provided. The CLI prompts for confirmation.
+
+=== "Python"
+
+    ```python
+    result = ws.replace_schema_enforcement(
+        mp.ReplaceSchemaEnforcementParams(
+            events=[],
+            common_properties=[],
+            user_properties=[],
+            rule_event="Warn and Hide",
+            notification_emails=["admin@example.com"],
+        ),
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon enforcement replace \
+        --params-json '{"events": [], "commonProperties": [], "userProperties": [], "ruleEvent": "Warn and Hide", "notificationEmails": ["admin@example.com"]}'
+    ```
+
+### Delete Enforcement
+
+!!! warning "Destructive Operation"
+    Deleting enforcement configuration is irreversible. The CLI prompts for confirmation.
+
+=== "Python"
+
+    ```python
+    result = ws.delete_schema_enforcement()
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon enforcement delete
+    ```
+
+---
+
+## Data Auditing
+
+Audit your project's data against defined schemas to find violations such as unexpected events, missing properties, or type mismatches.
+
+### Run Full Audit
+
+=== "Python"
+
+    ```python
+    audit = ws.run_audit()
+    print(f"Computed at: {audit.computed_at}")
+    for v in audit.violations:
+        print(f"  [{v.violation_type}] {v.event_name}: {v.description}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon audit
+    mp lexicon audit --format table
+    ```
+
+### Run Events-Only Audit
+
+A faster variant that only audits event schemas, skipping property-level checks.
+
+=== "Python"
+
+    ```python
+    audit = ws.run_audit_events_only()
+    for v in audit.violations:
+        print(f"  {v.event_name}: {v.description}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon audit --events-only
+    ```
+
+---
+
+## Data Volume Anomalies
+
+Monitor and manage anomalies detected in data volume patterns. Anomalies indicate unexpected spikes or drops that may signal tracking issues or data pipeline problems.
+
+### List Anomalies
+
+=== "Python"
+
+    ```python
+    # List all anomalies
+    anomalies = ws.list_data_volume_anomalies()
+    for a in anomalies:
+        print(f"{a.event_name}: {a.status} (variance: {a.variance})")
+
+    # Filter by status
+    open_anomalies = ws.list_data_volume_anomalies(
+        query_params={"status": "open"},
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon anomalies list
+    mp lexicon anomalies list --status open
+    mp lexicon anomalies list --event-name "Purchase" --format table
+    ```
+
+### Update an Anomaly
+
+=== "Python"
+
+    ```python
+    result = ws.update_anomaly(
+        mp.UpdateAnomalyParams(
+            id=123,
+            status="dismissed",
+            anomaly_class="Event",
+        ),
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon anomalies update --id 123 --status dismissed --anomaly-class Event
+    ```
+
+### Bulk Update Anomalies
+
+=== "Python"
+
+    ```python
+    result = ws.bulk_update_anomalies(
+        mp.BulkUpdateAnomalyParams(
+            anomalies=[
+                mp.BulkAnomalyEntry(id=1, anomaly_class="Event"),
+                mp.BulkAnomalyEntry(id=2, anomaly_class="Event"),
+            ],
+            status="dismissed",
+        ),
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon anomalies bulk-update \
+        --params-json '{"anomalies": [{"id": 1, "anomalyClass": "Event"}, {"id": 2, "anomalyClass": "Event"}], "status": "dismissed"}'
+    ```
+
+---
+
+## Event Deletion Requests
+
+Submit and manage requests to delete event data by event name, date range, and optional property filters.
+
+!!! warning "Destructive Operation"
+    Event deletion is irreversible. Use `preview` to validate filters before creating a deletion request.
+
+### List Deletion Requests
+
+=== "Python"
+
+    ```python
+    requests = ws.list_deletion_requests()
+    for r in requests:
+        print(f"#{r.id}: {r.event_name} ({r.status})")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon deletion-requests list
+    mp lexicon deletion-requests list --format table
+    ```
+
+### Preview Deletion Filters
+
+Preview what events would be affected before submitting a deletion request. This is a read-only operation with no side effects.
+
+=== "Python"
+
+    ```python
+    preview = ws.preview_deletion_filters(
+        mp.PreviewDeletionFiltersParams(
+            event_name="Test Event",
+            from_date="2026-01-01",
+            to_date="2026-01-31",
+        ),
+    )
+    for item in preview:
+        print(item)
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon deletion-requests preview \
+        --event-name "Test Event" \
+        --from-date 2026-01-01 --to-date 2026-01-31
+    ```
+
+### Create a Deletion Request
+
+=== "Python"
+
+    ```python
+    result = ws.create_deletion_request(
+        mp.CreateDeletionRequestParams(
+            event_name="Test Event",
+            from_date="2026-01-01",
+            to_date="2026-01-31",
+        ),
+    )
+    # Returns updated list of all deletion requests
+    for r in result:
+        print(f"#{r.id}: {r.status}")
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon deletion-requests create \
+        --event-name "Test Event" \
+        --from-date 2026-01-01 --to-date 2026-01-31
+    ```
+
+### Cancel a Deletion Request
+
+Only pending requests can be cancelled. The CLI prompts for confirmation.
+
+=== "Python"
+
+    ```python
+    result = ws.cancel_deletion_request(request_id=456)
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp lexicon deletion-requests cancel --id 456
+    ```
+
+---
+
 ## Next Steps
 
 - [API Reference — Workspace](../api/workspace.md) — Complete method signatures and docstrings
-- [API Reference — Types](../api/types.md) — EventDefinition, DropFilter, CustomProperty, LookupTable, and all parameter types
+- [API Reference — Types](../api/types.md) — EventDefinition, DropFilter, CustomProperty, LookupTable, SchemaEntry, SchemaEnforcementConfig, AuditResponse, DataVolumeAnomaly, EventDeletionRequest, and all parameter types
 - [CLI Reference](../cli/index.md) — Full CLI command documentation
 - [Entity Management](entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks

@@ -42,6 +42,13 @@ from mixpanel_data import (
     CustomProperty, CreateCustomPropertyParams,
     LookupTable, UploadLookupTableParams,
 )
+
+# Schema governance types
+from mixpanel_data import (
+    SchemaEntry, BulkCreateSchemasParams,
+    SchemaEnforcementConfig, AuditResponse,
+    DataVolumeAnomaly, EventDeletionRequest,
+)
 ```
 
 ## Core Components
@@ -55,7 +62,7 @@ The main entry point for all operations:
 - **Streaming** — Stream data directly without storage (ETL, pipelines)
 - **Local Queries** — SQL queries against DuckDB
 - **Live Queries** — Real-time analytics from Mixpanel API
-- **Entity CRUD & Data Governance** — Create, read, update, delete dashboards, reports, cohorts, feature flags, experiments, plus Lexicon definitions, drop filters, custom properties, custom events, and lookup tables
+- **Entity CRUD & Data Governance** — Create, read, update, delete dashboards, reports, cohorts, feature flags, experiments, plus Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, volume anomalies, and event deletion requests
 - **Introspection** — Examine local tables and schemas
 
 [View Workspace API](workspace.md)
@@ -96,6 +103,7 @@ Typed results for all operations:
 - **RetentionResult** — Retention cohort data
 - **Dashboard**, **Bookmark**, **Cohort** — Entity models for CRUD operations
 - **EventDefinition**, **DropFilter**, **CustomProperty**, **LookupTable** — Data governance models
+- **SchemaEntry**, **SchemaEnforcementConfig**, **AuditResponse**, **DataVolumeAnomaly**, **EventDeletionRequest** — Schema governance models
 - And many more...
 
 [View Result Types](types.md)

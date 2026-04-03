@@ -142,7 +142,7 @@ plugins:
           - guide/sql-queries.md: "Query with DuckDB SQL and JSON operators"
           - guide/live-analytics.md: "Segmentation, funnels, retention, JQL"
           - guide/entity-management.md: "Create, update, delete dashboards, reports, and cohorts"
-          - guide/data-governance.md: "Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables"
+          - guide/data-governance.md: "Manage Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, enforcement, auditing, anomalies, and event deletion requests"
           - guide/discovery.md: "Explore schema, events, properties, cohorts"
         API Reference:
           - api/index.md: "Python API overview"
