@@ -41,7 +41,7 @@ def schemas_list(
         str | None,
         typer.Option(
             "--entity-type",
-            help="Filter by entity type (e.g. event, user, group).",
+            help="Filter by entity type (event, custom_event, or profile).",
         ),
     ] = None,
     format: FormatOption = "json",
@@ -74,7 +74,9 @@ def schemas_create(
     ctx: typer.Context,
     entity_type: Annotated[
         str,
-        typer.Option("--entity-type", help="Entity type (e.g. event, user, group)."),
+        typer.Option(
+            "--entity-type", help="Entity type (event, custom_event, or profile)."
+        ),
     ],
     entity_name: Annotated[
         str,
@@ -96,7 +98,7 @@ def schemas_create(
 
     Args:
         ctx: Typer context with global options.
-        entity_type: Entity type (e.g. event, user, group).
+        entity_type: Entity type (event, custom_event, or profile).
         entity_name: Entity name for the schema.
         schema_json: Schema definition as a JSON string.
         format: Output format.
@@ -187,7 +189,9 @@ def schemas_update(
     ctx: typer.Context,
     entity_type: Annotated[
         str,
-        typer.Option("--entity-type", help="Entity type (e.g. event, user, group)."),
+        typer.Option(
+            "--entity-type", help="Entity type (event, custom_event, or profile)."
+        ),
     ],
     entity_name: Annotated[
         str,
@@ -210,7 +214,7 @@ def schemas_update(
 
     Args:
         ctx: Typer context with global options.
-        entity_type: Entity type (e.g. event, user, group).
+        entity_type: Entity type (event, custom_event, or profile).
         entity_name: Entity name for the schema.
         schema_json: Schema updates as a JSON string.
         format: Output format.

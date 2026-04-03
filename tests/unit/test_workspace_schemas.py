@@ -110,7 +110,7 @@ def _make_workspace(
 def _schema_entry_json(
     entity_type: str = "event",
     name: str = "Purchase",
-    schema_json: dict[str, Any] | None = None,
+    schema_definition: dict[str, Any] | None = None,
     version: str | None = "2025-01-15",
 ) -> dict[str, Any]:
     """Return a minimal schema entry dict matching the API shape.
@@ -118,7 +118,7 @@ def _schema_entry_json(
     Args:
         entity_type: Entity type ("event", "custom_event", "profile").
         name: Entity name.
-        schema_json: JSON Schema definition. Defaults to a simple schema.
+        schema_definition: JSON Schema definition. Defaults to a simple schema.
         version: Schema version in YYYY-MM-DD format.
 
     Returns:
@@ -127,7 +127,7 @@ def _schema_entry_json(
     result: dict[str, Any] = {
         "entityType": entity_type,
         "name": name,
-        "schemaJson": schema_json
+        "schemaJson": schema_definition
         or {"properties": {"amount": {"type": "number"}}, "required": ["amount"]},
     }
     if version is not None:
@@ -227,7 +227,7 @@ class TestListSchemaRegistry:
         assert len(captured_url) == 1
         assert "schemas/event" in captured_url[0]
 
-    def test_list_schemas_preserves_schema_json(self, temp_dir: Path) -> None:
+    def test_list_schemas_preserves_schema_definition(self, temp_dir: Path) -> None:
         """list_schema_registry() preserves the schemaJson field content."""
         custom_schema = {
             "type": "object",
@@ -246,7 +246,7 @@ class TestListSchemaRegistry:
                     "status": "ok",
                     "results": [
                         _schema_entry_json(
-                            "event", "Purchase", schema_json=custom_schema
+                            "event", "Purchase", schema_definition=custom_schema
                         ),
                     ],
                 },
@@ -861,3 +861,24 @@ class TestDeleteSchemas:
 
         assert len(captured) == 1
         assert captured[0].method == "DELETE"
+
+    def test_entity_name_without_type_raises(self, temp_dir: Path) -> None:
+        """delete_schemas(entity_name=X) without entity_type raises ValueError.
+
+        Providing entity_name without entity_type would silently delete all
+        schemas instead of the intended single schema.
+
+        Args:
+            temp_dir: Pytest tmp_path fixture.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Should never be called."""
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": {"deleteCount": 0}},
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        with pytest.raises(ValueError, match="entity_name requires entity_type"):
+            ws.delete_schemas(entity_name="Purchase")

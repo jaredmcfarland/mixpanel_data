@@ -428,6 +428,27 @@ class TestRunAudit:
         assert result.violations == []
         assert result.computed_at == "2026-01-01T12:00:00Z"
 
+    def test_empty_response_returns_empty_audit(self, temp_dir: Path) -> None:
+        """run_audit() returns empty AuditResponse when API returns empty list.
+
+        Args:
+            temp_dir: Pytest tmp_path fixture.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return empty results list."""
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": []},
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        result = ws.run_audit()
+
+        assert isinstance(result, AuditResponse)
+        assert result.violations == []
+        assert result.computed_at == ""
+
 
 class TestRunAuditEventsOnly:
     """Tests for Workspace.run_audit_events_only() method."""
@@ -462,6 +483,27 @@ class TestRunAuditEventsOnly:
         assert result.violations[0].violation == "Unexpected Event"
         assert result.violations[0].name == "rogue_event"
         assert result.computed_at == "2026-01-02T00:00:00Z"
+
+    def test_empty_response_returns_empty_audit(self, temp_dir: Path) -> None:
+        """run_audit_events_only() returns empty AuditResponse when empty.
+
+        Args:
+            temp_dir: Pytest tmp_path fixture.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return empty results list."""
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": []},
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        result = ws.run_audit_events_only()
+
+        assert isinstance(result, AuditResponse)
+        assert result.violations == []
+        assert result.computed_at == ""
 
 
 # =============================================================================

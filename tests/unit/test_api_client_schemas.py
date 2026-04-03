@@ -21,6 +21,7 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data.exceptions import MixpanelDataError
 
 # =============================================================================
 # Fixtures
@@ -926,29 +927,31 @@ class TestDeleteSchemas:
         path = captured_urls[0].split("?")[0]
         assert path.rstrip("/").endswith("schemas")
 
-    def test_delete_with_entity_name_only(self, oauth_credentials: Credentials) -> None:
-        """delete_schemas(entity_name='Signup') without entity_type uses base path.
+    def test_delete_with_entity_name_only_raises(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """delete_schemas(entity_name=X) without entity_type raises error.
 
-        When entity_name is provided without entity_type, the path should still be
-        schemas/ (base path) since there is no entity_type segment to scope under.
+        Providing entity_name without entity_type would silently delete all
+        schemas instead of the intended single schema.
+
+        Args:
+            oauth_credentials: OAuth credentials fixture.
         """
-        captured_urls: list[str] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Capture URL."""
-            captured_urls.append(str(request.url))
+            """Should never be called."""
             return httpx.Response(
                 200,
                 json={"status": "ok", "results": {"delete_count": 0}},
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client:
+        with (
+            client,
+            pytest.raises(MixpanelDataError, match="entity_name requires entity_type"),
+        ):
             client.delete_schemas(entity_name="Signup")
-
-        # Without entity_type, cannot build schemas/{et}/{en}/ path, so base path
-        path = captured_urls[0].split("?")[0]
-        assert path.rstrip("/").endswith("schemas")
 
     def test_uses_delete_method(self, oauth_credentials: Credentials) -> None:
         """delete_schemas() uses DELETE HTTP method."""

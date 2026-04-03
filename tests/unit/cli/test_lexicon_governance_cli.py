@@ -210,18 +210,19 @@ class TestLexiconAudit:
     def test_audit_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful audit returns JSON with violations and computed_at."""
         mock_ws = MagicMock()
-        mock_ws.run_audit.return_value = MagicMock(
-            violations=[
-                MagicMock(
-                    model_dump=lambda **kw: {
-                        "violation": "Unexpected Event",
-                        "name": "Debug",
-                        "count": 5,
-                    }
-                ),
+        audit_data = {
+            "violations": [
+                {
+                    "violation": "Unexpected Event",
+                    "name": "Debug",
+                    "count": 5,
+                },
             ],
-            computed_at="2026-04-01T12:00:00Z",
-        )
+            "computed_at": "2026-04-01T12:00:00Z",
+        }
+        mock_audit = MagicMock()
+        mock_audit.model_dump.return_value = audit_data
+        mock_ws.run_audit.return_value = mock_audit
         mock_get_ws.return_value = mock_ws
 
         result = runner.invoke(app, ["lexicon", "audit"])

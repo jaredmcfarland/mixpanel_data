@@ -723,10 +723,7 @@ def lexicon_audit(
             result = workspace.run_audit()
     output_result(
         ctx,
-        {
-            "violations": [v.model_dump(by_alias=True) for v in result.violations],
-            "computed_at": result.computed_at,
-        },
+        result.model_dump(by_alias=True),
         format=format,
         jq_filter=jq_filter,
     )
@@ -786,7 +783,10 @@ def enforcement_init(
     ctx: typer.Context,
     rule_event: Annotated[
         str,
-        typer.Option("--rule-event", help="Event name to initialize enforcement for."),
+        typer.Option(
+            "--rule-event",
+            help="Enforcement action (e.g. 'Warn and Accept', 'Warn and Hide', 'Warn and Drop').",
+        ),
     ],
     format: FormatOption = "json",
     jq_filter: JqOption = None,
@@ -954,7 +954,7 @@ def anomalies_list(
     if status is not None:
         query_params["status"] = status
     if limit is not None:
-        query_params["limit"] = limit
+        query_params["limit"] = str(limit)
     with status_spinner(ctx, "Fetching data volume anomalies..."):
         result = workspace.list_data_volume_anomalies(query_params=query_params)
     output_result(

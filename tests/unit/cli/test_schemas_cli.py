@@ -38,15 +38,15 @@ class TestSchemasList:
             MagicMock(
                 model_dump=lambda **kw: {
                     "entityType": "event",
-                    "entityName": "Purchase",
-                    "schema": {"properties": {}},
+                    "name": "Purchase",
+                    "schemaJson": {"properties": {}},
                 }
             ),
             MagicMock(
                 model_dump=lambda **kw: {
                     "entityType": "event",
-                    "entityName": "Signup",
-                    "schema": {"properties": {}},
+                    "name": "Signup",
+                    "schemaJson": {"properties": {}},
                 }
             ),
         ]
@@ -57,8 +57,8 @@ class TestSchemasList:
         data = json.loads(result.stdout)
         assert isinstance(data, list)
         assert len(data) == 2
-        assert data[0]["entityName"] == "Purchase"
-        assert data[1]["entityName"] == "Signup"
+        assert data[0]["name"] == "Purchase"
+        assert data[1]["name"] == "Signup"
 
     @patch("mixpanel_data.cli.commands.schemas.get_workspace")
     def test_with_entity_type_filter(self, mock_get_ws: MagicMock) -> None:
@@ -68,7 +68,7 @@ class TestSchemasList:
             MagicMock(
                 model_dump=lambda **kw: {
                     "entityType": "event",
-                    "entityName": "Purchase",
+                    "name": "Purchase",
                 }
             ),
         ]
@@ -93,8 +93,8 @@ class TestSchemasCreate:
         mock_ws = MagicMock()
         mock_ws.create_schema.return_value = {
             "entityType": "event",
-            "entityName": "Purchase",
-            "schema": {"properties": {"amount": {"type": "number"}}},
+            "name": "Purchase",
+            "schemaJson": {"properties": {"amount": {"type": "number"}}},
         }
         mock_get_ws.return_value = mock_ws
 
@@ -114,7 +114,7 @@ class TestSchemasCreate:
         )
         assert result.exit_code == 0
         data = json.loads(result.stdout)
-        assert data["entityName"] == "Purchase"
+        assert data["name"] == "Purchase"
         assert data["entityType"] == "event"
 
     @patch("mixpanel_data.cli.commands.schemas.get_workspace")
@@ -224,8 +224,8 @@ class TestSchemasUpdate:
         mock_ws = MagicMock()
         mock_ws.update_schema.return_value = {
             "entityType": "event",
-            "entityName": "Purchase",
-            "schema": {"properties": {"amount": {"type": "number"}}},
+            "name": "Purchase",
+            "schemaJson": {"properties": {"amount": {"type": "number"}}},
         }
         mock_get_ws.return_value = mock_ws
 
@@ -245,7 +245,7 @@ class TestSchemasUpdate:
         )
         assert result.exit_code == 0
         data = json.loads(result.stdout)
-        assert data["entityName"] == "Purchase"
+        assert data["name"] == "Purchase"
 
     @patch("mixpanel_data.cli.commands.schemas.get_workspace")
     def test_update_passes_args_to_workspace(self, mock_get_ws: MagicMock) -> None:
@@ -309,8 +309,8 @@ class TestSchemasUpdateBulk:
             MagicMock(
                 model_dump=lambda **kw: {
                     "entityType": "event",
-                    "entityName": "Purchase",
-                    "schema": {"properties": {}},
+                    "name": "Purchase",
+                    "schemaJson": {"properties": {}},
                 }
             ),
         ]
@@ -330,7 +330,7 @@ class TestSchemasUpdateBulk:
         data = json.loads(result.stdout)
         assert isinstance(data, list)
         assert len(data) == 1
-        assert data[0]["entityName"] == "Purchase"
+        assert data[0]["name"] == "Purchase"
 
     @patch("mixpanel_data.cli.commands.schemas.get_workspace")
     def test_update_bulk_invalid_json_exits_3(self, mock_get_ws: MagicMock) -> None:

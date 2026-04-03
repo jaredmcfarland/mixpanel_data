@@ -33,8 +33,8 @@ from mixpanel_data.types import BulkCreateSchemasParams, SchemaEntry
 
 params = BulkCreateSchemasParams(
     entries=[
-        SchemaEntry(name="Login", entity_type="event", schema_json={...}),
-        SchemaEntry(name="Signup", entity_type="event", schema_json={...}),
+        SchemaEntry(name="Login", entity_type="event", schema_definition={...}),
+        SchemaEntry(name="Signup", entity_type="event", schema_definition={...}),
     ],
     truncate=True,  # Replace existing event schemas
     entity_type="event",
@@ -163,7 +163,7 @@ for r in requests:
     print(f"  {r.event_name}: {r.status} ({r.deleted_events_count} events)")
 
 # Cancel a pending request
-requests = ws.cancel_deletion_request(id=42)
+requests = ws.cancel_deletion_request(request_id=42)
 ```
 
 ## CLI Usage

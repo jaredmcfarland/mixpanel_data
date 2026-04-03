@@ -7168,7 +7168,7 @@ class BulkCreateSchemasParams(BaseModel):
         ```python
         params = BulkCreateSchemasParams(
             entries=[
-                SchemaEntry(name="Login", entity_type="event", schema_json={...}),
+                SchemaEntry(name="Login", entity_type="event", schema_definition={...}),
             ],
             truncate=True,
             entity_type="event",

@@ -2497,6 +2497,11 @@ class MixpanelAPIClient:
                 )
             ```
         """
+        if entity_name is not None and entity_type is None:
+            raise MixpanelDataError(
+                "entity_name requires entity_type: providing entity_name "
+                "without entity_type would delete all schemas",
+            )
         base = "schemas"
         if entity_type is not None:
             base = f"schemas/{quote(entity_type, safe='')}"

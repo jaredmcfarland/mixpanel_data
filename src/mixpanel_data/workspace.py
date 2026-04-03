@@ -6645,6 +6645,11 @@ class Workspace:
             print(f"Deleted: {resp.delete_count}")
             ```
         """
+        if entity_name is not None and entity_type is None:
+            raise ValueError(
+                "entity_name requires entity_type: providing entity_name "
+                "without entity_type would delete all schemas",
+            )
         client = self._require_api_client()
         raw = client.delete_schemas(entity_type=entity_type, entity_name=entity_name)
         return DeleteSchemasResponse.model_validate(raw)
@@ -6821,6 +6826,8 @@ class Workspace:
         client = self._require_api_client()
         raw = client.run_audit()
         # raw is [violations_list, {"computed_at": ...}]
+        if not raw:
+            return AuditResponse(violations=[], computed_at="")
         violations = [AuditViolation.model_validate(v) for v in raw[0]]
         metadata = raw[1] if len(raw) > 1 else {}
         return AuditResponse(
@@ -6847,6 +6854,8 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.run_audit_events_only()
+        if not raw:
+            return AuditResponse(violations=[], computed_at="")
         violations = [AuditViolation.model_validate(v) for v in raw[0]]
         metadata = raw[1] if len(raw) > 1 else {}
         return AuditResponse(
