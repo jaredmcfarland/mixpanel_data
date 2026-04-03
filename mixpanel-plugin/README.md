@@ -349,7 +349,7 @@ claude --debug
 
 ### 🚀 Phase 4: Future Components
 Consider adding:
-1. **MCP Server** - Expose Mixpanel data as structured tools for other agents
+1. ~~**MCP Server**~~ - Extracted to `../mp_mcp/` as an independent project
 2. **Hooks** - Pre-commit validation for queries/scripts, session-start credential checks
 
 ## License

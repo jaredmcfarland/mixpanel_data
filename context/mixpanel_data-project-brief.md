@@ -10,7 +10,7 @@
 
 ## The Problem
 
-AI coding agents (Claude Code, Cursor, Codex, etc.) are becoming powerful tools for data analysis. When these agents interact with Mixpanel data via the existing MCP server, every API response consumes context window tokens. A single query might return 30KB of JSON—tokens that could otherwise be used for reasoning, insight generation, and iterative exploration.
+AI coding agents (Claude Code, Cursor, Codex, etc.) are becoming powerful tools for data analysis. When these agents interact with Mixpanel data via API calls, every API response consumes context window tokens. A single query might return 30KB of JSON—tokens that could otherwise be used for reasoning, insight generation, and iterative exploration.
 
 The context window is the agent's working memory. Filling it with raw data leaves less room for thinking.
 
@@ -72,7 +72,7 @@ The primary goal is preserving agent context for reasoning. This means:
 
 Not every question needs local storage. Quick answers should be quick:
 
-- **Live queries**: Call Mixpanel API, get answer, done (like the MCP server)
+- **Live queries**: Call Mixpanel API, get answer, done
 - **Local analysis**: Fetch → store → query → iterate (unique to this tool)
 
 The tool should make it easy to choose the right path for each task.
@@ -259,11 +259,9 @@ This could become the "Lens runtime"—interactive data exploration without buil
 
 ### Mixpanel MCP Server
 
-The existing MCP server calls Mixpanel APIs and returns results directly into the context window. `mixpanel_data` complements this by offering the local database approach. 
+> **Note:** The MCP server has been extracted to a separate project at `../mp_mcp/`.
 
-We can learn from the MCP server's tool design:
-- `run_segmentation_query`, `run_funnels_query`, etc.
-- `get_events`, `get_event_properties`, `get_event_property_values`
+The MCP server exposes Mixpanel data as structured tools for AI agents. `mixpanel_data` complements it by providing a programmable Python library and CLI interface.
 
 ### Lens
 
