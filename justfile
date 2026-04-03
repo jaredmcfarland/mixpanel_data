@@ -5,8 +5,8 @@
 default:
     @just --list
 
-# Run all checks (lint, typecheck, test) for both packages
-check: lint typecheck test mcp-check
+# Run all checks (lint, typecheck, test)
+check: lint typecheck test
 
 # Run tests
 test *args:
@@ -194,47 +194,3 @@ plugin-stats:
     TOTAL_LINES=$((CMD_LINES + SKILL_LINES + AGENT_LINES))
     echo ""
     echo "Total:       $TOTAL_LINES lines"
-
-# === MCP Server Development ===
-
-# Run all MCP server checks (lint, typecheck, test)
-mcp-check: mcp-lint mcp-typecheck mcp-test
-
-# Run MCP server tests
-mcp-test *args:
-    cd mp_mcp && uv run pytest {{ args }}
-
-# Run MCP server tests with coverage (fails if below 90%)
-mcp-test-cov:
-    cd mp_mcp && uv run pytest --cov=src/mp_mcp --cov-report=term-missing --cov-fail-under=90
-
-# Lint MCP server code
-mcp-lint *args:
-    cd mp_mcp && uv run ruff check src/ tests/ {{ args }}
-
-# Fix MCP server lint errors
-mcp-lint-fix:
-    cd mp_mcp && uv run ruff check --fix src/ tests/
-
-# Format MCP server code
-mcp-fmt:
-    cd mp_mcp && uv run ruff format src/ tests/
-
-# Check MCP server formatting
-mcp-fmt-check:
-    cd mp_mcp && uv run ruff format --check src/ tests/
-
-# Type check MCP server
-mcp-typecheck:
-    cd mp_mcp && uv run mypy src/ tests/
-
-# Sync MCP server dependencies
-mcp-sync:
-    cd mp_mcp && uv sync --all-extras
-
-# Clean MCP server build artifacts
-mcp-clean:
-    cd mp_mcp && rm -rf .pytest_cache .mypy_cache .ruff_cache
-    cd mp_mcp && rm -rf dist build *.egg-info
-    cd mp_mcp && rm -rf .coverage htmlcov
-    find mp_mcp -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
