@@ -7102,3 +7102,728 @@ class UpdateLookupTableParams(BaseModel):
 
     name: str | None = None
     """New table name."""
+
+
+# =============================================================================
+# Schema Registry Types (Phase 028)
+# =============================================================================
+
+
+class SchemaEntry(BaseModel):
+    """A schema registry entry for an event, custom event, or profile.
+
+    Represents a JSON Schema Draft 7 definition registered in the
+    Mixpanel schema registry. Used for both API responses and as entries
+    in bulk create/update operations.
+
+    Attributes:
+        entity_type: Entity type ("event", "custom_event", "profile").
+        name: Entity name (event name or "$user" for profile).
+        version: Schema version in YYYY-MM-DD format.
+        schema_definition: JSON Schema Draft 7 definition (API field: schemaJson).
+
+    Example:
+        ```python
+        entry = SchemaEntry(
+            entity_type="event",
+            name="Purchase",
+            schema_definition={"properties": {"amount": {"type": "number"}}},
+        )
+        # Or using the API alias:
+        entry = SchemaEntry(
+            entityType="event", name="Purchase",
+            schemaJson={"properties": {"amount": {"type": "number"}}},
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    entity_type: str
+    """Entity type: "event", "custom_event", or "profile"."""
+
+    name: str
+    """Entity name (event name or "$user" for profile)."""
+
+    version: str | None = None
+    """Schema version in YYYY-MM-DD format."""
+
+    schema_definition: dict[str, Any] = Field(alias="schemaJson")
+    """JSON Schema Draft 7 definition (API field: schemaJson)."""
+
+
+class BulkCreateSchemasParams(BaseModel):
+    """Parameters for bulk-creating schemas in the registry.
+
+    Attributes:
+        entries: Schema entries to create.
+        truncate: If true, delete all existing schemas of entity_type
+            before inserting.
+        entity_type: Entity type for all entries (only "event" supported
+            for batch operations).
+
+    Example:
+        ```python
+        params = BulkCreateSchemasParams(
+            entries=[
+                SchemaEntry(name="Login", entity_type="event", schema_json={...}),
+            ],
+            truncate=True,
+            entity_type="event",
+        )
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    entries: list[SchemaEntry]
+    """Schema entries to create."""
+
+    truncate: bool | None = None
+    """If true, delete all existing schemas of entity_type before inserting."""
+
+    entity_type: str | None = None
+    """Entity type for all entries (only "event" supported for batch)."""
+
+
+class BulkCreateSchemasResponse(BaseModel):
+    """Response from a bulk schema creation operation.
+
+    Attributes:
+        added: Number of schemas added.
+        deleted: Number of schemas deleted (from truncate).
+
+    Example:
+        ```python
+        resp = BulkCreateSchemasResponse(added=5, deleted=3)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    added: int
+    """Number of schemas added."""
+
+    deleted: int
+    """Number of schemas deleted (from truncate)."""
+
+
+class BulkPatchResult(BaseModel):
+    """Per-entry result from a bulk schema update operation.
+
+    Attributes:
+        entity_type: Entity type processed.
+        name: Entity name processed.
+        status: Result status ("ok" or "error").
+        error: Error message if status is "error".
+
+    Example:
+        ```python
+        result = BulkPatchResult(
+            entity_type="event", name="Login", status="ok"
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    entity_type: str
+    """Entity type processed."""
+
+    name: str
+    """Entity name processed."""
+
+    status: str
+    """Result status ("ok" or "error")."""
+
+    error: str | None = None
+    """Error message if status is "error"."""
+
+
+class DeleteSchemasResponse(BaseModel):
+    """Response from a schema deletion operation.
+
+    Attributes:
+        delete_count: Number of schemas deleted.
+
+    Example:
+        ```python
+        resp = DeleteSchemasResponse(delete_count=3)
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    delete_count: int
+    """Number of schemas deleted."""
+
+
+# =============================================================================
+# Schema Enforcement Types (Phase 028)
+# =============================================================================
+
+
+class SchemaEnforcementConfig(BaseModel):
+    """Schema enforcement configuration for a project.
+
+    Controls how Mixpanel handles events that don't match defined schemas.
+
+    Attributes:
+        id: Config ID.
+        last_modified: Last modification timestamp.
+        last_modified_by: User who last modified.
+        rule_event: Enforcement action ("Warn and Accept", "Warn and Hide",
+            "Warn and Drop").
+        notification_emails: Notification recipients.
+        events: Event enforcement rules.
+        common_properties: Common property rules.
+        user_properties: User property rules.
+        initialized_by: User who initialized.
+        initialized_from: Initialization start date.
+        initialized_to: Initialization end date.
+        state: Enforcement state ("planned" or "ingested").
+
+    Example:
+        ```python
+        config = SchemaEnforcementConfig(
+            id=1, rule_event="Warn and Accept", state="ingested"
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    id: int | None = None
+    """Config ID."""
+
+    last_modified: str | None = None
+    """Last modification timestamp."""
+
+    last_modified_by: dict[str, Any] | None = None
+    """User who last modified."""
+
+    rule_event: str | None = None
+    """Enforcement action: "Warn and Accept", "Warn and Hide", "Warn and Drop"."""
+
+    notification_emails: list[str] | None = None
+    """Notification recipients."""
+
+    events: list[dict[str, Any]] | None = None
+    """Event enforcement rules."""
+
+    common_properties: list[dict[str, Any]] | None = None
+    """Common property rules."""
+
+    user_properties: list[dict[str, Any]] | None = None
+    """User property rules."""
+
+    initialized_by: dict[str, Any] | None = None
+    """User who initialized."""
+
+    initialized_from: str | None = None
+    """Initialization start date."""
+
+    initialized_to: str | None = None
+    """Initialization end date."""
+
+    state: str | None = None
+    """Enforcement state ("planned" or "ingested")."""
+
+
+class InitSchemaEnforcementParams(BaseModel):
+    """Parameters for initializing schema enforcement.
+
+    Attributes:
+        rule_event: Enforcement action ("Warn and Accept", "Warn and Hide",
+            "Warn and Drop").
+
+    Example:
+        ```python
+        params = InitSchemaEnforcementParams(rule_event="Warn and Accept")
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    rule_event: str
+    """Enforcement action."""
+
+
+class UpdateSchemaEnforcementParams(BaseModel):
+    """Parameters for partially updating schema enforcement.
+
+    Attributes:
+        notification_emails: Updated notification recipients.
+        rule_event: Updated enforcement action.
+        events: Updated event list.
+        properties: Updated property map.
+
+    Example:
+        ```python
+        params = UpdateSchemaEnforcementParams(
+            rule_event="Warn and Drop",
+            notification_emails=["data-team@example.com"],
+        )
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    notification_emails: list[str] | None = None
+    """Updated notification recipients."""
+
+    rule_event: str | None = None
+    """Updated enforcement action."""
+
+    events: list[str] | None = None
+    """Updated event list."""
+
+    properties: dict[str, list[str]] | None = None
+    """Updated property map."""
+
+
+class ReplaceSchemaEnforcementParams(BaseModel):
+    """Parameters for fully replacing schema enforcement configuration.
+
+    All fields are required since this is a full replacement.
+
+    Attributes:
+        common_properties: Full common property rules.
+        user_properties: Full user property rules.
+        events: Full event rules.
+        rule_event: Enforcement action.
+        notification_emails: Notification recipients.
+        schema_id: Schema definition ID.
+
+    Example:
+        ```python
+        params = ReplaceSchemaEnforcementParams(
+            events=[...],
+            common_properties=[...],
+            user_properties=[...],
+            rule_event="Warn and Hide",
+            notification_emails=["admin@example.com"],
+        )
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    common_properties: list[dict[str, Any]]
+    """Full common property rules."""
+
+    user_properties: list[dict[str, Any]]
+    """Full user property rules."""
+
+    events: list[dict[str, Any]]
+    """Full event rules."""
+
+    rule_event: str
+    """Enforcement action."""
+
+    notification_emails: list[str]
+    """Notification recipients."""
+
+    schema_id: int | None = None
+    """Schema definition ID."""
+
+
+# =============================================================================
+# Data Audit Types (Phase 028)
+# =============================================================================
+
+
+class AuditViolation(BaseModel):
+    """A single violation found during a data audit.
+
+    Attributes:
+        violation: Violation type (e.g., "Unexpected Event",
+            "Missing Property", "Unexpected Type for Property").
+        name: Property or event name.
+        platform: Platform ("iOS", "Android", "Web").
+        version: Version string.
+        count: Number of occurrences.
+        event: Event name (for property violations).
+        sensitive: Whether property is marked sensitive.
+        property_type_error: Type mismatch description.
+
+    Example:
+        ```python
+        v = AuditViolation(
+            violation="Unexpected Event", name="DebugLog", count=42
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    violation: str
+    """Violation type."""
+
+    name: str
+    """Property or event name."""
+
+    platform: str | None = None
+    """Platform: "iOS", "Android", "Web"."""
+
+    version: str | None = None
+    """Version string."""
+
+    count: int
+    """Number of occurrences."""
+
+    event: str | None = None
+    """Event name (for property violations)."""
+
+    sensitive: bool | None = None
+    """Whether property is marked sensitive."""
+
+    property_type_error: str | None = None
+    """Type mismatch description."""
+
+
+class AuditResponse(BaseModel):
+    """Response from a data audit operation.
+
+    Contains a list of schema violations and the timestamp when
+    the audit was computed.
+
+    Attributes:
+        violations: List of audit violations.
+        computed_at: Timestamp of audit computation.
+
+    Example:
+        ```python
+        resp = AuditResponse(
+            violations=[
+                AuditViolation(violation="Unexpected Event", name="Debug", count=1)
+            ],
+            computed_at="2026-04-01T12:00:00Z",
+        )
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    violations: list[AuditViolation]
+    """List of audit violations."""
+
+    computed_at: str
+    """Timestamp of audit computation."""
+
+
+# =============================================================================
+# Data Volume Anomaly Types (Phase 028)
+# =============================================================================
+
+
+class DataVolumeAnomaly(BaseModel):
+    """A detected data volume anomaly.
+
+    Attributes:
+        id: Anomaly ID.
+        timestamp: Detection timestamp.
+        actual_count: Actual observed count.
+        predicted_upper: Upper bound of prediction.
+        predicted_lower: Lower bound of prediction.
+        percent_variance: Variance percentage.
+        status: Anomaly status ("open" or "dismissed").
+        project: Project ID.
+        event: Event ID.
+        event_name: Event name.
+        property: Property ID.
+        property_name: Property name.
+        metric: Metric ID.
+        metric_name: Metric name.
+        metric_type: Metric type.
+        primary_type: Primary anomaly type.
+        drift_types: Drift type details.
+        anomaly_class: Anomaly class ("Event", "Property",
+            "PropertyTypeDrift", "Metric").
+
+    Example:
+        ```python
+        anomaly = DataVolumeAnomaly(
+            id=1, actual_count=1000, predicted_upper=500,
+            predicted_lower=100, percent_variance="100%",
+            status="open", project=12345, anomaly_class="Event",
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    id: int
+    """Anomaly ID."""
+
+    timestamp: str | None = None
+    """Detection timestamp."""
+
+    actual_count: int
+    """Actual observed count."""
+
+    predicted_upper: int
+    """Upper bound of prediction."""
+
+    predicted_lower: int
+    """Lower bound of prediction."""
+
+    percent_variance: str
+    """Variance percentage."""
+
+    status: str
+    """Anomaly status ("open" or "dismissed")."""
+
+    project: int
+    """Project ID."""
+
+    event: int | None = None
+    """Event ID."""
+
+    event_name: str | None = None
+    """Event name."""
+
+    property: int | None = None
+    """Property ID."""
+
+    property_name: str | None = None
+    """Property name."""
+
+    metric: int | None = None
+    """Metric ID."""
+
+    metric_name: str | None = None
+    """Metric name."""
+
+    metric_type: str | None = None
+    """Metric type."""
+
+    primary_type: str | None = None
+    """Primary anomaly type."""
+
+    drift_types: dict[str, Any] | None = None
+    """Drift type details."""
+
+    anomaly_class: str
+    """Anomaly class: "Event", "Property", "PropertyTypeDrift", "Metric"."""
+
+
+class UpdateAnomalyParams(BaseModel):
+    """Parameters for updating a single anomaly status.
+
+    Attributes:
+        id: Anomaly ID.
+        status: New status ("open" or "dismissed").
+        anomaly_class: Anomaly class.
+
+    Example:
+        ```python
+        params = UpdateAnomalyParams(
+            id=123, status="dismissed", anomaly_class="Event"
+        )
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    id: int
+    """Anomaly ID."""
+
+    status: str
+    """New status: "open" or "dismissed"."""
+
+    anomaly_class: str
+    """Anomaly class."""
+
+
+class BulkAnomalyEntry(BaseModel):
+    """A single entry in a bulk anomaly update.
+
+    Attributes:
+        id: Anomaly ID.
+        anomaly_class: Anomaly class.
+
+    Example:
+        ```python
+        entry = BulkAnomalyEntry(id=123, anomaly_class="Event")
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    id: int
+    """Anomaly ID."""
+
+    anomaly_class: str
+    """Anomaly class."""
+
+
+class BulkUpdateAnomalyParams(BaseModel):
+    """Parameters for bulk-updating anomaly statuses.
+
+    Attributes:
+        anomalies: Anomalies to update.
+        status: New status for all ("open" or "dismissed").
+
+    Example:
+        ```python
+        params = BulkUpdateAnomalyParams(
+            anomalies=[BulkAnomalyEntry(id=1, anomaly_class="Event")],
+            status="dismissed",
+        )
+        ```
+    """
+
+    anomalies: list[BulkAnomalyEntry]
+    """Anomalies to update."""
+
+    status: str
+    """New status for all."""
+
+
+# =============================================================================
+# Event Deletion Request Types (Phase 028)
+# =============================================================================
+
+
+class EventDeletionRequest(BaseModel):
+    """An event deletion request with lifecycle status.
+
+    Attributes:
+        id: Request ID.
+        display_name: Display name.
+        event_name: Event to delete.
+        from_date: Start date.
+        to_date: End date.
+        filters: Deletion filters.
+        status: Request status ("Submitted", "Processing", "Completed", "Failed").
+        deleted_events_count: Count of deleted events.
+        created: Creation timestamp.
+        requesting_user: User who requested.
+
+    Example:
+        ```python
+        req = EventDeletionRequest(
+            id=1, event_name="Test", from_date="2026-01-01",
+            to_date="2026-01-31", status="Submitted",
+            deleted_events_count=0, created="2026-04-01",
+            requesting_user={"id": 1},
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True, extra="allow", alias_generator=to_camel, populate_by_name=True
+    )
+
+    id: int
+    """Request ID."""
+
+    display_name: str | None = None
+    """Display name."""
+
+    event_name: str
+    """Event to delete."""
+
+    from_date: str
+    """Start date."""
+
+    to_date: str
+    """End date."""
+
+    filters: dict[str, Any] | None = None
+    """Deletion filters."""
+
+    status: str
+    """Request status: "Submitted", "Processing", "Completed", "Failed"."""
+
+    deleted_events_count: int
+    """Count of deleted events."""
+
+    created: str
+    """Creation timestamp."""
+
+    requesting_user: dict[str, Any]
+    """User who requested."""
+
+
+class CreateDeletionRequestParams(BaseModel):
+    """Parameters for creating an event deletion request.
+
+    Attributes:
+        from_date: Start date (YYYY-MM-DD or datetime).
+        to_date: End date.
+        event_name: Event name to delete.
+        filters: Optional deletion filters.
+
+    Example:
+        ```python
+        params = CreateDeletionRequestParams(
+            event_name="Test Event",
+            from_date="2026-01-01",
+            to_date="2026-01-31",
+        )
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    from_date: str
+    """Start date (YYYY-MM-DD or datetime)."""
+
+    to_date: str
+    """End date."""
+
+    event_name: str
+    """Event name to delete."""
+
+    filters: dict[str, Any] | None = None
+    """Optional deletion filters."""
+
+
+class PreviewDeletionFiltersParams(BaseModel):
+    """Parameters for previewing event deletion filters.
+
+    This is a read-only operation that shows what events would match.
+
+    Attributes:
+        event_name: Event name.
+        from_date: Start date.
+        to_date: End date.
+        filters: Optional filters.
+
+    Example:
+        ```python
+        params = PreviewDeletionFiltersParams(
+            event_name="Test Event",
+            from_date="2026-01-01",
+            to_date="2026-01-31",
+        )
+        ```
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    event_name: str
+    """Event name."""
+
+    from_date: str
+    """Start date."""
+
+    to_date: str
+    """End date."""
+
+    filters: dict[str, Any] | None = None
+    """Optional filters."""

@@ -156,6 +156,7 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.lookup_tables import lookup_tables_app
     from mixpanel_data.cli.commands.query import query_app
     from mixpanel_data.cli.commands.reports import reports_app
+    from mixpanel_data.cli.commands.schemas import schemas_app
     from mixpanel_data.cli.commands.webhooks import webhooks_app
 
     app.add_typer(auth_app, name="auth", help="Manage authentication and accounts.")
@@ -181,6 +182,9 @@ def _register_commands() -> None:
     )
     app.add_typer(webhooks_app, name="webhooks", help="Manage project webhooks.")
     app.add_typer(lexicon_app, name="lexicon", help="Manage Lexicon data definitions.")
+    app.add_typer(
+        schemas_app, name="schemas", help="Manage schema registry definitions."
+    )
     app.add_typer(drop_filters_app, name="drop-filters", help="Manage drop filters.")
     app.add_typer(
         custom_properties_app,

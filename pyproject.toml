@@ -110,6 +110,7 @@ testpaths = ["tests"]
 addopts = "-vv --tb=short -m 'not live'"
 markers = [
     "live: marks tests as live API tests (deselect with '-m \"not live\"')",
+    "destructive: marks tests that consume limited resources (e.g. deletion request quota)",
 ]
 
 [tool.coverage.run]

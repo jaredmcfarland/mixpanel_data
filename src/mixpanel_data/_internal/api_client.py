@@ -2265,6 +2265,253 @@ class MixpanelAPIClient:
         }
 
     # =========================================================================
+    # Schema Registry CRUD (Phase 028)
+    # =========================================================================
+
+    def list_schema_registry(
+        self,
+        *,
+        entity_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List schema registry entries.
+
+        Calls ``GET /api/app/.../schemas/`` or ``schemas/{entity_type}/``.
+
+        Args:
+            entity_type: Optional filter by type ("event", "custom_event",
+                "profile"). If None, returns all schemas.
+
+        Returns:
+            List of schema entry dictionaries with ``entityType``, ``name``,
+            ``schemaJson`` fields.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                schemas = client.list_schema_registry(entity_type="event")
+            ```
+        """
+        if entity_type is not None:
+            path = self.maybe_scoped_path(f"schemas/{quote(entity_type, safe='')}")
+        else:
+            path = self.maybe_scoped_path("schemas")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_schema_registry: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_schema(
+        self,
+        entity_type: str,
+        entity_name: str,
+        schema_json: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Create a single schema definition.
+
+        Calls ``POST /api/app/.../schemas/{entity_type}/{entity_name}/``.
+
+        Args:
+            entity_type: Entity type ("event", "custom_event", "profile").
+            entity_name: Entity name (event name or "$user" for profile).
+            schema_json: JSON Schema Draft 7 definition.
+
+        Returns:
+            Created schema as dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error or entity already exists (400).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                schema = client.create_schema(
+                    "event", "Purchase",
+                    {"properties": {"amount": {"type": "number"}}},
+                )
+            ```
+        """
+        et = quote(entity_type, safe="")
+        en = quote(entity_name, safe="")
+        path = self.maybe_scoped_path(f"schemas/{et}/{en}")
+        result = self.app_request("POST", path, json_body=schema_json)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_schema: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def create_schemas_bulk(
+        self,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Bulk create schemas.
+
+        Calls ``POST /api/app/.../schemas/``.
+
+        Args:
+            body: Bulk creation payload from
+                ``BulkCreateSchemasParams.model_dump()``.
+
+        Returns:
+            Dict with ``added`` and ``deleted`` counts.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                resp = client.create_schemas_bulk({
+                    "entries": [...], "truncate": True
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("schemas")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_schemas_bulk: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_schema(
+        self,
+        entity_type: str,
+        entity_name: str,
+        schema_json: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update a single schema definition (merge semantics).
+
+        Calls ``PATCH /api/app/.../schemas/{entity_type}/{entity_name}/``.
+
+        Args:
+            entity_type: Entity type.
+            entity_name: Entity name.
+            schema_json: Partial JSON Schema to merge with existing.
+
+        Returns:
+            Updated schema as dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Entity not found or validation error (400, 404).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                updated = client.update_schema(
+                    "event", "Purchase",
+                    {"properties": {"tax": {"type": "number"}}},
+                )
+            ```
+        """
+        et = quote(entity_type, safe="")
+        en = quote(entity_name, safe="")
+        path = self.maybe_scoped_path(f"schemas/{et}/{en}")
+        result = self.app_request("PATCH", path, json_body=schema_json)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_schema: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_schemas_bulk(
+        self,
+        body: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Bulk update schemas (merge semantics per entry).
+
+        Calls ``PATCH /api/app/.../schemas/``.
+
+        Args:
+            body: Bulk update payload from
+                ``BulkCreateSchemasParams.model_dump()``.
+
+        Returns:
+            List of per-entry results with ``status`` ("ok" or "error").
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                results = client.update_schemas_bulk({"entries": [...]})
+            ```
+        """
+        path = self.maybe_scoped_path("schemas")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from update_schemas_bulk: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_schemas(
+        self,
+        *,
+        entity_type: str | None = None,
+        entity_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Delete schemas by entity type and/or name.
+
+        Calls ``DELETE /api/app/.../schemas/[{et}/[{en}/]]``.
+
+        If both provided, deletes a single schema. If only entity_type,
+        deletes all schemas of that type. If neither, deletes all schemas.
+
+        Args:
+            entity_type: Filter by entity type.
+            entity_name: Filter by entity name (requires entity_type).
+
+        Returns:
+            Dict with ``deleteCount`` field.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                resp = client.delete_schemas(
+                    entity_type="event", entity_name="Purchase"
+                )
+            ```
+        """
+        base = "schemas"
+        if entity_type is not None:
+            base = f"schemas/{quote(entity_type, safe='')}"
+            if entity_name is not None:
+                base = f"{base}/{quote(entity_name, safe='')}"
+        path = self.maybe_scoped_path(base)
+        result = self.app_request("DELETE", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from delete_schemas: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
     # Dashboard CRUD (Phase 024)
     # =========================================================================
 
@@ -6489,3 +6736,497 @@ class MixpanelAPIClient:
         """
         path = self.maybe_scoped_path("data-definitions/events/")
         self.app_request("DELETE", path, json_body={"name": name})
+
+    # =========================================================================
+    # Schema Enforcement (Phase 028)
+    # =========================================================================
+
+    def get_schema_enforcement(
+        self,
+        *,
+        fields: str | None = None,
+    ) -> dict[str, Any]:
+        """Get current schema enforcement configuration.
+
+        Calls ``GET /api/app/.../data-definitions/schema/``.
+
+        Args:
+            fields: Comma-separated field names to return (e.g.,
+                "ruleEvent,state"). If None, returns all fields.
+
+        Returns:
+            Enforcement configuration dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No enforcement configured (404).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                config = client.get_schema_enforcement()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/schema/")
+        params: dict[str, str] | None = None
+        if fields is not None:
+            params = {"fields": fields}
+        result = self.app_request("GET", path, params=params)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from get_schema_enforcement: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def init_schema_enforcement(
+        self,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Initialize schema enforcement.
+
+        Calls ``POST /api/app/.../data-definitions/schema/``.
+
+        Args:
+            body: Init payload from
+                ``InitSchemaEnforcementParams.model_dump()``.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Already initialized or invalid rule_event (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.init_schema_enforcement(
+                    {"ruleEvent": "Warn and Accept"}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/schema/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from init_schema_enforcement: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def update_schema_enforcement(
+        self,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Partially update enforcement configuration.
+
+        Calls ``PATCH /api/app/.../data-definitions/schema/``.
+
+        Args:
+            body: Partial update payload from
+                ``UpdateSchemaEnforcementParams.model_dump()``.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No enforcement configured or validation error (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.update_schema_enforcement(
+                    {"ruleEvent": "Warn and Drop"}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/schema/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_schema_enforcement: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def replace_schema_enforcement(
+        self,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Fully replace enforcement configuration.
+
+        Calls ``PUT /api/app/.../data-definitions/schema/``.
+
+        Args:
+            body: Complete replacement payload from
+                ``ReplaceSchemaEnforcementParams.model_dump()``.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.replace_schema_enforcement({...})
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/schema/")
+        result = self.app_request("PUT", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from replace_schema_enforcement: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def delete_schema_enforcement(self) -> dict[str, Any]:
+        """Delete enforcement configuration.
+
+        Calls ``DELETE /api/app/.../data-definitions/schema/``.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No enforcement configured (404).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.delete_schema_enforcement()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/schema/")
+        result = self.app_request("DELETE", path)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from delete_schema_enforcement: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
+    # Data Auditing (Phase 028)
+    # =========================================================================
+
+    def run_audit(self) -> list[Any]:
+        """Run a full data audit (events + properties).
+
+        Calls ``GET /api/app/.../data-definitions/audit/``.
+        Uses ``_raw=True`` because the response is a 2-element array:
+        ``[violations_list, metadata_dict]``.
+
+        Returns:
+            Raw 2-element array: ``[violations, {"computed_at": ...}]``.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No schemas defined (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                raw = client.run_audit()
+                violations, metadata = raw[0], raw[1]
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/audit/")
+        result = self.app_request("GET", path, _raw=True)
+        # The response has {"status": "ok", "results": [violations, metadata]}
+        if isinstance(result, dict) and "results" in result:
+            return result["results"]  # type: ignore[no-any-return]
+        if isinstance(result, list):
+            return result
+        raise MixpanelDataError(
+            f"Unexpected audit response format: {type(result).__name__}",
+        )
+
+    def run_audit_events_only(self) -> list[Any]:
+        """Run an events-only data audit (faster).
+
+        Calls ``GET /api/app/.../data-definitions/audit-events-only/``.
+        Same response format as ``run_audit()``.
+
+        Returns:
+            Raw 2-element array: ``[violations, {"computed_at": ...}]``.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No schemas defined (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                raw = client.run_audit_events_only()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/audit-events-only/")
+        result = self.app_request("GET", path, _raw=True)
+        if isinstance(result, dict) and "results" in result:
+            return result["results"]  # type: ignore[no-any-return]
+        if isinstance(result, list):
+            return result
+        raise MixpanelDataError(
+            f"Unexpected audit response format: {type(result).__name__}",
+        )
+
+    # =========================================================================
+    # Data Volume Anomalies (Phase 028)
+    # =========================================================================
+
+    def list_data_volume_anomalies(
+        self,
+        *,
+        query_params: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """List detected data volume anomalies.
+
+        Calls ``GET /api/app/.../data-definitions/data-volume-anomalies/``.
+        Extracts anomalies from ``results.anomalies`` using ``_raw=True``.
+
+        Args:
+            query_params: Optional filters (status, limit, event_id,
+                prop_id, include_property_anomalies,
+                include_metric_anomalies).
+
+        Returns:
+            List of anomaly dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                anomalies = client.list_data_volume_anomalies(
+                    query_params={"status": "open"}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/data-volume-anomalies/")
+        result = self.app_request("GET", path, params=query_params, _raw=True)
+        # Response: {"status":"ok","results":{"anomalies":[...]}}
+        if isinstance(result, dict):
+            results = result.get("results", result)
+            if isinstance(results, dict):
+                anomalies = results.get("anomalies", [])
+                if isinstance(anomalies, list):
+                    return anomalies
+        raise MixpanelDataError(
+            "Unexpected response format from list_data_volume_anomalies",
+        )
+
+    def update_anomaly(
+        self,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update the status of a single anomaly.
+
+        Calls ``PATCH /api/app/.../data-definitions/data-volume-anomalies/``.
+
+        Args:
+            body: Update payload from ``UpdateAnomalyParams.model_dump()``.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Anomaly not found or invalid parameters (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.update_anomaly(
+                    {"id": 123, "status": "dismissed", "anomalyClass": "Event"}
+                )
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/data-volume-anomalies/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from update_anomaly: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    def bulk_update_anomalies(
+        self,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Bulk update anomaly statuses.
+
+        Calls ``PATCH /api/app/.../data-definitions/data-volume-anomalies/bulk/``.
+
+        Args:
+            body: Bulk update payload from
+                ``BulkUpdateAnomalyParams.model_dump()``.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                result = client.bulk_update_anomalies({
+                    "anomalies": [...], "status": "dismissed"
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/data-volume-anomalies/bulk/")
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from bulk_update_anomalies: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
+    # =========================================================================
+    # Event Deletion Requests (Phase 028)
+    # =========================================================================
+
+    def list_deletion_requests(self) -> list[dict[str, Any]]:
+        """List all event deletion requests.
+
+        Calls ``GET /api/app/.../data-definitions/events/deletion-requests/``.
+
+        Returns:
+            List of deletion request dictionaries.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                requests = client.list_deletion_requests()
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/deletion-requests/")
+        result = self.app_request("GET", path)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from list_deletion_requests: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def create_deletion_request(
+        self,
+        body: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Create a new event deletion request.
+
+        Calls ``POST /api/app/.../data-definitions/events/deletion-requests/``.
+
+        Args:
+            body: Creation payload from
+                ``CreateDeletionRequestParams.model_dump()``.
+
+        Returns:
+            Updated full list of deletion requests.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                requests = client.create_deletion_request({
+                    "eventName": "Test", "fromDate": "2026-01-01",
+                    "toDate": "2026-01-31",
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/deletion-requests/")
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from create_deletion_request: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def cancel_deletion_request(self, request_id: int) -> list[dict[str, Any]]:
+        """Cancel a pending deletion request.
+
+        Calls ``DELETE /api/app/.../data-definitions/events/deletion-requests/``
+        with JSON body ``{"id": request_id}``.
+
+        Args:
+            request_id: Deletion request ID to cancel.
+
+        Returns:
+            Updated full list of deletion requests.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Request not found or not cancellable (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                requests = client.cancel_deletion_request(42)
+            ```
+        """
+        path = self.maybe_scoped_path("data-definitions/events/deletion-requests/")
+        result = self.app_request("DELETE", path, json_body={"id": request_id})
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from cancel_deletion_request: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
+
+    def preview_deletion_filters(
+        self,
+        body: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Preview what events a deletion filter would match.
+
+        Calls ``POST .../data-definitions/events/deletion-requests/preview-filters/``.
+
+        Args:
+            body: Preview payload from
+                ``PreviewDeletionFiltersParams.model_dump()``.
+
+        Returns:
+            List of expanded/normalized filters.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid filter parameters (400).
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                filters = client.preview_deletion_filters({
+                    "eventName": "Test", "fromDate": "2026-01-01",
+                    "toDate": "2026-01-31",
+                })
+            ```
+        """
+        path = self.maybe_scoped_path(
+            "data-definitions/events/deletion-requests/preview-filters/"
+        )
+        result = self.app_request("POST", path, json_body=body)
+        if not isinstance(result, list):
+            raise MixpanelDataError(
+                f"Unexpected response from preview_deletion_filters: "
+                f"expected list, got {type(result).__name__}",
+            )
+        return result
