@@ -18,7 +18,7 @@ Mixpanel's web UI is built for interactive exploration. But many workflows need 
 
 `mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—segmentation, funnels, retention, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
 
-## Three Interfaces, One Capability Set
+## Two Interfaces, One Capability Set
 
 **Python Library** — For notebooks, scripts, and applications:
 
