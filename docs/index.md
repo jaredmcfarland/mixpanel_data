@@ -145,20 +145,6 @@ mp query segmentation "Purchase" --from 2025-01-01 --format json --jq '.total'
 #     process(event)
 ```
 
-**MCP Server** — For AI assistants like Claude Desktop:
-
-The [`mp_mcp`](mcp/index.md) package exposes all mixpanel_data capabilities through the Model Context Protocol (MCP). AI assistants can query your analytics through natural conversation:
-
-| You Say                                        | What Happens                           |
-| ---------------------------------------------- | -------------------------------------- |
-| "What events are tracked in my project?"       | Discovers schema via `list_events`     |
-| "How many signups happened last week?"         | Runs segmentation query                |
-| "Why did conversions drop on January 7th?"     | AI-powered diagnosis across dimensions |
-| "Show me a product health dashboard"           | Orchestrates AARRR metrics analysis    |
-| "Stream events from January and find top users" | Streams data for analysis              |
-
-The MCP server includes intelligent tools that synthesize insights, composed tools that orchestrate multi-query analysis, and interactive workflows with user confirmation for large operations. See the [MCP Server documentation](mcp/index.md) for setup and tool reference.
-
 ## Capabilities
 
 **Discovery** — Rapidly explore your project's data landscape:
@@ -239,4 +225,3 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks
 - [Data Governance](guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables
 - [CLI Reference](cli/index.md) — Command-line interface documentation
-- [MCP Server](mcp/index.md) — Expose analytics to AI assistants like Claude Desktop

@@ -14,7 +14,7 @@
 
 ## Executive Summary
 
-`mixpanel_data` is a Python library and command-line tool that enables terminal-based coding agents (Claude Code, Cursor, etc.) to interact with Mixpanel data efficiently. Unlike the Mixpanel MCP server which dumps API responses directly into the context window, `mixpanel_data` takes a **database-first approach**: fetch data once, store it locally in DuckDB, then run unlimited queries against the local database.
+`mixpanel_data` is a Python library and command-line tool that enables terminal-based coding agents (Claude Code, Cursor, etc.) to interact with Mixpanel data efficiently. It provides a **programmable interface** to Mixpanel analytics: discover your schema, run live queries (segmentation, funnels, retention), stream events and profiles, and manage entities via the App API.
 
 ### Naming
 
@@ -32,17 +32,10 @@ This preserves the agent's context window for reasoning and insights rather than
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  MCP Approach                                               │
-│  Agent asks question → API call → 30KB JSON in context      │
-│  Agent asks another question → API call → 30KB more         │
-│  Context window fills up with data, not thinking            │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
 │  mp Approach                                                │
-│  Agent fetches data once → stored in local DuckDB           │
-│  Agent queries shape → small schema response                │
-│  Agent runs SQL → precise answer, minimal tokens            │
+│  Agent discovers schema → small metadata response           │
+│  Agent runs live query → precise answer, minimal tokens     │
+│  Agent streams data → memory-efficient iterators            │
 │  Context window preserved for reasoning                     │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -443,7 +436,7 @@ df = query_df("SELECT * FROM events WHERE event = 'Sign Up'")
 
 ### `mp report` — Live Mixpanel Queries
 
-These call Mixpanel's Query API directly (like the MCP server does).
+These call Mixpanel's Query API directly.
 
 ```bash
 # Segmentation
@@ -1225,11 +1218,9 @@ Commands that may be added in future versions:
 - `mp alerts` — Alert configuration and monitoring
 - `mp formulas` — Custom metric formulas
 
-### MCP Server (v2+)
+### MCP Server
 
-Expose `mp` as an MCP server itself, combining both approaches:
-- Live queries (like existing Mixpanel MCP)
-- Local database operations (unique to `mp`)
+> **Done.** The MCP server has been built and extracted to a separate project at `../mp_mcp/`.
 
 ---
 
