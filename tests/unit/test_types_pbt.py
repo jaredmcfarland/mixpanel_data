@@ -864,7 +864,7 @@ class TestCrossTypeInvariants:
 
         # All should produce valid DataFrames
         for r in all_results:
-            df = r.df  # type: ignore[attr-defined]
+            df = r.df
             assert df is not None
             assert len(df) >= 0
 
