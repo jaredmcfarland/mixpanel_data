@@ -57,7 +57,7 @@ CLI (Typer) → Public API (Workspace) → Services → Infrastructure (Config, 
 ```
 
 **Layer rules:**
-- CLI calls Workspace only (never storage/API directly)
+- CLI calls Workspace only (never API client directly)
 - Services call infrastructure only (no horizontal service calls)
 
 ## Code Requirements

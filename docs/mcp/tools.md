@@ -173,7 +173,7 @@ Get the most active events by volume.
 
 Get workspace configuration details.
 
-**Returns:** Project ID, region, account name, storage path
+**Returns:** Project ID, region, and account name
 
 **Example prompt:** "Show my Mixpanel workspace configuration"
 
@@ -675,29 +675,9 @@ Compare user cohorts across behavioral dimensions.
 
 ---
 
-## Interactive Tools (2) — Elicitation-Powered
+## Interactive Tools (1) — Elicitation-Powered
 
 Tools using `ctx.elicit()` for user confirmation and multi-step workflows.
-
-### safe_large_fetch
-
-Volume estimation with user confirmation before large fetches.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `from_date` | string | Yes | Start date |
-| `to_date` | string | Yes | End date |
-| `events` | list[string] | No | Events to fetch |
-
-**Workflow:**
-
-1. Estimates data volume
-2. Requests user confirmation if volume is large
-3. Executes fetch with progress reporting
-
-**Example prompt:** "Safely fetch all events from the last 90 days"
-
----
 
 ### guided_analysis
 

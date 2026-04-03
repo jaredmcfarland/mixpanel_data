@@ -110,11 +110,11 @@ User retention analysis workflow.
 
 ---
 
-### local_analysis_workflow
+### analysis_workflow
 
-Local SQL analysis workflow.
+Data analysis workflow.
 
-**Description:** Guide for working with locally stored data.
+**Description:** Guide for analyzing Mixpanel data.
 
 **Workflow steps:**
 

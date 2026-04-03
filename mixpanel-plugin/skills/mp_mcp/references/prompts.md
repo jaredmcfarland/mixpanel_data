@@ -14,7 +14,7 @@ Guide through a complete analytics exploration workflow.
 1. **Discover Your Schema** - Use `list_events`, `list_funnels`, `list_cohorts`
 2. **Explore Key Events** - Use `list_properties`, `top_events`
 3. **Run Initial Analysis** - Use `segmentation`, `funnel`, `retention`
-4. **Deep Dive with Local Data** - Use `fetch_events`, `sql`, `sample`
+4. **Deep Dive** - Use `stream_events`, JQL for complex analysis
 
 **Best For**: New users exploring a Mixpanel project for the first time.
 
@@ -55,20 +55,19 @@ Guide through retention analysis workflow.
 
 ---
 
-### local_analysis_workflow
+### analysis_workflow
 
-Guide through local data analysis with SQL.
+Guide through Mixpanel data analysis.
 
 **Parameters**: None
 
 **Workflow Steps**:
-1. **Fetch Your Data** - Use `fetch_events` to download to local storage
-2. **Explore the Data** - Use `list_tables`, `table_schema`, `sample`
-3. **Query with SQL** - Use `sql` for custom analysis
-4. **Advanced Analysis** - Join events with profiles, calculate user-level metrics
-5. **Clean Up** - Use `drop_table` when done
+1. **Discover Schema** - Use `list_events`, `list_properties`, `list_funnels`
+2. **Stream Data** - Use `stream_events` or `stream_profiles` for raw data access
+3. **Run Live Queries** - Use `segmentation`, `funnel`, `retention` for insights
+4. **Advanced Analysis** - Use JQL for complex transformations
 
-**Best For**: Complex analysis requiring custom SQL queries.
+**Best For**: Exploring a Mixpanel project and running analyses.
 
 ---
 

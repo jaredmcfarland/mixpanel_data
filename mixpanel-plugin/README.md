@@ -14,28 +14,25 @@ Comprehensive Mixpanel analytics integration for Claude Code with interactive co
 - Test: Validate credentials and API access
 - **Use when**: Managing Mixpanel credentials or switching between projects
 
-**`/mp-inspect [operation] [table-name]`**
-- Explore Mixpanel schema and local data structure
-- 12 curated operations across 3 categories:
+**`/mp-inspect [operation] [event-name]`**
+- Explore Mixpanel schema and discover events/properties
+- Operations across 2 categories:
   - Discover Schema: events, properties, funnels, cohorts
-  - Explore Local Data: tables, schema, sample, breakdown
-  - Analyze Patterns: keys, column, distribution, daily
+  - Analyze Patterns: distribution, daily
 - Progressive workflow chaining with next-step suggestions
 - **Use when**: Discovering available data before queries or understanding schema
 
-**`/mp-fetch [from-date] [to-date] [table-name]`**
-- Guided data fetching with validation
-- Parallel fetching for large date ranges (up to 10x faster)
-- Handles table conflicts (append/replace)
+**`/mp-fetch [events|profiles] [from-date] [to-date]`**
+- Guided data streaming with validation
+- Stream events or profiles from the Mixpanel API
 - Optional filters: events, WHERE clauses, limits
-- **Use when**: Fetching Mixpanel events into local DuckDB for analysis
+- **Use when**: Streaming Mixpanel events or profiles for analysis
 
-**`/mp-query [sql|jql|segmentation|funnel|retention]`**
+**`/mp-query [jql|segmentation|funnel|retention]`**
 - Interactive query builder for all query types
-- SQL: Query local DuckDB tables
 - JQL: JavaScript Query Language for complex transformations
 - Live queries: Segmentation, funnels, retention
-- **Use when**: Analyzing fetched data or running live queries
+- **Use when**: Running live queries against the Mixpanel API
 
 **`/mp-funnel [funnel-id]`**
 - Interactive funnel analysis wizard
@@ -154,21 +151,21 @@ Follow the interactive wizard to enter:
 
 Discover available events, properties, and saved funnels before fetching data.
 
-### 3. Fetch Data
+### 3. Stream Data
 
 ```bash
-> /mp-fetch 2024-01-01 2024-01-31 events
+> /mp-fetch events 2024-01-01 2024-01-31
 ```
 
-This fetches January 2024 events into a table named "events".
+This streams January 2024 events from the Mixpanel API.
 
 ### 4. Query Data
 
 ```bash
-> /mp-query sql
+> /mp-query segmentation
 ```
 
-Choose from suggested queries or build custom SQL/JQL.
+Choose from segmentation, funnel, retention, or JQL queries.
 
 ### 5. Auto-Guidance
 
@@ -223,12 +220,12 @@ The skill activates automatically to guide you.
 
 ## Usage Patterns
 
-### Pattern 1: Quick Setup → Fetch → Analyze
+### Pattern 1: Quick Setup → Query → Analyze
 
 ```bash
 /mp-auth production
-/mp-fetch 2024-01-01 2024-01-31 jan
-/mp-query sql
+/mp-inspect events
+/mp-query segmentation
 ```
 
 ### Pattern 2: Guided Discovery
@@ -242,8 +239,8 @@ Claude: [Activates skill automatically]
 ### Pattern 3: Advanced Analysis
 
 ```bash
-# Fetch specific events with filters
-/mp-fetch 2024-01-01 2024-01-31 purchases --events "Purchase" --where 'properties["amount"] > 100'
+# Stream specific events with filters
+/mp-fetch events 2024-01-01 2024-01-31 --events "Purchase" --where 'properties["amount"] > 100'
 
 # Build complex JQL query
 /mp-query jql
@@ -259,7 +256,7 @@ User: "Help me build a funnel analysis for signup → purchase"
 Slash commands give users **explicit control** over operations:
 - `/mp-auth` → "Configure credentials NOW"
 - `/mp-inspect` → "Explore schema NOW"
-- `/mp-fetch` → "Fetch data NOW"
+- `/mp-fetch` → "Stream data NOW"
 - `/mp-query` → "Query data NOW"
 
 ### Skill = Knowledge (Auto-Discovery)

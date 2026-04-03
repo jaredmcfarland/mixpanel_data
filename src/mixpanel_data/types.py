@@ -1707,8 +1707,8 @@ class PropertyDistributionResult:
     """Distribution of values for a property from JQL analysis.
 
     Contains the top N values for a property with their counts and percentages,
-    enabling quick understanding of property value distribution without fetching
-    all data locally.
+    enabling quick understanding of property value distribution without processing
+    all raw events.
 
     Attributes:
         event: The event type analyzed.
@@ -1784,7 +1784,7 @@ class NumericPropertySummaryResult:
 
     Contains min, max, sum, average, standard deviation, and percentiles
     for a numeric property, enabling understanding of value distributions
-    without fetching all data locally.
+    without processing all raw events.
 
     Attributes:
         event: The event type analyzed.
@@ -1998,7 +1998,7 @@ class EngagementDistributionResult:
     """User engagement distribution from JQL analysis.
 
     Shows how many users performed N events, helping understand
-    user engagement patterns without fetching all data locally.
+    user engagement patterns without processing all raw events.
 
     Attributes:
         from_date: Query start date (YYYY-MM-DD).

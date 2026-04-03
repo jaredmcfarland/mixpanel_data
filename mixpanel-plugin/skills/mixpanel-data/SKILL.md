@@ -1,11 +1,11 @@
 ---
 name: mixpanel-data
-description: Analyze Mixpanel analytics data using the mixpanel_data Python library or mp CLI. Use when working with Mixpanel event data, user profiles, funnels, retention, cohorts, segmentation queries, JQL scripts, or SQL analysis on local DuckDB. Triggers on mentions of Mixpanel, event analytics, funnel analysis, retention curves, user behavior tracking, JQL queries, filter expressions, 'fetch data from Mixpanel', 'query Mixpanel with SQL', 'run DuckDB queries on events', 'analyze user behavior', 'export Mixpanel data', 'mp command', or requests to work with analytics pipelines. Supports filter expressions for WHERE/ON clauses, JQL (JavaScript Query Language) for complex transformations, Python scripts with pandas integration, and CLI pipelines with jq/Unix tools.
+description: Analyze Mixpanel analytics data using the mixpanel_data Python library or mp CLI. Use when working with Mixpanel event data, user profiles, funnels, retention, cohorts, segmentation queries, JQL scripts, or streaming data. Triggers on mentions of Mixpanel, event analytics, funnel analysis, retention curves, user behavior tracking, JQL queries, filter expressions, 'stream data from Mixpanel', 'query Mixpanel', 'analyze user behavior', 'export Mixpanel data', 'mp command', or requests to work with analytics pipelines. Supports filter expressions for WHERE/ON clauses, JQL (JavaScript Query Language) for complex transformations, Python scripts with pandas integration, and CLI pipelines with jq/Unix tools.
 ---
 
 # Mixpanel Data Analysis
 
-Fetch Mixpanel data once into local DuckDB, then query repeatedly with SQL—preserving context for reasoning rather than consuming it with raw API responses.
+Pure API client for Mixpanel analytics — stream events/profiles, run live queries (segmentation, funnels, retention, JQL), and manage entities via the App API.
 
 ## Documentation Access
 
@@ -33,7 +33,7 @@ Full documentation is hosted at **https://jaredmcfarland.github.io/mixpanel_data
 | `/getting-started/configuration/index.md` | Credentials and config |
 | `/guide/fetching/index.md` | Fetching events/profiles |
 | `/guide/streaming/index.md` | Streaming without storage |
-| `/guide/sql-queries/index.md` | DuckDB SQL patterns |
+| `/guide/streaming/index.md` | Streaming events and profiles |
 | `/guide/live-analytics/index.md` | Segmentation, funnels, retention |
 | `/guide/discovery/index.md` | Schema exploration |
 | `/api/workspace/index.md` | Workspace class reference |
@@ -51,7 +51,7 @@ When you need detailed information, read these reference files:
 | [library-api.md](references/library-api.md) | Complete Python API signatures, parameters, return types for all Workspace methods |
 | [cli-commands.md](references/cli-commands.md) | Full CLI command reference with all options and examples |
 | [query-expressions.md](references/query-expressions.md) | Complete filter expression syntax, JQL reference, built-in reducers, bucketing |
-| [patterns.md](references/patterns.md) | JSON property queries in DuckDB, pandas integration, jq/Unix pipelines, data science workflows |
+| [patterns.md](references/patterns.md) | Streaming patterns, pandas integration, jq/Unix pipelines, data science workflows |
 | [documentation.md](references/documentation.md) | How to fetch external documentation from llms.txt, page URLs, fetch strategy |
 
 ## When to Use
@@ -71,7 +71,7 @@ When you need detailed information, read these reference files:
 ## Two Data Paths
 
 ### Path 1: Live Queries (Quick Answers)
-Call Mixpanel API directly for real-time metrics without local storage.
+Call Mixpanel API directly for real-time metrics.
 
 ```python
 # Python
@@ -84,42 +84,23 @@ print(result.df)
 mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 --on country
 ```
 
-### Path 2: Local Analysis (Deep Analysis)
-Fetch data into DuckDB, then query with SQL repeatedly.
+### Path 2: Streaming (Pipelines)
+Stream events/profiles for processing with external tools.
 
 ```python
-# Python - use parallel=True for large date ranges (up to 10x faster)
-ws.fetch_events("events", from_date="2024-01-01", to_date="2024-03-31", parallel=True)
-df = ws.sql("SELECT event_name, COUNT(*) FROM events GROUP BY 1")
+# Python - memory-efficient streaming
+for event in ws.stream_events(from_date="2024-01-01", to_date="2024-01-31"):
+    print(event)
+
+for profile in ws.stream_profiles():
+    print(profile)
 ```
 
 ```bash
-# CLI - use --parallel for large date ranges (up to 10x faster)
-mp fetch events --from 2024-01-01 --to 2024-03-31 --parallel
-mp query sql "SELECT event_name, COUNT(*) FROM events GROUP BY 1"
+# CLI - pipe to jq or other tools
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq '.event'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq -r '[.event, .distinct_id] | @csv' > events.csv
 ```
-
-**Parallel Fetching**: For date ranges > 7 days, use `--parallel` (CLI) or `parallel=True` (Python) for significantly faster exports. Required for ranges > 100 days.
-
-### Path 3: Streaming (Pipelines)
-Stream to stdout for processing with external tools.
-
-```bash
-mp fetch events --from 2024-01-01 --to 2024-01-01 --stdout | jq '.event'
-mp fetch events --stdout | jq -r '[.event, .distinct_id] | @csv' > events.csv
-```
-
-## JSON Property Access (Critical)
-
-Events and profiles store properties as JSON. Access with `properties->>'$.fieldname'`:
-
-```sql
--- DuckDB SQL (local queries)
-SELECT properties->>'$.country' as country FROM events
-WHERE properties->>'$.plan' = 'premium'
-```
-
-For complete JSON query patterns (type casting, filtering, aggregation), see [references/patterns.md](references/patterns.md).
 
 ## Filter Expressions (WHERE/ON)
 
@@ -132,7 +113,7 @@ mp query segmentation -e Purchase --on country
 
 **WHERE Parameter** (filtering): Always uses full expression syntax
 ```bash
-mp fetch events --where 'properties["amount"] > 100 and properties["plan"] in ["premium", "enterprise"]'
+mp query segmentation -e Purchase --where 'properties["amount"] > 100 and properties["plan"] in ["premium", "enterprise"]'
 ```
 
 For complete expression syntax (comparison, logical, set operations, existence functions, date/time functions), see [references/query-expressions.md](references/query-expressions.md).
@@ -156,48 +137,39 @@ Resolution priority:
 
 ## Quick Start Examples
 
-### Python: Fetch and Analyze
+### Python: Stream and Analyze
 
 ```python
 import mixpanel_data as mp
 
 ws = mp.Workspace()
-ws.fetch_events("jan", from_date="2024-01-01", to_date="2024-01-31")
 
-# SQL queries
-df = ws.sql("""
-    SELECT properties->>'$.country' as country, COUNT(*) as cnt
-    FROM jan GROUP BY 1 ORDER BY 2 DESC
-""")
+# Stream events
+for event in ws.stream_events(from_date="2024-01-01", to_date="2024-01-31"):
+    print(event)
 
-# Introspection
-ws.event_breakdown("jan")  # Event distribution
-ws.summarize("jan")        # Column statistics
+# Run segmentation
+result = ws.segmentation("Purchase", from_date="2024-01-01", to_date="2024-01-31", on="country")
+print(result.df)
+
+# Schema discovery
+events = ws.events()
+props = ws.properties("Purchase")
 
 ws.close()
 ```
 
-### Python: Ephemeral Workspace
-
-```python
-with mp.Workspace.ephemeral() as ws:
-    ws.fetch_events("events", from_date="2024-01-01", to_date="2024-01-01")
-    count = ws.sql_scalar("SELECT COUNT(*) FROM events")
-# Database automatically deleted
-```
-
-### CLI: Discover and Fetch
+### CLI: Discover and Query
 
 ```bash
 # Discover available events
 mp inspect events --format table
 
-# Fetch events to local database
-mp fetch events --from 2024-01-01 --to 2024-01-31
+# Run segmentation query
+mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 --on country
 
-# Query locally
-mp query sql "SELECT COUNT(*) FROM events" --format table
-mp inspect breakdown -t events  # Event distribution
+# Stream events for processing
+mp stream events --from 2024-01-01 --to 2024-01-31 | jq '.event'
 ```
 
 ### CLI: Live Queries
@@ -214,12 +186,12 @@ mp query funnel 12345 --from 2024-01-01 --to 2024-01-31
 mp query retention --born "Sign Up" --return "Purchase" --from 2024-01-01 --to 2024-01-31
 ```
 
-## Data Storage
+## Data Format
 
-Events: `(event_name, event_time, distinct_id, insert_id PRIMARY KEY, properties JSON)`
-Profiles: `(distinct_id PRIMARY KEY, properties JSON, last_seen)`
+Streamed events contain: `event` (name), `time`, `distinct_id`, `properties` (dict)
+Streamed profiles contain: `distinct_id`, `properties` (dict), `last_seen`
 
-Full schema and query patterns in [references/patterns.md](references/patterns.md).
+See [references/patterns.md](references/patterns.md) for integration patterns.
 
 ## Output Formats (CLI)
 
@@ -239,9 +211,6 @@ mp inspect events --format json --jq '.[] | select(contains("User"))'
 # Extract fields from query results
 mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
   --format json --jq '.total'
-
-# Filter SQL results
-mp query sql "SELECT * FROM events" --format json --jq '.[] | select(.event_name == "Purchase")'
 ```
 
 Note: `--jq` only works with `--format json` or `--format jsonl`.
@@ -251,34 +220,37 @@ Note: `--jq` only works with `--format json` or `--format jsonl`.
 The Workspace class provides three main capability areas:
 
 1. **Discovery**: `events()`, `properties()`, `funnels()`, `cohorts()` - Explore project schema
-2. **Data Fetching**: `fetch_events()`, `fetch_profiles()`, `stream_*()` - Get data locally or stream
+2. **Streaming**: `stream_events()`, `stream_profiles()` - Stream data from Mixpanel API
 3. **Analytics**: `segmentation()`, `funnel()`, `retention()`, `jql()` - Live queries and analysis
-4. **Local SQL**: `sql()`, `sql_scalar()`, `sql_rows()` - Query DuckDB with SQL
-5. **Introspection**: `info()`, `tables()`, `sample()`, `summarize()` - Inspect local data
+4. **Entity CRUD**: Dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, webhooks, Lexicon
 
-### Advanced Profile Fetching
+### Advanced Profile Streaming
 
-`fetch_profiles()` and `stream_profiles()` support advanced filtering:
+`stream_profiles()` supports advanced filtering:
 
 ```python
-# Fetch specific users by ID
-ws.fetch_profiles("vips", distinct_ids=["user_1", "user_2"])
+# Stream specific users by ID
+for p in ws.stream_profiles(distinct_ids=["user_1", "user_2"]):
+    print(p)
 
-# Fetch group profiles (companies, accounts, etc.)
-ws.fetch_profiles("companies", group_id="companies")
+# Stream group profiles (companies, accounts, etc.)
+for p in ws.stream_profiles(group_id="companies"):
+    print(p)
 
-# Fetch users by behavior (e.g., purchased in last 30 days)
-ws.fetch_profiles(
-    "purchasers",
+# Stream users by behavior (e.g., purchased in last 30 days)
+for p in ws.stream_profiles(
     behaviors=[{"window": "30d", "name": "buyers", "event_selectors": [{"event": "Purchase"}]}],
     where='(behaviors["buyers"] > 0)'
-)
+):
+    print(p)
 
 # Query historical profile state
-ws.fetch_profiles("historical", as_of_timestamp=1704067200)
+for p in ws.stream_profiles(as_of_timestamp=1704067200):
+    print(p)
 
 # Cohort membership analysis (include non-members with flag)
-ws.fetch_profiles("cohort_analysis", cohort_id="12345", include_all_users=True)
+for p in ws.stream_profiles(cohort_id="12345", include_all_users=True):
+    print(p)
 ```
 
 **Parameter constraints**: `distinct_id`/`distinct_ids` mutually exclusive; `behaviors`/`cohort_id` mutually exclusive; `include_all_users` requires `cohort_id`.
@@ -289,8 +261,6 @@ For complete method signatures and parameters, see [references/library-api.md](r
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `TableExistsError` | Table already exists | Use `--replace` or `--append` |
 | `AuthenticationError` | Invalid credentials | Check `mp auth test` |
 | `RateLimitError` | API rate limited | Wait for retry_after seconds |
-| `DateRangeTooLargeError` | >100 days range (sequential) | Use `--parallel` flag |
 | `EventNotFoundError` | Event not in project | Check `mp inspect events` |

@@ -134,7 +134,7 @@ def _handle_exception(e: Exception) -> None:
         suggestions = [
             retry_msg,
             "Reduce your date range to lower API load",
-            "Consider caching results locally",
+            "Consider adding delays between requests",
         ]
         raise ToolError(
             format_rich_error("Rate limited by Mixpanel API.", e, suggestions)
@@ -188,8 +188,8 @@ def _handle_exception(e: Exception) -> None:
         logger.info("Date range too large: %d days", e.days_requested)
         suggestions = [
             f"Maximum date range is {e.max_days} days per request",
-            "Split into multiple requests and use append=True to combine results",
-            f"Example: fetch from {e.from_date} to a date within {e.max_days} days",
+            "Split into multiple streaming requests with smaller date ranges",
+            f"Example: stream from {e.from_date} to a date within {e.max_days} days",
         ]
         raise ToolError(
             format_rich_error(

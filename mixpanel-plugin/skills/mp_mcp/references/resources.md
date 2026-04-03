@@ -15,30 +15,9 @@ Workspace configuration and connection status.
   "project_id": 123456,
   "region": "us",
   "account": "production",
-  "path": "/path/to/workspace.duckdb",
-  "size_mb": 125.5,
-  "created_at": "2024-01-01T00:00:00",
-  "tables": [
-    {"name": "events", "row_count": 50000, "type": "events"},
-    {"name": "profiles", "row_count": 1000, "type": "profiles"}
-  ]
+  "connected": true,
+  "auth_method": "service_account"
 }
-```
-
----
-
-### workspace://tables
-
-List of locally stored tables.
-
-**Returns**: JSON array of table metadata with names, row counts, and types.
-
-```json
-[
-  {"name": "events", "row_count": 50000, "type": "events"},
-  {"name": "jan_events", "row_count": 10000, "type": "events"},
-  {"name": "profiles", "row_count": 1000, "type": "profiles"}
-]
 ```
 
 ---

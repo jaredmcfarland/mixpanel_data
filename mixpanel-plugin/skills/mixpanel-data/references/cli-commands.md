@@ -5,7 +5,7 @@ Complete reference for the `mp` CLI application.
 ## Table of Contents
 - Global Options
 - Authentication Commands (mp auth)
-- Fetch Commands (mp fetch)
+- Stream Commands (mp stream)
 - Query Commands (mp query)
 - Inspect Commands (mp inspect)
 
@@ -38,9 +38,6 @@ mp inspect events --format json --jq 'length'
 mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
   --format json --jq '.total'
 
-# Filter SQL results
-mp query sql "SELECT * FROM events LIMIT 100" --format json \
-  --jq '.[] | select(.event_name == "Purchase")'
 ```
 
 Note: `--jq` only works with JSON formats. Using it with other formats produces an error.
@@ -111,67 +108,42 @@ mp auth test
 mp auth test myaccount
 ```
 
-## Fetch Commands (mp fetch)
+## Stream Commands (mp stream)
 
-### mp fetch events
-Fetch events from Export API.
+### mp stream events
+Stream events from the Export API to stdout.
 ```bash
-mp fetch events --from 2024-01-01 --to 2024-01-31
-mp fetch events myevents --from 2024-01-01 --to 2024-01-31  # Custom table name
-mp fetch events --from 2024-01-01 --to 2024-12-31 --parallel  # Parallel fetch for large ranges
+mp stream events --from 2024-01-01 --to 2024-01-31
+mp stream events --from 2024-01-01 --to 2024-01-31 --events "Purchase"
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--from` | Start date (YYYY-MM-DD, required) |
 | `--to` | End date (YYYY-MM-DD, required) |
-| `--parallel, -p` | Parallel fetching with multiple threads (up to 10x faster) |
-| `--workers` | Number of parallel workers (default: 10, only with --parallel) |
-| `--chunk-days` | Days per chunk for parallel (default: 7, range: 1-100) |
 | `--events` | Comma-separated event names to filter |
 | `--where` | Filter expression (see syntax above) |
-| `--limit` | Max events (1-100000, NOT with --parallel) |
-| `--replace` | Replace existing table |
-| `--append` | Append to existing table |
-| `--stdout` | Stream JSONL to stdout instead of storing |
-| `--raw` | Output raw API format (with --stdout) |
-| `--batch-size` | Rows per commit (100-100000) |
-| `--no-progress` | Disable progress bar |
+| `--limit` | Max events to stream |
 
-**Note**: For date ranges > 7 days, use `--parallel` for significantly faster exports. Required for ranges > 100 days.
-
-### mp fetch profiles
-Fetch user profiles from Engage API.
+### mp stream profiles
+Stream user profiles from the Engage API to stdout.
 ```bash
-mp fetch profiles
-mp fetch profiles myprofiles --cohort 12345
-mp fetch profiles --distinct-id user_123
-mp fetch profiles --group-id companies
-mp fetch profiles --parallel  # Parallel fetch for large datasets
-mp fetch profiles --behaviors '[{"window":"30d","name":"purchasers","event_selectors":[{"event":"Purchase"}]}]' --where '(behaviors["purchasers"] > 0)'
+mp stream profiles
+mp stream profiles --cohort 12345
+mp stream profiles --where 'properties["plan"] == "premium"'
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--parallel, -p` | Parallel fetching with multiple threads (up to 5x faster) |
-| `--workers` | Number of parallel workers (default: 5, max: 5, only with --parallel) |
 | `--where` | Filter expression (see syntax above) |
 | `--cohort` | Cohort ID to filter |
 | `--output-properties` | Comma-separated properties to include |
-| `--distinct-id` | Fetch a single user by distinct_id |
-| `--distinct-ids` | Fetch specific users (repeatable flag) |
-| `--group-id` | Fetch group profiles (e.g., 'companies') instead of users |
+| `--distinct-id` | Stream a single user by distinct_id |
+| `--distinct-ids` | Stream specific users (repeatable flag) |
+| `--group-id` | Stream group profiles (e.g., 'companies') instead of users |
 | `--behaviors` | Behavioral filter JSON (requires `--where` to reference) |
 | `--as-of-timestamp` | Query profile state at Unix timestamp |
 | `--include-all-users` | Include all users with cohort membership flag (requires --cohort) |
-| `--replace` | Replace existing table |
-| `--append` | Append to existing table |
-| `--stdout` | Stream JSONL to stdout |
-| `--raw` | Output raw API format |
-| `--batch-size` | Rows per commit |
-| `--no-progress` | Disable progress bar |
-
-**Note**: For large profile datasets, use `--parallel` for significantly faster exports (up to 5x speedup).
 
 **Parameter Constraints:**
 - `--distinct-id` and `--distinct-ids` are mutually exclusive
@@ -179,16 +151,6 @@ mp fetch profiles --behaviors '[{"window":"30d","name":"purchasers","event_selec
 - `--include-all-users` requires `--cohort`
 
 ## Query Commands (mp query)
-
-### Local Queries
-
-#### mp query sql
-Execute SQL against local database.
-```bash
-mp query sql "SELECT COUNT(*) FROM events"
-mp query sql --file query.sql
-mp query sql "SELECT COUNT(*) FROM events" --scalar  # Single value
-```
 
 ### Live Queries
 
@@ -427,68 +389,3 @@ Get single schema.
 mp inspect lexicon-schema -t event -n Purchase
 ```
 
-### Introspection (Local Database)
-
-#### mp inspect info
-Workspace metadata.
-```bash
-mp inspect info
-```
-
-#### mp inspect tables
-List local tables.
-```bash
-mp inspect tables --format table
-```
-
-#### mp inspect schema
-Table column definitions.
-```bash
-mp inspect schema -t events
-```
-
-#### mp inspect sample
-Random sample rows.
-```bash
-mp inspect sample -t events
-mp inspect sample -t events -n 20
-```
-
-#### mp inspect summarize
-Statistical column summary.
-```bash
-mp inspect summarize -t events
-```
-
-#### mp inspect breakdown
-Event distribution.
-```bash
-mp inspect breakdown -t events
-```
-
-#### mp inspect keys
-JSON property keys.
-```bash
-mp inspect keys -t events
-mp inspect keys -t events -e Purchase  # Filter by event
-```
-
-#### mp inspect column
-Deep column analysis.
-```bash
-mp inspect column -t events -c event_name
-mp inspect column -t events -c "properties->>'$.country'" --top 20
-```
-
-| Option | Description |
-|--------|-------------|
-| `-t, --table` | Table name (required) |
-| `-c, --column` | Column name or JSON path (required) |
-| `--top` | Top N values (default 10) |
-
-#### mp inspect drop
-Delete a table.
-```bash
-mp inspect drop -t events
-mp inspect drop -t events --force  # Skip confirmation
-```

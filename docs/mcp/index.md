@@ -135,7 +135,7 @@ See [Tools](tools.md) for the complete reference.
 ┌────────────────────────▼────────────────────────────────┐
 │              mixpanel_data.Workspace                    │
 │  ┌─────────────┐  ┌────────────────┐  ┌─────────────┐   │
-│  │  Discovery  │  │  Live Queries  │  │   Storage   │   │
+│  │  Discovery  │  │  Live Queries  │  │  Streaming  │   │
 │  └─────────────┘  └────────────────┘  └─────────────┘   │
 └────────────────────────┬────────────────────────────────┘
                          │

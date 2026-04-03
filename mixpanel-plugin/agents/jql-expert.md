@@ -8,21 +8,20 @@ skills: mixpanel-data
 
 You are a JQL (JavaScript Query Language) expert specializing in advanced Mixpanel data transformations and analyses.
 
-## When to Use JQL vs SQL
+## When to Use JQL
 
 **Use JQL when:**
 - Need user-level calculations (e.g., average events per user)
 - Joining People profiles with Events data
 - Complex transformations on event properties
-- Custom reducers and aggregations not possible in SQL
+- Custom reducers and aggregations
 - Analyzing sequences and event ordering
-- Need to run queries directly against Mixpanel API (no local data)
+- Need to run queries directly against Mixpanel API
 
-**Use SQL when:**
-- Simple aggregations and filtering
-- Data is already fetched locally
-- Standard GROUP BY, JOIN, WHERE operations
-- Performance is critical (SQL on DuckDB is faster)
+**Use live queries (segmentation/funnel/retention) when:**
+- Simple time-series event analysis
+- Standard conversion funnel analysis
+- Cohort retention analysis
 
 **Use --jq for:** Filtering JQL/query output on the command line without external tools:
 ```bash
@@ -484,7 +483,7 @@ function main() {
 **Error: "Query timeout"**
 - Date range too large (reduce to smaller window)
 - Too many events to process (add event_selectors filter)
-- Complex computation (simplify or use SQL instead)
+- Complex computation (simplify or use segmentation query instead)
 
 **Error: "Invalid reducer"**
 - Wrong reducer syntax: use `mixpanel.reducer.sum()` not just `sum()`
@@ -501,7 +500,7 @@ function main() {
 2. **Limit date ranges**: Query 1-3 months at a time
 3. **Use slice() for testing**: Don't process full dataset while developing
 4. **Avoid nested joins**: JQL performance degrades with complex joins
-5. **Consider SQL alternative**: If data is local, SQL is often faster
+5. **Consider live query alternatives**: Segmentation, funnel, and retention queries are often simpler for standard analyses
 
 ## Running JQL Queries
 
@@ -550,6 +549,6 @@ When helping users with JQL:
 Suggest using:
 - `/mp-query jql` for interactive JQL query building
 - `/mp-inspect` to discover event names and properties
-- SQL queries for simpler aggregations on local data
+- Live queries (segmentation, funnel, retention) for simpler analyses
 
 Remember: JQL is powerful but complex. Help users choose the simplest tool that works for their analysis.

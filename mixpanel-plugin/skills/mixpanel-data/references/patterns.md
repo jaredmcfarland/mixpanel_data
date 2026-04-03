@@ -3,122 +3,45 @@
 Common patterns for integrating mixpanel_data with pandas, jq, and Unix pipelines.
 
 ## Table of Contents
-- Data Storage Schema
-- JSON Property Queries in DuckDB
+- Streaming Data Format
 - pandas Integration
 - jq Processing
 - Unix Pipelines
-- Date Range Chunking
 - Multi-Account Workflows
 - Data Science Workflows
 
-## Data Storage Schema
+## Streaming Data Format
 
-### Events Table
-```sql
-CREATE TABLE events (
-    event_name VARCHAR NOT NULL,
-    event_time TIMESTAMP NOT NULL,
-    distinct_id VARCHAR NOT NULL,
-    insert_id VARCHAR PRIMARY KEY,
-    properties JSON
-)
+### Event Format (from stream_events)
+```json
+{
+    "event": "Purchase",
+    "time": 1704067200,
+    "distinct_id": "user_123",
+    "properties": {
+        "country": "US",
+        "amount": 49.99,
+        "plan": "premium"
+    }
+}
 ```
 
-### Profiles Table
-```sql
-CREATE TABLE profiles (
-    distinct_id VARCHAR PRIMARY KEY,
-    properties JSON,
-    last_seen TIMESTAMP
-)
-```
-
-## JSON Property Queries in DuckDB
-
-Properties stored as JSON. Use `->>'$.field'` to extract.
-
-### Basic Extraction
-```sql
--- String property
-SELECT properties->>'$.country' as country FROM events
-
--- Nested property
-SELECT properties->>'$.user.plan' as plan FROM events
-
--- Multiple properties
-SELECT
-    properties->>'$.country' as country,
-    properties->>'$.plan' as plan,
-    properties->>'$.source' as source
-FROM events
-```
-
-### Type Casting
-```sql
--- Numeric property
-SELECT CAST(properties->>'$.amount' AS DOUBLE) as amount FROM events
-
--- Integer
-SELECT CAST(properties->>'$.quantity' AS INTEGER) as qty FROM events
-
--- Boolean (stored as string)
-SELECT properties->>'$.is_premium' = 'true' as is_premium FROM events
-```
-
-### Filtering
-```sql
--- Filter by property value
-SELECT * FROM events
-WHERE properties->>'$.country' = 'US'
-
--- Numeric comparison
-SELECT * FROM events
-WHERE CAST(properties->>'$.amount' AS DOUBLE) > 100
-
--- NULL handling
-SELECT * FROM events
-WHERE properties->>'$.referrer' IS NOT NULL
-```
-
-### Aggregation
-```sql
-SELECT
-    properties->>'$.country' as country,
-    COUNT(*) as events,
-    COUNT(DISTINCT distinct_id) as users,
-    AVG(CAST(properties->>'$.amount' AS DOUBLE)) as avg_amount
-FROM events
-WHERE event_name = 'Purchase'
-GROUP BY properties->>'$.country'
-ORDER BY events DESC
+### Profile Format (from stream_profiles)
+```json
+{
+    "distinct_id": "user_123",
+    "properties": {
+        "name": "Alice",
+        "plan": "premium",
+        "country": "US"
+    },
+    "last_seen": "2024-01-31T12:00:00"
+}
 ```
 
 ## pandas Integration
 
-### DataFrame from SQL
-```python
-import mixpanel_data as mp
-
-ws = mp.Workspace()
-ws.fetch_events("events", from_date="2024-01-01", to_date="2024-01-31")
-
-# Direct SQL to DataFrame
-df = ws.sql("""
-    SELECT
-        DATE_TRUNC('day', event_time) as day,
-        event_name,
-        COUNT(*) as count
-    FROM events
-    GROUP BY 1, 2
-""")
-
-# Standard pandas operations
-daily = df.groupby('day')['count'].sum()
-pivot = df.pivot(index='day', columns='event_name', values='count').fillna(0)
-```
-
-### Result .df Property
+### DataFrame from Live Queries
 All result types have lazy `.df` conversion:
 
 ```python
@@ -139,12 +62,6 @@ df = result.df
 ```python
 import matplotlib.pyplot as plt
 
-# Time series
-df = ws.sql("SELECT DATE_TRUNC('day', event_time) as day, COUNT(*) as cnt FROM events GROUP BY 1")
-df.plot(x='day', y='cnt', kind='line', figsize=(12, 6))
-plt.title('Daily Events')
-plt.savefig('daily.png')
-
 # Segmentation visualization
 result = ws.segmentation("Purchase", from_date="2024-01-01", to_date="2024-01-31", on="country")
 pivot = result.df.pivot(index='date', columns='segment', values='count')
@@ -152,18 +69,16 @@ pivot.plot(figsize=(12, 6))
 plt.title('Purchases by Country')
 ```
 
-### Merging Data
+### DataFrame from Streaming
 ```python
-# Fetch multiple tables
-ws.fetch_events("jan", from_date="2024-01-01", to_date="2024-01-31")
-ws.fetch_events("feb", from_date="2024-02-01", to_date="2024-02-29", append=True)
+import pandas as pd
+import mixpanel_data as mp
 
-# Or use SQL UNION
-df = ws.sql("""
-    SELECT * FROM jan
-    UNION ALL
-    SELECT * FROM feb
-""")
+ws = mp.Workspace()
+
+# Collect streamed events into a DataFrame
+events = list(ws.stream_events(from_date="2024-01-01", to_date="2024-01-31"))
+df = pd.DataFrame(events)
 ```
 
 ## jq Processing
@@ -180,10 +95,6 @@ mp inspect events --format json --jq '.[] | select(contains("User"))'
 # Filter query results
 mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
   --format json --jq '.total'
-
-# Filter SQL results
-mp query sql "SELECT * FROM events LIMIT 100" --format json \
-  --jq '.[] | select(.event_name == "Purchase")'
 ```
 
 ### External jq with Streaming
@@ -192,50 +103,50 @@ For streaming data, pipe to external jq:
 
 ```bash
 # Single field
-mp fetch events --from 2024-01-01 --to 2024-01-01 --stdout | jq '.event'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq '.event'
 
 # Multiple fields
-mp fetch events --stdout | jq '{event, time: .event_time, user: .distinct_id}'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq '{event, time: .time, user: .distinct_id}'
 
 # Properties
-mp fetch events --stdout | jq '.properties.country'
-mp fetch events --stdout | jq '.properties | keys'  # List all property keys
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq '.properties.country'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq '.properties | keys'  # List all property keys
 ```
 
 ### Filtering
 ```bash
 # Filter by event
-mp fetch events --stdout | jq 'select(.event == "Purchase")'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq 'select(.event == "Purchase")'
 
 # Filter by property
-mp fetch events --stdout | jq 'select(.properties.country == "US")'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq 'select(.properties.country == "US")'
 
 # Numeric comparison
-mp fetch events --stdout | jq 'select(.properties.amount > 100)'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq 'select(.properties.amount > 100)'
 
 # Multiple conditions
-mp fetch events --stdout | jq 'select(.event == "Purchase" and .properties.amount > 100)'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq 'select(.event == "Purchase" and .properties.amount > 100)'
 ```
 
 ### Aggregation
 ```bash
 # Count by event
-mp fetch events --stdout | jq -s 'group_by(.event) | map({event: .[0].event, count: length})'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq -s 'group_by(.event) | map({event: .[0].event, count: length})'
 
 # Sum numeric property
-mp fetch events --stdout | jq -s '[.[].properties.amount] | add'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq -s '[.[].properties.amount] | add'
 
 # Unique users
-mp fetch events --stdout | jq -s '[.[].distinct_id] | unique | length'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq -s '[.[].distinct_id] | unique | length'
 ```
 
 ### Transformation
 ```bash
 # Flatten for CSV
-mp fetch events --stdout | jq -r '[.event, .distinct_id, .event_time, .properties.country] | @csv'
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq -r '[.event, .distinct_id, .time, .properties.country] | @csv'
 
 # Create new structure
-mp fetch events --stdout | jq '{
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq '{
     event: .event,
     user: .distinct_id,
     country: .properties.country,
@@ -248,24 +159,24 @@ mp fetch events --stdout | jq '{
 ### Stream to CSV
 ```bash
 # Events to CSV
-mp fetch events --from 2024-01-01 --to 2024-01-01 --stdout \
-  | jq -r '[.event, .distinct_id, .event_time] | @csv' \
+mp stream events --from 2024-01-01 --to 2024-01-01 \
+  | jq -r '[.event, .distinct_id, .time] | @csv' \
   > events.csv
 
 # With headers
 echo "event,user,time" > events.csv
-mp fetch events --stdout | jq -r '[.event, .distinct_id, .event_time] | @csv' >> events.csv
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq -r '[.event, .distinct_id, .time] | @csv' >> events.csv
 ```
 
 ### Count with Filtering
 ```bash
 # Count US purchases
-mp fetch events --stdout \
+mp stream events --from 2024-01-01 --to 2024-01-01 \
   | jq 'select(.event == "Purchase" and .properties.country == "US")' \
   | wc -l
 
 # Sum amounts
-mp fetch events --stdout \
+mp stream events --from 2024-01-01 --to 2024-01-01 \
   | jq 'select(.event == "Purchase") | .properties.amount' \
   | awk '{sum+=$1} END {print sum}'
 ```
@@ -273,60 +184,23 @@ mp fetch events --stdout \
 ### Parallel Processing
 ```bash
 # Process in batches
-mp fetch events --stdout | parallel --pipe -N1000 'python process_batch.py'
+mp stream events --from 2024-01-01 --to 2024-01-01 | parallel --pipe -N1000 'python process_batch.py'
 
 # Multiple date ranges in parallel
-seq 1 12 | parallel 'mp fetch events --from 2024-{}-01 --to 2024-{}-28 --stdout > month_{}.jsonl'
+seq 1 12 | parallel 'mp stream events --from 2024-{}-01 --to 2024-{}-28 > month_{}.jsonl'
 ```
 
 ### Combine with Other Tools
 ```bash
 # Sort by timestamp
-mp fetch events --stdout | jq -c '.' | sort -t'"' -k8
+mp stream events --from 2024-01-01 --to 2024-01-01 | jq -c '.' | sort -t'"' -k8
 
 # Sample random events
-mp fetch events --stdout | shuf -n 100
+mp stream events --from 2024-01-01 --to 2024-01-01 | shuf -n 100
 
 # First/last N events
-mp fetch events --stdout | head -100
-mp fetch events --stdout | tail -100
-```
-
-## Date Range Chunking
-
-### Python: Incremental Fetch
-```python
-import pandas as pd
-import mixpanel_data as mp
-
-ws = mp.Workspace()
-
-# Fetch by month with append
-for month_start in pd.date_range("2024-01-01", "2024-12-01", freq="MS"):
-    month_end = (month_start + pd.DateOffset(months=1)) - pd.DateOffset(days=1)
-    ws.fetch_events(
-        "events",
-        from_date=str(month_start.date()),
-        to_date=str(month_end.date()),
-        append=True,
-    )
-    print(f"Fetched {month_start.strftime('%B %Y')}")
-```
-
-### CLI: Shell Loop
-```bash
-# Monthly chunks
-for m in 01 02 03 04 05 06 07 08 09 10 11 12; do
-    mp fetch events --from 2024-${m}-01 --to 2024-${m}-28 --append
-done
-
-# Weekly chunks
-start="2024-01-01"
-while [[ "$start" < "2024-03-01" ]]; do
-    end=$(date -d "$start + 6 days" +%Y-%m-%d)
-    mp fetch events --from $start --to $end --append
-    start=$(date -d "$start + 7 days" +%Y-%m-%d)
-done
+mp stream events --from 2024-01-01 --to 2024-01-01 | head -100
+mp stream events --from 2024-01-01 --to 2024-01-01 | tail -100
 ```
 
 ## Multi-Account Workflows
@@ -356,9 +230,9 @@ ws_staging.close()
 mp --account production inspect events
 mp --account staging inspect events
 
-# Fetch from multiple accounts
-mp --account production fetch events --from 2024-01-01 --to 2024-01-31 --stdout > prod.jsonl
-mp --account staging fetch events --from 2024-01-01 --to 2024-01-31 --stdout > staging.jsonl
+# Stream from multiple accounts
+mp --account production stream events --from 2024-01-01 --to 2024-01-31 > prod.jsonl
+mp --account staging stream events --from 2024-01-01 --to 2024-01-31 > staging.jsonl
 ```
 
 ## Data Science Workflows
@@ -417,70 +291,52 @@ plt.title('User Retention Curve')
 plt.savefig('retention.png')
 ```
 
-### User Segmentation
+### User Segmentation (via JQL)
 ```python
 import mixpanel_data as mp
-import pandas as pd
 
 ws = mp.Workspace()
-ws.fetch_events("events", from_date="2024-01-01", to_date="2024-01-31")
 
-# Segment users by activity
-df = ws.sql("""
-    SELECT
-        distinct_id,
-        COUNT(*) as events,
-        COUNT(DISTINCT event_name) as unique_events,
-        MIN(event_time) as first_seen,
-        MAX(event_time) as last_seen
-    FROM events
-    GROUP BY distinct_id
+# Segment users by activity using JQL
+result = ws.jql("""
+function main() {
+  return Events({
+    from_date: '2024-01-01',
+    to_date: '2024-01-31'
+  })
+  .groupByUser([
+    mixpanel.reducer.count(),
+    mixpanel.reducer.count_unique('name')
+  ])
+  .groupBy([function(user) {
+    var count = user.value[0];
+    if (count > 100) return 'Super';
+    if (count > 20) return 'Power';
+    if (count > 5) return 'Regular';
+    return 'Casual';
+  }], mixpanel.reducer.count());
+}
 """)
 
-# Create segments
-df['segment'] = pd.cut(
-    df['events'],
-    bins=[0, 5, 20, 100, float('inf')],
-    labels=['Casual', 'Regular', 'Power', 'Super']
-)
-
-print(df.groupby('segment').size())
+print(result.data)
 ```
 
-### Cohort Analysis
+### Cohort Analysis (via Retention API)
 ```python
 import mixpanel_data as mp
 
 ws = mp.Workspace()
-ws.fetch_events("events", from_date="2024-01-01", to_date="2024-03-31")
 
-# Weekly cohorts
-df = ws.sql("""
-    WITH user_cohorts AS (
-        SELECT
-            distinct_id,
-            DATE_TRUNC('week', MIN(event_time)) as cohort_week
-        FROM events
-        GROUP BY distinct_id
-    ),
-    weekly_activity AS (
-        SELECT
-            e.distinct_id,
-            c.cohort_week,
-            DATE_TRUNC('week', e.event_time) as activity_week
-        FROM events e
-        JOIN user_cohorts c ON e.distinct_id = c.distinct_id
-    )
-    SELECT
-        cohort_week,
-        activity_week,
-        COUNT(DISTINCT distinct_id) as users
-    FROM weekly_activity
-    GROUP BY 1, 2
-    ORDER BY 1, 2
-""")
+# Use the retention API for cohort analysis
+result = ws.retention(
+    born_event="Sign Up",
+    return_event="Login",
+    from_date="2024-01-01",
+    to_date="2024-03-31",
+    unit="week",
+    interval_count=12,
+)
 
-# Pivot for cohort matrix
-pivot = df.pivot(index='cohort_week', columns='activity_week', values='users')
-print(pivot)
+df = result.df
+print(df)
 ```

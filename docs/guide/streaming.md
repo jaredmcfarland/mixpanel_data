@@ -5,7 +5,7 @@ Stream events and user profiles directly from Mixpanel. Ideal for ETL pipelines,
 !!! tip "Explore on DeepWiki"
     🤖 **[Data Flow Patterns →](https://deepwiki.com/jaredmcfarland/mixpanel_data/4.1-data-flow-patterns)**
 
-    Ask questions about streaming vs fetching, memory-efficient processing, or ETL pipeline patterns.
+    Ask questions about streaming, memory-efficient processing, or ETL pipeline patterns.
 
 ## Streaming Events
 
@@ -13,88 +13,58 @@ Stream events and user profiles directly from Mixpanel. Ideal for ETL pipelines,
 
 Stream all events for a date range:
 
-=== "Python"
+```python
+import mixpanel_data as mp
 
-    ```python
-    import mixpanel_data as mp
+ws = mp.Workspace()
 
-    ws = mp.Workspace()
+for event in ws.stream_events(
+    from_date="2025-01-01",
+    to_date="2025-01-31"
+):
+    print(f"{event['event_name']}: {event['distinct_id']}")
+    # event_time is a datetime object
+    # properties contains remaining fields
 
-    for event in ws.stream_events(
-        from_date="2025-01-01",
-        to_date="2025-01-31"
-    ):
-        print(f"{event['event_name']}: {event['distinct_id']}")
-        # event_time is a datetime object
-        # properties contains remaining fields
-
-    ws.close()
-    ```
-
-=== "CLI"
-
-    ```bash
-    mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
-    ```
+ws.close()
+```
 
 ### Filtering Events
 
 Filter by event name or expression:
 
-=== "Python"
+```python
+# Filter by event names
+for event in ws.stream_events(
+    from_date="2025-01-01",
+    to_date="2025-01-31",
+    events=["Purchase", "Signup"]
+):
+    process(event)
 
-    ```python
-    # Filter by event names
-    for event in ws.stream_events(
-        from_date="2025-01-01",
-        to_date="2025-01-31",
-        events=["Purchase", "Signup"]
-    ):
-        process(event)
-
-    # Filter with WHERE clause
-    for event in ws.stream_events(
-        from_date="2025-01-01",
-        to_date="2025-01-31",
-        where='properties["country"]=="US"'
-    ):
-        process(event)
-    ```
-
-=== "CLI"
-
-    ```bash
-    # Filter by event names
-    mp fetch events --from 2025-01-01 --to 2025-01-31 \
-        --events "Purchase,Signup" --stdout
-
-    # Filter with WHERE clause
-    mp fetch events --from 2025-01-01 --to 2025-01-31 \
-        --where 'properties["country"]=="US"' --stdout
-    ```
+# Filter with WHERE clause
+for event in ws.stream_events(
+    from_date="2025-01-01",
+    to_date="2025-01-31",
+    where='properties["country"]=="US"'
+):
+    process(event)
+```
 
 ### Raw API Format
 
 By default, streaming returns normalized data with `event_time` as a datetime. Use `raw=True` to get the exact Mixpanel API format:
 
-=== "Python"
-
-    ```python
-    for event in ws.stream_events(
-        from_date="2025-01-01",
-        to_date="2025-01-31",
-        raw=True
-    ):
-        # event has {"event": "...", "properties": {...}} structure
-        # properties["time"] is Unix timestamp
-        legacy_system.ingest(event)
-    ```
-
-=== "CLI"
-
-    ```bash
-    mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout --raw
-    ```
+```python
+for event in ws.stream_events(
+    from_date="2025-01-01",
+    to_date="2025-01-31",
+    raw=True
+):
+    # event has {"event": "...", "properties": {...}} structure
+    # properties["time"] is Unix timestamp
+    legacy_system.ingest(event)
+```
 
 ## Streaming Profiles
 
@@ -102,68 +72,36 @@ By default, streaming returns normalized data with `event_time` as a datetime. U
 
 Stream all user profiles:
 
-=== "Python"
-
-    ```python
-    for profile in ws.stream_profiles():
-        sync_to_crm(profile)
-    ```
-
-=== "CLI"
-
-    ```bash
-    mp fetch profiles --stdout
-    ```
+```python
+for profile in ws.stream_profiles():
+    sync_to_crm(profile)
+```
 
 ### Filtering Profiles
 
-=== "Python"
-
-    ```python
-    for profile in ws.stream_profiles(
-        where='properties["plan"]=="premium"'
-    ):
-        send_survey(profile)
-    ```
-
-=== "CLI"
-
-    ```bash
-    mp fetch profiles --where 'properties["plan"]=="premium"' --stdout
-    ```
+```python
+for profile in ws.stream_profiles(
+    where='properties["plan"]=="premium"'
+):
+    send_survey(profile)
+```
 
 ### Streaming Specific Users
 
 Stream a single user by their distinct ID:
 
-=== "Python"
-
-    ```python
-    for profile in ws.stream_profiles(distinct_id="user_123"):
-        process(profile)
-    ```
-
-=== "CLI"
-
-    ```bash
-    mp fetch profiles --distinct-id user_123 --stdout
-    ```
+```python
+for profile in ws.stream_profiles(distinct_id="user_123"):
+    process(profile)
+```
 
 Stream multiple specific users:
 
-=== "Python"
-
-    ```python
-    user_ids = ["user_123", "user_456", "user_789"]
-    for profile in ws.stream_profiles(distinct_ids=user_ids):
-        sync_to_external_system(profile)
-    ```
-
-=== "CLI"
-
-    ```bash
-    mp fetch profiles --distinct-ids "user_123,user_456,user_789" --stdout
-    ```
+```python
+user_ids = ["user_123", "user_456", "user_789"]
+for profile in ws.stream_profiles(distinct_ids=user_ids):
+    sync_to_external_system(profile)
+```
 
 !!! warning "Mutually Exclusive"
     `distinct_id` and `distinct_ids` cannot be used together. Use `distinct_id` for a single user, `distinct_ids` for multiple users.
@@ -172,78 +110,47 @@ Stream multiple specific users:
 
 Stream group profiles (e.g., companies, accounts) instead of user profiles:
 
-=== "Python"
+```python
+# Stream all company profiles
+for company in ws.stream_profiles(group_id="companies"):
+    sync_company(company)
 
-    ```python
-    # Stream all company profiles
-    for company in ws.stream_profiles(group_id="companies"):
-        sync_company(company)
-
-    # Filter group profiles
-    for account in ws.stream_profiles(
-        group_id="accounts",
-        where='properties["plan"]=="enterprise"'
-    ):
-        process_enterprise_account(account)
-    ```
-
-=== "CLI"
-
-    ```bash
-    # Stream company profiles
-    mp fetch profiles --group-id companies --stdout
-
-    # Filter group profiles
-    mp fetch profiles --group-id accounts \
-        --where 'properties["plan"]=="enterprise"' --stdout
-    ```
+# Filter group profiles
+for account in ws.stream_profiles(
+    group_id="accounts",
+    where='properties["plan"]=="enterprise"'
+):
+    process_enterprise_account(account)
+```
 
 ### Behavioral Filtering
 
 Stream users based on actions they've performed. Behaviors use a named pattern that you reference in a `where` clause:
 
-=== "Python"
+```python
+# Users who completed a purchase in last 30 days
+behaviors = [{
+    "window": "30d",
+    "name": "made_purchase",
+    "event_selectors": [{"event": "Purchase"}]
+}]
+for profile in ws.stream_profiles(
+    behaviors=behaviors,
+    where='(behaviors["made_purchase"] > 0)'
+):
+    send_thank_you(profile)
 
-    ```python
-    # Users who completed a purchase in last 30 days
-    behaviors = [{
-        "window": "30d",
-        "name": "made_purchase",
-        "event_selectors": [{"event": "Purchase"}]
-    }]
-    for profile in ws.stream_profiles(
-        behaviors=behaviors,
-        where='(behaviors["made_purchase"] > 0)'
-    ):
-        send_thank_you(profile)
-
-    # Users who signed up but didn't purchase
-    behaviors = [
-        {"window": "30d", "name": "signed_up", "event_selectors": [{"event": "Signup"}]},
-        {"window": "30d", "name": "purchased", "event_selectors": [{"event": "Purchase"}]}
-    ]
-    for profile in ws.stream_profiles(
-        behaviors=behaviors,
-        where='(behaviors["signed_up"] > 0) and (behaviors["purchased"] == 0)'
-    ):
-        send_conversion_reminder(profile)
-    ```
-
-=== "CLI"
-
-    ```bash
-    # Users who completed a purchase in last 30 days
-    mp fetch profiles \
-        --behaviors '[{"window":"30d","name":"made_purchase","event_selectors":[{"event":"Purchase"}]}]' \
-        --where '(behaviors["made_purchase"] > 0)' \
-        --stdout
-
-    # Users who signed up but didn't purchase
-    mp fetch profiles \
-        --behaviors '[{"window":"30d","name":"signed_up","event_selectors":[{"event":"Signup"}]},{"window":"30d","name":"purchased","event_selectors":[{"event":"Purchase"}]}]' \
-        --where '(behaviors["signed_up"] > 0) and (behaviors["purchased"] == 0)' \
-        --stdout
-    ```
+# Users who signed up but didn't purchase
+behaviors = [
+    {"window": "30d", "name": "signed_up", "event_selectors": [{"event": "Signup"}]},
+    {"window": "30d", "name": "purchased", "event_selectors": [{"event": "Purchase"}]}
+]
+for profile in ws.stream_profiles(
+    behaviors=behaviors,
+    where='(behaviors["signed_up"] > 0) and (behaviors["purchased"] == 0)'
+):
+    send_conversion_reminder(profile)
+```
 
 !!! info "Behavior Format"
     Each behavior requires: `window` (time window like "30d"), `name` (identifier for `where` clause), and `event_selectors` (array with `{"event": "Name"}`).
@@ -255,72 +162,64 @@ Stream users based on actions they've performed. Behaviors use a named pattern t
 
 Query profile state at a specific point in time:
 
-=== "Python"
+```python
+import time
 
-    ```python
-    import time
-
-    # Profile state from 7 days ago
-    seven_days_ago = int(time.time()) - (7 * 24 * 60 * 60)
-    for profile in ws.stream_profiles(as_of_timestamp=seven_days_ago):
-        compare_historical_state(profile)
-    ```
-
-=== "CLI"
-
-    ```bash
-    # Query historical state (Unix timestamp)
-    mp fetch profiles --as-of-timestamp 1704067200 --stdout
-    ```
+# Profile state from 7 days ago
+seven_days_ago = int(time.time()) - (7 * 24 * 60 * 60)
+for profile in ws.stream_profiles(as_of_timestamp=seven_days_ago):
+    compare_historical_state(profile)
+```
 
 ### Cohort Membership Analysis
 
 Get all users with cohort membership marked:
 
-=== "Python"
-
-    ```python
-    # Stream all users, marking which are in the cohort
-    for profile in ws.stream_profiles(
-        cohort_id="12345",
-        include_all_users=True
-    ):
-        if profile.get("in_cohort"):
-            tag_as_cohort_member(profile)
-        else:
-            tag_as_non_member(profile)
-    ```
-
-=== "CLI"
-
-    ```bash
-    mp fetch profiles --cohort-id 12345 --include-all-users --stdout
-    ```
+```python
+# Stream all users, marking which are in the cohort
+for profile in ws.stream_profiles(
+    cohort_id="12345",
+    include_all_users=True
+):
+    if profile.get("in_cohort"):
+        tag_as_cohort_member(profile)
+    else:
+        tag_as_non_member(profile)
+```
 
 !!! note "Requires cohort_id"
     `include_all_users` only works when `cohort_id` is specified.
 
-## CLI Pipeline Examples
+## Processing Patterns
 
-The `--stdout` flag outputs JSONL (one JSON object per line), perfect for Unix pipelines:
+Use Python to filter, count, and export streamed data:
 
-```bash
-# Filter with jq
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout \
-    | jq 'select(.event_name == "Purchase")'
+```python
+import json
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+
+# Filter to specific events
+purchases = [
+    e for e in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31")
+    if e["event_name"] == "Purchase"
+]
 
 # Count events
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout | wc -l
+count = sum(1 for _ in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"))
 
-# Save to file
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout > events.jsonl
-
-# Process with custom script
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout \
-    | python process_events.py
+# Save to JSONL file
+with open("events.jsonl", "w") as f:
+    for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+        f.write(json.dumps(event) + "\n")
 
 # Extract specific fields
-mp fetch profiles --stdout | jq -r '.distinct_id'
+distinct_ids = [
+    p["distinct_id"] for p in ws.stream_profiles()
+]
+
+ws.close()
 ```
 
 ## Output Formats
@@ -355,7 +254,7 @@ Profiles:
 }
 ```
 
-### Raw Format (`raw=True` or `--raw`)
+### Raw Format (`raw=True`)
 
 Events:
 

@@ -14,7 +14,6 @@ Verify credentials and data availability:
 
 ```bash
 !$(mp auth test 2>&1 || echo "No credentials configured")
-!$(mp inspect tables --format table 2>/dev/null || echo "No local data")
 ```
 
 If credentials aren't configured, suggest running `/mp-auth` first.

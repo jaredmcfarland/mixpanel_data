@@ -98,17 +98,11 @@ Show the user:
 
 ---
 
-## Option 2: Custom Funnel from Local Data
+## Option 2: Custom Funnel via JQL
 
-### 1. Check Available Tables
+Use JQL for custom funnel analysis not covered by saved funnels.
 
-```bash
-!$(mp inspect tables --format table)
-```
-
-If no tables exist, suggest running `/mp-fetch` first.
-
-### 2. Define Funnel Steps
+### 1. Define Funnel Steps
 
 Ask the user for the event sequence (3-5 events recommended):
 - Step 1: Event name (e.g., "View Product")
@@ -116,117 +110,77 @@ Ask the user for the event sequence (3-5 events recommended):
 - Step 3: Event name (e.g., "Checkout")
 - Step 4: Event name (e.g., "Purchase")
 
-### 3. Configure Analysis Parameters
+### 2. Build JQL Funnel Query
 
-**Table**: Which table to analyze
-**Time window**: Maximum time between steps (e.g., 24 hours, 7 days)
-**Date range**: Filter events by date
-
-### 4. Build SQL Funnel Query
-
-Use a window function approach to detect sequences:
-
-```sql
-WITH user_events AS (
-  SELECT
-    distinct_id,
-    event_name,
-    event_time,
-    ROW_NUMBER() OVER (PARTITION BY distinct_id ORDER BY event_time) as event_seq
-  FROM <table>
-  WHERE event_name IN ('Step1', 'Step2', 'Step3', 'Step4')
-    AND event_time >= '<from-date>'
-    AND event_time <= '<to-date>'
-),
-funnel_progression AS (
-  SELECT
-    distinct_id,
-    MAX(CASE WHEN event_name = 'Step1' THEN 1 ELSE 0 END) as completed_step1,
-    MAX(CASE WHEN event_name = 'Step2' THEN 1 ELSE 0 END) as completed_step2,
-    MAX(CASE WHEN event_name = 'Step3' THEN 1 ELSE 0 END) as completed_step3,
-    MAX(CASE WHEN event_name = 'Step4' THEN 1 ELSE 0 END) as completed_step4
-  FROM user_events
-  GROUP BY distinct_id
-)
-SELECT
-  SUM(completed_step1) as step1_users,
-  SUM(completed_step2) as step2_users,
-  SUM(completed_step3) as step3_users,
-  SUM(completed_step4) as step4_users,
-  ROUND(100.0 * SUM(completed_step2) / NULLIF(SUM(completed_step1), 0), 2) as step1_to_step2_rate,
-  ROUND(100.0 * SUM(completed_step3) / NULLIF(SUM(completed_step2), 0), 2) as step2_to_step3_rate,
-  ROUND(100.0 * SUM(completed_step4) / NULLIF(SUM(completed_step3), 0), 2) as step3_to_step4_rate,
-  ROUND(100.0 * SUM(completed_step4) / NULLIF(SUM(completed_step1), 0), 2) as overall_conversion
-FROM funnel_progression
-```
-
-Execute via:
 ```bash
-mp query sql "<query>" --format table
+mp query jql --script "
+function main() {
+  var funnel_events = ['View Product', 'Add to Cart', 'Checkout', 'Purchase'];
+
+  return Events({
+    from_date: '<from-date>',
+    to_date: '<to-date>',
+    event_selectors: funnel_events.map(function(e) { return {event: e}; })
+  })
+  .groupByUser(function(state, events) {
+    state = state || {};
+    events.forEach(function(event) {
+      state[event.name] = (state[event.name] || 0) + 1;
+    });
+    state.funnel_stage = 0;
+    for (var i = 0; i < funnel_events.length; i++) {
+      if (state[funnel_events[i]] > 0) {
+        state.funnel_stage = i + 1;
+      } else {
+        break;
+      }
+    }
+    return state;
+  })
+  .groupBy(['value.funnel_stage'], mixpanel.reducer.count())
+  .map(function(item) {
+    return {
+      stage: item.key[0],
+      stage_name: funnel_events[item.key[0] - 1] || 'Not in funnel',
+      users: item.value
+    };
+  });
+}
+"
 ```
 
-### 5. Visualize Results
+### 3. Visualize Results
 
 Offer to create a Python visualization:
 
 ```python
-import pandas as pd
+import mixpanel_data as mp
 import matplotlib.pyplot as plt
 
-# Data from query results
-steps = ['Step1', 'Step2', 'Step3', 'Step4']
-users = [<step1_users>, <step2_users>, <step3_users>, <step4_users>]
+ws = mp.Workspace()
+result = ws.funnel(12345, from_date="2024-01-01", to_date="2024-01-31")
 
-# Create funnel chart
+steps = [s.event for s in result.steps]
+users = [s.count for s in result.steps]
+
 fig, ax = plt.subplots(figsize=(10, 6))
 ax.barh(steps, users, color=['#4CAF50', '#8BC34A', '#CDDC39', '#FFEB3B'])
 ax.set_xlabel('Number of Users')
-ax.set_title('Conversion Funnel')
-
-# Add conversion rates
-for i, (step, count) in enumerate(zip(steps, users)):
-    ax.text(count, i, f' {count:,} users', va='center')
-
+ax.set_title(f'Funnel: {result.overall_conversion_rate:.1%} conversion')
 plt.tight_layout()
 plt.savefig('funnel.png')
-print("Funnel visualization saved to funnel.png")
 ```
 
 ---
 
 ## Advanced Analysis: Segmented Funnels
 
-For local data, offer segmented funnel analysis:
+Segment funnel results by property using the `--on` parameter:
 
-**Segment by property** (e.g., country, plan, source):
-
-```sql
-WITH user_events AS (
-  SELECT
-    distinct_id,
-    event_name,
-    event_time,
-    properties->>'$.country' as country
-  FROM <table>
-  WHERE event_name IN ('Step1', 'Step2', 'Step3', 'Step4')
-),
-funnel_by_segment AS (
-  SELECT
-    country,
-    MAX(CASE WHEN event_name = 'Step1' THEN 1 ELSE 0 END) as completed_step1,
-    MAX(CASE WHEN event_name = 'Step2' THEN 1 ELSE 0 END) as completed_step2,
-    MAX(CASE WHEN event_name = 'Step3' THEN 1 ELSE 0 END) as completed_step3,
-    MAX(CASE WHEN event_name = 'Step4' THEN 1 ELSE 0 END) as completed_step4
-  FROM user_events
-  GROUP BY distinct_id, country
-)
-SELECT
-  country,
-  SUM(completed_step1) as step1_users,
-  ROUND(100.0 * SUM(completed_step4) / NULLIF(SUM(completed_step1), 0), 2) as conversion_rate
-FROM funnel_by_segment
-GROUP BY country
-ORDER BY step1_users DESC
+```bash
+mp query funnel <funnel-id> \
+  --from 2024-01-01 --to 2024-01-31 \
+  --on country --format table
 ```
 
 ---

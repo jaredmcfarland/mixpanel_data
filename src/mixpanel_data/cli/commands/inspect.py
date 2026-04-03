@@ -63,7 +63,7 @@ def inspect_events(
     """List all event names from Mixpanel project.
 
     Calls the Mixpanel API to retrieve tracked event types. Use this
-    to discover what events exist before fetching or querying.
+    to discover what events exist before querying.
 
     Output Structure (JSON):
 

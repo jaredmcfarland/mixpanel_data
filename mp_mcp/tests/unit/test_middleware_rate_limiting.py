@@ -120,7 +120,7 @@ class TestMixpanelRateLimitMiddleware:
         middleware = MixpanelRateLimitMiddleware()
 
         mock_context = MagicMock()
-        mock_context.message.name = "list_tables"  # Not an API tool
+        mock_context.message.name = "workspace_info"  # Not an API tool
 
         expected_result: dict[str, list[str]] = {"tables": []}
         mock_call_next = AsyncMock(return_value=expected_result)

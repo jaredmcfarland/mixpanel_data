@@ -131,13 +131,13 @@ Ready to analyze retention? Tell me your return event."""
 
 
 @mcp.prompt()
-def local_analysis_workflow() -> str:
-    """Guide through local data analysis with SQL.
+def analysis_workflow() -> str:
+    """Guide through Mixpanel data analysis.
 
     Returns:
-        Prompt text guiding local SQL analysis.
+        Prompt text guiding data analysis.
     """
-    return """# Local Data Analysis Workflow
+    return """# Data Analysis Workflow
 
 Let me help you analyze your Mixpanel data in detail:
 
