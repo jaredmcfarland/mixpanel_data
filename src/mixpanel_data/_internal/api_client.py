@@ -6946,7 +6946,13 @@ class MixpanelAPIClient:
         result = self.app_request("GET", path, _raw=True)
         # The response has {"status": "ok", "results": [violations, metadata]}
         if isinstance(result, dict) and "results" in result:
-            return result["results"]  # type: ignore[no-any-return]
+            inner = result["results"]
+            if not isinstance(inner, list):
+                raise MixpanelDataError(
+                    f"Unexpected audit results type: expected list, "
+                    f"got {type(inner).__name__}",
+                )
+            return inner
         if isinstance(result, list):
             return result
         raise MixpanelDataError(
@@ -6975,7 +6981,13 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/audit-events-only/")
         result = self.app_request("GET", path, _raw=True)
         if isinstance(result, dict) and "results" in result:
-            return result["results"]  # type: ignore[no-any-return]
+            inner = result["results"]
+            if not isinstance(inner, list):
+                raise MixpanelDataError(
+                    f"Unexpected audit results type: expected list, "
+                    f"got {type(inner).__name__}",
+                )
+            return inner
         if isinstance(result, list):
             return result
         raise MixpanelDataError(
@@ -7021,7 +7033,12 @@ class MixpanelAPIClient:
         if isinstance(result, dict):
             results = result.get("results", result)
             if isinstance(results, dict):
-                anomalies = results.get("anomalies", [])
+                if "anomalies" not in results:
+                    raise MixpanelDataError(
+                        "Unexpected response from list_data_volume_anomalies: "
+                        "missing 'anomalies' key in results",
+                    )
+                anomalies = results["anomalies"]
                 if isinstance(anomalies, list):
                     return anomalies
         raise MixpanelDataError(

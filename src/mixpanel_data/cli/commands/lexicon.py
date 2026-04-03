@@ -705,8 +705,8 @@ def lexicon_audit(
 ) -> None:
     """Run schema audit to find violations.
 
-    Audits the project schema for violations such as undocumented events,
-    missing descriptions, or inconsistent naming. Use ``--events-only``
+    Audits the project schema for violations such as unexpected events,
+    missing properties, or unexpected property types. Use ``--events-only``
     for a faster, event-scoped audit.
 
     Args:
@@ -798,7 +798,7 @@ def enforcement_init(
 
     Args:
         ctx: Typer context with global options.
-        rule_event: Event name to initialize enforcement for.
+        rule_event: Enforcement action ("Warn and Accept", "Warn and Hide", or "Warn and Drop").
         format: Output format.
         jq_filter: Optional jq filter expression.
     """
@@ -904,6 +904,10 @@ def enforcement_delete(
     Args:
         ctx: Typer context with global options.
     """
+    typer.confirm(
+        "Delete all schema enforcement settings? This cannot be undone.",
+        abort=True,
+    )
     workspace = get_workspace(ctx)
     with status_spinner(ctx, "Deleting schema enforcement..."):
         workspace.delete_schema_enforcement()
@@ -944,13 +948,13 @@ def anomalies_list(
 
     Args:
         ctx: Typer context with global options.
-        status: Optional status filter (e.g. 'open', 'resolved').
+        status: Optional status filter (e.g. 'open', 'dismissed').
         limit: Optional maximum number of results.
         format: Output format.
         jq_filter: Optional jq filter expression.
     """
     workspace = get_workspace(ctx)
-    query_params: dict[str, Any] = {}
+    query_params: dict[str, str] = {}
     if status is not None:
         query_params["status"] = status
     if limit is not None:

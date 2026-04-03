@@ -309,6 +309,8 @@ def schemas_delete(
         format: Output format.
         jq_filter: Optional jq filter expression.
     """
+    if entity_type is None and entity_name is None:
+        typer.confirm("This will delete ALL schemas. Continue?", abort=True)
     workspace = get_workspace(ctx)
     with status_spinner(ctx, "Deleting schema entries..."):
         result = workspace.delete_schemas(

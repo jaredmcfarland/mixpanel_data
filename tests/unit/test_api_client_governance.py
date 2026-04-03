@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data.exceptions import MixpanelDataError
 
 # =============================================================================
 # Fixtures
@@ -454,6 +455,20 @@ class TestRunAudit:
         assert result[0] == []
         assert result[1]["computed_at"] == "2026-01-01T12:00:00Z"
 
+    def test_non_list_results_raises(self, oauth_credentials: Credentials) -> None:
+        """run_audit() raises MixpanelDataError when results is not a list."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return non-list results."""
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": {"unexpected": "dict"}},
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError, match="expected list"):
+            client.run_audit()
+
 
 class TestRunAuditEventsOnly:
     """Tests for run_audit_events_only() API client method."""
@@ -524,6 +539,20 @@ class TestRunAuditEventsOnly:
             client.run_audit_events_only()
 
         assert captured_methods[0] == "GET"
+
+    def test_non_list_results_raises(self, oauth_credentials: Credentials) -> None:
+        """run_audit_events_only() raises MixpanelDataError when results is not a list."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return non-list results."""
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": {"unexpected": "dict"}},
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError, match="expected list"):
+            client.run_audit_events_only()
 
 
 # =============================================================================
@@ -674,6 +703,20 @@ class TestListDataVolumeAnomalies:
             client.list_data_volume_anomalies()
 
         assert "/data-definitions/data-volume-anomalies/" in captured_urls[0]
+
+    def test_missing_anomalies_key_raises(self, oauth_credentials: Credentials) -> None:
+        """list_data_volume_anomalies() raises when 'anomalies' key is missing."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return response without anomalies key."""
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": {"items": []}},
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError, match="missing 'anomalies' key"):
+            client.list_data_volume_anomalies()
 
 
 class TestUpdateAnomaly:

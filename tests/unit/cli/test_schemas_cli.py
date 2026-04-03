@@ -399,16 +399,26 @@ class TestSchemasDelete:
         )
 
     @patch("mixpanel_data.cli.commands.schemas.get_workspace")
-    def test_delete_without_filters(self, mock_get_ws: MagicMock) -> None:
-        """Delete without filters passes None for both entity_type and entity_name."""
+    def test_delete_without_filters_confirms(self, mock_get_ws: MagicMock) -> None:
+        """Delete without filters prompts for confirmation and proceeds on 'y'."""
         mock_ws = MagicMock()
         mock_ws.delete_schemas.return_value = MagicMock(
             model_dump=lambda **kw: {"deleteCount": 5}
         )
         mock_get_ws.return_value = mock_ws
 
-        result = runner.invoke(app, ["schemas", "delete"])
+        result = runner.invoke(app, ["schemas", "delete"], input="y\n")
         assert result.exit_code == 0
         mock_ws.delete_schemas.assert_called_once_with(
             entity_type=None, entity_name=None
         )
+
+    @patch("mixpanel_data.cli.commands.schemas.get_workspace")
+    def test_delete_without_filters_aborts(self, mock_get_ws: MagicMock) -> None:
+        """Delete without filters aborts on 'n'."""
+        mock_ws = MagicMock()
+        mock_get_ws.return_value = mock_ws
+
+        result = runner.invoke(app, ["schemas", "delete"], input="n\n")
+        assert result.exit_code != 0
+        mock_ws.delete_schemas.assert_not_called()

@@ -187,15 +187,25 @@ class TestEnforcementDelete:
     """Tests for mp lexicon enforcement delete."""
 
     @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
-    def test_delete_succeeds(self, mock_get_ws: MagicMock) -> None:
-        """Successful delete exits with code 0."""
+    def test_delete_confirms_and_succeeds(self, mock_get_ws: MagicMock) -> None:
+        """Successful delete prompts for confirmation and exits with code 0."""
         mock_ws = MagicMock()
         mock_ws.delete_schema_enforcement.return_value = None
         mock_get_ws.return_value = mock_ws
 
-        result = runner.invoke(app, ["lexicon", "enforcement", "delete"])
+        result = runner.invoke(app, ["lexicon", "enforcement", "delete"], input="y\n")
         assert result.exit_code == 0
         mock_ws.delete_schema_enforcement.assert_called_once()
+
+    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    def test_delete_aborts_on_no(self, mock_get_ws: MagicMock) -> None:
+        """Delete aborts when user declines confirmation."""
+        mock_ws = MagicMock()
+        mock_get_ws.return_value = mock_ws
+
+        result = runner.invoke(app, ["lexicon", "enforcement", "delete"], input="n\n")
+        assert result.exit_code != 0
+        mock_ws.delete_schema_enforcement.assert_not_called()
 
 
 # =============================================================================

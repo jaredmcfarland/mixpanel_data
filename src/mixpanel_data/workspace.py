@@ -6637,6 +6637,7 @@ class Workspace:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid parameters (400).
             RateLimitError: Rate limit exceeded (429).
+            MixpanelDataError: If entity_name is provided without entity_type.
 
         Example:
             ```python
@@ -6646,7 +6647,7 @@ class Workspace:
             ```
         """
         if entity_name is not None and entity_type is None:
-            raise ValueError(
+            raise MixpanelDataError(
                 "entity_name requires entity_type: providing entity_name "
                 "without entity_type would delete all schemas",
             )
@@ -6828,8 +6829,13 @@ class Workspace:
         # raw is [violations_list, {"computed_at": ...}]
         if not raw:
             return AuditResponse(violations=[], computed_at="")
+        if not isinstance(raw[0], list):
+            raise MixpanelDataError(
+                f"Unexpected audit response: expected list of violations, "
+                f"got {type(raw[0]).__name__}",
+            )
         violations = [AuditViolation.model_validate(v) for v in raw[0]]
-        metadata = raw[1] if len(raw) > 1 else {}
+        metadata = raw[1] if len(raw) > 1 and isinstance(raw[1], dict) else {}
         return AuditResponse(
             violations=violations,
             computed_at=metadata.get("computed_at", ""),
@@ -6856,8 +6862,13 @@ class Workspace:
         raw = client.run_audit_events_only()
         if not raw:
             return AuditResponse(violations=[], computed_at="")
+        if not isinstance(raw[0], list):
+            raise MixpanelDataError(
+                f"Unexpected audit response: expected list of violations, "
+                f"got {type(raw[0]).__name__}",
+            )
         violations = [AuditViolation.model_validate(v) for v in raw[0]]
-        metadata = raw[1] if len(raw) > 1 else {}
+        metadata = raw[1] if len(raw) > 1 and isinstance(raw[1], dict) else {}
         return AuditResponse(
             violations=violations,
             computed_at=metadata.get("computed_at", ""),
