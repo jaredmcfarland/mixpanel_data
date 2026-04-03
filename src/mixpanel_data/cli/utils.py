@@ -149,9 +149,9 @@ def handle_errors(func: F) -> F:
             )
             err_console.print(f"  [dim]Maximum:[/dim] {e.max_days} days")
             err_console.print(
-                "[yellow]Tip:[/yellow] Split into multiple fetches, e.g.:\n"
-                f"  mp fetch events --from {e.from_date} --to <midpoint>\n"
-                f"  mp fetch events --from <midpoint+1> --to {e.to_date} --append"
+                "[yellow]Tip:[/yellow] Split into smaller date ranges, e.g.:\n"
+                f"  --from {e.from_date} --to <midpoint>\n"
+                f"  --from <midpoint+1> --to {e.to_date}"
             )
             raise typer.Exit(ExitCode.INVALID_ARGS) from None
         except JQLSyntaxError as e:

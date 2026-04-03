@@ -1,7 +1,7 @@
 """Unit tests for Workspace streaming methods.
 
 Tests for stream_events() and stream_profiles() methods that
-stream data directly from Mixpanel API without local storage.
+stream data directly from the Mixpanel API.
 """
 
 from __future__ import annotations

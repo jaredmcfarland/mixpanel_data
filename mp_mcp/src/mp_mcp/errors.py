@@ -7,9 +7,9 @@ Example:
     ```python
     @mcp.tool
     @handle_errors
-    def fetch_events(ctx: Context, from_date: str) -> dict:
+    def list_events(ctx: Context) -> list[str]:
         ws = get_workspace(ctx)
-        return ws.fetch_events(from_date=from_date).to_dict()
+        return ws.events()
     ```
 """
 
@@ -133,8 +133,8 @@ def _handle_exception(e: Exception) -> None:
         )
         suggestions = [
             retry_msg,
-            "Use fetch_events/fetch_profiles for bulk data to reduce API calls",
-            "Consider caching results locally with SQL queries",
+            "Reduce your date range to lower API load",
+            "Consider caching results locally",
         ]
         raise ToolError(
             format_rich_error("Rate limited by Mixpanel API.", e, suggestions)

@@ -14,7 +14,7 @@ from typing import Any
 _logger = logging.getLogger(__name__)
 
 # Reserved keys that transform_event extracts from properties.
-# These are standard Mixpanel fields that become top-level columns in storage.
+# These are standard Mixpanel fields promoted to top-level keys during normalization.
 RESERVED_EVENT_KEYS = frozenset({"distinct_id", "time", "$insert_id"})
 
 
@@ -81,7 +81,7 @@ def transform_event(event: dict[str, Any]) -> dict[str, Any]:
 
 
 # Reserved keys that transform_profile extracts from properties.
-# These are standard Mixpanel fields that become top-level columns in storage.
+# These are standard Mixpanel fields promoted to top-level keys during normalization.
 RESERVED_PROFILE_KEYS = frozenset({"$last_seen"})
 
 

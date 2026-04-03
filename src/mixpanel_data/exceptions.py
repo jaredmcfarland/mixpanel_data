@@ -763,7 +763,7 @@ class DateRangeTooLargeError(MixpanelDataError):
     Example:
         ```python
         try:
-            events = fetcher.fetch_events("2024-01-01", "2024-06-30")
+            events = ws.stream_events(from_date="2024-01-01", to_date="2024-06-30")
         except DateRangeTooLargeError as e:
             print(f"Range is {e.days_requested} days, max is {e.max_days}")
         ```
