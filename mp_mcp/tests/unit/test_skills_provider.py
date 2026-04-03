@@ -82,6 +82,14 @@ class TestSkillResourceRegistration:
 class TestSkillResourceContent:
     """Tests for skill resource content accessibility."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Provide mock credentials so Workspace() can initialize."""
+        monkeypatch.setenv("MP_USERNAME", "test-user")
+        monkeypatch.setenv("MP_SECRET", "test-secret")
+        monkeypatch.setenv("MP_PROJECT_ID", "12345")
+        monkeypatch.setenv("MP_REGION", "us")
+
     @pytest.mark.asyncio
     async def test_mp_mcp_skill_content_readable(self) -> None:
         """mp_mcp SKILL.md content should be readable via MCP."""
@@ -111,4 +119,3 @@ class TestSkillResourceContent:
             # Should contain tool documentation
             assert "list_events" in content
             assert "segmentation" in content
-            assert "fetch_events" in content

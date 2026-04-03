@@ -231,25 +231,23 @@ def top_events(
 def workspace_info(ctx: Context) -> dict[str, Any]:
     """Get current workspace state and configuration.
 
-    Returns information about the connected Mixpanel project
-    and any locally stored tables.
+    Returns information about the connected Mixpanel project.
 
     Args:
         ctx: FastMCP context with workspace access.
 
     Returns:
-        Dictionary with project_id, region, and table information.
+        Dictionary with project_id and region.
 
     Example:
         Ask: "What project am I connected to?"
-        Returns: {"project_id": 123456, "region": "us", "tables": [...]}
+        Returns: {"project_id": "123456", "region": "us"}
     """
     ws = get_workspace(ctx)
-    info = ws.info()
+    credentials = ws._credentials
     return {
-        "project_id": info.project_id,
-        "region": info.region,
-        "tables": [t.to_dict() for t in ws.tables()],
+        "project_id": credentials.project_id if credentials else None,
+        "region": credentials.region if credentials else None,
     }
 
 

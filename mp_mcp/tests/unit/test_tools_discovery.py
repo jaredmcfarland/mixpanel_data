@@ -122,7 +122,7 @@ class TestWorkspaceInfoTools:
         from mp_mcp.tools.discovery import workspace_info
 
         result = workspace_info(mock_context)  # type: ignore[operator]
-        assert result["project_id"] == 123456
+        assert result["project_id"] == "123456"
         assert result["region"] == "us"
 
 

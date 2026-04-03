@@ -81,8 +81,6 @@ class TestToolSets:
     def test_export_api_tools_contains_expected(self) -> None:
         """EXPORT_API_TOOLS should contain expected tools."""
         expected = {
-            "fetch_events",
-            "fetch_profiles",
             "stream_events",
             "stream_profiles",
         }
@@ -156,9 +154,9 @@ class TestMixpanelRateLimitMiddleware:
         middleware = MixpanelRateLimitMiddleware()
 
         mock_context = MagicMock()
-        mock_context.message.name = "fetch_events"  # Export API tool
+        mock_context.message.name = "stream_events"  # Export API tool
 
-        expected_result: dict[str, str] = {"table": "events"}
+        expected_result: dict[str, str] = {"events": "[]"}
         mock_call_next = AsyncMock(return_value=expected_result)
 
         result = await middleware.on_call_tool(mock_context, mock_call_next)
@@ -322,9 +320,9 @@ class TestPerSecondRateLimiting:
         middleware = MixpanelRateLimitMiddleware(export_config=export_config)
 
         mock_context = MagicMock()
-        mock_context.message.name = "fetch_events"  # Export API tool
+        mock_context.message.name = "stream_events"  # Export API tool
 
-        expected_result: dict[str, str] = {"table": "events"}
+        expected_result: dict[str, str] = {"events": "[]"}
         mock_call_next = AsyncMock(return_value=expected_result)
 
         result = await middleware.on_call_tool(mock_context, mock_call_next)
@@ -512,15 +510,15 @@ class TestRateLimitedWorkspace:
     def test_rate_limits_export_methods(self) -> None:
         """RateLimitedWorkspace should rate limit Export API methods."""
         mock_workspace = MagicMock()
-        mock_workspace.fetch_events.return_value = {"table": "events"}
+        mock_workspace.stream_events.return_value = [{"event": "login"}]
         rate_limiter = MixpanelRateLimitMiddleware()
 
         wrapped = RateLimitedWorkspace(mock_workspace, rate_limiter)
 
-        result = wrapped.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
+        result = wrapped.stream_events(from_date="2024-01-01", to_date="2024-01-31")
 
-        assert result == {"table": "events"}
-        mock_workspace.fetch_events.assert_called_once_with(
+        assert result == [{"event": "login"}]
+        mock_workspace.stream_events.assert_called_once_with(
             from_date="2024-01-01", to_date="2024-01-31"
         )
         # Rate limit should be recorded

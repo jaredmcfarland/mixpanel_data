@@ -74,13 +74,13 @@ class TestPromptFunctionality:
         assert "Day 7 retention" in result
 
     def test_local_analysis_workflow_returns_content(self) -> None:
-        """local_analysis_workflow should return SQL analysis guide."""
+        """local_analysis_workflow should return data analysis guide."""
         from mp_mcp.prompts import local_analysis_workflow
 
         result = str(local_analysis_workflow())  # type: ignore[operator]
         assert "# Local Data Analysis Workflow" in result
-        assert "fetch_events" in result
-        assert "SQL" in result
+        assert "stream_events" in result
+        assert "list_events" in result
 
     def test_gqm_decomposition_returns_content(self) -> None:
         """gqm_decomposition should return GQM framework content."""

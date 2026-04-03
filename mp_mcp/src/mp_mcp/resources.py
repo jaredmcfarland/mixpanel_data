@@ -107,37 +107,12 @@ def workspace_info_resource(ctx: Context) -> str:
         JSON string with workspace info.
     """
     ws = get_workspace(ctx)
-    workspace_info = ws.info()
+    credentials = ws._credentials
     info = {
-        "project_id": workspace_info.project_id,
-        "region": workspace_info.region,
-        "account": workspace_info.account,
-        "path": str(workspace_info.path) if workspace_info.path else None,
-        "size_mb": workspace_info.size_mb,
-        "created_at": (
-            workspace_info.created_at.isoformat() if workspace_info.created_at else None
-        ),
-        "tables": [t.to_dict() for t in ws.tables()],
+        "project_id": credentials.project_id if credentials else None,
+        "region": credentials.region if credentials else None,
     }
     return json.dumps(info, indent=2)
-
-
-@mcp.resource("workspace://tables")
-@handle_resource_errors
-def tables_resource(ctx: Context) -> str:
-    """List of locally stored tables.
-
-    Returns table names, row counts, and types for all fetched data.
-
-    Args:
-        ctx: FastMCP context with workspace access.
-
-    Returns:
-        JSON string with table list.
-    """
-    ws = get_workspace(ctx)
-    tables = [t.to_dict() for t in ws.tables()]
-    return json.dumps(tables, indent=2)
 
 
 @mcp.resource("schema://events")
@@ -608,7 +583,7 @@ def churn_investigation_recipe(_ctx: Context) -> str:
                 "queries": [
                     {
                         "description": "Analyze last actions before churn",
-                        "tool": "fetch_events",
+                        "tool": "stream_events",
                         "params": {
                             "from_date": from_date,
                             "to_date": to_date,

@@ -32,20 +32,6 @@ def mock_workspace() -> MagicMock:
     )
     workspace.jql.return_value = []
 
-    # Fetch methods
-    workspace.fetch_events.return_value = MagicMock(
-        to_dict=lambda: {"table_name": "events", "row_count": 100}
-    )
-
-    # Local methods
-    workspace.sql_rows.return_value = []
-    workspace.sql_scalar.return_value = 0
-    workspace.tables.return_value = []
-    workspace.table_schema.return_value = []
-    workspace.sample.return_value = []
-    workspace.summarize.return_value = {}
-
-    # Info
     workspace.project_id = 123456
     workspace.region = "us"
     workspace.close = MagicMock()

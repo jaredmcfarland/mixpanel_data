@@ -92,10 +92,6 @@ class TestStaticResourceRegistration:
         """workspace://info resource should be registered."""
         assert "workspace://info" in registered_resource_uris
 
-    def test_tables_registered(self, registered_resource_uris: list[str]) -> None:
-        """workspace://tables resource should be registered."""
-        assert "workspace://tables" in registered_resource_uris
-
     def test_events_registered(self, registered_resource_uris: list[str]) -> None:
         """schema://events resource should be registered."""
         assert "schema://events" in registered_resource_uris

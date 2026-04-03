@@ -44,11 +44,11 @@ Based on what you want to learn:
 - **Conversions**: Use `funnel` to analyze conversion paths
 - **Retention**: Use `retention` to understand user stickiness
 
-## Step 4: Deep Dive with Local Data
-For complex analysis:
-- Use `fetch_events` to download data locally
-- Use `sql` to run custom queries
-- Use `sample` to explore data format
+## Step 4: Deep Dive with Streaming Data
+For detailed analysis:
+- Use `stream_events` to retrieve raw event data
+- Use `stream_profiles` to retrieve user profile data
+- Use `activity_feed` to explore individual user journeys
 
 What would you like to explore first?"""
 
@@ -139,35 +139,29 @@ def local_analysis_workflow() -> str:
     """
     return """# Local Data Analysis Workflow
 
-Let me help you analyze data locally with SQL:
+Let me help you analyze your Mixpanel data in detail:
 
-## Step 1: Fetch Your Data
-Use `fetch_events` to download events to local storage:
+## Step 1: Stream Your Data
+Use `stream_events` to retrieve raw event data:
 ```
-fetch_events(from_date="2024-01-01", to_date="2024-01-31")
+stream_events(from_date="2024-01-01", to_date="2024-01-31")
 ```
 
-## Step 2: Explore the Data
-- Use `list_tables` to see available tables
-- Use `table_schema` to see column definitions
-- Use `sample` to preview actual data
+## Step 2: Explore the Schema
+- Use `list_events` to see available events
+- Use `list_properties` to see event properties
+- Use `top_events` to identify high-volume events
 
-## Step 3: Query with SQL
-Use `sql` for custom analysis:
-```sql
-SELECT event_name, COUNT(*) as count
-FROM events
-GROUP BY event_name
-ORDER BY count DESC
-```
+## Step 3: Run Targeted Queries
+Use analytics tools for focused analysis:
+- `segmentation` for time series analysis
+- `funnel` for conversion analysis
+- `retention` for return rate analysis
 
 ## Step 4: Advanced Analysis
-- Join events with profiles
-- Calculate user-level metrics
-- Build custom funnels
-
-## Step 5: Clean Up
-Use `drop_table` when done to free space
+- Use `stream_profiles` to retrieve user profiles
+- Use `activity_feed` to explore user journeys
+- Use `jql` for custom JavaScript queries
 
 What data would you like to analyze?"""
 
@@ -534,7 +528,7 @@ and related data.
 - Are there deprecated properties?
 
 ### Steps:
-1. Use `property_keys(table="events", event="{event}")` to list all properties
+1. Use `list_properties(event="{event}")` to list all properties
 2. Look for:
    - Duplicate properties (camelCase vs snake_case)
    - Type inconsistencies (string vs number)
