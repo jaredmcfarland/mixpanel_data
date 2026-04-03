@@ -13,8 +13,6 @@ from mixpanel_data.exceptions import (
     AccountNotFoundError,
     AuthenticationError,
     ConfigError,
-    DatabaseLockedError,
-    DatabaseNotFoundError,
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
@@ -22,8 +20,6 @@ from mixpanel_data.exceptions import (
     QueryError,
     RateLimitError,
     ServerError,
-    TableExistsError,
-    TableNotFoundError,
 )
 
 
@@ -62,38 +58,6 @@ class TestHandleErrors:
         error = exc_info.value
         assert "30" in str(error)
         assert "retry" in str(error).lower()
-
-    def test_table_exists_error_conversion(self) -> None:
-        """TableExistsError should convert to ToolError with table name."""
-        from fastmcp.exceptions import ToolError
-
-        from mp_mcp.errors import handle_errors
-
-        @handle_errors
-        def failing_func() -> None:
-            raise TableExistsError("events_jan")
-
-        with pytest.raises(ToolError) as exc_info:
-            failing_func()
-
-        assert "events_jan" in str(exc_info.value)
-        assert "exists" in str(exc_info.value).lower()
-
-    def test_table_not_found_error_conversion(self) -> None:
-        """TableNotFoundError should convert to ToolError with table name."""
-        from fastmcp.exceptions import ToolError
-
-        from mp_mcp.errors import handle_errors
-
-        @handle_errors
-        def failing_func() -> None:
-            raise TableNotFoundError("nonexistent")
-
-        with pytest.raises(ToolError) as exc_info:
-            failing_func()
-
-        assert "nonexistent" in str(exc_info.value)
-        assert "not found" in str(exc_info.value).lower()
 
     def test_query_error_conversion(self) -> None:
         """QueryError should convert to ToolError with query context."""
@@ -258,39 +222,6 @@ class TestHandleErrors:
         assert "100" in error_msg
         assert "Maximum date range" in error_msg
 
-    def test_database_locked_includes_pid(self) -> None:
-        """DatabaseLockedError should include holding process ID if available."""
-        from fastmcp.exceptions import ToolError
-
-        from mp_mcp.errors import handle_errors
-
-        @handle_errors
-        def failing_func() -> None:
-            raise DatabaseLockedError("/path/to/db.duckdb", holding_pid=12345)
-
-        with pytest.raises(ToolError) as exc_info:
-            failing_func()
-
-        error_msg = str(exc_info.value)
-        assert "12345" in error_msg
-        assert "locked" in error_msg.lower()
-
-    def test_database_not_found_includes_suggestion(self) -> None:
-        """DatabaseNotFoundError should suggest fetching data first."""
-        from fastmcp.exceptions import ToolError
-
-        from mp_mcp.errors import handle_errors
-
-        @handle_errors
-        def failing_func() -> None:
-            raise DatabaseNotFoundError("/path/to/db.duckdb")
-
-        with pytest.raises(ToolError) as exc_info:
-            failing_func()
-
-        error_msg = str(exc_info.value)
-        assert "fetch_events" in error_msg or "fetch_profiles" in error_msg
-
     def test_account_not_found_includes_available_accounts(self) -> None:
         """AccountNotFoundError should list available accounts."""
         from fastmcp.exceptions import ToolError
@@ -370,24 +301,6 @@ class TestHandleErrors:
 
         error_msg = str(exc_info.value)
         assert "Wait before retrying" in error_msg
-
-    def test_database_locked_without_pid(self) -> None:
-        """DatabaseLockedError without holding_pid omits PID info."""
-        from fastmcp.exceptions import ToolError
-
-        from mp_mcp.errors import handle_errors
-
-        @handle_errors
-        def failing_func() -> None:
-            raise DatabaseLockedError("/path/to/db.duckdb")
-
-        with pytest.raises(ToolError) as exc_info:
-            failing_func()
-
-        error_msg = str(exc_info.value)
-        assert "locked" in error_msg.lower()
-        # Should NOT have a specific PID message
-        assert "Database locked by process" not in error_msg
 
     def test_account_not_found_without_available_accounts(self) -> None:
         """AccountNotFoundError without available_accounts omits list."""

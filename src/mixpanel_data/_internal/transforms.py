@@ -1,7 +1,7 @@
 """Transform functions for Mixpanel data.
 
 Shared transformation functions for converting raw Mixpanel API responses
-to the storage format used by DuckDB tables.
+to a normalized format for downstream processing.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ RESERVED_EVENT_KEYS = frozenset({"distinct_id", "time", "$insert_id"})
 
 
 def transform_event(event: dict[str, Any]) -> dict[str, Any]:
-    """Transform API event to storage format.
+    """Transform API event to normalized format.
 
     Extracts standard Mixpanel fields (distinct_id, time, $insert_id) from
     the properties dict and promotes them to top-level fields. The time
@@ -86,7 +86,7 @@ RESERVED_PROFILE_KEYS = frozenset({"$last_seen"})
 
 
 def transform_profile(profile: dict[str, Any]) -> dict[str, Any]:
-    """Transform API profile to storage format.
+    """Transform API profile to normalized format.
 
     Extracts standard Mixpanel fields ($distinct_id, $last_seen) from the
     profile and promotes them to top-level fields.

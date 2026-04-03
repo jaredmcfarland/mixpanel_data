@@ -30,16 +30,11 @@ from mixpanel_data.types import (
     ActivityFeedResult,
     BookmarkInfo,
     CohortInfo,
-    ColumnStatsResult,
-    ColumnSummary,
     DailyCount,
     DailyCountsResult,
     EngagementBucket,
     EngagementDistributionResult,
-    EventBreakdownResult,
     EventCountsResult,
-    EventStats,
-    FetchResult,
     FlowsResult,
     FrequencyResult,
     FunnelInfo,
@@ -60,8 +55,6 @@ from mixpanel_data.types import (
     SavedCohort,
     SavedReportResult,
     SegmentationResult,
-    SQLResult,
-    SummaryResult,
     TopEvent,
     UserEvent,
 )
@@ -316,86 +309,6 @@ class TestResultWithDataFrameProperties:
         assert len(table_dict) == len(values)
         # Should still be JSON-serializable
         json.dumps(table_dict)
-
-
-# =============================================================================
-# FetchResult Property Tests
-# =============================================================================
-
-
-class TestFetchResultProperties:
-    """Property-based tests for FetchResult."""
-
-    @given(
-        table=table_names,
-        rows=st.integers(min_value=0, max_value=10_000_000),
-        data_type=st.sampled_from(["events", "profiles"]),
-        duration=st.floats(min_value=0.0, max_value=3600.0, allow_nan=False),
-        fetched_at=datetimes,
-    )
-    def test_to_dict_always_json_serializable(
-        self,
-        table: str,
-        rows: int,
-        data_type: str,
-        duration: float,
-        fetched_at: datetime,
-    ) -> None:
-        """to_dict() output should always be JSON-serializable."""
-        result = FetchResult(
-            table=table,
-            rows=rows,
-            type=data_type,  # type: ignore[arg-type]
-            duration_seconds=duration,
-            date_range=None,
-            fetched_at=fetched_at,
-        )
-
-        # Should not raise
-        data = result.to_dict()
-        json_str = json.dumps(data)
-        assert isinstance(json_str, str)
-
-    @given(
-        table=table_names,
-        rows=st.integers(min_value=0, max_value=1000),
-        fetched_at=datetimes,
-    )
-    def test_df_returns_dataframe_with_consistent_length(
-        self, table: str, rows: int, fetched_at: datetime
-    ) -> None:
-        """df property should return DataFrame matching data length."""
-        data = [{"col": i} for i in range(rows)]
-        result = FetchResult(
-            table=table,
-            rows=rows,
-            type="events",
-            duration_seconds=1.0,
-            date_range=None,
-            fetched_at=fetched_at,
-            _data=data,
-        )
-
-        df = result.df
-        assert len(df) == rows
-
-    @given(table=table_names, fetched_at=datetimes)
-    def test_df_cached_returns_same_object(
-        self, table: str, fetched_at: datetime
-    ) -> None:
-        """Repeated df access should return the same cached object."""
-        result = FetchResult(
-            table=table,
-            rows=0,
-            type="events",
-            duration_seconds=1.0,
-            date_range=None,
-            fetched_at=fetched_at,
-        )
-
-        df1 = result.df
-        df2 = result.df
-        assert df1 is df2
 
 
 # =============================================================================
@@ -916,14 +829,6 @@ class TestCrossTypeInvariants:
         is a fixed scenario that doesn't benefit from randomized inputs.
         """
         # Create instances with empty/minimal data
-        fetch = FetchResult(
-            table="t",
-            rows=0,
-            type="events",
-            duration_seconds=0,
-            date_range=None,
-            fetched_at=datetime(2024, 1, 1),
-        )
         seg = SegmentationResult(
             event="e",
             from_date="2024-01-01",
@@ -952,7 +857,7 @@ class TestCrossTypeInvariants:
         jql = JQLResult()
 
         # All should produce valid to_dict output
-        all_results = [fetch, seg, funnel, retention, jql]
+        all_results = [seg, funnel, retention, jql]
         for r in all_results:
             data = r.to_dict()  # type: ignore[attr-defined]
             json.dumps(data)  # Should not raise
@@ -1615,220 +1520,6 @@ class TestFlowsResultProperties:
 # =============================================================================
 
 
-class TestSummaryResultProperties:
-    """Property-based tests for SummaryResult."""
-
-    @given(
-        table=table_names,
-        row_count=st.integers(min_value=0, max_value=10_000_000),
-        column_count=st.integers(min_value=0, max_value=10),
-    )
-    def test_to_dict_always_json_serializable(
-        self, table: str, row_count: int, column_count: int
-    ) -> None:
-        """to_dict() output should always be JSON-serializable."""
-        columns = [
-            ColumnSummary(
-                column_name=f"col_{i}",
-                column_type="VARCHAR",
-                min=None,
-                max=None,
-                approx_unique=100,
-                avg=None,
-                std=None,
-                q25=None,
-                q50=None,
-                q75=None,
-                count=row_count,
-                null_percentage=0.0,
-            )
-            for i in range(column_count)
-        ]
-
-        result = SummaryResult(
-            table=table,
-            row_count=row_count,
-            columns=columns,
-        )
-
-        data = result.to_dict()
-        json_str = json.dumps(data)
-        assert isinstance(json_str, str)
-        assert len(data["columns"]) == column_count
-
-    @given(column_count=st.integers(min_value=0, max_value=20))
-    def test_df_row_count_matches_columns(self, column_count: int) -> None:
-        """DataFrame row count should equal number of columns."""
-        columns = [
-            ColumnSummary(
-                column_name=f"col_{i}",
-                column_type="VARCHAR",
-                min=None,
-                max=None,
-                approx_unique=100,
-                avg=None,
-                std=None,
-                q25=None,
-                q50=None,
-                q75=None,
-                count=100,
-                null_percentage=0.0,
-            )
-            for i in range(column_count)
-        ]
-
-        result = SummaryResult(
-            table="test_table",
-            row_count=100,
-            columns=columns,
-        )
-
-        assert len(result.df) == column_count
-
-
-# =============================================================================
-# EventBreakdownResult Property Tests
-# =============================================================================
-
-
-class TestEventBreakdownResultProperties:
-    """Property-based tests for EventBreakdownResult."""
-
-    @given(
-        table=table_names,
-        total_events=st.integers(min_value=0, max_value=10_000_000),
-        total_users=st.integers(min_value=0, max_value=1_000_000),
-        event_count=st.integers(min_value=0, max_value=10),
-        timestamp=datetimes,
-    )
-    def test_to_dict_always_json_serializable(
-        self,
-        table: str,
-        total_events: int,
-        total_users: int,
-        event_count: int,
-        timestamp: datetime,
-    ) -> None:
-        """to_dict() output should always be JSON-serializable."""
-        events = [
-            EventStats(
-                event_name=f"Event_{i}",
-                count=total_events // max(1, event_count),
-                unique_users=total_users // max(1, event_count),
-                first_seen=timestamp,
-                last_seen=timestamp,
-                pct_of_total=100.0 / max(1, event_count),
-            )
-            for i in range(event_count)
-        ]
-
-        result = EventBreakdownResult(
-            table=table,
-            total_events=total_events,
-            total_users=total_users,
-            date_range=(timestamp, timestamp),
-            events=events,
-        )
-
-        data = result.to_dict()
-        json_str = json.dumps(data)
-        assert isinstance(json_str, str)
-        assert len(data["events"]) == event_count
-
-    @given(event_count=st.integers(min_value=0, max_value=20), timestamp=datetimes)
-    def test_df_row_count_matches_events(
-        self, event_count: int, timestamp: datetime
-    ) -> None:
-        """DataFrame row count should equal number of event types."""
-        events = [
-            EventStats(
-                event_name=f"Event_{i}",
-                count=100,
-                unique_users=50,
-                first_seen=timestamp,
-                last_seen=timestamp,
-                pct_of_total=10.0,
-            )
-            for i in range(event_count)
-        ]
-
-        result = EventBreakdownResult(
-            table="test_table",
-            total_events=1000,
-            total_users=100,
-            date_range=(timestamp, timestamp),
-            events=events,
-        )
-
-        assert len(result.df) == event_count
-
-
-# =============================================================================
-# ColumnStatsResult Property Tests
-# =============================================================================
-
-
-class TestColumnStatsResultProperties:
-    """Property-based tests for ColumnStatsResult."""
-
-    @given(
-        table=table_names,
-        column=st.text(min_size=1, max_size=30),
-        dtype=st.sampled_from(["VARCHAR", "INTEGER", "DOUBLE", "TIMESTAMP", "JSON"]),
-        count=st.integers(min_value=0, max_value=10_000_000),
-        null_count=st.integers(min_value=0, max_value=10_000_000),
-        unique_count=st.integers(min_value=0, max_value=10_000_000),
-    )
-    def test_to_dict_always_json_serializable(
-        self,
-        table: str,
-        column: str,
-        dtype: str,
-        count: int,
-        null_count: int,
-        unique_count: int,
-    ) -> None:
-        """to_dict() output should always be JSON-serializable."""
-        total = count + null_count
-        null_pct = (null_count / total * 100) if total > 0 else 0.0
-        unique_pct = (unique_count / count * 100) if count > 0 else 0.0
-
-        result = ColumnStatsResult(
-            table=table,
-            column=column,
-            dtype=dtype,
-            count=count,
-            null_count=null_count,
-            null_pct=null_pct,
-            unique_count=unique_count,
-            unique_pct=unique_pct,
-            top_values=[],
-        )
-
-        data = result.to_dict()
-        json_str = json.dumps(data)
-        assert isinstance(json_str, str)
-
-    @given(top_value_count=st.integers(min_value=0, max_value=20))
-    def test_df_row_count_matches_top_values(self, top_value_count: int) -> None:
-        """DataFrame row count should equal number of top values."""
-        top_values = [(f"value_{i}", 100 - i) for i in range(top_value_count)]
-
-        result = ColumnStatsResult(
-            table="test_table",
-            column="test_column",
-            dtype="VARCHAR",
-            count=1000,
-            null_count=0,
-            null_pct=0.0,
-            unique_count=100,
-            unique_pct=10.0,
-            top_values=top_values,
-        )
-
-        assert len(result.df) == top_value_count
-
-
 # =============================================================================
 # Helper Type Property Tests
 # =============================================================================
@@ -1950,84 +1641,6 @@ class TestHelperTypeProperties:
         data = result.to_dict()
         json_str = json.dumps(data)
         assert isinstance(json_str, str)
-
-
-# =============================================================================
-# SQLResult Property Tests
-# =============================================================================
-
-
-# Strategy for valid column names (non-empty printable identifiers)
-column_names = st.text(
-    alphabet=st.characters(categories=("L", "N")),
-    min_size=1,
-    max_size=30,
-).filter(lambda s: s and s[0].isalpha())
-
-
-class TestSQLResultPBT:
-    """Property-based tests for SQLResult."""
-
-    @given(
-        columns=st.lists(column_names, min_size=1, max_size=10, unique=True),
-        num_rows=st.integers(min_value=0, max_value=20),
-    )
-    def test_sql_result_len_matches_rows(
-        self, columns: list[str], num_rows: int
-    ) -> None:
-        """len(SQLResult) should always equal len(rows)."""
-        # Generate rows matching column count
-        rows = [
-            tuple(f"val_{i}_{j}" for j in range(len(columns))) for i in range(num_rows)
-        ]
-        result = SQLResult(columns=columns, rows=rows)
-        assert len(result) == num_rows
-        assert len(result) == len(result.rows)
-
-    @given(
-        columns=st.lists(column_names, min_size=1, max_size=5, unique=True),
-        num_rows=st.integers(min_value=0, max_value=10),
-    )
-    def test_sql_result_to_dicts_has_correct_keys(
-        self, columns: list[str], num_rows: int
-    ) -> None:
-        """to_dicts() should produce dicts with exactly the column names as keys."""
-        rows = [
-            tuple(f"val_{i}_{j}" for j in range(len(columns))) for i in range(num_rows)
-        ]
-        result = SQLResult(columns=columns, rows=rows)
-        dicts = result.to_dicts()
-
-        assert len(dicts) == num_rows
-        for d in dicts:
-            assert set(d.keys()) == set(columns)
-
-    @given(
-        columns=st.lists(column_names, min_size=1, max_size=5, unique=True),
-    )
-    def test_sql_result_to_dict_json_serializable(self, columns: list[str]) -> None:
-        """SQLResult.to_dict() should always be JSON-serializable."""
-        rows = [tuple(f"val_{j}" for j in range(len(columns)))]
-        result = SQLResult(columns=columns, rows=rows)
-        data = result.to_dict()
-        json_str = json.dumps(data)
-        assert isinstance(json_str, str)
-        assert data["row_count"] == 1
-        assert data["columns"] == columns
-
-    @given(
-        columns=st.lists(column_names, min_size=1, max_size=5, unique=True),
-        num_rows=st.integers(min_value=0, max_value=10),
-    )
-    def test_sql_result_iter_yields_all_rows(
-        self, columns: list[str], num_rows: int
-    ) -> None:
-        """Iterating SQLResult should yield all rows in order."""
-        rows = [tuple(i for _ in range(len(columns))) for i in range(num_rows)]
-        result = SQLResult(columns=columns, rows=rows)
-
-        iterated = list(result)
-        assert iterated == rows
 
 
 # =============================================================================

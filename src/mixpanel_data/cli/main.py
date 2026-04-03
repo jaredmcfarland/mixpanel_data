@@ -10,8 +10,7 @@ Usage:
 Examples:
     mp --help
     mp auth list
-    mp --account staging fetch events --from 2024-01-01 --to 2024-01-31
-    mp query sql "SELECT COUNT(*) FROM events"
+    mp --account staging query segmentation -e "Sign Up" --from 2024-01-01 --to 2024-01-31
 """
 
 from __future__ import annotations
@@ -47,12 +46,10 @@ def _get_rich_markup_mode() -> Literal["markdown", "rich"] | None:
 # Create main application
 app = typer.Typer(
     name="mp",
-    help="Mixpanel data CLI - fetch, store, and query analytics data.",
-    epilog="""Two data paths:
-  Live:  mp query segmentation, mp query funnel (call Mixpanel API directly)
-  Local: mp fetch events → mp query sql (store locally, query with SQL)
+    help="Mixpanel data CLI - discover, query, and manage analytics data.",
+    epilog="""Discover your schema, run live analytics, and manage Mixpanel entities.
 
-Workflow: mp inspect events → mp fetch events → mp query sql""",
+Workflow: mp inspect events → mp query segmentation → mp dashboards list""",
     no_args_is_help=True,
     add_completion=True,
     rich_markup_mode=_get_rich_markup_mode(),
@@ -122,10 +119,10 @@ def main(
         ),
     ] = False,
 ) -> None:
-    """Mixpanel data CLI - fetch, store, and query analytics data.
+    """Mixpanel data CLI - discover, query, and manage analytics data.
 
-    Designed for AI coding agents. Fetch data once into a local DuckDB
-    database, then query it repeatedly with SQL.
+    Designed for AI coding agents. Discover schema, run live analytics,
+    and manage Mixpanel entities programmatically.
     """
     ctx.ensure_object(dict)
     ctx.obj["account"] = account
@@ -149,7 +146,6 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.dashboards import dashboards_app
     from mixpanel_data.cli.commands.drop_filters import drop_filters_app
     from mixpanel_data.cli.commands.experiments import experiments_app
-    from mixpanel_data.cli.commands.fetch import fetch_app
     from mixpanel_data.cli.commands.flags import flags_app
     from mixpanel_data.cli.commands.inspect import inspect_app
     from mixpanel_data.cli.commands.lexicon import lexicon_app
@@ -160,11 +156,8 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.webhooks import webhooks_app
 
     app.add_typer(auth_app, name="auth", help="Manage authentication and accounts.")
-    app.add_typer(fetch_app, name="fetch", help="Fetch data from Mixpanel.")
-    app.add_typer(query_app, name="query", help="Query local and live data.")
-    app.add_typer(
-        inspect_app, name="inspect", help="Inspect schema and local database."
-    )
+    app.add_typer(query_app, name="query", help="Query Mixpanel data.")
+    app.add_typer(inspect_app, name="inspect", help="Inspect Mixpanel project schema.")
     app.add_typer(dashboards_app, name="dashboards", help="Manage Mixpanel dashboards.")
     app.add_typer(
         reports_app, name="reports", help="Manage Mixpanel reports (bookmarks)."

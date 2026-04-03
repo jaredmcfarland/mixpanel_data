@@ -324,21 +324,8 @@ class TestWorkspaceIdOption:
         self, mock_ws_cls: MagicMock, cli_runner: CliRunner
     ) -> None:
         """Test that workspace_id is passed to Workspace constructor."""
-        from pathlib import Path
-
-        from mixpanel_data.types import WorkspaceInfo
-
         mock_ws = MagicMock()
         mock_ws.events.return_value = ["Event1"]
-        mock_ws.info.return_value = WorkspaceInfo(
-            path=Path("/tmp/test.db"),
-            account="default",
-            project_id="12345",
-            region="us",
-            tables=[],
-            size_mb=0.0,
-            created_at=None,
-        )
         mock_ws_cls.return_value = mock_ws
 
         # Patch at the point where get_workspace imports Workspace
@@ -348,8 +335,6 @@ class TestWorkspaceIdOption:
 
             def patched_get_workspace(
                 ctx: typer.Context,
-                *,
-                read_only: bool = False,  # noqa: ARG001
             ) -> MagicMock:
                 """Patched get_workspace that captures constructor args."""
                 if "workspace" not in ctx.obj or ctx.obj["workspace"] is None:
@@ -357,14 +342,13 @@ class TestWorkspaceIdOption:
                     workspace_id_val: int | None = ctx.obj.get("workspace_id")
                     ctx.obj["workspace"] = mock_ws_cls(
                         account=account,
-                        read_only=read_only,
                         workspace_id=workspace_id_val,
                     )
                 result: MagicMock = ctx.obj["workspace"]
                 return result
 
             with patch.object(utils_mod, "get_workspace", patched_get_workspace):
-                cli_runner.invoke(app, ["--workspace-id", "777", "inspect", "info"])
+                cli_runner.invoke(app, ["--workspace-id", "777", "inspect", "events"])
 
         # Verify workspace_id was passed
         mock_ws_cls.assert_called_once()

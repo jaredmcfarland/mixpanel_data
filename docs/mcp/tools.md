@@ -13,12 +13,12 @@ Tools are organized into tiers based on their complexity and MCP features:
 
 | Tier | Count | Description | MCP Feature |
 |------|-------|-------------|-------------|
-| **Tier 1** | 48 | Primitive tools (direct API calls) | Standard tools |
+| **Tier 1** | 35 | Primitive tools (direct API calls) | Standard tools |
 | **Tier 2** | 3 | Composed tools (multi-query orchestration) | Standard tools |
 | **Tier 3** | 3 | Intelligent tools (AI synthesis) | `ctx.sample()` |
 | **Interactive** | 2 | Elicitation workflows | `ctx.elicit()` |
 
-**Total: 56 tools**
+**Total: 43 tools**
 
 ---
 
@@ -534,49 +534,9 @@ Get property coverage statistics using JQL.
 
 ---
 
-## Fetch Tools (4)
+## Streaming Tools (2)
 
-Download data to local DuckDB storage for SQL analysis.
-
-### fetch_events
-
-Download events to local storage with progress reporting.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table` | string | No | Target table name (auto-generated when omitted) |
-| `from_date` | string | Yes | Start date |
-| `to_date` | string | Yes | End date |
-| `events` | list[string] | No | Filter to specific events |
-| `where` | string | No | Filter expression |
-| `parallel` | bool | No | Use parallel fetching (faster for large date ranges) |
-
-**Returns:** Fetch summary with row count
-
-**Example prompt:** "Fetch all events from January to the jan_events table"
-
-!!! note "Progress Reporting"
-    This tool reports progress during long-running fetches using MCP tasks.
-
----
-
-### fetch_profiles
-
-Download user profiles to local storage with progress reporting.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table` | string | No | Target table name (auto-generated when omitted) |
-| `cohort_id` | int | No | Filter by cohort |
-| `where` | string | No | Filter expression |
-| `output_properties` | list[string] | No | Specific properties to include |
-| `parallel` | bool | No | Use parallel fetching |
-
-**Returns:** Fetch summary with profile count
-
-**Example prompt:** "Fetch all premium user profiles"
-
----
+Stream data directly from Mixpanel without local storage.
 
 ### stream_events
 
@@ -604,156 +564,6 @@ Stream profiles without storing locally.
 | `limit` | int | No | Maximum profiles |
 
 **Returns:** Profile data directly (not persisted)
-
----
-
-## Local SQL Tools (11)
-
-Query and manage local DuckDB storage.
-
-### sql
-
-Execute SQL queries against local tables.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | string | Yes | SQL query |
-
-**Returns:** Query results as a list of rows
-
-**Example prompt:** "Count events by name in the jan_events table"
-
----
-
-### sql_scalar
-
-Execute SQL returning a single value.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `query` | string | Yes | SQL query returning one value |
-
-**Returns:** Single scalar value
-
-**Example prompt:** "How many total events are in jan_events?"
-
----
-
-### list_tables
-
-List all local tables.
-
-**Returns:** Table names with types (events/profiles)
-
-**Example prompt:** "What tables do I have locally?"
-
----
-
-### table_schema
-
-Get column information for a table.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table` | string | Yes | Table to describe |
-
-**Returns:** Column names, types, and descriptions
-
-**Example prompt:** "What columns are in the jan_events table?"
-
----
-
-### sample
-
-Get random sample rows from a table.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table` | string | Yes | Table to sample |
-| `limit` | int | No | Number of rows (default: 10) |
-
-**Returns:** Sample rows
-
-**Example prompt:** "Show me 5 sample events from jan_events"
-
----
-
-### summarize
-
-Get statistical summary of all columns.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table_name` | string | Yes | Table to summarize |
-
-**Returns:** Column statistics (nulls, unique values, min/max)
-
-**Example prompt:** "Summarize the jan_events table"
-
----
-
-### event_breakdown
-
-Count events by name.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table_name` | string | Yes | Events table |
-
-**Returns:** Event counts sorted by frequency
-
-**Example prompt:** "What's the distribution of event types in jan_events?"
-
----
-
-### property_keys
-
-Extract unique property keys from JSON column.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table_name` | string | Yes | Table to analyze |
-| `column` | string | No | JSON column (default: properties) |
-
-**Returns:** Unique property keys
-
-**Example prompt:** "What properties are present in the jan_events data?"
-
----
-
-### column_stats
-
-Get detailed statistics for a column.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table_name` | string | Yes | Table name |
-| `column` | string | Yes | Column to analyze |
-
-**Returns:** Detailed column statistics
-
----
-
-### drop_table
-
-Remove a local table.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `table_name` | string | Yes | Table to drop |
-
-**Returns:** Confirmation
-
----
-
-### drop_all_tables
-
-Remove all local tables.
-
-**Returns:** Confirmation with count of dropped tables
-
-!!! warning "Destructive Operation"
-    This permanently removes all local data.
 
 ---
 

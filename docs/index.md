@@ -16,7 +16,7 @@ A complete programmable interface to Mixpanel analytics—available as both a Py
 
 Mixpanel's web UI is built for interactive exploration. But many workflows need something different: scripts that run unattended, notebooks that combine Mixpanel data with other sources, agents that query analytics programmatically, or pipelines that move data between systems.
 
-`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—segmentation, funnels, retention, saved reports—plus capabilities like raw JQL execution and local SQL analysis are available as Python methods or shell commands.
+`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—segmentation, funnels, retention, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
 
 ## Three Interfaces, One Capability Set
 
@@ -77,31 +77,9 @@ activity = ws.activity_feed(
     from_date="2025-01-01"
 )
 
-# Fetch data locally (use parallel=True for large date ranges)
-ws.fetch_events(
-    "jan_events",
-    from_date="2025-01-01",
-    to_date="2025-01-31"
-)
-ws.fetch_events(
-    "q1_events",
-    from_date="2025-01-01",
-    to_date="2025-03-31",
-    parallel=True  # Up to 10x faster for large date ranges
-)
-ws.fetch_profiles("power_users", cohort_id=cohorts[0].id)
-
-# Query with full SQL power—joins, window functions, CTEs
-df = ws.sql("""
-    SELECT
-        e.properties->>'$.country' as country,
-        COUNT(DISTINCT e.distinct_id) as users,
-        COUNT(*) as events
-    FROM jan_events e
-    JOIN power_users u ON e.distinct_id = u.distinct_id
-    GROUP BY 1
-    ORDER BY 2 DESC
-""")
+# Stream events for processing
+for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+    process(event)
 
 # Results have .df for pandas interoperability
 segmentation.df
@@ -159,25 +137,11 @@ mp query activity-feed user@example.com --from 2025-01-01
 mp query saved-report 67890
 mp query frequency "Login" --from 2025-01-01
 
-# Fetch data locally (use --parallel for large date ranges)
-mp fetch events jan_events --from 2025-01-01 --to 2025-01-31
-mp fetch events q1_events --from 2025-01-01 --to 2025-03-31 --parallel
-mp fetch profiles users --cohort-id 12345
-
-# Query locally with SQL
-mp query sql "SELECT event_name, COUNT(*) FROM jan_events GROUP BY 1"
-
-# Inspect local data
-mp inspect tables
-mp inspect schema jan_events
-mp inspect sample jan_events
-mp inspect summarize jan_events
-
 # Filter with built-in jq
 mp query segmentation "Purchase" --from 2025-01-01 --format json --jq '.total'
 
 # Stream to Unix tools (memory-efficient for large datasets)
-mp fetch events --stdout --from 2025-01-01 --to 2025-01-31 \
+mp stream events --from 2025-01-01 --to 2025-01-31 \
     | jq -r '.distinct_id' | sort -u | wc -l
 ```
 
@@ -191,7 +155,7 @@ The [`mp_mcp`](mcp/index.md) package exposes all mixpanel_data capabilities thro
 | "How many signups happened last week?"         | Runs segmentation query                |
 | "Why did conversions drop on January 7th?"     | AI-powered diagnosis across dimensions |
 | "Show me a product health dashboard"           | Orchestrates AARRR metrics analysis    |
-| "Fetch events from January and find top users" | Stores locally, then runs SQL          |
+| "Stream events from January and find top users" | Streams data for analysis              |
 
 The MCP server includes intelligent tools that synthesize insights, composed tools that orchestrate multi-query analysis, and interactive workflows with user confirmation for large operations. See the [MCP Server documentation](mcp/index.md) for setup and tool reference.
 
@@ -217,14 +181,6 @@ Discovery commands let you survey what exists before writing queries—no guessi
 - Frequency and engagement analysis
 - Numeric aggregations (sum, average, bucket)
 - Raw JQL execution for custom analysis
-
-**Local Storage** — Fetch once, query repeatedly:
-
-- Store events and profiles in a local DuckDB database
-- Parallel fetching for large date ranges (up to 10x faster)
-- Query with full SQL: joins, window functions, CTEs
-- Introspect tables, sample data, analyze distributions
-- Iterate on analysis without repeated API calls
 
 **Entity Management** — Create, update, and delete Mixpanel entities:
 

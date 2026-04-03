@@ -27,8 +27,6 @@ from mixpanel_data.exceptions import (
     AccountNotFoundError,
     AuthenticationError,
     ConfigError,
-    DatabaseLockedError,
-    DatabaseNotFoundError,
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
@@ -36,8 +34,6 @@ from mixpanel_data.exceptions import (
     QueryError,
     RateLimitError,
     ServerError,
-    TableExistsError,
-    TableNotFoundError,
 )
 
 logger = logging.getLogger(__name__)
@@ -202,42 +198,6 @@ def _handle_exception(e: Exception) -> None:
                 suggestions,
             )
         ) from e
-
-    # Storage errors
-    if isinstance(e, TableExistsError):
-        logger.info("Table exists: %s", e.table_name)
-        suggestions = [
-            "Use drop_table to remove the existing table first",
-            "Choose a different table name",
-            "Use append=True to add data to the existing table",
-        ]
-        raise ToolError(format_rich_error(str(e), e, suggestions)) from e
-
-    if isinstance(e, TableNotFoundError):
-        logger.info("Table not found: %s", e.table_name)
-        suggestions = [
-            "Use list_tables to see available tables",
-            "Fetch data first with fetch_events or fetch_profiles",
-        ]
-        raise ToolError(format_rich_error(str(e), e, suggestions)) from e
-
-    if isinstance(e, DatabaseLockedError):
-        logger.warning("Database locked: path=%s, pid=%s", e.db_path, e.holding_pid)
-        suggestions = [
-            "Another mp command may be running - wait for it to complete",
-            "Check for other processes using the database file",
-        ]
-        if e.holding_pid:
-            suggestions.insert(0, f"Database locked by process {e.holding_pid}")
-        raise ToolError(format_rich_error(str(e), e, suggestions)) from e
-
-    if isinstance(e, DatabaseNotFoundError):
-        logger.info("Database not found: %s", e.db_path)
-        suggestions = [
-            "Run fetch_events or fetch_profiles first to create the database",
-            "Check the database path in your configuration",
-        ]
-        raise ToolError(format_rich_error(str(e), e, suggestions)) from e
 
     # Config errors
     if isinstance(e, AccountNotFoundError):

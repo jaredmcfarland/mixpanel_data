@@ -21,7 +21,6 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
-from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.types import (
     BlueprintCard,
     BlueprintFinishParams,
@@ -87,11 +86,9 @@ def _make_workspace(temp_dir: Path, handler: Any) -> Workspace:
     creds = _make_creds()
     transport = httpx.MockTransport(handler)
     client = MixpanelAPIClient(creds, _transport=transport)
-    storage = StorageEngine(path=temp_dir / "test.db")
     return Workspace(
         _config_manager=_make_config(temp_dir),
         _api_client=client,
-        _storage=storage,
     )
 
 

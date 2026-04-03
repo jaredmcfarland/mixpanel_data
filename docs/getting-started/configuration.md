@@ -270,29 +270,7 @@ ws_id = ws.resolve_workspace_id()
 
 If no workspace ID is set, workspace-scoped endpoints will auto-discover by listing available workspaces and selecting the default.
 
-## Workspace Path
-
-By default, the workspace database is stored at `./mixpanel.db`. Override with:
-
-```python
-import mixpanel_data as mp
-
-# Custom path
-ws = mp.Workspace(path="./data/analytics.db")
-
-# Ephemeral (temporary, auto-deleted)
-with mp.Workspace.ephemeral() as ws:
-    # ... work with data
-# Database deleted on exit
-```
-
-For CLI, use the `--db` option:
-
-```bash
-mp fetch events --db ./data/my_project.db --from 2025-01-01 --to 2025-01-31
-```
-
 ## Next Steps
 
-- [Fetching Data](../guide/fetching.md) — Learn about data ingestion
+- [Streaming Data](../guide/streaming.md) — Stream events and profiles
 - [API Reference](../api/index.md) — Complete API documentation

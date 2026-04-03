@@ -79,9 +79,7 @@ plugins:
           - getting-started/quickstart.md
           - getting-started/configuration.md
         User Guide:
-          - guide/fetching.md
           - guide/streaming.md
-          - guide/sql-queries.md
           - guide/live-analytics.md
           - guide/entity-management.md
           - guide/data-governance.md
@@ -103,8 +101,6 @@ plugins:
           - mcp/examples.md
         Architecture:
           - architecture/design.md
-          - architecture/data-model.md
-          - architecture/storage.md
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -127,9 +123,9 @@ plugins:
       full_output: llms-full.txt
       markdown_description: |
         mixpanel_data is a complete programmable interface to Mixpanel analytics.
-        Python library and CLI for discovery, querying, and data extraction.
+        Python library and CLI for discovery, querying, streaming, and entity management.
         Discover your schema, run live analytics (segmentation, funnels, retention),
-        execute JQL, and analyze locally with SQL via DuckDB.
+        execute JQL, and stream data for processing.
       sections:
         Getting Started:
           - index.md: "Project overview and key concepts"
@@ -137,9 +133,7 @@ plugins:
           - getting-started/quickstart.md: "First queries in 5 minutes"
           - getting-started/configuration.md: "Accounts, env vars, config files"
         User Guide:
-          - guide/fetching.md: "Fetch events and profiles to DuckDB"
-          - guide/streaming.md: "Stream data without storage for ETL"
-          - guide/sql-queries.md: "Query with DuckDB SQL and JSON operators"
+          - guide/streaming.md: "Stream events and profiles for ETL"
           - guide/live-analytics.md: "Segmentation, funnels, retention, JQL"
           - guide/entity-management.md: "Create, update, delete dashboards, reports, and cohorts"
           - guide/data-governance.md: "Manage Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, enforcement, auditing, anomalies, and event deletion requests"
@@ -161,8 +155,6 @@ plugins:
           - mcp/examples.md: "Example conversations and workflows"
         Architecture:
           - architecture/design.md: "Layered architecture and services"
-          - architecture/data-model.md: "Event and profile data model"
-          - architecture/storage.md: "DuckDB storage engine"
 
 markdown_extensions:
   - admonition
@@ -186,9 +178,7 @@ nav:
       - Quick Start: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
   - User Guide:
-      - Fetching Data: guide/fetching.md
       - Streaming Data: guide/streaming.md
-      - Local SQL Queries: guide/sql-queries.md
       - Live Analytics: guide/live-analytics.md
       - Entity Management: guide/entity-management.md
       - Data Governance: guide/data-governance.md
@@ -210,8 +200,6 @@ nav:
       - Examples: mcp/examples.md
   - Architecture:
       - Design: architecture/design.md
-      - Data Model: architecture/data-model.md
-      - Storage Engine: architecture/storage.md
 
 extra:
   social:

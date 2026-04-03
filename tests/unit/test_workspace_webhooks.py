@@ -20,7 +20,6 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
-from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.types import (
     CreateWebhookParams,
     ProjectWebhook,
@@ -88,11 +87,9 @@ def _make_workspace(
     creds = _make_oauth_credentials()
     transport = httpx.MockTransport(handler)
     client = MixpanelAPIClient(creds, _transport=transport)
-    storage = StorageEngine(path=temp_dir / "test.db")
     return Workspace(
         _config_manager=_setup_config_with_account(temp_dir),
         _api_client=client,
-        _storage=storage,
     )
 
 

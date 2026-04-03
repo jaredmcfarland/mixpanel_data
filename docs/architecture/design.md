@@ -24,13 +24,13 @@ mixpanel_data follows a layered architecture with clear separation of concerns.
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                     Service Layer                           │
-│     DiscoveryService, FetcherService, LiveQueryService      │
+│            DiscoveryService, LiveQueryService               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  Infrastructure Layer                       │
-│       ConfigManager, MixpanelAPIClient, StorageEngine       │
+│            ConfigManager, MixpanelAPIClient                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -58,15 +58,6 @@ Schema introspection with session-scoped caching:
 - `list_funnels()` — Saved funnels (cached)
 - `list_cohorts()` — Saved cohorts (cached)
 - `list_top_events()` — Today's top events (NOT cached, real-time)
-
-#### FetcherService
-
-Coordinates data ingestion from Mixpanel API to DuckDB, or direct streaming:
-
-- Streaming transformation (memory efficient)
-- Progress callback integration
-- Returns `FetchResult` with metadata (fetch mode)
-- Returns `Iterator[dict]` without storage (stream mode)
 
 #### LiveQueryService
 
@@ -96,15 +87,6 @@ HTTP client with Mixpanel-specific features:
 - Automatic rate limit handling with exponential backoff
 - Streaming JSONL parsing for large exports
 
-#### StorageEngine
-
-DuckDB-based storage:
-
-- Persistent, ephemeral, and in-memory modes
-- Table creation with streaming batch ingestion
-- Query execution (DataFrame, scalar, rows)
-- Schema introspection and metadata
-
 ## Data Paths
 
 ### Live Query Path
@@ -120,23 +102,6 @@ Best for:
 - Real-time data needs
 - One-off analysis
 - Pre-computed Mixpanel reports
-
-### Local Analysis Path
-
-```
-User Request → Workspace → FetcherService → MixpanelAPIClient → Mixpanel Export API
-                                 ↓
-                          StorageEngine (DuckDB)
-                                 ↓
-User Query → Workspace → StorageEngine → SQL Execution → DataFrame
-```
-
-Best for:
-
-- Repeated queries over same data
-- Custom SQL logic
-- Context window preservation (AI agents)
-- Offline analysis
 
 ### Streaming Path
 
@@ -157,21 +122,9 @@ Best for:
 
 ## Key Design Decisions
 
-### Explicit Table Management
+### Streaming Data Access
 
-Tables are never implicitly overwritten. Fetching to an existing table name raises `TableExistsError`. This prevents accidental data loss and makes data lineage explicit.
-
-### Streaming Ingestion
-
-The API client returns iterators, and storage accepts iterators. This enables memory-efficient processing of large datasets without loading everything into memory.
-
-### JSON Property Storage
-
-Event and profile properties are stored as JSON columns in DuckDB. This preserves the flexible Mixpanel schema while enabling powerful JSON querying:
-
-```sql
-SELECT properties->>'$.country' as country FROM events
-```
+The API client returns iterators for memory-efficient processing of large datasets without loading everything into memory.
 
 ### Immutable Credentials
 
@@ -193,9 +146,7 @@ All services accept their dependencies as constructor arguments. This enables:
 | CLI Framework | Typer | Declarative CLI building |
 | Output Formatting | Rich | Tables, progress bars, colors |
 | Validation | Pydantic | Data validation, settings |
-| Database | DuckDB | Embedded analytical database |
 | HTTP Client | httpx | Async-capable HTTP |
-| DataFrames | pandas | Data analysis interface |
 
 ## Package Structure
 
@@ -210,14 +161,12 @@ src/mixpanel_data/
 ├── _internal/               # Private implementation
 │   ├── config.py            # ConfigManager, Credentials
 │   ├── api_client.py        # MixpanelAPIClient
-│   ├── storage.py           # StorageEngine
 │   └── services/
 │       ├── discovery.py     # DiscoveryService
-│       ├── fetcher.py       # FetcherService
 │       └── live_query.py    # LiveQueryService
 └── cli/
     ├── main.py              # Typer app entry point
-    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts, flags, experiments
+    ├── commands/            # auth, query, inspect, dashboards, reports, cohorts, flags, experiments
     ├── formatters.py        # Output formatters
     └── utils.py             # CLI utilities
 ```

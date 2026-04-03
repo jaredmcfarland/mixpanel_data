@@ -1,19 +1,17 @@
 """
 mixpanel_data - Python library for working with Mixpanel analytics data.
 
-Designed for AI coding agents. Fetch data once into a local DuckDB database,
-then query it repeatedly with SQL.
+Complete programmable interface to Mixpanel analytics: discover your schema,
+run live analytics, stream data, and manage entities via the App API.
 """
 
-from mixpanel_data._literal_types import CountType, HourDayUnit, TableType, TimeUnit
+from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
 from mixpanel_data.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
     APIError,
     AuthenticationError,
     ConfigError,
-    DatabaseLockedError,
-    DatabaseNotFoundError,
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
@@ -22,8 +20,6 @@ from mixpanel_data.exceptions import (
     QueryError,
     RateLimitError,
     ServerError,
-    TableExistsError,
-    TableNotFoundError,
     WorkspaceScopeError,
 )
 from mixpanel_data.types import (
@@ -44,8 +40,6 @@ from mixpanel_data.types import (
     AnnotationUser,
     AuditResponse,
     AuditViolation,
-    BatchProgress,
-    BatchResult,
     BlueprintCard,
     BlueprintConfig,
     BlueprintFinishParams,
@@ -71,9 +65,6 @@ from mixpanel_data.types import (
     Cohort,
     CohortCreator,
     CohortInfo,
-    ColumnInfo,
-    ColumnStatsResult,
-    ColumnSummary,
     ComposedPropertyValue,
     CreateAlertParams,
     CreateAnnotationParams,
@@ -104,11 +95,9 @@ from mixpanel_data.types import (
     EngagementBucket,
     EngagementDistributionResult,
     EntityType,
-    EventBreakdownResult,
     EventCountsResult,
     EventDefinition,
     EventDeletionRequest,
-    EventStats,
     Experiment,
     ExperimentConcludeParams,
     ExperimentCreator,
@@ -116,7 +105,6 @@ from mixpanel_data.types import (
     ExperimentStatus,
     FeatureFlag,
     FeatureFlagStatus,
-    FetchResult,
     FlagContractStatus,
     FlagHistoryParams,
     FlagHistoryResponse,
@@ -141,11 +129,8 @@ from mixpanel_data.types import (
     NumericPropertySummaryResult,
     NumericSumResult,
     PaginatedResponse,
-    ParallelFetchResult,
-    ParallelProfileResult,
     PreviewDeletionFiltersParams,
     ProfilePageResult,
-    ProfileProgress,
     ProjectWebhook,
     PropertyCountsResult,
     PropertyCoverage,
@@ -166,11 +151,6 @@ from mixpanel_data.types import (
     SegmentationResult,
     ServingMethod,
     SetTestUsersParams,
-    SQLResult,
-    SummaryResult,
-    TableInfo,
-    TableMetadata,
-    TableSchema,
     TopEvent,
     UpdateAlertParams,
     UpdateAnnotationParams,
@@ -198,7 +178,6 @@ from mixpanel_data.types import (
     WebhookMutationResult,
     WebhookTestParams,
     WebhookTestResult,
-    WorkspaceInfo,
 )
 from mixpanel_data.workspace import Workspace
 
@@ -210,7 +189,6 @@ __all__ = [
     # Type aliases
     "CountType",
     "HourDayUnit",
-    "TableType",
     "TimeUnit",
     # Exceptions
     "MixpanelDataError",
@@ -223,24 +201,12 @@ __all__ = [
     "QueryError",
     "JQLSyntaxError",
     "ServerError",
-    "TableExistsError",
-    "TableNotFoundError",
-    "DatabaseLockedError",
-    "DatabaseNotFoundError",
     "EventNotFoundError",
     "DateRangeTooLargeError",
     "OAuthError",
     "WorkspaceScopeError",
     # Result types
-    "FetchResult",
-    "ParallelFetchResult",
-    "ParallelProfileResult",
-    "ProfilePageResult",
-    "BatchProgress",
-    "BatchResult",
-    "ProfileProgress",
     "SegmentationResult",
-    "SQLResult",
     "FunnelResult",
     "FunnelStep",
     "RetentionResult",
@@ -265,25 +231,12 @@ __all__ = [
     "NumericBucketResult",
     "NumericSumResult",
     "NumericAverageResult",
-    # Storage types
-    "TableMetadata",
-    "TableInfo",
-    "ColumnInfo",
-    "TableSchema",
-    # Workspace types
-    "WorkspaceInfo",
     # Lexicon schema types
     "EntityType",
     "LexiconMetadata",
     "LexiconProperty",
     "LexiconDefinition",
     "LexiconSchema",
-    # Introspection types
-    "ColumnSummary",
-    "SummaryResult",
-    "EventStats",
-    "EventBreakdownResult",
-    "ColumnStatsResult",
     # JQL Discovery types (Phase 016)
     "PropertyDistributionResult",
     "PropertyValueCount",
@@ -294,6 +247,8 @@ __all__ = [
     "EngagementBucket",
     "PropertyCoverageResult",
     "PropertyCoverage",
+    # Profile pagination
+    "ProfilePageResult",
     # App API types (Phase 023)
     "PublicWorkspace",
     "CursorPagination",

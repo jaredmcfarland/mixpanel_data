@@ -17,7 +17,7 @@ ws = mp.Workspace()
 result = ws.segmentation(...)
 
 # Direct imports
-from mixpanel_data import Workspace, FetchResult, MixpanelDataError
+from mixpanel_data import Workspace, MixpanelDataError
 
 # Auth utilities
 from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
@@ -58,12 +58,9 @@ from mixpanel_data import (
 The main entry point for all operations:
 
 - **Discovery** — Explore events, properties, funnels, cohorts
-- **Fetching** — Download events and profiles to local storage
-- **Streaming** — Stream data directly without storage (ETL, pipelines)
-- **Local Queries** — SQL queries against DuckDB
+- **Streaming** — Stream events and profiles directly from Mixpanel (ETL, pipelines)
 - **Live Queries** — Real-time analytics from Mixpanel API
 - **Entity CRUD & Data Governance** — Create, read, update, delete dashboards, reports, cohorts, feature flags, experiments, plus Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, volume anomalies, and event deletion requests
-- **Introspection** — Examine local tables and schemas
 
 [View Workspace API](workspace.md)
 
@@ -89,7 +86,6 @@ Structured error handling:
 - **ConfigError** — Configuration errors
 - **OAuthError** — OAuth authentication errors
 - **WorkspaceScopeError** — Workspace resolution errors
-- **TableExistsError** / **TableNotFoundError** — Storage errors
 
 [View Exceptions](exceptions.md)
 
@@ -97,7 +93,6 @@ Structured error handling:
 
 Typed results for all operations:
 
-- **FetchResult** — Fetch operation results
 - **SegmentationResult** — Time-series data
 - **FunnelResult** — Funnel conversion data
 - **RetentionResult** — Retention cohort data

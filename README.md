@@ -5,13 +5,13 @@
 
 > **⚠️ Pre-release Software**: This package is under active development and not yet published to PyPI. APIs may change between versions.
 
-A complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, and data extraction.
+A complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, streaming, and entity management.
 
 ## Why mixpanel_data?
 
-Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_data** provides a unified interface: discover your schema, run analytics queries, and extract data—all through consistent Python methods or CLI commands.
+Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_data** provides a unified interface: discover your schema, run analytics queries, stream data, and manage entities—all through consistent Python methods or CLI commands.
 
-Core analytics—segmentation, funnels, retention, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and local SQL analysis via [DuckDB](https://duckdb.org).
+Core analytics—segmentation, funnels, retention, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
 
 ## Installation
 
@@ -68,33 +68,17 @@ mp inspect properties --event Purchase # Properties for an event
 mp inspect funnels                     # Saved funnels
 ```
 
-### 3. Fetch Events to Local Storage
-
-```bash
-# Sequential fetch for small date ranges
-mp fetch events jan --from 2025-01-01 --to 2025-01-31
-
-# Parallel fetch for large date ranges (up to 10x faster)
-mp fetch events q1 --from 2025-01-01 --to 2025-03-31 --parallel
-```
-
-### 4. Query with SQL
-
-```bash
-mp query sql "SELECT event_name, COUNT(*) FROM jan GROUP BY 1 ORDER BY 2 DESC" --format table
-```
-
-### 5. Run Live Analytics
+### 3. Run Live Analytics
 
 ```bash
 mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 --on country
 ```
 
-### 6. Or Stream Directly (No Storage)
+### 4. Stream Data
 
 ```bash
 # Stream events as JSONL for piping to other tools
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout | jq '.event_name'
+mp stream events --from 2025-01-01 --to 2025-01-31 | jq '.event_name'
 ```
 
 ## Python API
@@ -152,42 +136,9 @@ schemas = ws.list_schema_registry()
 enforcement = ws.get_schema_enforcement()
 audit = ws.run_audit()
 
-# Fetch events into local DuckDB for SQL analysis
-ws.fetch_events("jan", from_date="2025-01-01", to_date="2025-01-31")
-
-# Use parallel=True for large date ranges (up to 10x faster)
-ws.fetch_events("q1", from_date="2025-01-01", to_date="2025-03-31", parallel=True)
-
-# Fetch profiles (use parallel=True for large datasets, up to 5x faster)
-ws.fetch_profiles("users", parallel=True)
-
-df = ws.sql("""
-    SELECT
-        DATE_TRUNC('day', event_time) as day,
-        event_name,
-        COUNT(*) as count
-    FROM jan
-    GROUP BY 1, 2
-    ORDER BY 1, 3 DESC
-""")
-```
-
-### Temporary Workspaces
-
-For one-off analysis without persisting data:
-
-```python
-# Ephemeral: temp file with compression (best for large datasets)
-with mp.Workspace.ephemeral() as ws:
-    ws.fetch_events("events", from_date="2025-01-01", to_date="2025-01-31")
-    total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-# Database automatically deleted
-
-# In-memory: zero disk footprint (best for small datasets, testing)
-with mp.Workspace.memory() as ws:
-    ws.fetch_events("events", from_date="2025-01-01", to_date="2025-01-07")
-    total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-# No files ever created
+# Stream events for processing
+for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+    process(event)
 ```
 
 ### Streaming
@@ -204,9 +155,9 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp auth`** — Authentication: `login`, `logout`, `status`, `token` (OAuth); `list`, `add`, `remove`, `switch`, `show`, `test` (service accounts)
 
-**`mp fetch`** — Extract data: `events`, `profiles` (add `--parallel` for up to 10x faster event exports or 5x faster profile exports, `--stdout` to stream as JSONL)
+**`mp query`** — Run analytics: `segmentation`, `funnel`, `retention`, `jql`, `saved-report`, `flows`, and 7 more
 
-**`mp query`** — Run analytics: `sql`, `segmentation`, `funnel`, `retention`, `jql`, `saved-report`, `flows`, and 7 more
+**`mp stream`** — Stream data: `events`, `profiles` (JSONL output for piping to other tools)
 
 **`mp dashboards`** — Dashboard management: `list`, `create`, `get`, `update`, `delete`, `favorite`, `pin`, blueprints, and more
 
@@ -236,7 +187,7 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp schemas`** — Schema registry management: `list`, `create`, `create-bulk`, `update`, `update-bulk`, `delete`
 
-**`mp inspect`** — Discover schema: `events`, `properties`, `funnels`, `cohorts`, `bookmarks`; local DB: `tables`, `schema`, `drop`, and 5 more
+**`mp inspect`** — Discover schema: `events`, `properties`, `funnels`, `cohorts`, `bookmarks`, `top-events`, `lexicon-schemas`
 
 All commands support `--format` (`json`, `jsonl`, `table`, `csv`, `plain`) and `--help`.
 
@@ -252,27 +203,9 @@ mp inspect events --format json --jq '.[:5]'
 mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
     --format json --jq '.total'
 
-# Filter SQL results
-mp query sql "SELECT * FROM events LIMIT 100" --format json \
-    --jq '.[] | select(.event_name == "Purchase")'
 ```
 
 See [CLI Reference](https://jaredmcfarland.github.io/mixpanel_data/cli/) for complete documentation.
-
-## DuckDB JSON Queries
-
-Mixpanel properties are stored as JSON columns:
-
-```sql
--- Extract property
-SELECT properties->>'$.country' as country FROM events
-
--- Filter on property
-SELECT * FROM events WHERE properties->>'$.plan' = 'premium'
-
--- Cast numeric
-SELECT SUM(CAST(properties->>'$.amount' AS DECIMAL)) FROM events
-```
 
 ## Documentation
 
@@ -283,7 +216,6 @@ Full documentation: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarl
 - [CLI Reference](https://jaredmcfarland.github.io/mixpanel_data/cli/)
 - [Python API](https://jaredmcfarland.github.io/mixpanel_data/api/)
 - [Streaming Guide](https://jaredmcfarland.github.io/mixpanel_data/guide/streaming/)
-- [SQL Query Guide](https://jaredmcfarland.github.io/mixpanel_data/guide/sql-queries/)
 - [Live Analytics](https://jaredmcfarland.github.io/mixpanel_data/guide/live-analytics/)
 
 - [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/jaredmcfarland/mixpanel_data)
@@ -298,8 +230,7 @@ Key design features:
 - **Discoverable schema**: `list_events()`, `list_properties()`, `list_funnels()`, `list_cohorts()`, `list_bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
 - **Structured output**: All CLI commands support `--format json` for machine-readable responses, plus `--jq` for inline filtering
-- **Parallel fetching**: Up to 10x faster event exports for large date ranges, 5x faster profile exports via `--parallel` or `parallel=True`
-- **Local SQL iteration**: Fetch once, query repeatedly—no re-fetching needed
+- **Streaming data extraction**: Memory-efficient iterators for events and profiles
 - **Dual authentication**: Service accounts (Basic Auth) for automation, OAuth 2.0 PKCE for interactive use
 - **Typed exceptions**: Error codes and context for programmatic handling
 
@@ -334,7 +265,7 @@ Then restart Claude Code.
   - `funnel-optimizer` - Conversion analysis and drop-off diagnostics
   - `retention-specialist` - Cohort behavior and retention curves
   - `jql-expert` - Advanced JavaScript queries and transformations
-- **Multiple query paths**: SQL (DuckDB local analysis), JQL (complex transforms), or Mixpanel API (live analytics)
+- **Multiple query paths**: JQL (complex transforms) or Mixpanel API (live analytics)
 - **Secure by design**: Credentials managed outside conversation context
 
 Learn more: [Plugin Documentation](mixpanel-plugin/README.md)

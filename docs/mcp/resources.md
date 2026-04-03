@@ -18,7 +18,6 @@ Always-available resources that reflect current state.
 | URI | Description |
 |-----|-------------|
 | `workspace://info` | Workspace configuration (project ID, region, account) |
-| `workspace://tables` | List of local DuckDB tables |
 | `schema://events` | All tracked event names |
 | `schema://funnels` | Saved funnel definitions |
 | `schema://cohorts` | Saved cohort definitions |
@@ -233,10 +232,10 @@ Used by interactive tools to request user confirmation or input.
 
 ### Progress Reporting (ctx.report_progress)
 
-Long-running operations like `fetch_events` report progress:
+Long-running operations report progress:
 
 ```
-Fetching events: 15,234 / ~50,000 (30%)
+Streaming events: 15,234 processed...
 ```
 
 ---

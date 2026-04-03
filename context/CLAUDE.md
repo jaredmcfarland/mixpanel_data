@@ -2,7 +2,7 @@
 
 This directory contains all design documentation, specifications, and reference materials for the `mixpanel_data` library.
 
-**A complete programmable interface to Mixpanel analytics**—Python library and CLI for discovery, querying, and data extraction.
+**A complete programmable interface to Mixpanel analytics**—Python library and CLI for discovery, querying, streaming, and entity management.
 
 ## Document Hierarchy
 
@@ -30,14 +30,13 @@ context/
 **For implementation:**
 1. **[mixpanel_data-api-specification.md](mixpanel_data-api-specification.md)** — Python library API design
 2. **[mp-cli-api-specification.md](mp-cli-api-specification.md)** — CLI commands and options
-3. **[mixpanel-data-model-reference.md](mixpanel-data-model-reference.md)** — Data model for Pydantic/DuckDB mapping
+3. **[mixpanel-data-model-reference.md](mixpanel-data-model-reference.md)** — Data model for Pydantic mapping
 
 ## Core Capabilities
 
 - **Discovery**: Explore your project schema—events, properties, funnels, cohorts, bookmarks
 - **Live Analytics**: Segmentation, funnels, retention, saved reports, flows—direct API queries
-- **Data Extraction**: Fetch events and profiles for local analysis or streaming to external systems
-- **Local SQL**: Store in DuckDB, query with SQL—fetch once, iterate many times
+- **Streaming**: Stream events and profiles for ETL pipelines or external systems
 - **JQL Execution**: Run custom JavaScript Query Language scripts
 
 ## For Humans and Agents
@@ -68,19 +67,19 @@ Both human developers and AI coding agents can explore capabilities without exte
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Service Layer                                              │
-│  DiscoveryService | FetcherService | LiveQueryService       │
+│  DiscoveryService | LiveQueryService                        │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  Infrastructure Layer                                       │
-│  ConfigManager | MixpanelAPIClient | StorageEngine (DuckDB) │
+│  ConfigManager | MixpanelAPIClient                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **Two data paths:**
 - **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention, saved reports, flows, JQL)
-- **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
+- **Streaming**: Stream events and profiles directly for ETL pipelines or external processing
 
 ## Naming Convention
 
@@ -88,16 +87,16 @@ Both human developers and AI coding agents can explore capabilities without exte
 |---------|------|---------|
 | PyPI package | `mixpanel_data` | `pip install mixpanel_data` |
 | Python import | `mixpanel_data` | `import mixpanel_data as mp` |
-| CLI command | `mp` | `mp fetch events --from 2025-01-01` |
+| CLI command | `mp` | `mp query segmentation -e Login --from 2025-01-01` |
 
 ## Design Principles
 
 1. **Library-First** — CLI wraps library; every capability is programmatic
 2. **Agent-Native** — Non-interactive, structured output, composable
-3. **Context Efficient** — Fetch once, query many times
-4. **Two Data Paths** — Live queries (quick) vs local DB (deep analysis)
+3. **Streaming-First** — Memory-efficient iterators for data extraction
+4. **Two Data Paths** — Live queries (quick analytics) vs streaming (data extraction)
 5. **Unix Philosophy** — One thing well, compose with other tools
-6. **Explicit Over Implicit** — No global state, explicit table creation/deletion
+6. **Explicit Over Implicit** — No global state, clear resource management
 7. **Secure by Default** — Credentials in config file, never in code
 
 ## Python Library API
@@ -122,24 +121,10 @@ funnel = ws.funnel(funnel_id=funnels[0].id, from_date="2025-01-01", to_date="202
 ret = ws.retention("Signup", "Purchase", from_date="2025-01-01", to_date="2025-01-31")
 report = ws.saved_report(bookmark_id=bookmarks[0].id)
 
-# Fetch data to local storage
-ws.fetch_events("events_jan", from_date="2025-01-01", to_date="2025-01-31")
-ws.fetch_profiles("users")
-
-# Query local data with SQL
-df = ws.sql("SELECT * FROM events_jan LIMIT 10")
-count = ws.sql_scalar("SELECT COUNT(*) FROM users")
-
-# Stream without storage
+# Stream data for ETL or processing
 for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-07"):
     process(event)
 
-# Introspection
-tables = ws.tables()
-schema = ws.schema("events_jan")
-
-# Cleanup
-ws.drop("events_jan")
 ws.close()
 ```
 
@@ -155,19 +140,8 @@ mp auth show [name]                       # Show account details
 mp auth test [name]                       # Test credentials
 ```
 
-### Data Fetching (2 commands)
-```bash
-mp fetch events <name> --from DATE --to DATE [--events E1,E2] [--where EXPR] [--stdout]
-mp fetch profiles <name> [--where EXPR] [--stdout]
-```
-
-Use `--stdout` to stream as JSONL instead of storing locally.
-
 ### Queries
 ```bash
-# Local SQL
-mp query sql "SELECT * FROM events LIMIT 10"
-
 # Live analytics
 mp query segmentation <event> --from DATE --to DATE [--on PROP] [--unit day|week|month]
 mp query funnel <id> --from DATE --to DATE [--unit day|week|month]
@@ -194,11 +168,6 @@ mp inspect values <property> [--event E]  # List property values
 mp inspect funnels                        # List saved funnels
 mp inspect cohorts                        # List saved cohorts
 mp inspect bookmarks                      # List saved reports/insights
-
-# Local database introspection
-mp inspect tables                         # List local tables
-mp inspect schema <table>                 # Table schema details
-mp inspect drop <table> [--all]           # Drop table(s)
 ```
 
 ### Output Formats
@@ -238,11 +207,10 @@ See [mixpanel-data-model-reference.md](mixpanel-data-model-reference.md) for com
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| Language | Python 3.10+ | DuckDB/Pandas ecosystem, modern typing |
+| Language | Python 3.10+ | Modern typing, ecosystem |
 | CLI | Typer | Type hints, auto-generated help |
 | Output | Rich | Tables, progress bars, colors |
 | Validation | Pydantic v2 | API response validation, frozen models |
-| Database | DuckDB | Embedded, analytical, JSON support |
 | HTTP | httpx | Async support, connection pooling |
 | Package Manager | uv | Fast, reliable dependency management |
 | Task Runner | just | Simple command runner |

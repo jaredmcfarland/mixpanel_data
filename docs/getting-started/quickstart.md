@@ -180,115 +180,7 @@ See funnels, cohorts, and saved reports already defined in Mixpanel:
 
 This discovery workflow ensures your queries reference real event names, valid properties, and actual values—no trial and error.
 
-## Step 4: Fetch Events to Local Storage
-
-Fetch a month of events into a local DuckDB database:
-
-=== "CLI"
-
-    ```bash
-    mp fetch events jan_events --from 2025-01-01 --to 2025-01-31
-    ```
-
-=== "Python"
-
-    ```python
-    import mixpanel_data as mp
-
-    ws = mp.Workspace()
-    result = ws.fetch_events(
-        name="jan_events",
-        from_date="2025-01-01",
-        to_date="2025-01-31"
-    )
-    print(f"Fetched {result.row_count} events in {result.duration_seconds:.1f}s")
-    ```
-
-!!! tip "Parallel Fetching for Large Date Ranges"
-    For date ranges longer than a week, use `--parallel` (CLI) or `parallel=True` (Python) for up to 10x faster exports:
-
-    ```bash
-    mp fetch events q1_events --from 2025-01-01 --to 2025-03-31 --parallel
-    ```
-
-    See [Fetching Data](../guide/fetching.md#parallel-fetching) for details.
-
-## Step 5: Inspect Your Fetched Data
-
-Before writing queries, explore what you fetched:
-
-=== "CLI"
-
-    ```bash
-    # See tables in your workspace
-    mp inspect tables
-
-    # Sample a few rows to see the data shape
-    mp inspect sample -t jan_events
-
-    # Understand event distribution
-    mp inspect breakdown -t jan_events
-
-    # Discover queryable property keys
-    mp inspect keys -t jan_events
-    ```
-
-=== "Python"
-
-    ```python
-    import mixpanel_data as mp
-
-    ws = mp.Workspace()
-
-    # See tables in your workspace
-    for table in ws.tables():
-        print(f"{table.name}: {table.row_count:,} rows")
-
-    # Sample rows to see data shape
-    print(ws.sample("jan_events", n=3))
-
-    # Understand event distribution
-    breakdown = ws.event_breakdown("jan_events")
-    print(f"{breakdown.total_events:,} events from {breakdown.total_users:,} users")
-    for e in breakdown.events[:5]:
-        print(f"  {e.event_name}: {e.count:,} ({e.pct_of_total:.1f}%)")
-
-    # Discover queryable property keys
-    print(ws.property_keys("jan_events"))
-    ```
-
-This tells you what events exist, how they're distributed, and what properties you can query—so your SQL is informed rather than guesswork.
-
-## Step 6: Query with SQL
-
-Analyze the data with SQL:
-
-=== "CLI"
-
-    ```bash
-    mp query sql "SELECT event_name, COUNT(*) as count FROM jan_events GROUP BY 1 ORDER BY 2 DESC" --format table
-    ```
-
-=== "Python"
-
-    ```python
-    import mixpanel_data as mp
-
-    ws = mp.Workspace()
-
-    # Get results as DataFrame
-    df = ws.sql("""
-        SELECT
-            event_name,
-            COUNT(*) as count
-        FROM jan_events
-        GROUP BY 1
-        ORDER BY 2 DESC
-    """)
-    print(df)
-    ```
-
-## Step 7: Run Live Queries
+## Step 4: Run Live Queries
 
 For real-time analytics, query Mixpanel directly:
 
@@ -319,7 +211,7 @@ For real-time analytics, query Mixpanel directly:
     print(result.df)
     ```
 
-## Step 8: Manage Entities & Data Governance (Optional)
+## Step 5: Manage Entities & Data Governance (Optional)
 
 Create, update, and delete dashboards, reports, cohorts, feature flags, and experiments:
 
@@ -373,18 +265,18 @@ Create, update, and delete dashboards, reports, cohorts, feature flags, and expe
 
 See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, cohort, feature flag, and experiment operations. See the [Data Governance guide](../guide/data-governance.md) for Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, and event deletion requests.
 
-## Alternative: Stream Data Without Storage
+## Step 6: Stream Data
 
-For ETL pipelines or one-time processing, stream data directly without storing:
+For ETL pipelines or data processing, stream data directly:
 
 === "CLI"
 
     ```bash
     # Stream events as JSONL (memory-efficient for large datasets)
-    mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout > events.jsonl
+    mp stream events --from 2025-01-01 --to 2025-01-31 > events.jsonl
 
     # Count unique users via Unix pipeline
-    mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout \
+    mp stream events --from 2025-01-01 --to 2025-01-31 \
       | jq -r '.distinct_id' | sort -u | wc -l
     ```
 
@@ -399,32 +291,10 @@ For ETL pipelines or one-time processing, stream data directly without storing:
     ws.close()
     ```
 
-## Temporary Workspaces
-
-For one-off analysis without persisting data, use **ephemeral** or **in-memory** workspaces:
-
-```python
-import mixpanel_data as mp
-
-# Ephemeral: uses temp file (best for large datasets, benefits from compression)
-with mp.Workspace.ephemeral() as ws:
-    ws.fetch_events("events", from_date="2025-01-01", to_date="2025-01-31")
-    total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-# Database automatically deleted when context exits
-
-# In-memory: no files created (best for small datasets or zero disk footprint)
-with mp.Workspace.memory() as ws:
-    ws.fetch_events("events", from_date="2025-01-01", to_date="2025-01-07")
-    total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-# Database gone - no files ever created
-```
-
 ## Next Steps
 
 - [Configuration](configuration.md) — Multiple accounts and advanced settings
 - [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
 - [Data Governance](../guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, and lookup tables
-- [Fetching Data](../guide/fetching.md) — Filtering and progress callbacks
-- [Streaming Data](../guide/streaming.md) — Process data without local storage
-- [SQL Queries](../guide/sql-queries.md) — DuckDB JSON syntax and patterns
+- [Streaming Data](../guide/streaming.md) — Stream events and profiles for ETL pipelines
 - [Live Analytics](../guide/live-analytics.md) — Segmentation, funnels, retention

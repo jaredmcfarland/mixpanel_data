@@ -7,9 +7,8 @@ Typer command groups for the `mp` CLI. Each file defines a subcommand group.
 | File | Command Group | Purpose |
 |------|---------------|---------|
 | `auth.py` | `mp auth` | Account management (add, remove, list, test, set-default) |
-| `fetch.py` | `mp fetch` | Data fetching (events, profiles) |
-| `inspect.py` | `mp inspect` | Database inspection (tables, schema, info) |
-| `query.py` | `mp query` | Query execution (sql, segmentation, funnel, retention, jql) |
+| `inspect.py` | `mp inspect` | Schema discovery (events, properties, funnels, cohorts, bookmarks) |
+| `query.py` | `mp query` | Query execution (segmentation, funnel, retention, jql) |
 | `dashboards.py` | `mp dashboards` | Dashboard CRUD (list, create, get, update, delete, favorite, pin, blueprints, RCA) |
 | `reports.py` | `mp reports` | Report/bookmark CRUD (list, create, get, update, delete, bulk operations, history) |
 | `cohorts.py` | `mp cohorts` | Cohort CRUD (list, create, get, update, delete, bulk operations) |

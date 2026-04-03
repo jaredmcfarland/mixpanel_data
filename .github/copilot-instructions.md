@@ -1,6 +1,6 @@
 # Copilot Instructions for mixpanel_data
 
-> Python library + CLI for Mixpanel analytics: discovery, live queries, local DuckDB analysis.
+> Python library + CLI for Mixpanel analytics: discovery, live queries, streaming, and entity management.
 
 ## Quick Reference (Start Here)
 
@@ -26,8 +26,6 @@ uv run pytest --cov=src/mixpanel_data --cov-fail-under=90
 - **Language**: Python 3.10+
 - **CLI**: Typer + Rich
 - **Validation**: Pydantic v2
-- **Database**: DuckDB
-- **DataFrames**: pandas
 - **HTTP**: httpx
 - **Testing**: pytest, ruff, mypy
 
@@ -42,11 +40,10 @@ src/mixpanel_data/
 ├── _internal/          # PRIVATE: never import in public signatures
 │   ├── config.py       # ConfigManager, Credentials
 │   ├── api_client.py   # MixpanelAPIClient
-│   ├── storage.py      # StorageEngine (DuckDB)
-│   └── services/       # Discovery, Fetcher, LiveQuery services
+│   └── services/       # Discovery, LiveQuery services
 └── cli/
     ├── main.py         # Typer entry point
-    └── commands/       # auth, fetch, query, inspect commands
+    └── commands/       # auth, query, inspect commands
 
 tests/
 ├── unit/              # Isolated tests (mocked deps)
@@ -56,7 +53,7 @@ tests/
 ## Architecture
 
 ```
-CLI (Typer) → Public API (Workspace) → Services → Infrastructure (Config, API, Storage)
+CLI (Typer) → Public API (Workspace) → Services → Infrastructure (Config, API)
 ```
 
 **Layer rules:**
@@ -89,7 +86,6 @@ Every function/method/class needs:
 - `model_config = ConfigDict(frozen=True)` on Pydantic models
 - Use `Iterator[T]` not `list[T]` for streaming data
 - Use `field(default_factory=list)` not `[]` for defaults
-- **Explicit table management**: Storage operations must never implicitly overwrite existing tables; raise `TableExistsError` if the target table already exists and require an explicit drop/overwrite step instead of silent replacement.
 ## Exceptions
 
 Use library hierarchy, never bare `Exception`:
@@ -102,8 +98,8 @@ Use library hierarchy, never bare `Exception`:
 - `AuthenticationError`
 - `RateLimitError`
 - `QueryError`
-- `TableExistsError`
-- `TableNotFoundError`
+- `OAuthError`
+- `WorkspaceScopeError`
 
 **Always chain:** `raise XError(...) from e`
 

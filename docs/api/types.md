@@ -30,51 +30,6 @@ Types for the Mixpanel App API infrastructure.
       show_root_heading: true
       show_root_toc_entry: true
 
-## Fetch Results
-
-::: mixpanel_data.FetchResult
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-## Parallel Fetch Types
-
-Types for parallel event fetching with progress tracking and failure handling.
-
-::: mixpanel_data.ParallelFetchResult
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.BatchProgress
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.BatchResult
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-## Parallel Profile Fetch Types
-
-Types for parallel profile fetching with page-based progress tracking.
-
-::: mixpanel_data.ParallelProfileResult
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.ProfileProgress
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.ProfilePageResult
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
 ## Query Results
 
 ::: mixpanel_data.SegmentationResult
@@ -250,60 +205,6 @@ Types for parallel profile fetching with page-based progress tracking.
       show_root_toc_entry: true
 
 ::: mixpanel_data.PropertyCoverage
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-## Introspection Types
-
-::: mixpanel_data.ColumnSummary
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.SummaryResult
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.EventStats
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.EventBreakdownResult
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.ColumnStatsResult
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-## Storage Types
-
-::: mixpanel_data.TableMetadata
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.TableInfo
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.ColumnInfo
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.TableSchema
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.WorkspaceInfo
     options:
       show_root_heading: true
       show_root_toc_entry: true

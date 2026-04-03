@@ -7,9 +7,8 @@ The `mp` command-line interface for `mixpanel_data`—a complete programmable in
 | Group | Purpose |
 |-------|---------|
 | `auth` | Account management (login, logout, list, switch) |
-| `fetch` | Data retrieval into local DuckDB (events, profiles) |
 | `query` | Live Mixpanel API queries (segmentation, funnels, retention, JQL) |
-| `inspect` | Local database introspection (tables, schema, sample, stats) |
+| `inspect` | Schema discovery (events, properties, funnels, cohorts, bookmarks) |
 | `dashboards` | Dashboard CRUD (list, create, get, update, delete, favorite, pin, blueprints) |
 | `reports` | Report/bookmark CRUD (list, create, get, update, delete, bulk ops, history) |
 | `cohorts` | Cohort CRUD (list, create, get, update, delete, bulk ops) |
@@ -62,7 +61,6 @@ Errors go to stderr via `err_console`.
 |-----------|-----------|
 | `AuthenticationError` | 2 |
 | `AccountNotFoundError` | 4 |
-| `TableNotFoundError` | 4 |
 | `RateLimitError` | 5 |
 | `QueryError` | 3 |
 | `ConfigError` | 1 |

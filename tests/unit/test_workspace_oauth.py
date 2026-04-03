@@ -33,7 +33,6 @@ from mixpanel_data._internal.config import (
     ConfigManager,
     Credentials,
 )
-from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.types import PublicWorkspace
 from mixpanel_data.workspace import Workspace
 
@@ -201,13 +200,10 @@ class TestWorkspaceConstructionWithOAuth:
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
         client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        db_storage = StorageEngine(path=temp_dir / "test.db")
-
         cm = ConfigManager(config_path=temp_dir / "config.toml")
         ws = Workspace(
             _config_manager=cm,
             _api_client=client,
-            _storage=db_storage,
         )
 
         # The workspace should have resolved OAuth credentials
@@ -228,14 +224,11 @@ class TestWorkspaceConstructionWithOAuth:
         basic_creds = _make_basic_credentials()
         transport = httpx.MockTransport(lambda _r: httpx.Response(200, json=[]))
         client = MixpanelAPIClient(basic_creds, _transport=transport)
-        db_storage = StorageEngine(path=temp_dir / "test.db")
-
         cm = _setup_config_with_account(temp_dir)
 
         ws = Workspace(
             _config_manager=cm,
             _api_client=client,
-            _storage=db_storage,
         )
 
         assert ws._credentials is not None
@@ -254,12 +247,9 @@ class TestWorkspaceListWorkspaces:
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
         client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        storage = StorageEngine(path=temp_dir / "test.db")
-
         ws = Workspace(
             _config_manager=_setup_config_with_account(temp_dir),
             _api_client=client,
-            _storage=storage,
         )
 
         workspaces = ws.list_workspaces()
@@ -294,12 +284,9 @@ class TestWorkspaceListWorkspaces:
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        storage = StorageEngine(path=temp_dir / "test.db")
-
         ws = Workspace(
             _config_manager=_setup_config_with_account(temp_dir),
             _api_client=client,
-            _storage=storage,
         )
 
         workspaces = ws.list_workspaces()
@@ -317,12 +304,9 @@ class TestWorkspaceResolveWorkspaceId:
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
         client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        storage = StorageEngine(path=temp_dir / "test.db")
-
         ws = Workspace(
             _config_manager=_setup_config_with_account(temp_dir),
             _api_client=client,
-            _storage=storage,
         )
 
         ws_id = ws.resolve_workspace_id()
@@ -340,12 +324,9 @@ class TestWorkspaceSetWorkspaceId:
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
         client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        storage = StorageEngine(path=temp_dir / "test.db")
-
         ws = Workspace(
             _config_manager=_setup_config_with_account(temp_dir),
             _api_client=client,
-            _storage=storage,
         )
 
         ws.set_workspace_id(42)
@@ -359,12 +340,9 @@ class TestWorkspaceSetWorkspaceId:
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
         client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        storage = StorageEngine(path=temp_dir / "test.db")
-
         ws = Workspace(
             _config_manager=_setup_config_with_account(temp_dir),
             _api_client=client,
-            _storage=storage,
         )
 
         assert ws.workspace_id is None
@@ -377,12 +355,9 @@ class TestWorkspaceSetWorkspaceId:
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
         client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        storage = StorageEngine(path=temp_dir / "test.db")
-
         ws = Workspace(
             _config_manager=_setup_config_with_account(temp_dir),
             _api_client=client,
-            _storage=storage,
         )
 
         ws.set_workspace_id(42)
@@ -399,12 +374,9 @@ class TestWorkspaceSetWorkspaceId:
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
         client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        storage = StorageEngine(path=temp_dir / "test.db")
-
         ws = Workspace(
             _config_manager=_setup_config_with_account(temp_dir),
             _api_client=client,
-            _storage=storage,
             workspace_id=999,
         )
 

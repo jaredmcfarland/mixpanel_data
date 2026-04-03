@@ -1,21 +1,11 @@
 # Streaming Data
 
-Stream events and user profiles directly from Mixpanel without storing to local database. Ideal for ETL pipelines, one-time exports, and Unix-style piping.
+Stream events and user profiles directly from Mixpanel. Ideal for ETL pipelines, data processing, exports, and Unix-style piping.
 
 !!! tip "Explore on DeepWiki"
     🤖 **[Data Flow Patterns →](https://deepwiki.com/jaredmcfarland/mixpanel_data/4.1-data-flow-patterns)**
 
     Ask questions about streaming vs fetching, memory-efficient processing, or ETL pipeline patterns.
-
-## When to Stream vs Fetch
-
-| Use Case | Recommended | Why |
-|----------|-------------|-----|
-| Repeated analysis | `fetch_events()` | Query once, analyze many times |
-| ETL to external system | `stream_events()` | No intermediate storage needed |
-| Memory-constrained | `stream_events()` | Constant memory usage |
-| Ad-hoc exploration | `fetch_events()` | SQL iteration is faster |
-| Piping to tools | `--stdout` | JSONL integrates with jq, grep, etc. |
 
 ## Streaming Events
 
@@ -514,6 +504,4 @@ def stream_profiles(
 
 ## Next Steps
 
-- [Fetching Data](fetching.md) — Store data locally for repeated SQL queries
-- [SQL Queries](sql-queries.md) — Query stored data with DuckDB SQL
 - [Live Analytics](live-analytics.md) — Real-time Mixpanel reports

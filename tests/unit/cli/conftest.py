@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,10 +9,7 @@ import typer
 from typer.testing import CliRunner
 
 from mixpanel_data.types import (
-    FetchResult,
     SegmentationResult,
-    TableInfo,
-    WorkspaceInfo,
 )
 
 
@@ -36,37 +31,6 @@ def mock_workspace() -> MagicMock:
     workspace.funnels.return_value = []
     workspace.cohorts.return_value = []
     workspace.top_events.return_value = []
-
-    workspace.tables.return_value = [
-        TableInfo(
-            name="events",
-            type="events",
-            row_count=1000,
-            fetched_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
-        ),
-    ]
-
-    workspace.info.return_value = WorkspaceInfo(
-        path=Path("/tmp/workspace.db"),
-        account="default",
-        project_id="12345",
-        region="us",
-        tables=["events"],
-        size_mb=1.5,
-        created_at=None,
-    )
-
-    workspace.sql_rows.return_value = [{"count": 100}]
-    workspace.sql_scalar.return_value = 100
-
-    workspace.fetch_events.return_value = FetchResult(
-        table="events",
-        rows=1000,
-        type="events",
-        duration_seconds=5.0,
-        date_range=("2024-01-01", "2024-01-31"),
-        fetched_at=datetime(2024, 1, 31, 12, 0, 0, tzinfo=timezone.utc),
-    )
 
     workspace.segmentation.return_value = SegmentationResult(
         event="Signup",

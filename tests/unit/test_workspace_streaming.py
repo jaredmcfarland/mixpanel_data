@@ -7,16 +7,14 @@ stream data directly from Mixpanel API without local storage.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import ConfigError, Workspace
+from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data._internal.storage import StorageEngine
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -47,12 +45,6 @@ def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
 
 
 @pytest.fixture
-def mock_storage() -> StorageEngine:
-    """Create ephemeral storage for testing."""
-    return StorageEngine.ephemeral()
-
-
-@pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -65,7 +57,6 @@ def mock_api_client() -> MagicMock:
 @pytest.fixture
 def workspace_factory(
     mock_config_manager: MagicMock,
-    mock_storage: StorageEngine,
     mock_api_client: MagicMock,
 ) -> Callable[..., Workspace]:
     """Factory for creating Workspace instances with mocked dependencies."""
@@ -73,7 +64,6 @@ def workspace_factory(
     def factory(**kwargs: Any) -> Workspace:
         defaults: dict[str, Any] = {
             "_config_manager": mock_config_manager,
-            "_storage": mock_storage,
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)
@@ -627,53 +617,6 @@ class TestStreamProfiles:
             profiles = list(ws.stream_profiles())
 
             assert profiles == []
-        finally:
-            ws.close()
-
-
-# =============================================================================
-# ConfigError Tests (Query-Only Mode)
-# =============================================================================
-
-
-class TestStreamingConfigError:
-    """Tests for ConfigError when streaming without credentials."""
-
-    def test_stream_events_raises_config_error_in_query_only_mode(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """Test stream_events raises ConfigError when opened without credentials."""
-        # Create a database file
-        db_path = temp_dir / "test.db"
-        storage = StorageEngine(path=db_path, read_only=False)
-        storage.close()
-
-        ws = Workspace.open(db_path)
-        try:
-            with pytest.raises(ConfigError) as exc_info:
-                list(ws.stream_events(from_date="2024-01-01", to_date="2024-01-31"))
-
-            assert "API access requires credentials" in str(exc_info.value)
-        finally:
-            ws.close()
-
-    def test_stream_profiles_raises_config_error_in_query_only_mode(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """Test stream_profiles raises ConfigError when opened without credentials."""
-        # Create a database file
-        db_path = temp_dir / "test.db"
-        storage = StorageEngine(path=db_path, read_only=False)
-        storage.close()
-
-        ws = Workspace.open(db_path)
-        try:
-            with pytest.raises(ConfigError) as exc_info:
-                list(ws.stream_profiles())
-
-            assert "API access requires credentials" in str(exc_info.value)
         finally:
             ws.close()
 
