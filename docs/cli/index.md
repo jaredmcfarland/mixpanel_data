@@ -495,21 +495,20 @@ mp query segmentation --event Login --from 2025-01-01 --to 2025-01-31 --format j
 
 ### Streaming Data
 
-Stream data directly as JSONL:
+Streaming is available through the Python API:
 
-```bash
-# Stream events as JSONL
-mp stream events --from 2025-01-01 --to 2025-01-31
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+
+# Stream events
+for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+    print(event)
 
 # Stream profiles
-mp stream profiles
-
-# Pipe to jq for filtering
-mp stream events --from 2025-01-01 --to 2025-01-31 \
-    | jq 'select(.event_name == "Purchase")'
-
-# Save to file
-mp stream events --from 2025-01-01 --to 2025-01-31 > events.jsonl
+for profile in ws.stream_profiles():
+    print(profile)
 ```
 
 ## Full Command Reference

@@ -140,9 +140,9 @@ mp query frequency "Login" --from 2025-01-01
 # Filter with built-in jq
 mp query segmentation "Purchase" --from 2025-01-01 --format json --jq '.total'
 
-# Stream to Unix tools (memory-efficient for large datasets)
-mp stream events --from 2025-01-01 --to 2025-01-31 \
-    | jq -r '.distinct_id' | sort -u | wc -l
+# Stream events via Python API (memory-efficient for large datasets)
+# for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+#     process(event)
 ```
 
 **MCP Server** — For AI assistants like Claude Desktop:

@@ -16,9 +16,9 @@ Tools are organized into tiers based on their complexity and MCP features:
 | **Tier 1** | 35 | Primitive tools (direct API calls) | Standard tools |
 | **Tier 2** | 3 | Composed tools (multi-query orchestration) | Standard tools |
 | **Tier 3** | 3 | Intelligent tools (AI synthesis) | `ctx.sample()` |
-| **Interactive** | 2 | Elicitation workflows | `ctx.elicit()` |
+| **Interactive** | 1 | Elicitation workflows | `ctx.elicit()` |
 
-**Total: 43 tools**
+**Total: 42 tools**
 
 ---
 

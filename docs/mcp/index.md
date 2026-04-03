@@ -19,7 +19,7 @@ The `mp_mcp` package provides an MCP server that connects AI assistants like Cla
 - **Saved Reports** — Execute saved Insights, Retention, Funnel, and Flows reports
 - **Streaming** — Stream events and profiles directly from Mixpanel
 - **Intelligent Tools** — AI-powered metric diagnosis and natural language queries
-- **Interactive Workflows** — Guided analysis with user confirmation for large operations
+- **Interactive Workflows** — Guided analysis with step-by-step exploration
 
 ## What's New in v2
 

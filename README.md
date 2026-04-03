@@ -74,11 +74,14 @@ mp inspect funnels                     # Saved funnels
 mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 --on country
 ```
 
-### 4. Stream Data
+### 4. Stream Data (Python API)
 
-```bash
-# Stream events as JSONL for piping to other tools
-mp stream events --from 2025-01-01 --to 2025-01-31 | jq '.event_name'
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+    print(event["event"])
 ```
 
 ## Python API
@@ -157,7 +160,7 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp query`** — Run analytics: `segmentation`, `funnel`, `retention`, `jql`, `saved-report`, `flows`, and 7 more
 
-**`mp stream`** — Stream data: `events`, `profiles` (JSONL output for piping to other tools)
+**`mp inspect`** — Schema discovery: `events`, `properties`, `values`, `funnels`, `cohorts`, `top-events`, `bookmarks`, `lexicon-schemas`
 
 **`mp dashboards`** — Dashboard management: `list`, `create`, `get`, `update`, `delete`, `favorite`, `pin`, blueprints, and more
 

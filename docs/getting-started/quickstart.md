@@ -269,17 +269,6 @@ See the [Entity Management guide](../guide/entity-management.md) for complete co
 
 For ETL pipelines or data processing, stream data directly:
 
-=== "CLI"
-
-    ```bash
-    # Stream events as JSONL (memory-efficient for large datasets)
-    mp stream events --from 2025-01-01 --to 2025-01-31 > events.jsonl
-
-    # Count unique users via Unix pipeline
-    mp stream events --from 2025-01-01 --to 2025-01-31 \
-      | jq -r '.distinct_id' | sort -u | wc -l
-    ```
-
 === "Python"
 
     ```python
