@@ -1,11 +1,11 @@
 # mixpanel_data Package
 
-A complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, and data extraction.
+A complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, streaming, and entity management.
 
 **Design principles:**
 - **Self-documenting**: Typed dataclasses with `.df` and `.to_dict()`, exceptions with structured context
 - **Discovery-first**: List events, properties, funnels, cohorts, and bookmarks before querying
-- **Dual data paths**: Live API queries for analytics, local DuckDB for SQL iteration
+- **API-first**: Live API queries for analytics, streaming for data extraction
 
 Public API for the Mixpanel data library. Import from here, not from `_internal`.
 
@@ -17,7 +17,7 @@ Public API for the Mixpanel data library. Import from here, not from `_internal`
 | `workspace.py` | Main facade class orchestrating all operations |
 | `auth.py` | Public auth module (ConfigManager, Credentials, AccountInfo) |
 | `exceptions.py` | Exception hierarchy with structured error context |
-| `types.py` | Result dataclasses (FetchResult, SegmentationResult, etc.) |
+| `types.py` | Result dataclasses (SegmentationResult, FunnelResult, etc.) |
 | `_literal_types.py` | Literal type aliases (TimeUnit, CountType, HourDayUnit) |
 | `_internal/` | Private implementation (do not import directly) |
 | `cli/` | Command-line interface |
@@ -29,36 +29,27 @@ from mixpanel_data import Workspace
 
 # Standard usage (credentials from env/config)
 ws = Workspace()
-ws.fetch_events(from_date="2025-01-01", to_date="2025-01-31")
-df = ws.sql("SELECT * FROM events")
+events = ws.list_events()
+result = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-01-31")
 ws.close()
 
-# Ephemeral (auto-cleanup)
-with Workspace.ephemeral() as ws:
-    ws.fetch_events(from_date="2025-01-01", to_date="2025-01-31")
-    count = ws.sql_scalar("SELECT COUNT(*) FROM events")
-
-# Query-only (no credentials needed)
-ws = Workspace.open("existing.db")
+# Context manager (auto-cleanup)
+with Workspace() as ws:
+    for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+        process(event)
 ```
 
 ## Workspace Methods
 
 **Discovery** (self-documenting API): `events()`, `properties()`, `property_values()`, `funnels()`, `cohorts()`, `list_bookmarks()`, `top_events()`, `lexicon_schemas()`, `lexicon_schema()`, `clear_discovery_cache()`
 
-**Data Extraction**: `fetch_events()`, `fetch_profiles()`, `stream_events()`, `stream_profiles()`
-
-**Local SQL Queries**: `sql()`, `sql_scalar()`, `sql_rows()`
+**Streaming**: `stream_events()`, `stream_profiles()`
 
 **Core Analytics**: `segmentation()`, `funnel()`, `retention()`, `query_saved_report()`
 
 **Extended Live Queries**: `jql()`, `event_counts()`, `property_counts()`, `activity_feed()`, `query_flows()`, `frequency()`, `segmentation_numeric()`, `segmentation_sum()`, `segmentation_average()`
 
 **JQL Discovery**: `property_distribution()`, `numeric_summary()`, `daily_counts()`, `engagement_distribution()`, `property_coverage()`
-
-**Introspection**: `info()`, `tables()`, `table_schema()`, `sample()`, `summarize()`, `event_breakdown()`, `property_keys()`, `column_stats()`
-
-**Table Management**: `drop()`, `drop_all()`
 
 **Dashboard CRUD**: `list_dashboards()`, `create_dashboard()`, `get_dashboard()`, `update_dashboard()`, `delete_dashboard()`, `bulk_delete_dashboards()`, `favorite_dashboard()`, `unfavorite_dashboard()`, `pin_dashboard()`, `unpin_dashboard()`, `remove_report_from_dashboard()`, `list_blueprint_templates()`, `create_blueprint()`, `get_blueprint_config()`, `update_blueprint_cohorts()`, `finalize_blueprint()`, `create_rca_dashboard()`, `get_bookmark_dashboard_ids()`, `get_dashboard_erf()`, `update_report_link()`, `update_text_card()`
 
@@ -86,7 +77,7 @@ ws = Workspace.open("existing.db")
 
 **Data Governance — Custom Events**: `list_custom_events()`, `update_custom_event()`, `delete_custom_event()`
 
-**Escape Hatches**: `connection` (DuckDB), `api` (MixpanelAPIClient)
+**Escape Hatches**: `api` (MixpanelAPIClient)
 
 ## Exception Hierarchy
 
@@ -101,8 +92,8 @@ MixpanelDataError
 │   ├── QueryError
 │   │   └── JQLSyntaxError
 │   └── ServerError
-├── TableExistsError
-└── TableNotFoundError
+├── OAuthError
+└── WorkspaceScopeError
 ```
 
 All exceptions provide `.to_dict()` for JSON serialization and structured `.details`.
@@ -113,7 +104,7 @@ All frozen dataclasses with:
 - `.df` property: Lazy DataFrame conversion (cached)
 - `.to_dict()`: JSON-serializable output
 
-Key types: `FetchResult`, `SegmentationResult`, `FunnelResult`, `RetentionResult`, `JQLResult`, `SavedReportResult`, `FlowsResult`, `BookmarkInfo`, `PropertyDistributionResult`, `NumericPropertySummaryResult`, `DailyCountsResult`, `EngagementDistributionResult`, `PropertyCoverageResult`, `TableInfo`, `TableSchema`, `WorkspaceInfo`, `Dashboard`, `CreateDashboardParams`, `UpdateDashboardParams`, `Bookmark`, `CreateBookmarkParams`, `UpdateBookmarkParams`, `Cohort`, `CreateCohortParams`, `UpdateCohortParams`, `BlueprintTemplate`, `BlueprintConfig`, `BookmarkHistoryResponse`
+Key types: `SegmentationResult`, `FunnelResult`, `RetentionResult`, `JQLResult`, `SavedReportResult`, `FlowsResult`, `BookmarkInfo`, `PropertyDistributionResult`, `NumericPropertySummaryResult`, `DailyCountsResult`, `EngagementDistributionResult`, `PropertyCoverageResult`, `Dashboard`, `CreateDashboardParams`, `UpdateDashboardParams`, `Bookmark`, `CreateBookmarkParams`, `UpdateBookmarkParams`, `Cohort`, `CreateCohortParams`, `UpdateCohortParams`, `BlueprintTemplate`, `BlueprintConfig`, `BookmarkHistoryResponse`
 
 ## Type Aliases
 

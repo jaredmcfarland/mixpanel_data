@@ -63,8 +63,6 @@ QUERY_API_TOOLS: frozenset[str] = frozenset(
 # Export API tools
 EXPORT_API_TOOLS: frozenset[str] = frozenset(
     [
-        "fetch_events",
-        "fetch_profiles",
         "stream_events",
         "stream_profiles",
     ]
@@ -459,8 +457,8 @@ class RateLimitedWorkspace:
 
     The wrapper intercepts calls to Query API methods (segmentation, funnel,
     retention, jql, event_counts, property_counts, activity_feed, frequency)
-    and Export API methods (fetch_events, fetch_profiles, stream_events,
-    stream_profiles), applying the same rate limiting as the middleware.
+    and Export API methods (stream_events, stream_profiles), applying the
+    same rate limiting as the middleware.
 
     All other attributes are proxied directly to the wrapped Workspace.
 
@@ -501,8 +499,6 @@ class RateLimitedWorkspace:
 
     EXPORT_METHODS: frozenset[str] = frozenset(
         [
-            "fetch_events",
-            "fetch_profiles",
             "stream_events",
             "stream_profiles",
         ]

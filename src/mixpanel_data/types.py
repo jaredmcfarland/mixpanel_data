@@ -17,11 +17,9 @@ without recomputation.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
 import pandas as pd
@@ -187,151 +185,6 @@ Derived from headers array in the API response:
     - flows: Headers contain "$flows"
     - insights: Default when no special headers present
 """
-
-
-# =============================================================================
-# SQL Query Result Type
-# =============================================================================
-
-
-@dataclass(frozen=True)
-class SQLResult:
-    """Result from a SQL query with column metadata.
-
-    Provides structured access to SQL query results including column names
-    and row data. Supports conversion to list of dicts for JSON serialization
-    and CLI output formatting.
-
-    Attributes:
-        columns: List of column names from the query.
-        rows: List of row tuples containing the data.
-
-    Example:
-        ```python
-        result = ws.sql_rows("SELECT name, age FROM users")
-        print(result.columns)  # ['name', 'age']
-        for row in result.rows:
-            print(dict(zip(result.columns, row)))
-
-        # Or convert to dicts directly:
-        for row in result.to_dicts():
-            print(row)  # {'name': 'Alice', 'age': 30}
-        ```
-    """
-
-    columns: list[str]
-    """List of column names from the query."""
-
-    rows: list[tuple[Any, ...]]
-    """List of row tuples containing the data."""
-
-    def to_dicts(self) -> list[dict[str, Any]]:
-        """Convert rows to list of dicts with column names as keys.
-
-        Returns:
-            List of dictionaries, one per row, with column names as keys.
-
-        Example:
-            ```python
-            result = SQLResult(columns=["x", "y"], rows=[(1, 2), (3, 4)])
-            dicts = result.to_dicts()
-            # [{"x": 1, "y": 2}, {"x": 3, "y": 4}]
-            ```
-        """
-        return [dict(zip(self.columns, row, strict=True)) for row in self.rows]
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize result for JSON output.
-
-        Returns:
-            Dictionary with columns, rows (as lists), and row_count.
-        """
-        return {
-            "columns": self.columns,
-            "rows": [list(row) for row in self.rows],
-            "row_count": len(self.rows),
-        }
-
-    def __len__(self) -> int:
-        """Return number of rows.
-
-        Returns:
-            Count of rows in the result.
-        """
-        return len(self.rows)
-
-    def __iter__(self) -> Iterator[tuple[Any, ...]]:
-        """Iterate over rows.
-
-        Yields:
-            Row tuples from the result.
-        """
-        return iter(self.rows)
-
-
-@dataclass(frozen=True)
-class FetchResult:
-    """Result of a data fetch operation.
-
-    Represents the outcome of fetching events or profiles from Mixpanel
-    and storing them in the local database.
-    """
-
-    table: str
-    """Name of the created table."""
-
-    rows: int
-    """Number of rows fetched."""
-
-    type: Literal["events", "profiles"]
-    """Type of data fetched."""
-
-    duration_seconds: float
-    """Time taken to complete the fetch."""
-
-    date_range: tuple[str, str] | None
-    """Date range for events (None for profiles)."""
-
-    fetched_at: datetime
-    """Timestamp when fetch completed."""
-
-    # Internal field for caching DataFrame (not part of public API)
-    _data: list[dict[str, Any]] = field(default_factory=list, repr=False)
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
-
-    @property
-    def df(self) -> pd.DataFrame:
-        """Convert result data to pandas DataFrame.
-
-        Conversion is lazy - computed on first access and cached.
-
-        Returns:
-            DataFrame with fetched data.
-        """
-        if self._df_cache is not None:
-            return self._df_cache
-
-        result_df = pd.DataFrame(self._data) if self._data else pd.DataFrame()
-
-        # Cache using object.__setattr__ for frozen dataclass
-        object.__setattr__(self, "_df_cache", result_df)
-        return result_df
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize result for JSON output.
-
-        Returns:
-            Dictionary representation (excludes raw data).
-            datetime values are converted to ISO format strings.
-        """
-        return {
-            "table": self.table,
-            "rows": self.rows,
-            "type": self.type,
-            "duration_seconds": self.duration_seconds,
-            "date_range": self.date_range,
-            "fetched_at": self.fetched_at.isoformat(),
-        }
 
 
 @dataclass(frozen=True)
@@ -1655,190 +1508,6 @@ class NumericAverageResult(ResultWithDataFrame):
         }
 
 
-# Storage Types
-
-
-@dataclass(frozen=True)
-class TableMetadata:
-    """Metadata for a data fetch operation.
-
-    This metadata is passed to table creation methods and stored in the
-    database's internal _metadata table for tracking fetch operations.
-    """
-
-    type: Literal["events", "profiles"]
-    """Type of data fetched."""
-
-    fetched_at: datetime
-    """When the fetch completed (UTC)."""
-
-    from_date: str | None = None
-    """Start date for events (YYYY-MM-DD), None for profiles."""
-
-    to_date: str | None = None
-    """End date for events (YYYY-MM-DD), None for profiles."""
-
-    filter_events: list[str] | None = None
-    """Event names filtered (if applicable)."""
-
-    filter_where: str | None = None
-    """WHERE clause filter (if applicable)."""
-
-    filter_cohort_id: str | None = None
-    """Cohort ID filter for profiles (if applicable)."""
-
-    filter_output_properties: list[str] | None = None
-    """Property names to include in output (if applicable)."""
-
-    filter_group_id: str | None = None
-    """Group ID for group profile queries (if applicable)."""
-
-    filter_behaviors: str | None = None
-    """Serialized behaviors filter for behavioral profile queries (if applicable)."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output."""
-        return {
-            "type": self.type,
-            "fetched_at": self.fetched_at.isoformat(),
-            "from_date": self.from_date,
-            "to_date": self.to_date,
-            "filter_events": self.filter_events,
-            "filter_where": self.filter_where,
-            "filter_cohort_id": self.filter_cohort_id,
-            "filter_output_properties": self.filter_output_properties,
-            "filter_group_id": self.filter_group_id,
-            "filter_behaviors": self.filter_behaviors,
-        }
-
-
-@dataclass(frozen=True)
-class TableInfo:
-    """Information about a table in the database.
-
-    Returned by list_tables() to provide summary information about
-    available tables without retrieving full schemas.
-    """
-
-    name: str
-    """Table name."""
-
-    type: Literal["events", "profiles"]
-    """Table type."""
-
-    row_count: int
-    """Number of rows."""
-
-    fetched_at: datetime
-    """When data was fetched (UTC)."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output."""
-        return {
-            "name": self.name,
-            "type": self.type,
-            "row_count": self.row_count,
-            "fetched_at": self.fetched_at.isoformat(),
-        }
-
-
-@dataclass(frozen=True)
-class ColumnInfo:
-    """Information about a table column.
-
-    Describes a single column's schema, including name, type,
-    nullability constraints, and primary key status.
-    """
-
-    name: str
-    """Column name."""
-
-    type: str
-    """DuckDB type (VARCHAR, TIMESTAMP, JSON, INTEGER, etc.)."""
-
-    nullable: bool
-    """Whether column allows NULL values."""
-
-    primary_key: bool = False
-    """Whether column is a primary key."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output."""
-        return {
-            "name": self.name,
-            "type": self.type,
-            "nullable": self.nullable,
-            "primary_key": self.primary_key,
-        }
-
-
-@dataclass(frozen=True)
-class TableSchema:
-    """Schema information for a table.
-
-    Returned by get_schema() to describe the structure of a table,
-    including all column definitions.
-    """
-
-    table_name: str
-    """Table name."""
-
-    columns: list[ColumnInfo]
-    """Column definitions."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output."""
-        return {
-            "table_name": self.table_name,
-            "columns": [col.to_dict() for col in self.columns],
-        }
-
-
-# Workspace Types
-
-
-@dataclass(frozen=True)
-class WorkspaceInfo:
-    """Information about a Workspace instance.
-
-    Returned by Workspace.info() to provide metadata about the workspace
-    including database location, connection details, and table summary.
-    """
-
-    path: Path | None
-    """Database file path (None for ephemeral or in-memory workspaces)."""
-
-    project_id: str
-    """Mixpanel project ID."""
-
-    region: str
-    """Data residency region (us, eu, in)."""
-
-    account: str | None
-    """Named account used (None if credentials from environment)."""
-
-    tables: list[str]
-    """Names of tables in the database."""
-
-    size_mb: float
-    """Database file size in megabytes (0.0 for in-memory workspaces)."""
-
-    created_at: datetime | None
-    """When database was created (None if unknown)."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output."""
-        return {
-            "path": str(self.path) if self.path else None,
-            "project_id": self.project_id,
-            "region": self.region,
-            "account": self.account,
-            "tables": self.tables,
-            "size_mb": self.size_mb,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
-
-
 # Lexicon Schemas Types
 
 EntityType = Literal["event", "profile"]
@@ -1993,371 +1662,6 @@ class LexiconSchema:
         }
 
 
-# Introspection Types
-
-
-@dataclass(frozen=True)
-class ColumnSummary:
-    """Statistical summary of a single column from DuckDB's SUMMARIZE command.
-
-    Contains per-column statistics including min/max, quartiles, null percentage,
-    and approximate distinct counts. Numeric columns include additional stats
-    like average and standard deviation.
-    """
-
-    column_name: str
-    """Name of the column."""
-
-    column_type: str
-    """DuckDB data type (VARCHAR, TIMESTAMP, INTEGER, JSON, etc.)."""
-
-    min: Any
-    """Minimum value (type varies by column type)."""
-
-    max: Any
-    """Maximum value (type varies by column type)."""
-
-    approx_unique: int
-    """Approximate count of distinct values (HyperLogLog)."""
-
-    avg: float | None
-    """Mean value (None for non-numeric columns)."""
-
-    std: float | None
-    """Standard deviation (None for non-numeric columns)."""
-
-    q25: Any
-    """25th percentile value (None for non-numeric)."""
-
-    q50: Any
-    """Median / 50th percentile (None for non-numeric)."""
-
-    q75: Any
-    """75th percentile value (None for non-numeric)."""
-
-    count: int
-    """Number of non-null values."""
-
-    null_percentage: float
-    """Percentage of null values (0.0 to 100.0)."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with all column statistics.
-        """
-        return {
-            "column_name": self.column_name,
-            "column_type": self.column_type,
-            "min": self.min,
-            "max": self.max,
-            "approx_unique": self.approx_unique,
-            "avg": self.avg,
-            "std": self.std,
-            "q25": self.q25,
-            "q50": self.q50,
-            "q75": self.q75,
-            "count": self.count,
-            "null_percentage": self.null_percentage,
-        }
-
-
-@dataclass(frozen=True)
-class SummaryResult:
-    """Statistical summary of all columns in a table.
-
-    Contains row count and per-column statistics from DuckDB's SUMMARIZE command.
-    Provides both structured access via the columns list and DataFrame conversion
-    via the df property.
-    """
-
-    table: str
-    """Name of the summarized table."""
-
-    row_count: int
-    """Total number of rows in the table."""
-
-    columns: list[ColumnSummary] = field(default_factory=list)
-    """Per-column statistics."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
-
-    @property
-    def df(self) -> pd.DataFrame:
-        """Convert to DataFrame with one row per column.
-
-        Conversion is lazy - computed on first access and cached.
-
-        Returns:
-            DataFrame with column statistics.
-        """
-        if self._df_cache is not None:
-            return self._df_cache
-
-        rows: list[dict[str, Any]] = [col.to_dict() for col in self.columns]
-
-        result_df = (
-            pd.DataFrame(rows)
-            if rows
-            else pd.DataFrame(
-                columns=[
-                    "column_name",
-                    "column_type",
-                    "min",
-                    "max",
-                    "approx_unique",
-                    "avg",
-                    "std",
-                    "q25",
-                    "q50",
-                    "q75",
-                    "count",
-                    "null_percentage",
-                ]
-            )
-        )
-
-        object.__setattr__(self, "_df_cache", result_df)
-        return result_df
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with table name, row count, and column statistics.
-        """
-        return {
-            "table": self.table,
-            "row_count": self.row_count,
-            "columns": [col.to_dict() for col in self.columns],
-        }
-
-
-@dataclass(frozen=True)
-class EventStats:
-    """Statistics for a single event type.
-
-    Contains count, unique users, date range, and percentage of total
-    for a specific event in an events table.
-    """
-
-    event_name: str
-    """Name of the event."""
-
-    count: int
-    """Total occurrences of this event."""
-
-    unique_users: int
-    """Count of distinct users who triggered this event."""
-
-    first_seen: datetime
-    """Earliest occurrence timestamp."""
-
-    last_seen: datetime
-    """Latest occurrence timestamp."""
-
-    pct_of_total: float
-    """Percentage of all events (0.0 to 100.0)."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with event statistics (datetimes as ISO strings).
-        """
-        return {
-            "event_name": self.event_name,
-            "count": self.count,
-            "unique_users": self.unique_users,
-            "first_seen": self.first_seen.isoformat(),
-            "last_seen": self.last_seen.isoformat(),
-            "pct_of_total": self.pct_of_total,
-        }
-
-
-@dataclass(frozen=True)
-class EventBreakdownResult:
-    """Distribution of events in a table.
-
-    Contains aggregate statistics and per-event breakdown with counts,
-    unique users, date ranges, and percentages.
-    """
-
-    table: str
-    """Name of the analyzed table."""
-
-    total_events: int
-    """Total number of events in the table."""
-
-    total_users: int
-    """Total distinct users across all events."""
-
-    date_range: tuple[datetime, datetime]
-    """(earliest, latest) event timestamps."""
-
-    events: list[EventStats] = field(default_factory=list)
-    """Per-event statistics, ordered by count descending."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
-
-    @property
-    def df(self) -> pd.DataFrame:
-        """Convert to DataFrame with one row per event type.
-
-        Conversion is lazy - computed on first access and cached.
-
-        Returns:
-            DataFrame with event statistics.
-        """
-        if self._df_cache is not None:
-            return self._df_cache
-
-        rows: list[dict[str, Any]] = []
-        for event in self.events:
-            rows.append(
-                {
-                    "event_name": event.event_name,
-                    "count": event.count,
-                    "unique_users": event.unique_users,
-                    "first_seen": event.first_seen,
-                    "last_seen": event.last_seen,
-                    "pct_of_total": event.pct_of_total,
-                }
-            )
-
-        result_df = (
-            pd.DataFrame(rows)
-            if rows
-            else pd.DataFrame(
-                columns=[
-                    "event_name",
-                    "count",
-                    "unique_users",
-                    "first_seen",
-                    "last_seen",
-                    "pct_of_total",
-                ]
-            )
-        )
-
-        object.__setattr__(self, "_df_cache", result_df)
-        return result_df
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with table info and event statistics.
-        """
-        return {
-            "table": self.table,
-            "total_events": self.total_events,
-            "total_users": self.total_users,
-            "date_range": [
-                self.date_range[0].isoformat(),
-                self.date_range[1].isoformat(),
-            ],
-            "events": [event.to_dict() for event in self.events],
-        }
-
-
-@dataclass(frozen=True)
-class ColumnStatsResult:
-    """Deep statistical analysis of a single column.
-
-    Provides detailed statistics including null rates, cardinality,
-    top values, and numeric statistics (for numeric columns).
-    Supports JSON path expressions for analyzing properties.
-    """
-
-    table: str
-    """Name of the source table."""
-
-    column: str
-    """Column expression analyzed (may include JSON path)."""
-
-    dtype: str
-    """DuckDB data type of the column."""
-
-    count: int
-    """Number of non-null values."""
-
-    null_count: int
-    """Number of null values."""
-
-    null_pct: float
-    """Percentage of null values (0.0 to 100.0)."""
-
-    unique_count: int
-    """Approximate count of distinct values."""
-
-    unique_pct: float
-    """Percentage of values that are unique (0.0 to 100.0)."""
-
-    top_values: list[tuple[Any, int]] = field(default_factory=list)
-    """Most frequent (value, count) pairs."""
-
-    min: float | None = None
-    """Minimum value (None for non-numeric)."""
-
-    max: float | None = None
-    """Maximum value (None for non-numeric)."""
-
-    mean: float | None = None
-    """Mean value (None for non-numeric)."""
-
-    std: float | None = None
-    """Standard deviation (None for non-numeric)."""
-
-    _df_cache: pd.DataFrame | None = field(default=None, repr=False)
-
-    @property
-    def df(self) -> pd.DataFrame:
-        """Convert top values to DataFrame with columns: value, count.
-
-        Conversion is lazy - computed on first access and cached.
-
-        Returns:
-            DataFrame with top values and their counts.
-        """
-        if self._df_cache is not None:
-            return self._df_cache
-
-        rows: list[dict[str, Any]] = [
-            {"value": value, "count": count} for value, count in self.top_values
-        ]
-
-        result_df = (
-            pd.DataFrame(rows) if rows else pd.DataFrame(columns=["value", "count"])
-        )
-
-        object.__setattr__(self, "_df_cache", result_df)
-        return result_df
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with all column statistics.
-        """
-        return {
-            "table": self.table,
-            "column": self.column,
-            "dtype": self.dtype,
-            "count": self.count,
-            "null_count": self.null_count,
-            "null_pct": self.null_pct,
-            "unique_count": self.unique_count,
-            "unique_pct": self.unique_pct,
-            "top_values": [[value, count] for value, count in self.top_values],
-            "min": self.min,
-            "max": self.max,
-            "mean": self.mean,
-            "std": self.std,
-        }
-
-
 # =============================================================================
 # JQL-Based Discovery Types (Phase 016)
 # =============================================================================
@@ -2403,8 +1707,8 @@ class PropertyDistributionResult:
     """Distribution of values for a property from JQL analysis.
 
     Contains the top N values for a property with their counts and percentages,
-    enabling quick understanding of property value distribution without fetching
-    all data locally.
+    enabling quick understanding of property value distribution without processing
+    all raw events.
 
     Attributes:
         event: The event type analyzed.
@@ -2480,7 +1784,7 @@ class NumericPropertySummaryResult:
 
     Contains min, max, sum, average, standard deviation, and percentiles
     for a numeric property, enabling understanding of value distributions
-    without fetching all data locally.
+    without processing all raw events.
 
     Attributes:
         event: The event type analyzed.
@@ -2694,7 +1998,7 @@ class EngagementDistributionResult:
     """User engagement distribution from JQL analysis.
 
     Shows how many users performed N events, helping understand
-    user engagement patterns without fetching all data locally.
+    user engagement patterns without processing all raw events.
 
     Attributes:
         from_date: Query start date (YYYY-MM-DD).
@@ -2874,451 +2178,6 @@ class PropertyCoverageResult:
             "to_date": self.to_date,
             "total_events": self.total_events,
             "coverage": [c.to_dict() for c in self.coverage],
-        }
-
-
-# =============================================================================
-# Parallel Export Types (Phase 017)
-# =============================================================================
-
-
-@dataclass(frozen=True)
-class BatchProgress:
-    """Progress update for a parallel fetch batch.
-
-    Sent to the on_batch_complete callback when a batch finishes
-    (successfully or with error).
-
-    Attributes:
-        from_date: Start date of this batch (YYYY-MM-DD).
-        to_date: End date of this batch (YYYY-MM-DD).
-        batch_index: Zero-based index of this batch.
-        total_batches: Total number of batches in the parallel fetch.
-        rows: Number of rows fetched in this batch (0 if failed).
-        success: Whether this batch completed successfully.
-        error: Error message if failed, None if successful.
-
-    Example:
-        ```python
-        def on_batch(progress: BatchProgress) -> None:
-            status = "✓" if progress.success else "✗"
-            print(f"[{status}] Batch {progress.batch_index + 1}/{progress.total_batches}")
-
-        result = ws.fetch_events(
-            name="events",
-            from_date="2024-01-01",
-            to_date="2024-03-31",
-            parallel=True,
-            on_batch_complete=on_batch,
-        )
-        ```
-    """
-
-    from_date: str
-    """Start date of this batch (YYYY-MM-DD)."""
-
-    to_date: str
-    """End date of this batch (YYYY-MM-DD)."""
-
-    batch_index: int
-    """Zero-based index of this batch."""
-
-    total_batches: int
-    """Total number of batches in the parallel fetch."""
-
-    rows: int
-    """Number of rows fetched in this batch (0 if failed)."""
-
-    success: bool
-    """Whether this batch completed successfully."""
-
-    error: str | None = None
-    """Error message if failed, None if successful."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with all batch progress fields.
-        """
-        return {
-            "from_date": self.from_date,
-            "to_date": self.to_date,
-            "batch_index": self.batch_index,
-            "total_batches": self.total_batches,
-            "rows": self.rows,
-            "success": self.success,
-            "error": self.error,
-        }
-
-
-@dataclass(frozen=True)
-class BatchResult:
-    """Result of fetching a single date range chunk.
-
-    Internal type used by ParallelFetcherService to track batch outcomes.
-    Contains either the fetched data (on success) or error info (on failure).
-
-    Attributes:
-        from_date: Start date of this batch (YYYY-MM-DD).
-        to_date: End date of this batch (YYYY-MM-DD).
-        rows: Number of rows fetched (0 if failed).
-        success: Whether the batch completed successfully.
-        error: Exception message if failed, None if successful.
-
-    Note:
-        Data is not included in to_dict() as it's consumed by the writer
-        thread and is not JSON-serializable (iterator of dicts).
-    """
-
-    from_date: str
-    """Start date of this batch (YYYY-MM-DD)."""
-
-    to_date: str
-    """End date of this batch (YYYY-MM-DD)."""
-
-    rows: int
-    """Number of rows fetched (0 if failed)."""
-
-    success: bool
-    """Whether the batch completed successfully."""
-
-    error: str | None = None
-    """Exception message if failed, None if successful."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output (excludes data).
-
-        Returns:
-            Dictionary with batch result fields (excluding data).
-        """
-        return {
-            "from_date": self.from_date,
-            "to_date": self.to_date,
-            "rows": self.rows,
-            "success": self.success,
-            "error": self.error,
-        }
-
-
-@dataclass(frozen=True)
-class ParallelFetchResult:
-    """Result of a parallel fetch operation.
-
-    Aggregates results from all batches, providing summary statistics
-    and information about any failures for retry.
-
-    Attributes:
-        table: Name of the created/appended table.
-        total_rows: Total number of rows fetched across all batches.
-        successful_batches: Number of batches that completed successfully.
-        failed_batches: Number of batches that failed.
-        failed_date_ranges: Date ranges (from_date, to_date) of failed batches.
-        duration_seconds: Total time taken for the parallel fetch.
-        fetched_at: Timestamp when fetch completed.
-
-    Example:
-        ```python
-        result = ws.fetch_events(
-            name="events",
-            from_date="2024-01-01",
-            to_date="2024-03-31",
-            parallel=True,
-        )
-
-        if result.has_failures:
-            print(f"Warning: {result.failed_batches} batches failed")
-            for from_date, to_date in result.failed_date_ranges:
-                print(f"  {from_date} to {to_date}")
-        ```
-    """
-
-    table: str
-    """Name of the created/appended table."""
-
-    total_rows: int
-    """Total number of rows fetched across all batches."""
-
-    successful_batches: int
-    """Number of batches that completed successfully."""
-
-    failed_batches: int
-    """Number of batches that failed."""
-
-    failed_date_ranges: tuple[tuple[str, str], ...]
-    """Date ranges (from_date, to_date) of failed batches for retry."""
-
-    duration_seconds: float
-    """Total time taken for the parallel fetch."""
-
-    fetched_at: datetime
-    """Timestamp when fetch completed."""
-
-    @property
-    def has_failures(self) -> bool:
-        """Check if any batches failed.
-
-        Returns:
-            True if at least one batch failed, False otherwise.
-        """
-        return self.failed_batches > 0
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with all result fields including has_failures.
-        """
-        return {
-            "table": self.table,
-            "total_rows": self.total_rows,
-            "successful_batches": self.successful_batches,
-            "failed_batches": self.failed_batches,
-            "failed_date_ranges": [list(dr) for dr in self.failed_date_ranges],
-            "duration_seconds": self.duration_seconds,
-            "fetched_at": self.fetched_at.isoformat(),
-            "has_failures": self.has_failures,
-        }
-
-
-# =============================================================================
-# Parallel Profile Fetch Types (Phase 019)
-# =============================================================================
-
-
-@dataclass(frozen=True)
-class ProfilePageResult:
-    """Result from fetching a single page of profiles.
-
-    Contains the profiles from one page of the Engage API along with
-    pagination metadata for fetching subsequent pages.
-
-    Attributes:
-        profiles: List of profile dictionaries from this page.
-        session_id: Session ID for fetching next page, None if no more pages.
-        page: Zero-based page index that was fetched.
-        has_more: True if there are more pages to fetch.
-        total: Total number of profiles matching the query across all pages.
-        page_size: Number of profiles per page (typically 1000).
-
-    Example:
-        ```python
-        # Fetch first page to get pagination metadata
-        result = api_client.export_profiles_page(page=0)
-        all_profiles = list(result.profiles)
-
-        # Pre-compute total pages for parallel fetching
-        total_pages = result.num_pages
-        print(f"Fetching {total_pages} pages ({result.total} profiles)")
-
-        # Continue fetching if more pages
-        while result.has_more:
-            result = api_client.export_profiles_page(
-                page=result.page + 1,
-                session_id=result.session_id,
-            )
-            all_profiles.extend(result.profiles)
-        ```
-    """
-
-    profiles: list[dict[str, Any]]
-    """List of profile dictionaries from this page."""
-
-    session_id: str | None
-    """Session ID for fetching next page, None if no more pages."""
-
-    page: int
-    """Zero-based page index that was fetched."""
-
-    has_more: bool
-    """True if there are more pages to fetch."""
-
-    total: int
-    """Total number of profiles matching the query across all pages."""
-
-    page_size: int
-    """Number of profiles per page (typically 1000)."""
-
-    @property
-    def num_pages(self) -> int:
-        """Calculate total number of pages needed.
-
-        Uses ceiling division to ensure partial pages are counted.
-
-        Returns:
-            Total pages needed to fetch all profiles.
-            Returns 0 if total is 0 (empty result set).
-
-        Example:
-            ```python
-            result = api_client.export_profiles_page(page=0)
-            # If total=5432 and page_size=1000, num_pages=6
-            for page_idx in range(1, result.num_pages):
-                # Fetch remaining pages...
-            ```
-        """
-        if self.total == 0:
-            return 0
-        return math.ceil(self.total / self.page_size)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with all page result fields including pagination metadata.
-        """
-        return {
-            "profiles": self.profiles,
-            "session_id": self.session_id,
-            "page": self.page,
-            "has_more": self.has_more,
-            "profile_count": len(self.profiles),
-            "total": self.total,
-            "page_size": self.page_size,
-            "num_pages": self.num_pages,
-        }
-
-
-@dataclass(frozen=True)
-class ProfileProgress:
-    """Progress update for a parallel profile fetch page.
-
-    Sent to the on_page_complete callback when a page finishes
-    (successfully or with error). Used for progress visibility during
-    parallel profile fetching operations.
-
-    Attributes:
-        page_index: Zero-based index of this page.
-        total_pages: Total pages if known, None if not yet determined.
-        rows: Number of rows fetched in this page (0 if failed).
-        success: Whether this page completed successfully.
-        error: Error message if failed, None if successful.
-        cumulative_rows: Total rows fetched so far across all pages.
-
-    Example:
-        ```python
-        def on_page(progress: ProfileProgress) -> None:
-            status = "✓" if progress.success else "✗"
-            pct = f"{progress.page_index + 1}/{progress.total_pages}" if progress.total_pages else f"{progress.page_index + 1}/?"
-            print(f"[{status}] Page {pct}: {progress.cumulative_rows} total rows")
-
-        result = ws.fetch_profiles(
-            name="users",
-            parallel=True,
-            on_page_complete=on_page,
-        )
-        ```
-    """
-
-    page_index: int
-    """Zero-based index of this page."""
-
-    total_pages: int | None
-    """Total pages if known, None if not yet determined."""
-
-    rows: int
-    """Number of rows fetched in this page (0 if failed)."""
-
-    success: bool
-    """Whether this page completed successfully."""
-
-    error: str | None
-    """Error message if failed, None if successful."""
-
-    cumulative_rows: int
-    """Total rows fetched so far across all pages."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with all profile progress fields.
-        """
-        return {
-            "page_index": self.page_index,
-            "total_pages": self.total_pages,
-            "rows": self.rows,
-            "success": self.success,
-            "error": self.error,
-            "cumulative_rows": self.cumulative_rows,
-        }
-
-
-@dataclass(frozen=True)
-class ParallelProfileResult:
-    """Result of a parallel profile fetch operation.
-
-    Aggregates results from all pages, providing summary statistics
-    and information about any failures for retry.
-
-    Attributes:
-        table: Name of the created/appended table.
-        total_rows: Total number of rows fetched across all pages.
-        successful_pages: Number of pages that completed successfully.
-        failed_pages: Number of pages that failed.
-        failed_page_indices: Page indices of failed pages for retry.
-        duration_seconds: Total time taken for the parallel fetch.
-        fetched_at: Timestamp when fetch completed.
-
-    Example:
-        ```python
-        result = ws.fetch_profiles(
-            name="users",
-            parallel=True,
-        )
-
-        if result.has_failures:
-            print(f"Warning: {result.failed_pages} pages failed")
-            for idx in result.failed_page_indices:
-                print(f"  Page {idx}")
-        ```
-    """
-
-    table: str
-    """Name of the created/appended table."""
-
-    total_rows: int
-    """Total number of rows fetched across all pages."""
-
-    successful_pages: int
-    """Number of pages that completed successfully."""
-
-    failed_pages: int
-    """Number of pages that failed."""
-
-    failed_page_indices: tuple[int, ...]
-    """Page indices of failed pages for retry."""
-
-    duration_seconds: float
-    """Total time taken for the parallel fetch."""
-
-    fetched_at: datetime
-    """Timestamp when fetch completed."""
-
-    @property
-    def has_failures(self) -> bool:
-        """Check if any pages failed.
-
-        Returns:
-            True if at least one page failed, False otherwise.
-        """
-        return self.failed_pages > 0
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output.
-
-        Returns:
-            Dictionary with all result fields including has_failures.
-        """
-        return {
-            "table": self.table,
-            "total_rows": self.total_rows,
-            "successful_pages": self.successful_pages,
-            "failed_pages": self.failed_pages,
-            "failed_page_indices": list(self.failed_page_indices),
-            "duration_seconds": self.duration_seconds,
-            "fetched_at": self.fetched_at.isoformat(),
-            "has_failures": self.has_failures,
         }
 
 
@@ -7829,3 +6688,101 @@ class PreviewDeletionFiltersParams(BaseModel):
 
     filters: dict[str, Any] | None = None
     """Optional filters."""
+
+
+# =============================================================================
+# Profile Page Result (API pagination)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ProfilePageResult:
+    """Result from fetching a single page of profiles.
+
+    Contains the profiles from one page of the Engage API along with
+    pagination metadata for fetching subsequent pages.
+
+    Attributes:
+        profiles: List of profile dictionaries from this page.
+        session_id: Session ID for fetching next page, None if no more pages.
+        page: Zero-based page index that was fetched.
+        has_more: True if there are more pages to fetch.
+        total: Total number of profiles matching the query across all pages.
+        page_size: Number of profiles per page (typically 1000).
+
+    Example:
+        ```python
+        # Fetch first page to get pagination metadata
+        result = api_client.export_profiles_page(page=0)
+        all_profiles = list(result.profiles)
+
+        # Pre-compute total pages for parallel fetching
+        total_pages = result.num_pages
+        print(f"Fetching {total_pages} pages ({result.total} profiles)")
+
+        # Continue fetching if more pages
+        while result.has_more:
+            result = api_client.export_profiles_page(
+                page=result.page + 1,
+                session_id=result.session_id,
+            )
+            all_profiles.extend(result.profiles)
+        ```
+    """
+
+    profiles: list[dict[str, Any]]
+    """List of profile dictionaries from this page."""
+
+    session_id: str | None
+    """Session ID for fetching next page, None if no more pages."""
+
+    page: int
+    """Zero-based page index that was fetched."""
+
+    has_more: bool
+    """True if there are more pages to fetch."""
+
+    total: int
+    """Total number of profiles matching the query across all pages."""
+
+    page_size: int
+    """Number of profiles per page (typically 1000)."""
+
+    @property
+    def num_pages(self) -> int:
+        """Calculate total number of pages needed.
+
+        Uses ceiling division to ensure partial pages are counted.
+
+        Returns:
+            Total pages needed to fetch all profiles.
+            Returns 0 if total is 0 (empty result set).
+
+        Example:
+            ```python
+            result = api_client.export_profiles_page(page=0)
+            # If total=5432 and page_size=1000, num_pages=6
+            for page_idx in range(1, result.num_pages):
+                # Fetch remaining pages...
+            ```
+        """
+        if self.total == 0:
+            return 0
+        return math.ceil(self.total / self.page_size)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with all page result fields including pagination metadata.
+        """
+        return {
+            "profiles": self.profiles,
+            "session_id": self.session_id,
+            "page": self.page,
+            "has_more": self.has_more,
+            "profile_count": len(self.profiles),
+            "total": self.total,
+            "page_size": self.page_size,
+            "num_pages": self.num_pages,
+        }

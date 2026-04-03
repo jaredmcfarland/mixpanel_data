@@ -1,6 +1,6 @@
 # Live Analytics
 
-Query Mixpanel's analytics APIs directly for real-time data without fetching to local storage.
+Query Mixpanel's analytics APIs directly for real-time data.
 
 !!! tip "Explore on DeepWiki"
     🤖 **[Querying Data Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.4-querying-data)**

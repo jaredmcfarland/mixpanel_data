@@ -116,19 +116,27 @@ function main() {
 "
 ```
 
-**Reserve fetch+SQL for surgical analysis:**
+**Use JQL for complex analysis:**
 - Correlating across event types at user-session level
-- Complex joins not possible in live queries
-- Property-level analysis requiring JSON extraction
+- User-level aggregations and joins
+- Property-level analysis requiring transformations
 
 ```bash
-# Fetch only when necessary
-mp fetch events --from 2024-01-01 --to 2024-01-07 --events "Signup,Purchase" --parallel
-mp query sql "
-  SELECT e1.distinct_id, e1.time as signup, e2.time as purchase
-  FROM events e1
-  JOIN events e2 ON e1.distinct_id = e2.distinct_id
-  WHERE e1.event_name = 'Signup' AND e2.event_name = 'Purchase'
+# JQL for cross-event analysis
+mp query jql --script "
+function main() {
+  return join(
+    Events({from_date: '2024-01-01', to_date: '2024-01-07',
+            event_selectors: [{event: 'Signup'}]}),
+    Events({from_date: '2024-01-01', to_date: '2024-01-07',
+            event_selectors: [{event: 'Purchase'}]})
+  )
+  .map(tuple => ({
+    user: tuple.event.distinct_id,
+    signup: tuple.event.time,
+    purchase: tuple.user.time
+  }));
+}
 "
 ```
 

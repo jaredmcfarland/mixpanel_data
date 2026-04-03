@@ -1,7 +1,6 @@
-"""Query commands for local SQL and live API queries.
+"""Query commands for live Mixpanel API queries.
 
 This module provides commands for querying data:
-- sql: Query local DuckDB database
 - segmentation: Live segmentation query
 - funnel: Live funnel analysis
 - retention: Live retention analysis
@@ -42,102 +41,14 @@ from mixpanel_data.cli.validators import (
 
 query_app = typer.Typer(
     name="query",
-    help="Query local and live data.",
-    epilog="""Local (uses DuckDB):
-  sql           Execute SQL against local database
-
-Live (calls Mixpanel API):
+    help="Query Mixpanel data.",
+    epilog="""Live (calls Mixpanel API):
   segmentation, funnel, retention, jql, event-counts,
   property-counts, activity-feed, saved-report, flows, frequency,
   segmentation-numeric, segmentation-sum, segmentation-average""",
     no_args_is_help=True,
     rich_markup_mode="markdown",
 )
-
-
-@query_app.command("sql")
-@handle_errors
-def query_sql(
-    ctx: typer.Context,
-    query: Annotated[
-        str | None,
-        typer.Argument(help="SQL query string."),
-    ] = None,
-    file: Annotated[
-        Path | None,
-        typer.Option("--file", "-F", help="Read query from file."),
-    ] = None,
-    scalar: Annotated[
-        bool,
-        typer.Option("--scalar", "-s", help="Return single value."),
-    ] = False,
-    format: FormatOption = "json",
-    jq_filter: JqOption = None,
-) -> None:
-    """Execute SQL query against local DuckDB database.
-
-    Query can be provided as an argument or read from a file with --file.
-    Use --scalar when your query returns a single value (e.g., COUNT(*)).
-
-    **Output Structure (JSON):**
-
-    Default (row results):
-
-        [
-          {"event": "Sign Up", "count": 1500},
-          {"event": "Login", "count": 3200},
-          {"event": "Purchase", "count": 450}
-        ]
-
-    With --scalar:
-
-        {"value": 15234}
-
-    **Examples:**
-
-        mp query sql "SELECT COUNT(*) FROM events" --scalar
-        mp query sql "SELECT event, COUNT(*) FROM events GROUP BY 1" --format table
-        mp query sql --file analysis.sql --format csv
-
-    **jq Examples:**
-
-        --jq '.[0]'                      # First row
-        --jq '.[] | .event'              # All event names
-        --jq 'map(select(.count > 100))' # Filter rows
-        --jq '.value'                    # Scalar result value
-    """
-    # Get query from argument or file
-    if query is None and file is None:
-        err_console.print("[red]Error:[/red] Provide a query or use --file")
-        raise typer.Exit(3)
-
-    if file is not None:
-        if not file.exists():
-            err_console.print(f"[red]Error:[/red] File not found: {file}")
-            raise typer.Exit(ExitCode.NOT_FOUND)
-        sql_query = file.read_text()
-    else:
-        sql_query = query  # type: ignore[assignment]
-
-    workspace = get_workspace(ctx, read_only=True)
-
-    if scalar:
-        result = workspace.sql_scalar(sql_query)
-        # For scalar output, just print the raw value
-        if format == "plain":
-            # Validate jq_filter - should error, not silently ignore
-            if jq_filter:
-                err_console.print(
-                    "[red]Error:[/red] --jq requires --format json or jsonl"
-                )
-                raise typer.Exit(ExitCode.INVALID_ARGS)
-            print(result)
-        else:
-            output_result(ctx, {"value": result}, format=format, jq_filter=jq_filter)
-    else:
-        result = workspace.sql_rows(sql_query)
-        # Convert SQLResult to list of dicts for proper output formatting
-        output_result(ctx, result.to_dicts(), format=format, jq_filter=jq_filter)
 
 
 @query_app.command("segmentation")
@@ -212,7 +123,7 @@ def query_segmentation(
         --jq '.series["US"] | add'       # Sum counts for one segment
     """
     validated_unit = validate_time_unit(unit)
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running segmentation query..."):
         result = workspace.segmentation(
@@ -288,7 +199,7 @@ def query_funnel(
         --jq '.steps[-1].count'              # Users completing the funnel
         --jq '.steps[] | {event, rate: .conversion_rate}'
     """
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running funnel query..."):
         result = workspace.funnel(
@@ -385,7 +296,7 @@ def query_retention(
         --jq '.cohorts[] | {date, size, day7: .retention[7]}'
     """
     validated_unit = validate_time_unit(unit)
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     # Use defaults if not provided
     actual_interval = interval if interval is not None else 1
@@ -488,7 +399,7 @@ def query_jql(
             key, value = p.split("=", 1)
             params[key] = value
 
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running JQL query..."):
         result = workspace.jql(
@@ -570,7 +481,7 @@ def query_event_counts(
     # Parse events
     events_list = [e.strip() for e in events.split(",")]
 
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running event counts query..."):
         result = workspace.event_counts(
@@ -663,7 +574,7 @@ def query_property_counts(
     """
     validated_type = validate_count_type(type_)
     validated_unit = validate_time_unit(unit)
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running property counts query..."):
         result = workspace.property_counts(
@@ -743,7 +654,7 @@ def query_activity_feed(
     # Parse users
     user_list = [u.strip() for u in users.split(",")]
 
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Fetching activity feed..."):
         result = workspace.activity_feed(
@@ -806,7 +717,7 @@ def query_saved_report(
         --jq '.headers'                      # Report column headers
         --jq '.series | to_entries | map({name: .key, total: (.value | add)})'
     """
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Querying saved report..."):
         result = workspace.query_saved_report(bookmark_id=bookmark_id)
@@ -864,7 +775,7 @@ def query_flows(
         --jq '.steps[] | {event, count}'     # Event and count per step
         --jq '.breakdowns | sort_by(.count) | reverse | .[0]'
     """
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Querying flows report..."):
         result = workspace.query_flows(bookmark_id=bookmark_id)
@@ -946,7 +857,7 @@ def query_frequency(
     validated_addiction_unit = validate_hour_day_unit(
         addiction_unit, "--addiction-unit"
     )
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running frequency query..."):
         result = workspace.frequency(
@@ -1043,7 +954,7 @@ def query_segmentation_numeric(
     """
     validated_type = validate_count_type(type_)
     validated_unit = validate_hour_day_unit(unit)
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running numeric segmentation..."):
         result = workspace.segmentation_numeric(
@@ -1131,7 +1042,7 @@ def query_segmentation_sum(
         --jq '[.results | to_entries[] | {date: .key, revenue: .value}]'
     """
     validated_unit = validate_hour_day_unit(unit)
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running sum query..."):
         result = workspace.segmentation_sum(
@@ -1218,7 +1129,7 @@ def query_segmentation_average(
         --jq '[.results | to_entries[] | {date: .key, avg: .value}]'
     """
     validated_unit = validate_hour_day_unit(unit)
-    workspace = get_workspace(ctx, read_only=True)
+    workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Running average query..."):
         result = workspace.segmentation_average(

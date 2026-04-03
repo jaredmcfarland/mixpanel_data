@@ -21,7 +21,6 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
-from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.types import (
     CreateFeatureFlagParams,
     FeatureFlag,
@@ -93,11 +92,9 @@ def _make_workspace(
     transport = httpx.MockTransport(handler)
     client = MixpanelAPIClient(creds, _transport=transport)
     client.set_workspace_id(100)
-    storage = StorageEngine(path=temp_dir / "test.db")
     return Workspace(
         _config_manager=_setup_config_with_account(temp_dir),
         _api_client=client,
-        _storage=storage,
     )
 
 

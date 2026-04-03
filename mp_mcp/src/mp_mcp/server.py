@@ -111,11 +111,9 @@ This server provides tools for Mixpanel analytics through the mixpanel_data libr
 Capabilities:
 - Schema Discovery: Explore events, properties, funnels, cohorts, and bookmarks
 - Live Analytics: Run segmentation, funnel, and retention queries
-- Data Fetching: Download events and profiles to local storage
-- Local Analysis: Execute SQL queries against fetched data
 - Intelligent Analysis: AI-powered metric diagnosis and natural language queries
 - Product Health: AARRR dashboards and GQM investigations
-- Interactive Workflows: Guided analysis and safe large fetches
+- Interactive Workflows: Guided analysis
 
 Use the tools to help users understand their Mixpanel data.
 """,
@@ -155,9 +153,7 @@ from mp_mcp.tools import (  # noqa: E402, F401
     auth,
     composed,
     discovery,
-    fetch,
     intelligent,
     interactive,
     live_query,
-    local,
 )

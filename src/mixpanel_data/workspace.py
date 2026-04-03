@@ -1,32 +1,24 @@
 """Workspace facade for Mixpanel data operations.
 
 The Workspace class is the unified entry point for all Mixpanel data operations,
-orchestrating DiscoveryService, FetcherService, LiveQueryService, and StorageEngine.
+orchestrating DiscoveryService, LiveQueryService, and the App API client.
 
 Example:
     Basic usage with credentials from config:
 
     ```python
     ws = Workspace()
-    ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-    df = ws.sql("SELECT * FROM events LIMIT 10")
+    events = ws.events()  # discover schema
+    result = ws.segmentation(event="login", from_date="2024-01-01", to_date="2024-01-31")
     ws.close()
     ```
 
-    Ephemeral workspace for temporary analysis:
+    Stream events for external processing:
 
     ```python
-    with Workspace.ephemeral() as ws:
-        ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-        total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-    # Database automatically deleted
-    ```
-
-    Query-only access to existing database:
-
-    ```python
-    ws = Workspace.open("path/to/database.db")
-    df = ws.sql("SELECT * FROM events")
+    ws = Workspace()
+    for event in ws.stream_events(from_date="2024-01-01", to_date="2024-01-31"):
+        process(event)
     ws.close()
     ```
 """
@@ -34,26 +26,17 @@ Example:
 from __future__ import annotations
 
 import logging
-import sys
 import time
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
-from datetime import datetime
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Literal
-
-import duckdb
-import pandas as pd
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.services.discovery import DiscoveryService
-from mixpanel_data._internal.services.fetcher import FetcherService
 from mixpanel_data._internal.services.live_query import LiveQueryService
-from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data._internal.transforms import transform_event, transform_profile
-from mixpanel_data._literal_types import TableType
-from mixpanel_data.exceptions import ConfigError, MixpanelDataError, QueryError
+from mixpanel_data.exceptions import ConfigError, MixpanelDataError
 from mixpanel_data.types import (
     ActivityFeedResult,
     AlertCount,
@@ -63,7 +46,6 @@ from mixpanel_data.types import (
     AnnotationTag,
     AuditResponse,
     AuditViolation,
-    BatchProgress,
     BlueprintConfig,
     BlueprintFinishParams,
     BlueprintTemplate,
@@ -80,8 +62,6 @@ from mixpanel_data.types import (
     BulkUpdateEventsParams,
     BulkUpdatePropertiesParams,
     Cohort,
-    ColumnStatsResult,
-    ColumnSummary,
     CreateAlertParams,
     CreateAnnotationParams,
     CreateAnnotationTagParams,
@@ -107,16 +87,13 @@ from mixpanel_data.types import (
     DuplicateExperimentParams,
     EngagementDistributionResult,
     EntityType,
-    EventBreakdownResult,
     EventCountsResult,
     EventDefinition,
     EventDeletionRequest,
-    EventStats,
     Experiment,
     ExperimentConcludeParams,
     ExperimentDecideParams,
     FeatureFlag,
-    FetchResult,
     FlagHistoryResponse,
     FlagLimitsResponse,
     FlowsResult,
@@ -134,10 +111,7 @@ from mixpanel_data.types import (
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
-    ParallelFetchResult,
-    ParallelProfileResult,
     PreviewDeletionFiltersParams,
-    ProfileProgress,
     ProjectWebhook,
     PropertyCountsResult,
     PropertyCoverageResult,
@@ -152,10 +126,6 @@ from mixpanel_data.types import (
     SchemaEntry,
     SegmentationResult,
     SetTestUsersParams,
-    SQLResult,
-    SummaryResult,
-    TableInfo,
-    TableSchema,
     TopEvent,
     UpdateAlertParams,
     UpdateAnnotationParams,
@@ -181,35 +151,11 @@ from mixpanel_data.types import (
     WebhookMutationResult,
     WebhookTestParams,
     WebhookTestResult,
-    WorkspaceInfo,
 )
-
-# Batch size validation bounds
-_MIN_BATCH_SIZE = 100
-_MAX_BATCH_SIZE = 100_000
 
 # Limit validation bounds (Mixpanel API restriction)
 _MIN_LIMIT = 1
 _MAX_LIMIT = 100_000
-
-
-def _validate_batch_size(batch_size: int) -> None:
-    """Validate batch_size is within the allowed range.
-
-    Args:
-        batch_size: Number of rows per commit.
-
-    Raises:
-        ValueError: If batch_size is outside the valid range.
-    """
-    if batch_size < _MIN_BATCH_SIZE:
-        raise ValueError(
-            f"batch_size must be at least {_MIN_BATCH_SIZE}, got {batch_size}"
-        )
-    if batch_size > _MAX_BATCH_SIZE:
-        raise ValueError(
-            f"batch_size must be at most {_MAX_BATCH_SIZE}, got {batch_size}"
-        )
 
 
 def _validate_limit(limit: int | None) -> None:
@@ -235,35 +181,28 @@ def _validate_limit(limit: int | None) -> None:
 class Workspace:
     """Unified entry point for Mixpanel data operations.
 
-    The Workspace class is a facade that orchestrates all services:
+    The Workspace class is a facade that orchestrates:
     - DiscoveryService for schema exploration
-    - FetcherService for data ingestion
     - LiveQueryService for real-time analytics
-    - StorageEngine for local SQL queries
+    - App API client for CRUD and data governance operations
 
     Examples:
         Basic usage with credentials from config:
 
         ```python
         ws = Workspace()
-        ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-        df = ws.sql("SELECT * FROM events LIMIT 10")
+        events = ws.events()  # discover schema
+        result = ws.segmentation(event="login", from_date="2024-01-01", to_date="2024-01-31")
+        ws.close()
         ```
 
-        Ephemeral workspace for temporary analysis:
+        Stream events for external processing:
 
         ```python
-        with Workspace.ephemeral() as ws:
-            ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-            total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-        # Database automatically deleted
-        ```
-
-        Query-only access to existing database:
-
-        ```python
-        ws = Workspace.open("path/to/database.db")
-        df = ws.sql("SELECT * FROM events")
+        ws = Workspace()
+        for event in ws.stream_events(from_date="2024-01-01", to_date="2024-01-31"):
+            process(event)
+        ws.close()
         ```
     """
 
@@ -276,15 +215,12 @@ class Workspace:
         account: str | None = None,
         project_id: str | None = None,
         region: str | None = None,
-        path: str | Path | None = None,
-        read_only: bool = False,
         workspace_id: int | None = None,
         # Dependency injection for testing
         _config_manager: ConfigManager | None = None,
         _api_client: MixpanelAPIClient | None = None,
-        _storage: StorageEngine | None = None,
     ) -> None:
-        """Create a new Workspace with credentials and optional database path.
+        """Create a new Workspace with credentials.
 
         Credentials are resolved in priority order:
         1. Environment variables (MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION)
@@ -296,14 +232,10 @@ class Workspace:
             account: Named account from config file to use.
             project_id: Override project ID from credentials.
             region: Override region from credentials (us, eu, in).
-            path: Path to database file. If None, uses default location.
-            read_only: If True, open database in read-only mode allowing
-                concurrent reads. Defaults to False (write access).
             workspace_id: Optional workspace ID for scoped App API requests.
                 If provided, the API client will use workspace-scoped paths.
             _config_manager: Injected ConfigManager for testing.
             _api_client: Injected MixpanelAPIClient for testing.
-            _storage: Injected StorageEngine for testing.
 
         Raises:
             ConfigError: If no credentials can be resolved.
@@ -335,178 +267,15 @@ class Workspace:
                 region=cast(RegionType, resolved_region),
             )
 
-        # Initialize storage lazily
-        # Store path for lazy initialization, or use injected storage directly
-        self._db_path: Path | None = None
-        self._storage: StorageEngine | None = None
-        self._read_only = read_only
-
-        if _storage is not None:
-            # Injected storage - use directly
-            self._storage = _storage
-        else:
-            # Determine database path for lazy initialization
-            if path is not None:
-                self._db_path = Path(path) if isinstance(path, str) else path
-            else:
-                # Default path: ~/.mp/data/{project_id}.db
-                self._db_path = (
-                    Path.home() / ".mp" / "data" / f"{self._credentials.project_id}.db"
-                )
-            # NOTE: StorageEngine is NOT created here - see storage property
-
         # Lazy-initialized services (None until first use)
         self._api_client: MixpanelAPIClient | None = _api_client
         self._discovery: DiscoveryService | None = None
-        self._fetcher: FetcherService | None = None
         self._live_query: LiveQueryService | None = None
 
         # Set workspace_id on the api_client if provided
         self._initial_workspace_id = workspace_id
         if workspace_id is not None and self._api_client is not None:
             self._api_client.set_workspace_id(workspace_id)
-
-    @classmethod
-    @contextmanager
-    def ephemeral(
-        cls,
-        account: str | None = None,
-        project_id: str | None = None,
-        region: str | None = None,
-        _config_manager: ConfigManager | None = None,
-        _api_client: MixpanelAPIClient | None = None,
-    ) -> Iterator[Workspace]:
-        """Create a temporary workspace that auto-deletes on exit.
-
-        Args:
-            account: Named account from config file to use.
-            project_id: Override project ID from credentials.
-            region: Override region from credentials.
-            _config_manager: Injected ConfigManager for testing.
-            _api_client: Injected MixpanelAPIClient for testing.
-
-        Yields:
-            Workspace: A workspace with temporary database.
-
-        Example:
-            ```python
-            with Workspace.ephemeral() as ws:
-                ws.fetch_events(from_date="2024-01-01", to_date="2024-01-31")
-                print(ws.sql_scalar("SELECT COUNT(*) FROM events"))
-            # Database file automatically deleted
-            ```
-        """
-        storage = StorageEngine.ephemeral()
-        ws = cls(
-            account=account,
-            project_id=project_id,
-            region=region,
-            _config_manager=_config_manager,
-            _api_client=_api_client,
-            _storage=storage,
-        )
-        try:
-            yield ws
-        finally:
-            ws.close()
-
-    @classmethod
-    @contextmanager
-    def memory(
-        cls,
-        account: str | None = None,
-        project_id: str | None = None,
-        region: str | None = None,
-        _config_manager: ConfigManager | None = None,
-        _api_client: MixpanelAPIClient | None = None,
-    ) -> Iterator[Workspace]:
-        """Create a workspace with true in-memory database.
-
-        The database exists only in RAM with zero disk footprint.
-        All data is lost when the context manager exits.
-
-        Best for:
-        - Small datasets where zero disk footprint is required
-        - Unit tests without filesystem side effects
-        - Quick exploratory queries
-
-        For large datasets, prefer ephemeral() which benefits from
-        DuckDB's compression (can be 8x faster for large workloads).
-
-        Args:
-            account: Named account from config file to use.
-            project_id: Override project ID from credentials.
-            region: Override region from credentials.
-            _config_manager: Injected ConfigManager for testing.
-            _api_client: Injected MixpanelAPIClient for testing.
-
-        Yields:
-            Workspace: A workspace with in-memory database.
-
-        Example:
-            ```python
-            with Workspace.memory() as ws:
-                ws.fetch_events(from_date="2024-01-01", to_date="2024-01-01")
-                total = ws.sql_scalar("SELECT COUNT(*) FROM events")
-            # Database gone - no cleanup needed, no files left behind
-            ```
-        """
-        storage = StorageEngine.memory()
-        ws = cls(
-            account=account,
-            project_id=project_id,
-            region=region,
-            _config_manager=_config_manager,
-            _api_client=_api_client,
-            _storage=storage,
-        )
-        try:
-            yield ws
-        finally:
-            ws.close()
-
-    @classmethod
-    def open(cls, path: str | Path, *, read_only: bool = True) -> Workspace:
-        """Open an existing database for query-only access.
-
-        This method opens a database without requiring API credentials.
-        Discovery, fetching, and live query methods will be unavailable.
-
-        Args:
-            path: Path to existing database file.
-            read_only: If True (default), open in read-only mode allowing
-                concurrent reads. Set to False for write access.
-
-        Returns:
-            Workspace: A workspace with access to stored data.
-
-        Raises:
-            FileNotFoundError: If database file doesn't exist.
-
-        Example:
-            ```python
-            ws = Workspace.open("my_data.db")
-            df = ws.sql("SELECT * FROM events")
-            ws.close()
-            ```
-        """
-        db_path = Path(path) if isinstance(path, str) else path
-        storage = StorageEngine.open_existing(db_path, read_only=read_only)
-
-        # Create instance without credential resolution
-        instance = object.__new__(cls)
-        instance._config_manager = ConfigManager()
-        instance._credentials = None
-        instance._account_name = None
-        instance._db_path = db_path
-        instance._storage = storage
-        instance._read_only = read_only
-        instance._api_client = None
-        instance._discovery = None
-        instance._fetcher = None
-        instance._live_query = None
-
-        return instance
 
     def __enter__(self) -> Workspace:
         """Enter context manager.
@@ -524,20 +293,16 @@ class Workspace:
     ) -> None:
         """Exit context manager, closing all resources.
 
-        Closes the database connection and HTTP client. Exceptions are
-        NOT suppressed - they propagate normally after cleanup.
+        Closes the HTTP client. Exceptions are NOT suppressed - they
+        propagate normally after cleanup.
         """
         self.close()
 
     def close(self) -> None:
-        """Close all resources (database connection, HTTP client).
+        """Close all resources (HTTP client).
 
         This method is idempotent and safe to call multiple times.
         """
-        # Close storage
-        if self._storage is not None:
-            self._storage.close()
-
         # Close API client if we created one
         if self._api_client is not None:
             self._api_client.close()
@@ -749,65 +514,12 @@ class Workspace:
         client = self._require_api_client()
         return client.resolve_workspace_id()
 
-    @staticmethod
-    def _try_float(value: Any) -> float | None:
-        """Attempt to convert a value to float, returning None if not possible.
-
-        Used for handling DuckDB SUMMARIZE output where avg/std may be
-        non-numeric for certain column types (e.g., timestamps).
-
-        Args:
-            value: Value to convert.
-
-        Returns:
-            Float value if conversion succeeds, None otherwise.
-        """
-        if value is None:
-            return None
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return None
-
     @property
     def _discovery_service(self) -> DiscoveryService:
         """Get or create discovery service (lazy initialization)."""
         if self._discovery is None:
             self._discovery = DiscoveryService(self._require_api_client())
         return self._discovery
-
-    @property
-    def storage(self) -> StorageEngine:
-        """Get or create storage engine (lazy initialization).
-
-        Only connects to database when first accessed. API-only operations
-        (discovery, live queries, streaming) don't touch the database.
-
-        Returns:
-            StorageEngine instance.
-
-        Raises:
-            DatabaseLockedError: If database is locked by another process.
-            OSError: If the database file cannot be created or opened due to
-                filesystem permission issues or other I/O errors.
-            RuntimeError: If no database path configured (shouldn't happen
-                in normal use).
-        """
-        if self._storage is None:
-            if self._db_path is None:
-                raise RuntimeError("No database path configured")
-            self._storage = StorageEngine(path=self._db_path, read_only=self._read_only)
-        return self._storage
-
-    @property
-    def _fetcher_service(self) -> FetcherService:
-        """Get or create fetcher service (lazy initialization)."""
-        if self._fetcher is None:
-            self._fetcher = FetcherService(
-                self._require_api_client(),
-                self.storage,  # Uses lazy storage property
-            )
-        return self._fetcher
 
     @property
     def _live_query_service(self) -> LiveQueryService:
@@ -1022,295 +734,6 @@ class Workspace:
         return self._discovery_service.get_schema(entity_type, name)
 
     # =========================================================================
-    # FETCHING METHODS
-    # =========================================================================
-
-    def fetch_events(
-        self,
-        name: str = "events",
-        *,
-        from_date: str,
-        to_date: str,
-        events: list[str] | None = None,
-        where: str | None = None,
-        limit: int | None = None,
-        progress: bool = True,
-        append: bool = False,
-        batch_size: int = 1000,
-        parallel: bool = False,
-        max_workers: int | None = None,
-        on_batch_complete: Callable[[BatchProgress], None] | None = None,
-        chunk_days: int = 7,
-    ) -> FetchResult | ParallelFetchResult:
-        """Fetch events from Mixpanel and store in local database.
-
-        Note:
-            This is a potentially long-running operation that streams data from
-            Mixpanel's Export API. For large date ranges, use ``parallel=True``
-            for significantly faster exports (up to 10x speedup).
-
-        Args:
-            name: Table name to create or append to (default: "events").
-            from_date: Start date (YYYY-MM-DD).
-            to_date: End date (YYYY-MM-DD).
-            events: Optional list of event names to filter.
-            where: Optional WHERE clause for filtering.
-            limit: Optional maximum number of events to return (max 100000).
-            progress: Show progress bar (default: True).
-            append: If True, append to existing table. If False (default), create new.
-            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
-                memory/IO tradeoff: smaller values use less memory but more
-                disk IO; larger values use more memory but less IO.
-                Default: 1000. Valid range: 100-100000.
-            parallel: If True, use parallel fetching with multiple threads.
-                Splits date range into 7-day chunks and fetches concurrently.
-                Enables export of date ranges exceeding 100 days. Default: False.
-            max_workers: Maximum concurrent fetch threads when parallel=True.
-                Default: 10. Higher values may hit Mixpanel rate limits.
-                Ignored when parallel=False.
-            on_batch_complete: Callback invoked when each batch completes
-                during parallel fetch. Receives BatchProgress with status.
-                Useful for custom progress reporting. Ignored when parallel=False.
-            chunk_days: Days per chunk for parallel date range splitting.
-                Default: 7. Valid range: 1-100. Smaller values create more
-                parallel batches but may increase API overhead.
-                Ignored when parallel=False.
-
-        Returns:
-            FetchResult when parallel=False, ParallelFetchResult when parallel=True.
-            ParallelFetchResult includes per-batch statistics and any failure info.
-
-        Raises:
-            TableExistsError: If table exists and append=False.
-            TableNotFoundError: If table doesn't exist and append=True.
-            ConfigError: If API credentials not available.
-            AuthenticationError: If credentials are invalid.
-            ValueError: If batch_size is outside valid range (100-100000).
-            ValueError: If limit is outside valid range (1-100000).
-            ValueError: If max_workers is not positive.
-            ValueError: If chunk_days is not in range 1-100.
-
-        Example:
-            ```python
-            # Sequential fetch (default)
-            result = ws.fetch_events(
-                name="events",
-                from_date="2024-01-01",
-                to_date="2024-01-31",
-            )
-
-            # Parallel fetch for large date ranges
-            result = ws.fetch_events(
-                name="events_q4",
-                from_date="2024-10-01",
-                to_date="2024-12-31",
-                parallel=True,
-            )
-
-            # With custom progress callback
-            def on_batch(progress: BatchProgress) -> None:
-                print(f"Batch {progress.batch_index + 1}/{progress.total_batches}")
-
-            result = ws.fetch_events(
-                name="events",
-                from_date="2024-01-01",
-                to_date="2024-03-31",
-                parallel=True,
-                on_batch_complete=on_batch,
-            )
-            ```
-        """
-        # Validate parameters early to avoid wasted API calls
-        _validate_batch_size(batch_size)
-        _validate_limit(limit)
-
-        # Validate max_workers for parallel mode
-        if max_workers is not None and max_workers <= 0:
-            raise ValueError("max_workers must be positive")
-
-        # Validate chunk_days for parallel mode
-        if chunk_days <= 0:
-            raise ValueError("chunk_days must be positive")
-        if chunk_days > 100:
-            raise ValueError("chunk_days must be at most 100")
-
-        # Create progress callback if requested (only for interactive terminals)
-        progress_callback = None
-        pbar = None
-        if progress and sys.stderr.isatty() and not parallel:
-            try:
-                from rich.progress import Progress, SpinnerColumn, TextColumn
-
-                pbar = Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    TextColumn("{task.completed} rows"),
-                )
-                task = pbar.add_task("Fetching events...", total=None)
-                pbar.start()
-
-                def callback(count: int) -> None:
-                    pbar.update(task, completed=count)
-
-                progress_callback = callback
-            except Exception:
-                # Progress bar unavailable or failed to initialize, skip silently
-                pass
-
-        try:
-            result = self._fetcher_service.fetch_events(
-                name=name,
-                from_date=from_date,
-                to_date=to_date,
-                events=events,
-                where=where,
-                limit=limit,
-                progress_callback=progress_callback,
-                append=append,
-                batch_size=batch_size,
-                parallel=parallel,
-                max_workers=max_workers,
-                on_batch_complete=on_batch_complete,
-                chunk_days=chunk_days,
-            )
-        finally:
-            if pbar is not None:
-                pbar.stop()
-
-        return result
-
-    def fetch_profiles(
-        self,
-        name: str = "profiles",
-        *,
-        where: str | None = None,
-        cohort_id: str | None = None,
-        output_properties: list[str] | None = None,
-        progress: bool = True,
-        append: bool = False,
-        batch_size: int = 1000,
-        distinct_id: str | None = None,
-        distinct_ids: list[str] | None = None,
-        group_id: str | None = None,
-        behaviors: list[dict[str, Any]] | None = None,
-        as_of_timestamp: int | None = None,
-        include_all_users: bool = False,
-        parallel: bool = False,
-        max_workers: int | None = None,
-        on_page_complete: Callable[[ProfileProgress], None] | None = None,
-    ) -> FetchResult | ParallelProfileResult:
-        """Fetch user profiles from Mixpanel and store in local database.
-
-        Note:
-            This is a potentially long-running operation that streams data from
-            Mixpanel's Engage API. For large profile sets, use ``parallel=True``
-            for up to 5x faster exports.
-
-        Args:
-            name: Table name to create or append to (default: "profiles").
-            where: Optional WHERE clause for filtering.
-            cohort_id: Optional cohort ID to filter by. Only profiles that are
-                members of this cohort will be returned.
-            output_properties: Optional list of property names to include in
-                the response. If None, all properties are returned.
-            progress: Show progress bar (default: True).
-            append: If True, append to existing table. If False (default), create new.
-            batch_size: Number of rows per INSERT/COMMIT cycle. Controls the
-                memory/IO tradeoff: smaller values use less memory but more
-                disk IO; larger values use more memory but less IO.
-                Default: 1000. Valid range: 100-100000.
-            distinct_id: Optional single user ID to fetch. Mutually exclusive
-                with distinct_ids.
-            distinct_ids: Optional list of user IDs to fetch. Mutually exclusive
-                with distinct_id. Duplicates are automatically removed.
-            group_id: Optional group type identifier (e.g., "companies") to fetch
-                group profiles instead of user profiles.
-            behaviors: Optional list of behavioral filters. Each dict should have
-                'window' (e.g., "30d"), 'name' (identifier), and 'event_selectors'
-                (list of {"event": "Name"}). Use with `where` parameter to filter,
-                e.g., where='(behaviors["name"] > 0)'. Mutually exclusive with
-                cohort_id.
-            as_of_timestamp: Optional Unix timestamp to query profile state at
-                a specific point in time. Must be in the past.
-            include_all_users: If True, include all users and mark cohort membership.
-                Only valid when cohort_id is provided.
-            parallel: If True, use parallel fetching with multiple threads.
-                Uses page-based parallelism for concurrent profile fetching.
-                Enables up to 5x faster exports. Default: False.
-            max_workers: Maximum concurrent fetch threads when parallel=True.
-                Default: 5, capped at 5. Ignored when parallel=False.
-            on_page_complete: Callback invoked when each page completes during
-                parallel fetch. Receives ProfileProgress with status.
-                Useful for custom progress reporting. Ignored when parallel=False.
-
-        Returns:
-            FetchResult when parallel=False, ParallelProfileResult when parallel=True.
-            ParallelProfileResult includes per-page statistics and any failure info.
-
-        Raises:
-            TableExistsError: If table exists and append=False.
-            TableNotFoundError: If table doesn't exist and append=True.
-            ConfigError: If API credentials not available.
-            ValueError: If batch_size is outside valid range (100-100000) or
-                mutually exclusive parameters are provided.
-        """
-        # Validate batch_size
-        _validate_batch_size(batch_size)
-
-        # Validate max_workers for parallel mode
-        if max_workers is not None and max_workers <= 0:
-            raise ValueError("max_workers must be positive")
-
-        # Create progress callback if requested (only for interactive terminals)
-        # Sequential mode uses spinner progress bar
-        progress_callback = None
-        pbar = None
-        if progress and sys.stderr.isatty() and not parallel:
-            try:
-                from rich.progress import Progress, SpinnerColumn, TextColumn
-
-                pbar = Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    TextColumn("{task.completed} rows"),
-                )
-                task = pbar.add_task("Fetching profiles...", total=None)
-                pbar.start()
-
-                def callback(count: int) -> None:
-                    pbar.update(task, completed=count)
-
-                progress_callback = callback
-            except Exception:
-                # Progress bar unavailable or failed to initialize, skip silently
-                pass
-
-        try:
-            result = self._fetcher_service.fetch_profiles(
-                name=name,
-                where=where,
-                cohort_id=cohort_id,
-                output_properties=output_properties,
-                progress_callback=progress_callback,
-                append=append,
-                batch_size=batch_size,
-                distinct_id=distinct_id,
-                distinct_ids=distinct_ids,
-                group_id=group_id,
-                behaviors=behaviors,
-                as_of_timestamp=as_of_timestamp,
-                include_all_users=include_all_users,
-                parallel=parallel,
-                max_workers=max_workers,
-                on_page_complete=on_page_complete,
-            )
-        finally:
-            if pbar is not None:
-                pbar.stop()
-
-        return result
-
-    # =========================================================================
     # STREAMING METHODS
     # =========================================================================
 
@@ -1492,64 +915,6 @@ class Workspace:
         else:
             for profile in profile_iterator:
                 yield transform_profile(profile)
-
-    # =========================================================================
-    # LOCAL QUERY METHODS
-    # =========================================================================
-
-    def sql(self, query: str) -> pd.DataFrame:
-        """Execute SQL query and return results as DataFrame.
-
-        Args:
-            query: SQL query string.
-
-        Returns:
-            pandas DataFrame with query results.
-
-        Raises:
-            QueryError: If query is invalid.
-        """
-        return self.storage.execute_df(query)
-
-    def sql_scalar(self, query: str) -> Any:
-        """Execute SQL query and return single scalar value.
-
-        Args:
-            query: SQL query that returns a single value.
-
-        Returns:
-            The scalar result (int, float, str, etc.).
-
-        Raises:
-            QueryError: If query is invalid or returns multiple values.
-        """
-        return self.storage.execute_scalar(query)
-
-    def sql_rows(self, query: str) -> SQLResult:
-        """Execute SQL query and return structured result with column metadata.
-
-        Args:
-            query: SQL query string.
-
-        Returns:
-            SQLResult with column names and row tuples.
-
-        Raises:
-            QueryError: If query is invalid.
-
-        Example:
-            ```python
-            result = ws.sql_rows("SELECT name, age FROM users")
-            print(result.columns)  # ['name', 'age']
-            for row in result.rows:
-                print(row)  # ('Alice', 30)
-
-            # Or convert to dicts for JSON output:
-            for row in result.to_dicts():
-                print(row)  # {'name': 'Alice', 'age': 30}
-            ```
-        """
-        return self.storage.execute_rows(query)
 
     # =========================================================================
     # LIVE QUERY METHODS
@@ -2206,586 +1571,8 @@ class Workspace:
         )
 
     # =========================================================================
-    # INTROSPECTION METHODS
-    # =========================================================================
-
-    def info(self) -> WorkspaceInfo:
-        """Get metadata about this workspace.
-
-        Returns:
-            WorkspaceInfo with path, project_id, region, account, tables, size.
-        """
-        path = self.storage.path
-        tables = [t.name for t in self.storage.list_tables()]
-
-        # Calculate database size and creation time
-        size_mb = 0.0
-        created_at: datetime | None = None
-        if path is not None and path.exists():
-            try:
-                stat = path.stat()
-                size_mb = stat.st_size / 1_000_000
-                created_at = datetime.fromtimestamp(stat.st_ctime)
-            except (OSError, PermissionError):
-                # File became inaccessible, use defaults
-                pass
-
-        return WorkspaceInfo(
-            path=path,
-            project_id=self._credentials.project_id if self._credentials else "unknown",
-            region=self._credentials.region if self._credentials else "unknown",
-            account=self._account_name,
-            tables=tables,
-            size_mb=size_mb,
-            created_at=created_at,
-        )
-
-    def tables(self) -> list[TableInfo]:
-        """List tables in the local database.
-
-        Returns:
-            List of TableInfo objects (name, type, row_count, fetched_at).
-        """
-        return self.storage.list_tables()
-
-    def table_schema(self, table: str) -> TableSchema:
-        """Get schema for a table in the local database.
-
-        Args:
-            table: Table name.
-
-        Returns:
-            TableSchema with column definitions.
-
-        Raises:
-            TableNotFoundError: If table doesn't exist.
-        """
-        return self.storage.get_schema(table)
-
-    def sample(self, table: str, n: int = 10) -> pd.DataFrame:
-        """Return random sample rows from a table.
-
-        Uses DuckDB's reservoir sampling for representative results.
-        Unlike LIMIT, sampling returns rows from throughout the table.
-
-        Args:
-            table: Table name to sample from.
-            n: Number of rows to return (default: 10).
-
-        Returns:
-            DataFrame with n random rows. If table has fewer than n rows,
-            returns all available rows.
-
-        Raises:
-            TableNotFoundError: If table doesn't exist.
-
-        Example:
-            ```python
-            ws = Workspace()
-            ws.sample("events")  # 10 random rows
-            ws.sample("events", n=5)  # 5 random rows
-            ```
-        """
-        # Validate table exists
-        self.storage.get_schema(table)
-
-        # Use DuckDB's reservoir sampling
-        sql = f'SELECT * FROM "{table}" USING SAMPLE {n}'
-        return self.storage.execute_df(sql)
-
-    def summarize(self, table: str) -> SummaryResult:
-        """Get statistical summary of all columns in a table.
-
-        Uses DuckDB's SUMMARIZE command to compute min/max, quartiles,
-        null percentage, and approximate distinct counts for each column.
-
-        Args:
-            table: Table name to summarize.
-
-        Returns:
-            SummaryResult with per-column statistics and total row count.
-
-        Raises:
-            TableNotFoundError: If table doesn't exist.
-
-        Example:
-            ```python
-            result = ws.summarize("events")
-            result.row_count         # 1234567
-            result.columns[0].null_percentage  # 0.5
-            result.df                # Full summary as DataFrame
-            ```
-        """
-        # Validate table exists
-        self.storage.get_schema(table)
-
-        # Get row count
-        row_count = self.storage.execute_scalar(f'SELECT COUNT(*) FROM "{table}"')
-
-        # Get column statistics using SUMMARIZE
-        summary_df = self.storage.execute_df(f'SUMMARIZE "{table}"')
-
-        # Convert to ColumnSummary objects (to_dict is more efficient than iterrows)
-        columns: list[ColumnSummary] = []
-        for row in summary_df.to_dict("records"):
-            columns.append(
-                ColumnSummary(
-                    column_name=str(row["column_name"]),
-                    column_type=str(row["column_type"]),
-                    min=row["min"],
-                    max=row["max"],
-                    approx_unique=int(row["approx_unique"]),
-                    avg=self._try_float(row["avg"]),
-                    std=self._try_float(row["std"]),
-                    q25=row["q25"],
-                    q50=row["q50"],
-                    q75=row["q75"],
-                    count=int(row["count"]),
-                    null_percentage=float(row["null_percentage"]),
-                )
-            )
-
-        return SummaryResult(
-            table=table,
-            row_count=int(row_count),
-            columns=columns,
-        )
-
-    def event_breakdown(self, table: str) -> EventBreakdownResult:
-        """Analyze event distribution in a table.
-
-        Computes per-event counts, unique users, date ranges, and
-        percentage of total for each event type.
-
-        Args:
-            table: Table name containing events. Must have columns:
-                   event_name, event_time, distinct_id.
-
-        Returns:
-            EventBreakdownResult with per-event statistics.
-
-        Raises:
-            TableNotFoundError: If table doesn't exist.
-            QueryError: If table lacks required columns (event_name,
-                       event_time, distinct_id). Error message lists
-                       the specific missing columns.
-
-        Example:
-            ```python
-            breakdown = ws.event_breakdown("events")
-            breakdown.total_events           # 1234567
-            breakdown.events[0].event_name   # "Page View"
-            breakdown.events[0].pct_of_total # 45.2
-            ```
-        """
-        # Validate table exists and get schema
-        schema = self.storage.get_schema(table)
-        column_names = {col.name for col in schema.columns}
-
-        # Check for required columns
-        required_columns = {"event_name", "event_time", "distinct_id"}
-        missing = required_columns - column_names
-        if missing:
-            raise QueryError(
-                f"event_breakdown() requires columns {required_columns}, "
-                f"but '{table}' is missing: {missing}",
-                status_code=0,
-            )
-
-        # Get aggregate statistics
-        agg_sql = f"""
-            SELECT
-                COUNT(*) as total_events,
-                COUNT(DISTINCT distinct_id) as total_users,
-                MIN(event_time) as min_time,
-                MAX(event_time) as max_time
-            FROM "{table}"
-        """
-        agg_result = self.storage.execute_rows(agg_sql)
-        total_events, total_users, min_time, max_time = agg_result.rows[0]
-
-        # Handle empty table
-        if total_events == 0:
-            return EventBreakdownResult(
-                table=table,
-                total_events=0,
-                total_users=0,
-                date_range=(datetime.min, datetime.min),
-                events=[],
-            )
-
-        # Get per-event statistics
-        breakdown_sql = f"""
-            SELECT
-                event_name,
-                COUNT(*) as count,
-                COUNT(DISTINCT distinct_id) as unique_users,
-                MIN(event_time) as first_seen,
-                MAX(event_time) as last_seen,
-                ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) as pct_of_total
-            FROM "{table}"
-            GROUP BY event_name
-            ORDER BY count DESC
-        """
-        breakdown_rows = self.storage.execute_rows(breakdown_sql)
-
-        events: list[EventStats] = []
-        for row in breakdown_rows:
-            event_name, count, unique_users, first_seen, last_seen, pct = row
-            events.append(
-                EventStats(
-                    event_name=str(event_name),
-                    count=int(count),
-                    unique_users=int(unique_users),
-                    first_seen=first_seen
-                    if isinstance(first_seen, datetime)
-                    else datetime.fromisoformat(str(first_seen)),
-                    last_seen=last_seen
-                    if isinstance(last_seen, datetime)
-                    else datetime.fromisoformat(str(last_seen)),
-                    pct_of_total=float(pct),
-                )
-            )
-
-        return EventBreakdownResult(
-            table=table,
-            total_events=int(total_events),
-            total_users=int(total_users),
-            date_range=(
-                min_time
-                if isinstance(min_time, datetime)
-                else datetime.fromisoformat(str(min_time)),
-                max_time
-                if isinstance(max_time, datetime)
-                else datetime.fromisoformat(str(max_time)),
-            ),
-            events=events,
-        )
-
-    def property_keys(
-        self,
-        table: str,
-        event: str | None = None,
-    ) -> list[str]:
-        """List all JSON property keys in a table.
-
-        Extracts distinct keys from the 'properties' JSON column.
-        Useful for discovering queryable fields in event properties.
-
-        Args:
-            table: Table name with a 'properties' JSON column.
-            event: Optional event name to filter by. If provided, only
-                   returns keys present in events of that type.
-
-        Returns:
-            Alphabetically sorted list of property key names.
-            Empty list if no keys found.
-
-        Raises:
-            TableNotFoundError: If table doesn't exist.
-            QueryError: If table lacks 'properties' column.
-
-        Example:
-            All keys across all events:
-
-            ```python
-            ws.property_keys("events")
-            # ['$browser', '$city', 'page', 'referrer', 'user_plan']
-            ```
-
-            Keys for specific event type:
-
-            ```python
-            ws.property_keys("events", event="Purchase")
-            # ['amount', 'currency', 'product_id', 'quantity']
-            ```
-        """
-        # Validate table exists and get schema
-        schema = self.storage.get_schema(table)
-        column_names = {col.name for col in schema.columns}
-
-        # Check for required column
-        if "properties" not in column_names:
-            raise QueryError(
-                f"property_keys() requires a 'properties' column, "
-                f"but '{table}' does not have one",
-                status_code=0,
-            )
-
-        # Build query with optional event filter
-        if event is not None:
-            # Check if event_name column exists
-            if "event_name" not in column_names:
-                raise QueryError(
-                    f"Cannot filter by event: '{table}' lacks 'event_name' column",
-                    status_code=0,
-                )
-            sql = f"""
-                SELECT DISTINCT unnest(json_keys(properties)) as key
-                FROM "{table}"
-                WHERE event_name = ?
-                ORDER BY key
-            """
-            result = self.storage.execute_rows_params(sql, [event])
-            rows = result.rows
-        else:
-            sql = f"""
-                SELECT DISTINCT unnest(json_keys(properties)) as key
-                FROM "{table}"
-                ORDER BY key
-            """
-            result = self.storage.execute_rows(sql)
-            rows = result.rows
-
-        return [str(row[0]) for row in rows]
-
-    def column_stats(
-        self,
-        table: str,
-        column: str,
-        *,
-        top_n: int = 10,
-    ) -> ColumnStatsResult:
-        """Get detailed statistics for a single column.
-
-        Performs deep analysis including null rates, cardinality,
-        top values, and numeric statistics (for numeric columns).
-
-        The column parameter supports JSON path expressions for
-        analyzing properties stored in JSON columns:
-        - `properties->>'$.country'` for string extraction
-        - `CAST(properties->>'$.amount' AS DOUBLE)` for numeric
-
-        Args:
-            table: Table name to analyze.
-            column: Column name or expression to analyze.
-            top_n: Number of top values to return (default: 10).
-
-        Returns:
-            ColumnStatsResult with comprehensive column statistics.
-
-        Raises:
-            TableNotFoundError: If table doesn't exist.
-            QueryError: If column expression is invalid.
-
-        Example:
-            Analyze standard column:
-
-            ```python
-            stats = ws.column_stats("events", "event_name")
-            stats.unique_count      # 47
-            stats.top_values[:3]    # [('Page View', 45230), ...]
-            ```
-
-            Analyze JSON property:
-
-            ```python
-            stats = ws.column_stats("events", "properties->>'$.country'")
-            ```
-
-        Security:
-            The column parameter is interpolated directly into SQL queries
-            to allow expression syntax. Only use with trusted input from
-            developers or AI coding agents. Do not pass untrusted user input.
-        """
-        # Validate table exists
-        self.storage.get_schema(table)
-
-        # Get total row count
-        total_rows = self.storage.execute_scalar(f'SELECT COUNT(*) FROM "{table}"')
-
-        # Get basic stats: count, null_count, approx unique
-        stats_sql = f"""
-            SELECT
-                COUNT({column}) as count,
-                COUNT(*) - COUNT({column}) as null_count,
-                APPROX_COUNT_DISTINCT({column}) as unique_count
-            FROM "{table}"
-        """
-        try:
-            stats_result = self.storage.execute_rows(stats_sql)
-        except Exception as e:
-            raise QueryError(
-                f"Invalid column expression: {column}. Error: {e}",
-                status_code=0,
-            ) from e
-
-        count, null_count, unique_count = stats_result.rows[0]
-
-        # Calculate percentages
-        null_pct = (null_count / total_rows * 100) if total_rows > 0 else 0.0
-        unique_pct = (unique_count / count * 100) if count > 0 else 0.0
-
-        # Get top values
-        top_sql = f"""
-            SELECT {column} as value, COUNT(*) as cnt
-            FROM "{table}"
-            WHERE {column} IS NOT NULL
-            GROUP BY {column}
-            ORDER BY cnt DESC
-            LIMIT {top_n}
-        """
-        top_result = self.storage.execute_rows(top_sql)
-        top_values: list[tuple[Any, int]] = [
-            (row[0], int(row[1])) for row in top_result.rows
-        ]
-
-        # Detect column type to determine if numeric stats apply
-        type_sql = (
-            f'SELECT typeof({column}) FROM "{table}" WHERE {column} IS NOT NULL LIMIT 1'
-        )
-        try:
-            type_result = self.storage.execute_rows(type_sql)
-            dtype = str(type_result.rows[0][0]) if type_result.rows else "UNKNOWN"
-        except Exception:
-            dtype = "UNKNOWN"
-
-        # Get numeric stats if applicable
-        min_val: float | None = None
-        max_val: float | None = None
-        mean_val: float | None = None
-        std_val: float | None = None
-
-        numeric_types = {
-            "INTEGER",
-            "BIGINT",
-            "DOUBLE",
-            "FLOAT",
-            "DECIMAL",
-            "HUGEINT",
-            "SMALLINT",
-            "TINYINT",
-            "UBIGINT",
-            "UINTEGER",
-            "USMALLINT",
-            "UTINYINT",
-        }
-        if dtype.upper() in numeric_types:
-            numeric_sql = f"""
-                SELECT
-                    MIN({column}) as min_val,
-                    MAX({column}) as max_val,
-                    AVG({column}) as mean_val,
-                    STDDEV({column}) as std_val
-                FROM "{table}"
-            """
-            try:
-                numeric_result = self.storage.execute_rows(numeric_sql)
-                if numeric_result.rows:
-                    row = numeric_result.rows[0]
-                    min_val = float(row[0]) if row[0] is not None else None
-                    max_val = float(row[1]) if row[1] is not None else None
-                    mean_val = float(row[2]) if row[2] is not None else None
-                    std_val = float(row[3]) if row[3] is not None else None
-            except Exception:
-                # Not numeric, skip
-                pass
-
-        return ColumnStatsResult(
-            table=table,
-            column=column,
-            dtype=dtype,
-            count=int(count),
-            null_count=int(null_count),
-            null_pct=round(null_pct, 2),
-            unique_count=int(unique_count),
-            unique_pct=round(unique_pct, 2),
-            top_values=top_values,
-            min=min_val,
-            max=max_val,
-            mean=mean_val,
-            std=std_val,
-        )
-
-    # =========================================================================
-    # TABLE MANAGEMENT METHODS
-    # =========================================================================
-
-    def drop(self, *names: str) -> None:
-        """Drop specified tables.
-
-        Args:
-            *names: Table names to drop.
-
-        Raises:
-            TableNotFoundError: If any table doesn't exist.
-        """
-        for name in names:
-            self.storage.drop_table(name)
-
-    def drop_all(self, type: TableType | None = None) -> None:
-        """Drop all tables from the workspace, optionally filtered by type.
-
-        Permanently removes all tables and their data. When used with the type
-        parameter, only tables matching the specified type are dropped.
-
-        Args:
-            type: Optional table type filter. Valid values: "events", "profiles".
-                  If None, all tables are dropped regardless of type.
-
-        Raises:
-            TableNotFoundError: If a table cannot be dropped (rare in practice).
-
-        Example:
-            Drop all event tables:
-
-            ```python
-            ws = Workspace()
-            ws.drop_all(type="events")  # Only drops event tables
-            ws.close()
-            ```
-
-            Drop all tables:
-
-            ```python
-            ws = Workspace()
-            ws.drop_all()  # Drops everything
-            ws.close()
-            ```
-        """
-        tables = self.storage.list_tables()
-        for table in tables:
-            if type is None or table.type == type:
-                self.storage.drop_table(table.name)
-
-    # =========================================================================
     # ESCAPE HATCHES
     # =========================================================================
-
-    @property
-    def connection(self) -> duckdb.DuckDBPyConnection:
-        """Direct access to the DuckDB connection.
-
-        Use this for operations not covered by the Workspace API.
-
-        Returns:
-            The underlying DuckDB connection.
-        """
-        return self.storage.connection
-
-    @property
-    def db_path(self) -> Path | None:
-        """Path to the DuckDB database file.
-
-        Returns the filesystem path where data is stored. Useful for:
-        - Knowing where your data lives
-        - Opening the same database later with ``Workspace.open(path)``
-        - Debugging and logging
-
-        Returns:
-            The database file path, or None for in-memory workspaces.
-
-        Example:
-            Save the path for later use::
-
-                ws = mp.Workspace()
-                path = ws.db_path
-                ws.close()
-
-                # Later, reopen the same database
-                ws = mp.Workspace.open(path)
-        """
-        return self.storage.path
 
     @property
     def api(self) -> MixpanelAPIClient:

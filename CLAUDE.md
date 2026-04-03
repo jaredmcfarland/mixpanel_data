@@ -4,13 +4,13 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-`mixpanel_data` is a complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, and data extraction. Discover your schema, run live analytics (segmentation, funnels, retention), execute JQL, and analyze locally with SQL via DuckDB.
+`mixpanel_data` is a complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, streaming, and entity management. Discover your schema, run live analytics (segmentation, funnels, retention), execute JQL, and manage entities via the Mixpanel App API.
 
 | Context | Name | Example |
 |---------|------|---------|
 | PyPI package | `mixpanel_data` | `pip install mixpanel_data` |
 | Python import | `mixpanel_data` | `import mixpanel_data as mp` |
-| CLI command | `mp` | `mp fetch events --from 2025-01-01` |
+| CLI command | `mp` | `mp query segmentation -e Login --from 2025-01-01` |
 
 ## Architecture
 
@@ -21,16 +21,15 @@ CLI (Typer)              → mp commands, output formatting
     ↓
 Public API               → Workspace, auth module, exceptions, types
     ↓
-Services                 → DiscoveryService, FetcherService, LiveQueryService
+Services                 → DiscoveryService, LiveQueryService
     ↓
-Infrastructure           → ConfigManager, MixpanelAPIClient, StorageEngine (DuckDB)
+Infrastructure           → ConfigManager, MixpanelAPIClient
 ```
 
-**Four capability areas:**
+**Three capability areas:**
 - **Discovery**: Explore schema (events, properties, funnels, cohorts, bookmarks)
-- **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention, JQL)
+- **Live queries & streaming**: Call Mixpanel API directly (segmentation, funnels, retention, JQL), stream events and profiles
 - **Entity CRUD & Data Governance**: Create, read, update, delete dashboards, reports (bookmarks), cohorts, feature flags, experiments, alerts, annotations, webhooks, Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via App API
-- **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
 
 ## Package Structure
 
@@ -40,11 +39,10 @@ src/mixpanel_data/
 ├── workspace.py             # Workspace facade class
 ├── auth.py                  # Public auth module
 ├── exceptions.py            # Exception hierarchy
-├── types.py                 # Result types (FetchResult, SegmentationResult, etc.)
+├── types.py                 # Result types (SegmentationResult, FunnelResult, etc.)
 ├── _internal/               # Private implementation (do not import directly)
 │   ├── config.py            # ConfigManager, Credentials, AuthMethod
 │   ├── api_client.py        # MixpanelAPIClient (Basic Auth + OAuth Bearer)
-│   ├── storage.py           # StorageEngine (DuckDB)
 │   ├── pagination.py        # Cursor-based App API pagination
 │   ├── auth/                # OAuth 2.0 PKCE authentication
 │   │   ├── flow.py          # OAuthFlow orchestrator
@@ -53,10 +51,10 @@ src/mixpanel_data/
 │   │   ├── pkce.py          # PKCE challenge generation (RFC 7636)
 │   │   ├── callback_server.py  # Local HTTP callback server
 │   │   └── client_registration.py  # Dynamic Client Registration (RFC 7591)
-│   └── services/            # Discovery, Fetcher, LiveQuery services
+│   └── services/            # Discovery, LiveQuery services
 └── cli/
     ├── main.py              # Typer app entry point
-    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts, flags, experiments, alerts, annotations, webhooks, lexicon, drop-filters, custom-properties, custom-events, lookup-tables, schemas command groups
+    ├── commands/            # auth, query, inspect, dashboards, reports, cohorts, flags, experiments, alerts, annotations, webhooks, lexicon, drop-filters, custom-properties, custom-events, lookup-tables, schemas command groups
     ├── formatters.py        # JSON, JSONL, Table, CSV, Plain output
     └── utils.py             # Error handling, console helpers
 ```
@@ -176,9 +174,7 @@ just mutate-check        # Check score meets 80% threshold
 
 ## Key Design Decisions
 
-- **Explicit table management**: Tables never implicitly overwritten; `TableExistsError` if exists
-- **Streaming ingestion**: API returns iterators, storage accepts iterators (memory efficient)
-- **JSON property storage**: Properties stored as JSON columns, queried with `properties->>'$.field'`
+- **Streaming data access**: API returns iterators for memory-efficient processing of large datasets
 - **Dual authentication**: Service accounts (Basic Auth) and OAuth 2.0 PKCE with automatic credential resolution
 - **Immutable credentials**: Resolved once at Workspace construction
 - **Dependency injection**: Services accept dependencies as constructor arguments for testing
@@ -253,7 +249,6 @@ Suppressing stderr causes silent failures and makes it impossible to diagnose is
 
 - Python 3.10+ with full type hints (mypy --strict compliant)
 - Typer (CLI) + Rich (output formatting)
-- DuckDB (embedded analytical database)
 - jq (JSON filtering via `--jq` option for CLI commands)
 - httpx (HTTP client), Pydantic (validation)
 - Hypothesis (property-based testing), mutmut (mutation testing)
@@ -299,23 +294,6 @@ Skill(skill="mixpanel-data:mixpanel-analyst")  # Will fail!
 **Slash commands** (starting with `/mp-`) use the Skill tool correctly.
 
 ## Active Technologies
-- Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies (017-parallel-export)
-- DuckDB (single-writer constraint requires queue-based serialization) (017-parallel-export)
-- Python 3.10+ + Typer (CLI), Rich (output), httpx (HTTP), Pydantic v2 (validation) (018-engage-api-params)
-- DuckDB (local storage for fetched profiles) (018-engage-api-params)
-- Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new dependencies (019-parallel-profile-fetch)
-- DuckDB (existing StorageEngine) (019-parallel-profile-fetch)
-- Python 3.10+ (matches mixpanel_data requirements) (020-mcp-server)
-- DuckDB (via mixpanel_data Workspace - shared session state) (020-mcp-server)
-- Python 3.10+ + FastMCP 2.x, mixpanel_data, Pydantic v2 (021-mcp-server-v2)
-- DuckDB (via mixpanel_data.Workspace), in-memory for middleware caches (021-mcp-server-v2)
-- Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), Typer (CLI), Rich (output) (023-oauth-app-api-infra)
-- JSON files at `~/.mp/oauth/` (token + client info persistence); DuckDB unchanged (023-oauth-app-api-infra)
-- Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), Typer (CLI), Rich (output) (024-core-entity-crud)
-- DuckDB (local analysis), Mixpanel App API (remote CRUD) (024-core-entity-crud)
-- N/A (remote CRUD via Mixpanel App API; no local DuckDB involvement) (025-feature-management)
-- Python 3.10+ (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), Typer (CLI), Rich (output) (026-operational-tooling)
-- N/A (remote CRUD via Mixpanel App API; no DuckDB involvement) (026-operational-tooling)
-
-## Recent Changes
-- 017-parallel-export: Added Python 3.10+ + concurrent.futures (stdlib), threading (stdlib), queue (stdlib) - no new external dependencies
+- Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), Typer (CLI), Rich (output)
+- JSON files at `~/.mp/oauth/` (token + client info persistence)
+- Mixpanel App API (remote CRUD for entities and data governance)

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -16,12 +15,10 @@ from mixpanel_data import (
     AccountExistsError,
     AccountNotFoundError,
     AuthenticationError,
-    FetchResult,
     FunnelResult,
     FunnelStep,
     MixpanelDataError,
     RateLimitError,
-    TableExistsError,
 )
 from mixpanel_data._internal.config import ConfigManager
 
@@ -79,7 +76,6 @@ class TestFoundationLayerWorkflow:
             AccountNotFoundError("missing", available_accounts=["a", "b"]),
             AccountExistsError("duplicate"),
             AuthenticationError("invalid"),
-            TableExistsError("events"),
             RateLimitError("slow down", retry_after=60),
         ]
 
@@ -90,30 +86,6 @@ class TestFoundationLayerWorkflow:
             # to_dict should be JSON serializable
             data = exc.to_dict()
             json.dumps(data)  # Should not raise
-
-    def test_fetch_result_workflow(self) -> None:
-        """Test FetchResult creation and serialization."""
-        result = FetchResult(
-            table="january_events",
-            rows=10000,
-            type="events",
-            duration_seconds=5.23,
-            date_range=("2024-01-01", "2024-01-31"),
-            fetched_at=datetime.now(),
-        )
-
-        # Immutable
-        with pytest.raises((TypeError, AttributeError)):
-            result.rows = 20000  # type: ignore[misc]
-
-        # JSON serializable
-        data = result.to_dict()
-        json_str = json.dumps(data)
-        assert "january_events" in json_str
-
-        # DataFrame conversion
-        df = result.df
-        assert len(df) >= 0  # Empty if no data attached
 
     def test_funnel_result_workflow(self) -> None:
         """Test FunnelResult creation and step iteration."""
@@ -149,14 +121,11 @@ class TestFoundationLayerWorkflow:
         def might_raise(exc_class: type) -> None:
             if exc_class == AccountNotFoundError:
                 raise AccountNotFoundError("x")
-            elif exc_class == TableExistsError:
-                raise TableExistsError("t")
             else:
                 raise exc_class("error")
 
         exception_classes = [
             AccountNotFoundError,
-            TableExistsError,
             RateLimitError,
             AuthenticationError,
         ]
@@ -178,7 +147,6 @@ class TestPublicAPIImports:
         """Test imports from mixpanel_data package."""
         from mixpanel_data import (
             ConfigError,
-            FetchResult,
             FunnelStep,
             MixpanelDataError,
         )
@@ -186,7 +154,6 @@ class TestPublicAPIImports:
         # All should be importable
         assert MixpanelDataError is not None
         assert ConfigError is not None
-        assert FetchResult is not None
         assert FunnelStep is not None
 
     def test_auth_module_imports(self) -> None:

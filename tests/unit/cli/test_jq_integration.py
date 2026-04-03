@@ -16,7 +16,6 @@ import pytest
 from typer.testing import CliRunner
 
 from mixpanel_data.cli.main import app
-from mixpanel_data.types import SQLResult
 
 
 @pytest.fixture
@@ -112,88 +111,6 @@ class TestInspectEventsWithJq:
             result = cli_runner.invoke(
                 app,
                 ["inspect", "events", "--format", "json", "--jq", "length"],
-            )
-
-        assert result.exit_code == 0
-        assert result.stdout.strip() == "5"
-
-
-class TestQuerySqlWithJq:
-    """Integration tests for query sql with --jq option (T070)."""
-
-    def test_query_sql_with_jq_filter(
-        self, cli_runner: CliRunner, mock_workspace: MagicMock
-    ) -> None:
-        """Test that query sql applies jq filter to output.
-
-        Args:
-            cli_runner: CLI runner for invoking commands.
-            mock_workspace: Mock workspace to provide test data.
-        """
-        # Mock SQL query result using SQLResult like existing tests
-        mock_workspace.sql_rows.return_value = SQLResult(
-            columns=["user_id", "email"],
-            rows=[
-                (1, "user1@example.com"),
-                (2, "user2@example.com"),
-                (3, "user3@example.com"),
-            ],
-        )
-
-        with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
-            return_value=mock_workspace,
-        ):
-            result = cli_runner.invoke(
-                app,
-                [
-                    "query",
-                    "sql",
-                    "SELECT * FROM users",
-                    "--format",
-                    "json",
-                    "--jq",
-                    ".[].email",
-                ],
-            )
-
-        assert result.exit_code == 0
-        parsed = json.loads(result.stdout)
-        assert parsed == [
-            "user1@example.com",
-            "user2@example.com",
-            "user3@example.com",
-        ]
-
-    def test_query_sql_jq_length(
-        self, cli_runner: CliRunner, mock_workspace: MagicMock
-    ) -> None:
-        """Test using jq length filter on query results.
-
-        Args:
-            cli_runner: CLI runner for invoking commands.
-            mock_workspace: Mock workspace to provide test data.
-        """
-        mock_workspace.sql_rows.return_value = SQLResult(
-            columns=["id"],
-            rows=[(1,), (2,), (3,), (4,), (5,)],
-        )
-
-        with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
-            return_value=mock_workspace,
-        ):
-            result = cli_runner.invoke(
-                app,
-                [
-                    "query",
-                    "sql",
-                    "SELECT id FROM events",
-                    "--format",
-                    "json",
-                    "--jq",
-                    "length",
-                ],
             )
 
         assert result.exit_code == 0

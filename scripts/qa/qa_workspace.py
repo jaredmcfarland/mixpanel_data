@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
-"""Live QA integration test for Phase 009 Workspace Facade.
+"""Live QA integration test for Workspace Facade.
 
 This script performs real API calls against Mixpanel to verify the
 Workspace facade class which is the unified entry point for all
 Mixpanel data operations.
 
 Tests:
-- Construction modes (standard, ephemeral, open, context manager)
+- Construction modes (standard, context manager)
 - Discovery methods (events, properties, funnels, cohorts, top_events)
-- Fetching methods (fetch_events, fetch_profiles)
-- Local query methods (sql, sql_scalar, sql_rows)
+- Streaming methods (stream_events, stream_profiles)
 - Live query methods (segmentation, funnel, retention, jql, etc.)
-- Introspection methods (info, tables, schema)
-- Table management (drop, drop_all)
-- Escape hatches (connection, api)
-- Error handling (ConfigError, AccountNotFoundError, TableExistsError, etc.)
+- Escape hatches (api)
+- Error handling (ConfigError, AccountNotFoundError)
 
 Usage:
     uv run python scripts/qa_workspace.py
@@ -28,18 +25,15 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from mixpanel_data.types import (
         ActivityFeedResult,
         EventCountsResult,
-        FetchResult,
         FrequencyResult,
         FunnelInfo,
         FunnelResult,
@@ -101,7 +95,7 @@ class QARunner:
     def print_results(self) -> None:
         """Print summary of all test results."""
         print("\n" + "=" * 70)
-        print("QA TEST RESULTS - Workspace Facade (Phase 009)")
+        print("QA TEST RESULTS - Workspace Facade")
         print("=" * 70)
 
         passed = sum(1 for r in self.results if r.passed)
@@ -138,7 +132,6 @@ def main() -> int:
 
     # Shared state
     ws: Workspace | None = None
-    temp_db_path: Path | None = None
 
     # Account to use
     ACCOUNT_NAME = "sinkapp-prod"
@@ -160,11 +153,7 @@ def main() -> int:
     FROM_DATE = last_month_start.strftime("%Y-%m-%d")
     TO_DATE = last_month_end.strftime("%Y-%m-%d")
 
-    # Use a small date range for fetch tests (to limit data)
-    FETCH_DATE = last_month_start.strftime("%Y-%m-%d")
-
     print(f"Using date range: {FROM_DATE} to {TO_DATE}")
-    print(f"Fetch test date: {FETCH_DATE}")
     print(f"Using account: {ACCOUNT_NAME}")
     print(f"Known event: {KNOWN_EVENT}")
     print(f"Numeric test: event={NUMERIC_EVENT}, property={NUMERIC_PROPERTY}")
@@ -183,8 +172,6 @@ def main() -> int:
     numeric_bucket_result: NumericBucketResult | None = None
     numeric_sum_result: NumericSumResult | None = None
     numeric_avg_result: NumericAverageResult | None = None
-    fetch_events_result: FetchResult | None = None
-    fetch_profiles_result: FetchResult | None = None
 
     # =========================================================================
     # Phase 1: Prerequisites & Imports
@@ -208,9 +195,7 @@ def main() -> int:
     def test_import_types() -> dict[str, Any]:
         from mixpanel_data.types import (
             ActivityFeedResult,  # noqa: F401
-            ColumnInfo,  # noqa: F401
             EventCountsResult,  # noqa: F401
-            FetchResult,  # noqa: F401
             FrequencyResult,  # noqa: F401
             FunnelInfo,  # noqa: F401
             FunnelResult,  # noqa: F401
@@ -223,8 +208,6 @@ def main() -> int:
             RetentionResult,  # noqa: F401
             SavedCohort,  # noqa: F401
             SegmentationResult,  # noqa: F401
-            TableInfo,  # noqa: F401
-            TableSchema,  # noqa: F401
             TopEvent,  # noqa: F401
             WorkspaceInfo,  # noqa: F401
         )
@@ -238,8 +221,6 @@ def main() -> int:
         from mixpanel_data.exceptions import (
             AccountNotFoundError,  # noqa: F401
             ConfigError,  # noqa: F401
-            TableExistsError,  # noqa: F401
-            TableNotFoundError,  # noqa: F401
         )
 
         return {"exceptions": "All exception types imported successfully"}
@@ -272,17 +253,12 @@ def main() -> int:
 
     # Test 2.1: Standard construction
     def test_standard_construction() -> dict[str, Any]:
-        nonlocal ws, temp_db_path
+        nonlocal ws
         from mixpanel_data import Workspace
 
-        # Create temp directory for test database
-        temp_dir = Path(tempfile.mkdtemp())
-        temp_db_path = temp_dir / "qa_workspace_test.db"
-
-        ws = Workspace(account=ACCOUNT_NAME, path=temp_db_path)
+        ws = Workspace(account=ACCOUNT_NAME)
         return {
             "created": True,
-            "path": str(temp_db_path),
         }
 
     result = runner.run_test("2.1 Standard construction", test_standard_construction)
@@ -295,66 +271,16 @@ def main() -> int:
     def test_context_manager() -> dict[str, Any]:
         from mixpanel_data import Workspace
 
-        temp_path = Path(tempfile.mkdtemp()) / "context_test.db"
-        with Workspace(account=ACCOUNT_NAME, path=temp_path) as ctx_ws:
-            info = ctx_ws.info()
-            tables = info.tables
+        with Workspace(account=ACCOUNT_NAME) as ctx_ws:
+            events = ctx_ws.events()
         return {
             "context_worked": True,
-            "tables_accessed": len(tables),
+            "events_discovered": len(events),
         }
 
     runner.run_test("2.2 Context manager", test_context_manager)
 
-    # Test 2.3: Ephemeral mode with cleanup verification
-    def test_ephemeral_mode() -> dict[str, Any]:
-        from mixpanel_data import Workspace
-
-        captured_path: Path | None = None
-        with Workspace.ephemeral(account=ACCOUNT_NAME) as eph_ws:
-            # Capture the temp path
-            captured_path = eph_ws._storage.path
-            info = eph_ws.info()
-            project_id = info.project_id
-
-        # Verify cleanup
-        cleanup_verified = captured_path is None or not captured_path.exists()
-        return {
-            "ephemeral_worked": True,
-            "project_id": project_id,
-            "path_was_temp": captured_path is not None,
-            "cleanup_verified": cleanup_verified,
-        }
-
-    runner.run_test("2.3 Ephemeral mode with cleanup", test_ephemeral_mode)
-
-    # Test 2.4: Query-only mode (Workspace.open)
-    def test_query_only_mode() -> dict[str, Any]:
-        from mixpanel_data import Workspace
-
-        # First create a database with data
-        temp_path = Path(tempfile.mkdtemp()) / "open_test.db"
-        with Workspace(account=ACCOUNT_NAME, path=temp_path):
-            # Just create empty - we'll test querying
-            pass
-
-        # Now open in query-only mode
-        open_ws = Workspace.open(temp_path)
-        try:
-            info = open_ws.info()
-            # Project should be "unknown" since no credentials
-            project_unknown = info.project_id == "unknown"
-            return {
-                "open_worked": True,
-                "project_unknown": project_unknown,
-                "tables": info.tables,
-            }
-        finally:
-            open_ws.close()
-
-    runner.run_test("2.4 Query-only mode (Workspace.open)", test_query_only_mode)
-
-    # Test 2.5: Error - Invalid account
+    # Test 2.3: Error - Invalid account
     def test_invalid_account_error() -> dict[str, Any]:
         from mixpanel_data import Workspace
         from mixpanel_data.exceptions import AccountNotFoundError
@@ -365,44 +291,7 @@ def main() -> int:
         except AccountNotFoundError as e:
             return {"error_code": e.code, "raised": True}
 
-    runner.run_test("2.5 Error: Invalid account", test_invalid_account_error)
-
-    # Test 2.6: Error - Workspace.open with non-existent path
-    def test_open_nonexistent_error() -> dict[str, Any]:
-        from mixpanel_data import Workspace
-
-        try:
-            Workspace.open("/nonexistent/path/to/database.db")
-            raise AssertionError("Should have raised FileNotFoundError")
-        except FileNotFoundError:
-            return {"raised": True}
-
-    runner.run_test("2.6 Error: Open non-existent path", test_open_nonexistent_error)
-
-    # Test 2.7: Error - API access on query-only workspace
-    def test_api_access_query_only_error() -> dict[str, Any]:
-        from mixpanel_data import Workspace
-        from mixpanel_data.exceptions import ConfigError
-
-        temp_path = Path(tempfile.mkdtemp()) / "api_test.db"
-        # Create database first
-        with Workspace(account=ACCOUNT_NAME, path=temp_path):
-            pass
-
-        # Open in query-only mode
-        open_ws = Workspace.open(temp_path)
-        try:
-            # Try to access API method
-            open_ws.events()
-            raise AssertionError("Should have raised ConfigError")
-        except ConfigError as e:
-            return {"error_code": e.code, "raised": True}
-        finally:
-            open_ws.close()
-
-    runner.run_test(
-        "2.7 Error: API on query-only workspace", test_api_access_query_only_error
-    )
+    runner.run_test("2.3 Error: Invalid account", test_invalid_account_error)
 
     # =========================================================================
     # Phase 3: Discovery Methods
@@ -526,145 +415,12 @@ def main() -> int:
     runner.run_test("3.7 clear_discovery_cache()", test_clear_discovery_cache)
 
     # =========================================================================
-    # Phase 4: Fetching & Local Queries
+    # Phase 4: Live Query Methods
     # =========================================================================
-    print("\n[Phase 4] Fetching & Local Queries")
+    print("\n[Phase 4] Live Query Methods")
     print("-" * 40)
 
-    # Test 4.1: fetch_events()
-    def test_fetch_events() -> dict[str, Any]:
-        nonlocal fetch_events_result
-        from mixpanel_data.types import FetchResult
-
-        assert ws is not None
-        fetch_events_result = ws.fetch_events(
-            name="qa_events",
-            from_date=FETCH_DATE,
-            to_date=FETCH_DATE,
-            events=[KNOWN_EVENT],
-            progress=False,
-        )
-        if not isinstance(fetch_events_result, FetchResult):
-            raise TypeError(f"Expected FetchResult, got {type(fetch_events_result)}")
-        return {
-            "table": fetch_events_result.table,
-            "rows": fetch_events_result.rows,
-            "type": fetch_events_result.type,
-            "date_range": fetch_events_result.date_range,
-            "duration": f"{fetch_events_result.duration_seconds:.2f}s",
-        }
-
-    runner.run_test("4.1 fetch_events()", test_fetch_events)
-
-    # Test 4.2: fetch_profiles()
-    def test_fetch_profiles() -> dict[str, Any]:
-        nonlocal fetch_profiles_result
-        from mixpanel_data.types import FetchResult
-
-        assert ws is not None
-        # Use a where clause to limit results
-        fetch_profiles_result = ws.fetch_profiles(
-            name="qa_profiles",
-            progress=False,
-        )
-        if not isinstance(fetch_profiles_result, FetchResult):
-            raise TypeError(f"Expected FetchResult, got {type(fetch_profiles_result)}")
-        return {
-            "table": fetch_profiles_result.table,
-            "rows": fetch_profiles_result.rows,
-            "type": fetch_profiles_result.type,
-            "date_range": fetch_profiles_result.date_range,  # Should be None
-            "duration": f"{fetch_profiles_result.duration_seconds:.2f}s",
-        }
-
-    runner.run_test("4.2 fetch_profiles()", test_fetch_profiles)
-
-    # Test 4.3: TableExistsError
-    def test_table_exists_error() -> dict[str, Any]:
-        from mixpanel_data.exceptions import TableExistsError
-
-        assert ws is not None
-        try:
-            ws.fetch_events(
-                name="qa_events",  # Already exists
-                from_date=FETCH_DATE,
-                to_date=FETCH_DATE,
-                progress=False,
-            )
-            raise AssertionError("Should have raised TableExistsError")
-        except TableExistsError as e:
-            return {"error_code": e.code, "raised": True}
-
-    runner.run_test("4.3 Error: TableExistsError", test_table_exists_error)
-
-    # Test 4.4: sql() - DataFrame query
-    def test_sql_dataframe() -> dict[str, Any]:
-        import pandas as pd
-
-        assert ws is not None
-        df = ws.sql("SELECT * FROM qa_events LIMIT 10")
-        if not isinstance(df, pd.DataFrame):
-            raise TypeError(f"Expected DataFrame, got {type(df)}")
-        return {
-            "columns": list(df.columns),
-            "rows": len(df),
-        }
-
-    runner.run_test("4.4 sql() DataFrame", test_sql_dataframe)
-
-    # Test 4.5: sql_scalar()
-    def test_sql_scalar() -> dict[str, Any]:
-        assert ws is not None
-        count = ws.sql_scalar("SELECT COUNT(*) FROM qa_events")
-        if not isinstance(count, int):
-            raise TypeError(f"Expected int, got {type(count)}")
-        return {
-            "count": count,
-        }
-
-    runner.run_test("4.5 sql_scalar()", test_sql_scalar)
-
-    # Test 4.6: sql_rows()
-    def test_sql_rows() -> dict[str, Any]:
-        assert ws is not None
-        rows = ws.sql_rows("SELECT event_name FROM qa_events LIMIT 5")
-        if not isinstance(rows, list):
-            raise TypeError(f"Expected list, got {type(rows)}")
-        if rows and not isinstance(rows[0], tuple):
-            raise TypeError(f"Expected tuple, got {type(rows[0])}")
-        return {
-            "count": len(rows),
-            "sample": rows[:3] if rows else [],
-        }
-
-    runner.run_test("4.6 sql_rows()", test_sql_rows)
-
-    # Test 4.7: JSON property querying
-    def test_json_property_query() -> dict[str, Any]:
-        assert ws is not None
-        df = ws.sql("""
-            SELECT
-                event_name,
-                json_extract_string(properties, '$.$browser') as browser
-            FROM qa_events
-            WHERE json_extract_string(properties, '$.$browser') IS NOT NULL
-            LIMIT 5
-        """)
-        return {
-            "columns": list(df.columns),
-            "rows": len(df),
-            "has_browser_col": "browser" in df.columns,
-        }
-
-    runner.run_test("4.7 JSON property query", test_json_property_query)
-
-    # =========================================================================
-    # Phase 5: Live Query Methods
-    # =========================================================================
-    print("\n[Phase 5] Live Query Methods")
-    print("-" * 40)
-
-    # Test 5.1: segmentation()
+    # Test 4.1: segmentation()
     def test_segmentation() -> dict[str, Any]:
         nonlocal segmentation_result
         from mixpanel_data.types import SegmentationResult
@@ -686,9 +442,9 @@ def main() -> int:
             "series_keys": list(segmentation_result.series.keys())[:3],
         }
 
-    runner.run_test("5.1 segmentation()", test_segmentation)
+    runner.run_test("4.1 segmentation()", test_segmentation)
 
-    # Test 5.2: event_counts()
+    # Test 4.2: event_counts()
     def test_event_counts() -> dict[str, Any]:
         nonlocal event_counts_result
         from mixpanel_data.types import EventCountsResult
@@ -709,9 +465,9 @@ def main() -> int:
             "series_keys": list(event_counts_result.series.keys()),
         }
 
-    runner.run_test("5.2 event_counts()", test_event_counts)
+    runner.run_test("4.2 event_counts()", test_event_counts)
 
-    # Test 5.3: property_counts()
+    # Test 4.3: property_counts()
     def test_property_counts() -> dict[str, Any]:
         nonlocal property_counts_result
         from mixpanel_data.types import PropertyCountsResult
@@ -734,9 +490,9 @@ def main() -> int:
             "series_keys": list(property_counts_result.series.keys())[:5],
         }
 
-    runner.run_test("5.3 property_counts()", test_property_counts)
+    runner.run_test("4.3 property_counts()", test_property_counts)
 
-    # Test 5.4: funnel() - only if funnels exist
+    # Test 4.4: funnel() - only if funnels exist
     def test_funnel() -> dict[str, Any]:
         nonlocal funnel_result
         from mixpanel_data.types import FunnelResult
@@ -760,9 +516,9 @@ def main() -> int:
             "steps": len(funnel_result.steps),
         }
 
-    runner.run_test("5.4 funnel()", test_funnel)
+    runner.run_test("4.4 funnel()", test_funnel)
 
-    # Test 5.5: retention()
+    # Test 4.5: retention()
     def test_retention() -> dict[str, Any]:
         nonlocal retention_result
         from mixpanel_data.types import RetentionResult
@@ -784,9 +540,9 @@ def main() -> int:
             "cohorts": len(retention_result.cohorts),
         }
 
-    runner.run_test("5.5 retention()", test_retention)
+    runner.run_test("4.5 retention()", test_retention)
 
-    # Test 5.6: jql()
+    # Test 4.6: jql()
     def test_jql() -> dict[str, Any]:
         nonlocal jql_result
         from mixpanel_data.types import JQLResult
@@ -810,9 +566,9 @@ def main() -> int:
             "sample": jql_result.raw[:3] if jql_result.raw else [],
         }
 
-    runner.run_test("5.6 jql()", test_jql)
+    runner.run_test("4.6 jql()", test_jql)
 
-    # Test 5.7: activity_feed()
+    # Test 4.7: activity_feed()
     def test_activity_feed() -> dict[str, Any]:
         nonlocal activity_result
         from mixpanel_data.types import ActivityFeedResult
@@ -828,9 +584,9 @@ def main() -> int:
             "event_count": len(activity_result.events),
         }
 
-    runner.run_test("5.7 activity_feed()", test_activity_feed)
+    runner.run_test("4.7 activity_feed()", test_activity_feed)
 
-    # Test 5.8: insights()
+    # Test 4.8: insights()
     def test_insights() -> dict[str, Any]:
         nonlocal insights_result
         from mixpanel_data.types import InsightsResult
@@ -846,9 +602,9 @@ def main() -> int:
             "series_keys": list(insights_result.series.keys())[:3],
         }
 
-    runner.run_test("5.8 insights()", test_insights)
+    runner.run_test("4.8 insights()", test_insights)
 
-    # Test 5.9: frequency()
+    # Test 4.9: frequency()
     def test_frequency() -> dict[str, Any]:
         nonlocal frequency_result
         from mixpanel_data.types import FrequencyResult
@@ -868,9 +624,9 @@ def main() -> int:
             "data_keys": list(frequency_result.data.keys())[:3],
         }
 
-    runner.run_test("5.9 frequency()", test_frequency)
+    runner.run_test("4.9 frequency()", test_frequency)
 
-    # Test 5.10: segmentation_numeric()
+    # Test 4.10: segmentation_numeric()
     def test_segmentation_numeric() -> dict[str, Any]:
         nonlocal numeric_bucket_result
         from mixpanel_data.types import NumericBucketResult
@@ -892,9 +648,9 @@ def main() -> int:
             "buckets": list(numeric_bucket_result.series.keys())[:3],
         }
 
-    runner.run_test("5.10 segmentation_numeric()", test_segmentation_numeric)
+    runner.run_test("4.10 segmentation_numeric()", test_segmentation_numeric)
 
-    # Test 5.11: segmentation_sum()
+    # Test 4.11: segmentation_sum()
     def test_segmentation_sum() -> dict[str, Any]:
         nonlocal numeric_sum_result
         from mixpanel_data.types import NumericSumResult
@@ -916,9 +672,9 @@ def main() -> int:
             "result_dates": list(numeric_sum_result.results.keys())[:3],
         }
 
-    runner.run_test("5.11 segmentation_sum()", test_segmentation_sum)
+    runner.run_test("4.11 segmentation_sum()", test_segmentation_sum)
 
-    # Test 5.12: segmentation_average()
+    # Test 4.12: segmentation_average()
     def test_segmentation_average() -> dict[str, Any]:
         nonlocal numeric_avg_result
         from mixpanel_data.types import NumericAverageResult
@@ -940,15 +696,15 @@ def main() -> int:
             "result_dates": list(numeric_avg_result.results.keys())[:3],
         }
 
-    runner.run_test("5.12 segmentation_average()", test_segmentation_average)
+    runner.run_test("4.12 segmentation_average()", test_segmentation_average)
 
     # =========================================================================
-    # Phase 6: Result Type Validation
+    # Phase 5: Result Type Validation
     # =========================================================================
-    print("\n[Phase 6] Result Type Validation")
+    print("\n[Phase 5] Result Type Validation")
     print("-" * 40)
 
-    # Test 6.1: SegmentationResult.df
+    # Test 5.1: SegmentationResult.df
     def test_segmentation_df() -> dict[str, Any]:
         if segmentation_result is None:
             return {"skipped": "No segmentation result"}
@@ -963,9 +719,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.1 SegmentationResult.df", test_segmentation_df)
+    runner.run_test("5.1 SegmentationResult.df", test_segmentation_df)
 
-    # Test 6.2: EventCountsResult.df
+    # Test 5.2: EventCountsResult.df
     def test_event_counts_df() -> dict[str, Any]:
         if event_counts_result is None:
             return {"skipped": "No event counts result"}
@@ -979,9 +735,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.2 EventCountsResult.df", test_event_counts_df)
+    runner.run_test("5.2 EventCountsResult.df", test_event_counts_df)
 
-    # Test 6.3: PropertyCountsResult.df
+    # Test 5.3: PropertyCountsResult.df
     def test_property_counts_df() -> dict[str, Any]:
         if property_counts_result is None:
             return {"skipped": "No property counts result"}
@@ -995,9 +751,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.3 PropertyCountsResult.df", test_property_counts_df)
+    runner.run_test("5.3 PropertyCountsResult.df", test_property_counts_df)
 
-    # Test 6.4: FunnelResult.df
+    # Test 5.4: FunnelResult.df
     def test_funnel_df() -> dict[str, Any]:
         if funnel_result is None:
             return {"skipped": "No funnel result"}
@@ -1011,9 +767,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.4 FunnelResult.df", test_funnel_df)
+    runner.run_test("5.4 FunnelResult.df", test_funnel_df)
 
-    # Test 6.5: RetentionResult.df
+    # Test 5.5: RetentionResult.df
     def test_retention_df() -> dict[str, Any]:
         if retention_result is None:
             return {"skipped": "No retention result"}
@@ -1027,9 +783,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns)[:5], "rows": len(df), "cached": True}
 
-    runner.run_test("6.5 RetentionResult.df", test_retention_df)
+    runner.run_test("5.5 RetentionResult.df", test_retention_df)
 
-    # Test 6.6: JQLResult.df
+    # Test 5.6: JQLResult.df
     def test_jql_df() -> dict[str, Any]:
         if jql_result is None:
             return {"skipped": "No JQL result"}
@@ -1039,9 +795,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.6 JQLResult.df", test_jql_df)
+    runner.run_test("5.6 JQLResult.df", test_jql_df)
 
-    # Test 6.7: ActivityFeedResult.df
+    # Test 5.7: ActivityFeedResult.df
     def test_activity_feed_df() -> dict[str, Any]:
         if activity_result is None:
             return {"skipped": "No activity result"}
@@ -1055,9 +811,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns)[:5], "rows": len(df), "cached": True}
 
-    runner.run_test("6.7 ActivityFeedResult.df", test_activity_feed_df)
+    runner.run_test("5.7 ActivityFeedResult.df", test_activity_feed_df)
 
-    # Test 6.8: InsightsResult.df
+    # Test 5.8: InsightsResult.df
     def test_insights_df() -> dict[str, Any]:
         if insights_result is None:
             return {"skipped": "No insights result"}
@@ -1071,9 +827,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.8 InsightsResult.df", test_insights_df)
+    runner.run_test("5.8 InsightsResult.df", test_insights_df)
 
-    # Test 6.9: FrequencyResult.df
+    # Test 5.9: FrequencyResult.df
     def test_frequency_df() -> dict[str, Any]:
         if frequency_result is None:
             return {"skipped": "No frequency result"}
@@ -1085,9 +841,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns)[:5], "rows": len(df), "cached": True}
 
-    runner.run_test("6.9 FrequencyResult.df", test_frequency_df)
+    runner.run_test("5.9 FrequencyResult.df", test_frequency_df)
 
-    # Test 6.10: NumericBucketResult.df
+    # Test 5.10: NumericBucketResult.df
     def test_numeric_bucket_df() -> dict[str, Any]:
         if numeric_bucket_result is None:
             return {"skipped": "No numeric bucket result"}
@@ -1101,9 +857,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.10 NumericBucketResult.df", test_numeric_bucket_df)
+    runner.run_test("5.10 NumericBucketResult.df", test_numeric_bucket_df)
 
-    # Test 6.11: NumericSumResult.df
+    # Test 5.11: NumericSumResult.df
     def test_numeric_sum_df() -> dict[str, Any]:
         if numeric_sum_result is None:
             return {"skipped": "No numeric sum result"}
@@ -1117,9 +873,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.11 NumericSumResult.df", test_numeric_sum_df)
+    runner.run_test("5.11 NumericSumResult.df", test_numeric_sum_df)
 
-    # Test 6.12: NumericAverageResult.df
+    # Test 5.12: NumericAverageResult.df
     def test_numeric_avg_df() -> dict[str, Any]:
         if numeric_avg_result is None:
             return {"skipped": "No numeric average result"}
@@ -1133,9 +889,9 @@ def main() -> int:
             raise ValueError("DataFrame not cached")
         return {"columns": list(df.columns), "rows": len(df), "cached": True}
 
-    runner.run_test("6.12 NumericAverageResult.df", test_numeric_avg_df)
+    runner.run_test("5.12 NumericAverageResult.df", test_numeric_avg_df)
 
-    # Test 6.13: All results JSON serializable
+    # Test 5.13: All results JSON serializable
     def test_all_json_serializable() -> dict[str, Any]:
         results_to_check = [
             ("SegmentationResult", segmentation_result),
@@ -1150,8 +906,6 @@ def main() -> int:
             ("NumericBucketResult", numeric_bucket_result),
             ("NumericSumResult", numeric_sum_result),
             ("NumericAverageResult", numeric_avg_result),
-            ("FetchResult (events)", fetch_events_result),
-            ("FetchResult (profiles)", fetch_profiles_result),
         ]
         serializable = []
         for name, result in results_to_check:
@@ -1164,155 +918,15 @@ def main() -> int:
                     raise ValueError(f"{name} not JSON serializable: {e}") from e
         return {"serializable_types": serializable}
 
-    runner.run_test("6.13 All results JSON serializable", test_all_json_serializable)
+    runner.run_test("5.13 All results JSON serializable", test_all_json_serializable)
 
     # =========================================================================
-    # Phase 7: Introspection Methods
+    # Phase 6: Escape Hatches
     # =========================================================================
-    print("\n[Phase 7] Introspection Methods")
+    print("\n[Phase 6] Escape Hatches")
     print("-" * 40)
 
-    # Test 7.1: info()
-    def test_info() -> dict[str, Any]:
-        from mixpanel_data.types import WorkspaceInfo
-
-        assert ws is not None
-        info = ws.info()
-        if not isinstance(info, WorkspaceInfo):
-            raise TypeError(f"Expected WorkspaceInfo, got {type(info)}")
-        return {
-            "path": str(info.path) if info.path else None,
-            "project_id": info.project_id,
-            "region": info.region,
-            "account": info.account,
-            "tables": info.tables,
-            "size_mb": f"{info.size_mb:.2f}",
-        }
-
-    runner.run_test("7.1 info()", test_info)
-
-    # Test 7.2: tables()
-    def test_tables() -> dict[str, Any]:
-        from mixpanel_data.types import TableInfo
-
-        assert ws is not None
-        tables = ws.tables()
-        if not isinstance(tables, list):
-            raise TypeError(f"Expected list, got {type(tables)}")
-        if tables and not isinstance(tables[0], TableInfo):
-            raise TypeError(f"Expected TableInfo, got {type(tables[0])}")
-        return {
-            "count": len(tables),
-            "tables": [
-                {"name": t.name, "type": t.type, "rows": t.row_count} for t in tables
-            ],
-        }
-
-    runner.run_test("7.2 tables()", test_tables)
-
-    # Test 7.3: table_schema()
-    def test_table_schema() -> dict[str, Any]:
-        from mixpanel_data.types import TableSchema
-
-        assert ws is not None
-        schema = ws.table_schema("qa_events")
-        if not isinstance(schema, TableSchema):
-            raise TypeError(f"Expected TableSchema, got {type(schema)}")
-        return {
-            "table_name": schema.table_name,
-            "column_count": len(schema.columns),
-            "columns": [c.name for c in schema.columns],
-        }
-
-    runner.run_test("7.3 table_schema()", test_table_schema)
-
-    # Test 7.4: table_schema() error - non-existent table
-    def test_table_schema_error() -> dict[str, Any]:
-        from mixpanel_data.exceptions import TableNotFoundError
-
-        assert ws is not None
-        try:
-            ws.table_schema("nonexistent_table_xyz")
-            raise AssertionError("Should have raised TableNotFoundError")
-        except TableNotFoundError as e:
-            return {"error_code": e.code, "raised": True}
-
-    runner.run_test("7.4 Error: table_schema() non-existent", test_table_schema_error)
-
-    # =========================================================================
-    # Phase 8: Table Management
-    # =========================================================================
-    print("\n[Phase 8] Table Management")
-    print("-" * 40)
-
-    # Test 8.1: drop() error - non-existent table
-    def test_drop_error() -> dict[str, Any]:
-        from mixpanel_data.exceptions import TableNotFoundError
-
-        assert ws is not None
-        try:
-            ws.drop("nonexistent_table_xyz")
-            raise AssertionError("Should have raised TableNotFoundError")
-        except TableNotFoundError as e:
-            return {"error_code": e.code, "raised": True}
-
-    runner.run_test("8.1 Error: drop() non-existent", test_drop_error)
-
-    # Test 8.2: drop() single table
-    def test_drop_single() -> dict[str, Any]:
-        assert ws is not None
-        # First check table exists
-        tables_before = [t.name for t in ws.tables()]
-        if "qa_profiles" not in tables_before:
-            return {"skipped": "qa_profiles not in tables"}
-        ws.drop("qa_profiles")
-        tables_after = [t.name for t in ws.tables()]
-        return {
-            "dropped": "qa_profiles",
-            "tables_before": tables_before,
-            "tables_after": tables_after,
-        }
-
-    runner.run_test("8.2 drop() single table", test_drop_single)
-
-    # Test 8.3: drop_all()
-    def test_drop_all() -> dict[str, Any]:
-        assert ws is not None
-        tables_before = [t.name for t in ws.tables()]
-        ws.drop_all()
-        tables_after = [t.name for t in ws.tables()]
-        return {
-            "tables_before": tables_before,
-            "tables_after": tables_after,
-            "all_dropped": len(tables_after) == 0,
-        }
-
-    runner.run_test("8.3 drop_all()", test_drop_all)
-
-    # =========================================================================
-    # Phase 9: Escape Hatches
-    # =========================================================================
-    print("\n[Phase 9] Escape Hatches")
-    print("-" * 40)
-
-    # Test 9.1: .connection property
-    def test_connection_property() -> dict[str, Any]:
-        import duckdb
-
-        assert ws is not None
-        conn = ws.connection
-        if not isinstance(conn, duckdb.DuckDBPyConnection):
-            raise TypeError(f"Expected DuckDBPyConnection, got {type(conn)}")
-        # Execute a simple query
-        result = conn.execute("SELECT 1 + 1 AS sum").fetchone()
-        return {
-            "type": type(conn).__name__,
-            "query_result": result[0] if result else None,
-        }
-
-    runner.run_test("9.1 .connection property", test_connection_property)
-
-    # Test 9.2: .api property
+    # Test 6.1: .api property
     def test_api_property() -> dict[str, Any]:
         from mixpanel_data._internal.api_client import MixpanelAPIClient
 
@@ -1325,51 +939,15 @@ def main() -> int:
             "has_credentials": api._credentials is not None,
         }
 
-    runner.run_test("9.2 .api property", test_api_property)
-
-    # Test 9.3: Direct SQL via .connection
-    def test_direct_sql() -> dict[str, Any]:
-        assert ws is not None
-        conn = ws.connection
-        # Create a temp table and query it
-        conn.execute("CREATE TEMP TABLE test_direct AS SELECT 42 AS value")
-        result = conn.execute("SELECT value FROM test_direct").fetchone()
-        conn.execute("DROP TABLE test_direct")
-        return {
-            "query_worked": True,
-            "value": result[0] if result else None,
-        }
-
-    runner.run_test("9.3 Direct SQL via .connection", test_direct_sql)
-
-    # Test 9.4: .api error on query-only workspace
-    def test_api_error_query_only() -> dict[str, Any]:
-        from mixpanel_data import Workspace
-        from mixpanel_data.exceptions import ConfigError
-
-        temp_path = Path(tempfile.mkdtemp()) / "api_error_test.db"
-        # Create database first
-        with Workspace(account=ACCOUNT_NAME, path=temp_path):
-            pass
-
-        open_ws = Workspace.open(temp_path)
-        try:
-            _ = open_ws.api
-            raise AssertionError("Should have raised ConfigError")
-        except ConfigError as e:
-            return {"error_code": e.code, "raised": True}
-        finally:
-            open_ws.close()
-
-    runner.run_test("9.4 Error: .api on query-only", test_api_error_query_only)
+    runner.run_test("6.1 .api property", test_api_property)
 
     # =========================================================================
-    # Phase 10: Cleanup
+    # Phase 7: Cleanup
     # =========================================================================
-    print("\n[Phase 10] Cleanup")
+    print("\n[Phase 7] Cleanup")
     print("-" * 40)
 
-    # Test 10.1: Close workspace
+    # Test 7.1: Close workspace
     def test_close_workspace() -> dict[str, Any]:
         nonlocal ws
         assert ws is not None
@@ -1379,17 +957,7 @@ def main() -> int:
         ws = None
         return {"closed": True, "idempotent": True}
 
-    runner.run_test("10.1 Close workspace", test_close_workspace)
-
-    # Test 10.2: Cleanup temp files
-    def test_cleanup_temp_files() -> dict[str, Any]:
-        if temp_db_path and temp_db_path.exists():
-            temp_db_path.unlink()
-            if temp_db_path.parent.exists():
-                temp_db_path.parent.rmdir()
-        return {"cleaned_up": True}
-
-    runner.run_test("10.2 Cleanup temp files", test_cleanup_temp_files)
+    runner.run_test("7.1 Close workspace", test_close_workspace)
 
     # =========================================================================
     # Results

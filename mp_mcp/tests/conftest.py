@@ -24,6 +24,11 @@ def mock_workspace() -> MagicMock:
     """
     workspace = MagicMock()
 
+    # Credentials
+    workspace._credentials = MagicMock()
+    workspace._credentials.project_id = "123456"
+    workspace._credentials.region = "us"
+
     # Discovery methods
     workspace.events.return_value = ["signup", "login", "purchase"]
     # properties() returns list[str] (property names only) - matching real Workspace API
@@ -75,18 +80,6 @@ def mock_workspace() -> MagicMock:
     jql_result_mock.raw = [{"user": "alice", "count": 10}]
     workspace.jql.return_value = jql_result_mock
 
-    # Fetch methods
-    workspace.fetch_events.return_value = MagicMock(
-        table_name="events_jan",
-        row_count=1000,
-        to_dict=lambda: {"table_name": "events_jan", "row_count": 1000},
-    )
-    workspace.fetch_profiles.return_value = MagicMock(
-        table_name="profiles",
-        row_count=500,
-        to_dict=lambda: {"table_name": "profiles", "row_count": 500},
-    )
-
     # Streaming methods (return iterators)
     workspace.stream_events.return_value = iter(
         [
@@ -100,53 +93,6 @@ def mock_workspace() -> MagicMock:
             {"$distinct_id": "user1", "$properties": {"email": "a@example.com"}},
             {"$distinct_id": "user2", "$properties": {"email": "b@example.com"}},
         ]
-    )
-
-    # Local methods
-    sql_rows_mock = MagicMock()
-    sql_rows_mock.to_dicts.return_value = [{"name": "login", "count": 100}]
-    workspace.sql_rows.return_value = sql_rows_mock
-    workspace.sql_scalar.return_value = 42
-
-    table_mock = MagicMock()
-    table_mock.to_dict.return_value = {
-        "name": "events_jan",
-        "row_count": 1000,
-        "type": "events",
-    }
-    workspace.tables.return_value = [table_mock]
-
-    col1_mock = MagicMock()
-    col1_mock.to_dict.return_value = {"column": "name", "type": "VARCHAR"}
-    col2_mock = MagicMock()
-    col2_mock.to_dict.return_value = {"column": "time", "type": "TIMESTAMP"}
-    schema_mock = MagicMock()
-    schema_mock.columns = [col1_mock, col2_mock]
-    workspace.table_schema.return_value = schema_mock
-
-    sample_df_mock = MagicMock()
-    sample_df_mock.to_dict.return_value = [{"name": "login", "time": "2024-01-01"}]
-    workspace.sample.return_value = sample_df_mock
-
-    summarize_col1 = MagicMock()
-    summarize_col1.to_dict.return_value = {"name": "event", "type": "VARCHAR"}
-    summarize_col2 = MagicMock()
-    summarize_col2.to_dict.return_value = {"name": "time", "type": "TIMESTAMP"}
-    summarize_mock = MagicMock()
-    summarize_mock.table = "events_jan"
-    summarize_mock.row_count = 1000
-    summarize_mock.columns = [summarize_col1, summarize_col2]
-    workspace.summarize.return_value = summarize_mock
-
-    # Table management
-    workspace.drop.return_value = None
-    workspace.drop_all.return_value = None
-
-    # Info - use info() method which returns WorkspaceInfo object
-    workspace.info.return_value = MagicMock(
-        project_id=123456,
-        region="us",
-        tables=[],
     )
 
     # Add event_counts() method for multi-event counting
@@ -198,9 +144,6 @@ def mock_workspace() -> MagicMock:
             "data": {"Chrome": 100, "Firefox": 50, "Safari": 25},
         }
     )
-
-    # Add property_keys() method for extracting unique property keys
-    workspace.property_keys.return_value = ["browser", "country", "device"]
 
     # Lexicon schema methods
     lexicon_schema_mock = MagicMock()

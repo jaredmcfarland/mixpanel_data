@@ -1,6 +1,6 @@
 ---
 description: Generate retention analysis and retention curves from Mixpanel data
-allowed-tools: Bash(mp query retention:*), Bash(mp query sql:*), Bash(mp inspect:*)
+allowed-tools: Bash(mp query retention:*), Bash(mp inspect:*)
 argument-hint: [born-event] [return-event]
 ---
 
@@ -148,197 +148,116 @@ print("Retention curve saved to retention_curve.png")
 
 ---
 
-## Type 2: Cohort Behavior Analysis (Local SQL)
+## Type 2: Segmented Retention Analysis
 
-Compare how different cohorts behave over time.
+Compare retention across different user segments.
 
-### 1. Check Available Tables
+### 1. Segment by Property
+
+Use the `--on` parameter to break down retention by a property:
 
 ```bash
-!$(mp inspect tables --format table)
+mp query retention \
+  --born "Sign Up" \
+  --return "Login" \
+  --from 2024-01-01 \
+  --to 2024-01-31 \
+  --unit week \
+  --on source
 ```
 
-If no tables, suggest `/mp-fetch` first. Run `/mp-inspect tables` to explore local data structure.
+### 2. Compare Segments
 
-### 2. Define Cohorts
+Run multiple retention queries with different filters:
 
-**Cohort definition options**:
+```bash
+# Organic users retention
+mp query retention \
+  --born "Sign Up" --return "Login" \
+  --from 2024-01-01 --to 2024-01-31 \
+  --born-where 'properties["source"] == "organic"'
 
-**Time-based cohorts**:
-- Weekly cohorts (users who signed up each week)
-- Monthly cohorts (users who signed up each month)
-
-**Property-based cohorts**:
-- Acquisition channel (organic, paid, referral)
-- User segment (free, premium, enterprise)
-- Geographic region
-
-Ask the user which cohort dimension to analyze.
-
-### 3. Build Cohort SQL Query
-
-**Weekly Cohort Analysis**:
-
-```sql
-WITH user_cohorts AS (
-  -- Assign each user to their cohort (week of first event)
-  SELECT
-    distinct_id,
-    DATE_TRUNC('week', MIN(event_time)) as cohort_week
-  FROM <table>
-  GROUP BY distinct_id
-),
-cohort_activity AS (
-  -- Track activity by cohort and activity week
-  SELECT
-    c.cohort_week,
-    DATE_TRUNC('week', e.event_time) as activity_week,
-    COUNT(DISTINCT e.distinct_id) as active_users
-  FROM <table> e
-  JOIN user_cohorts c ON e.distinct_id = c.distinct_id
-  GROUP BY c.cohort_week, activity_week
-),
-cohort_sizes AS (
-  -- Get cohort sizes
-  SELECT
-    cohort_week,
-    COUNT(DISTINCT distinct_id) as cohort_size
-  FROM user_cohorts
-  GROUP BY cohort_week
-)
-SELECT
-  ca.cohort_week,
-  ca.activity_week,
-  cs.cohort_size,
-  ca.active_users,
-  ROUND(100.0 * ca.active_users / cs.cohort_size, 2) as retention_rate,
-  FLOOR(DATEDIFF('day', ca.cohort_week, ca.activity_week) / 7) as weeks_since_cohort
-FROM cohort_activity ca
-JOIN cohort_sizes cs ON ca.cohort_week = cs.cohort_week
-ORDER BY ca.cohort_week, ca.activity_week
+# Paid users retention
+mp query retention \
+  --born "Sign Up" --return "Login" \
+  --from 2024-01-01 --to 2024-01-31 \
+  --born-where 'properties["source"] == "paid"'
 ```
 
-**Property-based Cohort Comparison**:
-
-```sql
-WITH user_cohorts AS (
-  SELECT
-    distinct_id,
-    properties->>'$.source' as cohort_source,
-    MIN(event_time) as first_seen
-  FROM <table>
-  WHERE event_name = 'Sign Up'
-  GROUP BY distinct_id, properties->>'$.source'
-),
-cohort_metrics AS (
-  SELECT
-    c.cohort_source,
-    COUNT(DISTINCT e.distinct_id) as total_users,
-    AVG(CASE WHEN e.event_name = 'Purchase' THEN 1 ELSE 0 END) as purchase_rate,
-    AVG(CAST(e.properties->>'$.amount' AS DOUBLE)) as avg_revenue
-  FROM <table> e
-  JOIN user_cohorts c ON e.distinct_id = c.distinct_id
-  GROUP BY c.cohort_source
-)
-SELECT * FROM cohort_metrics
-ORDER BY total_users DESC
-```
-
-### 4. Create Cohort Heatmap
-
-Offer to generate a retention heatmap:
+### 3. Visualize with Python
 
 ```python
-import pandas as pd
-import seaborn as sns
+import mixpanel_data as mp
 import matplotlib.pyplot as plt
 
-# Query results transformed to pivot table
-# cohort_week on y-axis, weeks_since_cohort on x-axis, retention_rate as values
+ws = mp.Workspace()
 
-df = pd.DataFrame({
-    'cohort_week': [...],
-    'weeks_since_cohort': [...],
-    'retention_rate': [...]
-})
+# Get retention data
+result = ws.retention(
+    born_event="Sign Up",
+    return_event="Login",
+    from_date="2024-01-01",
+    to_date="2024-01-31",
+    unit="week",
+    interval_count=12,
+)
 
-pivot = df.pivot(index='cohort_week', columns='weeks_since_cohort', values='retention_rate')
+df = result.df
+pivot = df.pivot(index='cohort', columns='interval', values='rate')
 
+# Create heatmap
+import seaborn as sns
 fig, ax = plt.subplots(figsize=(15, 8))
-sns.heatmap(pivot, annot=True, fmt='.1f', cmap='RdYlGn', ax=ax,
-            cbar_kws={'label': 'Retention Rate (%)'})
+sns.heatmap(pivot, annot=True, fmt='.1f', cmap='RdYlGn', ax=ax)
 ax.set_title('Cohort Retention Heatmap')
-ax.set_xlabel('Weeks Since Cohort Birth')
-ax.set_ylabel('Cohort Week')
-plt.tight_layout()
 plt.savefig('cohort_heatmap.png')
-print("Cohort heatmap saved to cohort_heatmap.png")
 ```
 
 ---
 
-## Type 3: Time-to-Event Analysis
+## Type 3: Time-to-Event Analysis (via JQL)
 
-Analyze how long it takes users to reach milestones.
+Analyze how long it takes users to reach milestones using JQL.
 
 ### 1. Define Events
 
 **Starting Event**: Where the clock starts (e.g., "Sign Up")
 **Target Event**: What we're measuring time to (e.g., "First Purchase")
 
-### 2. Build Time-to-Event Query
+### 2. Build Time-to-Event JQL Query
 
-```sql
-WITH user_events AS (
-  SELECT
-    distinct_id,
-    MIN(CASE WHEN event_name = '<start-event>' THEN event_time END) as start_time,
-    MIN(CASE WHEN event_name = '<target-event>' THEN event_time END) as target_time
-  FROM <table>
-  GROUP BY distinct_id
-),
-time_to_event AS (
-  SELECT
-    distinct_id,
-    start_time,
-    target_time,
-    DATEDIFF('day', start_time, target_time) as days_to_convert,
-    DATEDIFF('hour', start_time, target_time) as hours_to_convert
-  FROM user_events
-  WHERE start_time IS NOT NULL
-    AND target_time IS NOT NULL
-    AND target_time > start_time
-)
-SELECT
-  -- Bucket by days
-  CASE
-    WHEN days_to_convert = 0 THEN 'Same day'
-    WHEN days_to_convert <= 1 THEN '1 day'
-    WHEN days_to_convert <= 7 THEN '2-7 days'
-    WHEN days_to_convert <= 30 THEN '1-4 weeks'
-    WHEN days_to_convert <= 90 THEN '1-3 months'
-    ELSE '3+ months'
-  END as time_bucket,
-  COUNT(*) as users,
-  ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) as pct_of_total
-FROM time_to_event
-GROUP BY time_bucket
-ORDER BY MIN(days_to_convert)
-```
-
-### 3. Calculate Key Metrics
-
-Show distribution metrics:
-- **Median time-to-event**: 50th percentile
-- **90th percentile**: Most users convert by this time
-- **Conversion rate**: % of users who reached target event
-
-```sql
-SELECT
-  PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days_to_convert) as median_days,
-  PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY days_to_convert) as p90_days,
-  COUNT(*) as converted_users
-FROM time_to_event
+```bash
+mp query jql --script "
+function main() {
+  return Events({
+    from_date: '2024-01-01',
+    to_date: '2024-03-31',
+    event_selectors: [
+      {event: 'Sign Up'},
+      {event: 'Purchase'}
+    ]
+  })
+  .groupByUser(function(state, events) {
+    state = state || {signup: null, purchase: null};
+    events.forEach(function(e) {
+      if (e.name === 'Sign Up' && !state.signup) state.signup = e.time;
+      if (e.name === 'Purchase' && !state.purchase) state.purchase = e.time;
+    });
+    return state;
+  })
+  .filter(function(user) {
+    return user.value.signup && user.value.purchase;
+  })
+  .map(function(user) {
+    var days = (user.value.purchase - user.value.signup) / (1000 * 60 * 60 * 24);
+    var bucket = days < 1 ? 'Same day' :
+                 days <= 7 ? '2-7 days' :
+                 days <= 30 ? '1-4 weeks' : '1+ months';
+    return {bucket: bucket, count: 1};
+  })
+  .groupBy(['bucket'], mixpanel.reducer.count());
+}
+"
 ```
 
 ---
@@ -385,13 +304,7 @@ FROM time_to_event
 
 After cohort analysis, suggest:
 
-1. **Deep dive on specific cohort**:
-   ```bash
-   /mp-query sql
-   # Analyze behavior of specific cohort
-   ```
-
-2. **Segment retention by property**:
+1. **Segment retention by property**:
    ```bash
    mp query retention --born "Sign Up" --return "Login" \
      --from 2024-01-01 --to 2024-01-31 --on source

@@ -104,7 +104,6 @@ class TestWorkspaceInfoResourceLogic:
             "created_at": (
                 mock_info.created_at.isoformat() if mock_info.created_at else None
             ),
-            "tables": [],
         }
         result = json.dumps(info, indent=2)
         data = json.loads(result)
@@ -112,53 +111,6 @@ class TestWorkspaceInfoResourceLogic:
         assert data["project_id"] == 12345
         assert data["region"] == "us"
         assert data["account"] == "test@example.com"
-
-    def test_includes_tables_in_output(self) -> None:
-        """Workspace info should include tables."""
-        mock_table = MagicMock()
-        mock_table.to_dict.return_value = {"name": "events", "rows": 1000}
-        tables = [mock_table]
-
-        info = {
-            "project_id": 12345,
-            "region": "us",
-            "account": "test@example.com",
-            "path": None,
-            "size_mb": 0,
-            "created_at": None,
-            "tables": [t.to_dict() for t in tables],
-        }
-        result = json.dumps(info, indent=2)
-        data = json.loads(result)
-
-        assert len(data["tables"]) == 1
-        assert data["tables"][0]["name"] == "events"
-
-
-class TestTablesResourceLogic:
-    """Tests for tables_resource business logic."""
-
-    def test_returns_empty_list(self) -> None:
-        """Empty table list should serialize correctly."""
-        tables: list[Any] = []
-        result = json.dumps(tables, indent=2)
-        data = json.loads(result)
-        assert data == []
-
-    def test_returns_table_list(self) -> None:
-        """Table list should serialize correctly."""
-        mock_table1 = MagicMock()
-        mock_table1.to_dict.return_value = {"name": "events", "rows": 1000}
-        mock_table2 = MagicMock()
-        mock_table2.to_dict.return_value = {"name": "profiles", "rows": 500}
-        tables = [mock_table1, mock_table2]
-
-        result = json.dumps([t.to_dict() for t in tables], indent=2)
-        data = json.loads(result)
-
-        assert len(data) == 2
-        assert data[0]["name"] == "events"
-        assert data[1]["name"] == "profiles"
 
 
 class TestEventsResourceLogic:
@@ -423,7 +375,6 @@ class TestResourceRegistration:
         """All resources should be registered with MCP server."""
         # Static resources
         assert "workspace://info" in registered_resource_uris
-        assert "workspace://tables" in registered_resource_uris
         assert "schema://events" in registered_resource_uris
         assert "schema://funnels" in registered_resource_uris
         assert "schema://cohorts" in registered_resource_uris

@@ -34,14 +34,14 @@ class TestRetentionAnalysisPrompt:
         assert "retention_analysis" in registered_prompt_names
 
 
-class TestLocalAnalysisWorkflowPrompt:
-    """Tests for the local_analysis_workflow prompt."""
+class TestAnalysisWorkflowPrompt:
+    """Tests for the analysis_workflow prompt."""
 
-    def test_local_analysis_workflow_prompt_registered(
+    def test_analysis_workflow_prompt_registered(
         self, registered_prompt_names: list[str]
     ) -> None:
-        """local_analysis_workflow prompt should be registered."""
-        assert "local_analysis_workflow" in registered_prompt_names
+        """analysis_workflow prompt should be registered."""
+        assert "analysis_workflow" in registered_prompt_names
 
 
 class TestPromptFunctionality:
@@ -73,14 +73,14 @@ class TestPromptFunctionality:
         assert "born_event" in result
         assert "Day 7 retention" in result
 
-    def test_local_analysis_workflow_returns_content(self) -> None:
-        """local_analysis_workflow should return SQL analysis guide."""
-        from mp_mcp.prompts import local_analysis_workflow
+    def test_analysis_workflow_returns_content(self) -> None:
+        """analysis_workflow should return data analysis guide."""
+        from mp_mcp.prompts import analysis_workflow
 
-        result = str(local_analysis_workflow())  # type: ignore[operator]
-        assert "# Local Data Analysis Workflow" in result
-        assert "fetch_events" in result
-        assert "SQL" in result
+        result = str(analysis_workflow())  # type: ignore[operator]
+        assert "# Data Analysis Workflow" in result
+        assert "stream_events" in result
+        assert "list_events" in result
 
     def test_gqm_decomposition_returns_content(self) -> None:
         """gqm_decomposition should return GQM framework content."""

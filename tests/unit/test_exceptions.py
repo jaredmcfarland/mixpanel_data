@@ -12,8 +12,6 @@ from mixpanel_data.exceptions import (
     APIError,
     AuthenticationError,
     ConfigError,
-    DatabaseLockedError,
-    DatabaseNotFoundError,
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
@@ -21,8 +19,6 @@ from mixpanel_data.exceptions import (
     QueryError,
     RateLimitError,
     ServerError,
-    TableExistsError,
-    TableNotFoundError,
 )
 
 
@@ -165,106 +161,6 @@ class TestOperationExceptions:
         assert exc.request_params == {"query": "SELECT * FROM"}
 
 
-class TestStorageExceptions:
-    """Tests for storage-related exceptions."""
-
-    def test_table_exists_error(self) -> None:
-        """TableExistsError should have correct code and suggestion."""
-        exc = TableExistsError("events")
-
-        assert exc.code == "TABLE_EXISTS"
-        assert exc.table_name == "events"
-        assert "events" in str(exc)
-        assert "already exists" in str(exc)
-        assert "drop()" in exc.details["suggestion"]
-
-    def test_table_not_found_error(self) -> None:
-        """TableNotFoundError should have correct code."""
-        exc = TableNotFoundError("missing_table")
-
-        assert exc.code == "TABLE_NOT_FOUND"
-        assert exc.table_name == "missing_table"
-        assert "missing_table" in str(exc)
-        assert "not found" in str(exc)
-
-    def test_database_locked_error_basic(self) -> None:
-        """DatabaseLockedError should have correct code and message."""
-        exc = DatabaseLockedError("/path/to/db.duckdb")
-
-        assert exc.code == "DATABASE_LOCKED"
-        assert exc.db_path == "/path/to/db.duckdb"
-        assert "/path/to/db.duckdb" in str(exc)
-        assert "locked" in str(exc).lower()
-
-    def test_database_locked_error_with_pid(self) -> None:
-        """DatabaseLockedError should include holding PID when provided."""
-        exc = DatabaseLockedError("/path/to/db.duckdb", holding_pid=12345)
-
-        assert exc.holding_pid == 12345
-        assert "12345" in str(exc)
-        assert exc.details["holding_pid"] == 12345
-
-    def test_database_locked_error_without_pid(self) -> None:
-        """DatabaseLockedError should work when PID is not available."""
-        exc = DatabaseLockedError("/path/to/db.duckdb")
-
-        assert exc.holding_pid is None
-        assert "holding_pid" not in exc.details
-
-    def test_database_locked_error_includes_suggestion(self) -> None:
-        """DatabaseLockedError should include a helpful suggestion."""
-        exc = DatabaseLockedError("/path/to/db.duckdb")
-
-        assert "suggestion" in exc.details
-        assert "try again" in exc.details["suggestion"].lower()
-
-    def test_database_locked_error_to_dict(self) -> None:
-        """DatabaseLockedError to_dict should be JSON serializable."""
-        exc = DatabaseLockedError("/path/to/db.duckdb", holding_pid=99999)
-
-        result = exc.to_dict()
-
-        assert result["code"] == "DATABASE_LOCKED"
-        assert result["details"]["db_path"] == "/path/to/db.duckdb"
-        assert result["details"]["holding_pid"] == 99999
-
-        # Verify JSON serializable
-        json_str = json.dumps(result)
-        assert "DATABASE_LOCKED" in json_str
-        assert "99999" in json_str
-
-    def test_database_not_found_error_basic(self) -> None:
-        """DatabaseNotFoundError should have correct code and message."""
-        exc = DatabaseNotFoundError("/path/to/missing.db")
-
-        assert exc.code == "DATABASE_NOT_FOUND"
-        assert exc.db_path == "/path/to/missing.db"
-        assert "/path/to/missing.db" in str(exc)
-        assert "does not exist" in str(exc).lower()
-
-    def test_database_not_found_error_includes_suggestion(self) -> None:
-        """DatabaseNotFoundError should include a helpful suggestion."""
-        exc = DatabaseNotFoundError("/path/to/missing.db")
-
-        assert "suggestion" in exc.details
-        assert "fetch" in exc.details["suggestion"].lower()
-
-    def test_database_not_found_error_to_dict(self) -> None:
-        """DatabaseNotFoundError to_dict should be JSON serializable."""
-        exc = DatabaseNotFoundError("/home/user/.mp/data/12345.db")
-
-        result = exc.to_dict()
-
-        assert result["code"] == "DATABASE_NOT_FOUND"
-        assert result["details"]["db_path"] == "/home/user/.mp/data/12345.db"
-        assert "suggestion" in result["details"]
-
-        # Verify JSON serializable
-        json_str = json.dumps(result)
-        assert "DATABASE_NOT_FOUND" in json_str
-        assert "12345.db" in json_str
-
-
 class TestEventNotFoundError:
     """Tests for EventNotFoundError exception."""
 
@@ -397,10 +293,6 @@ class TestExceptionHierarchy:
             RateLimitError("test"),
             QueryError("test"),
             JQLSyntaxError(raw_error="test"),
-            TableExistsError("test"),
-            TableNotFoundError("test"),
-            DatabaseLockedError("/path/to/db"),
-            DatabaseNotFoundError("/path/to/db"),
             EventNotFoundError("test"),
             DateRangeTooLargeError("2024-01-01", "2024-06-30", 182),
         ]
@@ -422,7 +314,6 @@ class TestExceptionHierarchy:
             ConfigError("test"),
             AccountNotFoundError("test"),
             AuthenticationError("test"),
-            TableExistsError("test"),
             RateLimitError("test"),
         ]
 
@@ -442,10 +333,6 @@ class TestExceptionHierarchy:
             AuthenticationError: "AUTH_FAILED",
             RateLimitError: "RATE_LIMITED",
             QueryError: "QUERY_FAILED",
-            TableExistsError: "TABLE_EXISTS",
-            TableNotFoundError: "TABLE_NOT_FOUND",
-            DatabaseLockedError: "DATABASE_LOCKED",
-            DatabaseNotFoundError: "DATABASE_NOT_FOUND",
             EventNotFoundError: "EVENT_NOT_FOUND",
             DateRangeTooLargeError: "DATE_RANGE_TOO_LARGE",
         }
@@ -453,10 +340,6 @@ class TestExceptionHierarchy:
         for exc_class, expected_code in expected_codes.items():
             if exc_class in (AccountNotFoundError, AccountExistsError):
                 exc = exc_class("test")
-            elif exc_class in (TableExistsError, TableNotFoundError):
-                exc = exc_class("test_table")
-            elif exc_class in (DatabaseLockedError, DatabaseNotFoundError):
-                exc = exc_class("/path/to/db")
             elif exc_class is EventNotFoundError:
                 exc = exc_class("test_event")
             elif exc_class is DateRangeTooLargeError:

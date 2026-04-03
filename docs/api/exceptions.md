@@ -21,11 +21,7 @@ MixpanelDataError
 │   ├── ServerError
 │   └── JQLSyntaxError
 ├── OAuthError
-├── WorkspaceScopeError
-├── TableExistsError
-├── TableNotFoundError
-├── DatabaseLockedError
-└── DatabaseNotFoundError
+└── WorkspaceScopeError
 ```
 
 ## Catching Errors
@@ -137,33 +133,3 @@ Raised when workspace resolution fails for App API endpoints.
       show_root_heading: true
       show_root_toc_entry: true
 
-## Storage Exceptions
-
-Storage exceptions are raised during fetch and table operations:
-
-| Exception | Raised When |
-|-----------|-------------|
-| `TableExistsError` | Fetching to an existing table without `append=True` or `--replace` |
-| `TableNotFoundError` | Using `append=True` on a non-existent table |
-| `DatabaseLockedError` | Another process has the database locked |
-| `DatabaseNotFoundError` | Database file not found in read-only mode |
-
-::: mixpanel_data.TableExistsError
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.TableNotFoundError
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.DatabaseLockedError
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-::: mixpanel_data.DatabaseNotFoundError
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true

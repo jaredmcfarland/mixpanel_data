@@ -15,7 +15,6 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.types import BookmarkInfo
 
 
@@ -39,12 +38,6 @@ def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
 
 
 @pytest.fixture
-def mock_storage() -> StorageEngine:
-    """Create ephemeral storage for testing."""
-    return StorageEngine.ephemeral()
-
-
-@pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -57,7 +50,6 @@ def mock_api_client() -> MagicMock:
 @pytest.fixture
 def workspace_factory(
     mock_config_manager: MagicMock,
-    mock_storage: StorageEngine,
     mock_api_client: MagicMock,
 ) -> Callable[..., Workspace]:
     """Factory for creating Workspace instances with mocked dependencies."""
@@ -65,7 +57,6 @@ def workspace_factory(
     def factory(**kwargs: Any) -> Workspace:
         defaults: dict[str, Any] = {
             "_config_manager": mock_config_manager,
-            "_storage": mock_storage,
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)

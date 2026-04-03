@@ -22,8 +22,7 @@ The MCP Server v2 transforms `mp_mcp` from a thin API wrapper into an **intellig
 - **Schema Discovery**: Explore events, properties, funnels, cohorts, Lexicon schemas, and bookmarks
 - **Live Analytics**: Run segmentation, funnel, retention, JQL, and numeric aggregation queries
 - **Saved Reports**: Execute saved Insights, Retention, Funnel, and Flows reports
-- **Data Fetching**: Download events and profiles to local DuckDB storage
-- **Local Analysis**: Execute SQL queries against fetched data
+- **Streaming**: Stream events and profiles directly from Mixpanel
 - **Intelligent Tools**: AI-powered metric diagnosis and natural language queries
 - **Composed Tools**: AARRR dashboards, GQM investigations, cohort comparisons
 - **Interactive Workflows**: Guided analysis with user confirmation for large operations
@@ -109,13 +108,6 @@ mp_mcp --transport http --port 8000
 **Interactive Workflows (v2):**
 
 - "Help me analyze my data" (guided analysis)
-- "Safely fetch all events from the last 90 days"
-
-**Local Analysis:**
-
-- "Fetch events from January 1-7"
-- "Count events by name"
-- "Find the top 10 users by event count"
 
 ## Available Tools
 
@@ -170,26 +162,10 @@ mp_mcp --transport http --port 8000
 - `engagement_distribution` - Get user engagement distribution (JQL)
 - `property_coverage` - Get property coverage statistics (JQL)
 
-### Fetch (4 tools)
+### Streaming (2 tools)
 
-- `fetch_events` - Download events to local storage (with progress reporting)
-- `fetch_profiles` - Download profiles to local storage (with progress reporting)
-- `stream_events` - Stream events without storing
-- `stream_profiles` - Stream profiles without storing
-
-### Local (11 tools)
-
-- `sql` - Execute SQL queries
-- `sql_scalar` - Execute SQL returning single value
-- `list_tables` - List local tables
-- `table_schema` - Get table columns
-- `sample` - Get sample rows
-- `summarize` - Get table statistics
-- `event_breakdown` - Count events by name
-- `property_keys` - Extract property keys
-- `column_stats` - Get column statistics
-- `drop_table` - Remove a table
-- `drop_all_tables` - Remove all tables
+- `stream_events` - Stream events directly from Mixpanel
+- `stream_profiles` - Stream profiles directly from Mixpanel
 
 ### Intelligent Tools (3 tools) — Tier 3, Sampling-Powered
 
@@ -213,14 +189,13 @@ These tools orchestrate multiple primitive queries into comprehensive analyses.
 | `gqm_investigation`        | Goal-Question-Metric framework for structured investigation                          |
 | `cohort_comparison`        | Compare user cohorts across behavioral dimensions                                    |
 
-### Interactive Tools (2 tools) — Elicitation-Powered
+### Interactive Tools (1 tool) — Elicitation-Powered
 
 These tools use `ctx.elicit()` for user confirmation and multi-step workflows.
 
-| Tool               | Description                                                   |
-| ------------------ | ------------------------------------------------------------- |
-| `safe_large_fetch` | Volume estimation with user confirmation before large fetches |
-| `guided_analysis`  | Interactive step-by-step analysis workflow                    |
+| Tool               | Description                                       |
+| ------------------ | ------------------------------------------------- |
+| `guided_analysis`  | Interactive step-by-step analysis workflow         |
 
 ## Middleware
 
@@ -248,7 +223,6 @@ Static and dynamic data accessible via MCP resources:
 ### Static Resources
 
 - `workspace://info` - Workspace configuration
-- `workspace://tables` - Local table list
 - `schema://events` - Event list
 - `schema://funnels` - Funnel definitions
 - `schema://cohorts` - Cohort definitions
@@ -269,7 +243,7 @@ Guided workflow templates for structured analysis:
 | `analytics_workflow`      | Complete analytics exploration guide                                   |
 | `funnel_analysis`         | Funnel conversion analysis workflow                                    |
 | `retention_analysis`      | User retention analysis workflow                                       |
-| `local_analysis_workflow` | Local SQL analysis guide                                               |
+| `analysis_workflow`       | Data analysis guide                                                    |
 | `gqm_framework`           | Goal-Question-Metric investigation framework                           |
 | `aarrr_analysis`          | Pirate metrics (Acquisition, Activation, Retention, Revenue, Referral) |
 | `experiment_analysis`     | A/B test and experiment analysis guide                                 |
@@ -312,14 +286,14 @@ This server leverages advanced MCP features:
 │  └───────────────────────────────────────────────────┘  │
 │  ┌───────────────────────────────────────────────────┐  │
 │  │  Tier 1: Primitive (direct API calls)             │  │
-│  │  segmentation, funnel, retention, fetch_events,...│  │
+│  │  segmentation, funnel, retention, streaming, ... │  │
 │  └───────────────────────────────────────────────────┘  │
 └────────────────────────┬────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────┐
 │              mixpanel_data.Workspace                    │
 │  ┌─────────────┐  ┌────────────────┐  ┌─────────────┐   │
-│  │  Discovery  │  │  Live Queries  │  │   Storage   │   │
+│  │  Discovery  │  │  Live Queries  │  │  Streaming  │   │
 │  └─────────────┘  └────────────────┘  └─────────────┘   │
 └────────────────────────┬────────────────────────────────┘
                          │
@@ -359,8 +333,6 @@ mp_mcp/src/mp_mcp/
 │   ├── auth.py            # Account management tools
 │   ├── discovery.py       # Schema discovery tools
 │   ├── live_query.py      # Live query tools
-│   ├── fetch.py           # Data fetching tools
-│   ├── local.py           # Local SQL tools
 │   ├── intelligent/       # Tier 3 sampling-powered tools
 │   │   ├── diagnose.py
 │   │   ├── ask.py
@@ -370,8 +342,7 @@ mp_mcp/src/mp_mcp/
 │   │   ├── gqm.py
 │   │   └── cohort.py
 │   └── interactive/       # Elicitation workflows
-│       ├── guided.py
-│       └── safe_fetch.py
+│       └── guided.py
 └── middleware/
     ├── caching.py         # Response caching
     ├── rate_limiting.py   # API rate limiting
@@ -383,7 +354,6 @@ mp_mcp/src/mp_mcp/
 - Python 3.10+ with FastMCP 3.x (including tasks support)
 - FastMCP Skills Provider for dynamic skill loading
 - mixpanel_data Workspace for analytics
-- DuckDB for local storage
 - In-memory caches for middleware (no external dependencies)
 
 ## License

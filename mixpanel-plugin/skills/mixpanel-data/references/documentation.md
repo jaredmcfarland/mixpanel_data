@@ -60,9 +60,9 @@ MD:   https://jaredmcfarland.github.io/mixpanel_data/guide/fetching/index.md
 #### User Guide
 | Page | URL | Content |
 |------|-----|---------|
-| Fetching Data | `/guide/fetching/index.md` | fetch_events, fetch_profiles, options |
 | Streaming Data | `/guide/streaming/index.md` | stream_events, stream_profiles, pipelines |
-| Local SQL Queries | `/guide/sql-queries/index.md` | DuckDB SQL, JSON operators, patterns |
+| Streaming Data | `/guide/streaming/index.md` | stream_events, stream_profiles, pipelines |
+| Streaming Data | `/guide/streaming/index.md` | stream_events, stream_profiles, pipelines |
 | Live Analytics | `/guide/live-analytics/index.md` | Segmentation, funnels, retention, JQL |
 | Data Discovery | `/guide/discovery/index.md` | Schema exploration, events, properties |
 
@@ -86,7 +86,7 @@ MD:   https://jaredmcfarland.github.io/mixpanel_data/guide/fetching/index.md
 |------|-----|---------|
 | Design | `/architecture/design/index.md` | Layered architecture, services |
 | Data Model | `/architecture/data-model/index.md` | Event/profile schema |
-| Storage Engine | `/architecture/storage/index.md` | DuckDB storage details |
+| API Client | `/architecture/api-client/index.md` | API client architecture |
 
 ## Fetch Strategy
 

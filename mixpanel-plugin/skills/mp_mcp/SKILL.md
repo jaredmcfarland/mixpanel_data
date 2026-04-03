@@ -1,6 +1,6 @@
 ---
 name: mp_mcp
-description: Use the Mixpanel MCP server for analytics. Triggers on mentions of Mixpanel MCP tools, MCP resources, analytics queries via MCP, segmentation, funnels, retention, cohort_comparison, product_health_dashboard, ask_mixpanel, diagnose_metric_drop, guided_analysis, fetch_events, or SQL queries on local DuckDB data.
+description: Use the Mixpanel MCP server for analytics. Triggers on mentions of Mixpanel MCP tools, MCP resources, analytics queries via MCP, segmentation, funnels, retention, cohort_comparison, product_health_dashboard, ask_mixpanel, diagnose_metric_drop, guided_analysis, stream_events, or streaming data.
 ---
 
 # Mixpanel MCP Server
@@ -24,8 +24,8 @@ When you need detailed information, read these reference files:
 | --------------- | ---------------- | ------------------------------------------------------------------------------- |
 | **Discovery**   | Explore schema   | `list_events`, `list_properties`, `list_funnels`, `list_cohorts`, `top_events`  |
 | **Live Query**  | Real-time API    | `segmentation`, `funnel`, `retention`, `jql`, `event_counts`, `property_counts` |
-| **Fetch**       | Download data    | `fetch_events`, `fetch_profiles`, `stream_events`, `stream_profiles`            |
-| **Local**       | SQL analysis     | `sql`, `sql_scalar`, `list_tables`, `sample`, `summarize`, `event_breakdown`    |
+| **Streaming**   | Stream data      | `stream_events`, `stream_profiles`                                              |
+| **Local**       | Data analysis    | `sample`, `summarize`, `event_breakdown`                                        |
 | **Composed**    | Multi-primitive  | `cohort_comparison`, `product_health_dashboard`, `gqm_investigation`            |
 | **Intelligent** | AI-powered       | `ask_mixpanel`, `diagnose_metric_drop`, `funnel_optimization_report`            |
 | **Interactive** | Guided workflows | `guided_analysis`, `safe_large_fetch`                                           |
@@ -38,7 +38,7 @@ When you need detailed information, read these reference files:
 1. list_events() -> top_events()     # Find what to analyze
 2. list_properties(event)            # Understand the data
 3. segmentation() or funnel()        # Quick insights
-4. fetch_events() + sql()            # Deep local analysis
+4. stream_events()                    # Stream for processing
 ```
 
 ### Diagnostic Investigation
@@ -69,16 +69,6 @@ When you need detailed information, read these reference files:
 | `analysis://trends/{event}/{days}`    | Daily event counts                |
 | `users://{id}/journey`                | User's 90-day activity            |
 | `recipes://weekly-review`             | Weekly analytics checklist        |
-
-## JSON Property Access (Critical)
-
-Events and profiles store properties as JSON. Access with DuckDB JSON syntax:
-
-```sql
--- DuckDB SQL (local queries)
-SELECT properties->>'$.country' as country FROM events
-WHERE properties->>'$.plan' = 'premium'
-```
 
 ## Filter Expressions
 

@@ -612,42 +612,6 @@ class CohortComparison:
     """Whether differences are statistically significant."""
 
 
-# ==============================================================================
-# Elicitation Types
-# ==============================================================================
-
-
-@dataclass
-class FetchConfirmation:
-    """User confirmation for large fetch operation.
-
-    Response type for safe_large_fetch elicitation.
-
-    Attributes:
-        proceed: Whether to proceed with the fetch.
-        reduce_scope: Whether to reduce the scope.
-        new_limit: New event limit if reducing scope.
-
-    Example:
-        ```python
-        confirmation = FetchConfirmation(
-            proceed=True,
-            reduce_scope=True,
-            new_limit=50000,
-        )
-        ```
-    """
-
-    proceed: bool
-    """Whether to proceed with the fetch."""
-
-    reduce_scope: bool = False
-    """Whether to reduce the scope."""
-
-    new_limit: int | None = None
-    """New event limit if reducing scope."""
-
-
 @dataclass
 class AnalysisChoice:
     """User's choice for analysis direction.

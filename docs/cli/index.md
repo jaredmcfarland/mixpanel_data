@@ -51,75 +51,12 @@ Manage stored credentials, accounts, and OAuth authentication.
 | `mp auth status` | Show OAuth authentication state per region |
 | `mp auth token` | Output raw OAuth access token (for piping) |
 
-### fetch — Data Fetching
-
-Fetch data from Mixpanel into local storage, or stream directly to stdout.
-
-| Command | Description |
-|---------|-------------|
-| `mp fetch events` | Fetch events to local DuckDB |
-| `mp fetch profiles` | Fetch user profiles to local DuckDB |
-
-**Table Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--replace` | Drop and recreate existing table |
-| `--append` | Add data to existing table (duplicates skipped) |
-| `--batch-size` | Rows per commit (100-100000, default: 1000) |
-| `--no-progress` | Hide progress bar |
-
-**Streaming Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--stdout` | Stream data as JSONL to stdout instead of storing |
-| `--raw` | Output raw Mixpanel API format (requires `--stdout`) |
-
-**Event Filter Options (fetch events only):**
-
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--events` | `-e` | Comma-separated event names to filter |
-| `--where` | `-w` | Mixpanel filter expression |
-| `--limit` | `-l` | Maximum events to return (max 100000, not compatible with --parallel) |
-
-**Parallel Fetch Options (fetch events):**
-
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--parallel` | `-p` | Fetch in parallel using multiple threads (faster for large date ranges) |
-| `--workers` | | Number of parallel workers (default: 10, only with --parallel) |
-| `--chunk-days` | | Days per chunk for parallel fetching (default: 7, only with --parallel) |
-
-**Parallel Fetch Options (fetch profiles):**
-
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--parallel` | `-p` | Fetch in parallel using multiple threads (up to 5x faster for large datasets) |
-| `--workers` | | Number of parallel workers (default: 5, max: 5, only with --parallel) |
-
-**Profile Filter Options (fetch profiles only):**
-
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--cohort` | `-c` | Filter by cohort ID (mutually exclusive with --behaviors) |
-| `--output-properties` | `-o` | Comma-separated properties to include |
-| `--where` | `-w` | Mixpanel filter expression |
-| `--behaviors` | | Behavioral filter as JSON array (requires --where, mutually exclusive with --cohort) |
-| `--distinct-id` | | Fetch a specific user by distinct_id (mutually exclusive with --distinct-ids) |
-| `--distinct-ids` | | Fetch specific users (repeatable flag, mutually exclusive with --distinct-id) |
-| `--group-id` | `-g` | Fetch group profiles instead of user profiles |
-| `--as-of-timestamp` | | Query profile state at a specific Unix timestamp |
-| `--include-all-users` | | Include all users and mark cohort membership (requires --cohort) |
-
 ### query — Query Operations
 
-Execute queries against local or remote data.
+Execute live analytics queries against the Mixpanel API.
 
 | Command | Description |
 |---------|-------------|
-| `mp query sql` | Query local DuckDB with SQL |
 | `mp query segmentation` | Time-series event counts |
 | `mp query funnel` | Funnel conversion analysis |
 | `mp query retention` | Cohort retention analysis |
@@ -137,9 +74,9 @@ Execute queries against local or remote data.
 !!! tip "Saved Reports Workflow"
     Use `mp inspect bookmarks` to list available saved reports and get their IDs, then query them with `mp query saved-report` or `mp query flows`.
 
-### inspect — Discovery & Introspection
+### inspect — Schema Discovery
 
-Explore schema and local database.
+Explore your Mixpanel project schema.
 
 | Command | Description |
 |---------|-------------|
@@ -152,16 +89,6 @@ Explore schema and local database.
 | `mp inspect top-events` | List today's top events |
 | `mp inspect lexicon-schemas` | List Lexicon schemas from data dictionary |
 | `mp inspect lexicon-schema` | Get a single Lexicon schema |
-| `mp inspect info` | Show workspace info |
-| `mp inspect tables` | List local tables |
-| `mp inspect schema` | Show table schema |
-| `mp inspect drop` | Drop a local table |
-| `mp inspect drop-all` | Drop all tables (with optional type filter) |
-| `mp inspect sample` | Random sample rows from a table |
-| `mp inspect summarize` | Statistical summary of all columns |
-| `mp inspect breakdown` | Event distribution analysis |
-| `mp inspect keys` | Discover JSON property keys |
-| `mp inspect column` | Deep column-level statistics |
 | `mp inspect distribution` | Property value distribution (JQL) |
 | `mp inspect numeric` | Numeric property statistics (JQL) |
 | `mp inspect daily` | Daily event counts (JQL) |
@@ -431,9 +358,6 @@ mp inspect events --format json --jq 'length'
 mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
   --format json --jq '.series | to_entries | map({date: .key, count: .value})'
 
-# Filter SQL results
-mp query sql "SELECT * FROM events LIMIT 100" --format json \
-  --jq '.[] | select(.event_name == "Purchase")'
 ```
 
 !!! note "--jq requires JSON format"
@@ -443,11 +367,7 @@ See the [jq manual](https://jqlang.org/manual/) for filter syntax.
 
 ### Format Examples
 
-Given this query:
-
-```bash
-mp query sql "SELECT event_name, COUNT(*) as count FROM events GROUP BY 1 LIMIT 3"
-```
+Given this query result:
 
 **json** (default) — Pretty-printed, easy to read:
 
@@ -511,17 +431,11 @@ Login
 # Terminal viewing
 mp inspect events --format table
 
-# Export to spreadsheet
-mp query sql "SELECT * FROM events" --format csv > events.csv
-
 # Pipe to jq for processing
 mp query segmentation "Purchase" --from 2025-01-01 --format json | jq '.values'
 
 # Count results
 mp inspect events --format plain | wc -l
-
-# Stream to another tool
-mp query sql "SELECT * FROM events" --format jsonl | python process.py
 ```
 
 ## Exit Codes
@@ -532,7 +446,7 @@ mp query sql "SELECT * FROM events" --format jsonl | python process.py
 | 1 | General error | `MixpanelDataError` |
 | 2 | Authentication error | `AuthenticationError` |
 | 3 | Invalid arguments | `ConfigError`, validation errors |
-| 4 | Resource not found | `TableNotFoundError`, `AccountNotFoundError` |
+| 4 | Resource not found | `AccountNotFoundError` |
 | 5 | Rate limit exceeded | `RateLimitError` |
 | 130 | Interrupted | Ctrl+C |
 
@@ -563,54 +477,13 @@ mp auth add production --username sa_... --project 12345 --region us
 mp inspect events
 mp inspect properties --event Purchase
 
-# 3. Fetch data
-mp fetch events jan --from 2025-01-01 --to 2025-01-31
-
-# 4. Query locally
-mp query sql "SELECT event_name, COUNT(*) FROM jan GROUP BY 1" --format table
-
-# 5. Run live queries
+# 3. Run live queries
 mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 --format table
-```
-
-### Incremental Fetching
-
-```bash
-# Fetch initial data
-mp fetch events events --from 2025-01-01 --to 2025-01-31
-
-# Append more data later
-mp fetch events events --from 2025-02-01 --to 2025-02-28 --append
-
-# Resume after a crash (overlapping dates are safe)
-mp query sql "SELECT MAX(event_time) FROM events"
-mp fetch events events --from 2025-02-15 --to 2025-02-28 --append
-
-# Replace with fresh data
-mp fetch events events --from 2025-01-01 --to 2025-02-28 --replace
-
-# Parallel fetch for large date ranges (up to 10x faster)
-mp fetch events events --from 2025-01-01 --to 2025-12-31 --parallel
-
-# Parallel fetch with custom settings
-mp fetch events events --from 2025-01-01 --to 2025-12-31 --parallel --workers 20 --chunk-days 3
-
-# Parallel profile fetch for large datasets (up to 5x faster)
-mp fetch profiles users --parallel
-
-# Parallel profile fetch with custom workers
-mp fetch profiles users --parallel --workers 3
-
-# Parallel profile fetch with filters
-mp fetch profiles premium --where 'properties["plan"] == "premium"' --parallel
 ```
 
 ### Piping and Scripting
 
 ```bash
-# Export to file
-mp query sql "SELECT * FROM events" --format csv > events.csv
-
 # Built-in jq filtering (no external tools needed)
 mp query segmentation --event Login --from 2025-01-01 --to 2025-01-31 \
     --format json --jq '.series | keys | length'
@@ -618,51 +491,24 @@ mp query segmentation --event Login --from 2025-01-01 --to 2025-01-31 \
 # Or pipe to external jq
 mp query segmentation --event Login --from 2025-01-01 --to 2025-01-31 --format json \
     | jq '.values."$overall"'
-
-# Count lines
-mp query sql "SELECT * FROM events" --format jsonl | wc -l
 ```
 
-### Streaming to Stdout
+### Streaming Data
 
-Stream data directly without storing locally:
+Streaming is available through the Python API:
 
-```bash
-# Stream events as JSONL
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+
+# Stream events
+for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+    print(event)
 
 # Stream profiles
-mp fetch profiles --stdout
-
-# Stream profiles filtered by cohort
-mp fetch profiles --stdout --cohort 12345
-
-# Stream specific profile properties only
-mp fetch profiles --stdout --output-properties '$email,$name,plan'
-
-# Stream profiles with behavioral filter (users who purchased in last 30 days)
-mp fetch profiles --stdout \
-    --behaviors '[{"window":"30d","name":"buyers","event_selectors":[{"event":"Purchase"}]}]' \
-    --where '(behaviors["buyers"] > 0)'
-
-# Fetch a specific user profile
-mp fetch profiles --stdout --distinct-id user_123
-
-# Fetch multiple specific user profiles
-mp fetch profiles --stdout --distinct-ids user_123 --distinct-ids user_456
-
-# Fetch group profiles (e.g., companies)
-mp fetch profiles --stdout --group-id companies
-
-# Pipe to jq for filtering
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout \
-    | jq 'select(.event_name == "Purchase")'
-
-# Save to file
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout > events.jsonl
-
-# Raw Mixpanel API format
-mp fetch events --from 2025-01-01 --to 2025-01-31 --stdout --raw
+for profile in ws.stream_profiles():
+    print(profile)
 ```
 
 ## Full Command Reference

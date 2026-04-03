@@ -158,14 +158,14 @@ The `--where` parameter filters events/users before analysis. Always uses full e
 
 ### CLI Usage
 ```bash
-# Filter events by property
-mp fetch events --from 2024-01-01 --to 2024-01-31 --where 'properties["country"] == "US"'
+# Stream events with property filter
+mp stream events --from 2024-01-01 --to 2024-01-31 --where 'properties["country"] == "US"'
 
 # Complex filter
-mp fetch events --where 'properties["amount"] > 100 and properties["plan"] in ["premium", "enterprise"]'
+mp stream events --from 2024-01-01 --to 2024-01-31 --where 'properties["amount"] > 100 and properties["plan"] in ["premium", "enterprise"]'
 
-# Filter profiles
-mp fetch profiles --where 'user["plan"] == "premium" and defined(user["email"])'
+# Stream profiles with filter
+mp stream profiles --where 'user["plan"] == "premium" and defined(user["email"])'
 
 # Segmentation with filter
 mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 --where 'properties["amount"] > 100'
@@ -182,9 +182,10 @@ mp query segmentation -e Purchase --from 2024-01-01 --to 2024-01-31 \
 
 ### Python Usage
 ```python
-# fetch_events with where filter
-ws.fetch_events("events", from_date="2024-01-01", to_date="2024-01-31",
-                where='properties["country"] == "US"')
+# stream_events with where filter
+for event in ws.stream_events(from_date="2024-01-01", to_date="2024-01-31",
+                              where='properties["country"] == "US"'):
+    print(event)
 
 # Segmentation with where
 ws.segmentation("Purchase", from_date="2024-01-01", to_date="2024-01-31",

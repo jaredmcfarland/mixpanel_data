@@ -1,7 +1,7 @@
 {
   "name": "mixpanel-data",
   "version": "1.0.0",
-  "description": "Mixpanel analytics data integration for Claude Code - fetch, query, and analyze event data with interactive commands and comprehensive guidance",
+  "description": "Mixpanel analytics integration for Claude Code - stream, query, and analyze event data with interactive commands and comprehensive guidance",
   "author": {
     "name": "Jared McFarland",
     "email": "jaredcolin@gmail.com",
@@ -14,10 +14,10 @@
     "mixpanel",
     "analytics",
     "data-analysis",
-    "duckdb",
-    "sql",
     "jql",
     "event-tracking",
-    "user-analytics"
+    "user-analytics",
+    "api-client",
+    "streaming"
   ]
 }

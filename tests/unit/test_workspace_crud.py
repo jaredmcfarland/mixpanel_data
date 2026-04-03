@@ -22,7 +22,6 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
-from mixpanel_data._internal.storage import StorageEngine
 from mixpanel_data.types import (
     Bookmark,
     BookmarkHistoryResponse,
@@ -96,11 +95,9 @@ def _make_workspace(
     creds = _make_oauth_credentials()
     transport = httpx.MockTransport(handler)
     client = MixpanelAPIClient(creds, _transport=transport)
-    storage = StorageEngine(path=temp_dir / "test.db")
     return Workspace(
         _config_manager=_setup_config_with_account(temp_dir),
         _api_client=client,
-        _storage=storage,
     )
 
 
@@ -1518,24 +1515,3 @@ class TestRemoveReportFromDashboard:
         assert isinstance(result, Dashboard)
         assert result.title == "Updated Dashboard"
         assert call_count == 1  # Single PATCH request
-
-
-class TestConfigErrorOnNullClient:
-    """Test that CRUD methods raise ConfigError without credentials."""
-
-    def test_crud_without_credentials_raises(self, temp_dir: Path) -> None:
-        """CRUD methods raise ConfigError when called without API client."""
-        import pytest
-
-        from mixpanel_data.exceptions import ConfigError
-
-        # Create a DuckDB file for Workspace.open()
-        db_path = temp_dir / "query_only.db"
-        storage = StorageEngine(path=db_path)
-        storage.close()
-
-        # Query-only workspace (no credentials, no API client)
-        ws = Workspace.open(str(db_path))
-
-        with pytest.raises(ConfigError):
-            ws.list_dashboards()

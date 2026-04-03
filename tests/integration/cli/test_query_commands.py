@@ -26,134 +26,8 @@ from mixpanel_data.types import (
     RetentionResult,
     SavedReportResult,
     SegmentationResult,
-    SQLResult,
     UserEvent,
 )
-
-
-class TestQuerySql:
-    """Tests for mp query sql command."""
-
-    def test_sql_with_query_argument(
-        self, cli_runner: CliRunner, mock_workspace: MagicMock
-    ) -> None:
-        """Test SQL query with inline argument."""
-        mock_workspace.sql_rows.return_value = SQLResult(
-            columns=["count"], rows=[(100,)]
-        )
-
-        with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
-            return_value=mock_workspace,
-        ):
-            result = cli_runner.invoke(
-                app,
-                [
-                    "query",
-                    "sql",
-                    "SELECT COUNT(*) as count FROM events",
-                    "--format",
-                    "json",
-                ],
-            )
-
-        assert result.exit_code == 0
-        data = json.loads(result.stdout)
-        assert data == [{"count": 100}]
-
-    def test_sql_with_file_option(
-        self, cli_runner: CliRunner, mock_workspace: MagicMock, tmp_path: Path
-    ) -> None:
-        """Test SQL query from file."""
-        sql_file = tmp_path / "query.sql"
-        sql_file.write_text("SELECT * FROM events LIMIT 10")
-
-        mock_workspace.sql_rows.return_value = SQLResult(
-            columns=["event"], rows=[("Signup",)]
-        )
-
-        with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
-            return_value=mock_workspace,
-        ):
-            result = cli_runner.invoke(
-                app,
-                ["query", "sql", "--file", str(sql_file), "--format", "json"],
-            )
-
-        assert result.exit_code == 0
-        mock_workspace.sql_rows.assert_called_once_with("SELECT * FROM events LIMIT 10")
-
-    def test_sql_file_not_found(self, cli_runner: CliRunner) -> None:
-        """Test error when SQL file doesn't exist."""
-        result = cli_runner.invoke(
-            app,
-            ["query", "sql", "--file", "/nonexistent/query.sql", "--format", "json"],
-        )
-
-        assert result.exit_code == 4  # NOT_FOUND
-        assert "File not found" in result.output
-
-    def test_sql_no_query_or_file(self, cli_runner: CliRunner) -> None:
-        """Test error when neither query nor file provided."""
-        result = cli_runner.invoke(app, ["query", "sql", "--format", "json"])
-
-        assert result.exit_code == 3
-        assert "Provide a query or use --file" in result.output
-
-    def test_sql_scalar_mode(
-        self, cli_runner: CliRunner, mock_workspace: MagicMock
-    ) -> None:
-        """Test --scalar flag returns single value."""
-        mock_workspace.sql_scalar.return_value = 42
-
-        with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
-            return_value=mock_workspace,
-        ):
-            result = cli_runner.invoke(
-                app,
-                [
-                    "query",
-                    "sql",
-                    "SELECT COUNT(*) FROM events",
-                    "--scalar",
-                    "--format",
-                    "json",
-                ],
-            )
-
-        assert result.exit_code == 0
-        data = json.loads(result.stdout)
-        assert data == {"value": 42}
-
-    def test_sql_scalar_plain_with_jq_errors(
-        self, cli_runner: CliRunner, mock_workspace: MagicMock
-    ) -> None:
-        """Test --scalar --format plain --jq errors instead of silently ignoring."""
-        mock_workspace.sql_scalar.return_value = 42
-
-        with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
-            return_value=mock_workspace,
-        ):
-            result = cli_runner.invoke(
-                app,
-                [
-                    "query",
-                    "sql",
-                    "SELECT COUNT(*) FROM events",
-                    "--scalar",
-                    "--format",
-                    "plain",
-                    "--jq",
-                    ".value",
-                ],
-            )
-
-        # Should error, not silently ignore the jq filter
-        assert result.exit_code == 3
-        assert "json" in result.output.lower()
 
 
 class TestQuerySegmentation:
@@ -594,6 +468,7 @@ class TestQueryJql:
         self, cli_runner: CliRunner, mock_workspace: MagicMock, tmp_path: Path
     ) -> None:
         """Test JQL with script file."""
+
         jql_file = tmp_path / "query.js"
         jql_file.write_text("function main() { return Events({}); }")
 

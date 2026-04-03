@@ -87,10 +87,8 @@ src/mixpanel_data/
 ├── _internal/               # Private implementation
 │   ├── config.py            # ConfigManager, Credentials
 │   ├── api_client.py        # MixpanelAPIClient
-│   ├── storage.py           # StorageEngine (DuckDB)
 │   └── services/            # Service layer
 │       ├── discovery.py     # DiscoveryService
-│       ├── fetcher.py       # FetcherService
 │       └── live_query.py    # LiveQueryService
 └── cli/
     ├── main.py              # Typer app entry point
@@ -99,7 +97,6 @@ src/mixpanel_data/
     ├── validators.py        # Input validation
     └── commands/            # Command implementations
         ├── auth.py
-        ├── fetch.py
         ├── query.py
         ├── inspect.py
         ├── schemas.py
@@ -118,20 +115,18 @@ CLI Layer (Typer)           → Argument parsing, output formatting
     ↓
 Public API Layer            → Workspace class, auth module
     ↓
-Service Layer               → DiscoveryService, FetcherService, LiveQueryService
+Service Layer               → DiscoveryService, LiveQueryService
     ↓
-Infrastructure Layer        → ConfigManager, MixpanelAPIClient, StorageEngine (DuckDB)
+Infrastructure Layer        → ConfigManager, MixpanelAPIClient
 ```
 
 **Two data paths:**
 - **Live queries**: Call Mixpanel API directly (segmentation, funnels, retention)
-- **Local analysis**: Fetch → Store in DuckDB → Query with SQL → Iterate
+- **Streaming**: Stream events and profiles directly for ETL or processing
 
 ## Design Principles
 
-- **Explicit table management**: Tables never implicitly overwritten; `TableExistsError` if exists
-- **Streaming ingestion**: API returns iterators, storage accepts iterators (memory efficient)
-- **JSON property storage**: Properties stored as JSON columns, queried with `properties->>'$.field'`
+- **Streaming data access**: API returns iterators for memory-efficient processing
 - **Immutable credentials**: Resolved once at Workspace construction
 - **Dependency injection**: Services accept dependencies as constructor arguments for testing
 

@@ -25,7 +25,4 @@ HourDayUnit = Literal["hour", "day"]
 # Count/aggregation methods
 CountType = Literal["general", "unique", "average"]
 
-# Table types for filtering (events vs profiles)
-TableType = Literal["events", "profiles"]
-
-__all__ = ["TimeUnit", "HourDayUnit", "CountType", "TableType"]
+__all__ = ["TimeUnit", "HourDayUnit", "CountType"]

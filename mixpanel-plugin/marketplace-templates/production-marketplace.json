@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "mixpanel-data",
-      "description": "Mixpanel analytics data integration for Claude Code - fetch, query, and analyze event data with interactive commands and comprehensive guidance",
+      "description": "Mixpanel analytics integration for Claude Code - stream, query, and analyze event data with interactive commands and comprehensive guidance",
       "version": "1.0.0",
       "source": {
         "source": "url",
@@ -24,11 +24,11 @@
         "mixpanel",
         "analytics",
         "data-analysis",
-        "duckdb",
-        "sql",
         "jql",
         "event-tracking",
-        "user-analytics"
+        "user-analytics",
+        "api-client",
+        "streaming"
       ]
     }
   ]

@@ -90,7 +90,7 @@ Quit and relaunch Claude Desktop to load the MCP server.
 | #   | Test           | Prompt                               | Expected Result                                       | Pass |
 | --- | -------------- | ------------------------------------ | ----------------------------------------------------- | ---- |
 | 1.1 | Server loads   | Open Claude Desktop                  | No error dialogs, Mixpanel tools visible in tool list | [ ]  |
-| 1.2 | Tool discovery | "What Mixpanel tools are available?" | Lists discovery, query, fetch, and local tools        | [ ]  |
+| 1.2 | Tool discovery | "What Mixpanel tools are available?" | Lists discovery and query tools                       | [ ]  |
 
 ---
 
@@ -104,7 +104,7 @@ Quit and relaunch Claude Desktop to load the MCP server.
 | 2.4 | List funnels    | "What funnels do I have saved?"                             | Returns list of saved funnel names and IDs           | [ ]  |
 | 2.5 | List cohorts    | "Show my saved cohorts"                                     | Returns cohort names and IDs                         | [ ]  |
 | 2.6 | Top events      | "What are my most popular events?"                          | Returns events ranked by volume                      | [ ]  |
-| 2.7 | Workspace info  | "What's the current workspace state?"                       | Returns project ID, region, tables                   | [ ]  |
+| 2.7 | Workspace info  | "What's the current workspace state?"                       | Returns project ID, region                           | [ ]  |
 
 ---
 
@@ -120,60 +120,31 @@ Quit and relaunch Claude Desktop to load the MCP server.
 
 ---
 
-### Phase 4: Data Fetching (US3)
+### Phase 4: Session Persistence (US5)
 
-| #   | Test               | Prompt                                                         | Expected Result                                 | Pass |
-| --- | ------------------ | -------------------------------------------------------------- | ----------------------------------------------- | ---- |
-| 4.1 | Fetch events       | "Fetch events from January 1-7 into a table called jan_events" | Creates table, reports row count                | [ ]  |
-| 4.2 | Fetch with filter  | "Fetch only login events from last week"                       | Creates filtered table                          | [ ]  |
-| 4.3 | Fetch profiles     | "Download user profiles to a table called users"               | Creates profiles table                          | [ ]  |
-| 4.4 | Table exists error | "Fetch events into jan_events again"                           | Reports table already exists, suggests new name | [ ]  |
+| #   | Test                | Prompt                                                                          | Expected Result                                          | Pass |
+| --- | ------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------- | ---- |
+| 4.1 | Multi-query session | "Show me top events, then run segmentation on the top one, then show retention" | All three operations work in sequence                    | [ ]  |
+| 4.2 | Resource access     | Ask Claude to use workspace://info resource                                     | Returns current workspace state                          | [ ]  |
 
 ---
 
-### Phase 5: Local SQL Analysis (US4)
-
-**Prerequisite:** Complete test 4.1 first to have local data.
-
-| #   | Test            | Prompt                                               | Expected Result                            | Pass |
-| --- | --------------- | ---------------------------------------------------- | ------------------------------------------ | ---- |
-| 5.1 | List tables     | "What tables do I have locally?"                     | Lists jan_events (or whatever you created) | [ ]  |
-| 5.2 | Table schema    | "What columns are in the jan_events table?"          | Returns column names and types             | [ ]  |
-| 5.3 | Sample data     | "Show me 5 sample rows from jan_events"              | Returns 5 random rows                      | [ ]  |
-| 5.4 | SQL query       | "Count events by name in jan_events"                 | Returns event counts                       | [ ]  |
-| 5.5 | SQL scalar      | "How many total events are in jan_events?"           | Returns single count value                 | [ ]  |
-| 5.6 | Complex SQL     | "Find the top 10 users by event count in jan_events" | Returns user IDs with counts               | [ ]  |
-| 5.7 | Event breakdown | "Break down jan_events by event name"                | Returns name → count mapping               | [ ]  |
-| 5.8 | Drop table      | "Delete the jan_events table"                        | Confirms deletion                          | [ ]  |
-
----
-
-### Phase 6: Session Persistence (US5)
-
-| #   | Test                | Prompt                                                              | Expected Result                                      | Pass |
-| --- | ------------------- | ------------------------------------------------------------------- | ---------------------------------------------------- | ---- |
-| 6.1 | Multi-query session | "Fetch events from Jan 1-3, then count them, then show top 5 users" | All three operations work in sequence, data persists | [ ]  |
-| 6.2 | Resource access     | Ask Claude to use workspace://info resource                         | Returns current workspace state                      | [ ]  |
-
----
-
-### Phase 7: Guided Workflows (US6)
+### Phase 5: Guided Workflows (US6)
 
 | #   | Test               | Prompt                                | Expected Result                     | Pass |
 | --- | ------------------ | ------------------------------------- | ----------------------------------- | ---- |
-| 7.1 | Analytics workflow | Request the analytics_workflow prompt | Returns multi-step analytics guide  | [ ]  |
-| 7.2 | Funnel analysis    | Request the funnel_analysis prompt    | Returns funnel analysis workflow    | [ ]  |
-| 7.3 | Retention analysis | Request the retention_analysis prompt | Returns retention analysis workflow | [ ]  |
+| 5.1 | Analytics workflow | Request the analytics_workflow prompt | Returns multi-step analytics guide  | [ ]  |
+| 5.2 | Funnel analysis    | Request the funnel_analysis prompt    | Returns funnel analysis workflow    | [ ]  |
+| 5.3 | Retention analysis | Request the retention_analysis prompt | Returns retention analysis workflow | [ ]  |
 
 ---
 
-### Phase 8: Error Handling
+### Phase 6: Error Handling
 
 | #   | Test               | Prompt                                       | Expected Result                     | Pass |
 | --- | ------------------ | -------------------------------------------- | ----------------------------------- | ---- |
-| 8.1 | Invalid event      | "Show properties for nonexistent_event_xyz"  | Graceful error message              | [ ]  |
-| 8.2 | SQL error          | "Run SQL: SELECT \* FROM nonexistent_table"  | Reports table not found             | [ ]  |
-| 8.3 | Invalid date range | "Fetch events from 2099-01-01 to 2099-01-07" | Handles gracefully (empty or error) | [ ]  |
+| 6.1 | Invalid event      | "Show properties for nonexistent_event_xyz"  | Graceful error message              | [ ]  |
+| 6.2 | Invalid date range | "Show segmentation from 2099-01-01 to 2099-01-07" | Handles gracefully (empty or error) | [ ]  |
 
 ---
 
@@ -191,17 +162,8 @@ Complete this full workflow to verify the entire system works together:
 3. "How many [event] events happened each day last week, broken down by [property]?"
    → Verify you get segmented time series data
 
-4. "Fetch [event] events from last week into a table called test_data"
-   → Verify table is created
-
-5. "What's the schema of the test_data table?"
-   → Verify columns are listed
-
-6. "Find the top 5 distinct_ids by event count in test_data"
-   → Verify SQL works on local data
-
-7. "Drop the test_data table"
-   → Verify cleanup works
+4. "What's the retention for [event] over the last 30 days?"
+   → Verify you get cohort retention data
 ```
 
 **End-to-end test result:** [ ] Pass / [ ] Fail

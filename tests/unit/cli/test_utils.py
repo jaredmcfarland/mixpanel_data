@@ -23,8 +23,6 @@ from mixpanel_data.exceptions import (
     AccountNotFoundError,
     AuthenticationError,
     ConfigError,
-    DatabaseLockedError,
-    DatabaseNotFoundError,
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
@@ -32,8 +30,6 @@ from mixpanel_data.exceptions import (
     QueryError,
     RateLimitError,
     ServerError,
-    TableExistsError,
-    TableNotFoundError,
 )
 
 
@@ -113,28 +109,6 @@ class TestHandleErrors:
         with pytest.raises(click.exceptions.Exit) as exc:
             account_exists()
         assert exc.value.exit_code == ExitCode.GENERAL_ERROR
-
-    def test_table_exists_exits_with_code_1(self) -> None:
-        """Test TableExistsError maps to exit code 1."""
-
-        @handle_errors
-        def table_exists() -> None:
-            raise TableExistsError("events")
-
-        with pytest.raises(click.exceptions.Exit) as exc:
-            table_exists()
-        assert exc.value.exit_code == ExitCode.GENERAL_ERROR
-
-    def test_table_not_found_exits_with_code_4(self) -> None:
-        """Test TableNotFoundError maps to exit code 4."""
-
-        @handle_errors
-        def table_not_found() -> None:
-            raise TableNotFoundError("events")
-
-        with pytest.raises(click.exceptions.Exit) as exc:
-            table_not_found()
-        assert exc.value.exit_code == ExitCode.NOT_FOUND
 
     def test_rate_limit_exits_with_code_5(self) -> None:
         """Test RateLimitError maps to exit code 5."""
@@ -266,25 +240,6 @@ class TestHandleErrors:
         # Should show endpoint
         assert "segmentation" in captured.err
 
-    def test_database_locked_error_shows_pid(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test DatabaseLockedError displays holding PID when available."""
-
-        @handle_errors
-        def db_locked() -> None:
-            raise DatabaseLockedError(
-                db_path="/home/user/.mp/mixpanel.db",
-                holding_pid=12345,
-            )
-
-        with pytest.raises(click.exceptions.Exit):
-            db_locked()
-
-        captured = capsys.readouterr()
-        assert "12345" in captured.err
-        assert "PID" in captured.err
-
     def test_date_range_error_shows_details(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -399,23 +354,6 @@ class TestHandleErrors:
         assert "permission" in captured.err.lower()
         assert "403" in captured.err or "Forbidden" in captured.err
 
-    def test_database_not_found_error(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test DatabaseNotFoundError displays helpful message."""
-
-        @handle_errors
-        def db_not_found() -> None:
-            raise DatabaseNotFoundError(db_path="/home/user/.mp/mixpanel.db")
-
-        with pytest.raises(click.exceptions.Exit) as exc:
-            db_not_found()
-
-        assert exc.value.exit_code == ExitCode.NOT_FOUND
-        captured = capsys.readouterr()
-        # Should show the db path
-        assert "mixpanel.db" in captured.err
-        # Should suggest fetching data
-        assert "mp fetch" in captured.err
-
     def test_event_not_found_error_with_suggestions(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -454,9 +392,7 @@ class TestGetWorkspace:
 
             result = get_workspace(ctx)
 
-            MockWorkspace.assert_called_once_with(
-                account=None, read_only=False, workspace_id=None
-            )
+            MockWorkspace.assert_called_once_with(account=None, workspace_id=None)
             assert result == mock_ws
             assert ctx.obj["workspace"] == mock_ws
 
@@ -480,9 +416,7 @@ class TestGetWorkspace:
         with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
             get_workspace(ctx)
 
-            MockWorkspace.assert_called_once_with(
-                account="staging", read_only=False, workspace_id=None
-            )
+            MockWorkspace.assert_called_once_with(account="staging", workspace_id=None)
 
 
 class TestGetConfig:
