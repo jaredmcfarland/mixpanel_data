@@ -43,6 +43,7 @@ The `Workspace` class is the unified entry point that coordinates all services:
 - **Credential Resolution** — Env vars → named account → default account
 - **Service Orchestration** — Creates and manages service instances
 - **Entity CRUD** — Direct App API access for dashboards, reports, cohorts (workspace-scoped) and feature flags, experiments (project-scoped)
+- **Data Governance** — Schema registry, enforcement, auditing, volume anomalies, event deletion requests, Lexicon definitions, drop filters, custom properties, custom events, and lookup tables
 - **Resource Management** — Context manager support for cleanup
 
 ### Services

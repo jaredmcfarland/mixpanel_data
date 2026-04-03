@@ -56,7 +56,7 @@ src/mixpanel_data/
 │   └── services/            # Discovery, Fetcher, LiveQuery services
 └── cli/
     ├── main.py              # Typer app entry point
-    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts, flags, experiments, alerts, annotations, webhooks, lexicon, drop-filters, custom-properties, custom-events, lookup-tables command groups
+    ├── commands/            # auth, fetch, query, inspect, dashboards, reports, cohorts, flags, experiments, alerts, annotations, webhooks, lexicon, drop-filters, custom-properties, custom-events, lookup-tables, schemas command groups
     ├── formatters.py        # JSON, JSONL, Table, CSV, Plain output
     └── utils.py             # Error handling, console helpers
 ```

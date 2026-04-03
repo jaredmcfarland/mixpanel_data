@@ -147,6 +147,11 @@ drop_filters = ws.list_drop_filters()
 custom_props = ws.list_custom_properties()
 lookup_tables = ws.list_lookup_tables()
 
+# Schema governance
+schemas = ws.list_schema_registry()
+enforcement = ws.get_schema_enforcement()
+audit = ws.run_audit()
+
 # Fetch events into local DuckDB for SQL analysis
 ws.fetch_events("jan", from_date="2025-01-01", to_date="2025-01-31")
 
@@ -219,7 +224,7 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp webhooks`** — Webhook management: `list`, `create`, `update`, `delete`, `test`
 
-**`mp lexicon`** — Lexicon management: `events get/update/delete/bulk-update`, `properties get/update/bulk-update`, `tags list/create/update/delete`, `tracking-metadata`, `event-history`, `property-history`, `export`
+**`mp lexicon`** — Lexicon management: `events get/update/delete/bulk-update`, `properties get/update/bulk-update`, `tags list/create/update/delete`, `tracking-metadata`, `event-history`, `property-history`, `export`, `audit`, `enforcement get/init/update/replace/delete`, `anomalies list/update/bulk-update`, `deletion-requests list/create/cancel/preview`
 
 **`mp drop-filters`** — Drop filter management: `list`, `create`, `update`, `delete`, `limits`
 
@@ -228,6 +233,8 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 **`mp custom-events`** — Custom event management: `list`, `update`, `delete`
 
 **`mp lookup-tables`** — Lookup table management: `list`, `upload`, `update`, `delete`, `download`, `upload-url`, `download-url`
+
+**`mp schemas`** — Schema registry management: `list`, `create`, `create-bulk`, `update`, `update-bulk`, `delete`
 
 **`mp inspect`** — Discover schema: `events`, `properties`, `funnels`, `cohorts`, `bookmarks`; local DB: `tables`, `schema`, `drop`, and 5 more
 

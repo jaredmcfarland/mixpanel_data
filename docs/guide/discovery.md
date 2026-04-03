@@ -137,6 +137,9 @@ Retrieve data dictionary schemas for events and profile properties. Schemas incl
 !!! note "Schema Coverage"
     The Lexicon API returns only events/properties with explicit schemas (defined via API, CSV import, or UI). It does not return all events visible in Lexicon's UI.
 
+!!! tip "Schema Registry CRUD"
+    For write operations on the schema registry (create, update, delete schemas and enforcement configuration), see the [Data Governance guide — Schema Registry](data-governance.md#schema-registry).
+
 === "Python"
 
     ```python

@@ -52,6 +52,11 @@ drop_filters = ws.list_drop_filters()
 custom_props = ws.list_custom_properties()
 lookup_tables = ws.list_lookup_tables()
 
+# Schema governance
+schemas = ws.list_schema_registry()
+enforcement = ws.get_schema_enforcement()
+audit = ws.run_audit()
+
 # Live queries—use discovered data to construct accurate queries
 segmentation = ws.segmentation(
     event=events[0].name,
@@ -138,6 +143,11 @@ mp lexicon events get --names Signup,Login
 mp drop-filters list
 mp custom-properties list
 mp lookup-tables list
+
+# Schema governance
+mp schemas list
+mp lexicon enforcement get
+mp lexicon audit
 
 # Live queries against Mixpanel API
 mp query segmentation "Purchase" \

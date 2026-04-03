@@ -101,7 +101,9 @@ src/mixpanel_data/
         ├── auth.py
         ├── fetch.py
         ├── query.py
-        └── inspect.py
+        ├── inspect.py
+        ├── schemas.py
+        └── lexicon.py
 
 tests/
 ├── conftest.py              # Shared pytest fixtures

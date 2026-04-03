@@ -61,6 +61,8 @@ from mixpanel_data.types import (
     AlertScreenshotResponse,
     Annotation,
     AnnotationTag,
+    AuditResponse,
+    AuditViolation,
     BatchProgress,
     BlueprintConfig,
     BlueprintFinishParams,
@@ -69,6 +71,10 @@ from mixpanel_data.types import (
     BookmarkHistoryResponse,
     BookmarkInfo,
     BookmarkType,
+    BulkCreateSchemasParams,
+    BulkCreateSchemasResponse,
+    BulkPatchResult,
+    BulkUpdateAnomalyParams,
     BulkUpdateBookmarkEntry,
     BulkUpdateCohortEntry,
     BulkUpdateEventsParams,
@@ -83,6 +89,7 @@ from mixpanel_data.types import (
     CreateCohortParams,
     CreateCustomPropertyParams,
     CreateDashboardParams,
+    CreateDeletionRequestParams,
     CreateDropFilterParams,
     CreateExperimentParams,
     CreateFeatureFlagParams,
@@ -93,6 +100,8 @@ from mixpanel_data.types import (
     CustomProperty,
     DailyCountsResult,
     Dashboard,
+    DataVolumeAnomaly,
+    DeleteSchemasResponse,
     DropFilter,
     DropFilterLimitsResponse,
     DuplicateExperimentParams,
@@ -101,6 +110,7 @@ from mixpanel_data.types import (
     EventBreakdownResult,
     EventCountsResult,
     EventDefinition,
+    EventDeletionRequest,
     EventStats,
     Experiment,
     ExperimentConcludeParams,
@@ -113,6 +123,7 @@ from mixpanel_data.types import (
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
+    InitSchemaEnforcementParams,
     JQLResult,
     LexiconSchema,
     LexiconTag,
@@ -125,6 +136,7 @@ from mixpanel_data.types import (
     NumericSumResult,
     ParallelFetchResult,
     ParallelProfileResult,
+    PreviewDeletionFiltersParams,
     ProfileProgress,
     ProjectWebhook,
     PropertyCountsResult,
@@ -132,9 +144,12 @@ from mixpanel_data.types import (
     PropertyDefinition,
     PropertyDistributionResult,
     PublicWorkspace,
+    ReplaceSchemaEnforcementParams,
     RetentionResult,
     SavedCohort,
     SavedReportResult,
+    SchemaEnforcementConfig,
+    SchemaEntry,
     SegmentationResult,
     SetTestUsersParams,
     SQLResult,
@@ -144,6 +159,7 @@ from mixpanel_data.types import (
     TopEvent,
     UpdateAlertParams,
     UpdateAnnotationParams,
+    UpdateAnomalyParams,
     UpdateBookmarkParams,
     UpdateCohortParams,
     UpdateCustomPropertyParams,
@@ -155,6 +171,7 @@ from mixpanel_data.types import (
     UpdateLookupTableParams,
     UpdatePropertyDefinitionParams,
     UpdateReportLinkParams,
+    UpdateSchemaEnforcementParams,
     UpdateTagParams,
     UpdateTextCardParams,
     UpdateWebhookParams,
@@ -6428,3 +6445,641 @@ class Workspace:
         """
         client = self._require_api_client()
         return client.export_lexicon(export_types=export_types)
+
+    # =========================================================================
+    # Schema Registry CRUD (Phase 028)
+    # =========================================================================
+
+    def list_schema_registry(
+        self,
+        *,
+        entity_type: str | None = None,
+    ) -> list[SchemaEntry]:
+        """List schema registry entries.
+
+        Args:
+            entity_type: Filter by entity type ("event", "custom_event",
+                "profile"). If None, returns all schemas.
+
+        Returns:
+            List of ``SchemaEntry`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            ws = Workspace()
+            schemas = ws.list_schema_registry(entity_type="event")
+            for s in schemas:
+                print(f"{s.name}: {s.entity_type}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_schema_registry(entity_type=entity_type)
+        return [SchemaEntry.model_validate(r) for r in raw_list]
+
+    def create_schema(
+        self,
+        entity_type: str,
+        entity_name: str,
+        schema_json: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Create a single schema definition.
+
+        Args:
+            entity_type: Entity type ("event", "custom_event", "profile").
+            entity_name: Entity name (event name or "$user" for profile).
+            schema_json: JSON Schema Draft 7 definition.
+
+        Returns:
+            Created schema as dict.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.create_schema("event", "Purchase", {
+                "properties": {"amount": {"type": "number"}}
+            })
+            ```
+        """
+        client = self._require_api_client()
+        return client.create_schema(entity_type, entity_name, schema_json)
+
+    def create_schemas_bulk(
+        self,
+        params: BulkCreateSchemasParams,
+    ) -> BulkCreateSchemasResponse:
+        """Bulk create schemas.
+
+        Args:
+            params: Bulk creation parameters with entries list and
+                optional truncate flag.
+
+        Returns:
+            Response with ``added`` and ``deleted`` counts.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            ws = Workspace()
+            result = ws.create_schemas_bulk(BulkCreateSchemasParams(
+                entries=[SchemaEntry(...)], truncate=True
+            ))
+            print(f"Added: {result.added}")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.create_schemas_bulk(
+            params.model_dump(exclude_none=True, by_alias=True)
+        )
+        return BulkCreateSchemasResponse.model_validate(raw)
+
+    def update_schema(
+        self,
+        entity_type: str,
+        entity_name: str,
+        schema_json: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Update a single schema definition (merge semantics).
+
+        Args:
+            entity_type: Entity type.
+            entity_name: Entity name.
+            schema_json: Partial JSON Schema to merge with existing.
+
+        Returns:
+            Updated schema as dict.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Entity not found or validation error (400, 404).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.update_schema("event", "Purchase", {
+                "properties": {"tax": {"type": "number"}}
+            })
+            ```
+        """
+        client = self._require_api_client()
+        return client.update_schema(entity_type, entity_name, schema_json)
+
+    def update_schemas_bulk(
+        self,
+        params: BulkCreateSchemasParams,
+    ) -> list[BulkPatchResult]:
+        """Bulk update schemas (merge semantics per entry).
+
+        Args:
+            params: Bulk update parameters with entries list.
+
+        Returns:
+            List of per-entry results with status ("ok" or "error").
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: Rate limit exceeded (429).
+
+        Example:
+            ```python
+            ws = Workspace()
+            results = ws.update_schemas_bulk(BulkCreateSchemasParams(
+                entries=[SchemaEntry(...)]
+            ))
+            for r in results:
+                print(f"{r.name}: {r.status}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.update_schemas_bulk(
+            params.model_dump(exclude_none=True, by_alias=True)
+        )
+        return [BulkPatchResult.model_validate(r) for r in raw_list]
+
+    def delete_schemas(
+        self,
+        *,
+        entity_type: str | None = None,
+        entity_name: str | None = None,
+    ) -> DeleteSchemasResponse:
+        """Delete schemas by entity type and/or name.
+
+        If both provided, deletes a single schema. If only entity_type,
+        deletes all schemas of that type. If neither, deletes all schemas.
+
+        Args:
+            entity_type: Filter by entity type.
+            entity_name: Filter by entity name (requires entity_type).
+
+        Returns:
+            Response with ``delete_count``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400).
+            RateLimitError: Rate limit exceeded (429).
+            MixpanelDataError: If entity_name is provided without entity_type.
+
+        Example:
+            ```python
+            ws = Workspace()
+            resp = ws.delete_schemas(entity_type="event", entity_name="Purchase")
+            print(f"Deleted: {resp.delete_count}")
+            ```
+        """
+        if entity_name is not None and entity_type is None:
+            raise MixpanelDataError(
+                "entity_name requires entity_type: providing entity_name "
+                "without entity_type would delete all schemas",
+            )
+        client = self._require_api_client()
+        raw = client.delete_schemas(entity_type=entity_type, entity_name=entity_name)
+        return DeleteSchemasResponse.model_validate(raw)
+
+    # =========================================================================
+    # Schema Enforcement (Phase 028)
+    # =========================================================================
+
+    def get_schema_enforcement(
+        self,
+        *,
+        fields: str | None = None,
+    ) -> SchemaEnforcementConfig:
+        """Get current schema enforcement configuration.
+
+        Args:
+            fields: Comma-separated field names to return (e.g.,
+                "ruleEvent,state"). If None, returns all fields.
+
+        Returns:
+            Schema enforcement configuration.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No enforcement configured (404).
+
+        Example:
+            ```python
+            ws = Workspace()
+            config = ws.get_schema_enforcement()
+            print(f"Rule: {config.rule_event}")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.get_schema_enforcement(fields=fields)
+        return SchemaEnforcementConfig.model_validate(raw)
+
+    def init_schema_enforcement(
+        self,
+        params: InitSchemaEnforcementParams,
+    ) -> dict[str, Any]:
+        """Initialize schema enforcement.
+
+        Args:
+            params: Init parameters with rule_event.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Already initialized or invalid rule_event (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.init_schema_enforcement(
+                InitSchemaEnforcementParams(rule_event="Warn and Accept")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        return client.init_schema_enforcement(
+            params.model_dump(exclude_none=True, by_alias=True)
+        )
+
+    def update_schema_enforcement(
+        self,
+        params: UpdateSchemaEnforcementParams,
+    ) -> dict[str, Any]:
+        """Partially update enforcement configuration.
+
+        Args:
+            params: Partial update parameters.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No enforcement configured or validation error (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.update_schema_enforcement(
+                UpdateSchemaEnforcementParams(rule_event="Warn and Drop")
+            )
+            ```
+        """
+        client = self._require_api_client()
+        return client.update_schema_enforcement(
+            params.model_dump(exclude_none=True, by_alias=True)
+        )
+
+    def replace_schema_enforcement(
+        self,
+        params: ReplaceSchemaEnforcementParams,
+    ) -> dict[str, Any]:
+        """Fully replace enforcement configuration.
+
+        Args:
+            params: Complete replacement parameters.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.replace_schema_enforcement(ReplaceSchemaEnforcementParams(
+                events=[...], common_properties=[...],
+                user_properties=[...], rule_event="Warn and Hide",
+                notification_emails=["admin@example.com"],
+            ))
+            ```
+        """
+        client = self._require_api_client()
+        return client.replace_schema_enforcement(
+            params.model_dump(exclude_none=True, by_alias=True)
+        )
+
+    def delete_schema_enforcement(self) -> dict[str, Any]:
+        """Delete enforcement configuration.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No enforcement configured (404).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.delete_schema_enforcement()
+            ```
+        """
+        client = self._require_api_client()
+        return client.delete_schema_enforcement()
+
+    # =========================================================================
+    # Data Auditing (Phase 028)
+    # =========================================================================
+
+    def run_audit(self) -> AuditResponse:
+        """Run a full data audit (events + properties).
+
+        Returns:
+            Audit response with violations and ``computed_at`` timestamp.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No schemas defined (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            audit = ws.run_audit()
+            for v in audit.violations:
+                print(f"{v.violation}: {v.name} ({v.count})")
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.run_audit()
+        # raw is [violations_list, {"computed_at": ...}]
+        if not raw:
+            return AuditResponse(violations=[], computed_at="")
+        if not isinstance(raw[0], list):
+            raise MixpanelDataError(
+                f"Unexpected audit response: expected list of violations, "
+                f"got {type(raw[0]).__name__}",
+            )
+        violations = [AuditViolation.model_validate(v) for v in raw[0]]
+        metadata = raw[1] if len(raw) > 1 and isinstance(raw[1], dict) else {}
+        return AuditResponse(
+            violations=violations,
+            computed_at=metadata.get("computed_at", ""),
+        )
+
+    def run_audit_events_only(self) -> AuditResponse:
+        """Run an events-only data audit (faster).
+
+        Returns:
+            Audit response with event violations only.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: No schemas defined (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            audit = ws.run_audit_events_only()
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.run_audit_events_only()
+        if not raw:
+            return AuditResponse(violations=[], computed_at="")
+        if not isinstance(raw[0], list):
+            raise MixpanelDataError(
+                f"Unexpected audit response: expected list of violations, "
+                f"got {type(raw[0]).__name__}",
+            )
+        violations = [AuditViolation.model_validate(v) for v in raw[0]]
+        metadata = raw[1] if len(raw) > 1 and isinstance(raw[1], dict) else {}
+        return AuditResponse(
+            violations=violations,
+            computed_at=metadata.get("computed_at", ""),
+        )
+
+    # =========================================================================
+    # Data Volume Anomalies (Phase 028)
+    # =========================================================================
+
+    def list_data_volume_anomalies(
+        self,
+        *,
+        query_params: dict[str, str] | None = None,
+    ) -> list[DataVolumeAnomaly]:
+        """List detected data volume anomalies.
+
+        Args:
+            query_params: Optional filters (status, limit, event_id, etc.).
+
+        Returns:
+            List of ``DataVolumeAnomaly`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+
+        Example:
+            ```python
+            ws = Workspace()
+            anomalies = ws.list_data_volume_anomalies(
+                query_params={"status": "open"}
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_data_volume_anomalies(query_params=query_params)
+        return [DataVolumeAnomaly.model_validate(r) for r in raw_list]
+
+    def update_anomaly(
+        self,
+        params: UpdateAnomalyParams,
+    ) -> dict[str, Any]:
+        """Update the status of a single anomaly.
+
+        Args:
+            params: Update parameters with id, status, and anomaly_class.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Anomaly not found or invalid parameters (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.update_anomaly(UpdateAnomalyParams(
+                id=123, status="dismissed", anomaly_class="Event"
+            ))
+            ```
+        """
+        client = self._require_api_client()
+        return client.update_anomaly(params.model_dump(by_alias=True))
+
+    def bulk_update_anomalies(
+        self,
+        params: BulkUpdateAnomalyParams,
+    ) -> dict[str, Any]:
+        """Bulk update anomaly statuses.
+
+        Args:
+            params: Bulk update with anomalies list and target status.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid parameters (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ws.bulk_update_anomalies(BulkUpdateAnomalyParams(
+                anomalies=[BulkAnomalyEntry(id=1, anomaly_class="Event")],
+                status="dismissed",
+            ))
+            ```
+        """
+        client = self._require_api_client()
+        return client.bulk_update_anomalies(params.model_dump(by_alias=True))
+
+    # =========================================================================
+    # Event Deletion Requests (Phase 028)
+    # =========================================================================
+
+    def list_deletion_requests(self) -> list[EventDeletionRequest]:
+        """List all event deletion requests.
+
+        Returns:
+            List of ``EventDeletionRequest`` objects.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+
+        Example:
+            ```python
+            ws = Workspace()
+            for r in ws.list_deletion_requests():
+                print(f"{r.event_name}: {r.status}")
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.list_deletion_requests()
+        return [EventDeletionRequest.model_validate(r) for r in raw_list]
+
+    def create_deletion_request(
+        self,
+        params: CreateDeletionRequestParams,
+    ) -> list[EventDeletionRequest]:
+        """Create a new event deletion request.
+
+        Args:
+            params: Deletion parameters with event_name, from_date,
+                to_date, and optional filters.
+
+        Returns:
+            Updated full list of deletion requests.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            requests = ws.create_deletion_request(
+                CreateDeletionRequestParams(
+                    event_name="Test", from_date="2026-01-01",
+                    to_date="2026-01-31",
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.create_deletion_request(
+            params.model_dump(exclude_none=True, by_alias=True)
+        )
+        return [EventDeletionRequest.model_validate(r) for r in raw_list]
+
+    def cancel_deletion_request(self, request_id: int) -> list[EventDeletionRequest]:
+        """Cancel a pending deletion request.
+
+        Args:
+            request_id: Deletion request ID to cancel.
+
+        Returns:
+            Updated full list of deletion requests.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Request not found or not cancellable (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            requests = ws.cancel_deletion_request(42)
+            ```
+        """
+        client = self._require_api_client()
+        raw_list = client.cancel_deletion_request(request_id)
+        return [EventDeletionRequest.model_validate(r) for r in raw_list]
+
+    def preview_deletion_filters(
+        self,
+        params: PreviewDeletionFiltersParams,
+    ) -> list[dict[str, Any]]:
+        """Preview what events a deletion filter would match.
+
+        This is a read-only operation that does not modify any data.
+
+        Args:
+            params: Preview parameters with event_name, date range,
+                and optional filters.
+
+        Returns:
+            List of expanded/normalized filters.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Invalid filter parameters (400).
+
+        Example:
+            ```python
+            ws = Workspace()
+            preview = ws.preview_deletion_filters(
+                PreviewDeletionFiltersParams(
+                    event_name="Test", from_date="2026-01-01",
+                    to_date="2026-01-31",
+                )
+            )
+            ```
+        """
+        client = self._require_api_client()
+        return client.preview_deletion_filters(
+            params.model_dump(exclude_none=True, by_alias=True)
+        )

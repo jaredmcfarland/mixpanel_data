@@ -304,9 +304,9 @@ Manage project webhooks via the App API.
 | `mp webhooks delete` | Delete a webhook |
 | `mp webhooks test` | Test webhook connectivity |
 
-### lexicon — Data Governance: Lexicon Management
+### lexicon — Data Governance: Lexicon Management, Enforcement, Auditing & Deletion
 
-Manage Lexicon data definitions, tags, and metadata via the App API.
+Manage Lexicon data definitions, tags, metadata, schema enforcement, data auditing, volume anomalies, and event deletion requests via the App API.
 
 | Command | Description |
 |---------|-------------|
@@ -325,6 +325,19 @@ Manage Lexicon data definitions, tags, and metadata via the App API.
 | `mp lexicon event-history` | Get change history for an event |
 | `mp lexicon property-history` | Get change history for a property |
 | `mp lexicon export` | Export Lexicon data definitions |
+| `mp lexicon audit` | Run schema audit to find violations |
+| `mp lexicon enforcement get` | Get schema enforcement settings |
+| `mp lexicon enforcement init` | Initialize schema enforcement |
+| `mp lexicon enforcement update` | Update schema enforcement (PATCH) |
+| `mp lexicon enforcement replace` | Replace schema enforcement (PUT) |
+| `mp lexicon enforcement delete` | Delete schema enforcement settings |
+| `mp lexicon anomalies list` | List data volume anomalies |
+| `mp lexicon anomalies update` | Update a data volume anomaly |
+| `mp lexicon anomalies bulk-update` | Bulk-update data volume anomalies |
+| `mp lexicon deletion-requests list` | List event deletion requests |
+| `mp lexicon deletion-requests create` | Create an event deletion request |
+| `mp lexicon deletion-requests cancel` | Cancel a pending deletion request |
+| `mp lexicon deletion-requests preview` | Preview deletion filter results |
 
 ### drop-filters — Data Governance: Drop Filter Management
 
@@ -374,6 +387,19 @@ Manage CSV-based lookup tables for property enrichment via the App API.
 | `mp lookup-tables download` | Download lookup table data as CSV |
 | `mp lookup-tables upload-url` | Get a signed upload URL |
 | `mp lookup-tables download-url` | Get a signed download URL |
+
+### schemas — Data Governance: Schema Registry Management
+
+Manage JSON Schema Draft 7 definitions in the schema registry via the App API.
+
+| Command | Description |
+|---------|-------------|
+| `mp schemas list` | List schema registry entries |
+| `mp schemas create` | Create a single schema entry |
+| `mp schemas create-bulk` | Bulk create schema entries |
+| `mp schemas update` | Update a schema entry (merge semantics) |
+| `mp schemas update-bulk` | Bulk update schema entries |
+| `mp schemas delete` | Delete schema entries |
 
 ## Output Formats
 

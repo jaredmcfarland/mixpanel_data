@@ -18,7 +18,7 @@ Workspace orchestrates four internal services and provides direct App API access
 - **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts via Mixpanel App API (workspace-scoped)
 - **Feature Management** — Create, read, update, delete feature flags and experiments via Mixpanel App API (project-scoped)
 - **Operational Tooling** — Manage alerts, annotations, and webhooks via Mixpanel App API (workspace-scoped)
-- **Data Governance** — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via Mixpanel App API (workspace-scoped)
+- **Data Governance** — Manage Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, volume anomalies, and event deletion requests via Mixpanel App API (workspace-scoped)
 
 ## Key Features
 
@@ -424,3 +424,28 @@ ws.fetch_profiles(
         - list_custom_events
         - update_custom_event
         - delete_custom_event
+        # Schema Registry CRUD
+        - list_schema_registry
+        - create_schema
+        - create_schemas_bulk
+        - update_schema
+        - update_schemas_bulk
+        - delete_schemas
+        # Schema Enforcement
+        - get_schema_enforcement
+        - init_schema_enforcement
+        - update_schema_enforcement
+        - replace_schema_enforcement
+        - delete_schema_enforcement
+        # Data Auditing
+        - run_audit
+        - run_audit_events_only
+        # Data Volume Anomalies
+        - list_data_volume_anomalies
+        - update_anomaly
+        - bulk_update_anomalies
+        # Event Deletion Requests
+        - list_deletion_requests
+        - create_deletion_request
+        - cancel_deletion_request
+        - preview_deletion_filters
