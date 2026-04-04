@@ -6871,7 +6871,7 @@ class Metric:
     per_user: PerUserAggregation | None = None
     """Per-user pre-aggregation type."""
 
-    filters: list[Any] | None = None
+    filters: list[Filter] | None = None
     """Per-metric filters (list of Filter objects)."""
 
 
@@ -7328,8 +7328,10 @@ class QueryResult(ResultWithDataFrame):
                     # Total mode: no date column
                     rows.append({"event": metric_name, "count": value})
                 else:
+                    # Normalize ISO timestamps to YYYY-MM-DD
+                    normalized_date = date_key[:10] if len(date_key) >= 10 else date_key
                     rows.append(
-                        {"date": date_key, "event": metric_name, "count": value}
+                        {"date": normalized_date, "event": metric_name, "count": value}
                     )
 
         if not rows:

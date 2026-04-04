@@ -97,12 +97,14 @@ from mixpanel_data.types import (
     ExperimentConcludeParams,
     ExperimentDecideParams,
     FeatureFlag,
+    Filter,
     FlagHistoryResponse,
     FlagLimitsResponse,
     FlowsResult,
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
+    GroupBy,
     InitSchemaEnforcementParams,
     JQLResult,
     LexiconSchema,
@@ -1596,11 +1598,11 @@ class Workspace:
         formula: str | None,
         rolling: int | None,
         cumulative: bool,
-        group_by: Any,
+        group_by: str | GroupBy | list[str | GroupBy] | None,
     ) -> None:
         """Validate query arguments before building bookmark params.
 
-        Implements validation rules V1-V12 as fail-fast ValueErrors.
+        Implements validation rules V1-V14 as fail-fast ValueErrors.
 
         Args:
             events: Event names or Metric objects.
@@ -1736,8 +1738,8 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: str,
-        group_by: Any,
-        where: Any,
+        group_by: str | GroupBy | list[str | GroupBy] | None,
+        where: Filter | list[Filter] | None,
         formula: str | None,
         formula_label: str | None,
         rolling: int | None,
@@ -1864,8 +1866,6 @@ class Workspace:
         # --- Build sections.group[] ---
         group_section: list[dict[str, Any]] = []
         if group_by is not None:
-            from mixpanel_data.types import GroupBy
-
             groups = group_by if isinstance(group_by, list) else [group_by]
             for g in groups:
                 if isinstance(g, str):
@@ -1957,8 +1957,8 @@ class Workspace:
         math: MathType = "total",
         math_property: str | None = None,
         per_user: PerUserAggregation | None = None,
-        group_by: Any = None,
-        where: Any = None,
+        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        where: Filter | list[Filter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
         rolling: int | None = None,

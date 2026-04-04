@@ -89,33 +89,51 @@ class TestTimeRangeValidation:
 
     def test_v10_default_last_with_dates_ok(self, ws: Workspace) -> None:
         """V10: Default last (30) with explicit dates is OK (last is ignored)."""
-        # This should NOT raise — default last=30 is overridden by explicit dates
-        # Will fail because query() doesn't exist yet, but validation shouldn't raise
-        try:
-            ws.query("Login", from_date="2024-01-01", to_date="2024-01-31")
-        except ValueError:
-            pytest.fail("Default last with explicit dates should not raise ValueError")
-        except Exception:
-            # Other exceptions (e.g., API errors) are OK — validation passed
-            pass
+        ws._validate_query_args(
+            events=["Login"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            last=30,
+            formula=None,
+            rolling=None,
+            cumulative=False,
+            group_by=None,
+        )
 
     def test_valid_date_range_passes(self, ws: Workspace) -> None:
         """Valid from_date/to_date passes validation."""
-        try:
-            ws.query("Login", from_date="2024-01-01", to_date="2024-01-31")
-        except ValueError:
-            pytest.fail("Valid date range should not raise ValueError")
-        except Exception:
-            pass
+        ws._validate_query_args(
+            events=["Login"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            last=30,
+            formula=None,
+            rolling=None,
+            cumulative=False,
+            group_by=None,
+        )
 
     def test_valid_last_passes(self, ws: Workspace) -> None:
         """Valid positive last passes validation."""
-        try:
-            ws.query("Login", last=7)
-        except ValueError:
-            pytest.fail("Positive last should not raise ValueError")
-        except Exception:
-            pass
+        ws._validate_query_args(
+            events=["Login"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=7,
+            formula=None,
+            rolling=None,
+            cumulative=False,
+            group_by=None,
+        )
 
 
 # =============================================================================
@@ -174,21 +192,35 @@ class TestAggregationValidation:
 
     def test_valid_property_math_with_property(self, ws: Workspace) -> None:
         """Valid property math with math_property passes validation."""
-        try:
-            ws.query("Purchase", math="average", math_property="amount")
-        except ValueError:
-            pytest.fail("Property math with math_property should not raise")
-        except Exception:
-            pass
+        ws._validate_query_args(
+            events=["Purchase"],
+            math="average",
+            math_property="amount",
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            formula=None,
+            rolling=None,
+            cumulative=False,
+            group_by=None,
+        )
 
     def test_valid_per_user_with_total(self, ws: Workspace) -> None:
         """Valid per_user with non-DAU math passes validation."""
-        try:
-            ws.query("Purchase", math="total", per_user="average")
-        except ValueError:
-            pytest.fail("per_user with total should not raise")
-        except Exception:
-            pass
+        ws._validate_query_args(
+            events=["Purchase"],
+            math="total",
+            math_property=None,
+            per_user="average",
+            from_date=None,
+            to_date=None,
+            last=30,
+            formula=None,
+            rolling=None,
+            cumulative=False,
+            group_by=None,
+        )
 
 
 # =============================================================================
@@ -236,12 +268,19 @@ class TestFormulaValidation:
 
     def test_v4_formula_with_two_events_ok(self, ws: Workspace) -> None:
         """V4: Formula with 2 events passes validation."""
-        try:
-            ws.query(["Login", "Signup"], formula="(B / A) * 100")
-        except ValueError:
-            pytest.fail("Formula with 2 events should not raise")
-        except Exception:
-            pass
+        ws._validate_query_args(
+            events=["Login", "Signup"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            formula="(B / A) * 100",
+            rolling=None,
+            cumulative=False,
+            group_by=None,
+        )
 
 
 # =============================================================================
