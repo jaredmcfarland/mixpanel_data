@@ -2067,10 +2067,17 @@ class Workspace:
             mode=mode,
         )
 
-        # Delegate to service
+        # Delegate to service — _live_query_service calls _require_api_client
+        # which ensures _credentials is not None
+        credentials = self._credentials
+        if credentials is None:
+            raise ConfigError(
+                "API access requires credentials. "
+                "Use Workspace() with credentials instead of Workspace.open()."
+            )
         return self._live_query_service.query(
             bookmark_params=params,
-            project_id=int(self._credentials.project_id),
+            project_id=int(credentials.project_id),
         )
 
     # =========================================================================

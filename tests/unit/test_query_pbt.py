@@ -104,9 +104,9 @@ class TestMetricParamsInvariant:
         assume(math not in PROPERTY_MATH_TYPES)
         params = ws._build_query_params(
             events=[event],
-            math=math,
+            math=math,  # type: ignore[arg-type]
             math_property=None,
-            per_user=None,  # type: ignore[arg-type]
+            per_user=None,
             from_date=None,
             to_date=None,
             last=last,
@@ -138,9 +138,9 @@ class TestMetricParamsInvariant:
         ws = _make_ws()
         params = ws._build_query_params(
             events=[event],
-            math=math,
+            math=math,  # type: ignore[arg-type]
             math_property=prop,
-            per_user=None,  # type: ignore[arg-type]
+            per_user=None,
             from_date=None,
             to_date=None,
             last=30,
@@ -203,9 +203,9 @@ class TestValidationExhaustiveness:
         with pytest.raises(ValueError, match="requires math_property"):
             ws._validate_query_args(
                 events=["E"],
-                math=math,
+                math=math,  # type: ignore[arg-type]
                 math_property=None,
-                per_user=None,  # type: ignore[arg-type]
+                per_user=None,
                 from_date=None,
                 to_date=None,
                 last=30,
@@ -226,7 +226,7 @@ class TestValidationExhaustiveness:
         with pytest.raises(ValueError, match="per_user is incompatible"):
             ws._validate_query_args(
                 events=["E"],
-                math=math,
+                math=math,  # type: ignore[arg-type]
                 math_property=None,
                 per_user=per_user,  # type: ignore[arg-type]
                 from_date=None,

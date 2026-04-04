@@ -145,7 +145,7 @@ class TestAggregationValidation:
             "p99",
         ):
             with pytest.raises(ValueError, match="requires math_property"):
-                ws.query("Purchase", math=math_type)  # type: ignore[arg-type]
+                ws.query("Purchase", math=math_type)
 
     def test_v2_non_property_math_rejects_property(self, ws: Workspace) -> None:
         """V2: Non-property math with math_property raises ValueError."""
