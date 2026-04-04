@@ -17,7 +17,7 @@ result = ws.segmentation(
     event="Visit", from_date="2025-01-01", to_date="2025-01-31",
     on='properties["utm_source"]',
 )
-by_source = result.df.sum().sort_values(ascending=False)
+by_source = result.df.groupby("segment")["count"].sum().sort_values(ascending=False)
 print("Top acquisition channels:")
 print(by_source.head(10))
 ```
@@ -48,7 +48,7 @@ result = ws.jql("""function main() {
 ```python
 # N-day retention
 result = ws.retention(
-    born_event="Sign Up", event="Login",
+    born_event="Sign Up", return_event="Login",
     from_date="2025-01-01", to_date="2025-02-28",
 )
 print(result.df)
@@ -73,7 +73,7 @@ freq = ws.frequency(event="Use Feature X", from_date=..., to_date=...)
 ```python
 # Daily revenue
 revenue = ws.segmentation_sum(
-    event="Purchase", property="revenue",
+    event="Purchase", on='properties["revenue"]',
     from_date="2025-01-01", to_date="2025-01-31",
 )
 
@@ -95,8 +95,8 @@ result = ws.jql("""function main() {
 # Referral tracking
 invites = ws.segmentation(event="Invite Sent", from_date=..., to_date=...).df
 accepts = ws.segmentation(event="Invite Accepted", from_date=..., to_date=...).df
-invites_total = invites.sum().values[0]
-viral_coefficient = accepts.sum().values[0] / invites_total if invites_total > 0 else 0
+invites_total = invites["count"].sum()
+viral_coefficient = accepts["count"].sum() / invites_total if invites_total > 0 else 0
 print(f"Viral coefficient: {viral_coefficient:.2f}")
 ```
 
@@ -124,8 +124,8 @@ Use GQM to decompose vague questions into actionable queries. This is your prima
 
 | # | Question | Metric | Method |
 |---|----------|--------|--------|
-| 1 | How many users tried it? | Unique users | `segmentation(type="unique")` |
-| 2 | What's the adoption curve? | Daily unique users over time | `segmentation(unit="day", type="unique")` |
+| 1 | How many users tried it? | Unique users | `event_counts(events=[...], type="unique")` |
+| 2 | What's the adoption curve? | Daily unique users over time | `event_counts(events=[...], unit="day", type="unique")` |
 | 3 | Do adopters retain better? | Retention of feature users vs non-users | `retention()` with where filters |
 | 4 | Is there a conversion impact? | Funnel rates with/without feature use | `funnel()` comparisons |
 | 5 | Which segments adopt fastest? | Feature use by segment | `segmentation()` with on breakdown |
@@ -162,7 +162,8 @@ wau = ws.segmentation(
 engagement = ws.frequency(event="Core Action", from_date=..., to_date=...)
 retention = ws.retention(born_event="Sign Up", event="Core Action", from_date=..., to_date=...)
 
-print(f"WAU trend: {wau.df.iloc[:, 0].pct_change().mean():.1%} avg weekly growth")
+wau_series = wau.df.groupby("date")["count"].sum()
+print(f"WAU trend: {wau_series.pct_change().mean():.1%} avg weekly growth")
 ```
 
 ## Diagnosis Methodology
@@ -175,8 +176,8 @@ When a metric changes unexpectedly, follow this structured investigation.
 # Compare periods
 current = ws.segmentation(event="X", from_date="2025-03-01", to_date="2025-03-31").df
 previous = ws.segmentation(event="X", from_date="2025-02-01", to_date="2025-02-28").df
-change_pct = (current.sum() - previous.sum()) / previous.sum() * 100
-print(f"Change: {change_pct.values[0]:.1f}%")
+change_pct = (current["count"].sum() - previous["count"].sum()) / previous["count"].sum() * 100
+print(f"Change: {change_pct:.1f}%")
 ```
 
 ### Step 2: Segment the Change
@@ -188,7 +189,7 @@ dimensions = ["platform", "country", "utm_source", "plan_type", "device_type"]
 for dim in dimensions:
     current = ws.segmentation(event="X", from_date=..., to_date=..., on=f'properties["{dim}"]').df
     previous = ws.segmentation(event="X", from_date=..., to_date=..., on=f'properties["{dim}"]').df
-    delta = current.sum() - previous.sum()
+    delta = (current.groupby("segment")["count"].sum() - previous.groupby("segment")["count"].sum()).dropna()
     print(f"\n=== By {dim} ===")
     print(delta.sort_values().head(5))  # biggest drops
 ```
@@ -198,10 +199,11 @@ for dim in dimensions:
 ```python
 # Daily granularity to find exact date
 daily = ws.segmentation(event="X", from_date="2025-02-15", to_date="2025-03-15", unit="day").df
-daily["rolling_avg"] = daily.iloc[:, 0].rolling(3).mean()
-daily["pct_change"] = daily.iloc[:, 0].pct_change()
+daily_counts = daily.groupby("date")["count"].sum().reset_index()
+daily_counts["rolling_avg"] = daily_counts["count"].rolling(3).mean()
+daily_counts["pct_change"] = daily_counts["count"].pct_change()
 print("Biggest daily drops:")
-print(daily.nsmallest(5, "pct_change"))
+print(daily_counts.nsmallest(5, "pct_change"))
 ```
 
 ### Step 4: Correlate with Other Metrics
@@ -214,7 +216,7 @@ metrics = {
     "errors": ws.segmentation(event="Error", from_date=..., to_date=...).df,
     "signups": ws.segmentation(event="Sign Up", from_date=..., to_date=...).df,
 }
-combined = pd.DataFrame({k: v.iloc[:, 0] for k, v in metrics.items()})
+combined = pd.DataFrame({k: v.groupby("date")["count"].sum() for k, v in metrics.items()})
 print(combined.corr())
 ```
 

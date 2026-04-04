@@ -67,23 +67,23 @@ period = dict(from_date="2025-03-01", to_date="2025-03-31")
 prev_period = dict(from_date="2025-02-01", to_date="2025-02-28")
 
 # Acquisition
-signups = ws.segmentation(event="Sign Up", **period, type="general").df
-signups_prev = ws.segmentation(event="Sign Up", **prev_period, type="general").df
+signups = ws.segmentation(event="Sign Up", **period).df
+signups_prev = ws.segmentation(event="Sign Up", **prev_period).df
 
-# Activation
-dau = ws.segmentation(event="Login", **period, type="unique").df
+# Activation — unique users via event_counts
+dau = ws.event_counts(events=["Login"], **period, type="unique").df
 
 # Retention
-retention = ws.retention(born_event="Sign Up", event="Login", **period)
+retention = ws.retention(born_event="Sign Up", return_event="Login", **period)
 
 # Revenue
-revenue = ws.segmentation_sum(event="Purchase", property="revenue", **period).df
+revenue = ws.segmentation_sum(event="Purchase", on='properties["revenue"]', **period).df
 
 # Compile KPIs
 kpis = {
-    "New Signups": (signups.iloc[:, 0].sum(), signups_prev.iloc[:, 0].sum()),
-    "Avg DAU": (dau.iloc[:, 0].mean(), None),
-    "Total Revenue": (revenue.iloc[:, 0].sum(), None),
+    "New Signups": (signups["count"].sum(), signups_prev["count"].sum()),
+    "Avg DAU": (dau["count"].mean(), None),
+    "Total Revenue": (revenue["count"].sum(), None),
 }
 
 for name, (current, previous) in kpis.items():

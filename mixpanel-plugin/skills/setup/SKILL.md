@@ -44,7 +44,7 @@ cm.add_account(
     name='default',
     username='SERVICE_ACCOUNT_USERNAME',
     secret='SERVICE_ACCOUNT_SECRET',
-    project_id=PROJECT_ID,
+    project_id='YOUR_PROJECT_ID',
     region='us'
 )
 print('Account configured successfully')
@@ -53,12 +53,9 @@ print('Account configured successfully')
 
 ### Option 3: OAuth Login (interactive)
 
-```python
-python3 -c "
-import mixpanel_data as mp
-mp.auth.login(region='us')
-print('OAuth login complete')
-"
+```bash
+# OAuth login (interactive — opens browser)
+mp auth login
 ```
 
 ## Verify Everything Works

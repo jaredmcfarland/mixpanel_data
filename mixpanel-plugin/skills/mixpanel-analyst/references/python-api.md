@@ -18,13 +18,13 @@ ws = mp.Workspace(project_id=67890, region="eu") # explicit project
 ```python
 ws.events() -> list[str]
 ws.properties(event: str) -> list[str]
-ws.property_values(event: str, property: str, limit: int = 25) -> list[str]
+ws.property_values(property_name: str, *, event: str | None = None, limit: int = 100) -> list[str]
 ws.top_events(limit: int = 10) -> list[TopEvent]
 ws.funnels() -> list[FunnelInfo]
 ws.cohorts() -> list[SavedCohort]
-ws.list_bookmarks(type: BookmarkType | None = None) -> list[BookmarkInfo]
+ws.list_bookmarks(bookmark_type: BookmarkType | None = None) -> list[BookmarkInfo]
 ws.lexicon_schemas() -> list[LexiconSchema]
-ws.lexicon_schema(event_name: str) -> LexiconSchema
+ws.lexicon_schema(entity_type: EntityType, name: str) -> LexiconSchema
 ws.clear_discovery_cache() -> None
 ```
 
@@ -32,11 +32,10 @@ ws.clear_discovery_cache() -> None
 
 ```python
 ws.segmentation(
-    event: str, from_date: str, to_date: str,
-    unit: Literal["day","week","month"] = "day",
+    event: str, *, from_date: str, to_date: str,
     on: str | None = None,
+    unit: Literal["day","week","month"] = "day",
     where: str | None = None,
-    type: Literal["general","unique","average"] = "general",
 ) -> SegmentationResult
 
 ws.funnel(
@@ -46,13 +45,13 @@ ws.funnel(
 ) -> FunnelResult
 
 ws.retention(
-    born_event: str, event: str,
+    *, born_event: str, return_event: str,
     from_date: str, to_date: str,
     born_where: str | None = None,
-    event_where: str | None = None,
-    interval: int | None = None,
-    retention_type: str | None = None,
-    born_user_properties: str | None = None,
+    return_where: str | None = None,
+    interval: int = 1,
+    interval_count: int = 10,
+    unit: Literal["day","week","month"] = "day",
 ) -> RetentionResult
 
 ws.jql(script: str, params: dict | None = None) -> JQLResult
@@ -64,7 +63,7 @@ ws.query_saved_report(bookmark_id: int) -> SavedReportResult
 
 ```python
 ws.event_counts(
-    event: str | list[str], unit: str = "day",
+    events: list[str], unit: str = "day",
     from_date: str = ..., to_date: str = ...,
     where: str | None = None,
 ) -> EventCountsResult
@@ -75,13 +74,13 @@ ws.property_counts(
     where: str | None = None,
 ) -> PropertyCountsResult
 
-ws.activity_feed(user_id: str, limit: int = 50) -> ActivityFeedResult
+ws.activity_feed(distinct_ids: list[str], *, from_date: str | None = None, to_date: str | None = None) -> ActivityFeedResult
 
 ws.query_flows(bookmark_id: int) -> FlowsResult
 
 ws.frequency(
-    event: str, unit: str = "day",
-    from_date: str = ..., to_date: str = ...,
+    *, from_date: str, to_date: str,
+    unit: str = ..., event: str | None = None,
     where: str | None = None,
 ) -> FrequencyResult
 
@@ -92,13 +91,13 @@ ws.segmentation_numeric(
 ) -> NumericBucketResult
 
 ws.segmentation_sum(
-    event: str, property: str, unit: str = "day",
+    event: str, on: str, unit: str = "day",
     from_date: str = ..., to_date: str = ...,
     where: str | None = None,
 ) -> NumericSumResult
 
 ws.segmentation_average(
-    event: str, property: str, unit: str = "day",
+    event: str, on: str, unit: str = "day",
     from_date: str = ..., to_date: str = ...,
     where: str | None = None,
 ) -> NumericAverageResult
@@ -119,14 +118,18 @@ ws.property_coverage(event: str, property: str, from_date: str, to_date: str) ->
 ```python
 ws.stream_events(
     from_date: str, to_date: str,
-    event: str | None = None,
+    events: list[str] | None = None,
     where: str | None = None,
-) -> Iterator[UserEvent]
+) -> Iterator[dict[str, Any]]
 
 ws.stream_profiles(
-    from_date: str | None = None, to_date: str | None = None,
     where: str | None = None,
-) -> Iterator[dict]
+    cohort_id: str | None = None,
+    output_properties: list[str] | None = None,
+    raw: bool = False,
+    distinct_id: str | None = None,
+    distinct_ids: list[str] | None = None,
+) -> Iterator[dict[str, Any]]
 ```
 
 ## Dashboard CRUD

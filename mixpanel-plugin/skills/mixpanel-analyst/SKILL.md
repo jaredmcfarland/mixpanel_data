@@ -64,7 +64,7 @@ ws = mp.Workspace(workspace_id=12345)
 ```python
 ws.events()                                    # → list[str]
 ws.properties("Login")                         # → list[str]
-ws.property_values("Login", "city", limit=20)  # → list[str]
+ws.property_values("city", event="Login", limit=20)  # → list[str]
 ws.top_events(limit=10)                        # → list[TopEvent]
 ws.funnels()                                   # → list[FunnelInfo]
 ws.cohorts()                                   # → list[SavedCohort]
@@ -81,7 +81,6 @@ result = ws.segmentation(
     unit="day",                                      # day | week | month
     on='properties["platform"]',                     # segment by property
     where='properties["country"] == "US"',           # filter
-    type="general",                                  # general | unique | average
 )
 df = result.df  # pandas DataFrame
 
@@ -90,7 +89,7 @@ result = ws.funnel(funnel_id=12345, from_date="2025-01-01", to_date="2025-01-31"
 
 # Cohort retention
 result = ws.retention(
-    born_event="Sign Up", event="Login",
+    born_event="Sign Up", return_event="Login",
     from_date="2025-01-01", to_date="2025-01-31",
 )
 
@@ -102,13 +101,13 @@ result = ws.jql("""function main() {
 }""")
 
 # Additional queries
-ws.event_counts(event=["Login", "Signup"], from_date=..., to_date=...)
+ws.event_counts(events=["Login", "Signup"], from_date=..., to_date=...)
 ws.frequency(event="Purchase", from_date=..., to_date=...)
-ws.activity_feed(user_id="user123", limit=100)
+ws.activity_feed(distinct_ids=["user123"])
 ws.query_saved_report(bookmark_id=456)
 ws.query_flows(bookmark_id=789)
-ws.segmentation_sum(event="Purchase", property="revenue", ...)
-ws.segmentation_average(event="Purchase", property="duration", ...)
+ws.segmentation_sum(event="Purchase", on='properties["revenue"]', ...)
+ws.segmentation_average(event="Purchase", on='properties["duration"]', ...)
 ```
 
 ### Streaming — Raw Data Access
@@ -116,11 +115,11 @@ ws.segmentation_average(event="Purchase", property="duration", ...)
 ```python
 # Memory-efficient event iteration
 for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-02"):
-    print(event.name, event.time, event.properties)
+    print(event["event_name"], event["event_time"], event["properties"])
 
 # Profile iteration
 for profile in ws.stream_profiles():
-    print(profile["$distinct_id"])
+    print(profile["distinct_id"])
 ```
 
 ### Entity Management (App API)

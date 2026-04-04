@@ -12,7 +12,7 @@ import pandas as pd
 
 ws = mp.Workspace()
 result = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-01-31")
-df = result.df  # pandas DataFrame with DatetimeIndex
+df = result.df  # long-format DataFrame with columns: date, segment, count
 ```
 
 ## Common Transformations
@@ -21,15 +21,17 @@ df = result.df  # pandas DataFrame with DatetimeIndex
 
 ```python
 # Daily trend with rolling average
-df = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-03-31").df
-df["rolling_7d"] = df.iloc[:, 0].rolling(7).mean()
-print(df[["Login", "rolling_7d"]].tail(14))
+df = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-03-31", unit="day").df
 
-# Week-over-week comparison
-this_week = ws.segmentation(event="Login", from_date="2025-03-24", to_date="2025-03-30").df
-last_week = ws.segmentation(event="Login", from_date="2025-03-17", to_date="2025-03-23").df
-change = (this_week.sum() - last_week.sum()) / last_week.sum() * 100
-print(f"WoW change: {change.values[0]:.1f}%")
+# For unsegmented queries, work with the count series
+counts = df[df["segment"] == "total"].set_index("date")["count"]
+counts.index = pd.to_datetime(counts.index)
+
+# Rolling average and week-over-week
+counts_df = counts.to_frame()
+counts_df["rolling_7d"] = counts.rolling(7).mean()
+counts_df["wow_change"] = counts.pct_change(7) * 100
+print(counts_df.tail(14))
 ```
 
 ### Segmented Analysis
@@ -42,7 +44,7 @@ df = ws.segmentation(
 ).df
 
 # Top 5 countries by total
-totals = df.sum().sort_values(ascending=False)
+totals = df.groupby("segment")["count"].sum().sort_values(ascending=False)
 print("Top 5 countries:")
 print(totals.head())
 
@@ -59,13 +61,12 @@ result = ws.funnel(funnel_id=12345, from_date="2025-01-01", to_date="2025-01-31"
 df = result.df
 
 # Step-by-step conversion
-if hasattr(result, 'steps'):
-    for i, step in enumerate(result.steps):
-        rate = step.get('step_conv_ratio', 0) * 100
-        print(f"Step {i+1}: {step.get('event', '?'):30s} {rate:.1f}%")
+for i, step in enumerate(result.steps):
+    print(f"Step {i+1}: {step.event:30s} {step.conversion_rate:.1%}")
 
 # Overall conversion
-print(f"\nOverall: {result.steps[0].get('overall_conv_ratio', 0)*100:.1f}%")
+if result.steps:
+    print(f"\nOverall: {result.conversion_rate:.1%}")
 ```
 
 ### Retention Heatmap
@@ -74,14 +75,14 @@ print(f"\nOverall: {result.steps[0].get('overall_conv_ratio', 0)*100:.1f}%")
 import numpy as np
 
 result = ws.retention(
-    born_event="Sign Up", event="Login",
+    born_event="Sign Up", return_event="Login",
     from_date="2025-01-01", to_date="2025-02-28",
 )
 df = result.df
 
 # Format as percentage heatmap
 print("\n=== Retention Heatmap ===")
-print(df.map(lambda x: f"{x:.0%}" if pd.notna(x) else "—").to_string())
+print(df.applymap(lambda x: f"{x:.0%}" if pd.notna(x) else "—").to_string())
 ```
 
 ### Combining Multiple Queries
@@ -97,10 +98,16 @@ logins = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-01
 signups = ws.segmentation(event="Sign Up", from_date="2025-01-01", to_date="2025-01-31").df
 purchases = ws.segmentation(event="Purchase", from_date="2025-01-01", to_date="2025-01-31").df
 
+def extract_counts(df: pd.DataFrame) -> pd.Series:
+    """Extract the count series from a long-format segmentation DataFrame."""
+    s = df[df["segment"] == "total"].set_index("date")["count"]
+    s.index = pd.to_datetime(s.index)
+    return s
+
 combined = pd.DataFrame({
-    "Logins": logins.iloc[:, 0] if len(logins.columns) > 0 else 0,
-    "Signups": signups.iloc[:, 0] if len(signups.columns) > 0 else 0,
-    "Purchases": purchases.iloc[:, 0] if len(purchases.columns) > 0 else 0,
+    "Logins": extract_counts(logins),
+    "Signups": extract_counts(signups),
+    "Purchases": extract_counts(purchases),
 })
 
 # Derived metrics
@@ -233,8 +240,8 @@ with pd.ExcelWriter("report.xlsx") as writer:
 ```python
 # Correlation between events
 combined = pd.DataFrame({
-    "feature_use": feature_df.iloc[:, 0],
-    "purchases": purchase_df.iloc[:, 0],
+    "feature_use": feature_df[feature_df["segment"] == "total"].set_index("date")["count"],
+    "purchases": purchase_df[purchase_df["segment"] == "total"].set_index("date")["count"],
 })
 print(f"Correlation: {combined.corr().iloc[0, 1]:.3f}")
 
@@ -252,7 +259,7 @@ print(df[["avg", "min", "max"]].describe())
 ## Tips
 
 - Always use `matplotlib.use("Agg")` before importing `plt` — ensures non-interactive mode
-- Use `.iloc[:, 0]` to access the first (often only) data column from segmentation results
+- Use `df[df["segment"] == "total"].set_index("date")["count"]` to extract the count series from unsegmented segmentation results (long format: columns `date`, `segment`, `count`)
 - Call `.sum()`, `.mean()`, `.describe()` on DataFrames for quick summaries
 - Use `pd.to_datetime()` when working with streamed event timestamps
 - Save visualizations to files (`plt.savefig()`) rather than trying to display them

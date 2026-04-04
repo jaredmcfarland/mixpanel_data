@@ -11,7 +11,7 @@ for cmd in python3 python; do
   if command -v "$cmd" &>/dev/null; then
     major=$("$cmd" -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo 0)
     minor=$("$cmd" -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo 0)
-    if [ "$major" -ge 3 ] && [ "$minor" -ge 10 ]; then
+    if [ "$major" -gt 3 ] || ([ "$major" -eq 3 ] && [ "$minor" -ge 10 ]); then
       version=$("$cmd" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')")
       python_cmd="$cmd"
       echo "✓ Python $version ($cmd)"
@@ -57,14 +57,14 @@ echo "Checking Mixpanel credentials..."
 "$python_cmd" -c "
 import os, sys
 # Check environment variables first
-env_vars = ['MP_USERNAME', 'MP_SECRET', 'MP_PROJECT_ID']
+env_vars = ['MP_USERNAME', 'MP_SECRET', 'MP_PROJECT_ID', 'MP_REGION']
 env_set = [v for v in env_vars if os.environ.get(v)]
-if env_set:
-    print(f'✓ Environment variables set: {\", \".join(env_set)}')
-    missing = [v for v in env_vars if not os.environ.get(v)]
-    if missing:
-        print(f'  ⚠ Missing: {\", \".join(missing)}')
+if len(env_set) == len(env_vars):
+    print(f'✓ All environment variables set')
     sys.exit(0)
+elif env_set:
+    missing = [v for v in env_vars if not os.environ.get(v)]
+    print(f'⚠ Partial environment config — missing: {\", \".join(missing)}')
 
 # Check config file
 try:
@@ -72,8 +72,9 @@ try:
     cm = ConfigManager()
     accounts = cm.list_accounts()
     if accounts:
-        print(f'✓ {len(accounts)} configured account(s): {\", \".join(accounts)}')
-        default = cm.default_account
+        names = [a.name for a in accounts]
+        print(f'✓ {len(accounts)} configured account(s): {\", \".join(names)}')
+        default = next((a.name for a in accounts if a.is_default), None)
         if default:
             print(f'  Default: {default}')
     else:

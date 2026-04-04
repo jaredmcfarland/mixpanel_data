@@ -93,7 +93,11 @@ def list_types() -> None:
         if name.startswith("_"):
             continue
         obj = getattr(mod, name)
-        if isinstance(obj, type) and name != "Workspace":
+        if (
+            isinstance(obj, type)
+            and name != "Workspace"
+            and not issubclass(obj, Exception)
+        ):
             doc = inspect.getdoc(obj) or ""
             first_line = doc.split("\n")[0] if doc else ""
             types_list.append((name, first_line))
@@ -126,12 +130,16 @@ def show_fields(obj: type, indent: str = "") -> None:
         for fname, field in obj.__dataclass_fields__.items():
             ftype = field.type if hasattr(field, "type") else "?"
             default = ""
-            if field.default is not field.default_factory:  # type: ignore[attr-defined]
-                try:
-                    if field.default is not dataclasses.MISSING:  # type: ignore[name-defined]
-                        default = f" = {field.default!r}"
-                except Exception:
-                    pass
+            try:
+                if field.default is not dataclasses.MISSING:
+                    default = f" = {field.default!r}"
+                elif field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
+                    factory_name = getattr(
+                        field.default_factory, "__name__", repr(field.default_factory)
+                    )
+                    default = f" = <factory {factory_name}>"
+            except Exception:
+                pass
             print(f"{indent}  {fname}: {ftype}{default}")
     elif hasattr(obj, "model_fields"):
         print(f"\n{indent}Fields:")

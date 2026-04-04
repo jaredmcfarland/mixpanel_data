@@ -80,11 +80,9 @@ python3 help.py types                     # → list all 150+ types
 ## Installation
 
 ```bash
-# From marketplace (when published)
-claude plugin install mixpanel-data
-
-# Local development
-claude --plugin-dir /path/to/mixpanel-plugin
+# Copy or symlink the mixpanel-plugin/ directory into your plugins location
+# e.g. for local development:
+ln -s /path/to/mixpanel-plugin ~/.claude/plugins/mixpanel-data
 ```
 
 ## Directory Structure

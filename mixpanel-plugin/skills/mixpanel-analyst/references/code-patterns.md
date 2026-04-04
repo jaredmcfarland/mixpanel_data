@@ -24,7 +24,7 @@ event_name = top[0].name
 props = ws.properties(event_name)
 print(f"\nProperties for '{event_name}': {len(props)}")
 for p in props[:15]:
-    vals = ws.property_values(event_name, p, limit=5)
+    vals = ws.property_values(p, event=event_name, limit=5)
     print(f"  {p:30s} → {vals}")
 ```
 
@@ -37,17 +37,18 @@ import pandas as pd
 
 ws = mp.Workspace()
 
-df = ws.segmentation(
-    event="Login", from_date="2025-01-01", to_date="2025-03-31", unit="day"
-).df
+df = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-03-31", unit="day").df
+counts = df[df["segment"] == "total"].set_index("date")["count"]
+counts.index = pd.to_datetime(counts.index)
 
-df["7d_avg"] = df.iloc[:, 0].rolling(7).mean()
-df["wow_change"] = df.iloc[:, 0].pct_change(7) * 100
+counts_df = counts.to_frame()
+counts_df["7d_avg"] = counts.rolling(7).mean()
+counts_df["wow_change"] = counts.pct_change(7) * 100
 
 print("=== Login Trend ===")
-print(df.tail(14).to_string())
-print(f"\nAvg daily: {df.iloc[:, 0].mean():,.0f}")
-print(f"Peak: {df.iloc[:, 0].max():,.0f} on {df.iloc[:, 0].idxmax()}")
+print(counts_df.tail(14).to_string())
+print(f"\nAvg daily: {counts.mean():,.0f}")
+print(f"Peak: {counts.max():,.0f} on {counts.idxmax()}")
 ```
 
 ## 3. Segment Comparison
@@ -63,7 +64,7 @@ df = ws.segmentation(
     on='properties["platform"]',
 ).df
 
-totals = df.sum().sort_values(ascending=False)
+totals = df.groupby("segment")["count"].sum().sort_values(ascending=False)
 pct = (totals / totals.sum() * 100).round(1)
 
 print("=== Purchases by Platform ===")
@@ -101,7 +102,7 @@ ws = mp.Workspace()
 
 result = ws.retention(
     born_event="Sign Up",
-    event="Login",
+    return_event="Login",
     from_date="2025-01-01",
     to_date="2025-02-28",
 )
@@ -130,27 +131,29 @@ import pandas as pd
 ws = mp.Workspace()
 
 # Daily revenue
-revenue = ws.segmentation_sum(
-    event="Purchase", property="revenue",
+revenue_df = ws.segmentation_sum(
+    event="Purchase", on='properties["revenue"]',
     from_date="2025-01-01", to_date="2025-01-31",
 ).df
+revenue_s = revenue_df[revenue_df["segment"] == "total"].set_index("date")["count"]
 
 # Transaction count
-txns = ws.segmentation(
+txns_df = ws.segmentation(
     event="Purchase", from_date="2025-01-01", to_date="2025-01-31",
-    type="general",
 ).df
+txns_s = txns_df[txns_df["segment"] == "total"].set_index("date")["count"]
 
 # Unique buyers
-buyers = ws.segmentation(
-    event="Purchase", from_date="2025-01-01", to_date="2025-01-31",
+buyers_df = ws.event_counts(
+    events=["Purchase"], from_date="2025-01-01", to_date="2025-01-31",
     type="unique",
 ).df
+buyers_s = buyers_df[buyers_df["segment"] == "total"].set_index("date")["count"]
 
 combined = pd.DataFrame({
-    "Revenue": revenue.iloc[:, 0],
-    "Transactions": txns.iloc[:, 0],
-    "Unique Buyers": buyers.iloc[:, 0],
+    "Revenue": revenue_s,
+    "Transactions": txns_s,
+    "Unique Buyers": buyers_s,
 })
 combined["AOV"] = combined["Revenue"] / combined["Transactions"]
 combined["ARPU"] = combined["Revenue"] / combined["Unique Buyers"]
@@ -190,11 +193,11 @@ import pandas as pd
 ws = mp.Workspace()
 event = "Login"
 
-current = ws.segmentation(event=event, from_date="2025-03-01", to_date="2025-03-31").df
-previous = ws.segmentation(event=event, from_date="2025-02-01", to_date="2025-02-28").df
+current_df = ws.segmentation(event=event, from_date="2025-03-01", to_date="2025-03-31").df
+previous_df = ws.segmentation(event=event, from_date="2025-02-01", to_date="2025-02-28").df
 
-c_total = current.iloc[:, 0].sum()
-p_total = previous.iloc[:, 0].sum()
+c_total = current_df[current_df["segment"] == "total"]["count"].sum()
+p_total = previous_df[previous_df["segment"] == "total"]["count"].sum()
 change = (c_total - p_total) / p_total * 100
 
 print(f"=== {event} — Month over Month ===")
@@ -208,9 +211,11 @@ for dim in ["platform", "country"]:
                            on=f'properties["{dim}"]').df
     prev = ws.segmentation(event=event, from_date="2025-02-01", to_date="2025-02-28",
                            on=f'properties["{dim}"]').df
-    delta = curr.sum() - prev.sum()
+    curr_totals = curr.groupby("segment")["count"].sum()
+    prev_totals = prev.groupby("segment")["count"].sum()
+    delta = (curr_totals - prev_totals).dropna().sort_values()
     print(f"\n--- Change by {dim} ---")
-    print(delta.sort_values().head(5))
+    print(delta.head(5))
 ```
 
 ## 9. Feature Adoption Tracking
@@ -222,23 +227,25 @@ import mixpanel_data as mp
 ws = mp.Workspace()
 
 # Unique adopters per day
-adopters = ws.segmentation(
-    event="Use New Feature",
+adopters_df = ws.event_counts(
+    events=["Use New Feature"],
     from_date="2025-03-01", to_date="2025-03-31",
     unit="day", type="unique",
 ).df
+adopters_s = adopters_df[adopters_df["segment"] == "total"].set_index("date")["count"]
 
 # Total user base for comparison
-total_users = ws.segmentation(
-    event="Login",
+total_users_df = ws.event_counts(
+    events=["Login"],
     from_date="2025-03-01", to_date="2025-03-31",
     unit="day", type="unique",
 ).df
+total_users_s = total_users_df[total_users_df["segment"] == "total"].set_index("date")["count"]
 
 import pandas as pd
 combined = pd.DataFrame({
-    "Adopters": adopters.iloc[:, 0],
-    "Active Users": total_users.iloc[:, 0],
+    "Adopters": adopters_s,
+    "Active Users": total_users_s,
 })
 combined["Adoption %"] = (combined["Adopters"] / combined["Active Users"] * 100).round(1)
 
@@ -265,17 +272,17 @@ for c in cohorts:
 # Use where filters to segment by cohort properties
 paid = ws.segmentation(
     event="Feature Use", from_date="2025-01-01", to_date="2025-01-31",
-    where='user["plan"] == "paid"', type="unique",
+    where='user["plan"] == "paid"',
 ).df
 free = ws.segmentation(
     event="Feature Use", from_date="2025-01-01", to_date="2025-01-31",
-    where='user["plan"] == "free"', type="unique",
+    where='user["plan"] == "free"',
 ).df
 
 import pandas as pd
 comparison = pd.DataFrame({
-    "Paid Users": paid.iloc[:, 0],
-    "Free Users": free.iloc[:, 0],
+    "Paid Users": paid.groupby("date")["count"].sum(),
+    "Free Users": free.groupby("date")["count"].sum(),
 })
 print("=== Feature Use: Paid vs Free ===")
 print(comparison.describe())
@@ -293,15 +300,21 @@ period = dict(from_date="2025-03-01", to_date="2025-03-31")
 
 # Fetch all KPIs in parallel — each query is independent
 with ThreadPoolExecutor(max_workers=4) as pool:
-    f_dau = pool.submit(lambda: ws.segmentation(event="Login", **period, type="unique").df)
+    f_dau = pool.submit(lambda: ws.event_counts(events=["Login"], **period, type="unique").df)
     f_signups = pool.submit(lambda: ws.segmentation(event="Sign Up", **period).df)
     f_purchases = pool.submit(lambda: ws.segmentation(event="Purchase", **period).df)
-    f_revenue = pool.submit(lambda: ws.segmentation_sum(event="Purchase", property="revenue", **period).df)
+    f_revenue = pool.submit(lambda: ws.segmentation_sum(event="Purchase", on='properties["revenue"]', **period).df)
 
-dau = f_dau.result().iloc[:, 0].mean()
-signups = f_signups.result().iloc[:, 0].sum()
-purchases = f_purchases.result().iloc[:, 0].sum()
-revenue = f_revenue.result().iloc[:, 0].sum()
+def _total(df: "pd.DataFrame") -> float:
+    return df[df["segment"] == "total"]["count"].sum()
+
+def _mean(df: "pd.DataFrame") -> float:
+    return df[df["segment"] == "total"]["count"].mean()
+
+dau = _mean(f_dau.result())
+signups = _total(f_signups.result())
+purchases = _total(f_purchases.result())
+revenue = _total(f_revenue.result())
 
 print("╔══════════════════════════════════╗")
 print("║     EXECUTIVE DASHBOARD          ║")

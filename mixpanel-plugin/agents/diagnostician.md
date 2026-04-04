@@ -66,8 +66,8 @@ ws = mp.Workspace()
 current = ws.segmentation(event="TARGET_EVENT", from_date="CURRENT_START", to_date="CURRENT_END").df
 previous = ws.segmentation(event="TARGET_EVENT", from_date="PREV_START", to_date="PREV_END").df
 
-c_total = current.iloc[:, 0].sum()
-p_total = previous.iloc[:, 0].sum()
+c_total = current["count"].sum()
+p_total = previous["count"].sum()
 change_pct = (c_total - p_total) / p_total * 100 if p_total != 0 else 0
 
 print(f"Current period:  {c_total:>10,.0f}")
@@ -87,12 +87,15 @@ daily = ws.segmentation(
     unit="day",
 ).df
 
-daily["rolling_3d"] = daily.iloc[:, 0].rolling(3).mean()
-daily["daily_change"] = daily.iloc[:, 0].pct_change() * 100
+counts = daily[daily["segment"] == "total"].set_index("date")["count"]
+counts.index = pd.to_datetime(counts.index)
+trend = counts.to_frame()
+trend["rolling_3d"] = counts.rolling(3).mean()
+trend["daily_change"] = counts.pct_change() * 100
 
 # Find the biggest single-day drops/spikes
 print("=== Biggest Changes ===")
-print(daily.nsmallest(5, "daily_change")[["daily_change"]])
+print(trend.nsmallest(5, "daily_change")[["daily_change"]])
 ```
 
 ### Step 3: Segment the Change
@@ -124,8 +127,10 @@ prev = dict(zip(dimensions, all_dfs[len(dimensions):]))
 # Calculate absolute and relative change per segment
 for dim in dimensions:
     try:
-        delta = curr[dim].sum() - prev[dim].sum()
-        pct_delta = ((curr[dim].sum() - prev[dim].sum()) / prev[dim].sum().replace(0, float('nan')) * 100).fillna(0)
+        c_totals = curr[dim].groupby("segment")["count"].sum()
+        p_totals = prev[dim].groupby("segment")["count"].sum()
+        delta = c_totals - p_totals
+        pct_delta = ((c_totals - p_totals) / p_totals.replace(0, float('nan')) * 100).fillna(0)
 
         print(f"\n=== By {dim} ===")
         print("Absolute change (bottom 5):")
@@ -146,7 +151,7 @@ metrics = {}
 for event_name in ["Login", "Sign Up", "Purchase", "Error", "Page View"]:
     try:
         r = ws.segmentation(event=event_name, from_date="BROAD_START", to_date="BROAD_END").df
-        metrics[event_name] = r.iloc[:, 0]
+        metrics[event_name] = r[r["segment"] == "total"].set_index("date")["count"]
     except Exception:
         pass
 
