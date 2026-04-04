@@ -101,6 +101,18 @@ print(f"\nTotal: {df.sum().sum():,.0f}")
 print(f"Top segment: {df.sum().idxmax()}")
 ```
 
+## Auth Error Recovery
+
+If `Workspace()` initialization or any query raises `AuthenticationError` or `ConfigError`:
+
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+2. Parse the JSON to diagnose:
+   - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
+   - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."
+   - Credentials exist but API fails → "Credentials failed. Run `/mp-auth test` to diagnose."
+3. Do NOT attempt to fix credentials or ask for secrets.
+4. After the user resolves the issue, retry the original query.
+
 ## Quality Standards
 
 - Always start with schema discovery before querying

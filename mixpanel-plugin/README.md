@@ -17,6 +17,17 @@ Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool call
 
 ## Components
 
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/mp-auth` | Manage authentication — status, add/switch/test accounts, OAuth login |
+| `/mp-auth list` | List all configured accounts |
+| `/mp-auth add` | Guided service account setup (secrets entered securely in terminal) |
+| `/mp-auth test` | Test current credentials against the Mixpanel API |
+| `/mp-auth switch <name>` | Switch default account |
+| `/mp-auth login` | OAuth browser-based login |
+
 ### Skills
 
 | Skill | Invocation | Purpose |
@@ -39,6 +50,7 @@ Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool call
 |--------|----------|---------|
 | `setup.sh` | `skills/setup/scripts/` | Portable installer (uv → pip3 → pip fallback) |
 | `help.py` | `skills/mixpanel-analyst/scripts/` | Programmatic docstring lookup for any class/method |
+| `auth_manager.py` | `skills/mixpanel-analyst/scripts/` | Auth status, testing, account management (JSON output) |
 
 ### Reference Files (Progressive Disclosure)
 

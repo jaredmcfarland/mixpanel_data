@@ -84,6 +84,18 @@ for event_name in [t.event for t in top[:5]]:
         print(f"  {p:30s} → {vals[:3]}")
 ```
 
+### Auth Error Recovery
+
+If `Workspace()` initialization or any query raises `AuthenticationError` or `ConfigError`:
+
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+2. Parse the JSON to diagnose:
+   - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
+   - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."
+   - Credentials exist but API fails → "Credentials failed. Run `/mp-auth test` to diagnose."
+3. Do NOT attempt to fix credentials or ask for secrets.
+4. After the user resolves the issue, retry the original query.
+
 ### 3. Classify with AARRR
 
 Map the question to a pirate metric stage:

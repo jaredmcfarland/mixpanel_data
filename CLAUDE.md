@@ -270,6 +270,7 @@ This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin tea
 
 | Type | Name | Invocation |
 |------|------|------------|
+| **Command** | `auth` | `/mp-auth` — manage credentials, accounts, OAuth |
 | **Skill** | `setup` | `/mixpanel-data:setup` — install deps, verify auth |
 | **Skill** | `mixpanel-analyst` | Auto-triggered on analytics questions |
 | **Agent** | `analyst` | Task tool — general-purpose orchestrator |
@@ -277,6 +278,7 @@ This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin tea
 | **Agent** | `diagnostician` | Task tool — root cause analysis |
 | **Agent** | `narrator` | Task tool — executive summaries and reports |
 | **Script** | `help.py` | `python help.py Workspace.segmentation` — live API docs |
+| **Script** | `auth_manager.py` | `python auth_manager.py status` — auth status JSON |
 
 ### Usage
 

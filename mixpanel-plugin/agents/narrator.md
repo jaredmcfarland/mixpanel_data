@@ -48,6 +48,18 @@ Before any unfamiliar API call, look up the exact signature:
 python3 -c "import inspect, mixpanel_data as mp; m=getattr(mp.Workspace,'segmentation'); print(inspect.signature(m)); print(inspect.getdoc(m))"
 ```
 
+## Auth Error Recovery
+
+If `Workspace()` initialization or any query raises `AuthenticationError` or `ConfigError`:
+
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+2. Parse the JSON to diagnose:
+   - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
+   - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."
+   - Credentials exist but API fails → "Credentials failed. Run `/mp-auth test` to diagnose."
+3. Do NOT attempt to fix credentials or ask for secrets.
+4. After the user resolves the issue, retry the original query.
+
 ## Your Workflow
 
 ### 1. Determine Report Scope
