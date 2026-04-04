@@ -5,7 +5,19 @@ Complete programmable interface to Mixpanel analytics: discover your schema,
 run live analytics, stream data, and manage entities via the App API.
 """
 
-from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
+from mixpanel_data._literal_types import (
+    ChartType,
+    CountType,
+    FilterOperator,
+    FilterValue,
+    HourDayUnit,
+    InsightsTimeUnit,
+    MeasurementMath,
+    PerUserAggregation,
+    PropertyType,
+    ResourceType,
+    TimeUnit,
+)
 from mixpanel_data.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
@@ -50,6 +62,9 @@ from mixpanel_data.types import (
     BookmarkInfo,
     BookmarkMetadata,
     BookmarkType,
+    # Insights Query types
+    Breakdown,
+    BreakdownBucket,
     BulkAnomalyEntry,
     BulkCreateSchemasParams,
     BulkCreateSchemasResponse,
@@ -105,16 +120,19 @@ from mixpanel_data.types import (
     ExperimentStatus,
     FeatureFlag,
     FeatureFlagStatus,
+    Filter,
     FlagContractStatus,
     FlagHistoryParams,
     FlagHistoryResponse,
     FlagLimitsResponse,
     FlowsResult,
+    Formula,
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
     FunnelStep,
     InitSchemaEnforcementParams,
+    InsightsResult,
     JQLResult,
     LexiconDefinition,
     LexiconMetadata,
@@ -124,6 +142,7 @@ from mixpanel_data.types import (
     LookupTable,
     LookupTableUploadUrl,
     MarkLookupTableReadyParams,
+    Metric,
     NumericAverageResult,
     NumericBucketResult,
     NumericPropertySummaryResult,
@@ -190,6 +209,15 @@ __all__ = [
     "CountType",
     "HourDayUnit",
     "TimeUnit",
+    # Insights query type aliases
+    "MeasurementMath",
+    "FilterOperator",
+    "PropertyType",
+    "ResourceType",
+    "PerUserAggregation",
+    "ChartType",
+    "InsightsTimeUnit",
+    "FilterValue",
     # Exceptions
     "MixpanelDataError",
     "APIError",
@@ -352,6 +380,13 @@ __all__ = [
     "MarkLookupTableReadyParams",
     "LookupTableUploadUrl",
     "UpdateLookupTableParams",
+    # Insights Query types
+    "Metric",
+    "Filter",
+    "Breakdown",
+    "BreakdownBucket",
+    "Formula",
+    "InsightsResult",
     # Schema Registry & Data Governance types (Phase 028)
     "SchemaEntry",
     "BulkCreateSchemasParams",

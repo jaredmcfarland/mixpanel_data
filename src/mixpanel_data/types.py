@@ -26,6 +26,15 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
+from mixpanel_data._literal_types import (
+    FilterOperator,
+    FilterValue,
+    MeasurementMath,
+    PerUserAggregation,
+    PropertyType,
+    ResourceType,
+)
+
 T = TypeVar("T")
 
 # =============================================================================
@@ -3176,6 +3185,305 @@ class BookmarkHistoryResponse(BaseModel):
 
     pagination: BookmarkHistoryPagination | None = None
     """Pagination metadata."""
+
+
+# =============================================================================
+# Insights Query Types
+# =============================================================================
+
+
+class Filter(BaseModel):
+    """A filter condition (WHERE clause) for insights queries.
+
+    Represents a single property filter that constrains which events
+    or users are included in a query. Maps to a filter section entry
+    in bookmark params.
+
+    The SQL analogy is ``WHERE property operator value``.
+
+    Attributes:
+        property: Property name to filter on (e.g., ``"$browser"``,
+            ``"plan_type"``).
+        operator: Comparison operator. String operators include
+            ``"equals"``, ``"contains"``; number operators include
+            ``"is greater than"``, ``"is between"``.
+        value: Filter value(s). Format depends on operator:
+            arrays for ``"equals"``/``"does not equal"``,
+            plain string for ``"contains"``, numeric for number
+            operators, ``None`` for ``"is set"``/``"is not set"``.
+        property_type: Data type of the property being filtered.
+        resource_type: Whether this filters event or user properties.
+
+    Example:
+        ```python
+        # String equality
+        f = Filter(property="$browser", operator="equals", value=["Chrome"])
+
+        # Numeric range
+        f = Filter(
+            property="amount",
+            operator="is greater than",
+            value=100,
+            property_type="number",
+        )
+
+        # Existence check
+        f = Filter(property="email", operator="is set")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    property: str
+    """Property name to filter on."""
+
+    operator: FilterOperator
+    """Comparison operator."""
+
+    value: FilterValue = None
+    """Filter value(s). Format depends on operator."""
+
+    property_type: PropertyType = "string"
+    """Data type of the property being filtered."""
+
+    resource_type: ResourceType = "events"
+    """Whether this filters event or user properties."""
+
+
+class BreakdownBucket(BaseModel):
+    """Numeric bucketing configuration for breakdowns.
+
+    When breaking down by a numeric property, this controls how
+    values are grouped into ranges.
+
+    Attributes:
+        size: Width of each bucket.
+        min: Minimum value for bucketing range.
+        max: Maximum value for bucketing range.
+
+    Example:
+        ```python
+        bucket = BreakdownBucket(size=10, min=0, max=100)
+        # Creates buckets: 0-10, 10-20, ..., 90-100
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    size: int
+    """Width of each bucket."""
+
+    min: int | float = 0
+    """Minimum value for bucketing range."""
+
+    max: int | float = 100
+    """Maximum value for bucketing range."""
+
+
+class Breakdown(BaseModel):
+    """A breakdown dimension (GROUP BY clause) for insights queries.
+
+    Represents a property used to segment query results. Maps to a
+    group section entry in bookmark params.
+
+    The SQL analogy is ``GROUP BY property``.
+
+    Attributes:
+        property: Property name to break down by.
+        property_type: Data type of the breakdown property.
+        resource_type: Whether this is an event or user property.
+        bucket: Optional numeric bucketing configuration.
+
+    Example:
+        ```python
+        # Simple string breakdown
+        b = Breakdown(property="$browser")
+
+        # Numeric breakdown with buckets
+        b = Breakdown(
+            property="age",
+            property_type="number",
+            resource_type="people",
+            bucket=BreakdownBucket(size=10, min=0, max=100),
+        )
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    property: str
+    """Property name to break down by."""
+
+    property_type: PropertyType = "string"
+    """Data type of the breakdown property."""
+
+    resource_type: ResourceType = "events"
+    """Whether this is an event or user property."""
+
+    bucket: BreakdownBucket | None = None
+    """Optional numeric bucketing configuration."""
+
+
+class Metric(BaseModel):
+    """A single metric (SELECT clause) in an insights query.
+
+    Represents one event aggregation to compute. Maps to a show
+    clause with behavior + measurement in bookmark params.
+
+    The SQL analogy is ``SELECT math(property) FROM event WHERE filters``.
+
+    Attributes:
+        event: Event name to query (required).
+        math: Aggregation function. Counting: ``"total"``, ``"unique"``,
+            ``"sessions"``. Property aggregation (requires ``property``):
+            ``"average"``, ``"median"``, ``"min"``, ``"max"``, percentiles.
+        property: Property name for aggregation math types like
+            ``"average"``, ``"min"``, ``"max"``. Not needed for counting.
+        per_user: Per-user aggregation method. Aggregates per user first,
+            then applies ``math`` across users.
+        filters: Per-metric filters (ANDed with global ``where``).
+        filters_combinator: How per-metric filters combine
+            (``"all"`` = AND, ``"any"`` = OR).
+        hidden: Hide from display. Set ``True`` for metrics used only
+            as formula inputs.
+
+    Example:
+        ```python
+        # Count total events
+        m = Metric(event="Login")
+
+        # Count unique users
+        m = Metric(event="Login", math="unique")
+
+        # Average property value
+        m = Metric(event="Purchase", math="average", property="Amount")
+
+        # Per-user aggregation: average purchases per user
+        m = Metric(event="Purchase", math="average", per_user="total")
+
+        # With per-metric filter
+        m = Metric(
+            event="Purchase",
+            math="unique",
+            filters=[Filter(property="$browser", operator="equals", value=["Chrome"])],
+        )
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    event: str
+    """Event name to query."""
+
+    math: MeasurementMath = "total"
+    """Aggregation function."""
+
+    property: str | None = None
+    """Property name for aggregation math types."""
+
+    per_user: PerUserAggregation | None = None
+    """Per-user aggregation method."""
+
+    filters: list[Filter] | None = None
+    """Per-metric filters (ANDed with global where)."""
+
+    filters_combinator: Literal["all", "any"] = "all"
+    """How per-metric filters combine."""
+
+    hidden: bool = False
+    """Hide from display (for formula inputs)."""
+
+
+class Formula(BaseModel):
+    """A formula referencing metrics by letter (A, B, C...).
+
+    Letters map to the position of metrics in the ``metrics`` list
+    passed to ``Workspace.query()``. A is the first metric, B is
+    the second, and so on.
+
+    Attributes:
+        expression: Formula expression string, e.g. ``"(A / B) * 100"``.
+        name: Optional display label for the formula result.
+
+    Example:
+        ```python
+        # Conversion rate from two metrics
+        f = Formula(expression="(B / A) * 100", name="Conversion %")
+
+        # Use with query():
+        result = ws.query(
+            [Metric("Sign Up"), Metric("Purchase"), Formula("(B / A) * 100")],
+            last=30,
+        )
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    expression: str
+    """Formula expression string referencing metrics by letter."""
+
+    name: str | None = None
+    """Optional display label."""
+
+
+class InsightsResult(BaseModel):
+    """Result of a ``Workspace.query()`` call.
+
+    Wraps a ``SavedReportResult`` with the query context including
+    the generated bookmark params and optional bookmark ID (if saved).
+
+    Attributes:
+        data: The underlying query result with time-series data.
+        bookmark_id: Bookmark ID if ``save=True`` was used.
+        params: The generated bookmark params dict (for debugging or reuse).
+
+    Example:
+        ```python
+        result = ws.query("Login", last=30)
+
+        # Access DataFrame
+        df = result.df
+
+        # JSON-serializable output
+        d = result.to_dict()
+
+        # Inspect generated params
+        print(result.params)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    data: SavedReportResult
+    """The underlying query result."""
+
+    bookmark_id: int | None = None
+    """Bookmark ID if the query was saved."""
+
+    params: dict[str, Any] = Field(default_factory=dict)
+    """The generated bookmark params dict."""
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Shortcut to the result DataFrame.
+
+        Returns:
+            DataFrame with query results.
+        """
+        return self.data.df
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-serializable output.
+
+        Returns:
+            Dictionary with query results and metadata.
+        """
+        result = self.data.to_dict()
+        result["params"] = self.params
+        if self.bookmark_id is not None:
+            result["bookmark_id"] = self.bookmark_id
+        return result
 
 
 # =============================================================================

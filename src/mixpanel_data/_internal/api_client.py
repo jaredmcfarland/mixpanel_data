@@ -1924,6 +1924,51 @@ class MixpanelAPIClient:
         result: dict[str, Any] = self._request("GET", url, params=params)
         return result
 
+    def query_insights_inline(
+        self,
+        bookmark_params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Query insights with inline params (no bookmark required).
+
+        Sends bookmark params directly to the insights query endpoint
+        instead of requiring a saved bookmark. The params are serialized
+        as a JSON string in the ``params`` query parameter.
+
+        Args:
+            bookmark_params: Insights bookmark params dict with
+                ``displayOptions`` and ``sections``.
+
+        Returns:
+            Raw insights API response with headers, series, date_range,
+            computed_at, and meta.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid params structure.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            result = client.query_insights_inline({
+                "displayOptions": {"chartType": "line"},
+                "sections": {
+                    "show": [...],
+                    "time": [...],
+                    "filter": [],
+                    "group": [],
+                },
+            })
+            ```
+        """
+        import json
+
+        url = self._build_url("query", "/insights")
+        params: dict[str, Any] = {
+            "params": json.dumps(bookmark_params),
+        }
+        result: dict[str, Any] = self._request("GET", url, params=params)
+        return result
+
     def list_bookmarks(
         self,
         bookmark_type: str | None = None,

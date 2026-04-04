@@ -33,6 +33,7 @@ from typing import Any, Literal
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.query_builder import build_insights_params
 from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
@@ -53,6 +54,7 @@ from mixpanel_data.types import (
     BookmarkHistoryResponse,
     BookmarkInfo,
     BookmarkType,
+    Breakdown,
     BulkCreateSchemasParams,
     BulkCreateSchemasResponse,
     BulkPatchResult,
@@ -94,19 +96,23 @@ from mixpanel_data.types import (
     ExperimentConcludeParams,
     ExperimentDecideParams,
     FeatureFlag,
+    Filter,
     FlagHistoryResponse,
     FlagLimitsResponse,
     FlowsResult,
+    Formula,
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
     InitSchemaEnforcementParams,
+    InsightsResult,
     JQLResult,
     LexiconSchema,
     LexiconTag,
     LookupTable,
     LookupTableUploadUrl,
     MarkLookupTableReadyParams,
+    Metric,
     NumericAverageResult,
     NumericBucketResult,
     NumericPropertySummaryResult,
@@ -1180,6 +1186,149 @@ class Workspace:
             bookmark_type=bookmark_type,
             from_date=from_date,
             to_date=to_date,
+        )
+
+    def query(
+        self,
+        metrics: str | Metric | list[str | Metric | Formula],
+        *,
+        last: int | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        time_unit: Literal["hour", "day", "week", "month", "quarter"] = "day",
+        where: Filter | list[Filter] | None = None,
+        group_by: str | Breakdown | list[str | Breakdown] | None = None,
+        chart_type: Literal[
+            "line",
+            "bar",
+            "column",
+            "pie",
+            "table",
+            "insights-metric",
+            "bar-stacked",
+            "stacked-line",
+            "stacked-column",
+        ] = "line",
+        name: str | None = None,
+        save: bool = False,
+    ) -> InsightsResult:
+        """Query Mixpanel insights with typed, structured arguments.
+
+        Creates a transient bookmark from the given parameters, executes the
+        insights query, and returns the results. By default, the bookmark is
+        deleted after querying. Use ``save=True`` to keep it.
+
+        This is the primary method for LLM agents and programmatic access
+        to Mixpanel analytics. It supports progressive complexity — from
+        simple one-liners to multi-metric queries with formulas.
+
+        Args:
+            metrics: What to measure. Accepts:
+                - A string event name: ``"Login"`` (defaults to total count).
+                - A ``Metric`` object for full control.
+                - A list mixing strings, ``Metric``, and ``Formula`` objects.
+            last: Relative date range — last N time_units. Mutually exclusive
+                with ``from_date``/``to_date``.
+            from_date: Absolute start date (YYYY-MM-DD). Must be paired with
+                ``to_date``.
+            to_date: Absolute end date (YYYY-MM-DD). Must be paired with
+                ``from_date``.
+            time_unit: Time granularity for the query.
+            where: Global filters applied to all metrics. Accepts a single
+                ``Filter`` or a list.
+            group_by: Breakdown dimensions. Accepts a string property name,
+                a ``Breakdown`` object, or a list of either.
+            chart_type: Visualization type.
+            name: Optional bookmark name (auto-generated if omitted).
+            save: If True, keep the bookmark after querying.
+
+        Returns:
+            ``InsightsResult`` with query data, generated params, and optional
+            bookmark ID.
+
+        Raises:
+            ValueError: If date arguments are invalid.
+            ConfigError: If API credentials are not available.
+
+        Example:
+            Simple one-liner:
+
+            ```python
+            result = ws.query("Login", last=30)
+            df = result.df
+            ```
+
+            Multi-metric with formula:
+
+            ```python
+            result = ws.query(
+                [Metric("Sign Up"), Metric("Purchase"),
+                 Formula("(B / A) * 100", name="Conv %")],
+                last=90, time_unit="week",
+            )
+            ```
+
+            With filter and breakdown:
+
+            ```python
+            result = ws.query(
+                Metric("Purchase", math="average", property="Amount"),
+                where=Filter("$browser", "equals", ["Chrome"]),
+                group_by="$country_code",
+                from_date="2025-01-01", to_date="2025-03-31",
+            )
+            ```
+        """
+        # 1. Validate date args
+        _validate_date_args(last, from_date, to_date)
+
+        # 2. Normalize inputs
+        normalized_metrics, normalized_formulas = _normalize_metrics(metrics)
+        normalized_filters = _normalize_filters(where)
+        normalized_breakdowns = _normalize_breakdowns(group_by)
+
+        # 3. Build params
+        params = build_insights_params(
+            metrics=normalized_metrics,
+            formulas=normalized_formulas,
+            where=normalized_filters,
+            group_by=normalized_breakdowns,
+            time_unit=time_unit,
+            last=last,
+            from_date=from_date,
+            to_date=to_date,
+            chart_type=chart_type,
+        )
+
+        # 4. Query insights directly with inline params
+        api_client = self._require_api_client()
+        raw = api_client.query_insights_inline(params)
+
+        # 5. Transform to SavedReportResult
+        from mixpanel_data._internal.services.live_query import (
+            _transform_saved_report,
+        )
+
+        result = _transform_saved_report(raw, bookmark_id=0, bookmark_type="insights")
+
+        # 6. Optionally save as bookmark
+        bookmark_id_out: int | None = None
+        if save:
+            bookmark_name = name or f"query_{int(time.time())}"
+            bookmark = self.create_bookmark(
+                CreateBookmarkParams(
+                    name=bookmark_name,
+                    bookmark_type="insights",
+                    params=params,
+                )
+            )
+            bookmark_id_out = bookmark.id
+
+        # 7. Return
+        return InsightsResult(
+            data=result,
+            bookmark_id=bookmark_id_out,
+            params=params,
         )
 
     def query_flows(self, bookmark_id: int) -> FlowsResult:
@@ -5905,3 +6054,110 @@ class Workspace:
         return client.preview_deletion_filters(
             params.model_dump(exclude_none=True, by_alias=True)
         )
+
+
+# =============================================================================
+# Query helper functions (module-level)
+# =============================================================================
+
+
+def _validate_date_args(
+    last: int | None,
+    from_date: str | None,
+    to_date: str | None,
+) -> None:
+    """Validate mutual exclusivity of date arguments.
+
+    Args:
+        last: Relative date range.
+        from_date: Absolute start date.
+        to_date: Absolute end date.
+
+    Raises:
+        ValueError: If date arguments are invalid.
+    """
+    if last is not None and (from_date is not None or to_date is not None):
+        raise ValueError(
+            "Cannot specify both 'last' and 'from_date'/'to_date'. "
+            "Use either relative (last=30) or absolute (from_date/to_date) dates."
+        )
+    if last is None and from_date is None and to_date is None:
+        raise ValueError(
+            "Must specify either 'last' (relative) or 'from_date'/'to_date' (absolute) "
+            "date range."
+        )
+    if (from_date is None) != (to_date is None):
+        raise ValueError("Both 'from_date' and 'to_date' must be provided together.")
+
+
+def _normalize_metrics(
+    metrics: str | Metric | list[str | Metric | Formula],
+) -> tuple[list[Metric], list[Formula]]:
+    """Normalize metrics input into separate Metric and Formula lists.
+
+    Args:
+        metrics: Raw metrics input — string, Metric, or mixed list.
+
+    Returns:
+        Tuple of (metrics_list, formulas_list).
+    """
+    if isinstance(metrics, str):
+        return [Metric(event=metrics)], []
+    if isinstance(metrics, Metric):
+        return [metrics], []
+
+    normalized_metrics: list[Metric] = []
+    normalized_formulas: list[Formula] = []
+    for item in metrics:
+        if isinstance(item, str):
+            normalized_metrics.append(Metric(event=item))
+        elif isinstance(item, Metric):
+            normalized_metrics.append(item)
+        elif isinstance(item, Formula):
+            normalized_formulas.append(item)
+    return normalized_metrics, normalized_formulas
+
+
+def _normalize_filters(
+    where: Filter | list[Filter] | None,
+) -> list[Filter]:
+    """Normalize filter input into a list.
+
+    Args:
+        where: Raw filter input — single Filter, list, or None.
+
+    Returns:
+        List of Filter objects.
+    """
+    if where is None:
+        return []
+    if isinstance(where, Filter):
+        return [where]
+    return list(where)
+
+
+def _normalize_breakdowns(
+    group_by: str | Breakdown | list[str | Breakdown] | None,
+) -> list[Breakdown]:
+    """Normalize breakdown input into a list.
+
+    Args:
+        group_by: Raw breakdown input — string, Breakdown, list, or None.
+
+    Returns:
+        List of Breakdown objects.
+    """
+    if group_by is None:
+        return []
+    if isinstance(group_by, str):
+        return [Breakdown(property=group_by)]
+    if isinstance(group_by, Breakdown):
+        return [group_by]
+
+    result: list[Breakdown] = []
+    for item in group_by:
+        if isinstance(item, str):
+            result.append(Breakdown(property=item))
+        else:
+            result.append(item)
+    return result
