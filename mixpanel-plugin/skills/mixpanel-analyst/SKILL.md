@@ -55,6 +55,10 @@ ws = mp.Workspace()
 
 # With workspace ID for App API (entity CRUD)
 ws = mp.Workspace(workspace_id=12345)
+
+# IMPORTANT: project_id must be a STRING, not int
+ws = mp.Workspace(project_id="8")           # correct
+# ws = mp.Workspace(project_id=8)           # WRONG — ValidationError
 ```
 
 ## Quick API Reference
@@ -130,6 +134,89 @@ Full CRUD for dashboards, cohorts, feature flags, experiments, alerts, annotatio
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_dashboards
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.create_cohort
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_feature_flags
+```
+
+### Adding Reports to a Dashboard
+
+Use `add_report_to_dashboard()` to clone an existing bookmark onto a dashboard:
+
+```python
+import mixpanel_data as mp
+from mixpanel_data.types import CreateDashboardParams, CreateBookmarkParams
+
+ws = mp.Workspace(account="myaccount")
+
+# Step 1: Create dashboard
+dashboard = ws.create_dashboard(CreateDashboardParams(title="My Dashboard"))
+
+# Step 2: Create a bookmark
+bookmark = ws.create_bookmark(CreateBookmarkParams(
+    name="Daily Logins",
+    bookmark_type="insights",
+    params={...},  # see Bookmark Params Structure below
+))
+
+# Step 3: Add bookmark to dashboard
+ws.add_report_to_dashboard(dashboard.id, bookmark.id)
+```
+
+**Note**: `CreateBookmarkParams(dashboard_id=...)` does NOT add the report to the dashboard layout — always use `add_report_to_dashboard()` instead.
+
+### Bookmark Params Structure (Insights)
+
+The `params` dict for insights bookmarks follows this structure:
+
+```python
+def make_insights_params(event_name, chart_type="line", unit="month",
+                         value=180, group_by_prop=None):
+    """Build params for an insights bookmark."""
+    metric = {
+        "behavior": {
+            "type": "simple",
+            "name": event_name,
+            "resourceType": "events",
+            "dataGroupId": None,
+            "filters": [],
+            "behaviors": [{
+                "type": "event",
+                "id": None,
+                "name": event_name,
+                "filters": [],
+            }],
+        },
+        "measurement": {
+            "math": "total",         # total | unique
+            "perUserAggregation": None,
+            "property": None,
+        },
+        "isHidden": False,
+        "type": "metric",
+    }
+    sections = {
+        "show": [metric],            # list of metrics (A, B, C...)
+        "filter": [],
+        "formula": [],
+        "time": [{"unit": unit, "value": value}],
+        "group_by": [],
+        "group": [],
+    }
+    if group_by_prop:
+        sections["group_by"] = [{
+            "value": group_by_prop,
+            "resourceType": "events",
+            "propertyType": "string",
+            "typeCast": None,
+            "bucketing": None,
+        }]
+    return {
+        "sections": sections,
+        "displayOptions": {
+            "chartType": chart_type,  # line | bar
+            "plotStyle": "standard",
+            "analysis": "linear",
+            "value": "absolute",
+        },
+    }
 ```
 
 ### DataFrame Conversion
@@ -301,4 +388,3 @@ Load these references on demand when the quick reference above is insufficient:
 - [pandas-patterns.md](references/pandas-patterns.md) — Read when building visualizations, doing statistical analysis, creating heatmaps, or working with streaming data as DataFrames
 - [analytical-frameworks.md](references/analytical-frameworks.md) — Read when the user asks an open-ended question requiring structured investigation (GQM decomposition, diagnosis methodology, retention benchmarks)
 - [code-patterns.md](references/code-patterns.md) — Read when you need a complete, copy-paste starting point for a common analysis scenario (funnel drop-off, retention curves, revenue analysis, feature adoption, executive dashboards)
-- [bookmark-params.md](references/bookmark-params.md) — Read when creating or updating bookmarks (saved reports) via `create_bookmark()` / `update_bookmark()`. Covers the full `params` JSON schema for insights, funnels, retention, and flows report types

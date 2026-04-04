@@ -17,7 +17,7 @@ top = ws.top_events(limit=20)
 print(f"Total events: {len(events)}")
 print("\nTop events by volume:")
 for t in top:
-    print(f"  {t.event:40s}")
+    print(f"  {t.event:40s} {t.count:>10,} ({t.percent_change:+.1f}%)")
 
 # Drill into an event
 event_name = top[0].event
@@ -359,11 +359,96 @@ if anomalies:
         print(f"  - {a}")
 ```
 
+## 13. Create Dashboard with Reports
+
+```python
+"""Create a Mixpanel dashboard and populate it with reports programmatically."""
+import mixpanel_data as mp
+from mixpanel_data.types import CreateDashboardParams, CreateBookmarkParams
+
+ws = mp.Workspace(account="myaccount")
+client = ws.api
+
+# Step 1: Create dashboard
+dashboard = ws.create_dashboard(CreateDashboardParams(
+    title="Monthly KPI Dashboard",
+    description="Key product metrics tracked monthly",
+))
+dash_id = dashboard.id
+
+# Step 2: Helper to build insights bookmark params
+def make_metric(event_name, math="total", filters=None):
+    return {
+        "behavior": {
+            "type": "simple",
+            "name": event_name,
+            "resourceType": "events",
+            "dataGroupId": None,
+            "filters": filters or [],
+            "behaviors": [{"type": "event", "id": None, "name": event_name, "filters": filters or []}],
+        },
+        "measurement": {"math": math, "perUserAggregation": None, "property": None},
+        "isHidden": False,
+        "type": "metric",
+    }
+
+def make_insights_params(metrics, chart_type="line", unit="month", value=180, group_by=None):
+    return {
+        "sections": {
+            "show": metrics,
+            "filter": [],
+            "formula": [],
+            "time": [{"unit": unit, "value": value}],
+            "group_by": group_by or [],
+            "group": [],
+        },
+        "displayOptions": {
+            "chartType": chart_type,
+            "plotStyle": "standard",
+            "analysis": "linear",
+            "value": "absolute",
+        },
+    }
+
+def make_group_by(prop_name):
+    return {"value": prop_name, "resourceType": "events", "propertyType": "string", "typeCast": None, "bucketing": None}
+
+# Step 3: Create bookmarks
+reports = [
+    ws.create_bookmark(CreateBookmarkParams(
+        name="Signups Trend",
+        bookmark_type="insights",
+        params=make_insights_params([make_metric("Sign Up", math="total")]),
+    )),
+    ws.create_bookmark(CreateBookmarkParams(
+        name="Signups by Platform",
+        bookmark_type="insights",
+        params=make_insights_params(
+            [make_metric("Sign Up")],
+            chart_type="bar",
+            group_by=[make_group_by("platform")],
+        ),
+    )),
+]
+
+# Step 4: Add each report to the dashboard
+# NOTE: CreateBookmarkParams(dashboard_id=...) does NOT populate the dashboard layout
+for report in reports:
+    ws.add_report_to_dashboard(dash_id, report.id)
+    print(f"Added: {report.name}")
+
+print(f"\nDashboard '{dashboard.title}' created with {len(reports)} reports (ID={dash_id})")
+```
+
 ## Tips
 
 - Always wrap `from_date`/`to_date` as strings: `"2025-01-01"` not `datetime`
+- `project_id` must be a **string**: `Workspace(project_id="8")` not `project_id=8`
 - Use `type="unique"` for user counts, `type="general"` for event counts
+- `TopEvent` has fields: `event` (str), `count` (int), `percent_change` (float) — no `rank`
+- `BookmarkInfo.type` is a plain string (e.g., `"insights"`), not an enum — use directly, not `.value`
 - JQL is best for user-level calculations that cross events
 - Use `help.py` to look up exact method signatures before writing
 - Start simple, add complexity only when initial results suggest it's needed
 - Print intermediate results to verify before building on them
+- When adding reports to dashboards, `source_bookmark_id` creates a clone ("Duplicate of ...") — edit the clone's name in Mixpanel UI if needed
