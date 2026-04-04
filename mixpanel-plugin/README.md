@@ -50,6 +50,7 @@ Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool call
 |--------|----------|---------|
 | `setup.sh` | `skills/setup/scripts/` | Portable installer (uv → pip3 → pip fallback) |
 | `help.py` | `skills/mixpanel-analyst/scripts/` | Programmatic docstring lookup for any class/method |
+| `validate_bookmark.py` | `skills/mixpanel-analyst/scripts/` | Validate bookmark params JSON against canonical schema |
 | `auth_manager.py` | `skills/mixpanel-analyst/scripts/` | Auth status, testing, account management (JSON output) |
 
 ### Reference Files (Progressive Disclosure)
