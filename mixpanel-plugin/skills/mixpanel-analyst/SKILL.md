@@ -301,3 +301,4 @@ Load these references on demand when the quick reference above is insufficient:
 - [pandas-patterns.md](references/pandas-patterns.md) — Read when building visualizations, doing statistical analysis, creating heatmaps, or working with streaming data as DataFrames
 - [analytical-frameworks.md](references/analytical-frameworks.md) — Read when the user asks an open-ended question requiring structured investigation (GQM decomposition, diagnosis methodology, retention benchmarks)
 - [code-patterns.md](references/code-patterns.md) — Read when you need a complete, copy-paste starting point for a common analysis scenario (funnel drop-off, retention curves, revenue analysis, feature adoption, executive dashboards)
+- [bookmark-params.md](references/bookmark-params.md) — Read when creating or updating bookmarks (saved reports) via `create_bookmark()` / `update_bookmark()`. Covers the full `params` JSON schema for insights, funnels, retention, and flows report types

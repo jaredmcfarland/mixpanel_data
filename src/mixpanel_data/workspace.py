@@ -1900,6 +1900,35 @@ class Workspace:
         raw = client.remove_report_from_dashboard(dashboard_id, bookmark_id)
         return Dashboard.model_validate(raw)
 
+    def add_report_to_dashboard(self, dashboard_id: int, bookmark_id: int) -> Dashboard:
+        """Add a report to a dashboard.
+
+        Clones the specified bookmark onto the dashboard. The cloned report
+        appears as a new card in the dashboard layout.
+
+        Args:
+            dashboard_id: Dashboard identifier.
+            bookmark_id: Bookmark/report identifier to add.
+
+        Returns:
+            The updated ``Dashboard``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard or bookmark not found (404).
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            updated = ws.add_report_to_dashboard(12345, 42)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.add_report_to_dashboard(dashboard_id, bookmark_id)
+        return Dashboard.model_validate(raw)
+
     def list_blueprint_templates(
         self, *, include_reports: bool = False
     ) -> list[BlueprintTemplate]:

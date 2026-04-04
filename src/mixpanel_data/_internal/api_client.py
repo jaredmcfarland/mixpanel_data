@@ -2873,6 +2873,51 @@ class MixpanelAPIClient:
             )
         return result
 
+    def add_report_to_dashboard(
+        self, dashboard_id: int, bookmark_id: int
+    ) -> dict[str, Any] | None:
+        """Add a report (bookmark) to a dashboard.
+
+        Clones the specified bookmark onto the dashboard by calling
+        ``PATCH /api/app/projects/{pid}/dashboards/{dashboard_id}``
+        (or workspace-scoped) with a ``create`` content action.
+
+        Args:
+            dashboard_id: The numeric dashboard identifier.
+            bookmark_id: The numeric bookmark/report identifier to add.
+
+        Returns:
+            Dictionary representing the updated dashboard after report addition,
+            or None if the API returned 204 No Content.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Dashboard or bookmark not found (404).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                client.add_report_to_dashboard(12345, 67890)
+            ```
+        """
+        path = self.maybe_scoped_path(f"dashboards/{dashboard_id}")
+        body: dict[str, Any] = {
+            "content": {
+                "action": "create",
+                "content_type": "report",
+                "content_params": {"source_bookmark_id": bookmark_id},
+            }
+        }
+        result = self.app_request("PATCH", path, json_body=body)
+        if not isinstance(result, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from add_report_to_dashboard: "
+                f"expected dict, got {type(result).__name__}",
+            )
+        return result
+
     def list_blueprint_templates(
         self, *, include_reports: bool = False
     ) -> list[dict[str, Any]]:

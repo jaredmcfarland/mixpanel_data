@@ -410,6 +410,39 @@ def dashboards_remove_report(
     output_result(ctx, result.model_dump(), format=format, jq_filter=jq_filter)
 
 
+@dashboards_app.command("add-report")
+@handle_errors
+def dashboards_add_report(
+    ctx: typer.Context,
+    dashboard_id: Annotated[
+        int,
+        typer.Argument(help="Dashboard ID."),
+    ],
+    bookmark_id: Annotated[
+        int,
+        typer.Argument(help="Bookmark/report ID to add."),
+    ],
+    format: FormatOption = "json",
+    jq_filter: JqOption = None,
+) -> None:
+    """Add a report to a dashboard.
+
+    Clones the specified bookmark/report onto the dashboard and
+    returns the updated dashboard.
+
+    Args:
+        ctx: Typer context with global options.
+        dashboard_id: Dashboard identifier.
+        bookmark_id: Bookmark/report identifier to add.
+        format: Output format.
+        jq_filter: Optional jq filter expression.
+    """
+    workspace = get_workspace(ctx)
+    with status_spinner(ctx, "Adding report to dashboard..."):
+        result = workspace.add_report_to_dashboard(dashboard_id, bookmark_id)
+    output_result(ctx, result.model_dump(), format=format, jq_filter=jq_filter)
+
+
 # =============================================================================
 # Blueprints
 # =============================================================================

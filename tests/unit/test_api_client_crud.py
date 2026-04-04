@@ -348,6 +348,36 @@ class TestDashboardOrganization:
         assert result is not None
         assert result["id"] == 1
 
+    def test_add_report_to_dashboard(self, oauth_credentials: Credentials) -> None:
+        """add_report_to_dashboard() sends PATCH with create action and source_bookmark_id."""
+        captured: list[tuple[str, str, Any]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture method, URL, and body."""
+            captured.append(
+                (request.method, str(request.url), json.loads(request.content))
+            )
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": {"id": 1, "title": "Dash"}},
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.add_report_to_dashboard(1, 42)
+
+        assert captured[0][0] == "PATCH"
+        assert "/dashboards/1" in captured[0][1]
+        assert captured[0][2] == {
+            "content": {
+                "action": "create",
+                "content_type": "report",
+                "content_params": {"source_bookmark_id": 42},
+            }
+        }
+        assert result is not None
+        assert result["id"] == 1
+
 
 class TestBlueprintOperations:
     """Tests for blueprint API methods."""

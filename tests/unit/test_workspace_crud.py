@@ -1515,3 +1515,30 @@ class TestRemoveReportFromDashboard:
         assert isinstance(result, Dashboard)
         assert result.title == "Updated Dashboard"
         assert call_count == 1  # Single PATCH request
+
+
+class TestAddReportToDashboard:
+    """Tests for add_report_to_dashboard using PATCH with content action."""
+
+    def test_add_report_returns_dashboard(self, temp_dir: Path) -> None:
+        """add_report_to_dashboard() sends PATCH and returns updated dashboard."""
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return updated dashboard for PATCH request."""
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {"id": 1, "title": "Updated Dashboard"},
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        result = ws.add_report_to_dashboard(1, 42)
+
+        assert isinstance(result, Dashboard)
+        assert result.title == "Updated Dashboard"
+        assert call_count == 1  # Single PATCH request
