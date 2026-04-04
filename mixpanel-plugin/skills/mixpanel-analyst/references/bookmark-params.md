@@ -101,7 +101,7 @@ Not all SQL is expressible: no JOINs, no subqueries, no UNION. Formulas are the 
 | `pie` | Part-of-whole composition |
 | `column` | Vertical bar |
 | `insights-metric` | Single KPI number |
-| `stacked-bar` / `stacked-line` | Composition; use `plotStyle: "stacked"` with bar/line |
+| `bar-stacked` / `stacked-line` / `stacked-column` | Composition; plotStyle is set to `"stacked"` automatically |
 
 ### Measurement Math
 
@@ -295,7 +295,7 @@ Funnels go beyond simple SQL aggregation — they express sequential event analy
 |---|---|---|
 | `conversionWindowDuration` | 7 | Max time between first and last step |
 | `conversionWindowUnit` | `"day"` | second, minute, hour, day, week, month, session |
-| `funnelOrder` | `"loose"` | `loose` = any order, `any` = strict order |
+| `funnelOrder` | `"loose"` | `loose` = any order, `strict` = steps must be in order |
 
 ### Funnel Math Types
 `unique`, `general`, `session`, `conversion_rate`, `conversion_rate_unique`, `conversion_rate_total`, `conversion_rate_session`, `total`
@@ -502,6 +502,49 @@ df = result.df
 # Flows
 result = ws.query_flows(bookmark_id)
 ```
+
+## Validation
+
+**Always validate params before calling `create_bookmark()` or `update_bookmark()`.**
+
+```bash
+# Validate from stdin (auto-detects type)
+echo '<json>' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin
+
+# Validate with explicit type
+echo '<json>' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type funnels
+
+# Get structured errors as JSON
+echo '<json>' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --json
+```
+
+The validator checks:
+- Required fields (`displayOptions`, `sections`, `sections.show`, `sections.time`)
+- Valid `chartType` values (context-dependent: insights vs flows)
+- Valid `math` types (context-dependent: insights vs funnels vs retention)
+- Filter operators and resource types
+- Funnel step count (minimum 2)
+- Retention event count (exactly 2)
+- Flows structure (`steps[]`, `date_range`)
+
+Exit 0 = valid, exit 1 = errors. Errors print to stderr; use `--json` for structured output.
+
+In Python scripts, validate inline:
+
+```python
+import json, subprocess
+
+result = subprocess.run(
+    ["python3", "${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py", "--stdin", "--json"],
+    input=json.dumps(params), capture_output=True, text=True,
+)
+if result.returncode != 0:
+    errors = json.loads(result.stdout)
+    for e in errors:
+        print(f"[{e['severity'].upper()}] {e['path']}: {e['message']}")
+```
+
+---
 
 ## Constraints
 

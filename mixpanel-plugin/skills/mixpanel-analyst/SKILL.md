@@ -41,6 +41,26 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions          # list all excep
 
 Use this before every unfamiliar method. It pulls live docstrings from the installed package — always accurate.
 
+## Bookmark Validation
+
+Before calling `create_bookmark()` or `update_bookmark()`, **always validate the params dict**:
+
+```bash
+# Validate from a Python variable (pipe JSON to stdin)
+python3 -c "import json; print(json.dumps(params))" | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin
+
+# Validate with explicit type
+echo '{"sections": {...}}' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type insights
+
+# Validate from a file
+python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py params.json
+
+# Get errors as JSON (for programmatic use)
+echo '...' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --json
+```
+
+Exit 0 = valid. Exit 1 = errors (printed to stderr). The validator checks chart types, math types, filter operators, required fields, funnel step counts, retention event counts, and flows structure — catching mistakes before they hit the API.
+
 ## Workspace Construction
 
 ```python
@@ -142,6 +162,8 @@ Use `add_report_to_dashboard()` to clone an existing bookmark onto a dashboard:
 
 ```python
 import mixpanel_data as mp
+import json
+import subprocess
 from mixpanel_data.types import CreateDashboardParams, CreateBookmarkParams
 
 ws = mp.Workspace(account="myaccount")
@@ -149,15 +171,27 @@ ws = mp.Workspace(account="myaccount")
 # Step 1: Create dashboard
 dashboard = ws.create_dashboard(CreateDashboardParams(title="My Dashboard"))
 
-# Step 2: Create a bookmark
-bookmark = ws.create_bookmark(CreateBookmarkParams(
-    name="Daily Logins",
-    bookmark_type="insights",
-    params={...},  # see Bookmark Params Structure below
-))
+# Step 2: Build and VALIDATE params before creating
+params = {... }  # see Bookmark Params Structure below
 
-# Step 3: Add bookmark to dashboard
-ws.add_report_to_dashboard(dashboard.id, bookmark.id)
+# Validate params (catches errors before hitting the API)
+result = subprocess.run(
+    ["python3", "${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py", "--stdin", "--type", "insights"],
+    input=json.dumps(params), capture_output=True, text=True,
+)
+if result.returncode != 0:
+    print(f"Invalid params: {result.stderr}")
+    # Fix params before proceeding
+else:
+    # Step 3: Create bookmark (params are valid)
+    bookmark = ws.create_bookmark(CreateBookmarkParams(
+        name="Daily Logins",
+        bookmark_type="insights",
+        params=params,
+    ))
+
+    # Step 4: Add bookmark to dashboard
+    ws.add_report_to_dashboard(dashboard.id, bookmark.id)
 ```
 
 **Note**: `CreateBookmarkParams(dashboard_id=...)` does NOT add the report to the dashboard layout — always use `add_report_to_dashboard()` instead.

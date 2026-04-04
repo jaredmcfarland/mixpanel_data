@@ -1,0 +1,4778 @@
+{
+    "additionalProperties": false,
+    "properties": {
+        "columnWidths": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/ColumnWidths"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        },
+        "displayOptions": {
+            "$ref": "#/definitions/DisplayOptions"
+        },
+        "forecastComparison": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/ForecastComparison"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        },
+        "legend": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/InsightsLegend"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        },
+        "liftComparison": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/LiftComparison"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        },
+        "name": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        },
+        "sections": {
+            "$ref": "#/definitions/Sections"
+        },
+        "sorting": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/InsightsBookmarkSortConfig"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        },
+        "timeComparison": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/JsonValue"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        },
+        "versions": {
+            "anyOf": [
+                {
+                    "items": {
+                        "type": "string"
+                    },
+                    "type": "array"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        },
+        "executedMigrations": {
+            "anyOf": [
+                {
+                    "items": {
+                        "$ref": "#/definitions/ExecutedMigration"
+                    },
+                    "type": "array"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "default": null,
+            "title": ""
+        }
+    },
+    "required": [
+        "displayOptions",
+        "sections"
+    ],
+    "title": "InsightsBookmarkParams",
+    "type": "object",
+    "definitions": {
+        "AnalysisType": {
+            "enum": [
+                "linear",
+                "logarithmic",
+                "rolling",
+                "cumulative"
+            ],
+            "title": "AnalysisType",
+            "tsEnumNames": [
+                "Linear",
+                "Logarithmic",
+                "Rolling",
+                "Cumulative"
+            ],
+            "type": "string"
+        },
+        "AnnotationOptions": {
+            "additionalProperties": false,
+            "properties": {
+                "tagFilterIds": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "showUntagged": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "sortOrder": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SortOrderType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "hideAnnotations": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "creatorFilterIds": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "AnnotationOptions",
+            "type": "object"
+        },
+        "AxisAssignment": {
+            "enum": [
+                "primary",
+                "secondary"
+            ],
+            "title": "AxisAssignment",
+            "tsEnumNames": [
+                "Primary",
+                "Secondary"
+            ],
+            "type": "string"
+        },
+        "BaseTimeUnit": {
+            "enum": [
+                "hour",
+                "day",
+                "week",
+                "month"
+            ],
+            "title": "BaseTimeUnit",
+            "tsEnumNames": [
+                "Hour",
+                "Day",
+                "Week",
+                "Month"
+            ],
+            "type": "string"
+        },
+        "Behavior": {
+            "additionalProperties": false,
+            "properties": {
+                "type": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/MetricType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "id": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "renamed": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "dataGroupId": {
+                    "$ref": "#/definitions/DataGroupId",
+                    "default": null,
+                    "title": ""
+                },
+                "filters": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/JsonValue"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "filtersDeterminer": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FiltersDeterminer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "resourceType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/InsightsResourceType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "behaviors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/SubBehavior"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": [],
+                    "title": ""
+                },
+                "raw_cohort": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "customBucket": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/Bucket"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "conversionWindowDuration": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "conversionWindowUnit": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/ConversionWindowUnit"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "funnelReentryMode": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FunnelReentryModeType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "funnelOrder": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FunnelOrder"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "exclusions": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/ExclusionFunnelStep"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "aggregateBy": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/JsonValue"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/RetentionType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionAlignmentType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/RetentionAlignmentType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionUnit": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/TimeUnit"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionUnbounded": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionUnboundedMode": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/RetentionUnboundedModeType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionCustomBucketSizes": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "integer"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "segmentationEvent": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "unsavedId": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "search": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "profileType": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "dataset": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "datasetId": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "projectId": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "display": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/MetricDisplay"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "disableCohortize": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "customEventSet": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "hasUnsavedChanges": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": false,
+                    "title": ""
+                }
+            },
+            "title": "Behavior",
+            "type": "object"
+        },
+        "BehaviorMeasurement": {
+            "additionalProperties": false,
+            "properties": {
+                "dataGroupId": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/DataGroupId"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "math": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/MATH_TYPE"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "property": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "cumulative": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "perUserAggregation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PER_USER_AGGREGATIONS"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "rolling": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/RollingMeasurement"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "segmentMethod": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/COUNT_USERS_ONCE_TYPE"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "multiAttribution": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PredefinedMultiAttribution"
+                        },
+                        {
+                            "$ref": "#/definitions/CustomMultiAttribution"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "stepIndex": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "actionMode": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "actionStep": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionBucketIndex": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionCumulative": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retentionSegmentationEvent": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "percentile": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "BehaviorMeasurement",
+            "type": "object"
+        },
+        "BehaviorShowClause": {
+            "additionalProperties": false,
+            "properties": {
+                "_idx": {
+                    "default": null,
+                    "title": "",
+                    "type": "string"
+                },
+                "type": {
+                    "const": "metric",
+                    "default": null,
+                    "title": "",
+                    "tsType": "TopLevelMetricType.Metric",
+                    "type": "string"
+                },
+                "id": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "userNamed": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "behavior": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/Behavior"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "measurement": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/BehaviorMeasurement"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "statsig": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/Statsig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "srm": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SRM"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "comparisons": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/JsonValue"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": [],
+                    "title": ""
+                },
+                "display": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/MetricDisplay"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "isHidden": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "isExpanded": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "labelPrefix": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "formulaLabel": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "showClauseIndex": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "hasUnsavedChanges": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": false,
+                    "title": ""
+                },
+                "goals": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/Goal"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "overrides": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": true,
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "BehaviorShowClause",
+            "type": "object"
+        },
+        "Bucket": {
+            "additionalProperties": false,
+            "properties": {
+                "bucketSize": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "disabled": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "groups": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "number"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "max": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "min": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "offset": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "Bucket",
+            "type": "object"
+        },
+        "COUNT_USERS_ONCE_TYPE": {
+            "enum": [
+                "all",
+                "first",
+                "last"
+            ],
+            "title": "COUNT_USERS_ONCE_TYPE",
+            "tsEnumNames": [
+                "MULTIPLE",
+                "FIRST",
+                "LAST"
+            ],
+            "type": "string"
+        },
+        "ChartPlotStyle": {
+            "enum": [
+                "standard",
+                "stacked"
+            ],
+            "title": "ChartPlotStyle",
+            "tsEnumNames": [
+                "Standard",
+                "Stacked"
+            ],
+            "type": "string"
+        },
+        "ChartType": {
+            "enum": [
+                "bar",
+                "line",
+                "pie",
+                "bar-stacked",
+                "stacked-line",
+                "table",
+                "insights-metric",
+                "column",
+                "stacked-column",
+                "metric",
+                "sankey",
+                "flows",
+                "paths",
+                "funnel-top-paths",
+                "funnel-steps",
+                "funnel-steps-metric",
+                "funnel-trend",
+                "funnel-frequency-line",
+                "funnel-frequency-bar",
+                "funnel-ttc-line",
+                "funnel-ttc-bar",
+                "funnel-median-ttc",
+                "line-retention",
+                "retention-trend",
+                "retention-trend-metric",
+                "retention-table",
+                "retention-curve",
+                "frequency",
+                "impact-adoption",
+                "impact-trends",
+                "impact-propensity"
+            ],
+            "title": "ChartType",
+            "tsEnumNames": [
+                "Bar",
+                "Line",
+                "Pie",
+                "StackedBar",
+                "StackedLine",
+                "Table",
+                "Metric",
+                "Column",
+                "StackedColumn",
+                "LegacyMetric",
+                "Sankey",
+                "Flows",
+                "FlowsTopPaths",
+                "FunnelTopPaths",
+                "FunnelSteps",
+                "FunnelStepsMetric",
+                "FunnelTrend",
+                "FunnelFrequencyLine",
+                "FunnelFrequencyBar",
+                "FunnelTTCLine",
+                "FunnelTTCBar",
+                "FunnelMedianTTC",
+                "RetentionLine",
+                "RetentionTrend",
+                "RetentionTrendMetric",
+                "RetentionTable",
+                "RetentionCurve",
+                "Frequency",
+                "ImpactAdoption",
+                "ImpactTrends",
+                "ImpactPropensity"
+            ],
+            "type": "string"
+        },
+        "ColumnWidths": {
+            "additionalProperties": true,
+            "properties": {
+                "bar": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "number"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "dataTable": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/DataTableColumnWidthOverrides"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "ColumnWidths",
+            "type": "object"
+        },
+        "CommentOptions": {
+            "additionalProperties": false,
+            "properties": {
+                "commentsDisabled": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "CommentOptions",
+            "type": "object"
+        },
+        "ConversionWindowUnit": {
+            "enum": [
+                "second",
+                "minute",
+                "hour",
+                "day",
+                "week",
+                "month",
+                "session"
+            ],
+            "title": "ConversionWindowUnit",
+            "tsEnumNames": [
+                "Second",
+                "Minute",
+                "Hour",
+                "Day",
+                "Week",
+                "Month",
+                "Session"
+            ],
+            "type": "string"
+        },
+        "CustomMultiAttribution": {
+            "additionalProperties": false,
+            "properties": {
+                "type": {
+                    "$ref": "#/definitions/MultiAttributionType",
+                    "tsType": "MultiAttributionType.Custom"
+                },
+                "name": {
+                    "title": "",
+                    "type": "string"
+                },
+                "weights": {
+                    "$ref": "#/definitions/MultiAttributionWeights"
+                }
+            },
+            "required": [
+                "type",
+                "name",
+                "weights"
+            ],
+            "title": "CustomMultiAttribution",
+            "type": "object"
+        },
+        "DataGroupId": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "DataTableColumnWidthOverrides": {
+            "additionalProperties": false,
+            "properties": {
+                "report": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "number"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "dashboard": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "type": "number"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "DataTableColumnWidthOverrides",
+            "type": "object"
+        },
+        "DisplayOptions": {
+            "additionalProperties": false,
+            "properties": {
+                "chartType": {
+                    "$ref": "#/definitions/ChartType",
+                    "title": "InsightsChartType",
+                    "tsType": "ChartType.Bar | ChartType.Line | ChartType.Column | ChartType.Pie | ChartType.Table | ChartType.Metric | ChartType.FunnelSteps | ChartType.FunnelTopPaths | ChartType.RetentionCurve"
+                },
+                "plotStyle": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/ChartPlotStyle"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "analysis": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/AnalysisType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "value": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/ValueRepresentationType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "rollingWindowSize": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "timeUnit": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/TimeUnit"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "primaryYAxisOptions": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "secondaryYAxisOptions": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "theme": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "xAxisOptions": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "annotationOptions": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/AnnotationOptions"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "commentOptions": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/CommentOptions"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "queryTimeSampling": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "statSigControl": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/SegmentId"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "funnelStepsSelectedTableColumns": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FunnelStepsSelectedTableColumns"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "chartType"
+            ],
+            "title": "DisplayOptions",
+            "type": "object"
+        },
+        "ExclusionFunnelStep": {
+            "additionalProperties": false,
+            "properties": {
+                "bool_op": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FiltersOperator"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "property_filter_params_list": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/JsonValue"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "event": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "event_id": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "custom_event": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "custom_event_name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "step_label": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "session_event": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/START_END_TYPE"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "forward": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "reverse": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "steps": {
+                    "$ref": "#/definitions/StepRange"
+                }
+            },
+            "required": [
+                "steps"
+            ],
+            "title": "ExclusionFunnelStep",
+            "type": "object"
+        },
+        "ExecutedMigration": {
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "title": "",
+                    "type": "string"
+                },
+                "succeeded": {
+                    "title": "",
+                    "type": "boolean"
+                },
+                "version": {
+                    "title": "",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "name",
+                "succeeded",
+                "version"
+            ],
+            "title": "ExecutedMigration",
+            "type": "object"
+        },
+        "ExtendedTimeUnit": {
+            "enum": [
+                "second",
+                "minute",
+                "quarter",
+                "year"
+            ],
+            "title": "ExtendedTimeUnit",
+            "tsEnumNames": [
+                "Second",
+                "Minute",
+                "Quarter",
+                "Year"
+            ],
+            "type": "string"
+        },
+        "FUNNELS_MATH_TYPES": {
+            "enum": [
+                "general",
+                "unique",
+                "session",
+                "conversion_rate",
+                "conversion_rate_unique",
+                "conversion_rate_total",
+                "conversion_rate_session",
+                "total"
+            ],
+            "title": "FUNNELS_MATH_TYPES",
+            "tsEnumNames": [
+                "GENERAL",
+                "UNIQUE",
+                "SESSION",
+                "CONVERSION_RATE",
+                "CONVERSION_RATE_UNIQUE",
+                "CONVERSION_RATE_TOTAL",
+                "CONVERSION_RATE_SESSION",
+                "PROPERTY_SUM"
+            ],
+            "type": "string"
+        },
+        "FilteredBreakdownSegments": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/SavedLegend"
+                },
+                {
+                    "items": {
+                        "$ref": "#/definitions/SavedLegend"
+                    },
+                    "type": "array"
+                }
+            ]
+        },
+        "FiltersDeterminer": {
+            "enum": [
+                "all",
+                "any"
+            ],
+            "title": "FiltersDeterminer",
+            "type": "string"
+        },
+        "FiltersOperator": {
+            "enum": [
+                "and",
+                "or",
+                "or_all",
+                "and_any",
+                "then"
+            ],
+            "title": "FiltersOperator",
+            "tsEnumNames": [
+                "And",
+                "Or",
+                "OrAll",
+                "AndAny",
+                "Then"
+            ],
+            "type": "string"
+        },
+        "FlatLabelSortConfig": {
+            "additionalProperties": false,
+            "properties": {
+                "sortBy": {
+                    "const": "label",
+                    "title": "",
+                    "tsType": "SortBy.Label",
+                    "type": "string"
+                },
+                "sortOrder": {
+                    "$ref": "#/definitions/SortOrder"
+                },
+                "valueField": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "viewNLimit": {
+                    "$ref": "#/definitions/ViewNLimit",
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "sortBy",
+                "sortOrder"
+            ],
+            "title": "FlatLabelSortConfig",
+            "type": "object"
+        },
+        "FlatOrColumnSortConfig": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/FlatSortConfig"
+                },
+                {
+                    "$ref": "#/definitions/SortConfig"
+                }
+            ]
+        },
+        "FlatSortConfig": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/FlatLabelSortConfig"
+                },
+                {
+                    "$ref": "#/definitions/FlatValueSortConfig"
+                }
+            ]
+        },
+        "FlatValueSortConfig": {
+            "additionalProperties": false,
+            "properties": {
+                "sortBy": {
+                    "enum": [
+                        "value",
+                        "liftComparisonValue"
+                    ],
+                    "title": "",
+                    "tsType": "SortBy.Value",
+                    "type": "string"
+                },
+                "sortOrder": {
+                    "$ref": "#/definitions/SortOrder"
+                },
+                "valueField": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "valueField required when sorting by value (sortBy.Value) and there is > 1 valueField. Used for data tables.",
+                    "title": ""
+                },
+                "viewNLimit": {
+                    "$ref": "#/definitions/ViewNLimit",
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "sortBy",
+                "sortOrder"
+            ],
+            "title": "FlatValueSortConfig",
+            "type": "object"
+        },
+        "ForecastComparison": {
+            "additionalProperties": false,
+            "properties": {
+                "confidence": {
+                    "title": "",
+                    "type": "number"
+                },
+                "trainingMode": {
+                    "title": "",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "confidence",
+                "trainingMode"
+            ],
+            "title": "ForecastComparison",
+            "type": "object"
+        },
+        "FormulaClause": {
+            "additionalProperties": false,
+            "properties": {
+                "value": {
+                    "title": "",
+                    "type": "string"
+                },
+                "label": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "value"
+            ],
+            "title": "FormulaClause",
+            "type": "object"
+        },
+        "FormulaMeasurement": {
+            "additionalProperties": false,
+            "properties": {
+                "cumulative": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "rolling": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/RollingMeasurement"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "multiAttribution": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PredefinedMultiAttribution"
+                        },
+                        {
+                            "$ref": "#/definitions/CustomMultiAttribution"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "FormulaMeasurement",
+            "type": "object"
+        },
+        "FormulaShowClause": {
+            "additionalProperties": false,
+            "properties": {
+                "_idx": {
+                    "default": null,
+                    "title": "",
+                    "type": "string"
+                },
+                "type": {
+                    "anyOf": [
+                        {
+                            "const": "formula",
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "",
+                    "tsType": "TopLevelMetricType.Formula"
+                },
+                "formula": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "measurement": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FormulaMeasurement"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "statsig": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/Statsig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "display": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/MetricDisplay"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "isHidden": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "isExpanded": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "userNamed": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "comparisons": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/JsonValue"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": [],
+                    "title": ""
+                },
+                "id": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "definition": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "referencedMetrics": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/BehaviorShowClause"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "hasUnsavedChanges": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": false,
+                    "title": ""
+                },
+                "overrides": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": true,
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "goals": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/Goal"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "FormulaShowClause",
+            "type": "object"
+        },
+        "FunnelOrder": {
+            "enum": [
+                "loose",
+                "any"
+            ],
+            "title": "FunnelOrder",
+            "tsEnumNames": [
+                "Loose",
+                "Any"
+            ],
+            "type": "string"
+        },
+        "FunnelReentryModeType": {
+            "enum": [
+                "default",
+                "basic",
+                "aggressive",
+                "optimized"
+            ],
+            "title": "FunnelReentryModeType",
+            "tsEnumNames": [
+                "Default",
+                "Basic",
+                "Aggressive",
+                "Optimized"
+            ],
+            "type": "string"
+        },
+        "FunnelStepsSelectedTableColumns": {
+            "additionalProperties": false,
+            "properties": {
+                "conv-first-step": {
+                    "default": false,
+                    "title": "",
+                    "type": "boolean"
+                },
+                "conv-prev-step": {
+                    "default": false,
+                    "title": "",
+                    "type": "boolean"
+                },
+                "count": {
+                    "default": false,
+                    "title": "",
+                    "type": "boolean"
+                },
+                "stat-sig": {
+                    "default": false,
+                    "title": "",
+                    "type": "boolean"
+                },
+                "time-first-step": {
+                    "default": false,
+                    "title": "",
+                    "type": "boolean"
+                },
+                "time-prev-step": {
+                    "default": false,
+                    "title": "",
+                    "type": "boolean"
+                }
+            },
+            "title": "FunnelStepsSelectedTableColumns",
+            "type": "object"
+        },
+        "Goal": {
+            "additionalProperties": false,
+            "properties": {
+                "id": {
+                    "title": "",
+                    "type": "string"
+                },
+                "label": {
+                    "title": "",
+                    "type": "string"
+                },
+                "checkpoints": {
+                    "items": {
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "prefixItems": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "number"
+                            }
+                        ],
+                        "type": "array"
+                    },
+                    "title": "",
+                    "type": "array"
+                },
+                "target_type": {
+                    "default": "absolute",
+                    "enum": [
+                        "absolute",
+                        "relative"
+                    ],
+                    "title": "",
+                    "type": "string"
+                },
+                "target_input": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "direction": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "id",
+                "label",
+                "checkpoints"
+            ],
+            "title": "Goal",
+            "type": "object"
+        },
+        "GroupByCohort": {
+            "additionalProperties": false,
+            "properties": {
+                "count": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "created_by": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "dataset": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "data_group_id": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/DataGroupId"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "description": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "groups": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/JsonValue"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "is_locked": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "is_visible": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "id": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "isInherited": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "last_edited": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "negated": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "raw_cohort": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "resourceType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/InsightsResourceType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "GroupByCohort",
+            "type": "object"
+        },
+        "GroupClause": {
+            "additionalProperties": false,
+            "properties": {
+                "behavior": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "cohorts": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/GroupByCohort"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "customBucket": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/Bucket"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "customGroups": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "customProperty": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "customPropertyId": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "dataGroupId": {
+                    "$ref": "#/definitions/DataGroupId",
+                    "default": null,
+                    "title": ""
+                },
+                "dataset": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "datasetId": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "defaultType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PropertyType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "editing": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "endStepNumber": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "experiments": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "filterDateUnit": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/TimeUnit"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "filterJoinType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PropertyType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "filterOperator": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "filterType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PropertyType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "filterValue": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "items": {
+                                "anyOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "integer"
+                                    },
+                                    {
+                                        "type": "number"
+                                    },
+                                    {
+                                        "type": "boolean"
+                                    },
+                                    {
+                                        "$ref": "#/definitions/JsonValue"
+                                    }
+                                ]
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "id": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "isHidden": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "isInherited": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "joinPropertyType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PropertyType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "listItemGroup": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "listQuantifier": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/ListQuantifier"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "profileHistoryOptions": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "profileType": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "projectId": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "propertyDefaultType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PropertyType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "propertyFilter": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "propertyName": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "propertyObjectKey": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "propertyType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PropertyType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "resourceType": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/InsightsResourceType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "scdEvent": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "scdOptions": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "search": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "startStepNumber": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "tempDataGroupId": {
+                    "$ref": "#/definitions/DataGroupId",
+                    "default": null,
+                    "title": ""
+                },
+                "type": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/InsightsResourceType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "typeCast": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/PropertyType"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "unit": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "value": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "GroupClause",
+            "type": "object"
+        },
+        "InsightsBookmarkSortConfig": {
+            "additionalProperties": false,
+            "properties": {
+                "bar": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SortConfig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "table": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SortConfig"
+                        },
+                        {
+                            "$ref": "#/definitions/OldTableSortByValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "line": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FlatOrColumnSortConfig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "In the bookmark, line chart can either have the old FlatSortConfig or the new SortConfig format",
+                    "title": ""
+                },
+                "insights-metric": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SortConfig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "pie": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SortConfig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "retention-curve": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SortConfig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "Retention specific",
+                    "title": ""
+                },
+                "funnel-steps": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SortConfig"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "InsightsBookmarkSortConfig",
+            "type": "object"
+        },
+        "InsightsLegend": {
+            "additionalProperties": false,
+            "properties": {
+                "individualSelectedSegments": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SavedLegend"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "used for flat data, entire selected segments",
+                    "title": ""
+                },
+                "filteredBreakdownSegments": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FilteredBreakdownSegments"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "used for nested (bar chart) data, filtered segments at each level",
+                    "title": ""
+                },
+                "overrides": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "$ref": "#/definitions/LegendOverride"
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "used for specifying label or color overrides on specific segments",
+                    "title": "LegendOverrides"
+                }
+            },
+            "title": "InsightsLegend",
+            "type": "object"
+        },
+        "InsightsResourceType": {
+            "enum": [
+                "all",
+                "cohort",
+                "cohorts",
+                "event",
+                "events",
+                "formulas",
+                "other",
+                "people",
+                "user"
+            ],
+            "title": "InsightsResourceType",
+            "tsEnumNames": [
+                "All",
+                "Cohort",
+                "Cohorts",
+                "Event",
+                "Events",
+                "Formulas",
+                "Other",
+                "People",
+                "User"
+            ],
+            "type": "string"
+        },
+        "JsonValue": {},
+        "LegendOverride": {
+            "additionalProperties": false,
+            "properties": {
+                "color": {
+                    "title": "",
+                    "type": "string"
+                },
+                "label": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "color"
+            ],
+            "title": "LegendOverride",
+            "type": "object"
+        },
+        "LiftComparison": {
+            "additionalProperties": false,
+            "properties": {
+                "cohort": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "comparisonProperty": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "groupValue": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "type": {
+                    "$ref": "#/definitions/LiftType"
+                },
+                "controlVariant": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "type"
+            ],
+            "title": "LiftComparison",
+            "type": "object"
+        },
+        "LiftType": {
+            "enum": [
+                "percentOverall",
+                "segment",
+                "timeComparison",
+                "experiment"
+            ],
+            "title": "LiftType",
+            "tsEnumNames": [
+                "Overall",
+                "Segment",
+                "Time",
+                "Experiment"
+            ],
+            "type": "string"
+        },
+        "ListQuantifier": {
+            "enum": [
+                "any",
+                "all",
+                "flatten"
+            ],
+            "title": "ListQuantifier",
+            "tsEnumNames": [
+                "Any",
+                "All",
+                "Flatten"
+            ],
+            "type": "string"
+        },
+        "MATH_TYPE": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/PRIMITIVE_MATH_TYPES"
+                },
+                {
+                    "$ref": "#/definitions/NUMERIC_MATH_TYPES"
+                },
+                {
+                    "$ref": "#/definitions/XAU_MATH_TYPES"
+                },
+                {
+                    "$ref": "#/definitions/PER_USER_AGGREGATIONS"
+                },
+                {
+                    "$ref": "#/definitions/FUNNELS_MATH_TYPES"
+                },
+                {
+                    "$ref": "#/definitions/RETENTION_MATH_TYPES"
+                }
+            ]
+        },
+        "MetricDisplay": {
+            "additionalProperties": false,
+            "properties": {
+                "abbrev": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "axis": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/AxisAssignment"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "direction": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "up",
+                                "down"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "hideTrendline": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "precision": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                0,
+                                1,
+                                2,
+                                3,
+                                4,
+                                5,
+                                6,
+                                7,
+                                8
+                            ],
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "prefix": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "suffix": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "trendline": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "MetricDisplay",
+            "type": "object"
+        },
+        "MetricType": {
+            "enum": [
+                "cohort",
+                "custom-event",
+                "event",
+                "formula",
+                "funnel",
+                "people",
+                "retention",
+                "retention-frequency",
+                "saved-metric",
+                "simple",
+                "verified"
+            ],
+            "title": "MetricType",
+            "tsEnumNames": [
+                "Cohort",
+                "CustomEvent",
+                "Event",
+                "Formula",
+                "Funnel",
+                "People",
+                "Retention",
+                "RetentionFrequency",
+                "SavedMetric",
+                "Simple",
+                "Verified"
+            ],
+            "type": "string"
+        },
+        "MultiAttributionType": {
+            "enum": [
+                "first_touch",
+                "last_touch",
+                "linear",
+                "participation",
+                "time_decay",
+                "u_shaped",
+                "j_shaped",
+                "inverse_j_shaped",
+                "custom",
+                "session_replay_last"
+            ],
+            "title": "MultiAttributionType",
+            "tsEnumNames": [
+                "FirstTouch",
+                "LastTouch",
+                "Linear",
+                "Participation",
+                "TimeDecay",
+                "UShaped",
+                "JShaped",
+                "InverseJShaped",
+                "Custom",
+                "SessionReplayLast"
+            ],
+            "type": "string"
+        },
+        "MultiAttributionWeights": {
+            "additionalProperties": false,
+            "properties": {
+                "first": {
+                    "title": "",
+                    "type": "integer"
+                },
+                "middle": {
+                    "title": "",
+                    "type": "integer"
+                },
+                "last": {
+                    "title": "",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "first",
+                "middle",
+                "last"
+            ],
+            "title": "MultiAttributionWeights",
+            "type": "object"
+        },
+        "NUMERIC_MATH_TYPES": {
+            "enum": [
+                "p25",
+                "p75",
+                "p90",
+                "p99"
+            ],
+            "title": "NUMERIC_MATH_TYPES",
+            "tsEnumNames": [
+                "P25",
+                "P75",
+                "P90",
+                "P99"
+            ],
+            "type": "string"
+        },
+        "NonStandardTimeUnit": {
+            "enum": [
+                "session"
+            ],
+            "title": "NonStandardTimeUnit",
+            "tsEnumNames": [
+                "Session"
+            ],
+            "type": "string"
+        },
+        "OldTableSortByValue": {
+            "additionalProperties": false,
+            "description": "Same as SortByValueConfig except:\n1) sortColumn instead of valueField\n2) colSortAttrs can only be FlatLabelSortConfig, not FlatValueSortConfig\n\nMust convert this for use with data-table",
+            "properties": {
+                "sortBy": {
+                    "const": "value",
+                    "title": "",
+                    "tsType": "SortBy.Value",
+                    "type": "string"
+                },
+                "sortOrder": {
+                    "$ref": "#/definitions/SortOrder"
+                },
+                "sortColumn": {
+                    "$ref": "#/definitions/SortColumn"
+                },
+                "colSortAttrs": {
+                    "items": {
+                        "$ref": "#/definitions/FlatSortConfig"
+                    },
+                    "title": "",
+                    "type": "array"
+                }
+            },
+            "required": [
+                "sortBy",
+                "sortOrder",
+                "sortColumn",
+                "colSortAttrs"
+            ],
+            "title": "OldTableSortByValue",
+            "type": "object"
+        },
+        "PER_USER_AGGREGATIONS": {
+            "description": "only a subset of operations are valid for per user aggregations, keep this enum separate",
+            "enum": [
+                "total",
+                "average",
+                "min",
+                "max",
+                "unique_values",
+                "session_replay_id_value"
+            ],
+            "title": "PER_USER_AGGREGATIONS",
+            "tsEnumNames": [
+                "TOTAL",
+                "AVERAGE",
+                "MIN",
+                "MAX",
+                "UNIQUE_VALUES",
+                "SESSION_REPLAY_ID_VALUE"
+            ],
+            "type": "string"
+        },
+        "PRIMITIVE_MATH_TYPES": {
+            "enum": [
+                "total",
+                "unique",
+                "sessions",
+                "average",
+                "median",
+                "p25",
+                "p75",
+                "p90",
+                "p99",
+                "custom_percentile",
+                "min",
+                "max",
+                "cumulative_unique",
+                "histogram",
+                "unique_values",
+                "most_frequent",
+                "first_value",
+                "multi_attribution",
+                "numeric_summary"
+            ],
+            "title": "PRIMITIVE_MATH_TYPES",
+            "tsEnumNames": [
+                "TOTAL",
+                "UNIQUE",
+                "SESSIONS",
+                "AVERAGE",
+                "MEDIAN",
+                "P25",
+                "P75",
+                "P90",
+                "P99",
+                "CUSTOM_PERCENTILE",
+                "MIN",
+                "MAX",
+                "CUMULATIVE_UNIQUE",
+                "HISTOGRAM",
+                "UNIQUE_VALUES",
+                "MOST_FREQUENT",
+                "FIRST_VALUE",
+                "MULTI_ATTRIBUTION",
+                "NUMERIC_SUMMARY"
+            ],
+            "type": "string"
+        },
+        "PredefinedMultiAttribution": {
+            "additionalProperties": false,
+            "properties": {
+                "type": {
+                    "$ref": "#/definitions/MultiAttributionType"
+                },
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "weights": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/MultiAttributionWeights"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "step_index": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "type"
+            ],
+            "title": "PredefinedMultiAttribution",
+            "type": "object"
+        },
+        "PropertyType": {
+            "enum": [
+                "boolean",
+                "datetime",
+                "list",
+                "number",
+                "string",
+                "dimension",
+                "object",
+                "other",
+                "unknown"
+            ],
+            "title": "PropertyType",
+            "tsEnumNames": [
+                "Boolean",
+                "Datetime",
+                "List",
+                "Number",
+                "String",
+                "Dimension",
+                "Object",
+                "NonProperty",
+                "Unknown"
+            ],
+            "type": "string"
+        },
+        "RETENTION_MATH_TYPES": {
+            "enum": [
+                "unique",
+                "retention_rate",
+                "total",
+                "average"
+            ],
+            "title": "RETENTION_MATH_TYPES",
+            "tsEnumNames": [
+                "UNIQUE",
+                "RETENTION_RATE",
+                "PROPERTY_SUM",
+                "PROPERTY_AVERAGE"
+            ],
+            "type": "string"
+        },
+        "RetentionAlignmentType": {
+            "enum": [
+                "birth",
+                "interval_start"
+            ],
+            "title": "RetentionAlignmentType",
+            "tsEnumNames": [
+                "Birth",
+                "IntervalStart"
+            ],
+            "type": "string"
+        },
+        "RetentionType": {
+            "enum": [
+                "compounded",
+                "birth",
+                "addiction"
+            ],
+            "title": "RetentionType",
+            "type": "string"
+        },
+        "RetentionUnboundedModeType": {
+            "enum": [
+                "none",
+                "carry_back",
+                "carry_forward",
+                "consecutive_forward"
+            ],
+            "title": "RetentionUnboundedModeType",
+            "type": "string"
+        },
+        "RollingMeasurement": {
+            "additionalProperties": false,
+            "properties": {
+                "rollingWindowSize": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "RollingMeasurement",
+            "type": "object"
+        },
+        "SRM": {
+            "additionalProperties": false,
+            "properties": {
+                "expectedRatios": {
+                    "additionalProperties": {
+                        "type": "number"
+                    },
+                    "title": "",
+                    "type": "object"
+                }
+            },
+            "required": [
+                "expectedRatios"
+            ],
+            "title": "SRM",
+            "type": "object"
+        },
+        "START_END_TYPE": {
+            "enum": [
+                "start",
+                "end"
+            ],
+            "title": "START_END_TYPE",
+            "tsEnumNames": [
+                "start",
+                "end"
+            ],
+            "type": "string"
+        },
+        "SavedLegend": {
+            "additionalProperties": false,
+            "properties": {
+                "selected": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/SavedLegendItem"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "expanded": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/SavedLegendItem"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "SavedLegend",
+            "type": "object"
+        },
+        "SavedLegendItem": {
+            "additionalProperties": false,
+            "properties": {
+                "key": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "color": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "might still exist on old bookmarks, but it's not used anymore",
+                    "title": ""
+                },
+                "partial": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "SavedLegendItem",
+            "type": "object"
+        },
+        "Sections": {
+            "additionalProperties": false,
+            "properties": {
+                "cohorts": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/GroupByCohort"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "filter": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/JsonValue"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "formula": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/FormulaClause"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "globalDataGroupId": {
+                    "$ref": "#/definitions/DataGroupId",
+                    "default": null,
+                    "title": ""
+                },
+                "group": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/GroupClause"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "group_by": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/GroupClause"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "metricLevelDataGroups": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "show": {
+                    "items": {
+                        "$ref": "#/definitions/ShowClause"
+                    },
+                    "title": "",
+                    "type": "array"
+                },
+                "time": {
+                    "items": {
+                        "$ref": "#/definitions/JsonValue"
+                    },
+                    "title": "",
+                    "type": "array"
+                }
+            },
+            "required": [
+                "show",
+                "time"
+            ],
+            "title": "Sections",
+            "type": "object"
+        },
+        "SegmentId": {
+            "additionalProperties": false,
+            "properties": {
+                "prop": {
+                    "description": "raw string value of the segment",
+                    "title": "",
+                    "type": "string"
+                },
+                "propName": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "user-friendly renaming of prop, suitable for printing",
+                    "title": ""
+                },
+                "cohortDesc": {
+                    "$ref": "#/definitions/JsonValue",
+                    "default": null,
+                    "description": "Query parameters not encapsulated by the prop which are necessary to recreate\nthis segment.\n\nex: bucketSize and index for a bucketed numeric segment",
+                    "title": ""
+                }
+            },
+            "required": [
+                "prop"
+            ],
+            "title": "SegmentId",
+            "type": "object"
+        },
+        "ShowClause": {
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/FormulaShowClause"
+                },
+                {
+                    "$ref": "#/definitions/BehaviorShowClause"
+                }
+            ]
+        },
+        "SortByColumnsConfig": {
+            "additionalProperties": false,
+            "description": "sort by segment columns (segment-grouped sort)",
+            "properties": {
+                "sortBy": {
+                    "const": "column",
+                    "title": "",
+                    "tsType": "SortBy.Column",
+                    "type": "string"
+                },
+                "valueField": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "value field to specify which value to sort secondarily on",
+                    "title": ""
+                },
+                "colSortAttrs": {
+                    "items": {
+                        "$ref": "#/definitions/FlatSortConfig"
+                    },
+                    "title": "",
+                    "type": "array"
+                }
+            },
+            "required": [
+                "sortBy",
+                "colSortAttrs"
+            ],
+            "title": "SortByColumnsConfig",
+            "type": "object"
+        },
+        "SortByValueConfig": {
+            "additionalProperties": false,
+            "description": "sort by a single value column (flat sort). Still persists colSortAttrs so that if we switch back to sorting by\ncolumns, we preserve the prior sorts on the columns",
+            "properties": {
+                "sortBy": {
+                    "enum": [
+                        "value",
+                        "liftComparisonValue"
+                    ],
+                    "title": "",
+                    "tsType": "SortBy.Value",
+                    "type": "string"
+                },
+                "sortOrder": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/SortOrder"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "valueField": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "description": "valueField required when sorting by value (sortBy.Value) and there is > 1 valueField. Used for data tables.",
+                    "title": ""
+                },
+                "colSortAttrs": {
+                    "items": {
+                        "$ref": "#/definitions/FlatSortConfig"
+                    },
+                    "title": "",
+                    "type": "array"
+                },
+                "viewNLimit": {
+                    "$ref": "#/definitions/ViewNLimit",
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "sortBy",
+                "colSortAttrs"
+            ],
+            "title": "SortByValueConfig",
+            "type": "object"
+        },
+        "SortColumn": {
+            "enum": [
+                "Linear",
+                "sum",
+                "value"
+            ],
+            "title": "SortColumn",
+            "tsEnumNames": [
+                "Linear",
+                "Sum",
+                "Value"
+            ],
+            "type": "string"
+        },
+        "SortConfig": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/SortByColumnsConfig"
+                },
+                {
+                    "$ref": "#/definitions/SortByValueConfig"
+                }
+            ]
+        },
+        "SortOrder": {
+            "enum": [
+                "asc",
+                "desc"
+            ],
+            "title": "SortOrder",
+            "tsEnumNames": [
+                "Ascending",
+                "Descending"
+            ],
+            "type": "string"
+        },
+        "SortOrderType": {
+            "enum": [
+                "asc",
+                "desc"
+            ],
+            "title": "SortOrderType",
+            "tsEnumNames": [
+                "Ascending",
+                "Descending"
+            ],
+            "type": "string"
+        },
+        "SpecialTimeUnit": {
+            "enum": [
+                "hour_of_day",
+                "day_of_week"
+            ],
+            "title": "SpecialTimeUnit",
+            "tsEnumNames": [
+                "HourOfDay",
+                "DayOfWeek"
+            ],
+            "type": "string"
+        },
+        "Statsig": {
+            "additionalProperties": false,
+            "properties": {
+                "confidence": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "control_key": {
+                    "title": "",
+                    "type": "string"
+                },
+                "sequential_testing_adjustment": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/JsonValue"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "pre_exposure_date_range": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "type": "string"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "winsorization": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/Winsorization"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "math": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "exposures": {
+                    "anyOf": [
+                        {
+                            "additionalProperties": {
+                                "anyOf": [
+                                    {
+                                        "type": "integer"
+                                    },
+                                    {
+                                        "additionalProperties": {
+                                            "type": "integer"
+                                        },
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "type": "object"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "version": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "required": [
+                "control_key"
+            ],
+            "title": "Statsig",
+            "type": "object"
+        },
+        "StepRange": {
+            "additionalProperties": false,
+            "properties": {
+                "from": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "to": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "StepRange",
+            "type": "object"
+        },
+        "SubBehavior": {
+            "additionalProperties": false,
+            "properties": {
+                "type": {
+                    "anyOf": [
+                        {
+                            "enum": [
+                                "event",
+                                "custom-event",
+                                "funnel"
+                            ],
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": "",
+                    "tsType": "MetricType.Event | MetricType.CustomEvent | MetricType.Funnel"
+                },
+                "id": {
+                    "anyOf": [
+                        {
+                            "type": "integer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "name": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "renamed": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "filters": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/JsonValue"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": [],
+                    "title": ""
+                },
+                "filtersDeterminer": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FiltersDeterminer"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": "all",
+                    "title": ""
+                },
+                "funnelOrder": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/FunnelOrder"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "behaviors": {
+                    "anyOf": [
+                        {
+                            "items": {
+                                "$ref": "#/definitions/SubBehavior"
+                            },
+                            "type": "array"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": [],
+                    "title": ""
+                },
+                "display": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/definitions/MetricDisplay"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "customEventSet": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "SubBehavior",
+            "type": "object"
+        },
+        "TimeUnit": {
+            "anyOf": [
+                {
+                    "$ref": "#/definitions/BaseTimeUnit"
+                },
+                {
+                    "$ref": "#/definitions/ExtendedTimeUnit"
+                },
+                {
+                    "$ref": "#/definitions/NonStandardTimeUnit"
+                },
+                {
+                    "$ref": "#/definitions/SpecialTimeUnit"
+                }
+            ]
+        },
+        "ValueRepresentationType": {
+            "enum": [
+                "absolute",
+                "relative"
+            ],
+            "title": "ValueRepresentationType",
+            "tsEnumNames": [
+                "Absolute",
+                "Relative"
+            ],
+            "type": "string"
+        },
+        "ViewNLimit": {
+            "anyOf": [
+                {
+                    "type": "integer"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "Winsorization": {
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "anyOf": [
+                        {
+                            "type": "boolean"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "lower_percentile": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                },
+                "upper_percentile": {
+                    "anyOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "default": null,
+                    "title": ""
+                }
+            },
+            "title": "Winsorization",
+            "type": "object"
+        },
+        "XAU_MATH_TYPES": {
+            "enum": [
+                "dau",
+                "wau",
+                "mau"
+            ],
+            "title": "XAU_MATH_TYPES",
+            "tsEnumNames": [
+                "DAU",
+                "WAU",
+                "MAU"
+            ],
+            "type": "string"
+        },
+        "TopLevelMetricType": {
+            "title": "TopLevelMetricType",
+            "description": "This exists at the top of a metric / show clause.",
+            "enum": [
+                "metric",
+                "formula",
+                "metric-entry",
+                "new-metric-entry",
+                "new-formula-entry"
+            ],
+            "type": "string",
+            "tsEnumNames": [
+                "Metric",
+                "Formula",
+                "MetricEntry",
+                "NewMetricEntry",
+                "NewFormulaEntry"
+            ]
+        },
+        "SortBy": {
+            "title": "SortBy",
+            "enum": [
+                "value",
+                "label",
+                "column",
+                "liftComparisonValue"
+            ],
+            "type": "string",
+            "tsEnumNames": [
+                "Value",
+                "Label",
+                "Column",
+                "LiftComparisonValue"
+            ]
+        }
+    }
+}
