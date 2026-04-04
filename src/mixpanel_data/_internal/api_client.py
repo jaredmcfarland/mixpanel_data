@@ -1956,6 +1956,38 @@ class MixpanelAPIClient:
         result: dict[str, Any] = self._request("GET", url, params=params)
         return result
 
+    def insights_query(
+        self,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute an inline insights query via POST.
+
+        Posts bookmark params directly to the insights query endpoint
+        without creating a saved report. The project_id is included
+        in the request body, not in query params.
+
+        Args:
+            body: Request body containing 'bookmark' (params dict),
+                'project_id' (int), and 'queryLimits' (dict).
+
+        Returns:
+            Raw API response with computed_at, date_range, headers,
+            series, and meta fields.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid bookmark params.
+            RateLimitError: Rate limit exceeded.
+        """
+        url = self._build_url("query", "/insights")
+        result: dict[str, Any] = self._request(
+            "POST",
+            url,
+            data=body,
+            inject_project_id=False,
+        )
+        return result
+
     def query_flows(
         self,
         bookmark_id: int,

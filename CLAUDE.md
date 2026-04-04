@@ -297,3 +297,8 @@ Task(subagent_type="mixpanel-data:narrator", prompt="...")
 - Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), Typer (CLI), Rich (output)
 - JSON files at `~/.mp/oauth/` (token + client info persistence)
 - Mixpanel App API (remote CRUD for entities and data governance)
+- Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames) (029-insights-query-api)
+- N/A — live query only, no local persistence (029-insights-query-api)
+
+## Recent Changes
+- 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)

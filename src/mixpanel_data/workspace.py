@@ -26,8 +26,9 @@ Example:
 from __future__ import annotations
 
 import logging
+import re
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -38,6 +39,8 @@ from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
 from mixpanel_data.exceptions import ConfigError, MixpanelDataError
 from mixpanel_data.types import (
+    NO_PER_USER_MATH_TYPES,
+    PROPERTY_MATH_TYPES,
     ActivityFeedResult,
     AlertCount,
     AlertHistoryResponse,
@@ -107,10 +110,13 @@ from mixpanel_data.types import (
     LookupTable,
     LookupTableUploadUrl,
     MarkLookupTableReadyParams,
+    MathType,
+    Metric,
     NumericAverageResult,
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
+    PerUserAggregation,
     PreviewDeletionFiltersParams,
     ProjectWebhook,
     PropertyCountsResult,
@@ -118,6 +124,7 @@ from mixpanel_data.types import (
     PropertyDefinition,
     PropertyDistributionResult,
     PublicWorkspace,
+    QueryResult,
     ReplaceSchemaEnforcementParams,
     RetentionResult,
     SavedCohort,
@@ -1568,6 +1575,502 @@ class Workspace:
             properties=properties,
             from_date=from_date,
             to_date=to_date,
+        )
+
+    # =========================================================================
+    # INSIGHTS QUERY API (Phase 029)
+    # =========================================================================
+
+    _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+    def _validate_query_args(
+        self,
+        *,
+        events: Sequence[str | Metric],
+        math: MathType,
+        math_property: str | None,
+        per_user: PerUserAggregation | None,
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        formula: str | None,
+        rolling: int | None,
+        cumulative: bool,
+        group_by: Any,
+    ) -> None:
+        """Validate query arguments before building bookmark params.
+
+        Implements validation rules V1-V12 as fail-fast ValueErrors.
+
+        Args:
+            events: Event names or Metric objects.
+            math: Top-level aggregation function.
+            math_property: Property for property-based math.
+            per_user: Per-user pre-aggregation.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            last: Number of days for relative date range.
+            formula: Formula expression.
+            rolling: Rolling window size.
+            cumulative: Cumulative analysis mode.
+            group_by: Breakdown specification.
+
+        Raises:
+            ValueError: If any validation rule is violated.
+        """
+        # V1: Property math requires property
+        if math in PROPERTY_MATH_TYPES and math_property is None:
+            msg = f"math='{math}' requires math_property to be set"
+            raise ValueError(msg)
+
+        # V2: Non-property math rejects property
+        if math not in PROPERTY_MATH_TYPES and math_property is not None:
+            msg = (
+                f"math_property is only valid with property-based math types "
+                f"({', '.join(sorted(PROPERTY_MATH_TYPES))}), not '{math}'"
+            )
+            raise ValueError(msg)
+
+        # V3: per_user incompatible with DAU/WAU/MAU
+        if per_user is not None and math in NO_PER_USER_MATH_TYPES:
+            msg = f"per_user is incompatible with math='{math}'"
+            raise ValueError(msg)
+
+        # V4: Formula requires 2+ events
+        if formula is not None and len(events) < 2:
+            msg = f"formula requires at least 2 events (got {len(events)})"
+            raise ValueError(msg)
+
+        # V5: Rolling and cumulative are mutually exclusive
+        if rolling is not None and cumulative:
+            msg = "rolling and cumulative are mutually exclusive"
+            raise ValueError(msg)
+
+        # V6: Rolling must be positive
+        if rolling is not None and rolling <= 0:
+            msg = "rolling must be a positive integer"
+            raise ValueError(msg)
+
+        # V7: last must be positive
+        if last <= 0:
+            msg = "last must be a positive integer"
+            raise ValueError(msg)
+
+        # V8: Date format validation
+        if from_date is not None and not self._DATE_RE.match(from_date):
+            msg = f"from_date must be YYYY-MM-DD format (got '{from_date}')"
+            raise ValueError(msg)
+        if to_date is not None and not self._DATE_RE.match(to_date):
+            msg = f"to_date must be YYYY-MM-DD format (got '{to_date}')"
+            raise ValueError(msg)
+
+        # V9: to_date requires from_date
+        if to_date is not None and from_date is None:
+            msg = "to_date requires from_date"
+            raise ValueError(msg)
+
+        # V10: Cannot combine explicit dates with non-default last
+        if from_date is not None and last != 30:
+            msg = (
+                f"Cannot combine last={last} with explicit dates; "
+                f"use either last or from_date/to_date"
+            )
+            raise ValueError(msg)
+
+        # V13-V14: Per-Metric validation
+        for item in events:
+            if isinstance(item, Metric):
+                m_math = item.math
+                m_prop = item.property
+                m_per_user = item.per_user
+
+                if m_math in PROPERTY_MATH_TYPES and m_prop is None:
+                    msg = (
+                        f"Metric('{item.event}'): math='{m_math}' "
+                        f"requires property to be set"
+                    )
+                    raise ValueError(msg)
+
+                if m_math not in PROPERTY_MATH_TYPES and m_prop is not None:
+                    msg = (
+                        f"Metric('{item.event}'): property is only valid with "
+                        f"property-based math types "
+                        f"({', '.join(sorted(PROPERTY_MATH_TYPES))}), "
+                        f"not '{m_math}'"
+                    )
+                    raise ValueError(msg)
+
+                if m_per_user is not None and m_math in NO_PER_USER_MATH_TYPES:
+                    msg = (
+                        f"Metric('{item.event}'): per_user is incompatible "
+                        f"with math='{m_math}'"
+                    )
+                    raise ValueError(msg)
+
+        # V11-V12: GroupBy validation
+        from mixpanel_data.types import (
+            GroupBy,  # noqa: F811 — avoid circular at top level
+        )
+
+        if group_by is not None:
+            groups = group_by if isinstance(group_by, list) else [group_by]
+            for g in groups:
+                if isinstance(g, GroupBy):
+                    if (
+                        g.bucket_min is not None or g.bucket_max is not None
+                    ) and g.bucket_size is None:
+                        msg = "bucket_min/bucket_max require bucket_size"
+                        raise ValueError(msg)
+                    if g.bucket_size is not None and g.bucket_size <= 0:
+                        msg = "bucket_size must be positive"
+                        raise ValueError(msg)
+
+    def _build_query_params(
+        self,
+        *,
+        events: Sequence[str | Metric],
+        math: MathType,
+        math_property: str | None,
+        per_user: PerUserAggregation | None,
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        unit: str,
+        group_by: Any,
+        where: Any,
+        formula: str | None,
+        formula_label: str | None,
+        rolling: int | None,
+        cumulative: bool,
+        mode: str,
+    ) -> dict[str, Any]:
+        """Build bookmark params dict from typed arguments.
+
+        Generates the complete bookmark JSON structure expected by
+        the Mixpanel insights query API.
+
+        Args:
+            events: Event names or Metric objects.
+            math: Top-level aggregation function.
+            math_property: Property for property-based math.
+            per_user: Per-user pre-aggregation.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            last: Relative date range in days.
+            unit: Time unit (hour, day, week, month, quarter).
+            group_by: Breakdown specification.
+            where: Filter conditions.
+            formula: Formula expression.
+            formula_label: Label for formula result.
+            rolling: Rolling window size.
+            cumulative: Cumulative analysis mode.
+            mode: Result mode (timeseries, total, table).
+
+        Returns:
+            Bookmark params dict ready for insights query API.
+        """
+        # --- Build sections.show[] ---
+        show: list[dict[str, Any]] = []
+        for item in events:
+            if isinstance(item, Metric):
+                event_name = item.event
+                item_math = item.math
+                item_prop = item.property
+                item_per_user = item.per_user
+                item_filters = item.filters
+            else:
+                event_name = item
+                item_math = math
+                item_prop = math_property
+                item_per_user = per_user
+                item_filters = None
+
+            measurement: dict[str, Any] = {"math": item_math}
+            if item_prop is not None:
+                measurement["property"] = {
+                    "name": item_prop,
+                    "resourceType": "events",
+                }
+            if item_per_user is not None:
+                measurement["perUserAggregation"] = item_per_user
+
+            # Build behavior block with optional per-metric filters
+            behavior_filters: list[dict[str, Any]] = []
+            if item_filters:
+                behavior_filters = [self._build_filter_entry(f) for f in item_filters]
+
+            entry: dict[str, Any] = {
+                "type": "metric",
+                "behavior": {
+                    "type": "event",
+                    "name": event_name,
+                    "resourceType": "events",
+                    "filtersDeterminer": "all",
+                    "filters": behavior_filters,
+                },
+                "measurement": measurement,
+            }
+
+            # Mark hidden when formula is present
+            if formula is not None:
+                entry["isHidden"] = True
+
+            show.append(entry)
+
+        # Append formula entry to show[]
+        if formula is not None:
+            formula_entry: dict[str, Any] = {
+                "type": "formula",
+                "definition": formula,
+                "measurement": {},
+                "referencedMetrics": [],
+            }
+            if formula_label:
+                formula_entry["name"] = formula_label
+            show.append(formula_entry)
+
+        # --- Build sections.time (array) ---
+        if from_date is not None and to_date is not None:
+            time_entry: dict[str, Any] = {
+                "dateRangeType": "between",
+                "unit": unit,
+                "value": [from_date, to_date],
+            }
+        elif from_date is not None:
+            # "since" with raw dates isn't supported by the API;
+            # use "between" with from_date through today
+            import datetime as _dt
+
+            today = _dt.date.today().isoformat()
+            time_entry = {
+                "dateRangeType": "between",
+                "unit": unit,
+                "value": [from_date, today],
+            }
+        else:
+            time_entry = {
+                "dateRangeType": "in the last",
+                "unit": unit,
+                "window": {"unit": "day", "value": last},
+            }
+        time_section: list[dict[str, Any]] = [time_entry]
+
+        # --- Build sections.filter[] ---
+        filter_section: list[dict[str, Any]] = []
+        if where is not None:
+            filters_list = where if isinstance(where, list) else [where]
+            filter_section = [self._build_filter_entry(f) for f in filters_list]
+
+        # --- Build sections.group[] ---
+        group_section: list[dict[str, Any]] = []
+        if group_by is not None:
+            from mixpanel_data.types import GroupBy
+
+            groups = group_by if isinstance(group_by, list) else [group_by]
+            for g in groups:
+                if isinstance(g, str):
+                    group_section.append(
+                        {
+                            "value": g,
+                            "propertyName": g,
+                            "resourceType": "events",
+                            "propertyType": "string",
+                            "propertyDefaultType": "string",
+                        }
+                    )
+                elif isinstance(g, GroupBy):
+                    group_entry: dict[str, Any] = {
+                        "value": g.property,
+                        "propertyName": g.property,
+                        "resourceType": "events",
+                        "propertyType": g.property_type,
+                        "propertyDefaultType": g.property_type,
+                    }
+                    if g.bucket_size is not None:
+                        group_entry["customBucket"] = {
+                            "bucketSize": g.bucket_size,
+                        }
+                        if g.bucket_min is not None:
+                            group_entry["customBucket"]["min"] = g.bucket_min
+                        if g.bucket_max is not None:
+                            group_entry["customBucket"]["max"] = g.bucket_max
+                    group_section.append(group_entry)
+
+        # --- Build displayOptions ---
+        chart_type_map = {
+            "timeseries": "line",
+            "total": "bar",
+            "table": "table",
+        }
+        analysis = "linear"
+        display_options: dict[str, Any] = {
+            "chartType": chart_type_map.get(mode, "line"),
+            "analysis": analysis,
+        }
+        if rolling is not None:
+            display_options["analysis"] = "rolling"
+            display_options["rollingWindowSize"] = rolling
+        elif cumulative:
+            display_options["analysis"] = "cumulative"
+
+        # --- Assemble bookmark params ---
+        sections: dict[str, Any] = {
+            "show": show,
+            "time": time_section,
+            "filter": filter_section,
+            "group": group_section,
+        }
+
+        return {
+            "sections": sections,
+            "displayOptions": display_options,
+        }
+
+    @staticmethod
+    def _build_filter_entry(f: Any) -> dict[str, Any]:
+        """Convert a Filter object to a bookmark filter dict.
+
+        Args:
+            f: A Filter object with _property, _operator, _value,
+                _property_type, _resource_type attributes.
+
+        Returns:
+            Bookmark filter dict matching Mixpanel's expected format.
+        """
+        return {
+            "resourceType": f._resource_type,
+            "filterType": f._property_type,
+            "defaultType": f._property_type,
+            "value": f._property,
+            "filterValue": f._value,
+            "filterOperator": f._operator,
+        }
+
+    def query(
+        self,
+        events: str | Metric | Sequence[str | Metric],
+        *,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        unit: Literal["hour", "day", "week", "month", "quarter"] = "day",
+        math: MathType = "total",
+        math_property: str | None = None,
+        per_user: PerUserAggregation | None = None,
+        group_by: Any = None,
+        where: Any = None,
+        formula: str | None = None,
+        formula_label: str | None = None,
+        rolling: int | None = None,
+        cumulative: bool = False,
+        mode: Literal["timeseries", "total", "table"] = "timeseries",
+    ) -> QueryResult:
+        """Run a typed insights query against the Mixpanel API.
+
+        Generates bookmark params from keyword arguments, POSTs them inline
+        to ``/api/query/insights``, and returns a structured QueryResult
+        with lazy DataFrame conversion.
+
+        Args:
+            events: Event name(s) to query. Accepts a single string,
+                a Metric object, or a sequence of strings/Metrics.
+            from_date: Start date (YYYY-MM-DD). If set, overrides ``last``.
+            to_date: End date (YYYY-MM-DD). Requires ``from_date``.
+            last: Relative time range in days. Default: 30.
+                Ignored if ``from_date`` is set.
+            unit: Time aggregation unit. Default: ``"day"``.
+            math: Aggregation function for plain-string events.
+                Default: ``"total"``.
+            math_property: Property name for property-based math
+                (average, sum, percentiles).
+            per_user: Per-user pre-aggregation (average, total, min, max).
+            group_by: Break down results by property. Accepts a string,
+                GroupBy object, or list of strings/GroupBys.
+            where: Filter results by conditions. Accepts a Filter
+                or list of Filters.
+            formula: Formula expression referencing events by position
+                (A, B, C...). Requires 2+ events.
+            formula_label: Display label for formula result.
+            rolling: Rolling window size in periods.
+                Mutually exclusive with ``cumulative``.
+            cumulative: Enable cumulative analysis mode.
+                Mutually exclusive with ``rolling``.
+            mode: Result shape. ``"timeseries"`` returns per-period data,
+                ``"total"`` returns a single aggregate, ``"table"`` returns
+                tabular data. Default: ``"timeseries"``.
+
+        Returns:
+            QueryResult with series data, DataFrame, and metadata.
+
+        Raises:
+            ValueError: If arguments violate validation rules.
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid query parameters.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Simple event query
+            result = ws.query("Login")
+            print(result.df.head())
+
+            # With aggregation and time range
+            result = ws.query("Login", math="unique", last=7, unit="day")
+
+            # Multi-event with formula
+            result = ws.query(
+                [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
+                formula="(B / A) * 100",
+                formula_label="Conversion Rate",
+            )
+            ```
+        """
+        # Normalize events to sequence
+        if isinstance(events, (str, Metric)):
+            events_list: Sequence[str | Metric] = [events]
+        else:
+            events_list = events
+
+        # Validate
+        self._validate_query_args(
+            events=events_list,
+            math=math,
+            math_property=math_property,
+            per_user=per_user,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            formula=formula,
+            rolling=rolling,
+            cumulative=cumulative,
+            group_by=group_by,
+        )
+
+        # Build bookmark params
+        params = self._build_query_params(
+            events=events_list,
+            math=math,
+            math_property=math_property,
+            per_user=per_user,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            group_by=group_by,
+            where=where,
+            formula=formula,
+            formula_label=formula_label,
+            rolling=rolling,
+            cumulative=cumulative,
+            mode=mode,
+        )
+
+        # Delegate to service
+        return self._live_query_service.query(
+            bookmark_params=params,
+            project_id=int(self._credentials.project_id),
         )
 
     # =========================================================================
