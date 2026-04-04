@@ -1,6 +1,6 @@
 # mixpanel-data — CodeMode Analyst Plugin
 
-Turn Claude into a senior data analyst and Mixpanel product analytics expert. Instead of calling CLI commands or MCP tools, Claude writes Python code using `mixpanel_data` + `pandas` to answer questions about your Mixpanel data.
+Turn Claude into a senior data analyst and Mixpanel product analytics expert. Instead of calling CLI commands or MCP tools, Claude writes Python code using `mixpanel_data` + `pandas` + `numpy` + `matplotlib` + `seaborn` to answer questions about your Mixpanel data.
 
 ## Philosophy
 
@@ -9,7 +9,7 @@ Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool call
 ## Quick Start
 
 ```
-1. /mixpanel-data:setup              # Install mixpanel_data + pandas, verify auth
+1. /mixpanel-data:setup              # Install mixpanel_data + pandas + numpy + matplotlib + seaborn, verify auth
 2. "How many signups last week?"      # Claude writes Python, executes, answers
 3. "Why did retention drop?"          # Diagnostician agent investigates systematically
 4. "Generate a Q1 executive report"   # Narrator agent creates a polished report

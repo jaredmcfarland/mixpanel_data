@@ -30,13 +30,13 @@ fi
 # mixpanel_data is not on PyPI — install from GitHub
 MIXPANEL_DATA_PKG="git+https://github.com/jaredmcfarland/mixpanel_data.git"
 echo ""
-echo "Installing mixpanel_data (from GitHub) and pandas..."
+echo "Installing mixpanel_data (from GitHub), pandas, numpy, matplotlib, seaborn..."
 if command -v uv &>/dev/null; then
   echo "  (using uv)"
-  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas; }
+  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn; }
 elif "$python_cmd" -m pip --version &>/dev/null; then
   echo "  (using pip via $python_cmd)"
-  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" pandas
+  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn
 else
   echo "✗ No package manager found. Install pip or uv."
   echo "  Recommended: https://docs.astral.sh/uv/"
@@ -49,8 +49,14 @@ echo "Verifying installation..."
 "$python_cmd" -c "
 import mixpanel_data as mp
 import pandas as pd
+import numpy as np
+import matplotlib
+import seaborn as sns
 print(f'✓ mixpanel_data installed')
 print(f'✓ pandas {pd.__version__}')
+print(f'✓ numpy {np.__version__}')
+print(f'✓ matplotlib {matplotlib.__version__}')
+print(f'✓ seaborn {sns.__version__}')
 " || { echo "✗ Import verification failed"; exit 1; }
 
 # Check credentials
