@@ -89,8 +89,8 @@ kpis = {
 for name, (current, previous) in kpis.items():
     change = ""
     if previous and previous > 0:
-        pct = (current - previous) / previous * 100
-        change = f" ({pct:+.1f}% MoM)"
+        pct = (current - previous) / previous * 100 if previous > 0 else 0
+        change = f" ({pct:+.1f}% MoM)" if pct else ""
     print(f"{name}: {current:,.0f}{change}")
 ```
 

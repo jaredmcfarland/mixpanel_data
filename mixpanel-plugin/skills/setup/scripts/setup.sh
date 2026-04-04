@@ -31,15 +31,12 @@ echo ""
 echo "Installing mixpanel_data and pandas..."
 if command -v uv &>/dev/null; then
   echo "  (using uv)"
-  uv pip install mixpanel_data pandas
-elif command -v pip3 &>/dev/null; then
-  echo "  (using pip3)"
-  pip3 install mixpanel_data pandas
-elif command -v pip &>/dev/null; then
-  echo "  (using pip)"
-  pip install mixpanel_data pandas
+  uv pip install --python "$python_cmd" mixpanel_data pandas || uv pip install --system --python "$python_cmd" mixpanel_data pandas
+elif "$python_cmd" -m pip --version &>/dev/null; then
+  echo "  (using pip via $python_cmd)"
+  "$python_cmd" -m pip install mixpanel_data pandas
 else
-  echo "✗ No package manager found. Install one of: uv, pip3, pip"
+  echo "✗ No package manager found. Install pip or uv."
   echo "  Recommended: https://docs.astral.sh/uv/"
   exit 1
 fi
@@ -86,7 +83,7 @@ try:
 except Exception:
     print('⚠ Could not check config file credentials.')
     print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')
-" 2>/dev/null
+"
 
 echo ""
 echo "=== Setup complete ==="

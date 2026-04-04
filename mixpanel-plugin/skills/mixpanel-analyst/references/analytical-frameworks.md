@@ -95,7 +95,8 @@ result = ws.jql("""function main() {
 # Referral tracking
 invites = ws.segmentation(event="Invite Sent", from_date=..., to_date=...).df
 accepts = ws.segmentation(event="Invite Accepted", from_date=..., to_date=...).df
-viral_coefficient = accepts.sum().values[0] / invites.sum().values[0]
+invites_total = invites.sum().values[0]
+viral_coefficient = accepts.sum().values[0] / invites_total if invites_total > 0 else 0
 print(f"Viral coefficient: {viral_coefficient:.2f}")
 ```
 

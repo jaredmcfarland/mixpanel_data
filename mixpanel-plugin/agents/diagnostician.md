@@ -68,7 +68,7 @@ previous = ws.segmentation(event="TARGET_EVENT", from_date="PREV_START", to_date
 
 c_total = current.iloc[:, 0].sum()
 p_total = previous.iloc[:, 0].sum()
-change_pct = (c_total - p_total) / p_total * 100
+change_pct = (c_total - p_total) / p_total * 100 if p_total != 0 else 0
 
 print(f"Current period:  {c_total:>10,.0f}")
 print(f"Previous period: {p_total:>10,.0f}")
@@ -115,7 +115,7 @@ for dim in dimensions:
 
         # Calculate absolute and relative change per segment
         delta = curr.sum() - prev.sum()
-        pct_delta = ((curr.sum() - prev.sum()) / prev.sum() * 100).fillna(0)
+        pct_delta = ((curr.sum() - prev.sum()) / prev.sum().replace(0, float('nan')) * 100).fillna(0)
 
         print(f"\n=== By {dim} ===")
         print("Absolute change (bottom 5):")
