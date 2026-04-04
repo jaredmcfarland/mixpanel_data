@@ -16,6 +16,7 @@ import enum
 import importlib
 import inspect
 import sys
+from pathlib import Path
 from typing import Any
 
 try:
@@ -349,6 +350,37 @@ def show_related(type_name: str) -> None:
             print(m)
 
 
+_BOOKMARK_RELATED = frozenset(
+    {
+        "query_saved_report",
+        "query_flows",
+        "SavedReportResult",
+        "SavedReportType",
+        "FlowsResult",
+    }
+)
+
+
+def _maybe_show_bookmark_hint(query: str) -> None:
+    """Print a reference hint if the query relates to bookmarks.
+
+    Args:
+        query: The user's help query string.
+    """
+    parts = query.replace(".", " ").split()
+    if "bookmark" not in query.lower() and not (set(parts) & _BOOKMARK_RELATED):
+        return
+    ref = Path(__file__).resolve().parent.parent / "references" / "bookmark-params.md"
+    if not ref.is_file():
+        return
+    print(
+        "\n---\n"
+        "Tip: For bookmark params JSON schema, "
+        "read references/bookmark-params.md "
+        "(SQL-to-JSON query translation guide)"
+    )
+
+
 def show_detail(obj: Any, path: str) -> None:
     """Show detailed documentation for a specific object."""
     if isinstance(obj, type) and issubclass(obj, enum.Enum):
@@ -434,6 +466,9 @@ def main() -> None:
                 except AttributeError:
                     pass
             sys.exit(1)
+
+    if query not in ("types", "exceptions"):
+        _maybe_show_bookmark_hint(query)
 
 
 if __name__ == "__main__":

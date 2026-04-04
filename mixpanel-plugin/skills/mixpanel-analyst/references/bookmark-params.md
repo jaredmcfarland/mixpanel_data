@@ -37,21 +37,32 @@ bookmark = ws.create_bookmark(CreateBookmarkParams(
 
 ## SQL Mental Model
 
-Think in SQL, then translate:
+Bookmark params are a declarative query — like SQL in JSON form. For insights, the `sections` object maps directly to SQL clauses:
 
 ```
-SQL                              Bookmark params
-----------------------------------------------
-SELECT COUNT(DISTINCT user)   →  measurement.math: "unique"
-SELECT COUNT(*)               →  measurement.math: "total"
-SELECT AVG(prop)              →  measurement.math: "average" + measurement.property
-FROM events                   →  behavior.name: "<event_name>"
-WHERE prop = 'val'            →  sections.filter[] or behavior.filters[]
-GROUP BY prop                 →  sections.group[]
-GROUP BY time_unit            →  sections.time[].unit + chartType: "line"
-LIMIT N                       →  sorting.*.viewNLimit
-A / B (ratio)                 →  FormulaShowClause with definition: "A / B"
+sections.show[]    →  SELECT        (each show clause = one metric column)
+sections.filter[]  →  WHERE         (global — applies to all metrics)
+sections.group[]   →  GROUP BY      (property breakdowns)
+sections.time[]    →  GROUP BY time (implicit, controls line chart granularity)
+sorting            →  ORDER BY / LIMIT
 ```
+
+Within each show clause:
+
+```
+behavior.name         →  FROM <table>       (which event to query)
+behavior.filters[]    →  AND <per-metric>   (additional WHERE, scoped to this metric only)
+measurement.math      →  aggregate function (COUNT DISTINCT, AVG, SUM, ...)
+measurement.property  →  aggregate column   (for AVG/MIN/MAX/percentiles)
+```
+
+Formulas reference other metrics by letter (A = first, B = second):
+
+```
+definition: "(A / B) * 100"  →  computed column
+```
+
+Not all SQL is expressible: no JOINs, no subqueries, no UNION. Formulas are the closest to derived columns. Funnels, retention, and flows go beyond SQL — see their sections below.
 
 ## Report Type Detection
 
@@ -72,10 +83,10 @@ A / B (ratio)                 →  FormulaShowClause with definition: "A / B"
 {
   "displayOptions": {"chartType": "<type>"},
   "sections": {
-    "show": [/* metrics and/or formulas */],
-    "time": [/* date range */],
-    "filter": [/* global WHERE clauses */],
-    "group": [/* GROUP BY breakdowns */]
+    "show": [/* SELECT — metrics and formulas */],
+    "time": [/* GROUP BY time — date range + granularity */],
+    "filter": [/* WHERE — global filters across all metrics */],
+    "group": [/* GROUP BY — property breakdowns */]
   }
 }
 ```
@@ -114,7 +125,7 @@ A / B (ratio)                 →  FormulaShowClause with definition: "A / B"
 
 #### Per-User Aggregation
 
-Set `measurement.perUserAggregation` to `total`, `average`, `min`, `max`, or `unique_values`. This aggregates per user first, then applies `math` across users.
+Set `measurement.perUserAggregation` to `total`, `average`, `min`, `max`, or `unique_values`. This aggregates per user first, then applies `math` across users — like a nested query: `SELECT AVG(user_total) FROM (SELECT user_id, COUNT(*) as user_total ... GROUP BY user_id)`.
 
 Example — "Average number of purchases per user":
 ```json
@@ -251,7 +262,7 @@ Numeric bucketing:
 
 ## Funnels Params
 
-Uses `sections` wrapper like insights, but with `behavior.type: "funnel"` and steps in `behavior.behaviors[]`.
+Funnels go beyond simple SQL aggregation — they express sequential event analysis with time constraints (like a self-join with window functions). Uses `sections` wrapper like insights, but with `behavior.type: "funnel"` and ordered steps in `behavior.behaviors[]`.
 
 ```json
 {
@@ -310,7 +321,7 @@ Each step in `behaviors[]` can have inline filters:
 
 ## Retention Params
 
-Uses `sections` wrapper with `behavior.type: "retention"` and exactly 2 behaviors: born event (index 0) and return event (index 1).
+Retention goes beyond SQL — it's cohort analysis, tracking whether users who did event A come back to do event B over time intervals. Uses `sections` wrapper with `behavior.type: "retention"` and exactly 2 behaviors: born event (index 0) and return event (index 1).
 
 ```json
 {
@@ -357,7 +368,7 @@ Uses `sections` wrapper with `behavior.type: "retention"` and exactly 2 behavior
 
 ## Flows Params
 
-Flows use a **completely different flat structure** — no `sections` wrapper.
+Flows have no SQL analogy — they're graph traversal, showing the paths users take before and after anchor events. Completely different flat structure — no `sections` wrapper.
 
 ```json
 {
