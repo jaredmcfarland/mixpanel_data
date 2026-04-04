@@ -17,10 +17,10 @@ top = ws.top_events(limit=20)
 print(f"Total events: {len(events)}")
 print("\nTop events by volume:")
 for t in top:
-    print(f"  {t.name:40s}")
+    print(f"  {t.event:40s}")
 
 # Drill into an event
-event_name = top[0].name
+event_name = top[0].event
 props = ws.properties(event_name)
 print(f"\nProperties for '{event_name}': {len(props)}")
 for p in props[:15]:
@@ -176,11 +176,11 @@ import mixpanel_data as mp
 ws = mp.Workspace()
 
 # Get user's recent activity
-result = ws.activity_feed(user_id="USER_DISTINCT_ID", limit=50)
+result = ws.activity_feed(distinct_ids=["USER_DISTINCT_ID"])
 
 print("=== User Activity ===")
 for event in result.events:
-    print(f"  {event.time}  {event.name:30s}  {event.properties}")
+    print(f"  {event.time}  {event.event:30s}  {event.properties}")
 ```
 
 ## 8. Period-over-Period Comparison
@@ -198,7 +198,7 @@ previous_df = ws.segmentation(event=event, from_date="2025-02-01", to_date="2025
 
 c_total = current_df[current_df["segment"] == "total"]["count"].sum()
 p_total = previous_df[previous_df["segment"] == "total"]["count"].sum()
-change = (c_total - p_total) / p_total * 100
+change = (c_total - p_total) / p_total * 100 if p_total != 0 else 0
 
 print(f"=== {event} — Month over Month ===")
 print(f"Current:  {c_total:>10,.0f}")
@@ -352,7 +352,7 @@ if undocumented:
         print(f"  - {e}")
 
 # Check for volume anomalies
-anomalies = ws.list_data_volume_anomalies(limit=10)
+anomalies = ws.list_data_volume_anomalies()
 if anomalies:
     print(f"\nRecent anomalies: {len(anomalies)}")
     for a in anomalies[:5]:

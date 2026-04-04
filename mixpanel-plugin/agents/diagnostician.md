@@ -152,8 +152,8 @@ for event_name in ["Login", "Sign Up", "Purchase", "Error", "Page View"]:
     try:
         r = ws.segmentation(event=event_name, from_date="BROAD_START", to_date="BROAD_END").df
         metrics[event_name] = r[r["segment"] == "total"].set_index("date")["count"]
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  Could not fetch {event_name}: {e}")
 
 if metrics:
     combined = pd.DataFrame(metrics)

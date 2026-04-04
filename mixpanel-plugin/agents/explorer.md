@@ -67,7 +67,7 @@ events = ws.events()
 top = ws.top_events(limit=20)
 print(f"Total events: {len(events)}")
 for t in top:
-    print(f"  {t.name}")
+    print(f"  {t.event}")
 
 # What's saved?
 funnels = ws.funnels()
@@ -76,11 +76,11 @@ bookmarks = ws.list_bookmarks()
 print(f"\nSaved: {len(funnels)} funnels, {len(cohorts)} cohorts, {len(bookmarks)} reports")
 
 # Drill into relevant events
-for event_name in [t.name for t in top[:5]]:
+for event_name in [t.event for t in top[:5]]:
     props = ws.properties(event_name)
     print(f"\n{event_name}: {len(props)} properties")
     for p in props[:10]:
-        vals = ws.property_values(event_name, p, limit=5)
+        vals = ws.property_values(p, event=event_name, limit=5)
         print(f"  {p:30s} → {vals[:3]}")
 ```
 

@@ -82,7 +82,7 @@ df = result.df
 
 # Format as percentage heatmap
 print("\n=== Retention Heatmap ===")
-print(df.applymap(lambda x: f"{x:.0%}" if pd.notna(x) else "—").to_string())
+print(df.map(lambda x: f"{x:.0%}" if pd.notna(x) else "—").to_string())
 ```
 
 ### Combining Multiple Queries
@@ -204,13 +204,12 @@ ws = mp.Workspace()
 
 # Stream events into a DataFrame
 events = list(ws.stream_events(
-    from_date="2025-01-01", to_date="2025-01-02", event="Purchase"
+    from_date="2025-01-01", to_date="2025-01-02", events=["Purchase"]
 ))
 df = pd.DataFrame([
-    {"time": e.time, "user": e.distinct_id, **e.properties}
+    {"time": e["event_time"], "user": e["distinct_id"], **e["properties"]}
     for e in events
 ])
-df["time"] = pd.to_datetime(df["time"], unit="s")
 
 print(f"Streamed {len(df)} events")
 print(df.describe())

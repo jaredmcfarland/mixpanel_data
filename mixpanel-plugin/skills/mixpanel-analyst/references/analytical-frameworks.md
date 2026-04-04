@@ -153,14 +153,14 @@ import pandas as pd
 ws = mp.Workspace()
 
 # North Star: Weekly Active Users (WAU)
-wau = ws.segmentation(
-    event="Any Active Event", from_date="2025-01-01", to_date="2025-03-31",
+wau = ws.event_counts(
+    events=["Any Active Event"], from_date="2025-01-01", to_date="2025-03-31",
     unit="week", type="unique",
 )
 
 # Supporting metrics
 engagement = ws.frequency(event="Core Action", from_date=..., to_date=...)
-retention = ws.retention(born_event="Sign Up", event="Core Action", from_date=..., to_date=...)
+retention = ws.retention(born_event="Sign Up", return_event="Core Action", from_date=..., to_date=...)
 
 wau_series = wau.df.groupby("date")["count"].sum()
 print(f"WAU trend: {wau_series.pct_change().mean():.1%} avg weekly growth")

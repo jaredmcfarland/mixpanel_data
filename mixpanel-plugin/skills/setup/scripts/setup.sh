@@ -31,7 +31,7 @@ echo ""
 echo "Installing mixpanel_data and pandas..."
 if command -v uv &>/dev/null; then
   echo "  (using uv)"
-  uv pip install --python "$python_cmd" mixpanel_data pandas || uv pip install --system --python "$python_cmd" mixpanel_data pandas
+  uv pip install --python "$python_cmd" mixpanel_data pandas || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" mixpanel_data pandas; }
 elif "$python_cmd" -m pip --version &>/dev/null; then
   echo "  (using pip via $python_cmd)"
   "$python_cmd" -m pip install mixpanel_data pandas
@@ -81,8 +81,8 @@ try:
         print('⚠ No accounts configured yet.')
         print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')
         print('  Or configure an account programmatically (see setup instructions)')
-except Exception:
-    print('⚠ Could not check config file credentials.')
+except Exception as e:
+    print(f'⚠ Could not check config file credentials: {e}')
     print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')
 "
 

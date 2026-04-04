@@ -19,7 +19,7 @@ ws = mp.Workspace(project_id=67890, region="eu") # explicit project
 ws.events() -> list[str]
 ws.properties(event: str) -> list[str]
 ws.property_values(property_name: str, *, event: str | None = None, limit: int = 100) -> list[str]
-ws.top_events(limit: int = 10) -> list[TopEvent]
+ws.top_events(*, type: Literal["general","average","unique"] = "general", limit: int | None = None) -> list[TopEvent]
 ws.funnels() -> list[FunnelInfo]
 ws.cohorts() -> list[SavedCohort]
 ws.list_bookmarks(bookmark_type: BookmarkType | None = None) -> list[BookmarkInfo]
@@ -63,15 +63,15 @@ ws.query_saved_report(bookmark_id: int) -> SavedReportResult
 
 ```python
 ws.event_counts(
-    events: list[str], unit: str = "day",
-    from_date: str = ..., to_date: str = ...,
-    where: str | None = None,
+    events: list[str], *, from_date: str, to_date: str,
+    type: Literal["general", "unique", "average"] = "general",
+    unit: Literal["day", "week", "month"] = "day",
 ) -> EventCountsResult
 
 ws.property_counts(
-    event: str, property: str, unit: str = "day",
-    from_date: str = ..., to_date: str = ...,
-    where: str | None = None,
+    event: str, property_name: str, *, from_date: str, to_date: str,
+    type: Literal["general", "unique", "average"] = "general",
+    unit: Literal["day", "week", "month"] = "day",
 ) -> PropertyCountsResult
 
 ws.activity_feed(distinct_ids: list[str], *, from_date: str | None = None, to_date: str | None = None) -> ActivityFeedResult
@@ -80,25 +80,28 @@ ws.query_flows(bookmark_id: int) -> FlowsResult
 
 ws.frequency(
     *, from_date: str, to_date: str,
-    unit: str = ..., event: str | None = None,
+    unit: Literal["day", "week", "month"] = "day",
+    addiction_unit: Literal["hour", "day"] = "hour",
+    event: str | None = None,
     where: str | None = None,
 ) -> FrequencyResult
 
 ws.segmentation_numeric(
-    event: str, property: str, unit: str = "day",
-    from_date: str = ..., to_date: str = ...,
+    event: str, *, from_date: str, to_date: str,
+    on: str, unit: Literal["hour", "day"] = "day",
     where: str | None = None,
+    type: Literal["general", "unique", "average"] = "general",
 ) -> NumericBucketResult
 
 ws.segmentation_sum(
-    event: str, on: str, unit: str = "day",
-    from_date: str = ..., to_date: str = ...,
+    event: str, on: str, *, from_date: str, to_date: str,
+    unit: Literal["hour", "day"] = "day",
     where: str | None = None,
 ) -> NumericSumResult
 
 ws.segmentation_average(
-    event: str, on: str, unit: str = "day",
-    from_date: str = ..., to_date: str = ...,
+    event: str, on: str, *, from_date: str, to_date: str,
+    unit: Literal["hour", "day"] = "day",
     where: str | None = None,
 ) -> NumericAverageResult
 ```
@@ -117,18 +120,25 @@ ws.property_coverage(event: str, property: str, from_date: str, to_date: str) ->
 
 ```python
 ws.stream_events(
-    from_date: str, to_date: str,
+    *, from_date: str, to_date: str,
     events: list[str] | None = None,
     where: str | None = None,
+    limit: int | None = None,
+    raw: bool = False,
 ) -> Iterator[dict[str, Any]]
 
 ws.stream_profiles(
+    *,
     where: str | None = None,
     cohort_id: str | None = None,
     output_properties: list[str] | None = None,
     raw: bool = False,
     distinct_id: str | None = None,
     distinct_ids: list[str] | None = None,
+    group_id: str | None = None,
+    behaviors: list[dict[str, Any]] | None = None,
+    as_of_timestamp: int | None = None,
+    include_all_users: bool = False,
 ) -> Iterator[dict[str, Any]]
 ```
 
@@ -326,7 +336,7 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 | Type | From Method | Key Properties |
 |------|------------|----------------|
 | `SegmentationResult` | `segmentation()` | `.df`, `.data`, `.series` |
-| `FunnelResult` | `funnel()` | `.df`, `.steps`, `.conversion_rates` |
+| `FunnelResult` | `funnel()` | `.df`, `.steps`, `.conversion_rate` |
 | `RetentionResult` | `retention()` | `.df`, `.data` |
 | `JQLResult` | `jql()` | `.df`, `.data` |
 | `EventCountsResult` | `event_counts()` | `.df`, `.data` |
