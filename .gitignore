@@ -81,3 +81,6 @@ context/fastmcp/
 
 # MCP client configuration (local dev only)
 .mcp.json
+
+# oh-my-claudecode local state
+.omc/

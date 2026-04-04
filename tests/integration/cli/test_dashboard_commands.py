@@ -300,6 +300,17 @@ class TestDashboardsOrganization:
         data = json.loads(result.stdout)
         assert isinstance(data, dict)
 
+    def test_add_report(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
+        """Test adding a report to a dashboard."""
+        with patch(
+            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(app, ["dashboards", "add-report", "1", "42"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert isinstance(data, dict)
+
 
 class TestDashboardsBlueprints:
     """Tests for mp dashboards blueprints and blueprint-create commands."""

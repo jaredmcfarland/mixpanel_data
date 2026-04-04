@@ -111,6 +111,7 @@ Manage Mixpanel dashboards via the App API.
 | `mp dashboards unfavorite` | Unfavorite a dashboard |
 | `mp dashboards pin` | Pin a dashboard |
 | `mp dashboards unpin` | Unpin a dashboard |
+| `mp dashboards add-report` | Add a report to a dashboard |
 | `mp dashboards remove-report` | Remove a report from a dashboard |
 | `mp dashboards blueprints` | List blueprint templates |
 | `mp dashboards blueprint-create` | Create dashboard from blueprint |

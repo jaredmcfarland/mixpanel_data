@@ -41,6 +41,26 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions          # list all excep
 
 Use this before every unfamiliar method. It pulls live docstrings from the installed package — always accurate.
 
+## Bookmark Validation
+
+Before calling `create_bookmark()` or `update_bookmark()`, **always validate the params dict**:
+
+```bash
+# Validate from a Python variable (pipe JSON to stdin)
+python3 -c "import json; print(json.dumps(params))" | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin
+
+# Validate with explicit type
+echo '{"sections": {...}}' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type insights
+
+# Validate from a file
+python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py params.json
+
+# Get errors as JSON (for programmatic use)
+echo '...' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --json
+```
+
+Exit 0 = valid. Exit 1 = errors (printed to stderr). The validator checks chart types, math types, filter operators, required fields, funnel step counts, retention event counts, and flows structure — catching mistakes before they hit the API.
+
 ## Workspace Construction
 
 ```python
@@ -55,6 +75,10 @@ ws = mp.Workspace()
 
 # With workspace ID for App API (entity CRUD)
 ws = mp.Workspace(workspace_id=12345)
+
+# IMPORTANT: project_id must be a STRING, not int
+ws = mp.Workspace(project_id="8")           # correct
+# ws = mp.Workspace(project_id=8)           # WRONG — ValidationError
 ```
 
 ## Quick API Reference
@@ -130,6 +154,103 @@ Full CRUD for dashboards, cohorts, feature flags, experiments, alerts, annotatio
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_dashboards
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.create_cohort
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_feature_flags
+```
+
+### Adding Reports to a Dashboard
+
+Use `add_report_to_dashboard()` to clone an existing bookmark onto a dashboard:
+
+```python
+import mixpanel_data as mp
+import json
+import subprocess
+from mixpanel_data.types import CreateDashboardParams, CreateBookmarkParams
+
+ws = mp.Workspace(account="myaccount")
+
+# Step 1: Create dashboard
+dashboard = ws.create_dashboard(CreateDashboardParams(title="My Dashboard"))
+
+# Step 2: Build and VALIDATE params before creating
+params = {... }  # see Bookmark Params Structure below
+
+# Validate params (catches errors before hitting the API)
+result = subprocess.run(
+    ["python3", "${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py", "--stdin", "--type", "insights"],
+    input=json.dumps(params), capture_output=True, text=True,
+)
+if result.returncode != 0:
+    print(f"Invalid params: {result.stderr}")
+    # Fix params before proceeding
+else:
+    # Step 3: Create bookmark (params are valid)
+    bookmark = ws.create_bookmark(CreateBookmarkParams(
+        name="Daily Logins",
+        bookmark_type="insights",
+        params=params,
+    ))
+
+    # Step 4: Add bookmark to dashboard
+    ws.add_report_to_dashboard(dashboard.id, bookmark.id)
+```
+
+**Note**: `CreateBookmarkParams(dashboard_id=...)` does NOT add the report to the dashboard layout — always use `add_report_to_dashboard()` instead.
+
+### Bookmark Params Structure (Insights)
+
+The `params` dict for insights bookmarks follows this structure:
+
+```python
+def make_insights_params(event_name, chart_type="line", unit="month",
+                         value=180, group_by_prop=None):
+    """Build params for an insights bookmark."""
+    metric = {
+        "behavior": {
+            "type": "simple",
+            "name": event_name,
+            "resourceType": "events",
+            "dataGroupId": None,
+            "filters": [],
+            "behaviors": [{
+                "type": "event",
+                "id": None,
+                "name": event_name,
+                "filters": [],
+            }],
+        },
+        "measurement": {
+            "math": "total",         # total | unique
+            "perUserAggregation": None,
+            "property": None,
+        },
+        "isHidden": False,
+        "type": "metric",
+    }
+    sections = {
+        "show": [metric],            # list of metrics (A, B, C...)
+        "filter": [],
+        "formula": [],
+        "time": [{"unit": unit, "value": value}],
+        "group_by": [],
+        "group": [],
+    }
+    if group_by_prop:
+        sections["group_by"] = [{
+            "value": group_by_prop,
+            "resourceType": "events",
+            "propertyType": "string",
+            "typeCast": None,
+            "bucketing": None,
+        }]
+    return {
+        "sections": sections,
+        "displayOptions": {
+            "chartType": chart_type,  # line | bar
+            "plotStyle": "standard",
+            "analysis": "linear",
+            "value": "absolute",
+        },
+    }
 ```
 
 ### DataFrame Conversion

@@ -82,6 +82,7 @@ def mock_workspace() -> MagicMock:
     workspace.pin_dashboard.return_value = None
     workspace.unpin_dashboard.return_value = None
     workspace.remove_report_from_dashboard.return_value = mock_dash
+    workspace.add_report_to_dashboard.return_value = mock_dash
     workspace.list_blueprint_templates.return_value = [
         BlueprintTemplate(title_key="onboarding", description_key="Get started")
     ]

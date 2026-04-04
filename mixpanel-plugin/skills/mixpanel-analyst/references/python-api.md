@@ -10,8 +10,10 @@ import mixpanel_data as mp
 ws = mp.Workspace()                              # default account
 ws = mp.Workspace(account="prod")                # named account
 ws = mp.Workspace(workspace_id=12345)            # with workspace for App API
-ws = mp.Workspace(project_id=67890, region="eu") # explicit project
+ws = mp.Workspace(project_id="67890", region="eu") # explicit project — project_id is a STRING
 ```
+
+**Gotcha**: `project_id` must be a **string**, not an int. `Workspace(project_id=8)` raises `ValidationError`.
 
 ## Discovery
 
@@ -156,7 +158,36 @@ ws.unfavorite_dashboard(dashboard_id: int) -> None
 ws.pin_dashboard(dashboard_id: int) -> None
 ws.unpin_dashboard(dashboard_id: int) -> None
 ws.remove_report_from_dashboard(dashboard_id: int, report_id: int) -> None
+ws.add_report_to_dashboard(dashboard_id: int, bookmark_id: int) -> Dashboard
 ```
+
+**Gotchas**:
+- `CreateBookmarkParams(dashboard_id=X)` does **NOT** add the report to the dashboard layout — use `add_report_to_dashboard()` instead
+- `add_report_to_dashboard()` clones the bookmark, creating a "Duplicate of ..." copy on the dashboard
+- `finalize_blueprint()` only works on blueprint-created dashboards, not regular ones
+- Dashboard `layout` cannot be set via `update_dashboard()` PATCH (API rejects `order` and `version` keys)
+
+### Dashboard Layout Structure
+
+The `Dashboard.layout` field follows this format (read-only via API):
+
+```python
+{
+    "rows": {
+        "rowId1": {
+            "cells": [
+                {"id": "cellId", "width": 6, "content_id": 12345, "content_type": "report"},
+                {"id": "cellId", "width": 6, "content_id": 67890, "content_type": "report"},
+            ],
+            "height": 0,
+        },
+    },
+    "order": ["rowId1", ...],  # row display order
+    "version": "2.0.0",
+}
+```
+
+Width is a 12-column grid (6+6 = side by side, 12 = full width).
 
 ## Bookmark / Report CRUD
 

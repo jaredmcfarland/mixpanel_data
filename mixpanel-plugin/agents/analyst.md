@@ -124,3 +124,13 @@ If `Workspace()` initialization or any query raises `AuthenticationError` or `Co
 ## Entity Management
 
 You can also manage Mixpanel entities (dashboards, cohorts, feature flags, experiments, alerts, annotations, webhooks) via the App API. Use `help.py` to look up the exact CRUD method signatures.
+
+### Bookmark Validation
+
+When creating or updating bookmarks, **always validate params before calling the API**:
+
+```bash
+echo '<params_json>' | python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/validate_bookmark.py --stdin --type insights
+```
+
+This catches invalid chart types, math types, missing fields, wrong funnel step counts, etc. before they produce cryptic API errors. See `references/bookmark-params.md` for the full params schema.
