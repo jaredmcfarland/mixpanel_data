@@ -1620,6 +1620,11 @@ class Workspace:
         Raises:
             ValueError: If any validation rule is violated.
         """
+        # V0: At least one event required
+        if not events:
+            msg = "At least one event is required"
+            raise ValueError(msg)
+
         # V1: Property math requires property
         if math in PROPERTY_MATH_TYPES and math_property is None:
             msg = f"math='{math}' requires math_property to be set"
@@ -1679,6 +1684,20 @@ class Workspace:
             )
             raise ValueError(msg)
 
+        # V11-V12: GroupBy validation
+        if group_by is not None:
+            groups = group_by if isinstance(group_by, list) else [group_by]
+            for g in groups:
+                if isinstance(g, GroupBy):
+                    if (
+                        g.bucket_min is not None or g.bucket_max is not None
+                    ) and g.bucket_size is None:
+                        msg = "bucket_min/bucket_max require bucket_size"
+                        raise ValueError(msg)
+                    if g.bucket_size is not None and g.bucket_size <= 0:
+                        msg = "bucket_size must be positive"
+                        raise ValueError(msg)
+
         # V13-V14: Per-Metric validation
         for item in events:
             if isinstance(item, Metric):
@@ -1708,24 +1727,6 @@ class Workspace:
                         f"with math='{m_math}'"
                     )
                     raise ValueError(msg)
-
-        # V11-V12: GroupBy validation
-        from mixpanel_data.types import (
-            GroupBy,  # noqa: F811 — avoid circular at top level
-        )
-
-        if group_by is not None:
-            groups = group_by if isinstance(group_by, list) else [group_by]
-            for g in groups:
-                if isinstance(g, GroupBy):
-                    if (
-                        g.bucket_min is not None or g.bucket_max is not None
-                    ) and g.bucket_size is None:
-                        msg = "bucket_min/bucket_max require bucket_size"
-                        raise ValueError(msg)
-                    if g.bucket_size is not None and g.bucket_size <= 0:
-                        msg = "bucket_size must be positive"
-                        raise ValueError(msg)
 
     def _build_query_params(
         self,
@@ -1895,6 +1896,11 @@ class Workspace:
                         if g.bucket_max is not None:
                             group_entry["customBucket"]["max"] = g.bucket_max
                     group_section.append(group_entry)
+                else:
+                    raise TypeError(
+                        f"group_by elements must be str or GroupBy, "
+                        f"got {type(g).__name__}: {g!r}"
+                    )
 
         # --- Build displayOptions ---
         chart_type_map = {
@@ -1927,12 +1933,11 @@ class Workspace:
         }
 
     @staticmethod
-    def _build_filter_entry(f: Any) -> dict[str, Any]:
+    def _build_filter_entry(f: Filter) -> dict[str, Any]:
         """Convert a Filter object to a bookmark filter dict.
 
         Args:
-            f: A Filter object with _property, _operator, _value,
-                _property_type, _resource_type attributes.
+            f: A Filter object.
 
         Returns:
             Bookmark filter dict matching Mixpanel's expected format.
@@ -2004,6 +2009,7 @@ class Workspace:
 
         Raises:
             ValueError: If arguments violate validation rules.
+            ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials.
             QueryError: Invalid query parameters.
             RateLimitError: Rate limit exceeded.

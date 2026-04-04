@@ -10,33 +10,12 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data import Workspace
-from mixpanel_data._internal.config import ConfigManager, Credentials
 
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for testing."""
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
-
-
-@pytest.fixture
-def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
-    """Create mock ConfigManager that returns credentials."""
-    manager = MagicMock(spec=ConfigManager)
-    manager.resolve_credentials.return_value = mock_credentials
-    return manager
 
 
 @pytest.fixture
@@ -878,3 +857,104 @@ class TestModeParams:
             mode="table",
         )
         assert params["displayOptions"]["chartType"] == "table"
+
+
+# =============================================================================
+# Per-metric filters in params generation
+# =============================================================================
+
+
+class TestPerMetricFilters:
+    """Tests for per-metric filters in _build_query_params."""
+
+    def test_per_metric_filter_in_behavior(self, ws: Workspace) -> None:
+        """Metric.filters appear in behavior.filters, not sections.filter."""
+        from mixpanel_data import Filter, Metric
+
+        params = ws._build_query_params(
+            events=[Metric("Purchase", filters=[Filter.equals("country", "US")])],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formula=None,
+            formula_label=None,
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        show = params["sections"]["show"]
+        assert len(show) == 1
+        behavior = show[0]["behavior"]
+        assert "filters" in behavior
+        assert len(behavior["filters"]) == 1
+        f = behavior["filters"][0]
+        assert f["value"] == "country"
+        assert f["filterValue"] == ["US"]
+        assert f["filterOperator"] == "equals"
+
+    def test_per_metric_filter_separate_from_global(self, ws: Workspace) -> None:
+        """Per-metric filters and global where are in different locations."""
+        from mixpanel_data import Filter, Metric
+
+        params = ws._build_query_params(
+            events=[Metric("Purchase", filters=[Filter.equals("country", "US")])],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=Filter.greater_than("age", 18),
+            formula=None,
+            formula_label=None,
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        # Global filter in sections.filter
+        global_filters = params["sections"]["filter"]
+        assert len(global_filters) == 1
+        assert global_filters[0]["value"] == "age"
+
+        # Per-metric filter in show[0].behavior.filters
+        per_metric_filters = params["sections"]["show"][0]["behavior"]["filters"]
+        assert len(per_metric_filters) == 1
+        assert per_metric_filters[0]["value"] == "country"
+
+
+# =============================================================================
+# group_by type validation in params building
+# =============================================================================
+
+
+class TestGroupByTypeError:
+    """Tests for group_by element type validation."""
+
+    def test_invalid_group_by_type_raises(self, ws: Workspace) -> None:
+        """Non-str, non-GroupBy group_by element raises TypeError."""
+        with pytest.raises(TypeError, match="group_by elements must be str or GroupBy"):
+            ws._build_query_params(
+                events=["Login"],
+                math="total",
+                math_property=None,
+                per_user=None,
+                from_date=None,
+                to_date=None,
+                last=30,
+                unit="day",
+                group_by=[42],  # type: ignore[list-item]
+                where=None,
+                formula=None,
+                formula_label=None,
+                rolling=None,
+                cumulative=False,
+                mode="timeseries",
+            )

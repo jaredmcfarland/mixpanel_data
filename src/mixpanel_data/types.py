@@ -54,14 +54,18 @@ PerUserAggregation = Literal["average", "total", "min", "max"]
 """Per-user pre-aggregation type."""
 
 FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
-"""Property data type for filter conditions."""
+"""Property data type for filter conditions.
 
-PROPERTY_MATH_TYPES: frozenset[str] = frozenset(
+Includes ``"datetime"`` and ``"list"`` for API compatibility;
+no Filter factory methods currently produce these types.
+"""
+
+PROPERTY_MATH_TYPES: frozenset[MathType] = frozenset(
     {"average", "median", "min", "max", "sum", "p25", "p75", "p90", "p99"}
 )
 """Math types that require a property name."""
 
-NO_PER_USER_MATH_TYPES: frozenset[str] = frozenset({"dau", "wau", "mau"})
+NO_PER_USER_MATH_TYPES: frozenset[MathType] = frozenset({"dau", "wau", "mau"})
 """Math types incompatible with per_user aggregation."""
 
 # =============================================================================
@@ -6842,7 +6846,7 @@ class Metric:
         math: Aggregation function. Default: ``"total"``.
         property: Property name for property-based math (average, sum, etc.).
         per_user: Per-user pre-aggregation (average, total, min, max).
-        filters: Per-metric filters (override global ``where``).
+        filters: Per-metric filters (applied in addition to global ``where``).
 
     Example:
         ```python
@@ -6900,8 +6904,13 @@ class Filter:
     _operator: str
     """Internal operator string."""
 
-    _value: Any
-    """Value(s) to compare against."""
+    _value: str | int | float | list[str] | list[int | float] | None
+    """Value(s) to compare against.
+
+    Shape varies by operator: list for equals/not_equals, str for
+    contains/not_contains, numeric for greater_than/less_than,
+    two-element list for between, None for is_set/is_not_set/is_true/is_false.
+    """
 
     _property_type: FilterPropertyType = "string"
     """Data type of the property."""
@@ -7310,6 +7319,8 @@ class QueryResult(ResultWithDataFrame):
 
         For timeseries mode: columns are ``date``, ``event``, ``count``.
         For total mode: columns are ``event``, ``count``.
+        Table mode: depends on API response structure; typically matches
+        timeseries or total depending on date presence.
 
         Returns:
             Normalized DataFrame with one row per (date, metric) pair

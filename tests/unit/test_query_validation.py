@@ -12,33 +12,12 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data import Workspace
-from mixpanel_data._internal.config import ConfigManager, Credentials
 
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for testing."""
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
-
-
-@pytest.fixture
-def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
-    """Create mock ConfigManager that returns credentials."""
-    manager = MagicMock(spec=ConfigManager)
-    manager.resolve_credentials.return_value = mock_credentials
-    return manager
 
 
 @pytest.fixture
@@ -346,3 +325,28 @@ class TestGroupByValidation:
 
         with pytest.raises(ValueError, match="bucket_size must be positive"):
             ws.query("Purchase", group_by=GroupBy("amount", bucket_size=-10))
+
+
+# =============================================================================
+# V0: Empty events validation
+# =============================================================================
+
+
+class TestEmptyEventsValidation:
+    """Tests for empty events list validation (V0)."""
+
+    def test_v0_empty_list_raises(self, ws: Workspace) -> None:
+        """V0: Empty events list raises ValueError."""
+        with pytest.raises(ValueError, match="At least one event is required"):
+            ws.query([])
+
+    def test_v0_non_empty_list_passes(self, ws: Workspace) -> None:
+        """V0: Non-empty events list passes validation (may fail at API)."""
+        # This should pass validation but may fail at API call
+        # since we don't have a mock API client here.
+        # We only test that validation doesn't raise.
+        try:
+            ws.query(["Login"])
+        except Exception as e:
+            # Any error other than ValueError about empty events is acceptable
+            assert "At least one event is required" not in str(e)

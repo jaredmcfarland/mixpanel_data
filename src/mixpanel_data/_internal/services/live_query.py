@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from mixpanel_data._internal.expressions import normalize_on_expression
 from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
+from mixpanel_data.exceptions import QueryError
 from mixpanel_data.types import (
     ActivityFeedResult,
     CohortInfo,
@@ -263,7 +264,8 @@ def _transform_query_result(
     """Transform raw insights query response into QueryResult.
 
     Extracts nested date_range fields, copies computed_at, headers,
-    series, and meta from the raw response.
+    series, and meta from the raw response. Validates that the response
+    contains expected fields and is not an error-as-200.
 
     Args:
         raw: Raw API response dictionary from insights query.
@@ -271,14 +273,36 @@ def _transform_query_result(
 
     Returns:
         Typed QueryResult with all fields populated.
+
+    Raises:
+        QueryError: If the response contains an error or is missing
+            required fields.
     """
+    # Check for error responses that leaked through as HTTP 200
+    if "error" in raw:
+        raise QueryError(
+            f"Insights query failed: {raw['error']}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    if "series" not in raw:
+        raise QueryError(
+            "Insights query returned unexpected response shape "
+            f"(missing 'series' key). Keys present: {sorted(raw.keys())}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
     date_range = raw.get("date_range", {})
     return QueryResult(
         computed_at=raw.get("computed_at", ""),
         from_date=date_range.get("from_date", ""),
         to_date=date_range.get("to_date", ""),
         headers=raw.get("headers", []),
-        series=raw.get("series", {}),
+        series=raw["series"],
         params=bookmark_params,
         meta=raw.get("meta", {}),
     )

@@ -10,11 +10,10 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data.exceptions import QueryError
 from mixpanel_data.types import QueryResult
 
 # =============================================================================
@@ -23,30 +22,11 @@ from mixpanel_data.types import QueryResult
 
 
 @pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for testing."""
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
-
-
-@pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()
     return client
-
-
-@pytest.fixture
-def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
-    """Create mock ConfigManager that returns credentials."""
-    manager = MagicMock(spec=ConfigManager)
-    manager.resolve_credentials.return_value = mock_credentials
-    return manager
 
 
 @pytest.fixture
@@ -325,3 +305,47 @@ class TestQueryPersistence:
         assert "sections" in result.params
         assert "displayOptions" in result.params
         assert "show" in result.params["sections"]
+
+
+# =============================================================================
+# Response validation in _transform_query_result
+# =============================================================================
+
+
+class TestTransformQueryResultValidation:
+    """Tests for error handling in _transform_query_result."""
+
+    def test_error_as_200_raises_query_error(
+        self, ws: Workspace, mock_api_client: MagicMock
+    ) -> None:
+        """API returning error in 200 response raises QueryError."""
+        error_response: dict[str, Any] = {
+            "error": "invalid query",
+            "status": "fail",
+        }
+        mock_api_client.insights_query.return_value = error_response
+        with pytest.raises(QueryError, match="Insights query failed: invalid query"):
+            ws.query("Login")
+
+    def test_missing_series_raises_query_error(
+        self, ws: Workspace, mock_api_client: MagicMock
+    ) -> None:
+        """Response missing 'series' key raises QueryError."""
+        malformed_response: dict[str, Any] = {
+            "computed_at": "2024-01-31T12:00:00+00:00",
+            "date_range": {"from_date": "2024-01-01", "to_date": "2024-01-31"},
+            "headers": [],
+            "meta": {},
+        }
+        mock_api_client.insights_query.return_value = malformed_response
+        with pytest.raises(QueryError, match="missing 'series' key"):
+            ws.query("Login")
+
+    def test_valid_response_no_error(
+        self, ws: Workspace, mock_api_client: MagicMock
+    ) -> None:
+        """Valid response with series key succeeds."""
+        mock_api_client.insights_query.return_value = TIMESERIES_RESPONSE
+        result = ws.query("Login")
+        assert isinstance(result, QueryResult)
+        assert "Login [Total Events]" in result.series
