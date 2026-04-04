@@ -1,363 +1,144 @@
-# Mixpanel Data Plugin for Claude Code
+# mixpanel-data — CodeMode Analyst Plugin
 
-Comprehensive Mixpanel analytics integration for Claude Code with interactive commands and automated guidance.
+Turn Claude into a senior data analyst and Mixpanel product analytics expert. Instead of calling CLI commands or MCP tools, Claude writes Python code using `mixpanel_data` + `pandas` to answer questions about your Mixpanel data.
 
-## Features
+## Philosophy
 
-### 🎯 Slash Commands (User-Invoked)
-
-**`/mp-auth [account-name] [list|switch|test]`**
-- Interactive wizard for authentication and account management
-- Setup: Configure credentials with secure secret handling
-- List: View all configured accounts
-- Switch: Change default account
-- Test: Validate credentials and API access
-- **Use when**: Managing Mixpanel credentials or switching between projects
-
-**`/mp-inspect [operation] [event-name]`**
-- Explore Mixpanel schema and discover events/properties
-- Operations across 2 categories:
-  - Discover Schema: events, properties, funnels, cohorts
-  - Analyze Patterns: distribution, daily
-- Progressive workflow chaining with next-step suggestions
-- **Use when**: Discovering available data before queries or understanding schema
-
-**`/mp-fetch [events|profiles] [from-date] [to-date]`**
-- Guided data streaming with validation
-- Stream events or profiles from the Mixpanel API
-- Optional filters: events, WHERE clauses, limits
-- **Use when**: Streaming Mixpanel events or profiles for analysis
-
-**`/mp-query [jql|segmentation|funnel|retention]`**
-- Interactive query builder for all query types
-- JQL: JavaScript Query Language for complex transformations
-- Live queries: Segmentation, funnels, retention
-- **Use when**: Running live queries against the Mixpanel API
-
-**`/mp-funnel [funnel-id]`**
-- Interactive funnel analysis wizard
-- Supports saved Mixpanel funnels or custom event sequences
-- Segmentation and drop-off analysis
-- Visualization generation (Python/matplotlib)
-- **Use when**: Analyzing conversion funnels and identifying drop-off points
-
-**`/mp-retention [born-event] [return-event]`**
-- Comprehensive retention and cohort behavior analysis
-- Retention curves with multiple time units
-- Cohort behavior comparison
-- Time-to-event analysis
-- **Use when**: Understanding user retention and cohort behavior
-
-**`/mp-report [funnel|retention|dashboard|custom]`**
-- Generate comprehensive analysis reports
-- Automated visualizations and insights
-- Export to Markdown, PDF, or HTML
-- Executive summaries with recommendations
-- **Use when**: Creating shareable reports for stakeholders
-
-### 📚 Agent Skill (Auto-Discovered)
-
-**mixpanel-data Skill**
-- Automatically activates when you mention Mixpanel, analytics, or data queries
-- Provides comprehensive guidance on:
-  - Library API (Python)
-  - CLI commands (mp)
-  - Query expressions (filter syntax, JQL)
-  - Integration patterns (pandas, jq, Unix pipelines)
-  - Documentation access (llms.txt)
-- **Progressive disclosure**: Core concepts in SKILL.md, detailed references loaded as needed
-
-### 🤖 Subagents (Auto-Invoked)
-
-Specialized AI analysts that Claude invokes automatically for deep analysis workflows:
-
-**mixpanel-analyst** - General-purpose data analyst
-- Triggered: When user asks about Mixpanel data analysis, event analytics, user behavior
-- Expertise: SQL queries, JQL scripts, data interpretation, insights generation
-- Tools: Read, Write, Bash, Grep, Glob
-- **Use when**: "Analyze my purchase events", "What's driving user engagement?"
-
-**funnel-optimizer** - Conversion funnel specialist
-- Triggered: Questions about conversion rates, funnel analysis, drop-off points, user journeys
-- Expertise: Funnel segmentation, time-to-convert, drop-off analysis, CRO recommendations
-- Tools: Read, Write, Bash
-- **Use when**: "Why are users dropping off?", "Optimize my signup funnel"
-
-**retention-specialist** - Cohort and retention expert
-- Triggered: Questions about retention rates, churn, cohort behavior, user stickiness
-- Expertise: Retention curves, cohort comparison, LTV indicators, sticky features
-- Tools: Read, Write, Bash
-- **Use when**: "What's our Day 7 retention?", "Which cohorts have best retention?"
-
-**jql-expert** - JQL query builder
-- Triggered: Complex transformations, user-level analysis, advanced JQL needs
-- Expertise: JQL syntax, reducers, joins, custom aggregations, performance optimization
-- Tools: Read, Write, Bash
-- **Use when**: "Build a JQL query for...", "How do I calculate average events per user?"
-
-**How it works:**
-1. You ask a question or request analysis
-2. Claude determines which specialist is best suited
-3. The subagent runs autonomously in its own context
-4. Results are returned to the main conversation
-5. You can explicitly invoke: "Use the funnel-optimizer to analyze my checkout flow"
-
-## Installation
-
-### For End Users
-
-Install directly from GitHub:
-
-```bash
-/plugin marketplace add jaredmcfarland/mixpanel_data
-/plugin install mixpanel-data
-```
-
-Then restart Claude Code.
-
-### For Development/Testing
-
-Use the local marketplace from the repository root:
-
-```bash
-/plugin marketplace add /path/to/mixpanel_data
-/plugin install mixpanel-data
-```
-
-Restart Claude Code to load the plugin.
-
-**For detailed distribution strategies, release workflows, and troubleshooting, see [DISTRIBUTION.md](DISTRIBUTION.md)**
+Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool calling": **code is better than tools**. The agent writes Python that orchestrates analysis — parallel API calls, DataFrame transformations, visualizations — instead of issuing one-at-a-time commands.
 
 ## Quick Start
 
-### 1. Configure Credentials
+```
+1. /mixpanel-data:setup              # Install mixpanel_data + pandas, verify auth
+2. "How many signups last week?"      # Claude writes Python, executes, answers
+3. "Why did retention drop?"          # Diagnostician agent investigates systematically
+4. "Generate a Q1 executive report"   # Narrator agent creates a polished report
+```
+
+## Components
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/mp-auth` | Manage authentication — status, add/switch/test accounts, OAuth login |
+| `/mp-auth list` | List all configured accounts |
+| `/mp-auth add` | Guided service account setup (secrets entered securely in terminal) |
+| `/mp-auth test` | Test current credentials against the Mixpanel API |
+| `/mp-auth switch <name>` | Switch default account |
+| `/mp-auth login` | OAuth browser-based login |
+
+### Skills
+
+| Skill | Invocation | Purpose |
+|-------|-----------|---------|
+| `setup` | `/mixpanel-data:setup` | Install dependencies, verify credentials |
+| `mixpanel-analyst` | Auto-triggered | Core brain — CodeMode philosophy, Python API, analytical frameworks |
+
+### Agents
+
+| Agent | Model | Trigger | Purpose |
+|-------|-------|---------|---------|
+| `analyst` | Opus | General analytics questions | Orchestrator — queries data, interprets, recommends |
+| `explorer` | Opus | Vague/open-ended questions | Schema discovery, GQM decomposition, hypothesis generation |
+| `diagnostician` | Opus | "Why did X change?" | Root cause analysis across dimensions |
+| `narrator` | Opus | Reports and summaries | Synthesizes findings into executive narratives |
+
+### Scripts
+
+| Script | Location | Purpose |
+|--------|----------|---------|
+| `setup.sh` | `skills/setup/scripts/` | Portable installer (uv → pip3 → pip fallback) |
+| `help.py` | `skills/mixpanel-analyst/scripts/` | Programmatic docstring lookup for any class/method |
+| `auth_manager.py` | `skills/mixpanel-analyst/scripts/` | Auth status, testing, account management (JSON output) |
+
+### Reference Files (Progressive Disclosure)
+
+| File | Lines | Content |
+|------|-------|---------|
+| `python-api.md` | ~300 | Complete Workspace method signatures |
+| `pandas-patterns.md` | ~250 | DataFrame workflows, visualization patterns |
+| `analytical-frameworks.md` | ~300 | AARRR, GQM, North Star, diagnosis methodology |
+| `code-patterns.md` | ~300 | 12 ready-to-use Python analysis snippets |
+
+## How It Works
+
+When you ask a question about your Mixpanel data:
+
+1. Claude loads the `mixpanel-analyst` skill (CodeMode philosophy + quick API reference)
+2. Claude writes Python code using `mixpanel_data` to query your data
+3. Results come back as pandas DataFrames for further analysis
+4. Claude interprets the data and provides actionable insights
+
+For complex investigations, Claude dispatches specialized agents:
+- **Explorer** for vague questions → decomposes via GQM framework
+- **Diagnostician** for "why did X change?" → segments across 4-6 dimensions
+- **Narrator** for reports → pulls data across AARRR stages, writes polished markdown
+
+The `help.py` script lets agents look up any method's exact signature on demand:
 
 ```bash
-claude
-> /mp-auth production
+python3 help.py Workspace.segmentation   # → full signature + docstring
+python3 help.py SegmentationResult        # → type fields + docs
+python3 help.py types                     # → list all 150+ types
 ```
 
-Follow the interactive wizard to enter:
-- Mixpanel service account username
-- Service account secret
-- Project ID
-- Region (us, eu, in)
+## Prerequisites
 
-### 2. Explore Schema (Optional)
+- Python 3.10+
+- Mixpanel service account credentials (or OAuth)
+- Claude Code with plugins enabled
+
+## Installation
 
 ```bash
-> /mp-inspect
+# Copy or symlink the mixpanel-plugin/ directory into your plugins location
+# e.g. for local development:
+ln -s /path/to/mixpanel-plugin ~/.claude/plugins/mixpanel-data
 ```
 
-Discover available events, properties, and saved funnels before fetching data.
-
-### 3. Stream Data
-
-```bash
-> /mp-fetch events 2024-01-01 2024-01-31
-```
-
-This streams January 2024 events from the Mixpanel API.
-
-### 4. Query Data
-
-```bash
-> /mp-query segmentation
-```
-
-Choose from segmentation, funnel, retention, or JQL queries.
-
-### 5. Auto-Guidance
-
-Just ask questions naturally:
-```
-"How do I analyze purchase events from Mixpanel?"
-"What's the revenue by country?"
-"Show me user retention curves"
-```
-
-The skill activates automatically to guide you.
-
-## Component Breakdown
-
-### Commands (7 files, 2,521 lines)
-
-#### Phase 1: Essential Commands (1,176 lines)
-| Command | Lines | Purpose |
-|---------|-------|---------|
-| `/mp-auth` | 242 | Authentication and account management |
-| `/mp-fetch` | 162 | Data fetching with validation |
-| `/mp-query` | 334 | Interactive query builder (SQL/JQL/live queries) |
-| `/mp-inspect` | 438 | Schema and data exploration |
-
-#### Phase 2: Analysis Commands (1,345 lines)
-| Command | Lines | Purpose |
-|---------|-------|---------|
-| `/mp-funnel` | 339 | Conversion funnel analysis with visualizations |
-| `/mp-retention` | 428 | Retention and cohort behavior analysis |
-| `/mp-report` | 578 | Comprehensive report generator |
-
-### Skill (1 directory)
-
-- **SKILL.md** (246 lines): Core concepts, quick reference
-- **references/** (5 files, 2,179 lines):
-  - `library-api.md` - Complete Python API reference
-  - `cli-commands.md` - Full CLI documentation
-  - `query-expressions.md` - Filter expressions & JQL
-  - `patterns.md` - Integration patterns (pandas, jq)
-  - `documentation.md` - External docs access
-
-### Subagents (4 files)
-
-| Agent | Lines | Specialization |
-|-------|-------|----------------|
-| `mixpanel-analyst.md` | 362 | General-purpose data analysis (SQL, JQL, insights) |
-| `funnel-optimizer.md` | 382 | Conversion funnel analysis and optimization |
-| `retention-specialist.md` | 448 | Cohort retention and engagement analysis |
-| `jql-expert.md` | 521 | Advanced JQL query building and optimization |
-
-**Total: 1,713 lines** of specialized analysis expertise
-
-## Usage Patterns
-
-### Pattern 1: Quick Setup → Query → Analyze
-
-```bash
-/mp-auth production
-/mp-inspect events
-/mp-query segmentation
-```
-
-### Pattern 2: Guided Discovery
-
-```
-User: "I want to analyze Mixpanel purchase events"
-Claude: [Activates skill automatically]
-        "First, let's configure credentials with /mp-auth..."
-```
-
-### Pattern 3: Advanced Analysis
-
-```bash
-# Stream specific events with filters
-/mp-fetch events 2024-01-01 2024-01-31 --events "Purchase" --where 'properties["amount"] > 100'
-
-# Build complex JQL query
-/mp-query jql
-
-# Or ask for help
-User: "Help me build a funnel analysis for signup → purchase"
-```
-
-## Design Philosophy
-
-### Commands = Actions (Explicit Control)
-
-Slash commands give users **explicit control** over operations:
-- `/mp-auth` → "Configure credentials NOW"
-- `/mp-inspect` → "Explore schema NOW"
-- `/mp-fetch` → "Stream data NOW"
-- `/mp-query` → "Query data NOW"
-
-### Skill = Knowledge (Auto-Discovery)
-
-The skill provides **automatic guidance** when needed:
-- Mentions "Mixpanel" → Skill activates
-- Asks about "analytics" → Skill provides context
-- References "JQL" → Skill loads query expression docs
-
-### Progressive Disclosure
-
-All components minimize context usage:
-- **Commands**: Load only when invoked
-- **Skill**: Core in SKILL.md, detailed references loaded as needed
-- **Subagents**: Run in separate context, return only results
-- **Result**: Maximum context for conversation, minimal bloat
-
-## Development
-
-### Structure
+## Directory Structure
 
 ```
 mixpanel-plugin/
 ├── .claude-plugin/
-│   └── plugin.json               # Plugin metadata
-├── commands/                      # Slash commands (user-invoked)
-│   ├── mp-auth.md
-│   ├── mp-fetch.md
-│   ├── mp-funnel.md
-│   ├── mp-inspect.md
-│   ├── mp-query.md
-│   ├── mp-report.md
-│   └── mp-retention.md
-├── agents/                        # Subagents (auto-invoked)
-│   ├── mixpanel-analyst.md       # General data analyst
-│   ├── funnel-optimizer.md       # Conversion specialist
-│   ├── retention-specialist.md   # Retention expert
-│   └── jql-expert.md             # JQL query builder
-└── skills/                        # Agent Skills (auto-discovered)
-    └── mixpanel-data/
-        ├── SKILL.md
-        └── references/
-            ├── cli-commands.md
-            ├── documentation.md
-            ├── library-api.md
-            ├── patterns.md
-            └── query-expressions.md
+│   └── plugin.json                     # Plugin manifest (v2.0.0)
+├── skills/
+│   ├── setup/
+│   │   ├── SKILL.md                    # /mixpanel-data:setup
+│   │   └── scripts/
+│   │       └── setup.sh               # Dependency installer
+│   └── mixpanel-analyst/
+│       ├── SKILL.md                    # Core brain skill
+│       ├── scripts/
+│       │   └── help.py                 # API documentation lookup
+│       └── references/
+│           ├── python-api.md           # Full method signatures
+│           ├── pandas-patterns.md      # DataFrame patterns
+│           ├── analytical-frameworks.md # AARRR, GQM, North Star
+│           └── code-patterns.md        # Ready-to-use snippets
+├── agents/
+│   ├── analyst.md                      # General-purpose orchestrator
+│   ├── explorer.md                     # Schema discovery + GQM
+│   ├── diagnostician.md               # Root cause analysis
+│   └── narrator.md                     # Executive storytelling
+└── README.md
 ```
 
-### Testing
+## Design Principles
 
-```bash
-# Verify plugin loads
-claude --debug
+1. **Code over tools** — Claude writes `python3 -c "..."` one-liners and `.py` files, never CLI commands
+2. **Progressive disclosure** — Core knowledge in SKILL.md (~400 lines), detailed references loaded on demand
+3. **On-demand API docs** — `help.py` pulls live docstrings so agents always have accurate signatures
+4. **AARRR-first thinking** — Every question is classified into a pirate metric stage before querying
+5. **GQM decomposition** — Vague questions are decomposed into Goal → Questions → Metrics
+6. **Always discover first** — Agents explore the schema before writing queries
+7. **Actionable insights** — Never just show data; always interpret and recommend
 
-# Test commands
-/help  # Should show /mp-auth, /mp-inspect, /mp-fetch, /mp-query, /mp-funnel, /mp-retention, /mp-report
+## Relationship to mixpanel_data
 
-# Test skill activation
-"What skills are available?"  # Should show mixpanel-data
-
-# Test functionality
-/mp-auth test
-```
-
-## Requirements
-
-- Claude Code 1.0+
-- `mixpanel_data` Python library installed (`pip install mixpanel_data`)
-- Mixpanel service account credentials
-
-## Roadmap
-
-### ✅ Phase 1: Essential Commands (Complete)
-- `/mp-auth` - Authentication and account management
-- `/mp-inspect` - Schema and data exploration
-- `/mp-fetch` - Data fetching
-- `/mp-query` - Query builder
-
-### ✅ Phase 2: Analysis Commands (Complete)
-- `/mp-funnel` - Funnel analysis
-- `/mp-retention` - Retention analysis
-- `/mp-report` - Report generation
-
-### ✅ Phase 3: Subagents (Complete)
-- **mixpanel-analyst** - General-purpose data analyst (SQL, JQL, insights)
-- **funnel-optimizer** - Conversion funnel specialist
-- **retention-specialist** - Cohort and retention analysis expert
-- **jql-expert** - Advanced JQL query builder
-
-### 🚀 Phase 4: Future Components
-Consider adding:
-1. ~~**MCP Server**~~ - Extracted to `../mp_mcp/` as an independent project
-2. **Hooks** - Pre-commit validation for queries/scripts, session-start credential checks
+This plugin is a Claude Code interface to the [`mixpanel_data`](https://github.com/jaredmcfarland/mixpanel_data) Python library. The library provides the complete Mixpanel API surface (~170+ endpoints) as a Python facade. This plugin teaches Claude how to use that facade effectively for product analytics.
 
 ## License
 
-See project repository for license information.
-
-## Links
-
-- [mixpanel_data Documentation](https://jaredmcfarland.github.io/mixpanel_data/)
-- [GitHub Repository](https://github.com/jaredmcfarland/mixpanel_data)
-- [Claude Code Plugins](https://docs.claude.com/en/docs/claude-code/plugins)
+MIT

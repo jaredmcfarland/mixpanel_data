@@ -262,36 +262,36 @@ Design documents in `context/`:
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
 
-## mixpanel-data Plugin
+## mixpanel-data Plugin (v2 — CodeMode)
 
-This project includes a Claude Code plugin in `mixpanel-plugin/`.
+This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin teaches Claude to be a senior data analyst by writing Python code using `mixpanel_data` + `pandas` — no CLI commands, no MCP tools.
 
 ### Plugin Components
 
-| Type | Location | Invocation |
-|------|----------|------------|
-| **Slash Commands** | `commands/*.md` | Skill tool (`/mp-auth`, `/mp-fetch`, etc.) |
-| **Subagents** | `agents/*.md` | Task tool (`subagent_type`) |
-| **Skills** | `skills/mixpanel-data/` | Auto-loaded by agents |
+| Type | Name | Invocation |
+|------|------|------------|
+| **Command** | `auth` | `/mp-auth` — manage credentials, accounts, OAuth |
+| **Skill** | `setup` | `/mixpanel-data:setup` — install deps, verify auth |
+| **Skill** | `mixpanel-analyst` | Auto-triggered on analytics questions |
+| **Agent** | `analyst` | Task tool — general-purpose orchestrator |
+| **Agent** | `explorer` | Task tool — schema discovery, GQM decomposition |
+| **Agent** | `diagnostician` | Task tool — root cause analysis |
+| **Agent** | `narrator` | Task tool — executive summaries and reports |
+| **Script** | `help.py` | `python help.py Workspace.segmentation` — live API docs |
+| **Script** | `auth_manager.py` | `python auth_manager.py status` — auth status JSON |
 
-### Known Issue: Agent/Skill Confusion
-
-**Bug**: Plugin agents incorrectly appear in the Skill tool's `available_skills` list ([anthropics/claude-code#16407](https://github.com/anthropics/claude-code/issues/16407)).
-
-**Workaround**: When using mixpanel-data analysts, use the **Task tool**, not the Skill tool:
+### Usage
 
 ```
-# CORRECT - use Task tool for agents
-Task(subagent_type="mixpanel-data:mixpanel-analyst", prompt="...")
-Task(subagent_type="mixpanel-data:funnel-optimizer", prompt="...")
-Task(subagent_type="mixpanel-data:retention-specialist", prompt="...")
-Task(subagent_type="mixpanel-data:jql-expert", prompt="...")
+# Setup
+/mixpanel-data:setup
 
-# WRONG - do not use Skill tool for agents
-Skill(skill="mixpanel-data:mixpanel-analyst")  # Will fail!
+# Agents (via Task tool)
+Task(subagent_type="mixpanel-data:analyst", prompt="...")
+Task(subagent_type="mixpanel-data:explorer", prompt="...")
+Task(subagent_type="mixpanel-data:diagnostician", prompt="...")
+Task(subagent_type="mixpanel-data:narrator", prompt="...")
 ```
-
-**Slash commands** (starting with `/mp-`) use the Skill tool correctly.
 
 ## Active Technologies
 - Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), Typer (CLI), Rich (output)

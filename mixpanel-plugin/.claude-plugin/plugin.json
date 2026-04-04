@@ -1,7 +1,7 @@
 {
   "name": "mixpanel-data",
-  "version": "1.0.0",
-  "description": "Mixpanel analytics integration for Claude Code - stream, query, and analyze event data with interactive commands and comprehensive guidance",
+  "version": "2.0.0",
+  "description": "Turn Claude into a senior data analyst and Mixpanel product analytics expert. CodeMode-first: Claude writes Python using mixpanel_data + pandas instead of calling tools or CLI commands.",
   "author": {
     "name": "Jared McFarland",
     "email": "jaredcolin@gmail.com",
@@ -14,10 +14,10 @@
     "mixpanel",
     "analytics",
     "data-analysis",
-    "jql",
-    "event-tracking",
-    "user-analytics",
-    "api-client",
-    "streaming"
+    "product-analytics",
+    "codemode",
+    "pandas",
+    "python",
+    "data-science"
   ]
 }
