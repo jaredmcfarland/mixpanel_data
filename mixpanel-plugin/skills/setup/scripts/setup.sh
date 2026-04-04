@@ -27,14 +27,16 @@ if [ -z "$python_cmd" ]; then
 fi
 
 # Install packages
+# mixpanel_data is not on PyPI — install from GitHub
+MIXPANEL_DATA_PKG="git+https://github.com/jaredmcfarland/mixpanel_data.git"
 echo ""
-echo "Installing mixpanel_data and pandas..."
+echo "Installing mixpanel_data (from GitHub) and pandas..."
 if command -v uv &>/dev/null; then
   echo "  (using uv)"
-  uv pip install --python "$python_cmd" mixpanel_data pandas || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" mixpanel_data pandas; }
+  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas; }
 elif "$python_cmd" -m pip --version &>/dev/null; then
   echo "  (using pip via $python_cmd)"
-  "$python_cmd" -m pip install mixpanel_data pandas
+  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" pandas
 else
   echo "✗ No package manager found. Install pip or uv."
   echo "  Recommended: https://docs.astral.sh/uv/"
