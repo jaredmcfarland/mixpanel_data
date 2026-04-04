@@ -254,27 +254,31 @@ print(df.to_string())
 
 ### Parallel Investigation
 
-When diagnosing a metric change, query multiple dimensions:
+When diagnosing a metric change, query multiple dimensions simultaneously. Since each query is independent, use `ThreadPoolExecutor` to run them in parallel — cutting wall-clock time proportionally:
 
 ```python
 import mixpanel_data as mp
-import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 
 ws = mp.Workspace()
 base = dict(event="Sign Up", from_date="2025-01-01", to_date="2025-01-31")
 
-# Query across dimensions
-by_platform = ws.segmentation(**base, on='properties["platform"]').df
-by_country  = ws.segmentation(**base, on='properties["country"]').df
-by_source   = ws.segmentation(**base, on='properties["utm_source"]').df
-overall     = ws.segmentation(**base).df
+# Run independent queries in parallel
+def query_dim(dim):
+    return ws.segmentation(**base, on=f'properties["{dim}"]').df
+
+dims = ["platform", "country", "utm_source"]
+with ThreadPoolExecutor(max_workers=4) as pool:
+    results = dict(zip(dims, pool.map(query_dim, dims)))
+overall = ws.segmentation(**base).df
 
 # Compare and find the driver
-print("=== By Platform ===")
-print(by_platform.sum().sort_values(ascending=False).head())
-print("\n=== By Country ===")
-print(by_country.sum().sort_values(ascending=False).head())
+for dim, df in results.items():
+    print(f"\n=== By {dim} ===")
+    print(df.sum().sort_values(ascending=False).head())
 ```
+
+Use this pattern whenever you have 3+ independent queries — the speedup is significant for multi-dimensional investigations.
 
 ## Error Handling
 

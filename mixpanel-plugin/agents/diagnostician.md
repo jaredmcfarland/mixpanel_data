@@ -97,25 +97,35 @@ print(daily.nsmallest(5, "daily_change")[["daily_change"]])
 
 ### Step 3: Segment the Change
 
-Break down by 4-6 dimensions to find which segment drives the change.
+Break down by 4-6 dimensions to find which segment drives the change. Parallelize the queries — each dimension × period is independent, so run all 10 requests simultaneously:
 
 ```python
+from concurrent.futures import ThreadPoolExecutor
+
 dimensions = ["platform", "country", "utm_source", "browser", "device_type"]
 
+def query_segment(args):
+    dim, start, end = args
+    return ws.segmentation(
+        event="TARGET_EVENT", from_date=start, to_date=end,
+        on=f'properties["{dim}"]',
+    ).df
+
+# Build all tasks: each dimension for both periods
+tasks = [(d, "CURRENT_START", "CURRENT_END") for d in dimensions] \
+      + [(d, "PREV_START", "PREV_END") for d in dimensions]
+
+with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+    all_dfs = list(pool.map(query_segment, tasks))
+
+curr = dict(zip(dimensions, all_dfs[:len(dimensions)]))
+prev = dict(zip(dimensions, all_dfs[len(dimensions):]))
+
+# Calculate absolute and relative change per segment
 for dim in dimensions:
     try:
-        curr = ws.segmentation(
-            event="TARGET_EVENT", from_date="CURRENT_START", to_date="CURRENT_END",
-            on=f'properties["{dim}"]',
-        ).df
-        prev = ws.segmentation(
-            event="TARGET_EVENT", from_date="PREV_START", to_date="PREV_END",
-            on=f'properties["{dim}"]',
-        ).df
-
-        # Calculate absolute and relative change per segment
-        delta = curr.sum() - prev.sum()
-        pct_delta = ((curr.sum() - prev.sum()) / prev.sum().replace(0, float('nan')) * 100).fillna(0)
+        delta = curr[dim].sum() - prev[dim].sum()
+        pct_delta = ((curr[dim].sum() - prev[dim].sum()) / prev[dim].sum().replace(0, float('nan')) * 100).fillna(0)
 
         print(f"\n=== By {dim} ===")
         print("Absolute change (bottom 5):")

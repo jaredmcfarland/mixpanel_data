@@ -286,16 +286,22 @@ print(comparison.describe())
 ```python
 """Generate a text-based executive dashboard."""
 import mixpanel_data as mp
-import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 
 ws = mp.Workspace()
 period = dict(from_date="2025-03-01", to_date="2025-03-31")
 
-# KPIs
-dau = ws.segmentation(event="Login", **period, type="unique").df.iloc[:, 0].mean()
-signups = ws.segmentation(event="Sign Up", **period).df.iloc[:, 0].sum()
-purchases = ws.segmentation(event="Purchase", **period).df.iloc[:, 0].sum()
-revenue = ws.segmentation_sum(event="Purchase", property="revenue", **period).df.iloc[:, 0].sum()
+# Fetch all KPIs in parallel — each query is independent
+with ThreadPoolExecutor(max_workers=4) as pool:
+    f_dau = pool.submit(lambda: ws.segmentation(event="Login", **period, type="unique").df)
+    f_signups = pool.submit(lambda: ws.segmentation(event="Sign Up", **period).df)
+    f_purchases = pool.submit(lambda: ws.segmentation(event="Purchase", **period).df)
+    f_revenue = pool.submit(lambda: ws.segmentation_sum(event="Purchase", property="revenue", **period).df)
+
+dau = f_dau.result().iloc[:, 0].mean()
+signups = f_signups.result().iloc[:, 0].sum()
+purchases = f_purchases.result().iloc[:, 0].sum()
+revenue = f_revenue.result().iloc[:, 0].sum()
 
 print("╔══════════════════════════════════╗")
 print("║     EXECUTIVE DASHBOARD          ║")
