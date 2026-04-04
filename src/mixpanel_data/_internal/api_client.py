@@ -2834,8 +2834,8 @@ class MixpanelAPIClient:
     ) -> dict[str, Any] | None:
         """Remove a report (bookmark) from a dashboard.
 
-        Calls ``DELETE /api/app/projects/{pid}/dashboards/{dashboard_id}/reports/{bookmark_id}``
-        (or workspace-scoped).
+        Calls ``PATCH /api/app/projects/{pid}/dashboards/{dashboard_id}``
+        (or workspace-scoped) with a ``delete`` content action.
 
         Args:
             dashboard_id: The numeric dashboard identifier.
@@ -2875,7 +2875,7 @@ class MixpanelAPIClient:
 
     def add_report_to_dashboard(
         self, dashboard_id: int, bookmark_id: int
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, Any]:
         """Add a report (bookmark) to a dashboard.
 
         Clones the specified bookmark onto the dashboard by calling
@@ -2887,8 +2887,7 @@ class MixpanelAPIClient:
             bookmark_id: The numeric bookmark/report identifier to add.
 
         Returns:
-            Dictionary representing the updated dashboard after report addition,
-            or None if the API returned 204 No Content.
+            Dictionary representing the updated dashboard after report addition.
 
         Raises:
             AuthenticationError: Invalid credentials (401).

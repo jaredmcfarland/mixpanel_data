@@ -18,10 +18,12 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
+from mixpanel_data.exceptions import MixpanelDataError
 from mixpanel_data.types import (
     Bookmark,
     BookmarkHistoryResponse,
@@ -1542,3 +1544,28 @@ class TestAddReportToDashboard:
         assert isinstance(result, Dashboard)
         assert result.title == "Updated Dashboard"
         assert call_count == 1  # Single PATCH request
+
+    def test_add_report_raises_on_unexpected_response(self, temp_dir: Path) -> None:
+        """add_report_to_dashboard() raises MixpanelDataError for non-dashboard response."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return 204-style response without dashboard payload."""
+            return httpx.Response(204)
+
+        ws = _make_workspace(temp_dir, handler)
+        with pytest.raises(MixpanelDataError, match="Unexpected response"):
+            ws.add_report_to_dashboard(1, 42)
+
+    def test_add_report_raises_on_dict_without_id(self, temp_dir: Path) -> None:
+        """add_report_to_dashboard() raises MixpanelDataError when response dict lacks 'id'."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a dict response that is missing the 'id' key."""
+            return httpx.Response(
+                200,
+                json={"status": "ok", "results": {"title": "No ID Dashboard"}},
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        with pytest.raises(MixpanelDataError, match="Unexpected response"):
+            ws.add_report_to_dashboard(1, 42)

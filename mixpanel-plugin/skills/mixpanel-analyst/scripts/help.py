@@ -266,7 +266,7 @@ def show_fields(obj: type, indent: str = "") -> None:
             alias_info = ""
             resolved_alias = finfo.alias
             if resolved_alias is None and alias_gen and callable(alias_gen):
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(TypeError, ValueError, AttributeError):
                     resolved_alias = alias_gen(fname)
             if resolved_alias and resolved_alias != fname:
                 alias_info = f' (json: "{resolved_alias}")'

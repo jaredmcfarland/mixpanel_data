@@ -120,6 +120,23 @@ Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, experim
     mp dashboards unpin 123
     ```
 
+### Add a Report to a Dashboard
+
+=== "Python"
+
+    ```python
+    updated_dash = ws.add_report_to_dashboard(
+        dashboard_id=123,
+        bookmark_id=456
+    )
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp dashboards add-report 123 456
+    ```
+
 ### Remove a Report from a Dashboard
 
 === "Python"
@@ -134,7 +151,7 @@ Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, experim
 === "CLI"
 
     ```bash
-    mp dashboards remove-report 123 --bookmark-id 456
+    mp dashboards remove-report 123 456
     ```
 
 ### Blueprint Dashboards

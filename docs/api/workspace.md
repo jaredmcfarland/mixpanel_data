@@ -172,6 +172,7 @@ See the [Data Governance guide](../guide/data-governance.md) for complete covera
         - unfavorite_dashboard
         - pin_dashboard
         - unpin_dashboard
+        - add_report_to_dashboard
         - remove_report_from_dashboard
         - list_blueprint_templates
         - create_blueprint

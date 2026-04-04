@@ -261,14 +261,31 @@ VALID_FILTER_OPERATORS = {
     "false",
 }
 
-# Schema-derived: new validation sets (empty fallback = no-op if schema missing)
-VALID_FUNNEL_ORDER = _SCHEMA.get("funnel_order", set())
-VALID_CONVERSION_WINDOW_UNIT = _SCHEMA.get("conversion_window_unit", set())
-VALID_RETENTION_TYPE = _SCHEMA.get("retention_type", set())
-VALID_RETENTION_ALIGNMENT_TYPE = _SCHEMA.get("retention_alignment_type", set())
-VALID_RETENTION_UNBOUNDED_MODE = _SCHEMA.get("retention_unbounded_mode", set())
-VALID_FILTERS_DETERMINER = _SCHEMA.get("filters_determiner", set())
-VALID_PER_USER_AGGREGATIONS = _SCHEMA.get("per_user_aggregations", set())
+# Schema-derived with hardcoded fallbacks (mirrors pattern above)
+VALID_FUNNEL_ORDER = _SCHEMA.get("funnel_order", {"ordered", "unordered", "strict"})
+VALID_CONVERSION_WINDOW_UNIT = _SCHEMA.get(
+    "conversion_window_unit", {"second", "minute", "hour", "day", "week", "month"}
+)
+VALID_RETENTION_TYPE = _SCHEMA.get("retention_type", {"birth", "compounding"})
+VALID_RETENTION_ALIGNMENT_TYPE = _SCHEMA.get(
+    "retention_alignment_type", {"standard", "calendar"}
+)
+VALID_RETENTION_UNBOUNDED_MODE = _SCHEMA.get(
+    "retention_unbounded_mode", {"none", "unbounded", "cumulative"}
+)
+VALID_FILTERS_DETERMINER = _SCHEMA.get("filters_determiner", {"all", "any"})
+VALID_PER_USER_AGGREGATIONS = _SCHEMA.get(
+    "per_user_aggregations",
+    {
+        "average",
+        "distribution",
+        "max",
+        "median",
+        "min",
+        "sum",
+        "unique_values",
+    },
+)
 
 # Bookmark type mapping (from Mixpanel's internal OpenAPI spec)
 VALID_BOOKMARK_TYPES = {
@@ -328,6 +345,19 @@ def _enum_error(
         msg = f"Invalid {field} '{value}'. Valid ({len(valid)} total): {sample}"
         suggestion = None
     return ValidationError(path, msg, severity=severity, suggestion=suggestion)
+
+
+def _check_enum(
+    errors: list["ValidationError"],
+    path: str,
+    field: str,
+    value: str | None,
+    valid: set[str],
+    severity: str = "warning",
+) -> None:
+    """Append an enum validation error if *value* is set but not in *valid*."""
+    if value and valid and value not in valid:
+        errors.append(_enum_error(path, field, value, valid, severity=severity))
 
 
 # ---------------------------------------------------------------------------
@@ -484,17 +514,13 @@ def validate_show_clause(clause: dict, path: str) -> list[ValidationError]:
         )
 
     # Validate filtersDeterminer
-    fd = behavior.get("filtersDeterminer")
-    if fd and VALID_FILTERS_DETERMINER and fd not in VALID_FILTERS_DETERMINER:
-        errors.append(
-            _enum_error(
-                f"{path}.behavior.filtersDeterminer",
-                "filtersDeterminer",
-                fd,
-                VALID_FILTERS_DETERMINER,
-                severity="warning",
-            )
-        )
+    _check_enum(
+        errors,
+        f"{path}.behavior.filtersDeterminer",
+        "filtersDeterminer",
+        behavior.get("filtersDeterminer"),
+        VALID_FILTERS_DETERMINER,
+    )
 
     # Validate measurement
     measurement = clause.get("measurement")
@@ -535,21 +561,13 @@ def validate_show_clause(clause: dict, path: str) -> list[ValidationError]:
                 )
 
         # Validate perUserAggregation
-        pua = measurement.get("perUserAggregation")
-        if (
-            pua
-            and VALID_PER_USER_AGGREGATIONS
-            and pua not in VALID_PER_USER_AGGREGATIONS
-        ):
-            errors.append(
-                _enum_error(
-                    f"{path}.measurement.perUserAggregation",
-                    "perUserAggregation",
-                    pua,
-                    VALID_PER_USER_AGGREGATIONS,
-                    severity="warning",
-                )
-            )
+        _check_enum(
+            errors,
+            f"{path}.measurement.perUserAggregation",
+            "perUserAggregation",
+            measurement.get("perUserAggregation"),
+            VALID_PER_USER_AGGREGATIONS,
+        )
 
     # Validate per-metric behavior.filters[]
     bfilters = behavior.get("filters", [])
@@ -568,33 +586,20 @@ def validate_show_clause(clause: dict, path: str) -> list[ValidationError]:
                 )
             )
 
-        fo = behavior.get("funnelOrder")
-        if fo and VALID_FUNNEL_ORDER and fo not in VALID_FUNNEL_ORDER:
-            errors.append(
-                _enum_error(
-                    f"{path}.behavior.funnelOrder",
-                    "funnelOrder",
-                    fo,
-                    VALID_FUNNEL_ORDER,
-                    severity="warning",
-                )
-            )
-
-        cwu = behavior.get("conversionWindowUnit")
-        if (
-            cwu
-            and VALID_CONVERSION_WINDOW_UNIT
-            and cwu not in VALID_CONVERSION_WINDOW_UNIT
-        ):
-            errors.append(
-                _enum_error(
-                    f"{path}.behavior.conversionWindowUnit",
-                    "conversionWindowUnit",
-                    cwu,
-                    VALID_CONVERSION_WINDOW_UNIT,
-                    severity="warning",
-                )
-            )
+        _check_enum(
+            errors,
+            f"{path}.behavior.funnelOrder",
+            "funnelOrder",
+            behavior.get("funnelOrder"),
+            VALID_FUNNEL_ORDER,
+        )
+        _check_enum(
+            errors,
+            f"{path}.behavior.conversionWindowUnit",
+            "conversionWindowUnit",
+            behavior.get("conversionWindowUnit"),
+            VALID_CONVERSION_WINDOW_UNIT,
+        )
 
     # Validate retention-specific fields
     if btype in ("retention", "retention-frequency"):
@@ -607,49 +612,27 @@ def validate_show_clause(clause: dict, path: str) -> list[ValidationError]:
                 )
             )
 
-        rt = behavior.get("retentionType")
-        if rt and VALID_RETENTION_TYPE and rt not in VALID_RETENTION_TYPE:
-            errors.append(
-                _enum_error(
-                    f"{path}.behavior.retentionType",
-                    "retentionType",
-                    rt,
-                    VALID_RETENTION_TYPE,
-                    severity="warning",
-                )
-            )
-
-        rat = behavior.get("retentionAlignmentType")
-        if (
-            rat
-            and VALID_RETENTION_ALIGNMENT_TYPE
-            and rat not in VALID_RETENTION_ALIGNMENT_TYPE
-        ):
-            errors.append(
-                _enum_error(
-                    f"{path}.behavior.retentionAlignmentType",
-                    "retentionAlignmentType",
-                    rat,
-                    VALID_RETENTION_ALIGNMENT_TYPE,
-                    severity="warning",
-                )
-            )
-
-        rum = behavior.get("retentionUnboundedMode")
-        if (
-            rum
-            and VALID_RETENTION_UNBOUNDED_MODE
-            and rum not in VALID_RETENTION_UNBOUNDED_MODE
-        ):
-            errors.append(
-                _enum_error(
-                    f"{path}.behavior.retentionUnboundedMode",
-                    "retentionUnboundedMode",
-                    rum,
-                    VALID_RETENTION_UNBOUNDED_MODE,
-                    severity="warning",
-                )
-            )
+        _check_enum(
+            errors,
+            f"{path}.behavior.retentionType",
+            "retentionType",
+            behavior.get("retentionType"),
+            VALID_RETENTION_TYPE,
+        )
+        _check_enum(
+            errors,
+            f"{path}.behavior.retentionAlignmentType",
+            "retentionAlignmentType",
+            behavior.get("retentionAlignmentType"),
+            VALID_RETENTION_ALIGNMENT_TYPE,
+        )
+        _check_enum(
+            errors,
+            f"{path}.behavior.retentionUnboundedMode",
+            "retentionUnboundedMode",
+            behavior.get("retentionUnboundedMode"),
+            VALID_RETENTION_UNBOUNDED_MODE,
+        )
 
     return errors
 
@@ -856,13 +839,6 @@ def validate_bookmark(
     # Resolve structural type from bookmark_type
     if bookmark_type and bookmark_type in BOOKMARK_TYPE_TO_PARAMS_TYPE:
         structural_type = BOOKMARK_TYPE_TO_PARAMS_TYPE[bookmark_type]
-    elif bookmark_type and bookmark_type in {
-        "insights",
-        "funnels",
-        "retention",
-        "flows",
-    }:
-        structural_type = bookmark_type
     elif bookmark_type and bookmark_type not in VALID_BOOKMARK_TYPES:
         errors.append(
             ValidationError(
@@ -904,7 +880,14 @@ def main():
         # Try as file path first (only if short enough to be a path)
         if len(args.input) < 260 and not args.input.startswith("{"):
             path = Path(args.input)
-            raw = path.read_text() if path.is_file() else args.input
+            if path.is_file():
+                try:
+                    raw = path.read_text()
+                except OSError as e:
+                    print(f"Error reading file '{path}': {e}", file=sys.stderr)
+                    sys.exit(2)
+            else:
+                raw = args.input
         else:
             raw = args.input
     else:

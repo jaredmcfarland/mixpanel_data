@@ -1918,6 +1918,7 @@ class Workspace:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard or bookmark not found (404).
             ServerError: Server-side errors (5xx).
+            MixpanelDataError: If the API response is not a valid dashboard dict.
 
         Example:
             ```python
@@ -1927,6 +1928,11 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.add_report_to_dashboard(dashboard_id, bookmark_id)
+        if not isinstance(raw, dict) or "id" not in raw:
+            raise MixpanelDataError(
+                "Unexpected response from add_report_to_dashboard: "
+                f"expected dashboard dict with 'id', got {raw!r}",
+            )
         return Dashboard.model_validate(raw)
 
     def list_blueprint_templates(
