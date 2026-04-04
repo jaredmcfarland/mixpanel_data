@@ -1,17 +1,4 @@
-# Local test config
-*.local.md
-
-# OS files
+.omc/
 .DS_Store
-Thumbs.db
-
-# Editor files
-*.swp
-*.swo
-*~
-.vscode/
-.idea/
-
-# Temporary files
-*.tmp
-*.bak
+__pycache__/
+*.pyc
