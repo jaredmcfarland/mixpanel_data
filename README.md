@@ -92,14 +92,14 @@ import mixpanel_data as mp
 ws = mp.Workspace()
 
 # Discover what's in your project
-events = ws.list_events()
-props = ws.list_properties("Purchase")
-funnels = ws.list_funnels()
-cohorts = ws.list_cohorts()
+events = ws.events()
+props = ws.properties("Purchase")
+funnels = ws.funnels()
+cohorts = ws.cohorts()
 
 # Run live analytics queries
 result = ws.segmentation(
-    event=events[0].name,
+    event=events[0],
     from_date="2025-01-01",
     to_date="2025-01-31",
     on="country"
@@ -158,15 +158,15 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp auth`** — Authentication: `login`, `logout`, `status`, `token` (OAuth); `list`, `add`, `remove`, `switch`, `show`, `test` (service accounts)
 
-**`mp query`** — Run analytics: `segmentation`, `funnel`, `retention`, `jql`, `saved-report`, `flows`, and 7 more
+**`mp query`** — Run analytics: `segmentation`, `funnel`, `retention`, `jql`, `saved-report`, `flows`, `event-counts`, `property-counts`, `activity-feed`, `frequency`, `segmentation-numeric`, `segmentation-sum`, `segmentation-average`
 
-**`mp inspect`** — Schema discovery: `events`, `properties`, `values`, `funnels`, `cohorts`, `top-events`, `bookmarks`, `lexicon-schemas`
+**`mp inspect`** — Schema discovery: `events`, `properties`, `values`, `funnels`, `cohorts`, `top-events`, `bookmarks`, `lexicon-schemas`, `lexicon-schema`, `distribution`, `numeric`, `daily`, `engagement`, `coverage`
 
-**`mp dashboards`** — Dashboard management: `list`, `create`, `get`, `update`, `delete`, `favorite`, `pin`, blueprints, and more
+**`mp dashboards`** — Dashboard management: `list`, `create`, `get`, `update`, `delete`, `bulk-delete`, `favorite`, `unfavorite`, `pin`, `unpin`, `add-report`, `remove-report`, `update-report-link`, `update-text-card`, `blueprints`, `blueprint-create`, `rca`, `erf`
 
-**`mp reports`** — Report management: `list`, `create`, `get`, `update`, `delete`, bulk operations, history
+**`mp reports`** — Report management: `list`, `create`, `get`, `update`, `delete`, `bulk-delete`, `bulk-update`, `linked-dashboards`, `dashboard-ids`, `history`
 
-**`mp cohorts`** — Cohort management: `list`, `create`, `get`, `update`, `delete`, bulk operations
+**`mp cohorts`** — Cohort management: `list`, `create`, `get`, `update`, `delete`, `bulk-delete`, `bulk-update`
 
 **`mp flags`** — Feature flag management: `list`, `create`, `get`, `update`, `delete`, `archive`, `restore`, `duplicate`, `set-test-users`, `history`, `limits`
 
@@ -189,8 +189,6 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 **`mp lookup-tables`** — Lookup table management: `list`, `upload`, `update`, `delete`, `download`, `upload-url`, `download-url`
 
 **`mp schemas`** — Schema registry management: `list`, `create`, `create-bulk`, `update`, `update-bulk`, `delete`
-
-**`mp inspect`** — Discover schema: `events`, `properties`, `funnels`, `cohorts`, `bookmarks`, `top-events`, `lexicon-schemas`
 
 All commands support `--format` (`json`, `jsonl`, `table`, `csv`, `plain`) and `--help`.
 
@@ -230,7 +228,7 @@ The entire surface area is self-documenting. Every CLI command supports `--help`
 Key design features:
 
 - **Entity CRUD & Data Governance**: Full lifecycle management of dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, webhooks, plus Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via Mixpanel App API
-- **Discoverable schema**: `list_events()`, `list_properties()`, `list_funnels()`, `list_cohorts()`, `list_bookmarks()` reveal what's in your project before you query
+- **Discoverable schema**: `events()`, `properties()`, `funnels()`, `cohorts()`, `bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
 - **Structured output**: All CLI commands support `--format json` for machine-readable responses, plus `--jq` for inline filtering
 - **Streaming data extraction**: Memory-efficient iterators for events and profiles
@@ -239,36 +237,23 @@ Key design features:
 
 ## Claude Code Plugin
 
-This project also includes a Claude Code plugin that brings analytics workflows directly into conversational AI interactions.
-
-Ask questions about your Mixpanel data in natural language and get guided, interactive analytics workflows—all within Claude Code.
+This project includes a Claude Code plugin that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_data` + `pandas` rather than calling CLI commands or MCP tools.
 
 **Installation:**
 
-```bash
-/plugin marketplace add jaredmcfarland/mixpanel_data
-/plugin install mixpanel-data
-```
-
-Then restart Claude Code.
+Add the plugin from the `mixpanel-plugin/` directory, then restart Claude Code.
 
 **What you get:**
 
-- **Auto-discovery skill**: `mixpanel-data` skill activates when you mention Mixpanel, analytics, funnels, or retention—loads comprehensive reference docs and guides your workflow
-- **7 interactive commands**:
-  - `/mp-auth` - Secure credential management with account switching
-  - `/mp-inspect` - 12-operation schema explorer (events, properties, funnels, cohorts, tables)
-  - `/mp-fetch` - Guided data ingestion with validation
-  - `/mp-query` - Universal query builder (SQL, JQL, live analytics)
-  - `/mp-funnel` - Conversion analysis with visualizations
-  - `/mp-retention` - Retention curves and cohort analysis
-  - `/mp-report` - Comprehensive reporting with automated insights
-- **4 specialist agents**: Auto-invoked based on your questions
-  - `mixpanel-analyst` - General analytics, SQL/JQL query building
-  - `funnel-optimizer` - Conversion analysis and drop-off diagnostics
-  - `retention-specialist` - Cohort behavior and retention curves
-  - `jql-expert` - Advanced JavaScript queries and transformations
-- **Multiple query paths**: JQL (complex transforms) or Mixpanel API (live analytics)
+- **Command**: `/mp-auth` — Secure credential management with account switching
+- **Skills**:
+  - `setup` — Install dependencies and verify authentication
+  - `mixpanel-analyst` — Auto-triggered on analytics questions; loads comprehensive reference docs and guides your workflow
+- **4 specialist agents** (auto-invoked via Task tool):
+  - `analyst` — General-purpose orchestrator for analytics questions
+  - `explorer` — Schema discovery, hypothesis generation, GQM decomposition
+  - `diagnostician` — Root cause analysis for metric changes
+  - `narrator` — Executive summaries and stakeholder reports
 - **Secure by design**: Credentials managed outside conversation context
 
 Learn more: [Plugin Documentation](mixpanel-plugin/README.md)
