@@ -326,6 +326,38 @@ class TestGroupByValidation:
         with pytest.raises(ValueError, match="bucket_size must be positive"):
             ws.query("Purchase", group_by=GroupBy("amount", bucket_size=-10))
 
+    def test_bucket_size_requires_numeric_type(self, ws: Workspace) -> None:
+        """bucket_size with default string property_type raises ValueError."""
+        from mixpanel_data import GroupBy
+
+        with pytest.raises(
+            ValueError, match="bucket_size requires property_type='number'"
+        ):
+            ws.query("Purchase", group_by=GroupBy("amount", bucket_size=10))
+
+    def test_bucket_size_with_numeric_type_ok(self, ws: Workspace) -> None:
+        """bucket_size with property_type='number' passes validation."""
+        from unittest.mock import MagicMock
+
+        from mixpanel_data import GroupBy
+
+        mock_api_client = MagicMock()
+        mock_api_client.insights_query.return_value = {
+            "computed_at": "",
+            "date_range": {"from_date": "", "to_date": ""},
+            "headers": [],
+            "series": {},
+            "meta": {},
+        }
+        ws._api_client = mock_api_client
+
+        # Should not raise ValueError — validation passes
+        ws.query(
+            "Purchase",
+            group_by=GroupBy("amount", property_type="number", bucket_size=10),
+        )
+        mock_api_client.insights_query.assert_called_once()
+
 
 # =============================================================================
 # V0: Empty events validation

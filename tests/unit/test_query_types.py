@@ -213,6 +213,29 @@ class TestQueryResultDataFrame:
         assert row0["event"] == "Login [Total Events]"
         assert row0["count"] == 100
 
+    def test_hourly_timestamps_preserved(self) -> None:
+        """Hourly timestamp keys are preserved (not truncated to date)."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total Events]": {
+                    "2024-01-01T00:00:00": 100,
+                    "2024-01-01T01:00:00": 110,
+                    "2024-01-01T02:00:00": 120,
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        assert len(df) == 3
+        dates = list(df["date"])
+        assert dates[0] == "2024-01-01T00:00:00"
+        assert dates[1] == "2024-01-01T01:00:00"
+        assert dates[2] == "2024-01-01T02:00:00"
+
     def test_total_mode_columns(self) -> None:
         """Total mode produces event, count columns (no date)."""
         qr = QueryResult(
@@ -351,7 +374,7 @@ class TestFilterConstruction:
         from mixpanel_data.types import Filter
 
         f = Filter.greater_than("age", 18)
-        assert f._operator == "greater than"
+        assert f._operator == "is greater than"
         assert f._value == 18
         assert f._property_type == "number"
 
@@ -360,7 +383,7 @@ class TestFilterConstruction:
         from mixpanel_data.types import Filter
 
         f = Filter.less_than("amount", 100)
-        assert f._operator == "less than"
+        assert f._operator == "is less than"
         assert f._value == 100
 
     def test_between(self) -> None:

@@ -7044,7 +7044,7 @@ class Filter:
         """
         return cls(
             _property=property,
-            _operator="greater than",
+            _operator="is greater than",
             _value=value,
             _property_type="number",
             _resource_type=resource_type,
@@ -7070,7 +7070,7 @@ class Filter:
         """
         return cls(
             _property=property,
-            _operator="less than",
+            _operator="is less than",
             _value=value,
             _property_type="number",
             _resource_type=resource_type,
@@ -7339,8 +7339,7 @@ class QueryResult(ResultWithDataFrame):
                     # Total mode: no date column
                     rows.append({"event": metric_name, "count": value})
                 else:
-                    # Normalize ISO timestamps to YYYY-MM-DD
-                    normalized_date = date_key[:10] if len(date_key) >= 10 else date_key
+                    normalized_date = date_key
                     rows.append(
                         {"date": normalized_date, "event": metric_name, "count": value}
                     )

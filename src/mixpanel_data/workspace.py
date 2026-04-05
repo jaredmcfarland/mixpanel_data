@@ -1697,6 +1697,9 @@ class Workspace:
                     if g.bucket_size is not None and g.bucket_size <= 0:
                         msg = "bucket_size must be positive"
                         raise ValueError(msg)
+                    if g.bucket_size is not None and g.property_type != "number":
+                        msg = "bucket_size requires property_type='number'"
+                        raise ValueError(msg)
 
         # V13-V14: Per-Metric validation
         for item in events:
