@@ -78,7 +78,7 @@ result = ws.query(
 # Filtered aggregation with numeric breakdown
 result = ws.query(
     "Purchase",
-    math="sum",
+    math="total",
     math_property="amount",
     where=[Filter.equals("country", "US"), Filter.greater_than("amount", 50)],
     group_by="platform",

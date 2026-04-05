@@ -104,7 +104,7 @@ class Metric:
         Metric("Login")
         Metric("Login", math="unique")
         Metric("Login", math="dau")
-        Metric("Purchase", math="sum", property="revenue")
+        Metric("Purchase", math="total", property="revenue")
         Metric("Purchase", math="total", per_user="average")
         Metric("Purchase", filters=[Filter.greater_than("amount", 50)])
 ```
@@ -429,22 +429,24 @@ MathType = Literal[
     # Counting
     "total", "unique", "dau", "wau", "mau",
     # Property aggregation (requires math_property)
-    "average", "median", "min", "max", "sum",
+    "average", "median", "min", "max",
     "p25", "p75", "p90", "p99",
 ]
+# Note: Mixpanel has no "sum" math type. Use math="total" with
+# a property to sum a numeric property's values.
 
-PerUserAggregation = Literal["average", "total", "min", "max"]
+PerUserAggregation = Literal["unique_values", "total", "average", "min", "max"]
 
 FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
 
 # Math types that require math_property to be set
 PROPERTY_MATH_TYPES: set[str] = {
-    "average", "median", "min", "max", "sum",
+    "average", "median", "min", "max",
     "p25", "p75", "p90", "p99",
 }
 
 # Math types that are incompatible with per_user
-NO_PER_USER_MATH_TYPES: set[str] = {"dau", "wau", "mau"}
+NO_PER_USER_MATH_TYPES: set[str] = {"dau", "wau", "mau", "unique"}
 ```
 
 ---

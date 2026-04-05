@@ -202,7 +202,7 @@ result = ws.query("Login", math="dau", group_by="platform", last=90)
 # Filtered aggregation
 result = ws.query(
     "Purchase",
-    math="sum",
+    math="total",
     math_property="amount",
     where=Filter.equals("country", "US"),
 )

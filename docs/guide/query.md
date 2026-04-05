@@ -90,8 +90,8 @@ Aggregate a numeric property across events. Requires `math_property`:
 
 | Math type | Aggregation |
 |---|---|
+| `"total"` + `math_property` | Sum of a numeric property |
 | `"average"` | Mean value |
-| `"sum"` | Total sum |
 | `"median"` | Median value |
 | `"min"` / `"max"` | Extremes |
 | `"p25"` / `"p75"` / `"p90"` / `"p99"` | Percentiles |
@@ -124,10 +124,10 @@ result = ws.query(
 )
 ```
 
-Valid `per_user` values: `"average"`, `"total"`, `"min"`, `"max"`.
+Valid `per_user` values: `"unique_values"`, `"total"`, `"average"`, `"min"`, `"max"`.
 
 !!! note
-    `per_user` is incompatible with `dau`, `wau`, and `mau` math types.
+    `per_user` is incompatible with `dau`, `wau`, `mau`, and `unique` math types.
 
 ### The `Metric` Class
 
@@ -139,7 +139,7 @@ from mixpanel_data import Metric
 # Different math per event
 result = ws.query([
     Metric("Signup", math="unique"),
-    Metric("Purchase", math="sum", property="revenue"),
+    Metric("Purchase", math="total", property="revenue"),
 ])
 ```
 
@@ -236,6 +236,20 @@ result = ws.query([
         filters=[Filter.equals("plan", "premium")],
     ),
 ])
+```
+
+By default, multiple per-metric filters combine with AND logic. Use `filters_combinator="any"` for OR logic:
+
+```python
+result = ws.query(Metric(
+    "Purchase",
+    math="unique",
+    filters=[
+        Filter.equals("country", "US"),
+        Filter.equals("country", "CA"),
+    ],
+    filters_combinator="any",  # match US OR CA
+))
 ```
 
 ## Breakdowns
@@ -539,7 +553,7 @@ ws = mp.Workspace()
 # Total revenue by country this quarter
 revenue = ws.query(
     "Purchase",
-    math="sum",
+    math="total",
     math_property="amount",
     group_by="country",
     from_date="2025-01-01",
