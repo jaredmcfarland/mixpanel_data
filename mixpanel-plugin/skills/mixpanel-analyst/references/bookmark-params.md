@@ -151,6 +151,7 @@ Not all SQL is expressible: no JOINs, no subqueries, no UNION. Formulas are the 
 | `median` | `PERCENTILE_CONT(0.5)` |
 | `min` / `max` | `MIN` / `MAX` |
 | `p25` / `p75` / `p90` / `p99` | Percentiles |
+| `custom_percentile` | Custom percentile (set `measurement.percentile`) |
 | `unique_values` | `COUNT(DISTINCT property)` |
 | `histogram` | Distribution buckets |
 
@@ -190,6 +191,21 @@ With property aggregation:
   }
 }
 ```
+
+With custom percentile (e.g. p95):
+```json
+"measurement": {
+  "math": "custom_percentile",
+  "percentile": 95,
+  "property": {
+    "name": "duration_ms", "dataset": "mixpanel",
+    "defaultType": "number", "type": "number",
+    "resourceType": "events"
+  }
+}
+```
+
+Note: `query()` maps `math="percentile"` to `"custom_percentile"` in bookmark JSON and `percentile_value` to `measurement.percentile`.
 
 ### Show Clause — Formula
 

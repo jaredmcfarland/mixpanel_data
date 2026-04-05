@@ -43,7 +43,8 @@ ws.query(
     last: int = 30,                        # relative window in `unit`s; ignored if from_date set
     unit: Literal["hour", "day", "week", "month", "quarter"] = "day",
     math: MathType = "total",              # aggregate function
-    math_property: str | None = None,      # required for average/median/min/max/p25/p75/p90/p99
+    math_property: str | None = None,      # required for average/median/min/max/p25/p75/p90/p99/percentile/histogram
+    percentile_value: int | float | None = None,  # required when math="percentile" (e.g. 95)
     per_user: PerUserAggregation | None = None,  # nest per-user then aggregate
     group_by: str | GroupBy | list[str | GroupBy] | None = None,
     where: Filter | list[Filter] | None = None,
@@ -65,6 +66,7 @@ Metric(
     math: MathType = "total",
     math_property: str | None = None,
     per_user: PerUserAggregation | None = None,
+    percentile_value: int | float | None = None,  # required when math="percentile"
     where: Filter | list[Filter] | None = None,
     label: str | None = None,              # display label
 )
@@ -86,7 +88,18 @@ Filter.is_set(property, *, resource_type="events")
 Filter.is_not_set(property, *, resource_type="events")
 Filter.is_true(property, *, resource_type="events")
 Filter.is_false(property, *, resource_type="events")
+
+# Date/datetime filters
+Filter.on(property, date, *, resource_type="events")                    # exact date (YYYY-MM-DD)
+Filter.not_on(property, date, *, resource_type="events")                # not on date
+Filter.before(property, date, *, resource_type="events")                # before date
+Filter.since(property, date, *, resource_type="events")                 # on or after date
+Filter.in_the_last(property, quantity, date_unit, *, resource_type="events")      # last N units
+Filter.not_in_the_last(property, quantity, date_unit, *, resource_type="events")  # NOT in last N
+Filter.date_between(property, from_date, to_date, *, resource_type="events")     # date range
 ```
+
+`FilterDateUnit = Literal["hour", "day", "week", "month"]` — used by `in_the_last()` and `not_in_the_last()`.
 
 ### GroupBy
 
@@ -144,8 +157,12 @@ result.computed_at # API computation timestamp
 | `p75` | 75th percentile | Yes |
 | `p90` | 90th percentile | Yes |
 | `p99` | 99th percentile | Yes |
+| `percentile` | Custom percentile (requires `percentile_value`) | Yes |
+| `histogram` | Distribution of property values | Yes |
 
 There is **no `"sum"`** math type. To sum a property, use `math="total"` with `math_property="..."`.
+
+`math="percentile"` requires `percentile_value` (e.g. `percentile_value=95` for p95). `math="histogram"` shows property value distribution.
 
 ### PerUserAggregation
 
@@ -158,6 +175,22 @@ There is **no `"sum"`** math type. To sum a property, use `math="total"` with `m
 | `max` | Maximum per user |
 
 Requires `math_property`. Incompatible with `dau`, `wau`, `mau`, `unique`.
+
+---
+
+### build_params()
+
+Same signature as `query()` but returns the bookmark params dict without making an API call:
+
+```python
+ws.build_params(
+    events, *, from_date, to_date, last, unit, math, math_property,
+    percentile_value, per_user, group_by, where, formula, formula_label,
+    rolling, cumulative, mode,
+) -> dict
+```
+
+Useful for debugging, inspecting generated JSON, or passing to `create_bookmark()`.
 
 ---
 

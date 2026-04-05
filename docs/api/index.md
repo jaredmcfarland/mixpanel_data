@@ -117,11 +117,12 @@ Typed results for all operations:
 The library exports these type aliases:
 
 ```python
-from mixpanel_data import CountType, HourDayUnit, TimeUnit
+from mixpanel_data import CountType, HourDayUnit, TimeUnit, FilterDateUnit
 
 # CountType: Literal["general", "unique", "average", "median", "min", "max"]
 # HourDayUnit: Literal["hour", "day"]
 # TimeUnit: Literal["day", "week", "month", "quarter", "year"]
+# FilterDateUnit: Literal["hour", "day", "week", "month"]
 ```
 
 ## Complete API Reference

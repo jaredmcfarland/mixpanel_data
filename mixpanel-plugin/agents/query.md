@@ -93,8 +93,12 @@ ws.query(
 | `"p75"` | 75th percentile | Yes | No |
 | `"p90"` | 90th percentile | Yes | No |
 | `"p99"` | 99th percentile | Yes | No |
+| `"percentile"` | Custom percentile (requires `percentile_value`) | Yes | No |
+| `"histogram"` | Distribution of property values | Yes | No |
 
 There is no `"sum"` math type. To sum a property, use `math="total", math_property="prop"`.
+
+`math="percentile"` requires `percentile_value` on `query()` or `Metric` (e.g. `percentile_value=95` for p95).
 
 ### PerUserAggregation
 
@@ -122,6 +126,15 @@ Filter.is_set(property)                      # property exists
 Filter.is_not_set(property)                  # property is null
 Filter.is_true(property)                     # boolean true
 Filter.is_false(property)                    # boolean false
+
+# Date filters
+Filter.on(property, date)                    # exact date (YYYY-MM-DD)
+Filter.not_on(property, date)                # not on date
+Filter.before(property, date)                # before date
+Filter.since(property, date)                 # on or after date
+Filter.in_the_last(property, qty, unit)      # last N hours/days/weeks/months
+Filter.not_in_the_last(property, qty, unit)  # NOT in last N units
+Filter.date_between(property, from_d, to_d)  # date range
 ```
 
 ### GroupBy
@@ -162,6 +175,8 @@ Formula("(B/A)*100", label="CVR")
 | "total/sum of X" (property) | `math="total", math_property="X"` |
 | "median X" | `math="median", math_property="X"` |
 | "p90/p99 of X" | `math="p90"/"p99", math_property="X"` |
+| "p95 of X" / "custom percentile" | `math="percentile", math_property="X", percentile_value=95` |
+| "distribution of X" / "histogram" | `math="histogram", math_property="X"` |
 | "average X per user" | `math="total", per_user="average", math_property="X"` |
 | "by country" / "broken down by" | `group_by="country"` |
 | "in buckets of 50" / "revenue distribution" | `GroupBy("prop", property_type="number", bucket_size=50)` |
@@ -169,6 +184,11 @@ Formula("(B/A)*100", label="CVR")
 | "greater than 100" | `Filter.greater_than("prop", 100)` |
 | "premium users" / "where plan is" | `where=Filter.equals("plan", "premium")` |
 | "has email" / "email is set" | `Filter.is_set("email")` |
+| "created today" / "on date" | `Filter.on("created", "2025-01-15")` |
+| "created before" | `Filter.before("created", "2025-01-01")` |
+| "in the last 30 days" | `Filter.in_the_last("created", 30, "day")` |
+| "not in the last week" | `Filter.not_in_the_last("created", 1, "week")` |
+| "between two dates" | `Filter.date_between("created", "2025-01-01", "2025-06-30")` |
 | "conversion rate from X to Y" | `[Metric("X", math="unique"), Metric("Y", math="unique")], formula="(B/A)*100"` |
 | "rolling 7-day" / "smoothed" | `rolling=7` |
 | "cumulative" / "running total" | `cumulative=True` |

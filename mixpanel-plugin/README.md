@@ -58,10 +58,10 @@ Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool call
 
 | File | Lines | Content |
 |------|-------|---------|
-| `python-api.md` | ~450 | Typed Query API + complete Workspace method signatures |
+| `python-api.md` | ~530 | Typed Query API + complete Workspace method signatures |
 | `pandas-patterns.md` | ~250 | DataFrame workflows, visualization patterns |
 | `analytical-frameworks.md` | ~300 | AARRR, GQM, North Star, diagnosis methodology |
-| `code-patterns.md` | ~300 | 12 ready-to-use Python analysis snippets |
+| `code-patterns.md` | ~340 | 14 ready-to-use Python analysis snippets |
 
 ## How It Works
 

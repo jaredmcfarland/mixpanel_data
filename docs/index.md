@@ -178,8 +178,8 @@ Discovery commands let you survey what exists before writing queries—no guessi
 - Formula-based metrics (conversion rates, ratios)
 - Per-user aggregation (average purchases per user)
 - Rolling and cumulative analysis modes
-- Percentiles (p25, p75, p90, p99)
-- Typed filters (`Filter.equals()`, `Filter.greater_than()`, etc.)
+- Percentiles (p25, p75, p90, p99, custom percentiles, histogram distributions)
+- Typed filters (`Filter.equals()`, `Filter.greater_than()`, date filters like `Filter.in_the_last()`, etc.)
 - Property breakdowns with numeric bucketing
 - Results as DataFrames, persistable as saved reports
 

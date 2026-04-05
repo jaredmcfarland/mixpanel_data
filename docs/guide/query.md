@@ -95,6 +95,8 @@ Aggregate a numeric property across events. Requires `math_property`:
 | `"median"` | Median value |
 | `"min"` / `"max"` | Extremes |
 | `"p25"` / `"p75"` / `"p90"` / `"p99"` | Percentiles |
+| `"percentile"` + `percentile_value` | Custom percentile (e.g. p95) |
+| `"histogram"` | Distribution of property values |
 
 ```python
 # Average purchase amount per day
@@ -108,6 +110,17 @@ result = ws.query(
 
 # P90 response time
 result = ws.query("API Call", math="p90", math_property="duration_ms")
+
+# Custom percentile (p95) — use math="percentile" with percentile_value
+result = ws.query(
+    "API Call",
+    math="percentile",
+    math_property="duration_ms",
+    percentile_value=95,
+)
+
+# Histogram — distribution of purchase amounts
+result = ws.query("Purchase", math="histogram", math_property="amount")
 ```
 
 ### Per-User Aggregation
@@ -141,6 +154,15 @@ result = ws.query([
     Metric("Signup", math="unique"),
     Metric("Purchase", math="total", property="revenue"),
 ])
+```
+
+`Metric` also supports `percentile_value` for custom percentiles:
+
+```python
+# Per-metric custom percentile
+result = ws.query(
+    Metric("API Call", math="percentile", property="duration_ms", percentile_value=95),
+)
 ```
 
 Plain strings inherit the top-level `math`, `math_property`, and `per_user` defaults. `Metric` objects override them per-event:
@@ -250,6 +272,39 @@ result = ws.query(Metric(
     ],
     filters_combinator="any",  # match US OR CA
 ))
+```
+
+### Date Filters
+
+Filter by datetime properties using purpose-built factory methods:
+
+```python
+from mixpanel_data import Filter
+
+# Absolute date filters
+Filter.on("created", "2025-01-15")              # exact date match
+Filter.not_on("created", "2025-01-15")           # not on date
+Filter.before("created", "2025-01-01")           # before a date
+Filter.since("created", "2025-01-01")            # on or after a date
+Filter.date_between("created", "2025-01-01", "2025-06-30")  # date range
+
+# Relative date filters — "in the last N units"
+Filter.in_the_last("created", 30, "day")         # last 30 days
+Filter.in_the_last("last_seen", 2, "week")       # last 2 weeks
+Filter.not_in_the_last("created", 90, "day")     # NOT in last 90 days
+```
+
+The relative date methods accept a `FilterDateUnit`: `"hour"`, `"day"`, `"week"`, or `"month"`.
+
+```python
+from mixpanel_data import FilterDateUnit  # Literal["hour", "day", "week", "month"]
+
+# Example: recent signups with purchases
+result = ws.query(
+    "Purchase",
+    where=Filter.in_the_last("signup_date", 7, "day"),
+    last=30,
+)
 ```
 
 ## Breakdowns
@@ -622,6 +677,31 @@ wau = ws.query(
 )
 ```
 
+## Generating Params Without Querying
+
+Use `build_params()` to generate bookmark params without making an API call — useful for debugging, inspecting the generated JSON, or saving queries as reports:
+
+```python
+# Same arguments as query(), returns dict instead of QueryResult
+params = ws.build_params(
+    "Login",
+    math="dau",
+    group_by="platform",
+    where=Filter.in_the_last("created", 30, "day"),
+    last=90,
+)
+
+import json
+print(json.dumps(params, indent=2))  # inspect the generated bookmark JSON
+
+# Save as a report directly from params
+ws.create_bookmark(CreateBookmarkParams(
+    name="DAU by Platform (90d)",
+    bookmark_type="insights",
+    params=params,
+))
+```
+
 ## What's Next
 
 `query()` is the foundation for a family of typed query methods. Future additions will follow the same pattern — typed Python arguments generating the correct bookmark params:
@@ -629,7 +709,6 @@ wau = ws.query(
 - **`query_funnel()`** — Ad-hoc funnel conversion analysis with typed step definitions
 - **`query_retention()`** — Ad-hoc retention curves with event pairs
 - **Cohort behaviors** — Querying by cohort membership
-- **`build_params()`** — Generate bookmark params without executing
 
 ## Next Steps
 
