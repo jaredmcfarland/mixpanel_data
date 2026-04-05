@@ -11,7 +11,7 @@ A complete programmable interface to Mixpanel analytics—Python library and CLI
 
 Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_data** provides a unified interface: discover your schema, run analytics queries, stream data, and manage entities—all through consistent Python methods or CLI commands.
 
-Core analytics—segmentation, funnels, retention, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
+Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, breakdowns), segmentation, funnels, retention, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
 
 ## Installation
 
@@ -68,9 +68,20 @@ mp inspect properties --event Purchase # Properties for an event
 mp inspect funnels                     # Saved funnels
 ```
 
-### 3. Run Live Analytics
+### 3. Run Analytics Queries
+
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+
+# Typed insights query (recommended)
+result = ws.query("Purchase", math="unique", group_by="country", last=30)
+print(result.df)
+```
 
 ```bash
+# Or use the CLI for legacy query methods
 mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 --on country
 ```
 
@@ -88,6 +99,7 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 ```python
 import mixpanel_data as mp
+from mixpanel_data import Metric, Filter, Formula, GroupBy
 
 ws = mp.Workspace()
 
@@ -97,14 +109,30 @@ props = ws.properties("Purchase")
 funnels = ws.funnels()
 cohorts = ws.cohorts()
 
-# Run live analytics queries
+# Insights queries — typed, composable analytics
+result = ws.query("Login")                            # simple event count
+result = ws.query("Login", math="dau", last=90)       # DAU trend
+result = ws.query("Purchase", math="sum",             # revenue by country
+    math_property="amount", group_by="country")
+result = ws.query(                                     # conversion rate formula
+    [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
+    formula="(B / A) * 100",
+    formula_label="Conversion Rate",
+    unit="week",
+)
+result = ws.query("Purchase",                          # filtered with breakdown
+    where=Filter.equals("country", "US"),
+    group_by=GroupBy("amount", property_type="number", bucket_size=50),
+)
+print(result.df)  # pandas DataFrame
+
+# Legacy live analytics queries
 result = ws.segmentation(
     event=events[0],
     from_date="2025-01-01",
     to_date="2025-01-31",
     on="country"
 )
-print(result.df)  # pandas DataFrame
 
 # Query a saved funnel
 funnel = ws.funnel(
@@ -214,6 +242,7 @@ Full documentation: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarl
 
 - [Installation](https://jaredmcfarland.github.io/mixpanel_data/getting-started/installation/)
 - [Quick Start](https://jaredmcfarland.github.io/mixpanel_data/getting-started/quickstart/)
+- [Insights Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query/) — Typed analytics with DAU, formulas, filters, breakdowns
 - [CLI Reference](https://jaredmcfarland.github.io/mixpanel_data/cli/)
 - [Python API](https://jaredmcfarland.github.io/mixpanel_data/api/)
 - [Streaming Guide](https://jaredmcfarland.github.io/mixpanel_data/guide/streaming/)
@@ -227,6 +256,7 @@ The entire surface area is self-documenting. Every CLI command supports `--help`
 
 Key design features:
 
+- **Typed Insights Queries**: `query()` generates Mixpanel Insights bookmark params from typed Python arguments — DAU/WAU/MAU, formulas, filters, breakdowns, rolling windows, percentiles, and more
 - **Entity CRUD & Data Governance**: Full lifecycle management of dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, webhooks, plus Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via Mixpanel App API
 - **Discoverable schema**: `events()`, `properties()`, `funnels()`, `cohorts()`, `bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
