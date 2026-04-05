@@ -3,6 +3,7 @@
 Tests _build_query_params() in Workspace for US1 (basic params),
 US2 (aggregation), US3 (filters/groups), US4 (multi-event),
 US5 (formula), US6 (analysis mode), US7 (result mode).
+Also tests build_params() public helper (T054).
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mixpanel_data import Formula, Workspace
+from mixpanel_data import Filter, Formula, GroupBy, Metric, Workspace
 
 # =============================================================================
 # Fixtures
@@ -1114,3 +1115,262 @@ class TestFormulaObjectParams:
         )
         assert params["sections"]["show"][0]["isHidden"] is True
         assert params["sections"]["show"][1]["isHidden"] is True
+
+
+# =============================================================================
+# T054: build_params() public helper
+# =============================================================================
+
+
+class TestBuildParams:
+    """T054: build_params() returns bookmark params without API call."""
+
+    def test_build_params_returns_dict(self, ws: Workspace) -> None:
+        """T054a: build_params() returns a dict with sections and displayOptions."""
+        result = ws.build_params("Login")
+        assert isinstance(result, dict)
+        assert "sections" in result
+        assert "displayOptions" in result
+
+    def test_build_params_accepts_all_query_kwargs(self, ws: Workspace) -> None:
+        """T054b: build_params() accepts the full query() signature."""
+        result = ws.build_params(
+            [Metric("Login", math="unique"), Metric("Purchase")],
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            unit="week",
+            group_by=GroupBy("country"),
+            where=Filter.equals("region", "US"),
+            formula="A + B",
+            formula_label="Combined",
+            mode="total",
+        )
+        assert result["sections"]["show"][0]["behavior"]["name"] == "Login"
+        assert result["sections"]["show"][0]["measurement"]["math"] == "unique"
+        assert result["displayOptions"]["chartType"] == "bar"
+
+    def test_build_params_output_matches_query_params(self, ws: Workspace) -> None:
+        """T054c: build_params() output matches _build_query_params() for same input."""
+        build_result = ws.build_params("Login", math="unique", last=7, unit="day")
+        internal_result = ws._build_query_params(
+            events=["Login"],
+            math="unique",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=7,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        assert build_result == internal_result
+
+
+# =============================================================================
+# T057: Date filter bookmark params
+# =============================================================================
+
+
+class TestDateFilterParams:
+    """T057: Date filter bookmark params generation."""
+
+    def test_absolute_date_omits_date_unit(self, ws: Workspace) -> None:
+        """Absolute date filter (on) omits filterDateUnit."""
+        entry = ws._build_filter_entry(Filter.on("created", "2024-06-15"))
+        assert entry["filterType"] == "datetime"
+        assert entry["filterOperator"] == "was on"
+        assert entry["filterValue"] == "2024-06-15"
+        assert "filterDateUnit" not in entry
+
+    def test_relative_date_includes_date_unit(self, ws: Workspace) -> None:
+        """Relative date filter (in_the_last) includes filterDateUnit."""
+        entry = ws._build_filter_entry(Filter.in_the_last("created", 7, "day"))
+        assert entry["filterDateUnit"] == "day"
+        assert entry["filterValue"] == 7
+        assert entry["filterType"] == "datetime"
+
+    def test_date_between_value_is_list(self, ws: Workspace) -> None:
+        """Date between filter value is a two-element list."""
+        entry = ws._build_filter_entry(
+            Filter.date_between("created", "2024-01-01", "2024-06-30")
+        )
+        assert entry["filterValue"] == ["2024-01-01", "2024-06-30"]
+        assert entry["filterOperator"] == "was between"
+        assert "filterDateUnit" not in entry
+
+    def test_existing_filters_unaffected(self, ws: Workspace) -> None:
+        """Non-date filters still omit filterDateUnit (backward compat)."""
+        entry = ws._build_filter_entry(Filter.equals("country", "US"))
+        assert "filterDateUnit" not in entry
+
+    def test_date_filter_in_where_clause(self, ws: Workspace) -> None:
+        """Date filter works in sections.filter when passed as where=."""
+        params = ws.build_params(
+            "Login",
+            where=Filter.in_the_last("created", 7, "day"),
+        )
+        filt = params["sections"]["filter"][0]
+        assert filt["filterDateUnit"] == "day"
+        assert filt["filterType"] == "datetime"
+
+    def test_before_filter_params(self, ws: Workspace) -> None:
+        """Filter.before() produces correct bookmark entry."""
+        entry = ws._build_filter_entry(Filter.before("created", "2024-01-01"))
+        assert entry["filterOperator"] == "was before"
+        assert entry["filterValue"] == "2024-01-01"
+        assert entry["filterType"] == "datetime"
+
+    def test_since_filter_params(self, ws: Workspace) -> None:
+        """Filter.since() produces correct bookmark entry."""
+        entry = ws._build_filter_entry(Filter.since("created", "2024-01-01"))
+        assert entry["filterOperator"] == "was since"
+        assert entry["filterValue"] == "2024-01-01"
+
+    def test_not_in_the_last_includes_date_unit(self, ws: Workspace) -> None:
+        """Filter.not_in_the_last() includes filterDateUnit."""
+        entry = ws._build_filter_entry(Filter.not_in_the_last("created", 30, "day"))
+        assert entry["filterDateUnit"] == "day"
+        assert entry["filterOperator"] == "was not in the"
+
+
+# =============================================================================
+# T060: Multiple formulas via events list
+# =============================================================================
+
+
+class TestMultiFormulaParams:
+    """T060: Multiple formulas via events list."""
+
+    def test_two_formulas_produce_two_entries(self, ws: Workspace) -> None:
+        """Two Formula objects in events list produce two formula show entries."""
+        params = ws.build_params(
+            [
+                Metric("Signup", math="unique"),
+                Metric("Purchase", math="unique"),
+                Formula("B / A", label="Conv Rate"),
+                Formula("A + B", label="Total"),
+            ],
+        )
+        formulas = [e for e in params["sections"]["show"] if e.get("type") == "formula"]
+        assert len(formulas) == 2
+        assert formulas[0]["definition"] == "B / A"
+        assert formulas[0]["name"] == "Conv Rate"
+        assert formulas[1]["definition"] == "A + B"
+        assert formulas[1]["name"] == "Total"
+
+    def test_metrics_hidden_with_multiple_formulas(self, ws: Workspace) -> None:
+        """All metrics get isHidden=True when formulas are present."""
+        params = ws.build_params(
+            [
+                Metric("A"),
+                Metric("B"),
+                Formula("A+B"),
+                Formula("A-B"),
+            ],
+        )
+        metrics = [e for e in params["sections"]["show"] if e.get("type") == "metric"]
+        assert all(e["isHidden"] is True for e in metrics)
+
+    def test_three_formulas_with_three_events(self, ws: Workspace) -> None:
+        """Three formulas referencing three events all produce entries."""
+        params = ws.build_params(
+            [
+                Metric("A", math="unique"),
+                Metric("B", math="unique"),
+                Metric("C", math="unique"),
+                Formula("A + B", label="AB"),
+                Formula("B + C", label="BC"),
+                Formula("(A + B + C) / 3", label="Avg"),
+            ],
+        )
+        show = params["sections"]["show"]
+        assert len(show) == 6  # 3 metrics + 3 formulas
+        formulas = [e for e in show if e.get("type") == "formula"]
+        assert len(formulas) == 3
+
+
+# =============================================================================
+# T065: Custom percentile bookmark params
+# =============================================================================
+
+
+class TestPercentileParams:
+    """T065: Custom percentile bookmark params."""
+
+    def test_maps_to_custom_percentile(self, ws: Workspace) -> None:
+        """math='percentile' maps to measurement.math='custom_percentile'."""
+        params = ws.build_params(
+            "Login",
+            math="percentile",
+            math_property="duration",
+            percentile_value=95,
+        )
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["math"] == "custom_percentile"
+        assert m["percentile"] == 95
+        assert m["property"]["name"] == "duration"
+
+    def test_metric_percentile_maps_correctly(self, ws: Workspace) -> None:
+        """Metric(math='percentile') maps to custom_percentile in bookmark."""
+        params = ws.build_params(
+            Metric(
+                "Login",
+                math="percentile",
+                property="duration",
+                percentile_value=95,
+            ),
+        )
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["math"] == "custom_percentile"
+        assert m["percentile"] == 95
+
+    def test_percentile_float_value(self, ws: Workspace) -> None:
+        """Percentile value supports float (e.g. 99.9)."""
+        params = ws.build_params(
+            "Login",
+            math="percentile",
+            math_property="duration",
+            percentile_value=99.9,
+        )
+        assert params["sections"]["show"][0]["measurement"]["percentile"] == 99.9
+
+
+# =============================================================================
+# T069: Histogram bookmark params
+# =============================================================================
+
+
+class TestHistogramParams:
+    """T069: Histogram bookmark params."""
+
+    def test_histogram_math_in_bookmark(self, ws: Workspace) -> None:
+        """math='histogram' maps directly to measurement.math='histogram'."""
+        params = ws.build_params(
+            "Purchase",
+            math="histogram",
+            math_property="amount",
+            per_user="total",
+        )
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["math"] == "histogram"
+        assert m["property"]["name"] == "amount"
+        assert m["perUserAggregation"] == "total"
+
+    def test_histogram_metric_in_bookmark(self, ws: Workspace) -> None:
+        """Metric(math='histogram') maps correctly."""
+        params = ws.build_params(
+            Metric(
+                "Purchase",
+                math="histogram",
+                property="amount",
+                per_user="total",
+            ),
+        )
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["math"] == "histogram"
+        assert m["perUserAggregation"] == "total"

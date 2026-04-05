@@ -40,6 +40,7 @@ VALID_MATH_TYPES: frozenset[str] = frozenset(
         "p90",
         "p99",
         "custom_percentile",
+        "percentile",
         # Advanced
         "histogram",
         "unique_values",
@@ -78,6 +79,7 @@ VALID_MATH_INSIGHTS: frozenset[str] = frozenset(
         "p90",
         "p99",
         "custom_percentile",
+        "percentile",
         "histogram",
         "unique_values",
         "most_frequent",
@@ -123,6 +125,8 @@ MATH_REQUIRING_PROPERTY: frozenset[str] = frozenset(
         "p90",
         "p99",
         "custom_percentile",
+        "percentile",
+        "histogram",
     }
 )
 """Math types that require a measurement property to be specified."""

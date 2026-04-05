@@ -405,3 +405,25 @@ class TestFormulaInListIntegration:
         )
         behavior = result.params["sections"]["show"][0]["behavior"]
         assert behavior["filtersDeterminer"] == "any"
+
+
+# =============================================================================
+# T054d: build_params() does not invoke API
+# =============================================================================
+
+
+class TestBuildParamsNoApiCall:
+    """T054d: build_params() does not invoke the API."""
+
+    def test_does_not_call_api(self, ws: Workspace, mock_api_client: MagicMock) -> None:
+        """build_params() returns params without calling API client."""
+        result = ws.build_params("Login")
+        mock_api_client.insights_query.assert_not_called()
+        assert isinstance(result, dict)
+
+    def test_works_without_credentials(self, mock_config_manager: MagicMock) -> None:
+        """build_params() does not require live credentials."""
+        workspace = Workspace(_config_manager=mock_config_manager)
+        # No _api_client set at all
+        result = workspace.build_params("Login")
+        assert "sections" in result
