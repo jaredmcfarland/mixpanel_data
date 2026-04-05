@@ -1865,6 +1865,9 @@ class Workspace:
             math_property: Property name for property-based math
                 (average, sum, percentiles).
             per_user: Per-user pre-aggregation (average, total, min, max).
+            percentile_value: Custom percentile value (e.g. 95 for p95).
+                Required when ``math="percentile"``. Maps to ``percentile``
+                in bookmark measurement. Ignored for other math types.
             group_by: Break down results by property. Accepts a string,
                 GroupBy object, or list of strings/GroupBys.
             where: Filter results by conditions. Accepts a Filter
@@ -1988,6 +1991,8 @@ class Workspace:
                 Default: ``"total"``.
             math_property: Property name for property-based math.
             per_user: Per-user pre-aggregation.
+            percentile_value: Custom percentile value (e.g. 95).
+                Required when ``math="percentile"``.
             group_by: Break down results by property.
             where: Filter results by conditions.
             formula: Formula expression referencing events by position.
@@ -2075,6 +2080,9 @@ class Workspace:
             math: Aggregation function.
             math_property: Property for property-based math.
             per_user: Per-user pre-aggregation.
+            percentile_value: Custom percentile value. Required when
+                ``math="percentile"``. Maps to ``percentile`` in
+                bookmark measurement JSON.
             group_by: Breakdown specification.
             where: Filter conditions.
             formula: Top-level formula expression.

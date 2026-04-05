@@ -17,7 +17,9 @@ without recomputation.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
+from datetime import date as dt_date
 from datetime import datetime
 from enum import Enum
 from typing import Any, Generic, Literal, TypeVar
@@ -7039,7 +7041,7 @@ class Filter:
     _resource_type: Literal["events", "people"] = "events"
     """Resource type to filter."""
 
-    _date_unit: str | None = None
+    _date_unit: FilterDateUnit | None = None
     """Time unit for relative date filters (hour, day, week, month).
 
     Set by ``in_the_last()`` and ``not_in_the_last()`` factory methods.
@@ -7332,22 +7334,22 @@ class Filter:
     # --- Date/datetime filters ---
 
     @staticmethod
-    def _validate_date(date_str: str) -> None:
-        """Validate a date string is YYYY-MM-DD and a valid calendar date.
+    def _validate_date(date_str: str) -> dt_date:
+        """Validate a date string is YYYY-MM-DD and return parsed date.
 
         Args:
             date_str: Date string to validate.
 
+        Returns:
+            Parsed ``datetime.date`` object.
+
         Raises:
             ValueError: If format is wrong or date is invalid.
         """
-        import re
-        from datetime import date as dt_date
-
         if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
             raise ValueError(f"Date must be YYYY-MM-DD format (got '{date_str}')")
         try:
-            dt_date.fromisoformat(date_str)
+            return dt_date.fromisoformat(date_str)
         except ValueError:
             raise ValueError(f"'{date_str}' is not a valid calendar date") from None
 
@@ -7565,11 +7567,9 @@ class Filter:
             ValueError: If dates are not valid YYYY-MM-DD or
                 from_date is after to_date.
         """
-        from datetime import date as dt_date
-
-        cls._validate_date(from_date)
-        cls._validate_date(to_date)
-        if dt_date.fromisoformat(from_date) > dt_date.fromisoformat(to_date):
+        from_parsed = cls._validate_date(from_date)
+        to_parsed = cls._validate_date(to_date)
+        if from_parsed > to_parsed:
             raise ValueError(
                 f"from_date must be before to_date (got '{from_date}' > '{to_date}')"
             )
