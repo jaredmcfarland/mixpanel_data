@@ -76,7 +76,7 @@ class TestTimeRangeValidation:
             from_date="2024-01-01",
             to_date="2024-01-31",
             last=30,
-            formula=None,
+            has_formula=False,
             rolling=None,
             cumulative=False,
             group_by=None,
@@ -92,7 +92,7 @@ class TestTimeRangeValidation:
             from_date="2024-01-01",
             to_date="2024-01-31",
             last=30,
-            formula=None,
+            has_formula=False,
             rolling=None,
             cumulative=False,
             group_by=None,
@@ -108,7 +108,7 @@ class TestTimeRangeValidation:
             from_date=None,
             to_date=None,
             last=7,
-            formula=None,
+            has_formula=False,
             rolling=None,
             cumulative=False,
             group_by=None,
@@ -135,7 +135,6 @@ class TestAggregationValidation:
             "median",
             "min",
             "max",
-            "sum",
             "p25",
             "p75",
             "p90",
@@ -147,7 +146,7 @@ class TestAggregationValidation:
     def test_v2_non_property_math_rejects_property(self, ws: Workspace) -> None:
         """V2: Non-property math with math_property raises ValueError."""
         with pytest.raises(ValueError, match="math_property is only valid"):
-            ws.query("Login", math="total", math_property="amount")
+            ws.query("Login", math="unique", math_property="amount")
 
     def test_v2_unique_rejects_property(self, ws: Workspace) -> None:
         """V2: 'unique' math rejects math_property."""
@@ -179,27 +178,61 @@ class TestAggregationValidation:
             from_date=None,
             to_date=None,
             last=30,
-            formula=None,
+            has_formula=False,
             rolling=None,
             cumulative=False,
             group_by=None,
         )
 
-    def test_valid_per_user_with_total(self, ws: Workspace) -> None:
-        """Valid per_user with non-DAU math passes validation."""
+    def test_valid_per_user_with_property(self, ws: Workspace) -> None:
+        """Valid per_user with property math passes validation."""
         ws._validate_query_args(
             events=["Purchase"],
             math="total",
-            math_property=None,
+            math_property="revenue",
             per_user="average",
             from_date=None,
             to_date=None,
             last=30,
-            formula=None,
+            has_formula=False,
             rolling=None,
             cumulative=False,
             group_by=None,
         )
+
+    def test_per_user_without_property_raises(self, ws: Workspace) -> None:
+        """per_user without math_property raises ValueError."""
+        with pytest.raises(ValueError, match="per_user requires math_property"):
+            ws._validate_query_args(
+                events=["Purchase"],
+                math="total",
+                math_property=None,
+                per_user="average",
+                from_date=None,
+                to_date=None,
+                last=30,
+                has_formula=False,
+                rolling=None,
+                cumulative=False,
+                group_by=None,
+            )
+
+    def test_per_user_with_unique_raises(self, ws: Workspace) -> None:
+        """per_user with math='unique' raises ValueError."""
+        with pytest.raises(ValueError, match="per_user is incompatible"):
+            ws._validate_query_args(
+                events=["Login"],
+                math="unique",
+                math_property=None,
+                per_user="average",
+                from_date=None,
+                to_date=None,
+                last=30,
+                has_formula=False,
+                rolling=None,
+                cumulative=False,
+                group_by=None,
+            )
 
 
 # =============================================================================
@@ -222,7 +255,27 @@ class TestPerMetricValidation:
         from mixpanel_data import Metric
 
         with pytest.raises(ValueError, match="property is only valid"):
-            ws.query(Metric("Login", math="total", property="amount"))
+            ws.query(Metric("Login", math="unique", property="amount"))
+
+    def test_v14_metric_total_with_property_allowed(self, ws: Workspace) -> None:
+        """V14: Metric with math='total' + property is allowed (sum semantics)."""
+        from unittest.mock import MagicMock
+
+        from mixpanel_data import Metric
+
+        mock_api_client = MagicMock()
+        mock_api_client.insights_query.return_value = {
+            "computed_at": "",
+            "date_range": {"from_date": "", "to_date": ""},
+            "headers": [],
+            "series": {},
+            "meta": {},
+        }
+        ws._api_client = mock_api_client
+
+        # Should pass validation and reach the API
+        ws.query(Metric("Purchase", math="total", property="amount"))
+        mock_api_client.insights_query.assert_called_once()
 
     def test_metric_per_user_with_dau(self, ws: Workspace) -> None:
         """Per-Metric per_user incompatible with DAU."""
@@ -230,6 +283,13 @@ class TestPerMetricValidation:
 
         with pytest.raises(ValueError, match="per_user is incompatible"):
             ws.query(Metric("Login", math="dau", per_user="average"))
+
+    def test_metric_per_user_requires_property(self, ws: Workspace) -> None:
+        """Per-Metric per_user requires property to be set."""
+        from mixpanel_data import Metric
+
+        with pytest.raises(ValueError, match="per_user requires property"):
+            ws.query(Metric("Login", math="total", per_user="average"))
 
 
 # =============================================================================
@@ -255,7 +315,7 @@ class TestFormulaValidation:
             from_date=None,
             to_date=None,
             last=30,
-            formula="(B / A) * 100",
+            has_formula=True,
             rolling=None,
             cumulative=False,
             group_by=None,
@@ -354,9 +414,25 @@ class TestGroupByValidation:
         # Should not raise ValueError — validation passes
         ws.query(
             "Purchase",
-            group_by=GroupBy("amount", property_type="number", bucket_size=10),
+            group_by=GroupBy(
+                "amount",
+                property_type="number",
+                bucket_size=10,
+                bucket_min=0,
+                bucket_max=100,
+            ),
         )
         mock_api_client.insights_query.assert_called_once()
+
+    def test_bucket_size_requires_min_max(self, ws: Workspace) -> None:
+        """bucket_size without bucket_min/bucket_max raises ValueError."""
+        from mixpanel_data import GroupBy
+
+        with pytest.raises(ValueError, match="bucket_size requires both"):
+            ws.query(
+                "Purchase",
+                group_by=GroupBy("amount", property_type="number", bucket_size=10),
+            )
 
 
 # =============================================================================
@@ -382,3 +458,36 @@ class TestEmptyEventsValidation:
         except Exception as e:
             # Any error other than ValueError about empty events is acceptable
             assert "At least one event is required" not in str(e)
+
+
+# =============================================================================
+# Formula-in-list validation
+# =============================================================================
+
+
+class TestFormulaInListValidation:
+    """Tests for Formula objects in the events list."""
+
+    def test_formula_alone_raises(self, ws: Workspace) -> None:
+        """A Formula as the sole argument raises ValueError."""
+        from mixpanel_data import Formula
+
+        with pytest.raises(ValueError, match="Formula cannot be the only item"):
+            ws.query(Formula("A * 100"))
+
+    def test_formula_with_top_level_raises(self, ws: Workspace) -> None:
+        """Mixing Formula in list with top-level formula raises ValueError."""
+        from mixpanel_data import Formula, Metric
+
+        with pytest.raises(ValueError, match="Cannot combine top-level"):
+            ws.query(
+                [Metric("A"), Metric("B"), Formula("A + B")],
+                formula="A - B",
+            )
+
+    def test_formula_in_list_requires_two_events(self, ws: Workspace) -> None:
+        """Formula in list with only 1 event triggers V4."""
+        from mixpanel_data import Formula
+
+        with pytest.raises(ValueError, match="formula requires at least 2 events"):
+            ws.query(["Login", Formula("A * 100")])

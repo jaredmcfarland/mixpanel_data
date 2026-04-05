@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mixpanel_data import Workspace
+from mixpanel_data import Formula, Workspace
 
 # =============================================================================
 # Fixtures
@@ -45,8 +45,7 @@ class TestBasicParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -69,8 +68,7 @@ class TestBasicParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -93,8 +91,7 @@ class TestBasicParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -116,8 +113,7 @@ class TestBasicParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -141,8 +137,7 @@ class TestBasicParams:
                 unit=unit,
                 group_by=None,
                 where=None,
-                formula=None,
-                formula_label=None,
+                formulas=[],
                 rolling=None,
                 cumulative=False,
                 mode="timeseries",
@@ -162,8 +157,7 @@ class TestBasicParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -185,8 +179,7 @@ class TestBasicParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -217,8 +210,7 @@ class TestAggregationParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -238,8 +230,7 @@ class TestAggregationParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -259,8 +250,7 @@ class TestAggregationParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -274,7 +264,7 @@ class TestAggregationParams:
         params = ws._build_query_params(
             events=["Purchase"],
             math="total",
-            math_property=None,
+            math_property="revenue",
             per_user="average",
             from_date=None,
             to_date=None,
@@ -282,8 +272,7 @@ class TestAggregationParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -296,7 +285,7 @@ class TestAggregationParams:
         from mixpanel_data import Metric
 
         params = ws._build_query_params(
-            events=[Metric("Purchase", math="sum", property="revenue")],
+            events=[Metric("Purchase", math="average", property="revenue")],
             math="total",
             math_property=None,
             per_user=None,
@@ -306,14 +295,13 @@ class TestAggregationParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
         )
         m = params["sections"]["show"][0]["measurement"]
-        assert m["math"] == "sum"
+        assert m["math"] == "average"
         assert m["property"]["name"] == "revenue"
 
 
@@ -340,8 +328,7 @@ class TestFilterParams:
             unit="day",
             group_by=None,
             where=[Filter.equals("country", "US")],
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -367,8 +354,7 @@ class TestFilterParams:
             unit="day",
             group_by=None,
             where=[Filter.greater_than("age", 18)],
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -392,8 +378,7 @@ class TestFilterParams:
             unit="day",
             group_by=None,
             where=[Filter.contains("browser", "Chrome")],
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -416,8 +401,7 @@ class TestFilterParams:
             unit="day",
             group_by=None,
             where=[Filter.equals("country", "US"), Filter.greater_than("amount", 10)],
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -437,8 +421,7 @@ class TestFilterParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -462,8 +445,7 @@ class TestGroupParams:
             unit="day",
             group_by="platform",
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -487,8 +469,7 @@ class TestGroupParams:
             unit="day",
             group_by=GroupBy("amount", property_type="number"),
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -518,8 +499,7 @@ class TestGroupParams:
                 bucket_max=500,
             ),
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -542,8 +522,7 @@ class TestGroupParams:
             unit="day",
             group_by=["platform", "country"],
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -572,8 +551,7 @@ class TestMultiEventParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -597,8 +575,7 @@ class TestMultiEventParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -611,7 +588,7 @@ class TestMultiEventParams:
         from mixpanel_data import Metric
 
         params = ws._build_query_params(
-            events=["Login", Metric("Purchase", math="sum", property="amount")],
+            events=["Login", Metric("Purchase", math="total", property="amount")],
             math="unique",
             math_property=None,
             per_user=None,
@@ -621,14 +598,13 @@ class TestMultiEventParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
         )
         assert params["sections"]["show"][0]["measurement"]["math"] == "unique"
-        assert params["sections"]["show"][1]["measurement"]["math"] == "sum"
+        assert params["sections"]["show"][1]["measurement"]["math"] == "total"
 
 
 # =============================================================================
@@ -654,8 +630,7 @@ class TestFormulaParams:
             unit="day",
             group_by=None,
             where=None,
-            formula="(B / A) * 100",
-            formula_label="Conversion Rate",
+            formulas=[Formula("(B / A) * 100", label="Conversion Rate")],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -682,8 +657,7 @@ class TestFormulaParams:
             unit="day",
             group_by=None,
             where=None,
-            formula="B / A",
-            formula_label=None,
+            formulas=[Formula("B / A")],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -704,8 +678,7 @@ class TestFormulaParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -734,8 +707,7 @@ class TestAnalysisModeParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=7,
             cumulative=False,
             mode="timeseries",
@@ -757,8 +729,7 @@ class TestAnalysisModeParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=True,
             mode="timeseries",
@@ -778,8 +749,7 @@ class TestAnalysisModeParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -808,8 +778,7 @@ class TestModeParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -829,8 +798,7 @@ class TestModeParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="total",
@@ -850,8 +818,7 @@ class TestModeParams:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="table",
@@ -882,8 +849,7 @@ class TestPerMetricFilters:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -913,8 +879,7 @@ class TestPerMetricFilters:
             unit="day",
             group_by=None,
             where=Filter.greater_than("age", 18),
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -952,9 +917,200 @@ class TestGroupByTypeError:
                 unit="day",
                 group_by=[42],  # type: ignore[list-item]
                 where=None,
-                formula=None,
-                formula_label=None,
+                formulas=[],
                 rolling=None,
                 cumulative=False,
                 mode="timeseries",
             )
+
+
+# =============================================================================
+# filters_combinator in params building
+# =============================================================================
+
+
+class TestFiltersCombinatorParams:
+    """Tests for Metric.filters_combinator in _build_query_params."""
+
+    def test_default_combinator_is_all(self, ws: Workspace) -> None:
+        """Default filters_combinator='all' emits filtersDeterminer='all'."""
+        from mixpanel_data import Metric
+
+        params = ws._build_query_params(
+            events=[Metric("Login")],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        behavior = params["sections"]["show"][0]["behavior"]
+        assert behavior["filtersDeterminer"] == "all"
+
+    def test_any_combinator(self, ws: Workspace) -> None:
+        """filters_combinator='any' emits filtersDeterminer='any'."""
+        from mixpanel_data import Filter, Metric
+
+        params = ws._build_query_params(
+            events=[
+                Metric(
+                    "Login",
+                    filters=[Filter.equals("$browser", "Chrome")],
+                    filters_combinator="any",
+                )
+            ],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        behavior = params["sections"]["show"][0]["behavior"]
+        assert behavior["filtersDeterminer"] == "any"
+
+    def test_string_event_uses_all(self, ws: Workspace) -> None:
+        """Plain string events always use filtersDeterminer='all'."""
+        params = ws._build_query_params(
+            events=["Login"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        behavior = params["sections"]["show"][0]["behavior"]
+        assert behavior["filtersDeterminer"] == "all"
+
+
+# =============================================================================
+# Formula objects in _build_query_params
+# =============================================================================
+
+
+class TestFormulaObjectParams:
+    """Tests for Formula objects passed via formulas parameter."""
+
+    def test_single_formula_object(self, ws: Workspace) -> None:
+        """A Formula object produces a formula show clause."""
+        from mixpanel_data import Metric
+
+        params = ws._build_query_params(
+            events=[Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[Formula("(B / A) * 100", label="Conv %")],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        show = params["sections"]["show"]
+        assert len(show) == 3
+        assert show[2]["type"] == "formula"
+        assert show[2]["definition"] == "(B / A) * 100"
+        assert show[2]["name"] == "Conv %"
+
+    def test_formula_without_label(self, ws: Workspace) -> None:
+        """Formula without label omits name from show clause."""
+        from mixpanel_data import Metric
+
+        params = ws._build_query_params(
+            events=[Metric("A"), Metric("B")],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[Formula("A + B")],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        formula_clause = params["sections"]["show"][2]
+        assert formula_clause["type"] == "formula"
+        assert "name" not in formula_clause
+
+    def test_multiple_formulas(self, ws: Workspace) -> None:
+        """Multiple Formula objects produce multiple formula show clauses."""
+        from mixpanel_data import Metric
+
+        params = ws._build_query_params(
+            events=[Metric("A"), Metric("B")],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[
+                Formula("A + B", label="Sum"),
+                Formula("A / B", label="Ratio"),
+            ],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        show = params["sections"]["show"]
+        assert len(show) == 4  # 2 metrics + 2 formulas
+        assert show[2]["definition"] == "A + B"
+        assert show[3]["definition"] == "A / B"
+
+    def test_formula_hides_metrics(self, ws: Workspace) -> None:
+        """Metrics are hidden when formulas are present."""
+        from mixpanel_data import Metric
+
+        params = ws._build_query_params(
+            events=[Metric("A"), Metric("B")],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[Formula("A / B")],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        assert params["sections"]["show"][0]["isHidden"] is True
+        assert params["sections"]["show"][1]["isHidden"] is True

@@ -32,7 +32,7 @@ event_names = st.text(
 )
 non_property_math = st.sampled_from(["total", "unique", "dau", "wau", "mau"])
 property_math = st.sampled_from(
-    ["average", "median", "min", "max", "sum", "p25", "p75", "p90", "p99"]
+    ["average", "median", "min", "max", "p25", "p75", "p90", "p99"]
 )
 all_math = st.sampled_from(
     [
@@ -45,14 +45,13 @@ all_math = st.sampled_from(
         "median",
         "min",
         "max",
-        "sum",
         "p25",
         "p75",
         "p90",
         "p99",
     ]
 )
-per_user_agg = st.sampled_from(["average", "total", "min", "max"])
+per_user_agg = st.sampled_from(["unique_values", "total", "average", "min", "max"])
 units = st.sampled_from(["hour", "day", "week", "month", "quarter"])
 modes = st.sampled_from(["timeseries", "total", "table"])
 positive_ints = st.integers(min_value=1, max_value=365)
@@ -113,8 +112,7 @@ class TestMetricParamsInvariant:
             unit=unit,
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode=mode,
@@ -147,8 +145,7 @@ class TestMetricParamsInvariant:
             unit="day",
             group_by=None,
             where=None,
-            formula=None,
-            formula_label=None,
+            formulas=[],
             rolling=None,
             cumulative=False,
             mode="timeseries",
@@ -209,7 +206,7 @@ class TestValidationExhaustiveness:
                 from_date=None,
                 to_date=None,
                 last=30,
-                formula=None,
+                has_formula=False,
                 rolling=None,
                 cumulative=False,
                 group_by=None,
@@ -232,7 +229,7 @@ class TestValidationExhaustiveness:
                 from_date=None,
                 to_date=None,
                 last=30,
-                formula=None,
+                has_formula=False,
                 rolling=None,
                 cumulative=False,
                 group_by=None,

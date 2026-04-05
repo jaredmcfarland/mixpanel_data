@@ -42,16 +42,22 @@ MathType = Literal[
     "median",
     "min",
     "max",
-    "sum",
     "p25",
     "p75",
     "p90",
     "p99",
 ]
-"""Aggregation function for query metrics."""
+"""Aggregation function for query metrics.
 
-PerUserAggregation = Literal["average", "total", "min", "max"]
-"""Per-user pre-aggregation type."""
+Note: Mixpanel has no ``"sum"`` math type. Use ``math="total"`` with
+a ``property`` to sum a numeric property's values.
+"""
+
+PerUserAggregation = Literal["unique_values", "total", "average", "min", "max"]
+"""Per-user pre-aggregation type.
+
+Maps to ``mathPerUser`` in the bookmark measurement block.
+"""
 
 FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
 """Property data type for filter conditions.
@@ -61,11 +67,18 @@ no Filter factory methods currently produce these types.
 """
 
 PROPERTY_MATH_TYPES: frozenset[MathType] = frozenset(
-    {"average", "median", "min", "max", "sum", "p25", "p75", "p90", "p99"}
+    {"average", "median", "min", "max", "p25", "p75", "p90", "p99"}
 )
-"""Math types that require a property name."""
+"""Math types that always require a property name."""
 
-NO_PER_USER_MATH_TYPES: frozenset[MathType] = frozenset({"dau", "wau", "mau"})
+PROPERTY_OPTIONAL_MATH_TYPES: frozenset[MathType] = frozenset({"total"})
+"""Math types that optionally accept a property name.
+
+``"total"`` without a property counts events; with a property it sums
+the property's numeric values.
+"""
+
+NO_PER_USER_MATH_TYPES: frozenset[MathType] = frozenset({"dau", "wau", "mau", "unique"})
 """Math types incompatible with per_user aggregation."""
 
 # =============================================================================
@@ -6877,6 +6890,52 @@ class Metric:
 
     filters: list[Filter] | None = None
     """Per-metric filters (list of Filter objects)."""
+
+    filters_combinator: Literal["all", "any"] = "all"
+    """How per-metric filters combine (``"all"`` = AND, ``"any"`` = OR)."""
+
+
+@dataclass(frozen=True)
+class Formula:
+    """A formula expression referencing events by position letter (A, B, C...).
+
+    Letters map to event positions in the list passed to
+    ``Workspace.query()``. A is the first event, B the second, etc.
+
+    Can be passed as an element of the events list alongside strings
+    and ``Metric`` objects, or use the top-level ``formula`` parameter
+    for single-formula convenience.
+
+    Attributes:
+        expression: Formula expression, e.g. ``"(B / A) * 100"``.
+        label: Optional display label for the formula result.
+
+    Example:
+        ```python
+        from mixpanel_data import Formula, Metric
+
+        # Formula in the events list
+        result = ws.query(
+            [Metric("Signup", math="unique"),
+             Metric("Purchase", math="unique"),
+             Formula("(B / A) * 100", label="Conversion %")],
+        )
+
+        # Equivalent using top-level parameter
+        result = ws.query(
+            [Metric("Signup", math="unique"),
+             Metric("Purchase", math="unique")],
+            formula="(B / A) * 100",
+            formula_label="Conversion %",
+        )
+        ```
+    """
+
+    expression: str
+    """Formula expression referencing events by letter."""
+
+    label: str | None = None
+    """Optional display label for the formula result."""
 
 
 @dataclass(frozen=True)

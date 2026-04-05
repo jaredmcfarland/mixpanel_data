@@ -1,7 +1,7 @@
-"""Unit tests for Query API types: Metric, QueryResult.
+"""Unit tests for Query API types: Metric, Formula, QueryResult.
 
 Tests Metric dataclass construction, defaults, immutability (T006),
-and QueryResult.df behavior per mode (T045, T049).
+Formula dataclass, and QueryResult.df behavior per mode (T045, T049).
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import pytest
 from mixpanel_data.types import (
     NO_PER_USER_MATH_TYPES,
     PROPERTY_MATH_TYPES,
+    Formula,
     Metric,
     QueryResult,
 )
@@ -86,7 +87,6 @@ class TestTypeConstants:
             "median",
             "min",
             "max",
-            "sum",
             "p25",
             "p75",
             "p90",
@@ -94,9 +94,15 @@ class TestTypeConstants:
         }
         assert expected == PROPERTY_MATH_TYPES
 
+    def test_property_optional_math_types_contents(self) -> None:
+        """PROPERTY_OPTIONAL_MATH_TYPES contains types that optionally accept property."""
+        from mixpanel_data.types import PROPERTY_OPTIONAL_MATH_TYPES
+
+        assert {"total"} == PROPERTY_OPTIONAL_MATH_TYPES
+
     def test_no_per_user_math_types_contents(self) -> None:
-        """NO_PER_USER_MATH_TYPES contains DAU/WAU/MAU."""
-        assert {"dau", "wau", "mau"} == NO_PER_USER_MATH_TYPES
+        """NO_PER_USER_MATH_TYPES contains DAU/WAU/MAU/unique."""
+        assert {"dau", "wau", "mau", "unique"} == NO_PER_USER_MATH_TYPES
 
     def test_property_math_types_immutable(self) -> None:
         """PROPERTY_MATH_TYPES is a frozenset."""
@@ -495,3 +501,65 @@ class TestGroupByConstruction:
         g1 = GroupBy("country")
         g2 = GroupBy("country")
         assert g1 == g2
+
+
+# =============================================================================
+# Metric.filters_combinator tests
+# =============================================================================
+
+
+class TestMetricFiltersCombinator:
+    """Tests for Metric.filters_combinator field."""
+
+    def test_default_is_all(self) -> None:
+        """filters_combinator defaults to 'all'."""
+        m = Metric("Login")
+        assert m.filters_combinator == "all"
+
+    def test_set_to_any(self) -> None:
+        """filters_combinator can be set to 'any'."""
+        m = Metric("Login", filters_combinator="any")
+        assert m.filters_combinator == "any"
+
+    def test_equality_includes_combinator(self) -> None:
+        """Metrics with different filters_combinator are not equal."""
+        m1 = Metric("Login", filters_combinator="all")
+        m2 = Metric("Login", filters_combinator="any")
+        assert m1 != m2
+
+
+# =============================================================================
+# Formula dataclass tests
+# =============================================================================
+
+
+class TestFormulaConstruction:
+    """Tests for Formula frozen dataclass construction and defaults."""
+
+    def test_expression_only(self) -> None:
+        """Formula with expression only uses None label."""
+        f = Formula("(B / A) * 100")
+        assert f.expression == "(B / A) * 100"
+        assert f.label is None
+
+    def test_expression_with_label(self) -> None:
+        """Formula with expression and label."""
+        f = Formula("(B / A) * 100", label="Conversion %")
+        assert f.expression == "(B / A) * 100"
+        assert f.label == "Conversion %"
+
+    def test_immutability(self) -> None:
+        """Formula is frozen."""
+        f = Formula("A + B")
+        with pytest.raises(AttributeError):
+            f.expression = "C + D"  # type: ignore[misc]
+
+    def test_equality(self) -> None:
+        """Two Formulas with same fields are equal."""
+        f1 = Formula("A + B", label="Sum")
+        f2 = Formula("A + B", label="Sum")
+        assert f1 == f2
+
+    def test_inequality(self) -> None:
+        """Formulas with different expressions are not equal."""
+        assert Formula("A + B") != Formula("A - B")

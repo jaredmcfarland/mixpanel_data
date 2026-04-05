@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mixpanel_data import Workspace
+from mixpanel_data import Filter, Formula, Metric, Workspace
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data.exceptions import QueryError
 from mixpanel_data.types import QueryResult
@@ -349,3 +349,59 @@ class TestTransformQueryResultValidation:
         result = ws.query("Login")
         assert isinstance(result, QueryResult)
         assert "Login [Total Events]" in result.series
+
+
+# =============================================================================
+# Formula-in-list integration tests
+# =============================================================================
+
+
+class TestFormulaInListIntegration:
+    """Tests for Formula objects in the events list via ws.query()."""
+
+    def test_formula_in_list_produces_correct_params(
+        self, ws: Workspace, mock_api_client: MagicMock
+    ) -> None:
+        """Formula in events list produces formula show clause."""
+        mock_api_client.insights_query.return_value = TIMESERIES_RESPONSE
+        result = ws.query(
+            [
+                Metric("Signup", math="unique"),
+                Metric("Purchase", math="unique"),
+                Formula("(B / A) * 100", label="Conversion %"),
+            ],
+        )
+        show = result.params["sections"]["show"]
+        assert len(show) == 3
+        assert show[0]["behavior"]["name"] == "Signup"
+        assert show[1]["behavior"]["name"] == "Purchase"
+        assert show[2]["type"] == "formula"
+        assert show[2]["definition"] == "(B / A) * 100"
+        assert show[2]["name"] == "Conversion %"
+
+    def test_formula_in_list_hides_metrics(
+        self, ws: Workspace, mock_api_client: MagicMock
+    ) -> None:
+        """Metrics are hidden when Formula is in the list."""
+        mock_api_client.insights_query.return_value = TIMESERIES_RESPONSE
+        result = ws.query(
+            [Metric("A", math="unique"), Metric("B", math="unique"), Formula("A / B")],
+        )
+        show = result.params["sections"]["show"]
+        assert show[0]["isHidden"] is True
+        assert show[1]["isHidden"] is True
+
+    def test_filters_combinator_in_query(
+        self, ws: Workspace, mock_api_client: MagicMock
+    ) -> None:
+        """Metric with filters_combinator='any' emits correct params."""
+        mock_api_client.insights_query.return_value = TIMESERIES_RESPONSE
+        result = ws.query(
+            Metric(
+                "Login",
+                filters=[Filter.equals("$browser", "Chrome")],
+                filters_combinator="any",
+            ),
+        )
+        behavior = result.params["sections"]["show"][0]["behavior"]
+        assert behavior["filtersDeterminer"] == "any"

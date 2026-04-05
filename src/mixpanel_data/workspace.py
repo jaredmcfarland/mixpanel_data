@@ -41,6 +41,7 @@ from mixpanel_data.exceptions import ConfigError, MixpanelDataError
 from mixpanel_data.types import (
     NO_PER_USER_MATH_TYPES,
     PROPERTY_MATH_TYPES,
+    PROPERTY_OPTIONAL_MATH_TYPES,
     ActivityFeedResult,
     AlertCount,
     AlertHistoryResponse,
@@ -101,6 +102,7 @@ from mixpanel_data.types import (
     FlagHistoryResponse,
     FlagLimitsResponse,
     FlowsResult,
+    Formula,
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
@@ -1595,7 +1597,7 @@ class Workspace:
         from_date: str | None,
         to_date: str | None,
         last: int,
-        formula: str | None,
+        has_formula: bool,
         rolling: int | None,
         cumulative: bool,
         group_by: str | GroupBy | list[str | GroupBy] | None,
@@ -1612,7 +1614,7 @@ class Workspace:
             from_date: Start date (YYYY-MM-DD).
             to_date: End date (YYYY-MM-DD).
             last: Number of days for relative date range.
-            formula: Formula expression.
+            has_formula: Whether any formula is present.
             rolling: Rolling window size.
             cumulative: Cumulative analysis mode.
             group_by: Breakdown specification.
@@ -1630,21 +1632,31 @@ class Workspace:
             msg = f"math='{math}' requires math_property to be set"
             raise ValueError(msg)
 
-        # V2: Non-property math rejects property
-        if math not in PROPERTY_MATH_TYPES and math_property is not None:
+        # V2: Non-property math rejects property (except optional types like "total")
+        if (
+            math not in PROPERTY_MATH_TYPES
+            and math not in PROPERTY_OPTIONAL_MATH_TYPES
+            and math_property is not None
+        ):
             msg = (
                 f"math_property is only valid with property-based math types "
-                f"({', '.join(sorted(PROPERTY_MATH_TYPES))}), not '{math}'"
+                f"({', '.join(sorted(PROPERTY_MATH_TYPES | PROPERTY_OPTIONAL_MATH_TYPES))}), "
+                f"not '{math}'"
             )
             raise ValueError(msg)
 
-        # V3: per_user incompatible with DAU/WAU/MAU
+        # V3: per_user incompatible with DAU/WAU/MAU/unique
         if per_user is not None and math in NO_PER_USER_MATH_TYPES:
             msg = f"per_user is incompatible with math='{math}'"
             raise ValueError(msg)
 
+        # V3b: per_user requires a property (maps to aggregate-property-per-user)
+        if per_user is not None and math_property is None:
+            msg = "per_user requires math_property to be set"
+            raise ValueError(msg)
+
         # V4: Formula requires 2+ events
-        if formula is not None and len(events) < 2:
+        if has_formula and len(events) < 2:
             msg = f"formula requires at least 2 events (got {len(events)})"
             raise ValueError(msg)
 
@@ -1700,6 +1712,11 @@ class Workspace:
                     if g.bucket_size is not None and g.property_type != "number":
                         msg = "bucket_size requires property_type='number'"
                         raise ValueError(msg)
+                    if g.bucket_size is not None and (
+                        g.bucket_min is None or g.bucket_max is None
+                    ):
+                        msg = "bucket_size requires both bucket_min and bucket_max"
+                        raise ValueError(msg)
 
         # V13-V14: Per-Metric validation
         for item in events:
@@ -1715,11 +1732,15 @@ class Workspace:
                     )
                     raise ValueError(msg)
 
-                if m_math not in PROPERTY_MATH_TYPES and m_prop is not None:
+                if (
+                    m_math not in PROPERTY_MATH_TYPES
+                    and m_math not in PROPERTY_OPTIONAL_MATH_TYPES
+                    and m_prop is not None
+                ):
                     msg = (
                         f"Metric('{item.event}'): property is only valid with "
                         f"property-based math types "
-                        f"({', '.join(sorted(PROPERTY_MATH_TYPES))}), "
+                        f"({', '.join(sorted(PROPERTY_MATH_TYPES | PROPERTY_OPTIONAL_MATH_TYPES))}), "
                         f"not '{m_math}'"
                     )
                     raise ValueError(msg)
@@ -1728,6 +1749,12 @@ class Workspace:
                     msg = (
                         f"Metric('{item.event}'): per_user is incompatible "
                         f"with math='{m_math}'"
+                    )
+                    raise ValueError(msg)
+
+                if m_per_user is not None and m_prop is None:
+                    msg = (
+                        f"Metric('{item.event}'): per_user requires property to be set"
                     )
                     raise ValueError(msg)
 
@@ -1744,8 +1771,7 @@ class Workspace:
         unit: str,
         group_by: str | GroupBy | list[str | GroupBy] | None,
         where: Filter | list[Filter] | None,
-        formula: str | None,
-        formula_label: str | None,
+        formulas: Sequence[Formula],
         rolling: int | None,
         cumulative: bool,
         mode: str,
@@ -1766,8 +1792,7 @@ class Workspace:
             unit: Time unit (hour, day, week, month, quarter).
             group_by: Breakdown specification.
             where: Filter conditions.
-            formula: Formula expression.
-            formula_label: Label for formula result.
+            formulas: Formula objects to append.
             rolling: Rolling window size.
             cumulative: Cumulative analysis mode.
             mode: Result mode (timeseries, total, table).
@@ -1784,12 +1809,14 @@ class Workspace:
                 item_prop = item.property
                 item_per_user = item.per_user
                 item_filters = item.filters
+                item_filters_combinator = item.filters_combinator
             else:
                 event_name = item
                 item_math = math
                 item_prop = math_property
                 item_per_user = per_user
                 item_filters = None
+                item_filters_combinator = "all"
 
             measurement: dict[str, Any] = {"math": item_math}
             if item_prop is not None:
@@ -1811,28 +1838,28 @@ class Workspace:
                     "type": "event",
                     "name": event_name,
                     "resourceType": "events",
-                    "filtersDeterminer": "all",
+                    "filtersDeterminer": item_filters_combinator,
                     "filters": behavior_filters,
                 },
                 "measurement": measurement,
             }
 
             # Mark hidden when formula is present
-            if formula is not None:
+            if formulas:
                 entry["isHidden"] = True
 
             show.append(entry)
 
-        # Append formula entry to show[]
-        if formula is not None:
+        # Append formula entries to show[]
+        for f in formulas:
             formula_entry: dict[str, Any] = {
                 "type": "formula",
-                "definition": formula,
+                "definition": f.expression,
                 "measurement": {},
                 "referencedMetrics": [],
             }
-            if formula_label:
-                formula_entry["name"] = formula_label
+            if f.label:
+                formula_entry["name"] = f.label
             show.append(formula_entry)
 
         # --- Build sections.time (array) ---
@@ -1956,7 +1983,7 @@ class Workspace:
 
     def query(
         self,
-        events: str | Metric | Sequence[str | Metric],
+        events: str | Metric | Formula | Sequence[str | Metric | Formula],
         *,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -1981,7 +2008,9 @@ class Workspace:
 
         Args:
             events: Event name(s) to query. Accepts a single string,
-                a Metric object, or a sequence of strings/Metrics.
+                a Metric object, a Formula object, or a sequence mixing
+                strings, Metrics, and Formulas. Formula objects in the
+                list are extracted and appended as formula show clauses.
             from_date: Start date (YYYY-MM-DD). If set, overrides ``last``.
             to_date: End date (YYYY-MM-DD). Requires ``from_date``.
             last: Relative time range in days. Default: 30.
@@ -1997,7 +2026,8 @@ class Workspace:
             where: Filter results by conditions. Accepts a Filter
                 or list of Filters.
             formula: Formula expression referencing events by position
-                (A, B, C...). Requires 2+ events.
+                (A, B, C...). Requires 2+ events. Cannot be combined
+                with Formula objects in ``events``.
             formula_label: Display label for formula result.
             rolling: Rolling window size in periods.
                 Mutually exclusive with ``cumulative``.
@@ -2028,19 +2058,54 @@ class Workspace:
             # With aggregation and time range
             result = ws.query("Login", math="unique", last=7, unit="day")
 
-            # Multi-event with formula
+            # Multi-event with formula (top-level parameter)
             result = ws.query(
                 [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
                 formula="(B / A) * 100",
                 formula_label="Conversion Rate",
             )
+
+            # Multi-event with formula (Formula in list)
+            result = ws.query(
+                [Metric("Signup", math="unique"),
+                 Metric("Purchase", math="unique"),
+                 Formula("(B / A) * 100", label="Conversion Rate")],
+            )
             ```
         """
-        # Normalize events to sequence
-        if isinstance(events, (str, Metric)):
-            events_list: Sequence[str | Metric] = [events]
+        # Normalize events to sequence, separating Formula objects
+        if isinstance(events, str):
+            events_list: list[str | Metric] = [events]
+            formulas_from_list: list[Formula] = []
+        elif isinstance(events, Metric):
+            events_list = [events]
+            formulas_from_list = []
+        elif isinstance(events, Formula):
+            msg = "Formula cannot be the only item; provide event(s) too"
+            raise ValueError(msg)
         else:
-            events_list = events
+            events_list = []
+            formulas_from_list = []
+            for item in events:
+                if isinstance(item, Formula):
+                    formulas_from_list.append(item)
+                else:
+                    events_list.append(item)
+
+        # Resolve formulas: can't use both approaches
+        if formula is not None and formulas_from_list:
+            msg = (
+                "Cannot combine top-level 'formula' parameter with "
+                "Formula objects in the events list; use one approach"
+            )
+            raise ValueError(msg)
+
+        if formula is not None:
+            resolved_formulas: Sequence[Formula] = [
+                Formula(expression=formula, label=formula_label)
+            ]
+        else:
+            resolved_formulas = formulas_from_list
 
         # Validate
         self._validate_query_args(
@@ -2051,7 +2116,7 @@ class Workspace:
             from_date=from_date,
             to_date=to_date,
             last=last,
-            formula=formula,
+            has_formula=bool(resolved_formulas),
             rolling=rolling,
             cumulative=cumulative,
             group_by=group_by,
@@ -2069,8 +2134,7 @@ class Workspace:
             unit=unit,
             group_by=group_by,
             where=where,
-            formula=formula,
-            formula_label=formula_label,
+            formulas=resolved_formulas,
             rolling=rolling,
             cumulative=cumulative,
             mode=mode,
