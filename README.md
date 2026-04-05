@@ -112,7 +112,7 @@ cohorts = ws.cohorts()
 # Insights queries — typed, composable analytics
 result = ws.query("Login")                            # simple event count
 result = ws.query("Login", math="dau", last=90)       # DAU trend
-result = ws.query("Purchase", math="sum",             # revenue by country
+result = ws.query("Purchase", math="total",             # revenue by country
     math_property="amount", group_by="country")
 result = ws.query(                                     # conversion rate formula
     [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
@@ -269,6 +269,8 @@ Key design features:
 
 This project includes a Claude Code plugin that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_data` + `pandas` rather than calling CLI commands or MCP tools.
 
+The plugin is built around `Workspace.query()` — the typed insights query API. Agents translate natural language analytics questions into `query()` calls with typed filters, breakdowns, formulas, and aggregations, then interpret results as DataFrames.
+
 **Installation:**
 
 Add the plugin from the `mixpanel-plugin/` directory, then restart Claude Code.
@@ -278,12 +280,13 @@ Add the plugin from the `mixpanel-plugin/` directory, then restart Claude Code.
 - **Command**: `/mp-auth` — Secure credential management with account switching
 - **Skills**:
   - `setup` — Install dependencies and verify authentication
-  - `mixpanel-analyst` — Auto-triggered on analytics questions; loads comprehensive reference docs and guides your workflow
-- **4 specialist agents** (auto-invoked via Task tool):
-  - `analyst` — General-purpose orchestrator for analytics questions
-  - `explorer` — Schema discovery, hypothesis generation, GQM decomposition
-  - `diagnostician` — Root cause analysis for metric changes
-  - `narrator` — Executive summaries and stakeholder reports
+  - `mixpanel-analyst` — Auto-triggered on analytics questions; teaches `query()` API patterns, typed filters, AARRR frameworks, and progressive reference docs
+- **5 specialist agents** (auto-invoked via Task tool):
+  - `query` — Query compiler: translates natural language to precise `query()` API calls with full type system expertise (MathType, Filter, GroupBy, Formula)
+  - `analyst` — General-purpose orchestrator for multi-step analytics investigations
+  - `explorer` — Schema discovery, hypothesis generation, GQM decomposition for vague questions
+  - `diagnostician` — Root cause analysis: segments metric changes across dimensions using `query()` + `Filter`
+  - `narrator` — Executive summaries pulling DAU, revenue, retention, and engagement via `query()`
 - **Secure by design**: Credentials managed outside conversation context
 
 Learn more: [Plugin Documentation](mixpanel-plugin/README.md)
