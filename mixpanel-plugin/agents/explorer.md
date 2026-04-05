@@ -44,6 +44,7 @@ You are an exploratory data analyst specializing in schema discovery, hypothesis
 Before any unfamiliar API call, look up the exact signature:
 
 ```bash
+python3 -c "import inspect, mixpanel_data as mp; m=getattr(mp.Workspace,'query'); print(inspect.signature(m)); print(inspect.getdoc(m))"
 python3 -c "import inspect, mixpanel_data as mp; m=getattr(mp.Workspace,'events'); print(inspect.signature(m)); print(inspect.getdoc(m))"
 ```
 
@@ -110,8 +111,11 @@ Break the vague question into 3-5 specific, measurable sub-questions:
 
 | # | Question | Metric | Method |
 |---|----------|--------|--------|
-| 1 | [Specific question] | [Measurable metric] | `ws.method()` |
-| 2 | ... | ... | ... |
+| 1 | How many users do X? | Event count / unique users | `ws.query()` |
+| 2 | What is the trend of X? | Time series of event | `ws.query()` |
+| 3 | Do users come back after X? | Return rate over time | `ws.retention()` |
+| 4 | What % convert from X to Y? | Step-by-step conversion | `ws.funnel()` |
+| 5 | [Other specific question] | [Measurable metric] | `ws.method()` |
 
 ### 5. Execute Queries
 

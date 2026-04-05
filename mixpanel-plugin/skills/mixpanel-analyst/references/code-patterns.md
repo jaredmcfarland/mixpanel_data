@@ -37,18 +37,19 @@ import pandas as pd
 
 ws = mp.Workspace()
 
-df = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-03-31", unit="day").df
-counts = df[df["segment"] == "total"].set_index("date")["count"]
+result = ws.query("Login", last=90, unit="day")
+df = result.df
+counts = df.set_index("date")["count"]
 counts.index = pd.to_datetime(counts.index)
 
-counts_df = counts.to_frame()
-counts_df["7d_avg"] = counts.rolling(7).mean()
-counts_df["wow_change"] = counts.pct_change(7) * 100
+print(f"Total: {counts.sum():,.0f}")
+print(f"Daily avg: {counts.mean():,.0f}")
+trend = counts.to_frame()
+trend["7d_avg"] = counts.rolling(7).mean()
 
 print("=== Login Trend ===")
-print(counts_df.tail(14).to_string())
-print(f"\nAvg daily: {counts.mean():,.0f}")
-print(f"Peak: {counts.max():,.0f} on {counts.idxmax()}")
+print(trend.tail(14).to_string())
+print(f"\nPeak: {counts.max():,.0f} on {counts.idxmax()}")
 ```
 
 ## 3. Segment Comparison
@@ -59,12 +60,9 @@ import mixpanel_data as mp
 
 ws = mp.Workspace()
 
-df = ws.segmentation(
-    event="Purchase", from_date="2025-01-01", to_date="2025-01-31",
-    on='properties["platform"]',
-).df
-
-totals = df.groupby("segment")["count"].sum().sort_values(ascending=False)
+result = ws.query("Purchase", last=30, group_by="platform")
+df = result.df
+totals = df.groupby("event")["count"].sum().sort_values(ascending=False)
 pct = (totals / totals.sum() * 100).round(1)
 
 print("=== Purchases by Platform ===")
@@ -131,40 +129,30 @@ import pandas as pd
 ws = mp.Workspace()
 
 # Daily revenue
-revenue_df = ws.segmentation_sum(
-    event="Purchase", on='properties["revenue"]',
+revenue = ws.query(
+    "Purchase", math="total", math_property="revenue",
     from_date="2025-01-01", to_date="2025-01-31",
 ).df
-revenue_s = revenue_df[revenue_df["segment"] == "total"].set_index("date")["count"]
 
-# Transaction count
-txns_df = ws.segmentation(
-    event="Purchase", from_date="2025-01-01", to_date="2025-01-31",
+# Average order value
+aov = ws.query(
+    "Purchase", math="average", math_property="revenue",
+    from_date="2025-01-01", to_date="2025-01-31",
 ).df
-txns_s = txns_df[txns_df["segment"] == "total"].set_index("date")["count"]
 
-# Unique buyers
-buyers_df = ws.event_counts(
-    events=["Purchase"], from_date="2025-01-01", to_date="2025-01-31",
-    type="unique",
+# Revenue per user
+arpu = ws.query(
+    "Purchase", math="total", per_user="average",
+    math_property="revenue",
+    from_date="2025-01-01", to_date="2025-01-31",
 ).df
-buyers_s = buyers_df[buyers_df["segment"] == "total"].set_index("date")["count"]
-
-combined = pd.DataFrame({
-    "Revenue": revenue_s,
-    "Transactions": txns_s,
-    "Unique Buyers": buyers_s,
-})
-combined["AOV"] = combined["Revenue"] / combined["Transactions"]
-combined["ARPU"] = combined["Revenue"] / combined["Unique Buyers"]
 
 print("=== Revenue Summary ===")
-print(f"Total Revenue:     ${combined['Revenue'].sum():,.2f}")
-print(f"Total Transactions: {combined['Transactions'].sum():,.0f}")
-print(f"Avg Order Value:   ${combined['AOV'].mean():,.2f}")
-print(f"ARPU:              ${combined['ARPU'].mean():,.2f}")
-print(f"\nDaily breakdown:")
-print(combined.tail(7).to_string())
+print(f"Total Revenue:     ${revenue['count'].sum():,.2f}")
+print(f"Avg Order Value:   ${aov['count'].mean():,.2f}")
+print(f"ARPU:              ${arpu['count'].mean():,.2f}")
+print(f"\nDaily revenue breakdown:")
+print(revenue.tail(7).to_string())
 ```
 
 ## 7. User Journey Investigation
@@ -191,31 +179,24 @@ import mixpanel_data as mp
 import pandas as pd
 
 ws = mp.Workspace()
-event = "Login"
 
-current_df = ws.segmentation(event=event, from_date="2025-03-01", to_date="2025-03-31").df
-previous_df = ws.segmentation(event=event, from_date="2025-02-01", to_date="2025-02-28").df
+current = ws.query("Sign Up", from_date="2025-02-01", to_date="2025-02-28").df
+previous = ws.query("Sign Up", from_date="2025-01-01", to_date="2025-01-31").df
+c_total = current["count"].sum()
+p_total = previous["count"].sum()
+change = (c_total - p_total) / p_total * 100
+print(f"MoM change: {change:+.1f}%")
 
-c_total = current_df[current_df["segment"] == "total"]["count"].sum()
-p_total = previous_df[previous_df["segment"] == "total"]["count"].sum()
-change = (c_total - p_total) / p_total * 100 if p_total != 0 else 0
-
-print(f"=== {event} — Month over Month ===")
-print(f"Current:  {c_total:>10,.0f}")
-print(f"Previous: {p_total:>10,.0f}")
-print(f"Change:   {change:>+10.1f}%")
-
-# By segment
-for dim in ["platform", "country"]:
-    curr = ws.segmentation(event=event, from_date="2025-03-01", to_date="2025-03-31",
-                           on=f'properties["{dim}"]').df
-    prev = ws.segmentation(event=event, from_date="2025-02-01", to_date="2025-02-28",
-                           on=f'properties["{dim}"]').df
-    curr_totals = curr.groupby("segment")["count"].sum()
-    prev_totals = prev.groupby("segment")["count"].sum()
-    delta = (curr_totals - prev_totals).dropna().sort_values()
-    print(f"\n--- Change by {dim} ---")
-    print(delta.head(5))
+# By dimension
+for dim in ["platform", "country", "utm_source"]:
+    c = ws.query("Sign Up", from_date="2025-02-01", to_date="2025-02-28", group_by=dim).df
+    p = ws.query("Sign Up", from_date="2025-01-01", to_date="2025-01-31", group_by=dim).df
+    c_by = c.groupby("event")["count"].sum()
+    p_by = p.groupby("event")["count"].sum()
+    print(f"\n=== By {dim} ===")
+    combined = pd.DataFrame({"current": c_by, "previous": p_by}).fillna(0)
+    combined["change_%"] = ((combined["current"] - combined["previous"]) / combined["previous"].replace(0, 1) * 100).round(1)
+    print(combined.sort_values("change_%"))
 ```
 
 ## 9. Feature Adoption Tracking
@@ -227,20 +208,18 @@ import mixpanel_data as mp
 ws = mp.Workspace()
 
 # Unique adopters per day
-adopters_df = ws.event_counts(
-    events=["Use New Feature"],
+adopters_df = ws.query(
+    "Use New Feature", math="unique",
     from_date="2025-03-01", to_date="2025-03-31",
-    unit="day", type="unique",
 ).df
-adopters_s = adopters_df[adopters_df["segment"] == "total"].set_index("date")["count"]
+adopters_s = adopters_df.set_index("date")["count"]
 
 # Total user base for comparison
-total_users_df = ws.event_counts(
-    events=["Login"],
+total_users_df = ws.query(
+    "Login", math="unique",
     from_date="2025-03-01", to_date="2025-03-31",
-    unit="day", type="unique",
 ).df
-total_users_s = total_users_df[total_users_df["segment"] == "total"].set_index("date")["count"]
+total_users_s = total_users_df.set_index("date")["count"]
 
 import pandas as pd
 combined = pd.DataFrame({
@@ -260,6 +239,7 @@ print(f"Latest: {combined['Adoption %'].iloc[-1]:.1f}%")
 ```python
 """Compare behavior across user cohorts."""
 import mixpanel_data as mp
+from mixpanel_data import Filter
 
 ws = mp.Workspace()
 
@@ -269,14 +249,14 @@ for c in cohorts:
     print(f"  [{c.id}] {c.name} ({c.count} users)")
 
 # Compare event rates between cohorts
-# Use where filters to segment by cohort properties
-paid = ws.segmentation(
-    event="Feature Use", from_date="2025-01-01", to_date="2025-01-31",
-    where='user["plan"] == "paid"',
+# Use Filter objects to segment by cohort properties
+paid = ws.query(
+    "Purchase", from_date="2025-01-01", to_date="2025-01-31",
+    where=Filter.equals("plan", "paid"),
 ).df
-free = ws.segmentation(
-    event="Feature Use", from_date="2025-01-01", to_date="2025-01-31",
-    where='user["plan"] == "free"',
+free = ws.query(
+    "Purchase", from_date="2025-01-01", to_date="2025-01-31",
+    where=Filter.equals("plan", "free"),
 ).df
 
 import pandas as pd
@@ -284,7 +264,7 @@ comparison = pd.DataFrame({
     "Paid Users": paid.groupby("date")["count"].sum(),
     "Free Users": free.groupby("date")["count"].sum(),
 })
-print("=== Feature Use: Paid vs Free ===")
+print("=== Purchase: Paid vs Free ===")
 print(comparison.describe())
 ```
 
@@ -296,34 +276,30 @@ import mixpanel_data as mp
 from concurrent.futures import ThreadPoolExecutor
 
 ws = mp.Workspace()
-period = dict(from_date="2025-03-01", to_date="2025-03-31")
+period = dict(from_date="2025-01-01", to_date="2025-01-31")
 
-# Fetch all KPIs in parallel — each query is independent
+queries = {
+    "Signups": dict(events="Sign Up", math="unique", **period),
+    "DAU": dict(events="Login", math="dau", **period),
+    "Revenue": dict(events="Purchase", math="total", math_property="revenue", **period),
+    "ARPU": dict(events="Purchase", math="total", per_user="average", math_property="revenue", **period),
+}
+
+def run_query(args):
+    name, kwargs = args
+    return name, ws.query(**kwargs).df
+
 with ThreadPoolExecutor(max_workers=4) as pool:
-    f_dau = pool.submit(lambda: ws.event_counts(events=["Login"], **period, type="unique").df)
-    f_signups = pool.submit(lambda: ws.segmentation(event="Sign Up", **period).df)
-    f_purchases = pool.submit(lambda: ws.segmentation(event="Purchase", **period).df)
-    f_revenue = pool.submit(lambda: ws.segmentation_sum(event="Purchase", on='properties["revenue"]', **period).df)
-
-def _total(df: "pd.DataFrame") -> float:
-    return df[df["segment"] == "total"]["count"].sum()
-
-def _mean(df: "pd.DataFrame") -> float:
-    return df[df["segment"] == "total"]["count"].mean()
-
-dau = _mean(f_dau.result())
-signups = _total(f_signups.result())
-purchases = _total(f_purchases.result())
-revenue = _total(f_revenue.result())
+    results = dict(pool.map(run_query, queries.items()))
 
 print("╔══════════════════════════════════╗")
 print("║     EXECUTIVE DASHBOARD          ║")
-print("║     March 2025                   ║")
+print("║     January 2025                 ║")
 print("╠══════════════════════════════════╣")
-print(f"║  Avg DAU:      {dau:>12,.0f}      ║")
-print(f"║  New Signups:  {signups:>12,.0f}      ║")
-print(f"║  Purchases:    {purchases:>12,.0f}      ║")
-print(f"║  Revenue:     ${revenue:>11,.2f}      ║")
+print(f"║  Signups:      {results['Signups']['count'].sum():>12,.0f}      ║")
+print(f"║  Avg DAU:      {results['DAU']['count'].mean():>12,.0f}      ║")
+print(f"║  Revenue:     ${results['Revenue']['count'].sum():>11,.2f}      ║")
+print(f"║  ARPU:        ${results['ARPU']['count'].mean():>11,.2f}      ║")
 print("╚══════════════════════════════════╝")
 ```
 
@@ -364,80 +340,34 @@ if anomalies:
 ```python
 """Create a Mixpanel dashboard and populate it with reports programmatically."""
 import mixpanel_data as mp
-from mixpanel_data.types import CreateDashboardParams, CreateBookmarkParams
+from mixpanel_data import CreateDashboardParams, CreateBookmarkParams, GroupBy
 
 ws = mp.Workspace(account="myaccount")
-client = ws.api
 
 # Step 1: Create dashboard
-dashboard = ws.create_dashboard(CreateDashboardParams(
-    title="Monthly KPI Dashboard",
-    description="Key product metrics tracked monthly",
+dashboard = ws.create_dashboard(CreateDashboardParams(title="Product Overview"))
+
+# Step 2: Create reports via query()
+r1 = ws.query("Sign Up", math="total", last=180, unit="month")
+bm1 = ws.create_bookmark(CreateBookmarkParams(
+    name="Signups Trend (6mo)", bookmark_type="insights", params=r1.params,
 ))
-dash_id = dashboard.id
 
-# Step 2: Helper to build insights bookmark params
-def make_metric(event_name, math="total", filters=None):
-    return {
-        "behavior": {
-            "type": "simple",
-            "name": event_name,
-            "resourceType": "events",
-            "dataGroupId": None,
-            "filters": filters or [],
-            "behaviors": [{"type": "event", "id": None, "name": event_name, "filters": filters or []}],
-        },
-        "measurement": {"math": math, "perUserAggregation": None, "property": None},
-        "isHidden": False,
-        "type": "metric",
-    }
+r2 = ws.query("Sign Up", last=180, unit="month", group_by="platform")
+bm2 = ws.create_bookmark(CreateBookmarkParams(
+    name="Signups by Platform", bookmark_type="insights", params=r2.params,
+))
 
-def make_insights_params(metrics, chart_type="line", unit="month", value=180, group_by=None):
-    return {
-        "sections": {
-            "show": metrics,
-            "filter": [],
-            "formula": [],
-            "time": [{"unit": unit, "value": value}],
-            "group_by": group_by or [],
-            "group": [],
-        },
-        "displayOptions": {
-            "chartType": chart_type,
-            "plotStyle": "standard",
-            "analysis": "linear",
-            "value": "absolute",
-        },
-    }
+r3 = ws.query("Sign Up", math="dau", last=90)
+bm3 = ws.create_bookmark(CreateBookmarkParams(
+    name="DAU (90d)", bookmark_type="insights", params=r3.params,
+))
 
-def make_group_by(prop_name):
-    return {"value": prop_name, "resourceType": "events", "propertyType": "string", "typeCast": None, "bucketing": None}
+# Step 3: Add to dashboard
+for bm in [bm1, bm2, bm3]:
+    ws.add_report_to_dashboard(dashboard.id, bm.id)
 
-# Step 3: Create bookmarks
-reports = [
-    ws.create_bookmark(CreateBookmarkParams(
-        name="Signups Trend",
-        bookmark_type="insights",
-        params=make_insights_params([make_metric("Sign Up", math="total")]),
-    )),
-    ws.create_bookmark(CreateBookmarkParams(
-        name="Signups by Platform",
-        bookmark_type="insights",
-        params=make_insights_params(
-            [make_metric("Sign Up")],
-            chart_type="bar",
-            group_by=[make_group_by("platform")],
-        ),
-    )),
-]
-
-# Step 4: Add each report to the dashboard
-# NOTE: CreateBookmarkParams(dashboard_id=...) does NOT populate the dashboard layout
-for report in reports:
-    ws.add_report_to_dashboard(dash_id, report.id)
-    print(f"Added: {report.name}")
-
-print(f"\nDashboard '{dashboard.title}' created with {len(reports)} reports (ID={dash_id})")
+print(f"Dashboard created: {dashboard.id}")
 ```
 
 ## Tips

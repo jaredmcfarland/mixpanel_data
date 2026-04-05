@@ -30,7 +30,138 @@ ws.lexicon_schema(entity_type: EntityType, name: str) -> LexiconSchema
 ws.clear_discovery_cache() -> None
 ```
 
-## Analytics — Core Queries
+## Typed Query API (Primary)
+
+`Workspace.query()` generates valid Mixpanel insights bookmark params from keyword arguments, with two-layer validation (45 rules). Prefer this over legacy segmentation/event_counts methods for all insights-style queries.
+
+```python
+ws.query(
+    events: str | Metric | Formula | Sequence[str | Metric | Formula],
+    *,
+    from_date: str | None = None,          # "YYYY-MM-DD"; mutually exclusive with `last`
+    to_date: str | None = None,            # "YYYY-MM-DD"; defaults to today
+    last: int = 30,                        # relative window in `unit`s; ignored if from_date set
+    unit: Literal["hour", "day", "week", "month", "quarter"] = "day",
+    math: MathType = "total",              # aggregate function
+    math_property: str | None = None,      # required for average/median/min/max/p25/p75/p90/p99
+    per_user: PerUserAggregation | None = None,  # nest per-user then aggregate
+    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    where: Filter | list[Filter] | None = None,
+    formula: str | None = None,            # e.g. "(A / B) * 100"
+    formula_label: str | None = None,
+    rolling: int | None = None,            # rolling window size
+    cumulative: bool = False,
+    mode: Literal["timeseries", "total", "table"] = "timeseries",
+) -> QueryResult
+```
+
+### Metric
+
+```python
+from mixpanel_data import Metric
+
+Metric(
+    event: str,                            # event name
+    math: MathType = "total",
+    math_property: str | None = None,
+    per_user: PerUserAggregation | None = None,
+    where: Filter | list[Filter] | None = None,
+    label: str | None = None,              # display label
+)
+```
+
+### Filter
+
+```python
+from mixpanel_data import Filter
+
+Filter.equals(property, value, *, resource_type="events")
+Filter.not_equals(property, value, *, resource_type="events")
+Filter.contains(property, value, *, resource_type="events")
+Filter.not_contains(property, value, *, resource_type="events")
+Filter.greater_than(property, value, *, resource_type="events")
+Filter.less_than(property, value, *, resource_type="events")
+Filter.between(property, low, high, *, resource_type="events")
+Filter.is_set(property, *, resource_type="events")
+Filter.is_not_set(property, *, resource_type="events")
+Filter.is_true(property, *, resource_type="events")
+Filter.is_false(property, *, resource_type="events")
+```
+
+### GroupBy
+
+```python
+from mixpanel_data import GroupBy
+
+GroupBy(
+    property: str,
+    property_type: str = "string",         # "string", "number", "boolean", "datetime"
+    bucket_size: int | None = None,        # numeric bucketing
+    bucket_min: int | None = None,
+    bucket_max: int | None = None,
+)
+```
+
+### Formula
+
+```python
+from mixpanel_data import Formula
+
+Formula(
+    expression: str,                       # e.g. "(A / B) * 100"; letters A-Z reference events by position
+    label: str | None = None,
+)
+```
+
+### QueryResult
+
+```python
+result = ws.query("Login", math="dau", last=30)
+
+result.df          # pandas DataFrame (lazy cached); timeseries columns: date, event, count; total columns: event, count
+result.params      # dict — generated bookmark params JSON (pass to create_bookmark)
+result.series      # raw series data from API
+result.meta        # response metadata
+result.from_date   # resolved start date
+result.to_date     # resolved end date
+result.computed_at # API computation timestamp
+```
+
+### MathType
+
+| Value | Meaning | Requires `math_property`? |
+|-------|---------|--------------------------|
+| `total` | Total event count | No (but if set, sums that property) |
+| `unique` | Unique users | No |
+| `dau` | Daily active users | No |
+| `wau` | Weekly active users | No |
+| `mau` | Monthly active users | No |
+| `average` | Average of property | Yes |
+| `median` | Median of property | Yes |
+| `min` | Minimum of property | Yes |
+| `max` | Maximum of property | Yes |
+| `p25` | 25th percentile | Yes |
+| `p75` | 75th percentile | Yes |
+| `p90` | 90th percentile | Yes |
+| `p99` | 99th percentile | Yes |
+
+There is **no `"sum"`** math type. To sum a property, use `math="total"` with `math_property="..."`.
+
+### PerUserAggregation
+
+| Value | Meaning |
+|-------|---------|
+| `unique_values` | Count distinct property values per user |
+| `total` | Total count per user |
+| `average` | Average per user |
+| `min` | Minimum per user |
+| `max` | Maximum per user |
+
+Requires `math_property`. Incompatible with `dau`, `wau`, `mau`, `unique`.
+
+---
+
+## Analytics — Legacy Core Queries
 
 ```python
 ws.segmentation(
@@ -100,12 +231,14 @@ ws.segmentation_sum(
     unit: Literal["hour", "day"] = "day",
     where: str | None = None,
 ) -> NumericSumResult
+# Legacy — prefer: ws.query(event, math="total", math_property="...")
 
 ws.segmentation_average(
     event: str, on: str, *, from_date: str, to_date: str,
     unit: Literal["hour", "day"] = "day",
     where: str | None = None,
 ) -> NumericAverageResult
+# Legacy — prefer: ws.query(event, math="average", math_property="...")
 ```
 
 ## Analytics — JQL Discovery Helpers
@@ -374,6 +507,7 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 | `ActivityFeedResult` | `activity_feed()` | `.events` |
 | `FlowsResult` | `query_flows()` | `.df`, `.data` |
 | `FrequencyResult` | `frequency()` | `.df`, `.data` |
+| `QueryResult` | `query()` | `.df`, `.params`, `.series`, `.meta`, `.from_date`, `.to_date`, `.computed_at` |
 
 ## Exception Hierarchy
 

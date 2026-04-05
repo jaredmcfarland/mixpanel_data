@@ -40,6 +40,7 @@ Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool call
 | Agent | Model | Trigger | Purpose |
 |-------|-------|---------|---------|
 | `analyst` | Opus | General analytics questions | Orchestrator — queries data, interprets, recommends |
+| `query` | Opus | Specific analytics questions | Query compiler — translates natural language to `query()` API calls |
 | `explorer` | Opus | Vague/open-ended questions | Schema discovery, GQM decomposition, hypothesis generation |
 | `diagnostician` | Opus | "Why did X change?" | Root cause analysis across dimensions |
 | `narrator` | Opus | Reports and summaries | Synthesizes findings into executive narratives |
@@ -57,7 +58,7 @@ Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool call
 
 | File | Lines | Content |
 |------|-------|---------|
-| `python-api.md` | ~300 | Complete Workspace method signatures |
+| `python-api.md` | ~450 | Typed Query API + complete Workspace method signatures |
 | `pandas-patterns.md` | ~250 | DataFrame workflows, visualization patterns |
 | `analytical-frameworks.md` | ~300 | AARRR, GQM, North Star, diagnosis methodology |
 | `code-patterns.md` | ~300 | 12 ready-to-use Python analysis snippets |
@@ -67,11 +68,12 @@ Inspired by CloudFlare's "Code Mode" MCP and Anthropic's "programmatic tool call
 When you ask a question about your Mixpanel data:
 
 1. Claude loads the `mixpanel-analyst` skill (CodeMode philosophy + quick API reference)
-2. Claude writes Python code using `mixpanel_data` to query your data
-3. Results come back as pandas DataFrames for further analysis
+2. Claude writes Python code using `Workspace.query()` — typed insights queries with DAU/WAU/MAU, formulas, filters, breakdowns, rolling windows, percentiles
+3. Results come back as pandas DataFrames via `result.df` for further analysis
 4. Claude interprets the data and provides actionable insights
 
 For complex investigations, Claude dispatches specialized agents:
+- **Query** for specific analytics questions → compiles natural language to `query()` API calls
 - **Explorer** for vague questions → decomposes via GQM framework
 - **Diagnostician** for "why did X change?" → segments across 4-6 dimensions
 - **Narrator** for reports → pulls data across AARRR stages, writes polished markdown
@@ -79,8 +81,9 @@ For complex investigations, Claude dispatches specialized agents:
 The `help.py` script lets agents look up any method's exact signature on demand:
 
 ```bash
-python3 help.py Workspace.segmentation   # → full signature + docstring
-python3 help.py SegmentationResult        # → type fields + docs
+python3 help.py Workspace.query           # → full signature + docstring
+python3 help.py QueryResult               # → type fields + docs
+python3 help.py Filter                    # → all 11 class methods
 python3 help.py types                     # → list all 150+ types
 ```
 
@@ -120,6 +123,7 @@ mixpanel-plugin/
 │           └── code-patterns.md        # Ready-to-use snippets
 ├── agents/
 │   ├── analyst.md                      # General-purpose orchestrator
+│   ├── query.md                        # Query compiler — NL to query() API
 │   ├── explorer.md                     # Schema discovery + GQM
 │   ├── diagnostician.md               # Root cause analysis
 │   └── narrator.md                     # Executive storytelling

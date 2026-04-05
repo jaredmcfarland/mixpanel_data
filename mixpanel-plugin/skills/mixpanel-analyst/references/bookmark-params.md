@@ -35,6 +35,35 @@ bookmark = ws.create_bookmark(CreateBookmarkParams(
 ))
 ```
 
+## Preferred: Use `query()` for Insights
+
+For insights queries, use `Workspace.query()` which generates valid bookmark params automatically with two-layer validation (45 rules). Manual bookmark JSON construction is no longer needed for insights.
+
+```python
+import mixpanel_data as mp
+from mixpanel_data import Metric, Filter, CreateBookmarkParams
+
+ws = mp.Workspace()
+
+# Run a query
+result = ws.query("Login", math="dau", group_by="platform", last=90)
+
+# Save as a report using the generated params
+ws.create_bookmark(CreateBookmarkParams(
+    name="DAU by Platform (90d)",
+    bookmark_type="insights",
+    params=result.params,
+))
+```
+
+Use manual bookmark JSON (documented below) only for:
+- **Funnels** — `query()` does not cover funnel analysis yet
+- **Retention** — `query()` does not cover retention analysis yet
+- **Flows** — `query()` does not cover flows analysis yet
+- **Edge cases** where `query()` cannot express the exact bookmark structure needed
+
+---
+
 ## SQL Mental Model
 
 Bookmark params are a declarative query — like SQL in JSON form. For insights, the `sections` object maps directly to SQL clauses:
@@ -76,6 +105,8 @@ Not all SQL is expressible: no JOINs, no subqueries, no UNION. Formulas are the 
 ---
 
 ## Insights Params
+
+> **Note:** For new insights queries, prefer `ws.query()` which generates these params automatically. See "Preferred: Use `query()` for Insights" above. The raw JSON format below is documented for reference.
 
 ### Skeleton
 
@@ -528,6 +559,8 @@ The validator checks:
 - Flows structure (`steps[]`, `date_range`)
 
 Exit 0 = valid, exit 1 = errors. Errors print to stderr; use `--json` for structured output.
+
+For insights queries created via `query()`, validation is automatic (45 rules, two layers). Use `validate_bookmark.py` for manually-constructed funnel, retention, and flows params.
 
 In Python scripts, validate inline:
 

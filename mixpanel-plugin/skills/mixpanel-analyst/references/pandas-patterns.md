@@ -11,8 +11,8 @@ import mixpanel_data as mp
 import pandas as pd
 
 ws = mp.Workspace()
-result = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-01-31")
-df = result.df  # long-format DataFrame with columns: date, segment, count
+result = ws.query("Login", from_date="2025-01-01", to_date="2025-01-31")
+df = result.df  # columns: date, event, count
 ```
 
 ## Common Transformations
@@ -21,10 +21,10 @@ df = result.df  # long-format DataFrame with columns: date, segment, count
 
 ```python
 # Daily trend with rolling average
-df = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-03-31", unit="day").df
+df = ws.query("Login", from_date="2025-01-01", to_date="2025-03-31", unit="day").df
 
-# For unsegmented queries, work with the count series
-counts = df[df["segment"] == "total"].set_index("date")["count"]
+# Unsegmented: extract time series
+counts = df.set_index("date")["count"]
 counts.index = pd.to_datetime(counts.index)
 
 # Rolling average and week-over-week
@@ -38,13 +38,16 @@ print(counts_df.tail(14))
 
 ```python
 # Breakdown by property, find top segments
-df = ws.segmentation(
-    event="Purchase", from_date="2025-01-01", to_date="2025-01-31",
-    on='properties["country"]'
+df = ws.query(
+    "Purchase", from_date="2025-01-01", to_date="2025-01-31",
+    group_by="country",
 ).df
 
+# Grouped: pivot by segment
+pivot = df.pivot_table(index="date", columns="event", values="count")
+
 # Top 5 countries by total
-totals = df.groupby("segment")["count"].sum().sort_values(ascending=False)
+totals = df.groupby("event")["count"].sum().sort_values(ascending=False)
 print("Top 5 countries:")
 print(totals.head())
 
@@ -94,13 +97,13 @@ import mixpanel_data as mp
 ws = mp.Workspace()
 
 # Multiple metrics side by side
-logins = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-01-31").df
-signups = ws.segmentation(event="Sign Up", from_date="2025-01-01", to_date="2025-01-31").df
-purchases = ws.segmentation(event="Purchase", from_date="2025-01-01", to_date="2025-01-31").df
+logins = ws.query("Login", from_date="2025-01-01", to_date="2025-01-31").df
+signups = ws.query("Sign Up", from_date="2025-01-01", to_date="2025-01-31").df
+purchases = ws.query("Purchase", from_date="2025-01-01", to_date="2025-01-31").df
 
 def extract_counts(df: pd.DataFrame) -> pd.Series:
-    """Extract the count series from a long-format segmentation DataFrame."""
-    s = df[df["segment"] == "total"].set_index("date")["count"]
+    """Extract the count series from a query DataFrame."""
+    s = df.set_index("date")["count"]
     s.index = pd.to_datetime(s.index)
     return s
 
@@ -126,7 +129,7 @@ import matplotlib
 matplotlib.use("Agg")  # Non-interactive backend
 import matplotlib.pyplot as plt
 
-df = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-01-31").df
+df = ws.query("Login", from_date="2025-01-01", to_date="2025-01-31").df
 
 fig, ax = plt.subplots(figsize=(12, 6))
 df.plot(ax=ax, title="Daily Logins")
@@ -239,8 +242,8 @@ with pd.ExcelWriter("report.xlsx") as writer:
 ```python
 # Correlation between events
 combined = pd.DataFrame({
-    "feature_use": feature_df[feature_df["segment"] == "total"].set_index("date")["count"],
-    "purchases": purchase_df[purchase_df["segment"] == "total"].set_index("date")["count"],
+    "feature_use": feature_df.set_index("date")["count"],
+    "purchases": purchase_df.set_index("date")["count"],
 })
 print(f"Correlation: {combined.corr().iloc[0, 1]:.3f}")
 
@@ -258,7 +261,7 @@ print(df[["avg", "min", "max"]].describe())
 ## Tips
 
 - Always use `matplotlib.use("Agg")` before importing `plt` — ensures non-interactive mode
-- Use `df[df["segment"] == "total"].set_index("date")["count"]` to extract the count series from unsegmented segmentation results (long format: columns `date`, `segment`, `count`)
+- Use `df.set_index("date")["count"]` to extract the count series from unsegmented query results (columns: `date`, `event`, `count`)
 - Call `.sum()`, `.mean()`, `.describe()` on DataFrames for quick summaries
 - Use `pd.to_datetime()` when working with streamed event timestamps
 - Save visualizations to files (`plt.savefig()`) rather than trying to display them
