@@ -49,14 +49,63 @@ MathType = Literal[
 ]
 """Aggregation function for query metrics.
 
++-----------+------------------------------------------------------------------+--------------------+
+| Value     | Meaning                                                          | Requires property? |
++===========+==================================================================+====================+
+| total     | Count events, or sum a numeric property if ``property`` is set   | Optional           |
++-----------+------------------------------------------------------------------+--------------------+
+| unique    | Count distinct users                                             | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| dau       | Daily Active Users (unique users per day)                        | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| wau       | Weekly Active Users (unique users per 7-day window)              | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| mau       | Monthly Active Users (unique users per 28-day window)            | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| average   | Mean of a numeric property's values                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| median    | Median (50th percentile) of a numeric property                   | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| min       | Minimum value of a numeric property                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| max       | Maximum value of a numeric property                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p25       | 25th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p75       | 75th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p90       | 90th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p99       | 99th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+
 Note: Mixpanel has no ``"sum"`` math type. Use ``math="total"`` with
 a ``property`` to sum a numeric property's values.
+
+``dau``, ``wau``, ``mau``, and ``unique`` are incompatible with ``per_user``.
 """
 
 PerUserAggregation = Literal["unique_values", "total", "average", "min", "max"]
 """Per-user pre-aggregation type.
 
-Maps to ``mathPerUser`` in the bookmark measurement block.
+Requires ``math_property`` to be set. The query first computes the
+per-user aggregate, then applies the top-level ``math`` across users.
+
++-----------------+---------------------------------------------------------------+
+| Value           | Meaning                                                       |
++=================+===============================================================+
+| total           | Sum of the property value per user (then aggregate)           |
++-----------------+---------------------------------------------------------------+
+| average         | Mean of the property value per user (then aggregate)          |
++-----------------+---------------------------------------------------------------+
+| min             | Minimum property value per user (then aggregate)              |
++-----------------+---------------------------------------------------------------+
+| max             | Maximum property value per user (then aggregate)              |
++-----------------+---------------------------------------------------------------+
+| unique_values   | Count of distinct property values per user (then aggregate)   |
++-----------------+---------------------------------------------------------------+
+
+Maps to ``perUserAggregation`` in the bookmark measurement block.
 """
 
 FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
@@ -65,21 +114,6 @@ FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
 Includes ``"datetime"`` and ``"list"`` for API compatibility;
 no Filter factory methods currently produce these types.
 """
-
-PROPERTY_MATH_TYPES: frozenset[MathType] = frozenset(
-    {"average", "median", "min", "max", "p25", "p75", "p90", "p99"}
-)
-"""Math types that always require a property name."""
-
-PROPERTY_OPTIONAL_MATH_TYPES: frozenset[MathType] = frozenset({"total"})
-"""Math types that optionally accept a property name.
-
-``"total"`` without a property counts events; with a property it sums
-the property's numeric values.
-"""
-
-NO_PER_USER_MATH_TYPES: frozenset[MathType] = frozenset({"dau", "wau", "mau", "unique"})
-"""Math types incompatible with per_user aggregation."""
 
 # =============================================================================
 # Base Class for Result Types with DataFrame Conversion
@@ -6860,6 +6894,8 @@ class Metric:
         property: Property name for property-based math (average, sum, etc.).
         per_user: Per-user pre-aggregation (average, total, min, max).
         filters: Per-metric filters (applied in addition to global ``where``).
+        filters_combinator: How per-metric filters combine.
+            ``"all"`` = AND (default), ``"any"`` = OR.
 
     Example:
         ```python
@@ -7398,7 +7434,13 @@ class QueryResult(ResultWithDataFrame):
                     # Total mode: no date column
                     rows.append({"event": metric_name, "count": value})
                 else:
+                    # Strip timezone offset from ISO timestamps
+                    # "2024-01-01T00:00:00-07:00" → "2024-01-01T00:00:00"
+                    # "2024-01-01T00:00:00" → unchanged (hourly)
+                    # "2024-01-01" → unchanged (daily)
                     normalized_date = date_key
+                    if len(date_key) > 19 and "T" in date_key:
+                        normalized_date = date_key[:19]
                     rows.append(
                         {"date": normalized_date, "event": metric_name, "count": value}
                     )

@@ -10,9 +10,12 @@ from typing import Any
 
 import pytest
 
+from mixpanel_data._internal.bookmark_enums import (
+    MATH_NO_PER_USER,
+    MATH_PROPERTY_OPTIONAL,
+    MATH_REQUIRING_PROPERTY,
+)
 from mixpanel_data.types import (
-    NO_PER_USER_MATH_TYPES,
-    PROPERTY_MATH_TYPES,
     Formula,
     Metric,
     QueryResult,
@@ -80,8 +83,8 @@ class TestMetricConstruction:
 class TestTypeConstants:
     """Tests for query type aliases and constants."""
 
-    def test_property_math_types_contents(self) -> None:
-        """PROPERTY_MATH_TYPES contains all property-based aggregations."""
+    def test_math_requiring_property_contents(self) -> None:
+        """MATH_REQUIRING_PROPERTY contains all property-based aggregations."""
         expected = {
             "average",
             "median",
@@ -91,26 +94,25 @@ class TestTypeConstants:
             "p75",
             "p90",
             "p99",
+            "custom_percentile",
         }
-        assert expected == PROPERTY_MATH_TYPES
+        assert expected == MATH_REQUIRING_PROPERTY
 
-    def test_property_optional_math_types_contents(self) -> None:
-        """PROPERTY_OPTIONAL_MATH_TYPES contains types that optionally accept property."""
-        from mixpanel_data.types import PROPERTY_OPTIONAL_MATH_TYPES
+    def test_math_property_optional_contents(self) -> None:
+        """MATH_PROPERTY_OPTIONAL contains types that optionally accept property."""
+        assert {"total"} == MATH_PROPERTY_OPTIONAL
 
-        assert {"total"} == PROPERTY_OPTIONAL_MATH_TYPES
+    def test_math_no_per_user_contents(self) -> None:
+        """MATH_NO_PER_USER contains DAU/WAU/MAU/unique."""
+        assert {"dau", "wau", "mau", "unique"} == MATH_NO_PER_USER
 
-    def test_no_per_user_math_types_contents(self) -> None:
-        """NO_PER_USER_MATH_TYPES contains DAU/WAU/MAU/unique."""
-        assert {"dau", "wau", "mau", "unique"} == NO_PER_USER_MATH_TYPES
+    def test_math_requiring_property_immutable(self) -> None:
+        """MATH_REQUIRING_PROPERTY is a frozenset."""
+        assert isinstance(MATH_REQUIRING_PROPERTY, frozenset)
 
-    def test_property_math_types_immutable(self) -> None:
-        """PROPERTY_MATH_TYPES is a frozenset."""
-        assert isinstance(PROPERTY_MATH_TYPES, frozenset)
-
-    def test_no_per_user_math_types_immutable(self) -> None:
-        """NO_PER_USER_MATH_TYPES is a frozenset."""
-        assert isinstance(NO_PER_USER_MATH_TYPES, frozenset)
+    def test_math_no_per_user_immutable(self) -> None:
+        """MATH_NO_PER_USER is a frozenset."""
+        assert isinstance(MATH_NO_PER_USER, frozenset)
 
 
 # =============================================================================

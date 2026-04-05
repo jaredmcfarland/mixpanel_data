@@ -5,12 +5,14 @@ Complete programmable interface to Mixpanel analytics: discover your schema,
 run live analytics, stream data, and manage entities via the App API.
 """
 
+from mixpanel_data._internal.validation import validate_bookmark
 from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
 from mixpanel_data.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
     APIError,
     AuthenticationError,
+    BookmarkValidationError,
     ConfigError,
     DateRangeTooLargeError,
     EventNotFoundError,
@@ -20,12 +22,10 @@ from mixpanel_data.exceptions import (
     QueryError,
     RateLimitError,
     ServerError,
+    ValidationError,
     WorkspaceScopeError,
 )
 from mixpanel_data.types import (
-    NO_PER_USER_MATH_TYPES,
-    PROPERTY_MATH_TYPES,
-    PROPERTY_OPTIONAL_MATH_TYPES,
     ActivityFeedResult,
     AlertBookmark,
     AlertCount,
@@ -197,12 +197,16 @@ __version__ = "0.1.0"
 __all__ = [
     # Core
     "Workspace",
+    # Validation
+    "validate_bookmark",
     # Type aliases
     "CountType",
     "HourDayUnit",
     "TimeUnit",
     # Exceptions
     "MixpanelDataError",
+    "BookmarkValidationError",
+    "ValidationError",
     "APIError",
     "ConfigError",
     "AccountNotFoundError",
@@ -366,9 +370,6 @@ __all__ = [
     # Query API types (Phase 029)
     "MathType",
     "PerUserAggregation",
-    "PROPERTY_MATH_TYPES",
-    "PROPERTY_OPTIONAL_MATH_TYPES",
-    "NO_PER_USER_MATH_TYPES",
     "Metric",
     "Filter",
     "Formula",

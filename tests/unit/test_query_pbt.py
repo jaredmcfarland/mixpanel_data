@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
+from mixpanel_data._internal.bookmark_enums import MATH_REQUIRING_PROPERTY
 from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.validation import validate_query_args
 from mixpanel_data.types import (
-    PROPERTY_MATH_TYPES,
     Filter,
     QueryResult,
 )
@@ -100,7 +100,7 @@ class TestMetricParamsInvariant:
     ) -> None:
         """Any non-property math Metric produces valid params without exception."""
         ws = _make_ws()
-        assume(math not in PROPERTY_MATH_TYPES)
+        assume(math not in MATH_REQUIRING_PROPERTY)
         params = ws._build_query_params(
             events=[event],
             math=math,  # type: ignore[arg-type]
@@ -195,22 +195,21 @@ class TestValidationExhaustiveness:
         self,
         math: str,
     ) -> None:
-        """Any property math without math_property always raises ValueError."""
-        ws = _make_ws()
-        with pytest.raises(ValueError, match="requires math_property"):
-            ws._validate_query_args(
-                events=["E"],
-                math=math,  # type: ignore[arg-type]
-                math_property=None,
-                per_user=None,
-                from_date=None,
-                to_date=None,
-                last=30,
-                has_formula=False,
-                rolling=None,
-                cumulative=False,
-                group_by=None,
-            )
+        """Any property math without math_property always produces error."""
+        errors = validate_query_args(
+            events=["E"],
+            math=math,  # type: ignore[arg-type]
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            has_formula=False,
+            rolling=None,
+            cumulative=False,
+            group_by=None,
+        )
+        assert any("requires math_property" in e.message for e in errors)
 
     @given(math=st.sampled_from(["dau", "wau", "mau"]), per_user=per_user_agg)
     def test_per_user_with_dau_wau_mau_always_fails(
@@ -218,22 +217,21 @@ class TestValidationExhaustiveness:
         math: str,
         per_user: str,
     ) -> None:
-        """per_user with DAU/WAU/MAU always raises ValueError."""
-        ws = _make_ws()
-        with pytest.raises(ValueError, match="per_user is incompatible"):
-            ws._validate_query_args(
-                events=["E"],
-                math=math,  # type: ignore[arg-type]
-                math_property=None,
-                per_user=per_user,  # type: ignore[arg-type]
-                from_date=None,
-                to_date=None,
-                last=30,
-                has_formula=False,
-                rolling=None,
-                cumulative=False,
-                group_by=None,
-            )
+        """per_user with DAU/WAU/MAU always produces error."""
+        errors = validate_query_args(
+            events=["E"],
+            math=math,  # type: ignore[arg-type]
+            math_property=None,
+            per_user=per_user,  # type: ignore[arg-type]
+            from_date=None,
+            to_date=None,
+            last=30,
+            has_formula=False,
+            rolling=None,
+            cumulative=False,
+            group_by=None,
+        )
+        assert any("per_user is incompatible" in e.message for e in errors)
 
 
 class TestQueryResultDfInvariant:

@@ -26,7 +26,6 @@ Example:
 from __future__ import annotations
 
 import logging
-import re
 import time
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -37,11 +36,14 @@ from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
-from mixpanel_data.exceptions import ConfigError, MixpanelDataError
+from mixpanel_data._internal.validation import validate_bookmark, validate_query_args
+from mixpanel_data.exceptions import (
+    BookmarkValidationError,
+    ConfigError,
+    MixpanelDataError,
+    ValidationError,
+)
 from mixpanel_data.types import (
-    NO_PER_USER_MATH_TYPES,
-    PROPERTY_MATH_TYPES,
-    PROPERTY_OPTIONAL_MATH_TYPES,
     ActivityFeedResult,
     AlertCount,
     AlertHistoryResponse,
@@ -1585,179 +1587,6 @@ class Workspace:
     # INSIGHTS QUERY API (Phase 029)
     # =========================================================================
 
-    _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-    def _validate_query_args(
-        self,
-        *,
-        events: Sequence[str | Metric],
-        math: MathType,
-        math_property: str | None,
-        per_user: PerUserAggregation | None,
-        from_date: str | None,
-        to_date: str | None,
-        last: int,
-        has_formula: bool,
-        rolling: int | None,
-        cumulative: bool,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
-    ) -> None:
-        """Validate query arguments before building bookmark params.
-
-        Implements validation rules V1-V14 as fail-fast ValueErrors.
-
-        Args:
-            events: Event names or Metric objects.
-            math: Top-level aggregation function.
-            math_property: Property for property-based math.
-            per_user: Per-user pre-aggregation.
-            from_date: Start date (YYYY-MM-DD).
-            to_date: End date (YYYY-MM-DD).
-            last: Number of days for relative date range.
-            has_formula: Whether any formula is present.
-            rolling: Rolling window size.
-            cumulative: Cumulative analysis mode.
-            group_by: Breakdown specification.
-
-        Raises:
-            ValueError: If any validation rule is violated.
-        """
-        # V0: At least one event required
-        if not events:
-            msg = "At least one event is required"
-            raise ValueError(msg)
-
-        # V1: Property math requires property
-        if math in PROPERTY_MATH_TYPES and math_property is None:
-            msg = f"math='{math}' requires math_property to be set"
-            raise ValueError(msg)
-
-        # V2: Non-property math rejects property (except optional types like "total")
-        if (
-            math not in PROPERTY_MATH_TYPES
-            and math not in PROPERTY_OPTIONAL_MATH_TYPES
-            and math_property is not None
-        ):
-            msg = (
-                f"math_property is only valid with property-based math types "
-                f"({', '.join(sorted(PROPERTY_MATH_TYPES | PROPERTY_OPTIONAL_MATH_TYPES))}), "
-                f"not '{math}'"
-            )
-            raise ValueError(msg)
-
-        # V3: per_user incompatible with DAU/WAU/MAU/unique
-        if per_user is not None and math in NO_PER_USER_MATH_TYPES:
-            msg = f"per_user is incompatible with math='{math}'"
-            raise ValueError(msg)
-
-        # V3b: per_user requires a property (maps to aggregate-property-per-user)
-        if per_user is not None and math_property is None:
-            msg = "per_user requires math_property to be set"
-            raise ValueError(msg)
-
-        # V4: Formula requires 2+ events
-        if has_formula and len(events) < 2:
-            msg = f"formula requires at least 2 events (got {len(events)})"
-            raise ValueError(msg)
-
-        # V5: Rolling and cumulative are mutually exclusive
-        if rolling is not None and cumulative:
-            msg = "rolling and cumulative are mutually exclusive"
-            raise ValueError(msg)
-
-        # V6: Rolling must be positive
-        if rolling is not None and rolling <= 0:
-            msg = "rolling must be a positive integer"
-            raise ValueError(msg)
-
-        # V7: last must be positive
-        if last <= 0:
-            msg = "last must be a positive integer"
-            raise ValueError(msg)
-
-        # V8: Date format validation
-        if from_date is not None and not self._DATE_RE.match(from_date):
-            msg = f"from_date must be YYYY-MM-DD format (got '{from_date}')"
-            raise ValueError(msg)
-        if to_date is not None and not self._DATE_RE.match(to_date):
-            msg = f"to_date must be YYYY-MM-DD format (got '{to_date}')"
-            raise ValueError(msg)
-
-        # V9: to_date requires from_date
-        if to_date is not None and from_date is None:
-            msg = "to_date requires from_date"
-            raise ValueError(msg)
-
-        # V10: Cannot combine explicit dates with non-default last
-        if from_date is not None and last != 30:
-            msg = (
-                f"Cannot combine last={last} with explicit dates; "
-                f"use either last or from_date/to_date"
-            )
-            raise ValueError(msg)
-
-        # V11-V12: GroupBy validation
-        if group_by is not None:
-            groups = group_by if isinstance(group_by, list) else [group_by]
-            for g in groups:
-                if isinstance(g, GroupBy):
-                    if (
-                        g.bucket_min is not None or g.bucket_max is not None
-                    ) and g.bucket_size is None:
-                        msg = "bucket_min/bucket_max require bucket_size"
-                        raise ValueError(msg)
-                    if g.bucket_size is not None and g.bucket_size <= 0:
-                        msg = "bucket_size must be positive"
-                        raise ValueError(msg)
-                    if g.bucket_size is not None and g.property_type != "number":
-                        msg = "bucket_size requires property_type='number'"
-                        raise ValueError(msg)
-                    if g.bucket_size is not None and (
-                        g.bucket_min is None or g.bucket_max is None
-                    ):
-                        msg = "bucket_size requires both bucket_min and bucket_max"
-                        raise ValueError(msg)
-
-        # V13-V14: Per-Metric validation
-        for item in events:
-            if isinstance(item, Metric):
-                m_math = item.math
-                m_prop = item.property
-                m_per_user = item.per_user
-
-                if m_math in PROPERTY_MATH_TYPES and m_prop is None:
-                    msg = (
-                        f"Metric('{item.event}'): math='{m_math}' "
-                        f"requires property to be set"
-                    )
-                    raise ValueError(msg)
-
-                if (
-                    m_math not in PROPERTY_MATH_TYPES
-                    and m_math not in PROPERTY_OPTIONAL_MATH_TYPES
-                    and m_prop is not None
-                ):
-                    msg = (
-                        f"Metric('{item.event}'): property is only valid with "
-                        f"property-based math types "
-                        f"({', '.join(sorted(PROPERTY_MATH_TYPES | PROPERTY_OPTIONAL_MATH_TYPES))}), "
-                        f"not '{m_math}'"
-                    )
-                    raise ValueError(msg)
-
-                if m_per_user is not None and m_math in NO_PER_USER_MATH_TYPES:
-                    msg = (
-                        f"Metric('{item.event}'): per_user is incompatible "
-                        f"with math='{m_math}'"
-                    )
-                    raise ValueError(msg)
-
-                if m_per_user is not None and m_prop is None:
-                    msg = (
-                        f"Metric('{item.event}'): per_user requires property to be set"
-                    )
-                    raise ValueError(msg)
-
     def _build_query_params(
         self,
         *,
@@ -2073,6 +1902,36 @@ class Workspace:
             )
             ```
         """
+        # Type guard: events must be str, Metric, Formula, or sequence thereof
+        if not isinstance(events, (str, Metric, Formula, list, tuple)):
+            raise BookmarkValidationError(
+                [
+                    ValidationError(
+                        path="events",
+                        message=(
+                            f"events must be a string, Metric, Formula, or "
+                            f"sequence, got {type(events).__name__}"
+                        ),
+                        code="V21_INVALID_EVENT_TYPE",
+                    )
+                ]
+            )
+
+        # Type guard: where must be Filter or list of Filters
+        if where is not None and not isinstance(where, (Filter, list)):
+            raise BookmarkValidationError(
+                [
+                    ValidationError(
+                        path="where",
+                        message=(
+                            f"where must be a Filter or list of Filters, "
+                            f"got {type(where).__name__}"
+                        ),
+                        code="V25_INVALID_FILTER_TYPE",
+                    )
+                ]
+            )
+
         # Normalize events to sequence, separating Formula objects
         if isinstance(events, str):
             events_list: list[str | Metric] = [events]
@@ -2081,8 +1940,15 @@ class Workspace:
             events_list = [events]
             formulas_from_list = []
         elif isinstance(events, Formula):
-            msg = "Formula cannot be the only item; provide event(s) too"
-            raise ValueError(msg)
+            raise BookmarkValidationError(
+                [
+                    ValidationError(
+                        path="events",
+                        message="Formula cannot be the only item; provide event(s) too",
+                        code="V0_NO_EVENTS",
+                    )
+                ]
+            )
         else:
             events_list = []
             formulas_from_list = []
@@ -2094,11 +1960,18 @@ class Workspace:
 
         # Resolve formulas: can't use both approaches
         if formula is not None and formulas_from_list:
-            msg = (
-                "Cannot combine top-level 'formula' parameter with "
-                "Formula objects in the events list; use one approach"
+            raise BookmarkValidationError(
+                [
+                    ValidationError(
+                        path="formula",
+                        message=(
+                            "Cannot combine top-level 'formula' parameter with "
+                            "Formula objects in the events list; use one approach"
+                        ),
+                        code="V4_FORMULA_CONFLICT",
+                    )
+                ]
             )
-            raise ValueError(msg)
 
         if formula is not None:
             resolved_formulas: Sequence[Formula] = [
@@ -2107,8 +1980,8 @@ class Workspace:
         else:
             resolved_formulas = formulas_from_list
 
-        # Validate
-        self._validate_query_args(
+        # Layer 1: Argument validation
+        arg_errors = validate_query_args(
             events=events_list,
             math=math,
             math_property=math_property,
@@ -2120,7 +1993,10 @@ class Workspace:
             rolling=rolling,
             cumulative=cumulative,
             group_by=group_by,
+            formulas=resolved_formulas,
         )
+        if any(e.severity == "error" for e in arg_errors):
+            raise BookmarkValidationError(arg_errors)
 
         # Build bookmark params
         params = self._build_query_params(
@@ -2139,6 +2015,11 @@ class Workspace:
             cumulative=cumulative,
             mode=mode,
         )
+
+        # Layer 2: Bookmark structure validation
+        bookmark_errors = validate_bookmark(params)
+        if any(e.severity == "error" for e in bookmark_errors):
+            raise BookmarkValidationError(bookmark_errors)
 
         # Delegate to service — _live_query_service calls _require_api_client
         # which ensures _credentials is not None
