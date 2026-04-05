@@ -510,6 +510,36 @@ class TestValidateBookmarkLayer2:
         assert len(op_errors) == 1
         assert op_errors[0].severity == "warning"
 
+    def test_b15_insights_date_operators_valid(self) -> None:
+        """B15: InsightsDateRangeType operators pass validation."""
+        insights_date_ops = [
+            "was on",
+            "was not on",
+            "was in the",
+            "was not in the",
+            "was between",
+            "was not between",
+            "was less than",
+            "was before",
+            "was since",
+            "was in the next",
+        ]
+        for op in insights_date_ops:
+            bm = _minimal_bookmark()
+            bm["sections"]["filter"] = [
+                {
+                    "filterType": "datetime",
+                    "filterOperator": op,
+                    "value": "created",
+                    "filterValue": "2024-01-01",
+                }
+            ]
+            errors = validate_bookmark(bm)
+            op_errors = [e for e in errors if e.code == "B15_INVALID_FILTER_OPERATOR"]
+            assert len(op_errors) == 0, (
+                f"Operator {op!r} should be valid but got B15 warning"
+            )
+
     def test_b18_missing_filter_property(self) -> None:
         """B18: Filter without property identifier produces error."""
         bm = _minimal_bookmark()

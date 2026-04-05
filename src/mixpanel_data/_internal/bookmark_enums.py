@@ -290,7 +290,7 @@ VALID_FILTER_OPERATORS: frozenset[str] = frozenset(
         # Boolean operators
         "true",
         "false",
-        # Date operators
+        # Date operators (legacy segfilter format — DateRangeType)
         "on",
         "not on",
         "in the last",
@@ -299,9 +299,31 @@ VALID_FILTER_OPERATORS: frozenset[str] = frozenset(
         "before",
         "in the next",
         "since",
+        # Date operators (canonical bookmark sections — InsightsDateRangeType)
+        "was on",
+        "was not on",
+        "was in the",
+        "was not in the",
+        "was between",
+        "was not between",
+        "was less than",
+        "was before",
+        "was since",
+        "was in the next",
     }
 )
-"""Valid filter operators from the canonical operator expression schema."""
+"""Valid filter operators from the canonical operator expression schema.
+
+Includes both legacy ``DateRangeType`` operators (``"on"``, ``"in the last"``,
+etc.) and canonical ``InsightsDateRangeType`` operators (``"was on"``,
+``"was in the"``, etc.).  The ``InsightsDateRangeType`` form is what the
+Mixpanel webapp writes into bookmark ``sections.filter[]`` entries; the
+legacy form appears in old v2 bookmarks and segfilter-based params.  Both
+are accepted by the Mixpanel API.
+
+Reference: ``analytics/bookmark_parser/common/segfilter/
+segfilter_to_property_filter.py`` — ``InsightsDateRangeType`` class.
+"""
 
 # =============================================================================
 # Filters Determiner
