@@ -528,3 +528,103 @@ class TestFormulaInListValidation:
             BookmarkValidationError, match="formula requires at least 2 events"
         ):
             ws.query(["Login", Formula("A * 100")])
+
+
+# =============================================================================
+# T054c: build_params() validation parity
+# =============================================================================
+
+
+class TestBuildParamsValidation:
+    """T054c: build_params() runs the same validation as query()."""
+
+    def test_rejects_invalid_last(self, ws: Workspace) -> None:
+        """build_params() raises BookmarkValidationError for last=0."""
+        with pytest.raises(
+            BookmarkValidationError, match="last must be a positive integer"
+        ):
+            ws.build_params("Login", last=0)
+
+    def test_rejects_formula_without_events(self, ws: Workspace) -> None:
+        """build_params() validates formula requires 2+ events."""
+        with pytest.raises(
+            BookmarkValidationError, match="formula requires at least 2 events"
+        ):
+            ws.build_params("Login", formula="A + B")
+
+    def test_rejects_invalid_date_format(self, ws: Workspace) -> None:
+        """build_params() validates date format."""
+        with pytest.raises(BookmarkValidationError, match="YYYY-MM-DD"):
+            ws.build_params("Login", from_date="01/01/2024")
+
+
+# =============================================================================
+# T064: Percentile validation (V1 inherited + new V26)
+# =============================================================================
+
+
+class TestPercentileValidation:
+    """T064: Percentile validation rules."""
+
+    def test_v1_percentile_requires_math_property(self, ws: Workspace) -> None:
+        """V1: math='percentile' requires math_property."""
+        with pytest.raises(BookmarkValidationError, match="requires math_property"):
+            ws.build_params("Login", math="percentile", percentile_value=95)
+
+    def test_v26_percentile_requires_percentile_value(self, ws: Workspace) -> None:
+        """V26: math='percentile' requires percentile_value."""
+        with pytest.raises(BookmarkValidationError, match="percentile_value"):
+            ws.build_params("Login", math="percentile", math_property="duration")
+
+    def test_v26_metric_percentile_requires_value(self, ws: Workspace) -> None:
+        """V26: Metric with math='percentile' requires percentile_value."""
+        from mixpanel_data import Metric
+
+        with pytest.raises(BookmarkValidationError, match="percentile_value"):
+            ws.build_params(Metric("Login", math="percentile", property="duration"))
+
+    def test_valid_percentile_passes(self, ws: Workspace) -> None:
+        """Percentile with property and value passes validation."""
+        result = ws.build_params(
+            "Login",
+            math="percentile",
+            math_property="duration",
+            percentile_value=95,
+        )
+        assert isinstance(result, dict)
+
+
+# =============================================================================
+# T068: Histogram validation
+# =============================================================================
+
+
+class TestHistogramValidation:
+    """T068: Histogram validation."""
+
+    def test_v1_histogram_requires_property(self, ws: Workspace) -> None:
+        """V1: math='histogram' requires math_property."""
+        with pytest.raises(BookmarkValidationError, match="requires math_property"):
+            ws.build_params("Login", math="histogram")
+
+    def test_v27_histogram_requires_per_user(self, ws: Workspace) -> None:
+        """V27: math='histogram' requires per_user."""
+        with pytest.raises(BookmarkValidationError, match="requires per_user"):
+            ws.build_params("Purchase", math="histogram", math_property="amount")
+
+    def test_v27_metric_histogram_requires_per_user(self, ws: Workspace) -> None:
+        """V27: Metric(math='histogram') requires per_user."""
+        from mixpanel_data import Metric
+
+        with pytest.raises(BookmarkValidationError, match="requires per_user"):
+            ws.build_params(Metric("Purchase", math="histogram", property="amount"))
+
+    def test_histogram_with_property_and_per_user_passes(self, ws: Workspace) -> None:
+        """Histogram with property and per_user passes validation."""
+        result = ws.build_params(
+            "Purchase",
+            math="histogram",
+            math_property="amount",
+            per_user="total",
+        )
+        assert isinstance(result, dict)

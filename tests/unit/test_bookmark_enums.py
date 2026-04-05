@@ -38,17 +38,21 @@ from mixpanel_data.types import (
 class TestMathTypeCompleteness:
     """Verify math type enum coverage."""
 
+    # User-facing math aliases that map to different bookmark values.
+    # "percentile" -> "custom_percentile" in bookmark JSON.
+    USER_FACING_ALIASES: frozenset[str] = frozenset({"percentile"})
+
     def test_math_type_literal_subset_of_insights(self) -> None:
-        """Every MathType Literal value is in VALID_MATH_INSIGHTS."""
-        literal_values = set(get_args(MathType))
+        """Every MathType Literal value (excluding aliases) is in VALID_MATH_INSIGHTS."""
+        literal_values = set(get_args(MathType)) - self.USER_FACING_ALIASES
         assert literal_values <= VALID_MATH_INSIGHTS, (
             f"MathType values not in VALID_MATH_INSIGHTS: "
             f"{literal_values - VALID_MATH_INSIGHTS}"
         )
 
     def test_math_type_literal_subset_of_all(self) -> None:
-        """Every MathType Literal value is in VALID_MATH_TYPES."""
-        literal_values = set(get_args(MathType))
+        """Every MathType Literal value (excluding aliases) is in VALID_MATH_TYPES."""
+        literal_values = set(get_args(MathType)) - self.USER_FACING_ALIASES
         assert literal_values <= VALID_MATH_TYPES
 
     def test_insights_subset_of_all(self) -> None:
@@ -64,8 +68,10 @@ class TestMathTypeCompleteness:
         assert VALID_MATH_RETENTION <= VALID_MATH_TYPES
 
     def test_requiring_property_subset_of_insights(self) -> None:
-        """MATH_REQUIRING_PROPERTY is a subset of VALID_MATH_INSIGHTS."""
-        assert MATH_REQUIRING_PROPERTY <= VALID_MATH_INSIGHTS
+        """MATH_REQUIRING_PROPERTY (excluding aliases) is a subset of VALID_MATH_INSIGHTS."""
+        assert (
+            MATH_REQUIRING_PROPERTY - self.USER_FACING_ALIASES
+        ) <= VALID_MATH_INSIGHTS
 
     def test_property_optional_subset_of_insights(self) -> None:
         """MATH_PROPERTY_OPTIONAL is a subset of VALID_MATH_INSIGHTS."""

@@ -17,7 +17,9 @@ without recomputation.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
+from datetime import date as dt_date
 from datetime import datetime
 from enum import Enum
 from typing import Any, Generic, Literal, TypeVar
@@ -46,6 +48,8 @@ MathType = Literal[
     "p75",
     "p90",
     "p99",
+    "percentile",
+    "histogram",
 ]
 """Aggregation function for query metrics.
 
@@ -78,11 +82,19 @@ MathType = Literal[
 +-----------+------------------------------------------------------------------+--------------------+
 | p99       | 99th percentile of a numeric property                            | Yes                |
 +-----------+------------------------------------------------------------------+--------------------+
+| percentile| Custom percentile (requires ``percentile_value``)                | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| histogram | Distribution of a numeric property's values                      | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
 
 Note: Mixpanel has no ``"sum"`` math type. Use ``math="total"`` with
 a ``property`` to sum a numeric property's values.
 
 ``dau``, ``wau``, ``mau``, and ``unique`` are incompatible with ``per_user``.
+
+``percentile`` maps to ``custom_percentile`` in bookmark JSON and requires
+``percentile_value`` on Metric (or as a top-level param on ``query()``/``build_params()``).
+``histogram`` maps directly to ``histogram`` in bookmark JSON.
 """
 
 PerUserAggregation = Literal["unique_values", "total", "average", "min", "max"]
@@ -111,8 +123,17 @@ Maps to ``perUserAggregation`` in the bookmark measurement block.
 FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
 """Property data type for filter conditions.
 
-Includes ``"datetime"`` and ``"list"`` for API compatibility;
-no Filter factory methods currently produce these types.
+Includes ``"datetime"`` and ``"list"`` for API compatibility.
+Datetime factory methods (``Filter.on``, ``Filter.before``, etc.)
+produce filters with ``filterType="datetime"``.
+"""
+
+FilterDateUnit = Literal["hour", "day", "week", "month"]
+"""Time unit for relative date filters.
+
+Used by ``Filter.in_the_last()`` and ``Filter.not_in_the_last()``
+to specify the granularity of the relative time window.
+Maps to ``filterDateUnit`` in bookmark JSON.
 """
 
 # =============================================================================
@@ -6924,6 +6945,13 @@ class Metric:
     per_user: PerUserAggregation | None = None
     """Per-user pre-aggregation type."""
 
+    percentile_value: int | float | None = None
+    """Custom percentile value (e.g. 95 for p95).
+
+    Required when ``math="percentile"``. Ignored for other math types.
+    Maps to ``percentile`` in bookmark JSON.
+    """
+
     filters: list[Filter] | None = None
     """Per-metric filters (list of Filter objects)."""
 
@@ -7012,6 +7040,14 @@ class Filter:
 
     _resource_type: Literal["events", "people"] = "events"
     """Resource type to filter."""
+
+    _date_unit: FilterDateUnit | None = None
+    """Time unit for relative date filters (hour, day, week, month).
+
+    Set by ``in_the_last()`` and ``not_in_the_last()`` factory methods.
+    Maps to ``filterDateUnit`` in bookmark JSON. ``None`` for non-date
+    and absolute date filters.
+    """
 
     @classmethod
     def equals(
@@ -7292,6 +7328,256 @@ class Filter:
             _operator="false",
             _value=None,
             _property_type="boolean",
+            _resource_type=resource_type,
+        )
+
+    # --- Date/datetime filters ---
+
+    @staticmethod
+    def _validate_date(date_str: str) -> dt_date:
+        """Validate a date string is YYYY-MM-DD and return parsed date.
+
+        Args:
+            date_str: Date string to validate.
+
+        Returns:
+            Parsed ``datetime.date`` object.
+
+        Raises:
+            ValueError: If format is wrong or date is invalid.
+        """
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+            raise ValueError(f"Date must be YYYY-MM-DD format (got '{date_str}')")
+        try:
+            return dt_date.fromisoformat(date_str)
+        except ValueError:
+            raise ValueError(f"'{date_str}' is not a valid calendar date") from None
+
+    @classmethod
+    def on(
+        cls,
+        property: str,
+        date: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a date equality filter (exact date match).
+
+        Args:
+            property: Property name (e.g. ``"$time"``, ``"created"``).
+            date: Date in YYYY-MM-DD format.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for exact date match.
+
+        Raises:
+            ValueError: If date is not valid YYYY-MM-DD.
+        """
+        cls._validate_date(date)
+        return cls(
+            _property=property,
+            _operator="was on",
+            _value=date,
+            _property_type="datetime",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def not_on(
+        cls,
+        property: str,
+        date: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a date inequality filter (not on date).
+
+        Args:
+            property: Property name.
+            date: Date in YYYY-MM-DD format.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for date inequality.
+
+        Raises:
+            ValueError: If date is not valid YYYY-MM-DD.
+        """
+        cls._validate_date(date)
+        return cls(
+            _property=property,
+            _operator="was not on",
+            _value=date,
+            _property_type="datetime",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def before(
+        cls,
+        property: str,
+        date: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a date before filter.
+
+        Args:
+            property: Property name.
+            date: Date in YYYY-MM-DD format.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for dates before the specified date.
+
+        Raises:
+            ValueError: If date is not valid YYYY-MM-DD.
+        """
+        cls._validate_date(date)
+        return cls(
+            _property=property,
+            _operator="was before",
+            _value=date,
+            _property_type="datetime",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def since(
+        cls,
+        property: str,
+        date: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a date since filter (from date onward).
+
+        Args:
+            property: Property name.
+            date: Date in YYYY-MM-DD format.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for dates on or after the specified date.
+
+        Raises:
+            ValueError: If date is not valid YYYY-MM-DD.
+        """
+        cls._validate_date(date)
+        return cls(
+            _property=property,
+            _operator="was since",
+            _value=date,
+            _property_type="datetime",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def in_the_last(
+        cls,
+        property: str,
+        quantity: int,
+        date_unit: FilterDateUnit,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a relative date filter (in the last N units).
+
+        Args:
+            property: Property name.
+            quantity: Number of time units (must be positive).
+            date_unit: Time unit (``"hour"``, ``"day"``, ``"week"``,
+                ``"month"``).
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for events within the last N units.
+
+        Raises:
+            ValueError: If quantity is not positive.
+        """
+        if quantity <= 0:
+            raise ValueError(f"quantity must be a positive integer (got {quantity})")
+        return cls(
+            _property=property,
+            _operator="was in the",
+            _value=quantity,
+            _property_type="datetime",
+            _resource_type=resource_type,
+            _date_unit=date_unit,
+        )
+
+    @classmethod
+    def not_in_the_last(
+        cls,
+        property: str,
+        quantity: int,
+        date_unit: FilterDateUnit,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a relative date exclusion filter (not in the last N units).
+
+        Args:
+            property: Property name.
+            quantity: Number of time units (must be positive).
+            date_unit: Time unit (``"hour"``, ``"day"``, ``"week"``,
+                ``"month"``).
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for events NOT within the last N units.
+
+        Raises:
+            ValueError: If quantity is not positive.
+        """
+        if quantity <= 0:
+            raise ValueError(f"quantity must be a positive integer (got {quantity})")
+        return cls(
+            _property=property,
+            _operator="was not in the",
+            _value=quantity,
+            _property_type="datetime",
+            _resource_type=resource_type,
+            _date_unit=date_unit,
+        )
+
+    @classmethod
+    def date_between(
+        cls,
+        property: str,
+        from_date: str,
+        to_date: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a date range filter (between two dates, inclusive).
+
+        Args:
+            property: Property name.
+            from_date: Start date in YYYY-MM-DD format.
+            to_date: End date in YYYY-MM-DD format.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for dates within the range.
+
+        Raises:
+            ValueError: If dates are not valid YYYY-MM-DD or
+                from_date is after to_date.
+        """
+        from_parsed = cls._validate_date(from_date)
+        to_parsed = cls._validate_date(to_date)
+        if from_parsed > to_parsed:
+            raise ValueError(
+                f"from_date must be before to_date (got '{from_date}' > '{to_date}')"
+            )
+        return cls(
+            _property=property,
+            _operator="was between",
+            _value=[from_date, to_date],
+            _property_type="datetime",
             _resource_type=resource_type,
         )
 

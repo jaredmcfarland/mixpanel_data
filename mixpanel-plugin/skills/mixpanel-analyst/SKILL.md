@@ -234,6 +234,19 @@ Filter.is_set("email")
 Filter.contains("page_url", "/pricing")
 Filter.is_true("is_premium")
 
+# Date filters
+Filter.on("created", "2025-01-15")             # exact date
+Filter.not_on("created", "2025-01-15")         # not on date
+Filter.before("created", "2025-01-01")         # before date
+Filter.since("created", "2025-01-01")          # on or after date
+Filter.in_the_last("created", 30, "day")       # last 30 days
+Filter.not_in_the_last("created", 90, "day")   # NOT in last 90 days
+Filter.date_between("created", "2025-01-01", "2025-06-30")  # date range
+
+# Custom percentile and histogram
+ws.query("API Call", math="percentile", math_property="duration_ms", percentile_value=95)
+ws.query("Purchase", math="histogram", math_property="amount")
+
 # Legacy string filters (still work with segmentation/retention/funnel)
 where='properties["platform"] == "iOS"'
 on='properties["platform"]'

@@ -1594,6 +1594,7 @@ class Workspace:
         math: MathType,
         math_property: str | None,
         per_user: PerUserAggregation | None,
+        percentile_value: int | float | None = None,
         from_date: str | None,
         to_date: str | None,
         last: int,
@@ -1637,6 +1638,7 @@ class Workspace:
                 item_math = item.math
                 item_prop = item.property
                 item_per_user = item.per_user
+                item_percentile = item.percentile_value
                 item_filters = item.filters
                 item_filters_combinator = item.filters_combinator
             else:
@@ -1644,10 +1646,16 @@ class Workspace:
                 item_math = math
                 item_prop = math_property
                 item_per_user = per_user
+                item_percentile = percentile_value
                 item_filters = None
                 item_filters_combinator = "all"
 
-            measurement: dict[str, Any] = {"math": item_math}
+            # Map user-facing "percentile" to bookmark "custom_percentile"
+            bookmark_math = (
+                "custom_percentile" if item_math == "percentile" else item_math
+            )
+
+            measurement: dict[str, Any] = {"math": bookmark_math}
             if item_prop is not None:
                 measurement["property"] = {
                     "name": item_prop,
@@ -1655,6 +1663,8 @@ class Workspace:
                 }
             if item_per_user is not None:
                 measurement["perUserAggregation"] = item_per_user
+            if item_percentile is not None:
+                measurement["percentile"] = item_percentile
 
             # Build behavior block with optional per-metric filters
             behavior_filters: list[dict[str, Any]] = []
@@ -1800,8 +1810,9 @@ class Workspace:
 
         Returns:
             Bookmark filter dict matching Mixpanel's expected format.
+            Includes ``filterDateUnit`` for relative date filters.
         """
-        return {
+        entry: dict[str, Any] = {
             "resourceType": f._resource_type,
             "filterType": f._property_type,
             "defaultType": f._property_type,
@@ -1809,6 +1820,9 @@ class Workspace:
             "filterValue": f._value,
             "filterOperator": f._operator,
         }
+        if f._date_unit is not None:
+            entry["filterDateUnit"] = f._date_unit
+        return entry
 
     def query(
         self,
@@ -1821,6 +1835,7 @@ class Workspace:
         math: MathType = "total",
         math_property: str | None = None,
         per_user: PerUserAggregation | None = None,
+        percentile_value: int | float | None = None,
         group_by: str | GroupBy | list[str | GroupBy] | None = None,
         where: Filter | list[Filter] | None = None,
         formula: str | None = None,
@@ -1850,6 +1865,9 @@ class Workspace:
             math_property: Property name for property-based math
                 (average, sum, percentiles).
             per_user: Per-user pre-aggregation (average, total, min, max).
+            percentile_value: Custom percentile value (e.g. 95 for p95).
+                Required when ``math="percentile"``. Maps to ``percentile``
+                in bookmark measurement. Ignored for other math types.
             group_by: Break down results by property. Accepts a string,
                 GroupBy object, or list of strings/GroupBys.
             where: Filter results by conditions. Accepts a Filter
@@ -1901,6 +1919,183 @@ class Workspace:
                  Formula("(B / A) * 100", label="Conversion Rate")],
             )
             ```
+        """
+        params = self._resolve_and_build_params(
+            events=events,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            math=math,
+            math_property=math_property,
+            per_user=per_user,
+            percentile_value=percentile_value,
+            group_by=group_by,
+            where=where,
+            formula=formula,
+            formula_label=formula_label,
+            rolling=rolling,
+            cumulative=cumulative,
+            mode=mode,
+        )
+
+        # Delegate to service — _live_query_service calls _require_api_client
+        # which ensures _credentials is not None
+        credentials = self._credentials
+        if credentials is None:
+            raise ConfigError(
+                "API access requires credentials. "
+                "Use Workspace() with credentials instead of Workspace.open()."
+            )
+        return self._live_query_service.query(
+            bookmark_params=params,
+            project_id=int(credentials.project_id),
+        )
+
+    def build_params(
+        self,
+        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        *,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        unit: Literal["hour", "day", "week", "month", "quarter"] = "day",
+        math: MathType = "total",
+        math_property: str | None = None,
+        per_user: PerUserAggregation | None = None,
+        percentile_value: int | float | None = None,
+        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        where: Filter | list[Filter] | None = None,
+        formula: str | None = None,
+        formula_label: str | None = None,
+        rolling: int | None = None,
+        cumulative: bool = False,
+        mode: Literal["timeseries", "total", "table"] = "timeseries",
+    ) -> dict[str, Any]:
+        """Build validated bookmark params without executing the API call.
+
+        Has the same signature as :meth:`query` but returns the generated
+        bookmark params dict instead of querying the Mixpanel API. Useful
+        for debugging, inspecting generated JSON, persisting via
+        :meth:`create_bookmark`, or testing.
+
+        Args:
+            events: Event name(s) to query. Accepts a single string,
+                a Metric object, a Formula object, or a sequence mixing
+                strings, Metrics, and Formulas.
+            from_date: Start date (YYYY-MM-DD). If set, overrides ``last``.
+            to_date: End date (YYYY-MM-DD). Requires ``from_date``.
+            last: Relative time range in days. Default: 30.
+            unit: Time aggregation unit. Default: ``"day"``.
+            math: Aggregation function for plain-string events.
+                Default: ``"total"``.
+            math_property: Property name for property-based math.
+            per_user: Per-user pre-aggregation.
+            percentile_value: Custom percentile value (e.g. 95).
+                Required when ``math="percentile"``.
+            group_by: Break down results by property.
+            where: Filter results by conditions.
+            formula: Formula expression referencing events by position.
+            formula_label: Display label for formula result.
+            rolling: Rolling window size in periods.
+            cumulative: Enable cumulative analysis mode.
+            mode: Result shape. Default: ``"timeseries"``.
+
+        Returns:
+            Bookmark params dict with ``sections`` and ``displayOptions``
+            keys, ready for use with the insights API or
+            :meth:`create_bookmark`.
+
+        Raises:
+            BookmarkValidationError: If arguments violate validation rules.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Inspect generated bookmark JSON
+            params = ws.build_params("Login", math="unique", last=7)
+            print(json.dumps(params, indent=2))
+
+            # Save as a bookmark
+            ws.create_bookmark(CreateBookmarkParams(
+                name="Daily Unique Logins",
+                bookmark_type="insights",
+                params=params,
+            ))
+            ```
+        """
+        return self._resolve_and_build_params(
+            events=events,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            math=math,
+            math_property=math_property,
+            per_user=per_user,
+            percentile_value=percentile_value,
+            group_by=group_by,
+            where=where,
+            formula=formula,
+            formula_label=formula_label,
+            rolling=rolling,
+            cumulative=cumulative,
+            mode=mode,
+        )
+
+    def _resolve_and_build_params(
+        self,
+        *,
+        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        unit: str,
+        math: MathType,
+        math_property: str | None,
+        per_user: PerUserAggregation | None,
+        percentile_value: int | float | None = None,
+        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        where: Filter | list[Filter] | None = None,
+        formula: str | None = None,
+        formula_label: str | None = None,
+        rolling: int | None = None,
+        cumulative: bool = False,
+        mode: str = "timeseries",
+    ) -> dict[str, Any]:
+        """Normalize, validate, and build bookmark params.
+
+        Shared implementation for :meth:`query` and :meth:`build_params`.
+        Handles type guards, event/formula normalization, argument
+        validation (Layer 1), bookmark construction, and bookmark
+        structure validation (Layer 2).
+
+        Args:
+            events: Raw events input (str, Metric, Formula, or sequence).
+            from_date: Start date (YYYY-MM-DD) or None.
+            to_date: End date (YYYY-MM-DD) or None.
+            last: Relative time range in days.
+            unit: Time aggregation unit.
+            math: Aggregation function.
+            math_property: Property for property-based math.
+            per_user: Per-user pre-aggregation.
+            percentile_value: Custom percentile value. Required when
+                ``math="percentile"``. Maps to ``percentile`` in
+                bookmark measurement JSON.
+            group_by: Breakdown specification.
+            where: Filter conditions.
+            formula: Top-level formula expression.
+            formula_label: Display label for formula.
+            rolling: Rolling window size.
+            cumulative: Cumulative analysis mode.
+            mode: Result shape.
+
+        Returns:
+            Validated bookmark params dict.
+
+        Raises:
+            BookmarkValidationError: If validation fails at any layer.
         """
         # Type guard: events must be str, Metric, Formula, or sequence thereof
         if not isinstance(events, (str, Metric, Formula, list, tuple)):
@@ -1986,6 +2181,7 @@ class Workspace:
             math=math,
             math_property=math_property,
             per_user=per_user,
+            percentile_value=percentile_value,
             from_date=from_date,
             to_date=to_date,
             last=last,
@@ -2004,6 +2200,7 @@ class Workspace:
             math=math,
             math_property=math_property,
             per_user=per_user,
+            percentile_value=percentile_value,
             from_date=from_date,
             to_date=to_date,
             last=last,
@@ -2021,18 +2218,7 @@ class Workspace:
         if any(e.severity == "error" for e in bookmark_errors):
             raise BookmarkValidationError(bookmark_errors)
 
-        # Delegate to service — _live_query_service calls _require_api_client
-        # which ensures _credentials is not None
-        credentials = self._credentials
-        if credentials is None:
-            raise ConfigError(
-                "API access requires credentials. "
-                "Use Workspace() with credentials instead of Workspace.open()."
-            )
-        return self._live_query_service.query(
-            bookmark_params=params,
-            project_id=int(credentials.project_id),
-        )
+        return params
 
     # =========================================================================
     # ESCAPE HATCHES

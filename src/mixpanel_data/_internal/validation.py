@@ -161,6 +161,7 @@ def validate_query_args(
     math: MathType,
     math_property: str | None,
     per_user: PerUserAggregation | None,
+    percentile_value: int | float | None = None,
     from_date: str | None,
     to_date: str | None,
     last: int,
@@ -283,6 +284,29 @@ def validate_query_args(
                     f"({', '.join(valid)}), not '{math}'"
                 ),
                 code="V2_MATH_REJECTS_PROPERTY",
+            )
+        )
+
+    # V26: percentile math requires percentile_value
+    if math == "percentile" and percentile_value is None:
+        errors.append(
+            ValidationError(
+                path="percentile_value",
+                message=("math='percentile' requires percentile_value to be set"),
+                code="V26_PERCENTILE_REQUIRES_VALUE",
+            )
+        )
+
+    # V27: histogram math requires per_user
+    if math == "histogram" and per_user is None:
+        errors.append(
+            ValidationError(
+                path="per_user",
+                message=(
+                    "math='histogram' requires per_user to be set "
+                    "(e.g. per_user='total')"
+                ),
+                code="V27_HISTOGRAM_REQUIRES_PER_USER",
             )
         )
 
@@ -598,6 +622,33 @@ def validate_query_args(
                             f"({', '.join(valid)}), not '{m_math}'"
                         ),
                         code="V14_METRIC_REJECTS_PROPERTY",
+                    )
+                )
+
+            # V27: Per-Metric histogram requires per_user
+            if m_math == "histogram" and m_per_user is None:
+                errors.append(
+                    ValidationError(
+                        path=mpath,
+                        message=(
+                            f"Metric('{item.event}'): math='histogram' "
+                            f"requires per_user to be set "
+                            f"(e.g. per_user='total')"
+                        ),
+                        code="V27_HISTOGRAM_REQUIRES_PER_USER",
+                    )
+                )
+
+            # V26: Per-Metric percentile requires percentile_value
+            if m_math == "percentile" and item.percentile_value is None:
+                errors.append(
+                    ValidationError(
+                        path=mpath,
+                        message=(
+                            f"Metric('{item.event}'): math='percentile' "
+                            f"requires percentile_value to be set"
+                        ),
+                        code="V26_PERCENTILE_REQUIRES_VALUE",
                     )
                 )
 

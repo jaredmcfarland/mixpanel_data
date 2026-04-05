@@ -268,7 +268,48 @@ print("=== Purchase: Paid vs Free ===")
 print(comparison.describe())
 ```
 
-## 11. Multi-Metric Dashboard
+## 11. Date-Filtered Analysis
+
+```python
+"""Filter by date properties — signup cohorts, time-bounded queries."""
+import mixpanel_data as mp
+from mixpanel_data import Filter
+
+ws = mp.Workspace()
+
+# Users who signed up in the last 30 days
+recent_signups = ws.query(
+    "Purchase",
+    math="total",
+    math_property="revenue",
+    where=Filter.in_the_last("signup_date", 30, "day"),
+    last=30,
+)
+
+# Activity before a specific date
+early_users = ws.query(
+    "Login",
+    math="unique",
+    where=Filter.before("created", "2024-01-01"),
+    last=90,
+)
+
+# Custom percentile — p95 response time
+p95_latency = ws.query(
+    "API Call",
+    math="percentile",
+    math_property="duration_ms",
+    percentile_value=95,
+    last=30,
+)
+
+print("=== Recent Signup Revenue ===")
+print(recent_signups.df.describe())
+print("=== P95 Latency ===")
+print(p95_latency.df.tail())
+```
+
+## 12. Multi-Metric Dashboard
 
 ```python
 """Generate a text-based executive dashboard."""
@@ -303,7 +344,7 @@ print(f"║  ARPU:        ${results['ARPU']['count'].mean():>11,.2f}      ║")
 print("╚══════════════════════════════════╝")
 ```
 
-## 12. Data Governance Audit
+## 13. Data Governance Audit
 
 ```python
 """Audit event schema and data quality."""
@@ -335,7 +376,7 @@ if anomalies:
         print(f"  - {a}")
 ```
 
-## 13. Create Dashboard with Reports
+## 14. Create Dashboard with Reports
 
 ```python
 """Create a Mixpanel dashboard and populate it with reports programmatically."""

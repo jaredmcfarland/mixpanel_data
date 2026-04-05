@@ -16,6 +16,7 @@ from mixpanel_data._internal.bookmark_enums import (
     MATH_REQUIRING_PROPERTY,
 )
 from mixpanel_data.types import (
+    Filter,
     Formula,
     Metric,
     QueryResult,
@@ -95,6 +96,8 @@ class TestTypeConstants:
             "p90",
             "p99",
             "custom_percentile",
+            "percentile",
+            "histogram",
         }
         assert expected == MATH_REQUIRING_PROPERTY
 
@@ -565,3 +568,204 @@ class TestFormulaConstruction:
     def test_inequality(self) -> None:
         """Formulas with different expressions are not equal."""
         assert Formula("A + B") != Formula("A - B")
+
+
+# =============================================================================
+# T055: Date filter factory methods
+# =============================================================================
+
+
+class TestDateFilterConstruction:
+    """T055: Date filter factory methods on Filter class."""
+
+    def test_on_creates_datetime_filter(self) -> None:
+        """Filter.on() creates absolute date equality filter."""
+        f = Filter.on("created", "2024-06-15")
+        assert f._property == "created"
+        assert f._operator == "was on"
+        assert f._value == "2024-06-15"
+        assert f._property_type == "datetime"
+        assert f._date_unit is None
+
+    def test_not_on(self) -> None:
+        """Filter.not_on() creates date inequality filter."""
+        f = Filter.not_on("created", "2024-06-15")
+        assert f._operator == "was not on"
+        assert f._value == "2024-06-15"
+        assert f._property_type == "datetime"
+
+    def test_before(self) -> None:
+        """Filter.before() creates date before filter."""
+        f = Filter.before("created", "2024-01-01")
+        assert f._operator == "was before"
+        assert f._value == "2024-01-01"
+        assert f._property_type == "datetime"
+        assert f._date_unit is None
+
+    def test_since(self) -> None:
+        """Filter.since() creates date since filter."""
+        f = Filter.since("created", "2024-01-01")
+        assert f._operator == "was since"
+        assert f._value == "2024-01-01"
+        assert f._property_type == "datetime"
+
+    def test_in_the_last(self) -> None:
+        """Filter.in_the_last() creates relative date filter with date_unit."""
+        f = Filter.in_the_last("created", 7, "day")
+        assert f._operator == "was in the"
+        assert f._value == 7
+        assert f._date_unit == "day"
+        assert f._property_type == "datetime"
+
+    def test_not_in_the_last(self) -> None:
+        """Filter.not_in_the_last() creates relative negation filter."""
+        f = Filter.not_in_the_last("created", 30, "day")
+        assert f._operator == "was not in the"
+        assert f._value == 30
+        assert f._date_unit == "day"
+        assert f._property_type == "datetime"
+
+    def test_date_between(self) -> None:
+        """Filter.date_between() creates date range filter."""
+        f = Filter.date_between("created", "2024-01-01", "2024-06-30")
+        assert f._operator == "was between"
+        assert f._value == ["2024-01-01", "2024-06-30"]
+        assert f._property_type == "datetime"
+        assert f._date_unit is None
+
+    def test_in_the_last_hour_unit(self) -> None:
+        """Filter.in_the_last() supports hour unit."""
+        f = Filter.in_the_last("ts", 24, "hour")
+        assert f._date_unit == "hour"
+
+    def test_in_the_last_month_unit(self) -> None:
+        """Filter.in_the_last() supports month unit."""
+        f = Filter.in_the_last("ts", 3, "month")
+        assert f._date_unit == "month"
+
+    def test_in_the_last_week_unit(self) -> None:
+        """Filter.in_the_last() supports week unit."""
+        f = Filter.in_the_last("ts", 2, "week")
+        assert f._date_unit == "week"
+
+    def test_immutability_date_filter(self) -> None:
+        """Date filter is frozen."""
+        f = Filter.on("created", "2024-01-01")
+        with pytest.raises(AttributeError):
+            f._date_unit = "day"  # type: ignore[misc]
+
+    def test_resource_type_on_date_filter(self) -> None:
+        """Date filters support resource_type parameter."""
+        f = Filter.on("$created", "2024-01-01", resource_type="people")
+        assert f._resource_type == "people"
+
+
+# =============================================================================
+# T056: Date filter input validation
+# =============================================================================
+
+
+class TestDateFilterValidation:
+    """T056: Date filter factory method input validation."""
+
+    def test_on_rejects_invalid_date_format(self) -> None:
+        """Filter.on() rejects non-YYYY-MM-DD date string."""
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            Filter.on("created", "06/15/2024")
+
+    def test_on_rejects_invalid_calendar_date(self) -> None:
+        """Filter.on() rejects impossible calendar date."""
+        with pytest.raises(ValueError, match="valid calendar date"):
+            Filter.on("created", "2024-02-30")
+
+    def test_before_rejects_invalid_date(self) -> None:
+        """Filter.before() rejects invalid date string."""
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            Filter.before("created", "bad-date")
+
+    def test_since_rejects_invalid_date(self) -> None:
+        """Filter.since() rejects invalid date string."""
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            Filter.since("created", "2024/01/01")
+
+    def test_date_between_rejects_invalid_from(self) -> None:
+        """Filter.date_between() rejects invalid from_date."""
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            Filter.date_between("created", "bad", "2024-06-30")
+
+    def test_date_between_rejects_invalid_to(self) -> None:
+        """Filter.date_between() rejects invalid to_date."""
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            Filter.date_between("created", "2024-01-01", "bad")
+
+    def test_date_between_rejects_reversed_dates(self) -> None:
+        """Filter.date_between() rejects from > to."""
+        with pytest.raises(ValueError, match="must be before"):
+            Filter.date_between("created", "2024-12-31", "2024-01-01")
+
+    def test_in_the_last_rejects_zero(self) -> None:
+        """Filter.in_the_last() rejects non-positive quantity."""
+        with pytest.raises(ValueError, match="positive"):
+            Filter.in_the_last("created", 0, "day")
+
+    def test_in_the_last_rejects_negative(self) -> None:
+        """Filter.in_the_last() rejects negative quantity."""
+        with pytest.raises(ValueError, match="positive"):
+            Filter.in_the_last("created", -5, "day")
+
+    def test_not_in_the_last_rejects_zero(self) -> None:
+        """Filter.not_in_the_last() rejects non-positive quantity."""
+        with pytest.raises(ValueError, match="positive"):
+            Filter.not_in_the_last("created", 0, "week")
+
+
+# =============================================================================
+# T063: Custom percentile type support
+# =============================================================================
+
+
+class TestPercentileType:
+    """T063: Custom percentile support."""
+
+    def test_math_type_accepts_percentile(self) -> None:
+        """MathType literal accepts 'percentile'."""
+        m = Metric("Login", math="percentile", property="duration", percentile_value=95)
+        assert m.math == "percentile"
+
+    def test_percentile_value_default_none(self) -> None:
+        """Metric.percentile_value defaults to None."""
+        assert Metric("Login").percentile_value is None
+
+    def test_percentile_value_int(self) -> None:
+        """Metric.percentile_value accepts int."""
+        m = Metric("Login", math="percentile", property="duration", percentile_value=95)
+        assert m.percentile_value == 95
+
+    def test_percentile_value_float(self) -> None:
+        """Metric.percentile_value accepts float."""
+        m = Metric("X", math="percentile", property="d", percentile_value=99.9)
+        assert m.percentile_value == 99.9
+
+    def test_percentile_immutable(self) -> None:
+        """percentile_value is frozen."""
+        m = Metric("Login", math="percentile", property="d", percentile_value=95)
+        with pytest.raises(AttributeError):
+            m.percentile_value = 50  # type: ignore[misc]
+
+
+# =============================================================================
+# T067: Histogram math type
+# =============================================================================
+
+
+class TestHistogramType:
+    """T067: Histogram math type."""
+
+    def test_math_type_accepts_histogram(self) -> None:
+        """MathType literal accepts 'histogram'."""
+        m = Metric("Purchase", math="histogram", property="amount")
+        assert m.math == "histogram"
+
+    def test_histogram_in_requiring_property(self) -> None:
+        """'histogram' is in MATH_REQUIRING_PROPERTY."""
+        assert "histogram" in MATH_REQUIRING_PROPERTY

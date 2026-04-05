@@ -109,6 +109,7 @@ from mixpanel_data.types import (
     FeatureFlag,
     FeatureFlagStatus,
     Filter,
+    FilterDateUnit,
     FilterPropertyType,
     FlagContractStatus,
     FlagHistoryParams,
@@ -374,6 +375,7 @@ __all__ = [
     "Filter",
     "Formula",
     "GroupBy",
+    "FilterDateUnit",
     "FilterPropertyType",
     "QueryResult",
     # Schema Registry & Data Governance types (Phase 028)
