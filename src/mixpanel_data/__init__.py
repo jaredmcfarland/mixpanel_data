@@ -5,12 +5,14 @@ Complete programmable interface to Mixpanel analytics: discover your schema,
 run live analytics, stream data, and manage entities via the App API.
 """
 
+from mixpanel_data._internal.validation import validate_bookmark
 from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
 from mixpanel_data.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
     APIError,
     AuthenticationError,
+    BookmarkValidationError,
     ConfigError,
     DateRangeTooLargeError,
     EventNotFoundError,
@@ -20,6 +22,7 @@ from mixpanel_data.exceptions import (
     QueryError,
     RateLimitError,
     ServerError,
+    ValidationError,
     WorkspaceScopeError,
 )
 from mixpanel_data.types import (
@@ -105,15 +108,19 @@ from mixpanel_data.types import (
     ExperimentStatus,
     FeatureFlag,
     FeatureFlagStatus,
+    Filter,
+    FilterPropertyType,
     FlagContractStatus,
     FlagHistoryParams,
     FlagHistoryResponse,
     FlagLimitsResponse,
     FlowsResult,
+    Formula,
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
     FunnelStep,
+    GroupBy,
     InitSchemaEnforcementParams,
     JQLResult,
     LexiconDefinition,
@@ -124,11 +131,14 @@ from mixpanel_data.types import (
     LookupTable,
     LookupTableUploadUrl,
     MarkLookupTableReadyParams,
+    MathType,
+    Metric,
     NumericAverageResult,
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
     PaginatedResponse,
+    PerUserAggregation,
     PreviewDeletionFiltersParams,
     ProfilePageResult,
     ProjectWebhook,
@@ -140,6 +150,7 @@ from mixpanel_data.types import (
     PropertyResourceType,
     PropertyValueCount,
     PublicWorkspace,
+    QueryResult,
     RcaSourceData,
     ReplaceSchemaEnforcementParams,
     RetentionResult,
@@ -186,12 +197,16 @@ __version__ = "0.1.0"
 __all__ = [
     # Core
     "Workspace",
+    # Validation
+    "validate_bookmark",
     # Type aliases
     "CountType",
     "HourDayUnit",
     "TimeUnit",
     # Exceptions
     "MixpanelDataError",
+    "BookmarkValidationError",
+    "ValidationError",
     "APIError",
     "ConfigError",
     "AccountNotFoundError",
@@ -352,6 +367,15 @@ __all__ = [
     "MarkLookupTableReadyParams",
     "LookupTableUploadUrl",
     "UpdateLookupTableParams",
+    # Query API types (Phase 029)
+    "MathType",
+    "PerUserAggregation",
+    "Metric",
+    "Filter",
+    "Formula",
+    "GroupBy",
+    "FilterPropertyType",
+    "QueryResult",
     # Schema Registry & Data Governance types (Phase 028)
     "SchemaEntry",
     "BulkCreateSchemasParams",

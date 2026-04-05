@@ -12,7 +12,7 @@ The `Workspace` class is the unified entry point for all Mixpanel data operation
 Workspace orchestrates internal services and provides direct App API access:
 
 - **DiscoveryService** — Schema exploration (events, properties, funnels, cohorts)
-- **LiveQueryService** — Real-time analytics queries
+- **LiveQueryService** — Real-time analytics queries (legacy) and Insights engine queries
 - **Streaming** — Stream events and profiles directly from Mixpanel
 - **Entity CRUD** — Create, read, update, delete dashboards, reports, and cohorts via Mixpanel App API (workspace-scoped)
 - **Feature Management** — Create, read, update, delete feature flags and experiments via Mixpanel App API (project-scoped)
@@ -142,6 +142,7 @@ See the [Data Governance guide](../guide/data-governance.md) for complete covera
         - clear_discovery_cache
         - stream_events
         - stream_profiles
+        - query
         - segmentation
         - funnel
         - retention

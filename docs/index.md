@@ -57,7 +57,34 @@ schemas = ws.list_schema_registry()
 enforcement = ws.get_schema_enforcement()
 audit = ws.run_audit()
 
-# Live queries—use discovered data to construct accurate queries
+# Insights queries — typed, composable analytics
+from mixpanel_data import Metric, Filter, Formula
+
+# Simple event query (last 30 days by default)
+result = ws.query("Login")
+print(result.df)
+
+# DAU with breakdown
+result = ws.query("Login", math="dau", group_by="platform", last=90)
+
+# Multi-metric formula: conversion rate
+result = ws.query(
+    [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
+    formula="(B / A) * 100",
+    formula_label="Conversion Rate",
+    unit="week",
+)
+
+# Filtered aggregation with numeric breakdown
+result = ws.query(
+    "Purchase",
+    math="total",
+    math_property="amount",
+    where=[Filter.equals("country", "US"), Filter.greater_than("amount", 50)],
+    group_by="platform",
+)
+
+# Legacy live queries
 segmentation = ws.segmentation(
     event=events[0].name,
     from_date="2025-01-01",
@@ -71,27 +98,14 @@ funnel = ws.funnel(
     to_date="2025-01-31"
 )
 
-saved = ws.saved_report(bookmark_id=bookmarks[0].id)
-activity = ws.activity_feed(
-    distinct_id="user@example.com",
-    from_date="2025-01-01"
-)
-
 # Stream events for processing
 for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
     process(event)
 
 # Results have .df for pandas interoperability
+result.df
 segmentation.df
 funnel.df
-df.to_csv("export.csv")
-
-# Execute arbitrary JQL for custom analysis
-jql_result = ws.jql("""
-    function main() {
-        return Events({...}).groupBy([...])
-    }
-""")
 ```
 
 **CLI** — For shell scripts, pipelines, and agent tool calls:
@@ -157,6 +171,18 @@ mp query segmentation "Purchase" --from 2025-01-01 --format json --jq '.total'
 
 Discovery commands let you survey what exists before writing queries—no guessing at event names or property values.
 
+**Insights Queries** — Typed, composable analytics using Mixpanel's Insights engine:
+
+- DAU / WAU / MAU and unique user metrics
+- Multi-metric comparison on a single chart
+- Formula-based metrics (conversion rates, ratios)
+- Per-user aggregation (average purchases per user)
+- Rolling and cumulative analysis modes
+- Percentiles (p25, p75, p90, p99)
+- Typed filters (`Filter.equals()`, `Filter.greater_than()`, etc.)
+- Property breakdowns with numeric bucketing
+- Results as DataFrames, persistable as saved reports
+
 **Live Queries** — Execute Mixpanel analytics directly:
 
 - Segmentation with filtering, grouping, and time bucketing
@@ -221,6 +247,7 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 
 - [Installation](getting-started/installation.md) — Get started with pip or uv
 - [Quick Start](getting-started/quickstart.md) — Your first queries in 5 minutes
+- [Insights Queries](guide/query.md) — Typed analytics queries with DAU, formulas, filters, and breakdowns
 - [API Reference](api/index.md) — Complete Python API documentation
 - [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks
 - [Data Governance](guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables

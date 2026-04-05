@@ -30,7 +30,36 @@ Types for the Mixpanel App API infrastructure.
       show_root_heading: true
       show_root_toc_entry: true
 
-## Query Results
+## Insights Query Types
+
+Types for `Workspace.query()` — typed Insights engine queries with composable metrics, filters, and breakdowns.
+
+::: mixpanel_data.Metric
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.Formula
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.Filter
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.GroupBy
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.QueryResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Legacy Query Results
 
 ::: mixpanel_data.SegmentationResult
     options:

@@ -79,11 +79,12 @@ plugins:
           - getting-started/quickstart.md
           - getting-started/configuration.md
         User Guide:
-          - guide/streaming.md
+          - guide/discovery.md
+          - guide/query.md
           - guide/live-analytics.md
+          - guide/streaming.md
           - guide/entity-management.md
           - guide/data-governance.md
-          - guide/discovery.md
         API Reference:
           - api/index.md
           - api/workspace.md
@@ -127,11 +128,12 @@ plugins:
           - getting-started/quickstart.md: "First queries in 5 minutes"
           - getting-started/configuration.md: "Accounts, env vars, config files"
         User Guide:
-          - guide/streaming.md: "Stream events and profiles for ETL"
+          - guide/discovery.md: "Explore schema, events, properties, cohorts"
+          - guide/query.md: "Typed insights queries — DAU, formulas, filters, breakdowns"
           - guide/live-analytics.md: "Segmentation, funnels, retention, JQL"
+          - guide/streaming.md: "Stream events and profiles for ETL"
           - guide/entity-management.md: "Create, update, delete dashboards, reports, and cohorts"
           - guide/data-governance.md: "Manage Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, enforcement, auditing, anomalies, and event deletion requests"
-          - guide/discovery.md: "Explore schema, events, properties, cohorts"
         API Reference:
           - api/index.md: "Python API overview"
           - api/workspace.md: "Workspace class - main entry point"
@@ -166,11 +168,12 @@ nav:
       - Quick Start: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
   - User Guide:
-      - Streaming Data: guide/streaming.md
+      - Data Discovery: guide/discovery.md
+      - Insights Queries: guide/query.md
       - Live Analytics: guide/live-analytics.md
+      - Streaming Data: guide/streaming.md
       - Entity Management: guide/entity-management.md
       - Data Governance: guide/data-governance.md
-      - Data Discovery: guide/discovery.md
   - API Reference:
       - Overview: api/index.md
       - Workspace: api/workspace.md

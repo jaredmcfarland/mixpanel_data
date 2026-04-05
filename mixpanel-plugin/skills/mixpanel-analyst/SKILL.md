@@ -20,10 +20,9 @@ Write Python code. Never teach CLI commands. Never call MCP tools.
 ```python
 # One-liner example
 python3 -c "
-import mixpanel_data as mp
-ws = mp.Workspace()
-r = ws.segmentation(event='Login', from_date='2025-01-01', to_date='2025-01-31')
-print(r.df)
+import mixpanel_data as mp; ws = mp.Workspace()
+r = ws.query('Login', last=30)
+print(f'Total logins (30d): {r.df[\"count\"].sum():,.0f}')
 "
 ```
 
@@ -32,8 +31,8 @@ print(r.df)
 Before writing any API call you're unsure about, look up the exact signature:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.segmentation
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py SegmentationResult
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace          # list all methods
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types               # list all types
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions          # list all exceptions
@@ -43,7 +42,9 @@ Use this before every unfamiliar method. It pulls live docstrings from the insta
 
 ## Bookmark Validation
 
-Before calling `create_bookmark()` or `update_bookmark()`, **always validate the params dict**:
+For insights queries, `query()` validates automatically (45 rules). Use `validate_bookmark.py` only for funnels, retention, and flows bookmarks.
+
+Before calling `create_bookmark()` or `update_bookmark()` with non-insights params, **validate the params dict**:
 
 ```bash
 # Validate from a Python variable (pipe JSON to stdin)
@@ -96,18 +97,45 @@ ws.list_bookmarks()                            # → list[BookmarkInfo]
 ws.lexicon_schemas()                           # → list[LexiconSchema]
 ```
 
-### Analytics — Query the Data
+### Typed Query API (Primary)
 
 ```python
-# Time-series event counts with optional breakdown
-result = ws.segmentation(
-    event="Login", from_date="2025-01-01", to_date="2025-01-31",
-    unit="day",                                      # day | week | month
-    on='properties["platform"]',                     # segment by property
-    where='properties["country"] == "US"',           # filter
-)
+from mixpanel_data import Metric, Filter, GroupBy, Formula, CreateBookmarkParams
+
+# Simple query (last 30 days by default)
+result = ws.query("Login")
 df = result.df  # pandas DataFrame
 
+# DAU (previously impossible)
+result = ws.query("Login", math="dau", last=90)
+
+# Property aggregation (replaces segmentation_sum / segmentation_average)
+result = ws.query("Purchase", math="average", math_property="amount")
+
+# Typed filters + breakdown
+result = ws.query(
+    "Login", from_date="2025-01-01", to_date="2025-01-31",
+    where=Filter.equals("country", "US"),
+    group_by="platform",
+)
+
+# Multi-event formula
+result = ws.query(
+    [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
+    formula="(B / A) * 100", formula_label="Conversion Rate",
+)
+
+# Save query as a Mixpanel report
+ws.create_bookmark(CreateBookmarkParams(
+    name="DAU by Platform", bookmark_type="insights", params=result.params,
+))
+```
+
+### Legacy Analytics
+
+The methods below pre-date `query()`. They still work and are needed for funnels, retention, JQL, and streaming. For insights queries, prefer `query()` above.
+
+```python
 # Funnel conversion
 result = ws.funnel(funnel_id=12345, from_date="2025-01-01", to_date="2025-01-31")
 
@@ -130,8 +158,7 @@ ws.frequency(event="Purchase", from_date=..., to_date=...)
 ws.activity_feed(distinct_ids=["user123"])
 ws.query_saved_report(bookmark_id=456)
 ws.query_flows(bookmark_id=789)
-ws.segmentation_sum(event="Purchase", on='properties["revenue"]', ...)
-ws.segmentation_average(event="Purchase", on='properties["duration"]', ...)
+# segmentation_sum / segmentation_average: use query(event, math='average', math_property='...') instead.
 ```
 
 ### Streaming — Raw Data Access
@@ -158,12 +185,9 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_feature_flags
 
 ### Adding Reports to a Dashboard
 
-Use `add_report_to_dashboard()` to clone an existing bookmark onto a dashboard:
+Use `query()` to generate validated bookmark params, then save and add to a dashboard:
 
 ```python
-import mixpanel_data as mp
-import json
-import subprocess
 from mixpanel_data.types import CreateDashboardParams, CreateBookmarkParams
 
 ws = mp.Workspace(account="myaccount")
@@ -171,94 +195,26 @@ ws = mp.Workspace(account="myaccount")
 # Step 1: Create dashboard
 dashboard = ws.create_dashboard(CreateDashboardParams(title="My Dashboard"))
 
-# Step 2: Build and VALIDATE params before creating
-params = {... }  # see Bookmark Params Structure below
+# Step 2: Create bookmark from query (params auto-validated)
+result = ws.query("Sign Up", last=180, unit="month", group_by="platform")
+bookmark = ws.create_bookmark(CreateBookmarkParams(
+    name="Signups by Platform (6mo)",
+    bookmark_type="insights",
+    params=result.params,
+))
 
-# Validate params (catches errors before hitting the API)
-result = subprocess.run(
-    ["python3", "${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py", "--stdin", "--type", "insights"],
-    input=json.dumps(params), capture_output=True, text=True,
-)
-if result.returncode != 0:
-    print(f"Invalid params: {result.stderr}")
-    # Fix params before proceeding
-else:
-    # Step 3: Create bookmark (params are valid)
-    bookmark = ws.create_bookmark(CreateBookmarkParams(
-        name="Daily Logins",
-        bookmark_type="insights",
-        params=params,
-    ))
-
-    # Step 4: Add bookmark to dashboard
-    ws.add_report_to_dashboard(dashboard.id, bookmark.id)
+# Step 3: Add bookmark to dashboard
+ws.add_report_to_dashboard(dashboard.id, bookmark.id)
 ```
 
-**Note**: `CreateBookmarkParams(dashboard_id=...)` does NOT add the report to the dashboard layout — always use `add_report_to_dashboard()` instead.
-
-### Bookmark Params Structure (Insights)
-
-The `params` dict for insights bookmarks follows this structure:
-
-```python
-def make_insights_params(event_name, chart_type="line", unit="month",
-                         value=180, group_by_prop=None):
-    """Build params for an insights bookmark."""
-    metric = {
-        "behavior": {
-            "type": "simple",
-            "name": event_name,
-            "resourceType": "events",
-            "dataGroupId": None,
-            "filters": [],
-            "behaviors": [{
-                "type": "event",
-                "id": None,
-                "name": event_name,
-                "filters": [],
-            }],
-        },
-        "measurement": {
-            "math": "total",         # total | unique
-            "perUserAggregation": None,
-            "property": None,
-        },
-        "isHidden": False,
-        "type": "metric",
-    }
-    sections = {
-        "show": [metric],            # list of metrics (A, B, C...)
-        "filter": [],
-        "formula": [],
-        "time": [{"unit": unit, "value": value}],
-        "group_by": [],
-        "group": [],
-    }
-    if group_by_prop:
-        sections["group_by"] = [{
-            "value": group_by_prop,
-            "resourceType": "events",
-            "propertyType": "string",
-            "typeCast": None,
-            "bucketing": None,
-        }]
-    return {
-        "sections": sections,
-        "displayOptions": {
-            "chartType": chart_type,  # line | bar
-            "plotStyle": "standard",
-            "analysis": "linear",
-            "value": "absolute",
-        },
-    }
-```
+**Note**: `CreateBookmarkParams(dashboard_id=...)` does NOT add the report to the dashboard layout — always use `add_report_to_dashboard()` instead. For funnel/retention/flows bookmarks, see `references/bookmark-params.md`.
 
 ### DataFrame Conversion
 
 Every query result has a `.df` property returning a pandas DataFrame:
 
 ```python
-result = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-01-31")
+result = ws.query("Login", from_date="2025-01-01", to_date="2025-01-31")
 df = result.df
 df.plot(title="Login Trend")
 df.to_csv("logins.csv")
@@ -268,17 +224,19 @@ print(df.describe())
 ## Filter Expression Syntax
 
 ```python
-# WHERE — filter events
+# Typed filters (preferred — validated at construction time)
+from mixpanel_data import Filter
+Filter.equals("platform", "iOS")
+Filter.equals("country", ["US", "UK"])      # multi-value (IN)
+Filter.greater_than("revenue", 100)
+Filter.between("age", 18, 65)
+Filter.is_set("email")
+Filter.contains("page_url", "/pricing")
+Filter.is_true("is_premium")
+
+# Legacy string filters (still work with segmentation/retention/funnel)
 where='properties["platform"] == "iOS"'
-where='properties["country"] IN ["US", "UK"]'
-where='properties["revenue"] > 100'
-where='defined(properties["email"])'
-
-# ON — segment/breakdown
 on='properties["platform"]'
-on='properties["country"]'
-
-# Combine with AND/OR/NOT
 where='properties["platform"] == "iOS" AND properties["country"] == "US"'
 ```
 
@@ -303,11 +261,11 @@ Map every question to a pirate metric stage:
 
 | Stage | Key Question | Primary Methods |
 |-------|-------------|-----------------|
-| **Acquisition** | Where do users come from? | `segmentation` with source/utm breakdown |
+| **Acquisition** | Where do users come from? | `query` with source/utm breakdown |
 | **Activation** | Do they reach the aha moment? | `funnel`, `activity_feed` |
-| **Retention** | Do they come back? | `retention`, `segmentation` over time |
-| **Revenue** | Do they pay? | `segmentation_sum` on revenue, `funnel` to purchase |
-| **Referral** | Do they invite others? | `segmentation` on invite/share events |
+| **Retention** | Do they come back? | `retention`, `query` over time |
+| **Revenue** | Do they pay? | `query` with math_property on revenue, `funnel` to purchase |
+| **Referral** | Do they invite others? | `query` on invite/share events |
 
 ### 3. GQM for Vague Questions
 
@@ -334,8 +292,8 @@ Never just show data. Always:
 ```python
 python3 -c "
 import mixpanel_data as mp; ws = mp.Workspace()
-r = ws.segmentation(event='Login', from_date='2025-01-01', to_date='2025-01-31')
-print(f'Total logins: {r.df.sum().values[0]:,.0f}')
+r = ws.query('Login', last=30)
+print(f'Total logins (30d): {r.df[\"count\"].sum():,.0f}')
 "
 ```
 
@@ -377,20 +335,20 @@ print(df.to_string())
 When diagnosing a metric change, query multiple dimensions simultaneously. Since each query is independent, use `ThreadPoolExecutor` to run them in parallel — cutting wall-clock time proportionally:
 
 ```python
-import mixpanel_data as mp
+from mixpanel_data import Filter
 from concurrent.futures import ThreadPoolExecutor
+import mixpanel_data as mp
 
 ws = mp.Workspace()
-base = dict(event="Sign Up", from_date="2025-01-01", to_date="2025-01-31")
+base = dict(from_date="2025-01-01", to_date="2025-01-31")
 
-# Run independent queries in parallel
 def query_dim(dim):
-    return ws.segmentation(**base, on=f'properties["{dim}"]').df
+    return ws.query("Sign Up", **base, group_by=dim).df
 
 dims = ["platform", "country", "utm_source"]
 with ThreadPoolExecutor(max_workers=4) as pool:
     results = dict(zip(dims, pool.map(query_dim, dims)))
-overall = ws.segmentation(**base).df
+overall = ws.query("Sign Up", **base).df
 
 # Compare and find the driver
 for dim, df in results.items():

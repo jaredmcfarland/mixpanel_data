@@ -9,11 +9,14 @@ from errors by providing structured access to:
 - HTTP status codes and response bodies
 - Original request context (method, URL, params, body)
 - Parsed error details for common error patterns
+- Structured validation errors with paths, suggestions, and fixes
 """
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any, Literal
 
 
 class MixpanelDataError(Exception):
@@ -907,3 +910,157 @@ class WorkspaceScopeError(MixpanelDataError):
             details: Additional structured data about the error.
         """
         super().__init__(message, code=code, details=details)
+
+
+# Bookmark Validation
+
+
+@dataclass(frozen=True)
+class ValidationError:
+    """A single validation issue found in query arguments or bookmark params.
+
+    Used by the bookmark validation engine to report all issues found in a
+    single pass, enabling agents to fix multiple problems at once rather
+    than discovering them one at a time.
+
+    Attributes:
+        path: JSONPath-like location of the error (e.g.
+            ``"sections.show[0].measurement.math"``).
+        message: Human-readable description of the issue.
+        code: Machine-readable error code for programmatic handling
+            (e.g. ``"INVALID_MATH_TYPE"``).
+        severity: ``"error"`` blocks execution; ``"warning"`` is informational.
+        suggestion: Fuzzy-matched valid alternatives, if applicable.
+        fix: JSON structure template to correct the error, if applicable.
+
+    Example:
+        ```python
+        error = ValidationError(
+            path="sections.show[0].measurement.math",
+            message="Invalid math type 'totl'",
+            code="INVALID_MATH_TYPE",
+            suggestion=("total",),
+        )
+        print(error)  # [ERROR] sections.show[0]...: Invalid math type 'totl'
+        ```
+    """
+
+    path: str
+    """JSONPath-like location of the error."""
+
+    message: str
+    """Human-readable description of the issue."""
+
+    code: str = "VALIDATION_ERROR"
+    """Machine-readable error code for programmatic handling."""
+
+    severity: Literal["error", "warning"] = "error"
+    """``"error"`` blocks execution; ``"warning"`` is informational."""
+
+    suggestion: tuple[str, ...] | None = None
+    """Fuzzy-matched valid alternatives, if applicable."""
+
+    fix: dict[str, Any] | None = None
+    """JSON structure template to correct the error, if applicable."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with all ValidationError fields. Keys with ``None``
+            values are omitted for cleaner output.
+        """
+        result: dict[str, Any] = {
+            "path": self.path,
+            "message": self.message,
+            "code": self.code,
+            "severity": self.severity,
+        }
+        if self.suggestion is not None:
+            result["suggestion"] = list(self.suggestion)
+        if self.fix is not None:
+            result["fix"] = self.fix
+        return result
+
+    def __str__(self) -> str:
+        """Return formatted error string.
+
+        Returns:
+            Formatted string with severity prefix, path, and message.
+        """
+        prefix = "WARNING" if self.severity == "warning" else "ERROR"
+        s = f"[{prefix}] {self.path}: {self.message}"
+        if self.suggestion:
+            s += f" Did you mean '{self.suggestion[0]}'?"
+        return s
+
+
+class BookmarkValidationError(MixpanelDataError):
+    """Bookmark params failed validation.
+
+    Contains all validation errors found, enabling agents to fix
+    multiple issues in a single pass rather than one at a time.
+    Integrates into the ``MixpanelDataError`` hierarchy so callers
+    using ``except MixpanelDataError`` will catch these.
+
+    Attributes:
+        errors: All validation errors found (both errors and warnings).
+        error_count: Number of severity="error" items.
+        warning_count: Number of severity="warning" items.
+
+    Example:
+        ```python
+        try:
+            result = ws.query("Login", math="totl")
+        except BookmarkValidationError as e:
+            print(f"{e.error_count} errors, {e.warning_count} warnings")
+            for err in e.errors:
+                print(f"  {err.path}: {err.message}")
+                if err.suggestion:
+                    print(f"    Did you mean: {err.suggestion[0]}?")
+        ```
+    """
+
+    def __init__(self, errors: Sequence[ValidationError]) -> None:
+        """Initialize BookmarkValidationError.
+
+        Args:
+            errors: Sequence of validation errors found. Must contain at
+                least one error with severity="error".
+        """
+        self._errors = tuple(errors)
+        self._error_count = sum(1 for e in self._errors if e.severity == "error")
+        self._warning_count = sum(1 for e in self._errors if e.severity == "warning")
+
+        # Build summary message
+        parts: list[str] = []
+        for err in self._errors:
+            if err.severity == "error":
+                parts.append(f"  {err}")
+        summary = "\n".join(parts)
+        message = (
+            f"Bookmark validation failed with {self._error_count} error(s)"
+            f" and {self._warning_count} warning(s):\n{summary}"
+        )
+
+        details: dict[str, Any] = {
+            "error_count": self._error_count,
+            "warning_count": self._warning_count,
+            "errors": [e.to_dict() for e in self._errors],
+        }
+        super().__init__(message, code="BOOKMARK_VALIDATION_ERROR", details=details)
+
+    @property
+    def errors(self) -> tuple[ValidationError, ...]:
+        """All validation errors found (both errors and warnings)."""
+        return self._errors
+
+    @property
+    def error_count(self) -> int:
+        """Number of severity="error" items."""
+        return self._error_count
+
+    @property
+    def warning_count(self) -> int:
+        """Number of severity="warning" items."""
+        return self._warning_count

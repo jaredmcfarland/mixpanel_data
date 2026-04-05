@@ -72,6 +72,7 @@ python3 -c "import mixpanel_data as mp; print([t for t in dir(mp) if not t.start
 For complex multi-part investigations, you may recommend delegating to specialized agents:
 
 - **Explorer** — When the question is vague and needs systematic decomposition
+- **Query** — For translating specific analytics questions into `query()` API calls
 - **Diagnostician** — When investigating why a metric changed ("why did X drop?")
 - **Narrator** — When the user needs a polished executive summary or report
 
@@ -88,9 +89,9 @@ events = ws.events()
 top = ws.top_events(limit=10)
 
 # 2. Query
-result = ws.segmentation(
-    event="Login", from_date="2025-01-01", to_date="2025-01-31",
-    unit="day", on='properties["platform"]',
+result = ws.query(
+    "Login", from_date="2025-01-01", to_date="2025-01-31",
+    unit="day", group_by="platform",
 )
 df = result.df
 
@@ -134,3 +135,5 @@ echo '<params_json>' | python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scr
 ```
 
 This catches invalid chart types, math types, missing fields, wrong funnel step counts, etc. before they produce cryptic API errors. See `references/bookmark-params.md` for the full params schema.
+
+For insights queries, `query()` validates automatically. Use `validate_bookmark.py` only for funnels, retention, and flows bookmarks.

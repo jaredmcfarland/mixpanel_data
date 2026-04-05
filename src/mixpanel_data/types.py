@@ -29,6 +29,93 @@ from pydantic.alias_generators import to_camel
 T = TypeVar("T")
 
 # =============================================================================
+# Query API Type Aliases and Constants (Phase 029)
+# =============================================================================
+
+MathType = Literal[
+    "total",
+    "unique",
+    "dau",
+    "wau",
+    "mau",
+    "average",
+    "median",
+    "min",
+    "max",
+    "p25",
+    "p75",
+    "p90",
+    "p99",
+]
+"""Aggregation function for query metrics.
+
++-----------+------------------------------------------------------------------+--------------------+
+| Value     | Meaning                                                          | Requires property? |
++===========+==================================================================+====================+
+| total     | Count events, or sum a numeric property if ``property`` is set   | Optional           |
++-----------+------------------------------------------------------------------+--------------------+
+| unique    | Count distinct users                                             | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| dau       | Daily Active Users (unique users per day)                        | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| wau       | Weekly Active Users (unique users per 7-day window)              | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| mau       | Monthly Active Users (unique users per 28-day window)            | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| average   | Mean of a numeric property's values                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| median    | Median (50th percentile) of a numeric property                   | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| min       | Minimum value of a numeric property                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| max       | Maximum value of a numeric property                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p25       | 25th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p75       | 75th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p90       | 90th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p99       | 99th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+
+Note: Mixpanel has no ``"sum"`` math type. Use ``math="total"`` with
+a ``property`` to sum a numeric property's values.
+
+``dau``, ``wau``, ``mau``, and ``unique`` are incompatible with ``per_user``.
+"""
+
+PerUserAggregation = Literal["unique_values", "total", "average", "min", "max"]
+"""Per-user pre-aggregation type.
+
+Requires ``math_property`` to be set. The query first computes the
+per-user aggregate, then applies the top-level ``math`` across users.
+
++-----------------+---------------------------------------------------------------+
+| Value           | Meaning                                                       |
++=================+===============================================================+
+| total           | Sum of the property value per user (then aggregate)           |
++-----------------+---------------------------------------------------------------+
+| average         | Mean of the property value per user (then aggregate)          |
++-----------------+---------------------------------------------------------------+
+| min             | Minimum property value per user (then aggregate)              |
++-----------------+---------------------------------------------------------------+
+| max             | Maximum property value per user (then aggregate)              |
++-----------------+---------------------------------------------------------------+
+| unique_values   | Count of distinct property values per user (then aggregate)   |
++-----------------+---------------------------------------------------------------+
+
+Maps to ``perUserAggregation`` in the bookmark measurement block.
+"""
+
+FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
+"""Property data type for filter conditions.
+
+Includes ``"datetime"`` and ``"list"`` for API compatibility;
+no Filter factory methods currently produce these types.
+"""
+
+# =============================================================================
 # Base Class for Result Types with DataFrame Conversion
 # =============================================================================
 
@@ -6785,4 +6872,601 @@ class ProfilePageResult:
             "total": self.total,
             "page_size": self.page_size,
             "num_pages": self.num_pages,
+        }
+
+
+# =============================================================================
+# Query API Types (Phase 029)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class Metric:
+    """Encapsulates a single event to query with its aggregation settings.
+
+    Used with ``Workspace.query()`` to specify per-event math, property,
+    per-user aggregation, and filters. Plain event name strings inherit
+    top-level query defaults; Metric objects override them.
+
+    Attributes:
+        event: Mixpanel event name.
+        math: Aggregation function. Default: ``"total"``.
+        property: Property name for property-based math (average, sum, etc.).
+        per_user: Per-user pre-aggregation (average, total, min, max).
+        filters: Per-metric filters (applied in addition to global ``where``).
+        filters_combinator: How per-metric filters combine.
+            ``"all"`` = AND (default), ``"any"`` = OR.
+
+    Example:
+        ```python
+        from mixpanel_data import Metric
+
+        # Simple event with defaults
+        m1 = Metric("Login")
+
+        # With aggregation
+        m2 = Metric("Purchase", math="average", property="amount")
+
+        # With per-user aggregation
+        m3 = Metric("Purchase", math="total", per_user="average")
+        ```
+    """
+
+    event: str
+    """Mixpanel event name."""
+
+    math: MathType = "total"
+    """Aggregation function."""
+
+    property: str | None = None
+    """Property name for property-based math types."""
+
+    per_user: PerUserAggregation | None = None
+    """Per-user pre-aggregation type."""
+
+    filters: list[Filter] | None = None
+    """Per-metric filters (list of Filter objects)."""
+
+    filters_combinator: Literal["all", "any"] = "all"
+    """How per-metric filters combine (``"all"`` = AND, ``"any"`` = OR)."""
+
+
+@dataclass(frozen=True)
+class Formula:
+    """A formula expression referencing events by position letter (A, B, C...).
+
+    Letters map to event positions in the list passed to
+    ``Workspace.query()``. A is the first event, B the second, etc.
+
+    Can be passed as an element of the events list alongside strings
+    and ``Metric`` objects, or use the top-level ``formula`` parameter
+    for single-formula convenience.
+
+    Attributes:
+        expression: Formula expression, e.g. ``"(B / A) * 100"``.
+        label: Optional display label for the formula result.
+
+    Example:
+        ```python
+        from mixpanel_data import Formula, Metric
+
+        # Formula in the events list
+        result = ws.query(
+            [Metric("Signup", math="unique"),
+             Metric("Purchase", math="unique"),
+             Formula("(B / A) * 100", label="Conversion %")],
+        )
+
+        # Equivalent using top-level parameter
+        result = ws.query(
+            [Metric("Signup", math="unique"),
+             Metric("Purchase", math="unique")],
+            formula="(B / A) * 100",
+            formula_label="Conversion %",
+        )
+        ```
+    """
+
+    expression: str
+    """Formula expression referencing events by letter."""
+
+    label: str | None = None
+    """Optional display label for the formula result."""
+
+
+@dataclass(frozen=True)
+class Filter:
+    """Represents a typed filter condition on a property.
+
+    Constructed exclusively via class methods — never instantiated directly.
+    Each class method maps to specific filterType, filterOperator, and
+    filterValue format in the bookmark JSON.
+
+    Example:
+        ```python
+        from mixpanel_data import Filter
+
+        f1 = Filter.equals("country", "US")
+        f2 = Filter.greater_than("age", 18)
+        f3 = Filter.between("amount", 10, 100)
+        f4 = Filter.is_set("email")
+        ```
+    """
+
+    _property: str
+    """Property name to filter on."""
+
+    _operator: str
+    """Internal operator string."""
+
+    _value: str | int | float | list[str] | list[int | float] | None
+    """Value(s) to compare against.
+
+    Shape varies by operator: list for equals/not_equals, str for
+    contains/not_contains, numeric for greater_than/less_than,
+    two-element list for between, None for is_set/is_not_set/is_true/is_false.
+    """
+
+    _property_type: FilterPropertyType = "string"
+    """Data type of the property."""
+
+    _resource_type: Literal["events", "people"] = "events"
+    """Resource type to filter."""
+
+    @classmethod
+    def equals(
+        cls,
+        property: str,
+        value: str | list[str],
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create an equality filter.
+
+        Args:
+            property: Property name.
+            value: Value or list of values.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for string equality.
+        """
+        val = [value] if isinstance(value, str) else value
+        return cls(
+            _property=property,
+            _operator="equals",
+            _value=val,
+            _property_type="string",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def not_equals(
+        cls,
+        property: str,
+        value: str | list[str],
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a not-equals filter.
+
+        Args:
+            property: Property name.
+            value: Value or list of values.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for string inequality.
+        """
+        val = [value] if isinstance(value, str) else value
+        return cls(
+            _property=property,
+            _operator="does not equal",
+            _value=val,
+            _property_type="string",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def contains(
+        cls,
+        property: str,
+        value: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a contains (substring) filter.
+
+        Args:
+            property: Property name.
+            value: Substring to match.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for substring containment.
+        """
+        return cls(
+            _property=property,
+            _operator="contains",
+            _value=value,
+            _property_type="string",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def not_contains(
+        cls,
+        property: str,
+        value: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a not-contains filter.
+
+        Args:
+            property: Property name.
+            value: Substring that must not match.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for substring non-containment.
+        """
+        return cls(
+            _property=property,
+            _operator="does not contain",
+            _value=value,
+            _property_type="string",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def greater_than(
+        cls,
+        property: str,
+        value: int | float,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a greater-than filter.
+
+        Args:
+            property: Property name.
+            value: Numeric threshold.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for numeric greater-than.
+        """
+        return cls(
+            _property=property,
+            _operator="is greater than",
+            _value=value,
+            _property_type="number",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def less_than(
+        cls,
+        property: str,
+        value: int | float,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a less-than filter.
+
+        Args:
+            property: Property name.
+            value: Numeric threshold.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for numeric less-than.
+        """
+        return cls(
+            _property=property,
+            _operator="is less than",
+            _value=value,
+            _property_type="number",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def between(
+        cls,
+        property: str,
+        min_val: int | float,
+        max_val: int | float,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a between (inclusive range) filter.
+
+        Args:
+            property: Property name.
+            min_val: Minimum value (inclusive).
+            max_val: Maximum value (inclusive).
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for numeric range.
+        """
+        return cls(
+            _property=property,
+            _operator="is between",
+            _value=[min_val, max_val],
+            _property_type="number",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def is_set(
+        cls,
+        property: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a property-existence filter.
+
+        Args:
+            property: Property name.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for property existence.
+        """
+        return cls(
+            _property=property,
+            _operator="is set",
+            _value=None,
+            _property_type="string",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def is_not_set(
+        cls,
+        property: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a property-nonexistence filter.
+
+        Args:
+            property: Property name.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for property non-existence.
+        """
+        return cls(
+            _property=property,
+            _operator="is not set",
+            _value=None,
+            _property_type="string",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def is_true(
+        cls,
+        property: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a boolean true filter.
+
+        Args:
+            property: Property name.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for boolean true.
+        """
+        return cls(
+            _property=property,
+            _operator="true",
+            _value=None,
+            _property_type="boolean",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def is_false(
+        cls,
+        property: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a boolean false filter.
+
+        Args:
+            property: Property name.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for boolean false.
+        """
+        return cls(
+            _property=property,
+            _operator="false",
+            _value=None,
+            _property_type="boolean",
+            _resource_type=resource_type,
+        )
+
+
+@dataclass(frozen=True)
+class GroupBy:
+    """Specifies a property breakdown with optional numeric bucketing.
+
+    Used with ``Workspace.query()`` to break down results by property values.
+    String properties are broken down by distinct values; numeric properties
+    can be bucketed into ranges.
+
+    Attributes:
+        property: Property name to break down by.
+        property_type: Data type of the property. Default: ``"string"``.
+        bucket_size: Bucket width for numeric properties.
+        bucket_min: Minimum value for numeric buckets.
+        bucket_max: Maximum value for numeric buckets.
+
+    Example:
+        ```python
+        from mixpanel_data import GroupBy
+
+        # String breakdown
+        g1 = GroupBy("country")
+
+        # Numeric bucketed breakdown
+        g2 = GroupBy(
+            "revenue",
+            property_type="number",
+            bucket_size=50,
+            bucket_min=0,
+            bucket_max=500,
+        )
+        ```
+    """
+
+    property: str
+    """Property name to break down by."""
+
+    property_type: Literal["string", "number", "boolean", "datetime"] = "string"
+    """Data type of the property."""
+
+    bucket_size: int | float | None = None
+    """Bucket width for numeric properties."""
+
+    bucket_min: int | float | None = None
+    """Minimum value for numeric buckets."""
+
+    bucket_max: int | float | None = None
+    """Maximum value for numeric buckets."""
+
+
+@dataclass(frozen=True)
+class QueryResult(ResultWithDataFrame):
+    """Structured output from a Workspace.query() execution.
+
+    Contains the query response data with lazy DataFrame conversion.
+    The series structure varies by query mode:
+
+    - Timeseries: ``{metric_name: {date_string: value}}``
+    - Total: ``{metric_name: {"all": value}}``
+
+    Attributes:
+        computed_at: When the query was computed (ISO format).
+        from_date: Effective start date from response.
+        to_date: Effective end date from response.
+        headers: Column headers from the insights response.
+        series: Query result data (structure varies by mode).
+        params: Generated bookmark params sent to API (for debugging/persistence).
+        meta: Response metadata (sampling factor, limits hit).
+
+    Example:
+        ```python
+        result = ws.query("Login", math="unique", last=7)
+
+        # DataFrame access
+        print(result.df.head())
+
+        # Inspect generated params
+        print(result.params)
+
+        # Save as a report
+        ws.create_bookmark(CreateBookmarkParams(
+            name="Login Uniques (7d)",
+            bookmark_type="insights",
+            params=result.params,
+        ))
+        ```
+    """
+
+    computed_at: str
+    """When the query was computed (ISO format)."""
+
+    from_date: str
+    """Effective start date from response."""
+
+    to_date: str
+    """Effective end date from response."""
+
+    headers: list[str] = field(default_factory=list)
+    """Column headers from the insights response."""
+
+    series: dict[str, Any] = field(default_factory=dict)
+    """Query result data.
+
+    For timeseries: ``{metric_name: {date_string: value}}``
+    For total: ``{metric_name: {"all": value}}``
+    """
+
+    params: dict[str, Any] = field(default_factory=dict)
+    """Generated bookmark params sent to API (for debugging/persistence)."""
+
+    meta: dict[str, Any] = field(default_factory=dict)
+    """Response metadata (sampling factor, limits hit, etc.)."""
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Convert to DataFrame.
+
+        For timeseries mode: columns are ``date``, ``event``, ``count``.
+        For total mode: columns are ``event``, ``count``.
+        Table mode: depends on API response structure; typically matches
+        timeseries or total depending on date presence.
+
+        Returns:
+            Normalized DataFrame with one row per (date, metric) pair
+            for timeseries, or one row per metric for total.
+        """
+        if self._df_cache is not None:
+            return self._df_cache
+
+        rows: list[dict[str, Any]] = []
+
+        for metric_name, date_values in self.series.items():
+            if not isinstance(date_values, dict):
+                continue
+            for date_key, value in date_values.items():
+                if date_key == "all":
+                    # Total mode: no date column
+                    rows.append({"event": metric_name, "count": value})
+                else:
+                    # Strip timezone offset from ISO timestamps
+                    # "2024-01-01T00:00:00-07:00" → "2024-01-01T00:00:00"
+                    # "2024-01-01T00:00:00" → unchanged (hourly)
+                    # "2024-01-01" → unchanged (daily)
+                    normalized_date = date_key
+                    if len(date_key) > 19 and "T" in date_key:
+                        normalized_date = date_key[:19]
+                    rows.append(
+                        {"date": normalized_date, "event": metric_name, "count": value}
+                    )
+
+        if not rows:
+            result_df = pd.DataFrame(columns=["date", "event", "count"])
+        elif "date" in rows[0]:
+            result_df = pd.DataFrame(rows, columns=["date", "event", "count"])
+        else:
+            result_df = pd.DataFrame(rows, columns=["event", "count"])
+
+        object.__setattr__(self, "_df_cache", result_df)
+        return result_df
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with all QueryResult fields.
+        """
+        return {
+            "computed_at": self.computed_at,
+            "from_date": self.from_date,
+            "to_date": self.to_date,
+            "headers": self.headers,
+            "series": self.series,
+            "params": self.params,
+            "meta": self.meta,
         }

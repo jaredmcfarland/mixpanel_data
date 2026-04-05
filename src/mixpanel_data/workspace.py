@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -36,7 +36,13 @@ from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
-from mixpanel_data.exceptions import ConfigError, MixpanelDataError
+from mixpanel_data._internal.validation import validate_bookmark, validate_query_args
+from mixpanel_data.exceptions import (
+    BookmarkValidationError,
+    ConfigError,
+    MixpanelDataError,
+    ValidationError,
+)
 from mixpanel_data.types import (
     ActivityFeedResult,
     AlertCount,
@@ -94,12 +100,15 @@ from mixpanel_data.types import (
     ExperimentConcludeParams,
     ExperimentDecideParams,
     FeatureFlag,
+    Filter,
     FlagHistoryResponse,
     FlagLimitsResponse,
     FlowsResult,
+    Formula,
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
+    GroupBy,
     InitSchemaEnforcementParams,
     JQLResult,
     LexiconSchema,
@@ -107,10 +116,13 @@ from mixpanel_data.types import (
     LookupTable,
     LookupTableUploadUrl,
     MarkLookupTableReadyParams,
+    MathType,
+    Metric,
     NumericAverageResult,
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
+    PerUserAggregation,
     PreviewDeletionFiltersParams,
     ProjectWebhook,
     PropertyCountsResult,
@@ -118,6 +130,7 @@ from mixpanel_data.types import (
     PropertyDefinition,
     PropertyDistributionResult,
     PublicWorkspace,
+    QueryResult,
     ReplaceSchemaEnforcementParams,
     RetentionResult,
     SavedCohort,
@@ -1568,6 +1581,457 @@ class Workspace:
             properties=properties,
             from_date=from_date,
             to_date=to_date,
+        )
+
+    # =========================================================================
+    # INSIGHTS QUERY API (Phase 029)
+    # =========================================================================
+
+    def _build_query_params(
+        self,
+        *,
+        events: Sequence[str | Metric],
+        math: MathType,
+        math_property: str | None,
+        per_user: PerUserAggregation | None,
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        unit: str,
+        group_by: str | GroupBy | list[str | GroupBy] | None,
+        where: Filter | list[Filter] | None,
+        formulas: Sequence[Formula],
+        rolling: int | None,
+        cumulative: bool,
+        mode: str,
+    ) -> dict[str, Any]:
+        """Build bookmark params dict from typed arguments.
+
+        Generates the complete bookmark JSON structure expected by
+        the Mixpanel insights query API.
+
+        Args:
+            events: Event names or Metric objects.
+            math: Top-level aggregation function.
+            math_property: Property for property-based math.
+            per_user: Per-user pre-aggregation.
+            from_date: Start date (YYYY-MM-DD).
+            to_date: End date (YYYY-MM-DD).
+            last: Relative date range in days.
+            unit: Time unit (hour, day, week, month, quarter).
+            group_by: Breakdown specification.
+            where: Filter conditions.
+            formulas: Formula objects to append.
+            rolling: Rolling window size.
+            cumulative: Cumulative analysis mode.
+            mode: Result mode (timeseries, total, table).
+
+        Returns:
+            Bookmark params dict ready for insights query API.
+        """
+        # --- Build sections.show[] ---
+        show: list[dict[str, Any]] = []
+        for item in events:
+            if isinstance(item, Metric):
+                event_name = item.event
+                item_math = item.math
+                item_prop = item.property
+                item_per_user = item.per_user
+                item_filters = item.filters
+                item_filters_combinator = item.filters_combinator
+            else:
+                event_name = item
+                item_math = math
+                item_prop = math_property
+                item_per_user = per_user
+                item_filters = None
+                item_filters_combinator = "all"
+
+            measurement: dict[str, Any] = {"math": item_math}
+            if item_prop is not None:
+                measurement["property"] = {
+                    "name": item_prop,
+                    "resourceType": "events",
+                }
+            if item_per_user is not None:
+                measurement["perUserAggregation"] = item_per_user
+
+            # Build behavior block with optional per-metric filters
+            behavior_filters: list[dict[str, Any]] = []
+            if item_filters:
+                behavior_filters = [self._build_filter_entry(f) for f in item_filters]
+
+            entry: dict[str, Any] = {
+                "type": "metric",
+                "behavior": {
+                    "type": "event",
+                    "name": event_name,
+                    "resourceType": "events",
+                    "filtersDeterminer": item_filters_combinator,
+                    "filters": behavior_filters,
+                },
+                "measurement": measurement,
+            }
+
+            # Mark hidden when formula is present
+            if formulas:
+                entry["isHidden"] = True
+
+            show.append(entry)
+
+        # Append formula entries to show[]
+        for f in formulas:
+            formula_entry: dict[str, Any] = {
+                "type": "formula",
+                "definition": f.expression,
+                "measurement": {},
+                "referencedMetrics": [],
+            }
+            if f.label:
+                formula_entry["name"] = f.label
+            show.append(formula_entry)
+
+        # --- Build sections.time (array) ---
+        if from_date is not None and to_date is not None:
+            time_entry: dict[str, Any] = {
+                "dateRangeType": "between",
+                "unit": unit,
+                "value": [from_date, to_date],
+            }
+        elif from_date is not None:
+            # "since" with raw dates isn't supported by the API;
+            # use "between" with from_date through today
+            import datetime as _dt
+
+            today = _dt.date.today().isoformat()
+            time_entry = {
+                "dateRangeType": "between",
+                "unit": unit,
+                "value": [from_date, today],
+            }
+        else:
+            time_entry = {
+                "dateRangeType": "in the last",
+                "unit": unit,
+                "window": {"unit": "day", "value": last},
+            }
+        time_section: list[dict[str, Any]] = [time_entry]
+
+        # --- Build sections.filter[] ---
+        filter_section: list[dict[str, Any]] = []
+        if where is not None:
+            filters_list = where if isinstance(where, list) else [where]
+            filter_section = [self._build_filter_entry(f) for f in filters_list]
+
+        # --- Build sections.group[] ---
+        group_section: list[dict[str, Any]] = []
+        if group_by is not None:
+            groups = group_by if isinstance(group_by, list) else [group_by]
+            for g in groups:
+                if isinstance(g, str):
+                    group_section.append(
+                        {
+                            "value": g,
+                            "propertyName": g,
+                            "resourceType": "events",
+                            "propertyType": "string",
+                            "propertyDefaultType": "string",
+                        }
+                    )
+                elif isinstance(g, GroupBy):
+                    group_entry: dict[str, Any] = {
+                        "value": g.property,
+                        "propertyName": g.property,
+                        "resourceType": "events",
+                        "propertyType": g.property_type,
+                        "propertyDefaultType": g.property_type,
+                    }
+                    if g.bucket_size is not None:
+                        group_entry["customBucket"] = {
+                            "bucketSize": g.bucket_size,
+                        }
+                        if g.bucket_min is not None:
+                            group_entry["customBucket"]["min"] = g.bucket_min
+                        if g.bucket_max is not None:
+                            group_entry["customBucket"]["max"] = g.bucket_max
+                    group_section.append(group_entry)
+                else:
+                    raise TypeError(
+                        f"group_by elements must be str or GroupBy, "
+                        f"got {type(g).__name__}: {g!r}"
+                    )
+
+        # --- Build displayOptions ---
+        chart_type_map = {
+            "timeseries": "line",
+            "total": "bar",
+            "table": "table",
+        }
+        analysis = "linear"
+        display_options: dict[str, Any] = {
+            "chartType": chart_type_map.get(mode, "line"),
+            "analysis": analysis,
+        }
+        if rolling is not None:
+            display_options["analysis"] = "rolling"
+            display_options["rollingWindowSize"] = rolling
+        elif cumulative:
+            display_options["analysis"] = "cumulative"
+
+        # --- Assemble bookmark params ---
+        sections: dict[str, Any] = {
+            "show": show,
+            "time": time_section,
+            "filter": filter_section,
+            "group": group_section,
+        }
+
+        return {
+            "sections": sections,
+            "displayOptions": display_options,
+        }
+
+    @staticmethod
+    def _build_filter_entry(f: Filter) -> dict[str, Any]:
+        """Convert a Filter object to a bookmark filter dict.
+
+        Args:
+            f: A Filter object.
+
+        Returns:
+            Bookmark filter dict matching Mixpanel's expected format.
+        """
+        return {
+            "resourceType": f._resource_type,
+            "filterType": f._property_type,
+            "defaultType": f._property_type,
+            "value": f._property,
+            "filterValue": f._value,
+            "filterOperator": f._operator,
+        }
+
+    def query(
+        self,
+        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        *,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        unit: Literal["hour", "day", "week", "month", "quarter"] = "day",
+        math: MathType = "total",
+        math_property: str | None = None,
+        per_user: PerUserAggregation | None = None,
+        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        where: Filter | list[Filter] | None = None,
+        formula: str | None = None,
+        formula_label: str | None = None,
+        rolling: int | None = None,
+        cumulative: bool = False,
+        mode: Literal["timeseries", "total", "table"] = "timeseries",
+    ) -> QueryResult:
+        """Run a typed insights query against the Mixpanel API.
+
+        Generates bookmark params from keyword arguments, POSTs them inline
+        to ``/api/query/insights``, and returns a structured QueryResult
+        with lazy DataFrame conversion.
+
+        Args:
+            events: Event name(s) to query. Accepts a single string,
+                a Metric object, a Formula object, or a sequence mixing
+                strings, Metrics, and Formulas. Formula objects in the
+                list are extracted and appended as formula show clauses.
+            from_date: Start date (YYYY-MM-DD). If set, overrides ``last``.
+            to_date: End date (YYYY-MM-DD). Requires ``from_date``.
+            last: Relative time range in days. Default: 30.
+                Ignored if ``from_date`` is set.
+            unit: Time aggregation unit. Default: ``"day"``.
+            math: Aggregation function for plain-string events.
+                Default: ``"total"``.
+            math_property: Property name for property-based math
+                (average, sum, percentiles).
+            per_user: Per-user pre-aggregation (average, total, min, max).
+            group_by: Break down results by property. Accepts a string,
+                GroupBy object, or list of strings/GroupBys.
+            where: Filter results by conditions. Accepts a Filter
+                or list of Filters.
+            formula: Formula expression referencing events by position
+                (A, B, C...). Requires 2+ events. Cannot be combined
+                with Formula objects in ``events``.
+            formula_label: Display label for formula result.
+            rolling: Rolling window size in periods.
+                Mutually exclusive with ``cumulative``.
+            cumulative: Enable cumulative analysis mode.
+                Mutually exclusive with ``rolling``.
+            mode: Result shape. ``"timeseries"`` returns per-period data,
+                ``"total"`` returns a single aggregate, ``"table"`` returns
+                tabular data. Default: ``"timeseries"``.
+
+        Returns:
+            QueryResult with series data, DataFrame, and metadata.
+
+        Raises:
+            ValueError: If arguments violate validation rules.
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid query parameters.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Simple event query
+            result = ws.query("Login")
+            print(result.df.head())
+
+            # With aggregation and time range
+            result = ws.query("Login", math="unique", last=7, unit="day")
+
+            # Multi-event with formula (top-level parameter)
+            result = ws.query(
+                [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
+                formula="(B / A) * 100",
+                formula_label="Conversion Rate",
+            )
+
+            # Multi-event with formula (Formula in list)
+            result = ws.query(
+                [Metric("Signup", math="unique"),
+                 Metric("Purchase", math="unique"),
+                 Formula("(B / A) * 100", label="Conversion Rate")],
+            )
+            ```
+        """
+        # Type guard: events must be str, Metric, Formula, or sequence thereof
+        if not isinstance(events, (str, Metric, Formula, list, tuple)):
+            raise BookmarkValidationError(
+                [
+                    ValidationError(
+                        path="events",
+                        message=(
+                            f"events must be a string, Metric, Formula, or "
+                            f"sequence, got {type(events).__name__}"
+                        ),
+                        code="V21_INVALID_EVENT_TYPE",
+                    )
+                ]
+            )
+
+        # Type guard: where must be Filter or list of Filters
+        if where is not None and not isinstance(where, (Filter, list)):
+            raise BookmarkValidationError(
+                [
+                    ValidationError(
+                        path="where",
+                        message=(
+                            f"where must be a Filter or list of Filters, "
+                            f"got {type(where).__name__}"
+                        ),
+                        code="V25_INVALID_FILTER_TYPE",
+                    )
+                ]
+            )
+
+        # Normalize events to sequence, separating Formula objects
+        if isinstance(events, str):
+            events_list: list[str | Metric] = [events]
+            formulas_from_list: list[Formula] = []
+        elif isinstance(events, Metric):
+            events_list = [events]
+            formulas_from_list = []
+        elif isinstance(events, Formula):
+            raise BookmarkValidationError(
+                [
+                    ValidationError(
+                        path="events",
+                        message="Formula cannot be the only item; provide event(s) too",
+                        code="V0_NO_EVENTS",
+                    )
+                ]
+            )
+        else:
+            events_list = []
+            formulas_from_list = []
+            for item in events:
+                if isinstance(item, Formula):
+                    formulas_from_list.append(item)
+                else:
+                    events_list.append(item)
+
+        # Resolve formulas: can't use both approaches
+        if formula is not None and formulas_from_list:
+            raise BookmarkValidationError(
+                [
+                    ValidationError(
+                        path="formula",
+                        message=(
+                            "Cannot combine top-level 'formula' parameter with "
+                            "Formula objects in the events list; use one approach"
+                        ),
+                        code="V4_FORMULA_CONFLICT",
+                    )
+                ]
+            )
+
+        if formula is not None:
+            resolved_formulas: Sequence[Formula] = [
+                Formula(expression=formula, label=formula_label)
+            ]
+        else:
+            resolved_formulas = formulas_from_list
+
+        # Layer 1: Argument validation
+        arg_errors = validate_query_args(
+            events=events_list,
+            math=math,
+            math_property=math_property,
+            per_user=per_user,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            has_formula=bool(resolved_formulas),
+            rolling=rolling,
+            cumulative=cumulative,
+            group_by=group_by,
+            formulas=resolved_formulas,
+        )
+        if any(e.severity == "error" for e in arg_errors):
+            raise BookmarkValidationError(arg_errors)
+
+        # Build bookmark params
+        params = self._build_query_params(
+            events=events_list,
+            math=math,
+            math_property=math_property,
+            per_user=per_user,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            group_by=group_by,
+            where=where,
+            formulas=resolved_formulas,
+            rolling=rolling,
+            cumulative=cumulative,
+            mode=mode,
+        )
+
+        # Layer 2: Bookmark structure validation
+        bookmark_errors = validate_bookmark(params)
+        if any(e.severity == "error" for e in bookmark_errors):
+            raise BookmarkValidationError(bookmark_errors)
+
+        # Delegate to service — _live_query_service calls _require_api_client
+        # which ensures _credentials is not None
+        credentials = self._credentials
+        if credentials is None:
+            raise ConfigError(
+                "API access requires credentials. "
+                "Use Workspace() with credentials instead of Workspace.open()."
+            )
+        return self._live_query_service.query(
+            bookmark_params=params,
+            project_id=int(credentials.project_id),
         )
 
     # =========================================================================

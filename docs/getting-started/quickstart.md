@@ -180,9 +180,46 @@ See funnels, cohorts, and saved reports already defined in Mixpanel:
 
 This discovery workflow ensures your queries reference real event names, valid properties, and actual values—no trial and error.
 
-## Step 4: Run Live Queries
+## Step 4: Run Analytics Queries
 
-For real-time analytics, query Mixpanel directly:
+### Insights Queries (Recommended)
+
+Use `query()` for typed, composable analytics — DAU/WAU/MAU, formulas, filters, breakdowns, and more:
+
+```python
+import mixpanel_data as mp
+from mixpanel_data import Metric, Filter
+
+ws = mp.Workspace()
+
+# Simple event count (last 30 days by default)
+result = ws.query("Purchase")
+print(result.df)
+
+# DAU with property breakdown
+result = ws.query("Login", math="dau", group_by="platform", last=90)
+
+# Filtered aggregation
+result = ws.query(
+    "Purchase",
+    math="total",
+    math_property="amount",
+    where=Filter.equals("country", "US"),
+)
+
+# Multi-metric formula
+result = ws.query(
+    [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
+    formula="(B / A) * 100",
+    formula_label="Conversion Rate",
+)
+```
+
+See the [Insights Queries guide](../guide/query.md) for full coverage.
+
+### Legacy Query Methods
+
+For segmentation, funnels, and retention via the older Query API:
 
 === "CLI"
 
@@ -283,7 +320,8 @@ For ETL pipelines or data processing, stream data directly:
 ## Next Steps
 
 - [Configuration](configuration.md) — Multiple accounts and advanced settings
+- [Insights Queries](../guide/query.md) — Typed analytics with DAU, formulas, filters, and breakdowns
+- [Live Analytics](../guide/live-analytics.md) — Segmentation, funnels, retention
 - [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
 - [Data Governance](../guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, and lookup tables
 - [Streaming Data](../guide/streaming.md) — Stream events and profiles for ETL pipelines
-- [Live Analytics](../guide/live-analytics.md) — Segmentation, funnels, retention

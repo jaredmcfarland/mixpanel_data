@@ -9,15 +9,12 @@ The AARRR framework maps the user lifecycle into five stages. Classify every que
 ### Acquisition — "Where do users come from?"
 
 **Questions**: Traffic sources, campaign effectiveness, channel attribution
-**Key methods**: `segmentation` with utm/source breakdown, `event_counts`
+**Key methods**: `query` with group_by breakdown, `event_counts`
 
 ```python
 # Channel analysis
-result = ws.segmentation(
-    event="Visit", from_date="2025-01-01", to_date="2025-01-31",
-    on='properties["utm_source"]',
-)
-by_source = result.df.groupby("segment")["count"].sum().sort_values(ascending=False)
+result = ws.query("Visit", last=30, group_by="utm_source")
+by_source = result.df.groupby("event")["count"].sum().sort_values(ascending=False)
 print("Top acquisition channels:")
 print(by_source.head(10))
 ```
@@ -25,7 +22,7 @@ print(by_source.head(10))
 ### Activation — "Do they reach the aha moment?"
 
 **Questions**: Onboarding completion, time-to-value, first key action
-**Key methods**: `funnel`, `activity_feed`, `segmentation` on activation events
+**Key methods**: `funnel`, `activity_feed`, `query` on activation events
 
 ```python
 # Onboarding funnel
@@ -43,7 +40,7 @@ result = ws.jql("""function main() {
 ### Retention — "Do they come back?"
 
 **Questions**: Return rates, cohort behavior, churn patterns, sticky features
-**Key methods**: `retention`, `segmentation` over time, `frequency`
+**Key methods**: `retention`, `query` over time, `frequency`
 
 ```python
 # N-day retention
@@ -68,33 +65,32 @@ freq = ws.frequency(event="Use Feature X", from_date=..., to_date=...)
 ### Revenue — "Do they pay?"
 
 **Questions**: Conversion to paid, ARPU, LTV indicators, upgrade triggers
-**Key methods**: `segmentation_sum` on revenue, `funnel` to purchase, `jql` for per-user revenue
+**Key methods**: `query` with math aggregations, `funnel` to purchase, `jql` for per-user revenue
 
 ```python
 # Daily revenue
-revenue = ws.segmentation_sum(
-    event="Purchase", on='properties["revenue"]',
+revenue = ws.query(
+    "Purchase", math="total", math_property="revenue",
     from_date="2025-01-01", to_date="2025-01-31",
 )
 
-# ARPU via JQL
-result = ws.jql("""function main() {
-  return Events({from_date: "2025-01-01", to_date: "2025-01-31",
-                 event_selectors: [{event: "Purchase"}]})
-    .groupByUser(mixpanel.reducer.sum("properties.revenue"))
-    .reduce(mixpanel.reducer.numeric_summary())
-}""")
+# ARPU
+arpu = ws.query(
+    "Purchase", math="total", per_user="average",
+    math_property="revenue",
+    from_date="2025-01-01", to_date="2025-01-31",
+)
 ```
 
 ### Referral — "Do they invite others?"
 
 **Questions**: Invite rates, viral coefficient, referral attribution
-**Key methods**: `segmentation` on invite/share events, `jql` for viral loops
+**Key methods**: `query` on invite/share events, `jql` for viral loops
 
 ```python
 # Referral tracking
-invites = ws.segmentation(event="Invite Sent", from_date=..., to_date=...).df
-accepts = ws.segmentation(event="Invite Accepted", from_date=..., to_date=...).df
+invites = ws.query("Invite Sent", from_date=..., to_date=...).df
+accepts = ws.query("Invite Accepted", from_date=..., to_date=...).df
 invites_total = invites["count"].sum()
 viral_coefficient = accepts["count"].sum() / invites_total if invites_total > 0 else 0
 print(f"Viral coefficient: {viral_coefficient:.2f}")
@@ -115,10 +111,10 @@ Use GQM to decompose vague questions into actionable queries. This is your prima
 | # | Question | Metric | Method |
 |---|----------|--------|--------|
 | 1 | Did overall D7 retention change? | D7 retention % | `retention()` |
-| 2 | Which user segment is most affected? | Retention by platform/country | `retention()` with segmentation |
+| 2 | Which user segment is most affected? | Retention by platform/country | `retention()` with group_by |
 | 3 | Did onboarding completion change? | Funnel conversion rate | `funnel()` |
-| 4 | Are users engaging with core features? | Feature event frequency | `frequency()` or `segmentation()` |
-| 5 | Was there a specific date the drop started? | Daily retention trend | `segmentation()` of return events |
+| 4 | Are users engaging with core features? | Feature event frequency | `frequency()` or `query()` |
+| 5 | Was there a specific date the drop started? | Daily retention trend | `query()` of return events |
 
 ### Example: "How is the new feature performing?"
 
@@ -128,7 +124,7 @@ Use GQM to decompose vague questions into actionable queries. This is your prima
 | 2 | What's the adoption curve? | Daily unique users over time | `event_counts(events=[...], unit="day", type="unique")` |
 | 3 | Do adopters retain better? | Retention of feature users vs non-users | `retention()` with where filters |
 | 4 | Is there a conversion impact? | Funnel rates with/without feature use | `funnel()` comparisons |
-| 5 | Which segments adopt fastest? | Feature use by segment | `segmentation()` with on breakdown |
+| 5 | Which segments adopt fastest? | Feature use by segment | `query()` with group_by breakdown |
 
 ## North Star Metric Framework
 
@@ -174,8 +170,8 @@ When a metric changes unexpectedly, follow this structured investigation.
 
 ```python
 # Compare periods
-current = ws.segmentation(event="X", from_date="2025-03-01", to_date="2025-03-31").df
-previous = ws.segmentation(event="X", from_date="2025-02-01", to_date="2025-02-28").df
+current = ws.query("X", from_date="2025-03-01", to_date="2025-03-31").df
+previous = ws.query("X", from_date="2025-02-01", to_date="2025-02-28").df
 change_pct = (current["count"].sum() - previous["count"].sum()) / previous["count"].sum() * 100
 print(f"Change: {change_pct:.1f}%")
 ```
@@ -187,9 +183,9 @@ Break down by 4-6 dimensions to isolate the driver:
 ```python
 dimensions = ["platform", "country", "utm_source", "plan_type", "device_type"]
 for dim in dimensions:
-    current = ws.segmentation(event="X", from_date=..., to_date=..., on=f'properties["{dim}"]').df
-    previous = ws.segmentation(event="X", from_date=..., to_date=..., on=f'properties["{dim}"]').df
-    delta = (current.groupby("segment")["count"].sum() - previous.groupby("segment")["count"].sum()).dropna()
+    current = ws.query("X", from_date=..., to_date=..., group_by=dim).df
+    previous = ws.query("X", from_date=..., to_date=..., group_by=dim).df
+    delta = (current.groupby("event")["count"].sum() - previous.groupby("event")["count"].sum()).dropna()
     print(f"\n=== By {dim} ===")
     print(delta.sort_values().head(5))  # biggest drops
 ```
@@ -198,7 +194,7 @@ for dim in dimensions:
 
 ```python
 # Daily granularity to find exact date
-daily = ws.segmentation(event="X", from_date="2025-02-15", to_date="2025-03-15", unit="day").df
+daily = ws.query("X", from_date="2025-02-15", to_date="2025-03-15", unit="day").df
 daily_counts = daily.groupby("date")["count"].sum().reset_index()
 daily_counts["rolling_avg"] = daily_counts["count"].rolling(3).mean()
 daily_counts["pct_change"] = daily_counts["count"].pct_change()
@@ -211,10 +207,10 @@ print(daily_counts.nsmallest(5, "pct_change"))
 ```python
 # Did other metrics change at the same time?
 metrics = {
-    "target": ws.segmentation(event="X", from_date=..., to_date=...).df,
-    "logins": ws.segmentation(event="Login", from_date=..., to_date=...).df,
-    "errors": ws.segmentation(event="Error", from_date=..., to_date=...).df,
-    "signups": ws.segmentation(event="Sign Up", from_date=..., to_date=...).df,
+    "target": ws.query("X", from_date=..., to_date=...).df,
+    "logins": ws.query("Login", from_date=..., to_date=...).df,
+    "errors": ws.query("Error", from_date=..., to_date=...).df,
+    "signups": ws.query("Sign Up", from_date=..., to_date=...).df,
 }
 combined = pd.DataFrame({k: v.groupby("date")["count"].sum() for k, v in metrics.items()})
 print(combined.corr())

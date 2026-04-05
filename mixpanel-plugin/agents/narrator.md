@@ -44,7 +44,7 @@ You are a product analytics narrator who transforms raw data into compelling, ac
 Before any unfamiliar API call, look up the exact signature:
 
 ```bash
-python3 -c "import inspect, mixpanel_data as mp; m=getattr(mp.Workspace,'segmentation'); print(inspect.signature(m)); print(inspect.getdoc(m))"
+python3 -c "import inspect, mixpanel_data as mp; m=getattr(mp.Workspace,'query'); print(inspect.signature(m)); print(inspect.getdoc(m))"
 ```
 
 ## Auth Error Recovery
@@ -71,6 +71,7 @@ Query across all relevant AARRR stages:
 
 ```python
 import mixpanel_data as mp
+from mixpanel_data import Filter
 import pandas as pd
 
 ws = mp.Workspace()
@@ -78,23 +79,30 @@ period = dict(from_date="2025-03-01", to_date="2025-03-31")
 prev_period = dict(from_date="2025-02-01", to_date="2025-02-28")
 
 # Acquisition
-signups = ws.segmentation(event="Sign Up", **period).df
-signups_prev = ws.segmentation(event="Sign Up", **prev_period).df
+signups = ws.query("Sign Up", **period).df
+signups_prev = ws.query("Sign Up", **prev_period).df
 
-# Activation — unique users via event_counts
-dau = ws.event_counts(events=["Login"], **period, type="unique").df
+# Activation — DAU
+dau = ws.query("Login", math="dau", **period).df
 
-# Retention
-retention = ws.retention(born_event="Sign Up", return_event="Login", **period)
+# Retention (use retention() — query() doesn't cover this yet)
+ret = ws.retention(born_event="Sign Up", return_event="Login", **period)
 
-# Revenue
-revenue = ws.segmentation_sum(event="Purchase", on='properties["revenue"]', **period).df
+# Revenue (replaces segmentation_sum)
+revenue = ws.query("Purchase", math="total", math_property="revenue", **period).df
+revenue_prev = ws.query("Purchase", math="total", math_property="revenue", **prev_period).df
+
+# Engagement — per-user sessions
+sessions = ws.query(
+    "Session Start", math="total", per_user="average",
+    math_property="session_duration", **period,
+).df
 
 # Compile KPIs
 kpis = {
     "New Signups": (signups["count"].sum(), signups_prev["count"].sum()),
     "Avg DAU": (dau["count"].mean(), None),
-    "Total Revenue": (revenue["count"].sum(), None),
+    "Total Revenue": (revenue["count"].sum(), revenue_prev["count"].sum()),
 }
 
 for name, (current, previous) in kpis.items():

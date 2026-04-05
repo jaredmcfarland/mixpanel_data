@@ -14,10 +14,16 @@ The `mixpanel_data` Python API provides programmatic access to all library funct
 import mixpanel_data as mp
 
 ws = mp.Workspace()
-result = ws.segmentation(...)
+result = ws.query("Login", math="unique", last=30)
 
 # Direct imports
 from mixpanel_data import Workspace, MixpanelDataError
+
+# Insights Query types
+from mixpanel_data import (
+    Metric, Filter, Formula, GroupBy, QueryResult,
+    MathType, PerUserAggregation, FilterPropertyType,
+)
 
 # Auth utilities
 from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
@@ -58,8 +64,9 @@ from mixpanel_data import (
 The main entry point for all operations:
 
 - **Discovery** — Explore events, properties, funnels, cohorts
+- **Insights Queries** — Typed analytics queries using the Insights engine (`query()`)
+- **Live Queries** — Legacy analytics endpoints (segmentation, funnels, retention, JQL)
 - **Streaming** — Stream events and profiles directly from Mixpanel (ETL, pipelines)
-- **Live Queries** — Real-time analytics from Mixpanel API
 - **Entity CRUD & Data Governance** — Create, read, update, delete dashboards, reports, cohorts, feature flags, experiments, plus Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, volume anomalies, and event deletion requests
 
 [View Workspace API](workspace.md)
@@ -93,7 +100,9 @@ Structured error handling:
 
 Typed results for all operations:
 
-- **SegmentationResult** — Time-series data
+- **QueryResult** — Insights query results (from `query()`)
+- **Metric**, **Filter**, **Formula**, **GroupBy** — Query building blocks
+- **SegmentationResult** — Time-series data (legacy)
 - **FunnelResult** — Funnel conversion data
 - **RetentionResult** — Retention cohort data
 - **Dashboard**, **Bookmark**, **Cohort** — Entity models for CRUD operations
