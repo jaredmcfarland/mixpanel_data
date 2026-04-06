@@ -404,7 +404,7 @@ def _extract_funnel_steps_from_series(
 
     def _step_sort_key(name: str) -> tuple[int, str]:
         m = _STEP_PREFIX_RE.match(name)
-        return (int(m.group(1)), name) if m else (float("inf"), name)  # type: ignore[arg-type]
+        return (int(m.group(1)), name) if m else (2**31, name)
 
     step_names = sorted(count_data.keys(), key=_step_sort_key)
 
