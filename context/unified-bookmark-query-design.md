@@ -739,7 +739,7 @@ class FlowStep:
     reverse: int | None = None
     label: str | None = None
     filters: list[Filter] | None = None
-    filters_combinator: Literal["and", "or"] = "and"
+    filters_combinator: Literal["all", "any"] = "all"
 ```
 
 ### 5.4 `FlowQueryResult`

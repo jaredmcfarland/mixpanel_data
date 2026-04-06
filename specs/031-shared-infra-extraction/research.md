@@ -153,4 +153,4 @@
 | `Filter.in_the_last()` | `"was in the"` | `"datetime"` |
 | `Filter.not_in_the_last()` | `"was not in the"` | `"datetime"` |
 
-No `does_not_contain`, `is_between`, `is_at_least`, or `is_at_most` methods exist on the `Filter` class. These operators are only used in legacy bookmarks, not in the current typed API. The converter does not need to handle them unless `Filter` is extended in a future phase.
+`Filter.not_contains()` (operator `"does not contain"`) and `Filter.between()` (operator `"is between"`) exist on the `Filter` class and are handled by the converter. `is_at_least` and `is_at_most` methods do not exist on `Filter` — these operators appear only in legacy bookmarks. The converter handles all operators in its mapping dicts (including legacy ones) for completeness, even if some are not currently constructible via `Filter` class methods.

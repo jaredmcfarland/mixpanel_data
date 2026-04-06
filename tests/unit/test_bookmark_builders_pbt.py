@@ -1,9 +1,9 @@
-"""Property-based tests for bookmark builder equivalence.
+"""Property-based tests for bookmark builder delegation wiring.
 
-Uses Hypothesis to verify that the extracted builder functions produce
-identical output to the original inline code in ``_build_query_params()``.
-This is an oracle test: the refactored code must match the pre-refactoring
-behavior across randomized inputs.
+Uses Hypothesis to verify that ``_build_query_params()`` correctly
+delegates to the extracted builder functions. These tests confirm
+that the wiring between the composed method and the standalone
+helpers is correct across randomized inputs.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def _make_workspace() -> Workspace:
 
 
 # =============================================================================
-# Oracle Tests: build_time_section matches _build_query_params
+# Wiring Tests: build_time_section matches _build_query_params
 # =============================================================================
 
 
@@ -138,7 +138,7 @@ class TestTimeSectionEquivalence:
 
 
 # =============================================================================
-# Oracle Tests: build_filter_section matches _build_query_params
+# Wiring Tests: build_filter_section matches _build_query_params
 # =============================================================================
 
 
@@ -202,7 +202,7 @@ class TestFilterSectionEquivalence:
 
 
 # =============================================================================
-# Oracle Tests: build_group_section matches _build_query_params
+# Wiring Tests: build_group_section matches _build_query_params
 # =============================================================================
 
 

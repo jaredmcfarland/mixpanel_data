@@ -162,7 +162,7 @@ No new validation entities. Extracted validators (`validate_time_args`, `validat
 | `VALID_RETENTION_UNITS` | `frozenset[str]` | `{"day", "week", "month"}` |
 | `VALID_RETENTION_ALIGNMENT` | `frozenset[str]` | `{"birth", "interval_start"}` |
 | `VALID_FLOWS_COUNT_TYPES` | `frozenset[str]` | `{"unique", "total", "session"}` |
-| `VALID_FLOWS_CHART_TYPES` | `frozenset[str]` | `{"sankey", "top-paths"}` |
+| `VALID_FLOWS_CHART_TYPES` | `frozenset[str]` | `{"sankey", "top-paths"}` — user-facing API uses `"paths"` which maps to `"top-paths"` internally |
 
 ## Enum Constants (Extended)
 

@@ -60,9 +60,9 @@ A library developer building the flows query method needs to convert `Filter` ob
 
 1. **Given** `Filter.equals("country", "US")`, **When** the segfilter converter is called, **Then** it returns a dict with `filter.operator: "=="`, `filter.operand: ["US"]`, and `property.name: "country"`.
 2. **Given** `Filter.greater_than("amount", 50)`, **When** the segfilter converter is called, **Then** it returns `filter.operator: ">"` and `filter.operand: "50"` (stringified number).
-3. **Given** `Filter.is_set("email")`, **When** the segfilter converter is called, **Then** it returns `filter.operator: "is set"` with the correct operand structure.
-4. **Given** `Filter.contains("name", "john")`, **When** the segfilter converter is called, **Then** it returns `filter.operator: "contains"` with the correct operand structure.
-5. **Given** a `Filter` with `resource_type="people"`, **When** the segfilter converter is called, **Then** `property.source` is `"people"` (not `"properties"`).
+3. **Given** `Filter.is_set("email")`, **When** the segfilter converter is called, **Then** it returns `filter.operator: "set"` with `filter.operand: ""` (empty string).
+4. **Given** `Filter.contains("name", "john")`, **When** the segfilter converter is called, **Then** it returns `filter.operator: "in"` with `filter.operand: "john"`.
+5. **Given** a `Filter` with `resource_type="people"`, **When** the segfilter converter is called, **Then** `property.source` is `"user"` (mapped from `"people"` via `RESOURCE_TYPE_MAP`).
 
 ---
 

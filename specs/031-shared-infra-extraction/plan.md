@@ -109,7 +109,7 @@ Create `_internal/segfilter.py` with:
 1. **`build_segfilter_entry()`** — Convert a `Filter` object to segfilter format. Handles all 15+ operator types currently exposed by `Filter`. Reference: `analytics/iron/common/widgets/property-filter-menu/models/segfilter.ts:toSegfilterFilter()`.
 
 Key translations:
-- Operator mapping: `"equals"` → `"=="`, `"does not equal"` → `"!="`, `"contains"` → `"contains"`, `"is greater than"` → `">"`, etc.
+- Operator mapping: `"equals"` → `"=="`, `"does not equal"` → `"!="`, `"contains"` → `"in"`, `"is greater than"` → `">"`, etc.
 - Value formatting: numbers stringified, dates `YYYY-MM-DD` → `MM/DD/YYYY`
 - Property structure: `{"name": prop, "source": resource_type, "type": property_type}`
 - Existence operators: `"is set"` / `"is not set"` with correct empty operand

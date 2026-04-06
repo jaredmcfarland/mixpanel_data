@@ -1,10 +1,9 @@
-"""Property-based tests for validation equivalence after refactoring.
+"""Property-based tests for query-validator delegation and aggregation.
 
-Verifies that ``validate_query_args()`` produces identical error output
-after extracting ``validate_time_args()`` and ``validate_group_by_args()``
-into standalone functions. The extracted functions are tested as oracles:
-their combined output must match the corresponding subset of errors from
-the monolithic ``validate_query_args()``.
+Verifies that ``validate_query_args()`` includes the same time- and
+group-by-related validation errors produced by ``validate_time_args()``
+and ``validate_group_by_args()`` for the same inputs. These checks
+validate wiring between the composed validator and the extracted helpers.
 """
 
 from __future__ import annotations
