@@ -46,6 +46,7 @@ from mixpanel_data.types import (
     Formula,
     FunnelStep,
     GroupBy,
+    HoldingConstant,
     MathType,
     Metric,
     PerUserAggregation,
@@ -431,7 +432,7 @@ def validate_funnel_args(
     conversion_window_unit: str = "day",
     math: str = "conversion_rate_unique",
     exclusions: list[Exclusion] | None,
-    holding_constant: list[Any] | None = None,
+    holding_constant: Sequence[str | HoldingConstant] | None = None,
     from_date: str | None,
     to_date: str | None,
     last: int,
@@ -533,7 +534,10 @@ def validate_funnel_args(
             )
 
     # F3: Positive integer conversion window
-    if not isinstance(conversion_window, int) or isinstance(conversion_window, bool):
+    _valid_window = isinstance(conversion_window, int) and not isinstance(
+        conversion_window, bool
+    )
+    if not _valid_window:
         errors.append(
             ValidationError(
                 path="conversion_window",
@@ -553,8 +557,12 @@ def validate_funnel_args(
             )
         )
 
-    # F3b: Maximum conversion window per unit
-    if conversion_window_unit in MAX_CONVERSION_WINDOW and conversion_window > 0:
+    # F3b: Maximum conversion window per unit (requires valid int)
+    if (
+        _valid_window
+        and conversion_window_unit in MAX_CONVERSION_WINDOW
+        and conversion_window > 0
+    ):
         max_val = MAX_CONVERSION_WINDOW[conversion_window_unit]
         if conversion_window > max_val:
             errors.append(
@@ -581,44 +589,47 @@ def validate_funnel_args(
             )
         )
 
-    # F7b: Minimum conversion window per unit (second requires >=2)
-    if conversion_window_unit == "second" and 0 < conversion_window < 2:
-        errors.append(
-            ValidationError(
-                path="conversion_window",
-                message=(
-                    f"conversion_window must be at least 2 when "
-                    f"conversion_window_unit='second' (got {conversion_window})"
-                ),
-                code="F7_SECOND_MIN_WINDOW",
-                suggestion=("2",),
+    if _valid_window:
+        # F7b: Minimum conversion window per unit (second requires >=2)
+        if conversion_window_unit == "second" and 0 < conversion_window < 2:
+            errors.append(
+                ValidationError(
+                    path="conversion_window",
+                    message=(
+                        f"conversion_window must be at least 2 when "
+                        f"conversion_window_unit='second' (got {conversion_window})"
+                    ),
+                    code="F7_SECOND_MIN_WINDOW",
+                    suggestion=("2",),
+                )
             )
-        )
 
-    # F9: Session math requires session window
-    _SESSION_MATH = frozenset({"conversion_rate_session"})
-    if math in _SESSION_MATH and conversion_window_unit != "session":
-        errors.append(
-            ValidationError(
-                path="math",
-                message=(f"math='{math}' requires conversion_window_unit='session'"),
-                code="F9_SESSION_MATH_REQUIRES_SESSION_WINDOW",
+        # F9: Session math requires session window
+        _SESSION_MATH = frozenset({"conversion_rate_session"})
+        if math in _SESSION_MATH and conversion_window_unit != "session":
+            errors.append(
+                ValidationError(
+                    path="math",
+                    message=(
+                        f"math='{math}' requires conversion_window_unit='session'"
+                    ),
+                    code="F9_SESSION_MATH_REQUIRES_SESSION_WINDOW",
+                )
             )
-        )
-    if (
-        conversion_window_unit == "session"
-        and math not in _SESSION_MATH
-        and conversion_window != 1
-    ):
-        errors.append(
-            ValidationError(
-                path="conversion_window",
-                message=(
-                    "conversion_window_unit='session' requires conversion_window=1"
-                ),
-                code="F9_SESSION_WINDOW_REQUIRES_ONE",
+        if (
+            conversion_window_unit == "session"
+            and math not in _SESSION_MATH
+            and conversion_window != 1
+        ):
+            errors.append(
+                ValidationError(
+                    path="conversion_window",
+                    message=(
+                        "conversion_window_unit='session' requires conversion_window=1"
+                    ),
+                    code="F9_SESSION_WINDOW_REQUIRES_ONE",
+                )
             )
-        )
 
     # F4: Non-empty exclusion event names and step range validation
     if exclusions is not None:

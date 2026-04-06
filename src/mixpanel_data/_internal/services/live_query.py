@@ -9,6 +9,7 @@ analytics data changes frequently and queries should return fresh data.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -356,8 +357,9 @@ def _extract_funnel_steps_from_series(
     if "$overall" in series:
         overall = series["$overall"]
         if isinstance(overall, dict) and "steps" in overall:
-            overall_steps: list[dict[str, Any]] = overall["steps"]
-            return overall_steps
+            overall_steps = overall["steps"]
+            if isinstance(overall_steps, list):
+                return overall_steps
         if isinstance(overall, list):
             result_list: list[dict[str, Any]] = overall
             return result_list
@@ -396,8 +398,15 @@ def _extract_funnel_steps_from_series(
     if not isinstance(count_data, dict):
         return []
 
-    # Step names are like "1. Signup", "2. Purchase" — sort by prefix
-    step_names = sorted(count_data.keys())
+    # Step names are like "1. Signup", "2. Purchase" — sort by numeric prefix
+    # to handle 10+ steps correctly (lexicographic sort would put "10." before "2.")
+    _STEP_PREFIX_RE = re.compile(r"^(\d+)\.\s*(.+)$")
+
+    def _step_sort_key(name: str) -> tuple[int, str]:
+        m = _STEP_PREFIX_RE.match(name)
+        return (int(m.group(1)), name) if m else (float("inf"), name)  # type: ignore[arg-type]
+
+    step_names = sorted(count_data.keys(), key=_step_sort_key)
 
     # Helper to get a metric value for a step (handles "all" segment)
     def _get_val(metric: str, step_name: str) -> Any:
@@ -410,11 +419,8 @@ def _extract_funnel_steps_from_series(
     # Build step dicts
     result: list[dict[str, Any]] = []
     for step_name in step_names:
-        # Strip "N. " prefix to get clean event name
-        import re
-
-        match = re.match(r"^\d+\.\s*(.+)$", step_name)
-        event = match.group(1) if match else step_name
+        match = _STEP_PREFIX_RE.match(step_name)
+        event = match.group(2) if match else step_name
 
         result.append(
             {
