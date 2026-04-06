@@ -41,6 +41,7 @@ from mixpanel_data.types import (
     PropertyDistributionResult,
     PropertyValueCount,
     QueryResult,
+    RetentionQueryResult,
     RetentionResult,
     SavedReportResult,
     SegmentationResult,
@@ -498,6 +499,185 @@ def _transform_funnel_result(
         series=series,
         params=bookmark_params,
         meta=raw.get("meta", {}),
+    )
+
+
+def _normalize_cohort_date(key: str) -> str:
+    """Normalize an ISO timestamp cohort key to YYYY-MM-DD.
+
+    The insights API may return cohort date keys as full ISO timestamps
+    (e.g. ``2025-01-01T00:00:00+00:00``). This truncates to the first
+    10 characters to produce a plain ``YYYY-MM-DD`` date string.
+
+    Args:
+        key: Cohort date key from the API response.
+
+    Returns:
+        Normalized date string (``YYYY-MM-DD``).
+    """
+    return key[:10] if "T" in key else key
+
+
+def _extract_cohorts_and_average(
+    data: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Extract date-keyed cohorts and $average from a cohort data dict.
+
+    Normalizes cohort date keys to ``YYYY-MM-DD`` format.
+
+    Args:
+        data: Cohort data dict (date keys + optional ``$average``).
+
+    Returns:
+        Tuple of (cohorts dict, average dict).
+    """
+    average: dict[str, Any] = {}
+    cohorts: dict[str, dict[str, Any]] = {}
+    for key, value in data.items():
+        if key == "$average":
+            average = value if isinstance(value, dict) else {}
+        elif isinstance(value, dict):
+            cohorts[_normalize_cohort_date(key)] = value
+    return cohorts, average
+
+
+def _transform_retention_result(
+    raw: dict[str, Any],
+    bookmark_params: dict[str, Any],
+) -> RetentionQueryResult:
+    """Transform raw insights query retention response into RetentionQueryResult.
+
+    Extracts computed_at, date_range, cohort data from the series, and
+    the synthetic ``$average`` cohort. Validates that the response
+    contains expected fields and is not an error-as-200.
+
+    The insights API always wraps retention data in a metric name key::
+
+        series = {
+            "EventA and then EventB": {
+                "2025-01-01T00:00:00+00:00": {"first": 100, "counts": [...], "rates": [...]},
+                "$average": {"first": 90, "counts": [...], "rates": [...]},
+            }
+        }
+
+    For segmented (``group_by``) queries, the response nests segments
+    alongside ``$overall``::
+
+        series = {
+            "EventA and then EventB": {
+                "$overall": {"2025-01-01": {...}, "$average": {...}},
+                "iOS":      {"2025-01-01": {...}, "$average": {...}},
+                "Android":  {"2025-01-01": {...}, "$average": {...}},
+            }
+        }
+
+    This function unwraps the outer metric key and extracts both
+    aggregate (``$overall``) and per-segment cohort data.
+
+    Args:
+        raw: Raw API response dictionary from insights query.
+        bookmark_params: The bookmark params dict sent to the API
+            (preserved in the result for debugging/persistence).
+
+    Returns:
+        Typed RetentionQueryResult with cohort data and metadata.
+
+    Raises:
+        QueryError: If the response contains an error or is missing
+            required fields.
+    """
+    # Check for error responses that leaked through as HTTP 200
+    if "error" in raw:
+        raise QueryError(
+            f"Retention query failed: {raw['error']}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    if "series" not in raw:
+        raise QueryError(
+            "Retention query returned unexpected response shape "
+            f"(missing 'series' key). Keys present: {sorted(raw.keys())}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    date_range = raw.get("date_range", {})
+    series = raw.get("series", {})
+
+    if not isinstance(series, dict):
+        raise QueryError(
+            f"Retention query 'series' field is {type(series).__name__}, "
+            "expected dict.",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    # Unwrap the metric name key: series = {"metric_name": {date_cohorts}}
+    # The API returns exactly one top-level key (the metric name).
+    # Multiple top-level keys indicate a genuinely malformed response.
+    cohort_data: dict[str, Any] = {}
+    if series:
+        if len(series) > 1:
+            raise QueryError(
+                "Retention query returned segmented series with "
+                f"{len(series)} keys that cannot be represented as a "
+                "single RetentionQueryResult without losing data. "
+                f"Keys: {sorted(series.keys())}",
+                status_code=200,
+                response_body=raw,
+                request_body=bookmark_params,
+            )
+        for _metric_key, value in series.items():
+            if isinstance(value, dict):
+                cohort_data = value
+                break
+        else:
+            # No dict value found — the metric key maps to a non-dict
+            metric_key = next(iter(series))
+            raise QueryError(
+                f"Retention series value for key {metric_key!r} is not a "
+                f"dict (got {type(series[metric_key]).__name__}). "
+                "Expected cohort data dictionary.",
+                status_code=200,
+                response_body=raw,
+                request_body=bookmark_params,
+            )
+
+    # Handle segmented responses: $overall + named segments
+    segments: dict[str, dict[str, dict[str, Any]]] = {}
+    segment_averages: dict[str, dict[str, Any]] = {}
+
+    if "$overall" in cohort_data and isinstance(cohort_data["$overall"], dict):
+        # Extract aggregate from $overall
+        overall_data = cohort_data["$overall"]
+        cohorts, average = _extract_cohorts_and_average(overall_data)
+
+        # Extract named segments (everything except $overall)
+        for seg_key, seg_value in cohort_data.items():
+            if seg_key == "$overall" or not isinstance(seg_value, dict):
+                continue
+            seg_cohorts, seg_avg = _extract_cohorts_and_average(seg_value)
+            segments[seg_key] = seg_cohorts
+            if seg_avg:
+                segment_averages[seg_key] = seg_avg
+    else:
+        # Unsegmented: extract $average and date-keyed cohorts directly
+        cohorts, average = _extract_cohorts_and_average(cohort_data)
+
+    return RetentionQueryResult(
+        computed_at=raw.get("computed_at", ""),
+        from_date=date_range.get("from_date", ""),
+        to_date=date_range.get("to_date", ""),
+        cohorts=cohorts,
+        average=average,
+        params=bookmark_params,
+        meta=raw.get("meta", {}),
+        segments=segments,
+        segment_averages=segment_averages,
     )
 
 
@@ -1037,6 +1217,48 @@ class LiveQueryService:
         }
         raw = self._api_client.insights_query(body)
         return _transform_funnel_result(raw, bookmark_params)
+
+    def query_retention(
+        self,
+        bookmark_params: dict[str, Any],
+        project_id: int,
+    ) -> RetentionQueryResult:
+        """Execute an inline retention query with pre-built bookmark params.
+
+        Posts retention bookmark params to the insights query endpoint
+        (the API detects ``behavior.type == "retention"`` and delegates
+        to the retention query engine), then transforms the response
+        into a RetentionQueryResult with lazy DataFrame.
+
+        Args:
+            bookmark_params: Pre-built retention bookmark params dict.
+            project_id: Mixpanel project ID.
+
+        Returns:
+            RetentionQueryResult with cohort data, DataFrame,
+            and metadata.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid bookmark params.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            result = live_query.query_retention(
+                bookmark_params={"sections": {...}, "displayOptions": {...}},
+                project_id=12345,
+            )
+            print(result.cohorts)
+            ```
+        """
+        body: dict[str, Any] = {
+            "bookmark": bookmark_params,
+            "project_id": project_id,
+            "queryLimits": {"limit": 3000},
+        }
+        raw = self._api_client.insights_query(body)
+        return _transform_retention_result(raw, bookmark_params)
 
     def query_flows(
         self,

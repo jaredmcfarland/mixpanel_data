@@ -46,8 +46,9 @@ from mixpanel_data._internal.validation import (
     validate_bookmark,
     validate_funnel_args,
     validate_query_args,
+    validate_retention_args,
 )
-from mixpanel_data._literal_types import QueryTimeUnit
+from mixpanel_data._literal_types import QueryTimeUnit, TimeUnit
 from mixpanel_data.exceptions import (
     BookmarkValidationError,
     ConfigError,
@@ -148,6 +149,11 @@ from mixpanel_data.types import (
     PublicWorkspace,
     QueryResult,
     ReplaceSchemaEnforcementParams,
+    RetentionAlignment,
+    RetentionEvent,
+    RetentionMathType,
+    RetentionMode,
+    RetentionQueryResult,
     RetentionResult,
     SavedCohort,
     SavedReportResult,
@@ -2644,6 +2650,404 @@ class Workspace:
             where=where,
             exclusions=exclusions,
             holding_constant=holding_constant,
+            mode=mode,
+        )
+
+    # =========================================================================
+    # Retention Query (Phase 033)
+    # =========================================================================
+
+    def _build_retention_params(
+        self,
+        *,
+        born_event: RetentionEvent,
+        return_event: RetentionEvent,
+        retention_unit: TimeUnit,
+        alignment: RetentionAlignment,
+        bucket_sizes: list[int] | None,
+        math: RetentionMathType,
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        unit: QueryTimeUnit,
+        group_by: str | GroupBy | list[str | GroupBy] | None,
+        where: Filter | list[Filter] | None,
+        mode: RetentionMode,
+    ) -> dict[str, Any]:
+        """Build retention bookmark params dict from typed arguments.
+
+        Generates the complete bookmark JSON structure expected by
+        the Mixpanel insights query API for retention-type bookmarks.
+
+        Args:
+            born_event: Normalized RetentionEvent for born event.
+            return_event: Normalized RetentionEvent for return event.
+            retention_unit: Retention period unit.
+            alignment: Retention alignment mode.
+            bucket_sizes: Custom bucket sizes or None.
+            math: Aggregation function.
+            from_date: Start date (YYYY-MM-DD) or None.
+            to_date: End date (YYYY-MM-DD) or None.
+            last: Relative date range in days.
+            unit: Time granularity.
+            group_by: Breakdown specification.
+            where: Filter conditions.
+            mode: Display mode (curve, trends, table).
+
+        Returns:
+            Bookmark params dict ready for insights query API.
+        """
+        # Build behaviors array (exactly 2: born + return)
+        behaviors: list[dict[str, Any]] = []
+        for evt in [born_event, return_event]:
+            behavior_entry: dict[str, Any] = {
+                "type": "event",
+                "id": None,
+                "name": evt.event,
+                "filters": [],
+                "filtersDeterminer": evt.filters_combinator,
+            }
+            # Per-event filters
+            if evt.filters:
+                behavior_entry["filters"] = [build_filter_entry(f) for f in evt.filters]
+            behaviors.append(behavior_entry)
+
+        # Build behavior block
+        behavior: dict[str, Any] = {
+            "type": "retention",
+            "resourceType": "events",
+            "behaviors": behaviors,
+            "retentionUnit": retention_unit,
+            "retentionAlignmentType": alignment,
+            "retentionCustomBucketSizes": list(bucket_sizes) if bucket_sizes else [],
+            "filter": [],
+        }
+
+        # Build measurement
+        measurement: dict[str, Any] = {
+            "math": math,
+        }
+
+        # Build show clause
+        show: list[dict[str, Any]] = [
+            {
+                "type": "metric",
+                "behavior": behavior,
+                "measurement": measurement,
+            }
+        ]
+
+        # Build sections using shared builders
+        time_section = build_time_section(
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+        )
+        filter_section = build_filter_section(where)
+        group_section = build_group_section(group_by)
+
+        # Chart type mapping
+        chart_type_map = {
+            "curve": "retention-curve",
+            "trends": "line",
+            "table": "table",
+        }
+
+        return {
+            "sections": {
+                "show": show,
+                "time": time_section,
+                "filter": filter_section,
+                "group": group_section,
+                "formula": [],
+            },
+            "displayOptions": {
+                "chartType": chart_type_map.get(mode, "retention-curve"),
+            },
+        }
+
+    def _resolve_and_build_retention_params(
+        self,
+        *,
+        born_event: str | RetentionEvent,
+        return_event: str | RetentionEvent,
+        retention_unit: TimeUnit,
+        alignment: RetentionAlignment,
+        bucket_sizes: list[int] | None,
+        math: RetentionMathType,
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        unit: QueryTimeUnit,
+        group_by: str | GroupBy | list[str | GroupBy] | None,
+        where: Filter | list[Filter] | None,
+        mode: RetentionMode,
+    ) -> dict[str, Any]:
+        """Normalize, validate, and build retention bookmark params.
+
+        Shared implementation for :meth:`query_retention` and
+        :meth:`build_retention_params`. Handles normalization of
+        string shorthand to RetentionEvent objects, argument validation
+        (Layer 1), bookmark construction, and structure validation
+        (Layer 2).
+
+        Args:
+            born_event: Born event spec (string or RetentionEvent).
+            return_event: Return event spec (string or RetentionEvent).
+            retention_unit: Retention period unit.
+            alignment: Retention alignment mode.
+            bucket_sizes: Custom bucket sizes or None.
+            math: Aggregation function.
+            from_date: Start date (YYYY-MM-DD) or None.
+            to_date: End date (YYYY-MM-DD) or None.
+            last: Relative date range in days.
+            unit: Time granularity.
+            group_by: Breakdown specification.
+            where: Filter conditions.
+            mode: Display mode.
+
+        Returns:
+            Validated bookmark params dict.
+
+        Raises:
+            BookmarkValidationError: If validation fails at any layer.
+        """
+        # Normalize events: str → RetentionEvent
+        norm_born = (
+            RetentionEvent(born_event) if isinstance(born_event, str) else born_event
+        )
+        norm_return = (
+            RetentionEvent(return_event)
+            if isinstance(return_event, str)
+            else return_event
+        )
+
+        # Layer 1: Argument validation
+        arg_errors = validate_retention_args(
+            born_event=norm_born.event,
+            return_event=norm_return.event,
+            retention_unit=retention_unit,
+            alignment=alignment,
+            bucket_sizes=bucket_sizes,
+            math=math,
+            mode=mode,
+            unit=unit,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            group_by=group_by,
+        )
+        if any(e.severity == "error" for e in arg_errors):
+            raise BookmarkValidationError(arg_errors)
+
+        # Build bookmark params
+        params = self._build_retention_params(
+            born_event=norm_born,
+            return_event=norm_return,
+            retention_unit=retention_unit,
+            alignment=alignment,
+            bucket_sizes=bucket_sizes,
+            math=math,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            group_by=group_by,
+            where=where,
+            mode=mode,
+        )
+
+        # Layer 2: Bookmark structure validation
+        bookmark_errors = validate_bookmark(params, bookmark_type="retention")
+        if any(e.severity == "error" for e in bookmark_errors):
+            raise BookmarkValidationError(bookmark_errors)
+
+        return params
+
+    def query_retention(
+        self,
+        born_event: str | RetentionEvent,
+        return_event: str | RetentionEvent,
+        *,
+        retention_unit: TimeUnit = "week",
+        alignment: RetentionAlignment = "birth",
+        bucket_sizes: list[int] | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        unit: QueryTimeUnit = "day",
+        math: RetentionMathType = "retention_rate",
+        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        where: Filter | list[Filter] | None = None,
+        mode: RetentionMode = "curve",
+    ) -> RetentionQueryResult:
+        """Run a typed retention query against the Mixpanel API.
+
+        Generates retention bookmark params from keyword arguments, POSTs
+        them inline to ``/api/query/insights``, and returns a structured
+        RetentionQueryResult with lazy DataFrame conversion.
+
+        Args:
+            born_event: Event that defines cohort membership. Accepts
+                an event name string or a ``RetentionEvent`` object
+                for per-event filters.
+            return_event: Event that defines return. Accepts an event
+                name string or a ``RetentionEvent`` object.
+            retention_unit: Retention period unit. Default: ``"week"``.
+            alignment: Retention alignment mode. Default: ``"birth"``.
+            bucket_sizes: Custom bucket sizes (positive ints in
+                ascending order). Default: ``None`` (uniform buckets).
+            from_date: Start date (YYYY-MM-DD). If set, overrides
+                ``last``.
+            to_date: End date (YYYY-MM-DD). Requires ``from_date``.
+            last: Relative time range in days. Default: 30.
+            unit: Time aggregation unit (``day``, ``week``, or
+                ``month`` — ``hour`` is not supported for retention).
+                Default: ``"day"``.
+            math: Retention aggregation function. Default:
+                ``"retention_rate"``.
+            group_by: Break down results by property.
+            where: Filter results by conditions.
+            mode: Result display mode. Default: ``"curve"``.
+
+        Returns:
+            RetentionQueryResult with cohort data, DataFrame, and
+            metadata.
+
+        Raises:
+            BookmarkValidationError: If arguments violate validation
+                rules (before API call).
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid query parameters.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Simple retention query
+            result = ws.query_retention("Signup", "Login")
+            print(result.average)
+
+            # With configuration
+            result = ws.query_retention(
+                "Signup", "Login",
+                retention_unit="day",
+                bucket_sizes=[1, 3, 7, 14, 30],
+                last=90,
+            )
+            print(result.df)
+            ```
+        """
+        params = self._resolve_and_build_retention_params(
+            born_event=born_event,
+            return_event=return_event,
+            retention_unit=retention_unit,
+            alignment=alignment,
+            bucket_sizes=bucket_sizes,
+            math=math,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            group_by=group_by,
+            where=where,
+            mode=mode,
+        )
+
+        credentials = self._credentials
+        if credentials is None:
+            raise ConfigError(
+                "API access requires credentials. "
+                "Use Workspace() with credentials instead of Workspace.open()."
+            )
+        return self._live_query_service.query_retention(
+            bookmark_params=params,
+            project_id=int(credentials.project_id),
+        )
+
+    def build_retention_params(
+        self,
+        born_event: str | RetentionEvent,
+        return_event: str | RetentionEvent,
+        *,
+        retention_unit: TimeUnit = "week",
+        alignment: RetentionAlignment = "birth",
+        bucket_sizes: list[int] | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        unit: QueryTimeUnit = "day",
+        math: RetentionMathType = "retention_rate",
+        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        where: Filter | list[Filter] | None = None,
+        mode: RetentionMode = "curve",
+    ) -> dict[str, Any]:
+        """Build validated retention bookmark params without executing.
+
+        Accepts the same arguments as :meth:`query_retention` but returns
+        the generated bookmark params ``dict`` (not a
+        ``RetentionQueryResult``) instead of querying the API. Useful for
+        debugging, inspecting generated JSON, persisting via
+        :meth:`create_bookmark`, or testing.
+
+        Args:
+            born_event: Event that defines cohort membership.
+            return_event: Event that defines return.
+            retention_unit: Retention period unit. Default: ``"week"``.
+            alignment: Retention alignment mode. Default: ``"birth"``.
+            bucket_sizes: Custom bucket sizes. Default: ``None``.
+            from_date: Start date (YYYY-MM-DD) or None.
+            to_date: End date (YYYY-MM-DD) or None.
+            last: Relative time range in days. Default: 30.
+            unit: Time aggregation unit (``day``, ``week``, or
+                ``month`` — ``hour`` is not supported for retention).
+                Default: ``"day"``.
+            math: Aggregation function. Default:
+                ``"retention_rate"``.
+            group_by: Break down results by property.
+            where: Filter results by conditions.
+            mode: Display mode. Default: ``"curve"``.
+
+        Returns:
+            Bookmark params dict with ``sections`` and
+            ``displayOptions`` keys.
+
+        Raises:
+            BookmarkValidationError: If arguments violate validation
+                rules.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Inspect generated JSON
+            params = ws.build_retention_params("Signup", "Login")
+            print(json.dumps(params, indent=2))
+
+            # Save as a report
+            ws.create_bookmark(CreateBookmarkParams(
+                name="Signup → Login Retention",
+                bookmark_type="retention",
+                params=params,
+            ))
+            ```
+        """
+        return self._resolve_and_build_retention_params(
+            born_event=born_event,
+            return_event=return_event,
+            retention_unit=retention_unit,
+            alignment=alignment,
+            bucket_sizes=bucket_sizes,
+            math=math,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            group_by=group_by,
+            where=where,
             mode=mode,
         )
 

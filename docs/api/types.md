@@ -83,6 +83,35 @@ Types for `Workspace.query_funnel()` — typed funnel conversion analysis with s
       show_root_heading: true
       show_root_toc_entry: true
 
+## Retention Query Types
+
+Types for `Workspace.query_retention()` — typed retention analysis with event pairs, custom buckets, alignment modes, and segmentation.
+
+::: mixpanel_data.RetentionEvent
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.RetentionAlignment
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.RetentionMode
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.RetentionMathType
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.RetentionQueryResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Legacy Query Results
 
 ::: mixpanel_data.SegmentationResult

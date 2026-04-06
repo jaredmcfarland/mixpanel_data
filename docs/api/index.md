@@ -25,6 +25,9 @@ from mixpanel_data import (
     MathType, PerUserAggregation, FilterPropertyType,
 )
 
+# Retention Query types
+from mixpanel_data import RetentionEvent, RetentionQueryResult
+
 # Auth utilities
 from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
 
@@ -65,6 +68,8 @@ The main entry point for all operations:
 
 - **Discovery** — Explore events, properties, funnels, cohorts
 - **Insights Queries** — Typed analytics queries using the Insights engine (`query()`)
+- **Funnel Queries** — Typed funnel conversion analysis (`query_funnel()`)
+- **Retention Queries** — Typed retention analysis with event pairs (`query_retention()`)
 - **Live Queries** — Legacy analytics endpoints (segmentation, funnels, retention, JQL)
 - **Streaming** — Stream events and profiles directly from Mixpanel (ETL, pipelines)
 - **Entity CRUD & Data Governance** — Create, read, update, delete dashboards, reports, cohorts, feature flags, experiments, plus Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, volume anomalies, and event deletion requests
@@ -102,9 +107,11 @@ Typed results for all operations:
 
 - **QueryResult** — Insights query results (from `query()`)
 - **Metric**, **Filter**, **Formula**, **GroupBy** — Query building blocks
+- **FunnelQueryResult**, **FunnelStep**, **Exclusion** — Typed funnel results
+- **RetentionQueryResult**, **RetentionEvent**, **RetentionAlignment**, **RetentionMode**, **RetentionMathType** — Typed retention results
 - **SegmentationResult** — Time-series data (legacy)
-- **FunnelResult** — Funnel conversion data
-- **RetentionResult** — Retention cohort data
+- **FunnelResult** — Funnel conversion data (legacy)
+- **RetentionResult** — Retention cohort data (legacy)
 - **Dashboard**, **Bookmark**, **Cohort** — Entity models for CRUD operations
 - **EventDefinition**, **DropFilter**, **CustomProperty**, **LookupTable** — Data governance models
 - **SchemaEntry**, **SchemaEnforcementConfig**, **AuditResponse**, **DataVolumeAnomaly**, **EventDeletionRequest** — Schema governance models

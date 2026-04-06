@@ -161,6 +161,9 @@ step.avg_time          # timedelta or None
 
 ## Retention
 
+!!! tip "Looking for Typed Retention Queries?"
+    For per-event filters, custom retention buckets, alignment modes, display modes, typed breakdowns, and persistable results — without expression-string filters — see **[Retention Queries](query-retention.md)**.
+
 Cohort-based retention analysis:
 
 === "Python"

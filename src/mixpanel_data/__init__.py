@@ -164,6 +164,11 @@ from mixpanel_data.types import (
     QueryResult,
     RcaSourceData,
     ReplaceSchemaEnforcementParams,
+    RetentionAlignment,
+    RetentionEvent,
+    RetentionMathType,
+    RetentionMode,
+    RetentionQueryResult,
     RetentionResult,
     SavedCohort,
     SavedReportResult,
@@ -414,4 +419,10 @@ __all__ = [
     "HoldingConstant",
     "FunnelMathType",
     "FunnelQueryResult",
+    # Retention Query types (Phase 033)
+    "RetentionAlignment",
+    "RetentionEvent",
+    "RetentionMathType",
+    "RetentionMode",
+    "RetentionQueryResult",
 ]
