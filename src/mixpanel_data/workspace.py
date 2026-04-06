@@ -26,7 +26,6 @@ Example:
 from __future__ import annotations
 
 import logging
-import re
 import time
 from collections.abc import Iterator, Sequence
 from datetime import date as _date
@@ -39,14 +38,15 @@ from mixpanel_data._internal.bookmark_builders import (
     build_filter_entry,
     build_filter_section,
     build_group_section,
-    build_segfilter_entry,
     build_time_section,
 )
 from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.segfilter import build_segfilter_entry
 from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
 from mixpanel_data._internal.validation import (
+    _CONTROL_CHAR_RE,
     validate_bookmark,
     validate_flow_args,
     validate_flow_bookmark,
@@ -199,7 +199,6 @@ from mixpanel_data.types import (
 # Limit validation bounds (Mixpanel API restriction)
 _MIN_LIMIT = 1
 _MAX_LIMIT = 100_000
-_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def _validate_limit(limit: int | None) -> None:
@@ -1266,7 +1265,7 @@ class Workspace:
         )
 
     def query_saved_flows(self, bookmark_id: int) -> FlowsResult:
-        """Query a saved Flows report (formerly query_flows).
+        """Query a saved Flows report.
 
         Executes a saved Flows report by its bookmark ID, returning
         step data, breakdowns, and conversion rates.
@@ -2882,8 +2881,8 @@ class Workspace:
                 {
                     "event": step.event,
                     "step_label": step.label or step.event,
-                    "forward": step.forward or 0,
-                    "reverse": step.reverse or 0,
+                    "forward": step.forward if step.forward is not None else 0,
+                    "reverse": step.reverse if step.reverse is not None else 0,
                     "bool_op": ("or" if step.filters_combinator == "any" else "and"),
                     "property_filter_params_list": [
                         build_segfilter_entry(f) for f in (step.filters or [])
@@ -3020,7 +3019,7 @@ class Workspace:
         for i, s in enumerate(steps):
             if s.filters:
                 for fi, f in enumerate(s.filters):
-                    if _CTRL_RE.search(f._property):
+                    if _CONTROL_CHAR_RE.search(f._property):
                         step_errors.append(
                             ValidationError(
                                 path=f"steps[{i}].filters[{fi}]",
@@ -3055,12 +3054,15 @@ class Workspace:
         if from_date is not None and to_date is None:
             to_date = _date.today().isoformat()
 
-        # Layer 1: Argument validation
+        # Layer 1: Argument validation — use effective direction values
+        # from normalized steps so per-step overrides aren't rejected by FL5.
+        effective_forward = max(s.forward or 0 for s in steps)
+        effective_reverse = max(s.reverse or 0 for s in steps)
         event_names = [s.event for s in steps]
         arg_errors = validate_flow_args(
             steps=event_names,
-            forward=forward,
-            reverse=reverse,
+            forward=effective_forward,
+            reverse=effective_reverse,
             count_type=count_type,
             mode=mode,
             cardinality=cardinality,

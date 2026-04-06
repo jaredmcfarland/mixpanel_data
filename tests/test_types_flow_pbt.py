@@ -22,7 +22,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from pydantic import SecretStr
 
@@ -387,7 +387,18 @@ class TestBuildFlowParamsPBT:
 
         The output ``steps`` array must have the same length as the
         input list of FlowStep objects passed to ``build_flow_params``.
+        Steps that explicitly zero both directions (overriding the
+        top-level default ``forward=1``) are correctly rejected by
+        FL5 validation, so skip those inputs.
         """
+        # build_flow_params defaults: forward=1, reverse=0.
+        # Skip when all steps would have zero effective direction.
+        effective = [
+            (s.forward if s.forward is not None else 1)
+            + (s.reverse if s.reverse is not None else 0)
+            for s in steps
+        ]
+        assume(max(effective) > 0)
         ws = _make_workspace()
         result = ws.build_flow_params(steps)
         assert len(result["steps"]) == len(steps)

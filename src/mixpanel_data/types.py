@@ -22,9 +22,10 @@ from dataclasses import dataclass, field
 from datetime import date as dt_date
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
-import networkx as nx
+if TYPE_CHECKING:
+    import networkx as nx
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
@@ -8463,7 +8464,7 @@ class FlowQueryResult(ResultWithDataFrame):
     mode: Literal["sankey", "paths"] = "sankey"
     _nodes_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
     _edges_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
-    _graph_cache: nx.DiGraph | None = field(default=None, repr=False, kw_only=True)
+    _graph_cache: Any = field(default=None, repr=False, kw_only=True)
 
     @property
     def nodes_df(self) -> pd.DataFrame:
@@ -8599,6 +8600,8 @@ class FlowQueryResult(ResultWithDataFrame):
             # 100
             ```
         """
+        import networkx as nx  # lazy — only paid when graph is accessed
+
         if self._graph_cache is not None:
             return self._graph_cache
         graph: nx.DiGraph = nx.DiGraph()

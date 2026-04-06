@@ -15,7 +15,7 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data.exceptions import ConfigError
+from mixpanel_data.exceptions import BookmarkValidationError, ConfigError
 from mixpanel_data.types import Filter, FlowQueryResult, FlowStep
 
 # =========================================================================
@@ -754,5 +754,120 @@ class TestMultiStepAnchorPosition:
             params = ws.build_flow_params("Login")
 
             assert params["anchor_position"] == 1
+        finally:
+            ws.close()
+
+
+# =========================================================================
+# T043: TestPerStepDirectionValidation — FL5 respects per-step overrides
+# =========================================================================
+
+
+class TestPerStepDirectionValidation:
+    """Tests that FL5 validation uses effective per-step direction values."""
+
+    def test_per_step_direction_overrides_bypass_fl5(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Per-step forward override is not rejected when top-level is 0."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                FlowStep("Login", forward=3),
+                forward=0,
+                reverse=0,
+            )
+
+            assert params["steps"][0]["forward"] == 3
+            assert params["steps"][0]["reverse"] == 0
+        finally:
+            ws.close()
+
+    def test_all_zero_direction_still_rejected(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """FL5 still rejects when no step has a non-zero direction."""
+        ws = workspace_factory()
+        try:
+            with pytest.raises(
+                BookmarkValidationError, match="forward or reverse must be > 0"
+            ):
+                ws.build_flow_params(
+                    FlowStep("Login"),  # forward=None, reverse=None → 0, 0
+                    forward=0,
+                    reverse=0,
+                )
+        finally:
+            ws.close()
+
+    def test_mixed_step_directions_pass(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Mixed per-step overrides pass when at least one direction > 0."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                [FlowStep("A", forward=3), FlowStep("B", reverse=2)],
+                forward=0,
+                reverse=0,
+            )
+
+            assert params["steps"][0]["forward"] == 3
+            assert params["steps"][0]["reverse"] == 0
+            assert params["steps"][1]["forward"] == 0
+            assert params["steps"][1]["reverse"] == 2
+        finally:
+            ws.close()
+
+
+# =========================================================================
+# T044: TestFlowStepDatetimeFilters — segfilter datetime operator mapping
+# =========================================================================
+
+
+class TestFlowStepDatetimeFilters:
+    """Tests that datetime filters produce correct segfilter operators."""
+
+    def test_flow_step_datetime_before_filter(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Filter.before() produces segfilter operator '>' (not '<')."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                FlowStep(
+                    "Login",
+                    filters=[Filter.before("$time", "2026-01-15")],
+                ),
+            )
+
+            segfilter = params["steps"][0]["property_filter_params_list"][0]
+            assert segfilter["filter"]["operator"] == ">"
+            assert segfilter["filter"]["operand"] == "01/15/2026"
+        finally:
+            ws.close()
+
+    def test_flow_step_relative_date_filter(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Filter.in_the_last() produces segfilter with operator, operand, and unit."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                FlowStep(
+                    "Login",
+                    filters=[Filter.in_the_last("$time", 7, "day")],
+                ),
+            )
+
+            segfilter = params["steps"][0]["property_filter_params_list"][0]
+            assert segfilter["filter"]["operator"] == ">"
+            assert segfilter["filter"]["operand"] == 7
+            assert segfilter["filter"]["unit"] == "days"
         finally:
             ws.close()

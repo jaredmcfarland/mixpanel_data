@@ -1062,6 +1062,13 @@ _MAX_FLOW_STEPS_DIRECTION = 5
 _MAX_FLOW_CARDINALITY = 50
 """Maximum cardinality (number of top paths shown) in a flow query."""
 
+_FLOW_MAX_WINDOW: dict[str, int] = {
+    "month": 12,
+    "week": 52,
+    "day": 366,
+}
+"""Maximum conversion window per unit (366-day equivalent for a leap year)."""
+
 
 def validate_flow_args(
     *,
@@ -1224,17 +1231,12 @@ def validate_flow_args(
         )
 
     # FL7b: conversion_window max per unit (366-day equivalent)
-    _flow_max_window: dict[str, int] = {
-        "month": 12,
-        "week": 52,
-        "day": 367,
-    }
     if (
         conversion_window > 0
-        and conversion_window_unit in _flow_max_window
-        and conversion_window > _flow_max_window[conversion_window_unit]
+        and conversion_window_unit in _FLOW_MAX_WINDOW
+        and conversion_window > _FLOW_MAX_WINDOW[conversion_window_unit]
     ):
-        max_val = _flow_max_window[conversion_window_unit]
+        max_val = _FLOW_MAX_WINDOW[conversion_window_unit]
         errors.append(
             ValidationError(
                 path="conversion_window",
