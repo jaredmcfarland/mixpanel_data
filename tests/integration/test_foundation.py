@@ -16,7 +16,7 @@ from mixpanel_data import (
     AccountNotFoundError,
     AuthenticationError,
     FunnelResult,
-    FunnelStep,
+    FunnelResultStep,
     MixpanelDataError,
     RateLimitError,
 )
@@ -90,9 +90,9 @@ class TestFoundationLayerWorkflow:
     def test_funnel_result_workflow(self) -> None:
         """Test FunnelResult creation and step iteration."""
         steps = [
-            FunnelStep(event="View", count=1000, conversion_rate=1.0),
-            FunnelStep(event="Click", count=500, conversion_rate=0.5),
-            FunnelStep(event="Purchase", count=100, conversion_rate=0.2),
+            FunnelResultStep(event="View", count=1000, conversion_rate=1.0),
+            FunnelResultStep(event="Click", count=500, conversion_rate=0.5),
+            FunnelResultStep(event="Purchase", count=100, conversion_rate=0.2),
         ]
 
         result = FunnelResult(
@@ -147,14 +147,14 @@ class TestPublicAPIImports:
         """Test imports from mixpanel_data package."""
         from mixpanel_data import (
             ConfigError,
-            FunnelStep,
+            FunnelResultStep,
             MixpanelDataError,
         )
 
         # All should be importable
         assert MixpanelDataError is not None
         assert ConfigError is not None
-        assert FunnelStep is not None
+        assert FunnelResultStep is not None
 
     def test_auth_module_imports(self) -> None:
         """Test imports from mixpanel_data.auth module."""

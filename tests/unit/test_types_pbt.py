@@ -39,7 +39,7 @@ from mixpanel_data.types import (
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
-    FunnelStep,
+    FunnelResultStep,
     JQLResult,
     NumericAverageResult,
     NumericBucketResult,
@@ -413,7 +413,7 @@ class TestFunnelResultProperties:
     ) -> None:
         """to_dict() output should always be JSON-serializable."""
         steps = [
-            FunnelStep(
+            FunnelResultStep(
                 event=f"Step {i}",
                 count=max(0, 1000 - i * 100),
                 conversion_rate=max(0.0, 1.0 - i * 0.1),
@@ -439,7 +439,7 @@ class TestFunnelResultProperties:
     def test_df_row_count_matches_steps(self, step_count: int) -> None:
         """DataFrame should have one row per funnel step."""
         steps = [
-            FunnelStep(event=f"Step {i}", count=100, conversion_rate=0.5)
+            FunnelResultStep(event=f"Step {i}", count=100, conversion_rate=0.5)
             for i in range(step_count)
         ]
 

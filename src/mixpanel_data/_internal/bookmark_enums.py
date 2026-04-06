@@ -398,6 +398,27 @@ VALID_CONVERSION_WINDOW_UNITS: frozenset[str] = frozenset(
 )
 """Valid time units for funnel conversion window."""
 
+MAX_CONVERSION_WINDOW: dict[str, int] = {
+    "month": 12,
+    "session": 12,
+    "week": 52,
+    "day": 367,
+    "hour": 8808,
+    "minute": 528480,
+    "second": 31708800,
+}
+"""Maximum conversion window duration per unit.
+
+Sourced from ``analytics/api/version_2_0/arb_funnels/validate.py``
+``_MAX_LENGTHS`` dict. All values correspond to approximately 366 days.
+"""
+
+_MAX_FUNNEL_STEPS = 100
+"""Maximum number of steps allowed in a funnel query."""
+
+_MAX_HOLDING_CONSTANT = 3
+"""Maximum number of holding-constant properties allowed."""
+
 # =============================================================================
 # Retention-Specific Constants
 # =============================================================================

@@ -597,3 +597,93 @@ class TestValidateBookmarkLayer2:
         errors = validate_bookmark(bm)
         group_errors = [e for e in errors if e.code.startswith("B17")]
         assert group_errors == []
+
+
+class TestValidateMeasurementFunnelContext:
+    """Tests for _validate_measurement with bookmark_type='funnels'."""
+
+    def test_funnel_math_accepted(self) -> None:
+        """Valid funnel math types produce no errors when bookmark_type='funnels'."""
+        funnel_math_types = [
+            "conversion_rate_unique",
+            "conversion_rate_total",
+            "conversion_rate_session",
+            "unique",
+            "total",
+            "general",
+            "session",
+            "conversion_rate",
+        ]
+        for math_type in funnel_math_types:
+            bm = _minimal_funnel_bookmark(math=math_type)
+            errors = validate_bookmark(bm, bookmark_type="funnels")
+            math_errors = [e for e in errors if e.code == "B9_INVALID_MATH"]
+            assert math_errors == [], f"math='{math_type}' should be valid for funnels"
+
+    def test_insights_only_math_rejected_in_funnel_context(self) -> None:
+        """Insights-only math types are rejected when bookmark_type='funnels'."""
+        insights_only = ["dau", "wau", "mau", "cumulative_unique", "histogram"]
+        for math_type in insights_only:
+            bm = _minimal_funnel_bookmark(math=math_type)
+            errors = validate_bookmark(bm, bookmark_type="funnels")
+            math_errors = [e for e in errors if e.code == "B9_INVALID_MATH"]
+            assert len(math_errors) == 1, (
+                f"math='{math_type}' should be invalid for funnels"
+            )
+
+    def test_funnel_math_rejected_in_insights_context(self) -> None:
+        """Funnel-specific math types are rejected in default insights context."""
+        funnel_only = [
+            "conversion_rate",
+            "conversion_rate_session",
+            "general",
+            "session",
+        ]
+        for math_type in funnel_only:
+            bm = _minimal_bookmark()
+            bm["sections"]["show"][0]["measurement"]["math"] = math_type
+            errors = validate_bookmark(bm, bookmark_type="insights")
+            math_errors = [e for e in errors if e.code == "B9_INVALID_MATH"]
+            assert len(math_errors) == 1, (
+                f"math='{math_type}' should be invalid for insights"
+            )
+
+    def test_funnel_math_with_suggestion(self) -> None:
+        """Invalid funnel math produces suggestion from funnel math set."""
+        bm = _minimal_funnel_bookmark(math="conversion_rate_uniqu")
+        errors = validate_bookmark(bm, bookmark_type="funnels")
+        math_errors = [e for e in errors if e.code == "B9_INVALID_MATH"]
+        assert len(math_errors) == 1
+        assert math_errors[0].suggestion is not None
+        assert "conversion_rate_unique" in math_errors[0].suggestion
+
+
+def _minimal_funnel_bookmark(
+    math: str = "conversion_rate_unique",
+) -> dict[str, Any]:
+    """Return a minimal valid funnel bookmark params dict."""
+    return {
+        "sections": {
+            "show": [
+                {
+                    "behavior": {
+                        "type": "funnel",
+                        "behaviors": [
+                            {"name": "Signup", "resourceType": "events"},
+                            {"name": "Purchase", "resourceType": "events"},
+                        ],
+                    },
+                    "measurement": {
+                        "math": math,
+                    },
+                }
+            ],
+            "time": [{"unit": "day", "dateRangeType": "in the last"}],
+            "filter": [],
+            "group": [],
+            "formula": [],
+        },
+        "displayOptions": {
+            "chartType": "funnel-steps",
+        },
+    }

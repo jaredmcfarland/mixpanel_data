@@ -17,7 +17,7 @@ from mixpanel_data.types import (
     FlowsResult,
     FrequencyResult,
     FunnelResult,
-    FunnelStep,
+    FunnelResultStep,
     JQLResult,
     NumericAverageResult,
     NumericBucketResult,
@@ -263,12 +263,12 @@ class TestQueryFunnel:
             to_date="2024-01-31",
             conversion_rate=0.5,
             steps=[
-                FunnelStep(
+                FunnelResultStep(
                     event="View Page",
                     count=1000,
                     conversion_rate=1.0,
                 ),
-                FunnelStep(
+                FunnelResultStep(
                     event="Sign Up",
                     count=500,
                     conversion_rate=0.5,
@@ -311,8 +311,8 @@ class TestQueryFunnel:
             to_date="2024-01-31",
             conversion_rate=0.5,
             steps=[
-                FunnelStep(event="View Page", count=1000, conversion_rate=1.0),
-                FunnelStep(event="Sign Up", count=500, conversion_rate=0.5),
+                FunnelResultStep(event="View Page", count=1000, conversion_rate=1.0),
+                FunnelResultStep(event="Sign Up", count=500, conversion_rate=0.5),
             ],
         )
 

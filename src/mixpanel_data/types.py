@@ -376,8 +376,8 @@ class SegmentationResult(ResultWithDataFrame):
 
 
 @dataclass(frozen=True)
-class FunnelStep:
-    """Single step in a funnel."""
+class FunnelResultStep:
+    """Single step result in a legacy funnel query response."""
 
     event: str
     """Event name for this step."""
@@ -423,7 +423,7 @@ class FunnelResult(ResultWithDataFrame):
     conversion_rate: float
     """Overall conversion rate (0.0 to 1.0)."""
 
-    steps: list[FunnelStep] = field(default_factory=list)
+    steps: list[FunnelResultStep] = field(default_factory=list)
     """Step-by-step breakdown."""
 
     @property
@@ -7752,6 +7752,341 @@ class QueryResult(ResultWithDataFrame):
             "from_date": self.from_date,
             "to_date": self.to_date,
             "headers": self.headers,
+            "series": self.series,
+            "params": self.params,
+            "meta": self.meta,
+        }
+
+
+# =============================================================================
+# Funnel Query Types (Phase 032)
+# =============================================================================
+
+FunnelMathType = Literal[
+    "conversion_rate_unique",
+    "conversion_rate_total",
+    "conversion_rate_session",
+    "unique",
+    "total",
+    "average",
+    "median",
+    "min",
+    "max",
+    "p25",
+    "p75",
+    "p90",
+    "p99",
+]
+"""Aggregation function for funnel query metrics.
+
++---------------------------+------------------------------------------------------+
+| Value                     | Meaning                                              |
++===========================+======================================================+
+| conversion_rate_unique    | Unique-user conversion rate (default)                |
++---------------------------+------------------------------------------------------+
+| conversion_rate_total     | Total-event conversion rate                          |
++---------------------------+------------------------------------------------------+
+| conversion_rate_session   | Session-based conversion rate                        |
++---------------------------+------------------------------------------------------+
+| unique                    | Raw count of unique users per step                   |
++---------------------------+------------------------------------------------------+
+| total                     | Raw total event count per step                       |
++---------------------------+------------------------------------------------------+
+| average                   | Mean of a numeric property per step                  |
++---------------------------+------------------------------------------------------+
+| median                    | Median of a numeric property per step                |
++---------------------------+------------------------------------------------------+
+| min                       | Minimum of a numeric property per step               |
++---------------------------+------------------------------------------------------+
+| max                       | Maximum of a numeric property per step               |
++---------------------------+------------------------------------------------------+
+| p25                       | 25th percentile of a numeric property per step       |
++---------------------------+------------------------------------------------------+
+| p75                       | 75th percentile of a numeric property per step       |
++---------------------------+------------------------------------------------------+
+| p90                       | 90th percentile of a numeric property per step       |
++---------------------------+------------------------------------------------------+
+| p99                       | 99th percentile of a numeric property per step       |
++---------------------------+------------------------------------------------------+
+
+These 13 values are the public-facing funnel math types. The Mixpanel API
+also accepts internal aliases (``"general"``, ``"session"``,
+``"conversion_rate"``) but those are not exposed in the public API.
+"""
+
+
+@dataclass(frozen=True)
+class FunnelStep:
+    """A single step in a funnel query.
+
+    Use plain event-name strings for simple funnels. Use ``FunnelStep``
+    objects when you need per-step filters, labels, or ordering overrides.
+
+    Attributes:
+        event: Mixpanel event name for this funnel step.
+        label: Display label for this step. Defaults to the event name
+            when ``None``.
+        filters: Per-step filter conditions. Each ``Filter`` restricts
+            which events count for this step. ``None`` means no filters.
+        filters_combinator: How per-step filters combine.
+            ``"all"`` requires all filters to match (AND logic).
+            ``"any"`` requires any filter to match (OR logic).
+        order: Per-step ordering override. Only meaningful when the
+            top-level funnel ``order`` is ``"any"``. ``None`` inherits
+            the top-level order.
+
+    Example:
+        ```python
+        from mixpanel_data import FunnelStep, Filter
+
+        # Simple step (equivalent to just using "Signup" string)
+        step1 = FunnelStep("Signup")
+
+        # Step with per-step filter and label
+        step2 = FunnelStep(
+            "Purchase",
+            label="High-Value Purchase",
+            filters=[Filter.greater_than("amount", 50)],
+        )
+
+        ws.query_funnel([step1, step2])
+        ```
+    """
+
+    event: str
+    """Mixpanel event name for this funnel step."""
+
+    label: str | None = None
+    """Display label for this step (defaults to event name)."""
+
+    filters: list[Filter] | None = None
+    """Per-step filter conditions."""
+
+    filters_combinator: Literal["all", "any"] = "all"
+    """How per-step filters combine (AND/OR)."""
+
+    order: Literal["loose", "any"] | None = None
+    """Per-step ordering override (only meaningful with top-level order='any')."""
+
+
+@dataclass(frozen=True)
+class Exclusion:
+    """An event to exclude between funnel steps.
+
+    Users who perform the excluded event within the specified step range
+    are removed from the funnel. Use plain strings for full-range
+    exclusions; use ``Exclusion`` objects when you need to target
+    specific step ranges.
+
+    Attributes:
+        event: Event name to exclude between steps.
+        from_step: Start of exclusion range (0-indexed, inclusive).
+            Defaults to 0 (first step).
+        to_step: End of exclusion range (0-indexed, inclusive).
+            ``None`` means up to the last step in the funnel.
+
+    Example:
+        ```python
+        from mixpanel_data import Exclusion
+
+        # Exclude between all steps (same as using string "Logout")
+        ex1 = Exclusion("Logout")
+
+        # Exclude only between steps 1 and 2
+        ex2 = Exclusion("Refund", from_step=1, to_step=2)
+
+        ws.query_funnel(
+            ["Signup", "Add to Cart", "Purchase"],
+            exclusions=[ex1, ex2],
+        )
+        ```
+    """
+
+    event: str
+    """Event name to exclude between steps."""
+
+    from_step: int = 0
+    """Start of exclusion range (0-indexed, inclusive)."""
+
+    to_step: int | None = None
+    """End of exclusion range (0-indexed, inclusive). None = last step."""
+
+
+@dataclass(frozen=True)
+class HoldingConstant:
+    """A property to hold constant across all funnel steps.
+
+    When a property is held constant, only users whose property value
+    is the same at every funnel step are counted as converting. For
+    example, holding ``"platform"`` constant means a user who signed up
+    on iOS but purchased on web is not counted as converting.
+
+    Attributes:
+        property: Property name to hold constant across steps.
+        resource_type: Whether this is an event property or a
+            user-profile property. Defaults to ``"events"``.
+
+    Example:
+        ```python
+        from mixpanel_data import HoldingConstant
+
+        # Hold an event property constant (default)
+        hc1 = HoldingConstant("platform")
+
+        # Hold a user-profile property constant
+        hc2 = HoldingConstant("plan_tier", resource_type="people")
+
+        ws.query_funnel(
+            ["Signup", "Purchase"],
+            holding_constant=[hc1, hc2],
+        )
+        ```
+    """
+
+    property: str
+    """Property name to hold constant across steps."""
+
+    resource_type: Literal["events", "people"] = "events"
+    """Whether this is an event property or user-profile property."""
+
+
+@dataclass(frozen=True)
+class FunnelQueryResult(ResultWithDataFrame):
+    """Result of a funnel query via the insights API.
+
+    Contains step-level conversion data, timing information, the
+    generated bookmark params (for debugging or persisting as a saved
+    report), and a lazy DataFrame conversion.
+
+    Unlike ``FunnelResult`` (which wraps the legacy funnel API), this
+    type wraps the richer bookmark-based insights API response and
+    provides additional fields like ``avg_time``, ``avg_time_from_start``,
+    and the ``params`` dict.
+
+    Attributes:
+        computed_at: When the query was computed (ISO format).
+        from_date: Effective start date from the response.
+        to_date: Effective end date from the response.
+        steps_data: Step-level results. Each dict contains keys:
+            ``event``, ``count``, ``step_conv_ratio``,
+            ``overall_conv_ratio``, ``avg_time``,
+            ``avg_time_from_start``.
+        series: Raw series data from the API (for advanced use).
+        params: Generated bookmark params sent to the API
+            (for debugging or persistence via ``create_bookmark``).
+        meta: Response metadata (e.g. ``sampling_factor``,
+            ``is_cached``).
+
+    Example:
+        ```python
+        result = ws.query_funnel(["Signup", "Purchase"])
+
+        # Overall conversion
+        print(result.overall_conversion_rate)  # e.g. 0.12
+
+        # DataFrame view
+        print(result.df)
+        #   step  event   count  step_conv_ratio  overall_conv_ratio  ...
+
+        # Save as a report
+        ws.create_bookmark(CreateBookmarkParams(
+            name="Signup → Purchase Funnel",
+            bookmark_type="funnels",
+            params=result.params,
+        ))
+        ```
+    """
+
+    computed_at: str
+    """When the query was computed (ISO format)."""
+
+    from_date: str
+    """Effective start date from the response."""
+
+    to_date: str
+    """Effective end date from the response."""
+
+    steps_data: list[dict[str, Any]] = field(default_factory=list)
+    """Step-level results (count, ratios, timing per step)."""
+
+    series: dict[str, Any] = field(default_factory=dict)
+    """Raw series data from the API."""
+
+    params: dict[str, Any] = field(default_factory=dict)
+    """Generated bookmark params sent to API."""
+
+    meta: dict[str, Any] = field(default_factory=dict)
+    """Response metadata (sampling_factor, is_cached, etc.)."""
+
+    @property
+    def overall_conversion_rate(self) -> float:
+        """End-to-end conversion rate from first to last step.
+
+        Returns:
+            Float between 0.0 and 1.0 representing the fraction of
+            users who completed all funnel steps. Returns 0.0 if
+            ``steps_data`` is empty.
+        """
+        if not self.steps_data:
+            return 0.0
+        last = self.steps_data[-1]
+        return float(last.get("overall_conv_ratio", 0.0))
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Convert to DataFrame with one row per funnel step.
+
+        Columns: ``step``, ``event``, ``count``, ``step_conv_ratio``,
+        ``overall_conv_ratio``, ``avg_time``, ``avg_time_from_start``.
+
+        Returns:
+            Normalized DataFrame with one row per step.
+        """
+        if self._df_cache is not None:
+            return self._df_cache
+
+        cols = [
+            "step",
+            "event",
+            "count",
+            "step_conv_ratio",
+            "overall_conv_ratio",
+            "avg_time",
+            "avg_time_from_start",
+        ]
+
+        rows: list[dict[str, Any]] = []
+        for i, step in enumerate(self.steps_data, start=1):
+            rows.append(
+                {
+                    "step": i,
+                    "event": step.get("event", f"Step {i}"),
+                    "count": step.get("count", 0),
+                    "step_conv_ratio": step.get("step_conv_ratio", 0.0),
+                    "overall_conv_ratio": step.get("overall_conv_ratio", 0.0),
+                    "avg_time": step.get("avg_time", 0.0),
+                    "avg_time_from_start": step.get("avg_time_from_start", 0.0),
+                }
+            )
+
+        result_df = (
+            pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
+        )
+
+        object.__setattr__(self, "_df_cache", result_df)
+        return result_df
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with all FunnelQueryResult fields.
+        """
+        return {
+            "computed_at": self.computed_at,
+            "from_date": self.from_date,
+            "to_date": self.to_date,
+            "steps_data": self.steps_data,
             "series": self.series,
             "params": self.params,
             "meta": self.meta,

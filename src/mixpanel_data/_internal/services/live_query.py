@@ -25,8 +25,9 @@ from mixpanel_data.types import (
     EventCountsResult,
     FlowsResult,
     FrequencyResult,
+    FunnelQueryResult,
     FunnelResult,
-    FunnelStep,
+    FunnelResultStep,
     JQLResult,
     NumericAverageResult,
     NumericBucketResult,
@@ -129,13 +130,15 @@ def _transform_funnel(
             else:
                 aggregated_counts[idx] = (event, count)
 
-    # Build FunnelStep list with recalculated conversion rates
-    steps: list[FunnelStep] = []
+    # Build FunnelResultStep list with recalculated conversion rates
+    steps: list[FunnelResultStep] = []
     prev_count = 0
     for idx in sorted(aggregated_counts.keys()):
         event, count = aggregated_counts[idx]
         conv_rate = 1.0 if idx == 0 else (count / prev_count if prev_count > 0 else 0.0)
-        steps.append(FunnelStep(event=event, count=count, conversion_rate=conv_rate))
+        steps.append(
+            FunnelResultStep(event=event, count=count, conversion_rate=conv_rate)
+        )
         prev_count = count
 
     # Overall conversion rate: last step / first step
@@ -303,6 +306,172 @@ def _transform_query_result(
         to_date=date_range.get("to_date", ""),
         headers=raw.get("headers", []),
         series=raw["series"],
+        params=bookmark_params,
+        meta=raw.get("meta", {}),
+    )
+
+
+def _extract_funnel_steps_from_series(
+    series: Any,
+) -> list[dict[str, Any]]:
+    """Extract step-level data from funnel series response.
+
+    The insights API returns funnel data organized by metric type,
+    with step names as keys (e.g. ``"1. Signup"``). This function
+    pivots that structure into a flat list of step dicts.
+
+    The response format is::
+
+        {
+          "Signup through Purchase": {
+            "count": {"1. Signup": {"all": 1000}, "2. Purchase": {"all": 120}},
+            "step_conv_ratio": {"1. Signup": {"all": 1.0}, ...},
+            "overall_conv_ratio": {...},
+            "avg_time": {...},
+            "avg_time_from_start": {...},
+          }
+        }
+
+    Args:
+        series: Raw series data from insights API response.
+
+    Returns:
+        List of step dicts with keys: ``event``, ``count``,
+        ``step_conv_ratio``, ``overall_conv_ratio``, ``avg_time``,
+        ``avg_time_from_start``.
+    """
+    if isinstance(series, list):
+        return series
+
+    if not isinstance(series, dict):
+        return []
+
+    # Direct "steps" key (alternative format)
+    if "steps" in series:
+        steps = series["steps"]
+        if isinstance(steps, list):
+            return steps
+
+    # Top-level "$overall" key (legacy/alternative format)
+    if "$overall" in series:
+        overall = series["$overall"]
+        if isinstance(overall, dict) and "steps" in overall:
+            overall_steps: list[dict[str, Any]] = overall["steps"]
+            return overall_steps
+        if isinstance(overall, list):
+            result_list: list[dict[str, Any]] = overall
+            return result_list
+
+    # Insights API funnel format: series is {funnel_key: {metric: {step: {seg: val}}}}
+    # With group_by: {funnel_key: {$overall: {metric: ...}, segment: {metric: ...}}}
+    # With trends:   {funnel_key: {date: {metric: ...}, date: {metric: ...}}}
+    # Find the first funnel key and resolve to the metrics dict
+    funnel_data: dict[str, Any] | None = None
+    for _key, value in series.items():
+        if not isinstance(value, dict):
+            continue
+        # Direct metrics format (no group_by, mode=steps)
+        if "count" in value:
+            funnel_data = value
+            break
+        # Segmented format (group_by): look for $overall
+        if "$overall" in value:
+            overall_val = value["$overall"]
+            if isinstance(overall_val, dict) and "count" in overall_val:
+                funnel_data = overall_val
+                break
+        # Trends format: look for first date-like key with metrics
+        for _sub_key, sub_val in value.items():
+            if isinstance(sub_val, dict) and "count" in sub_val:
+                funnel_data = sub_val
+                break
+        if funnel_data is not None:
+            break
+
+    if funnel_data is None:
+        return []
+
+    # Extract step names from the "count" metric (always present)
+    count_data = funnel_data.get("count", {})
+    if not isinstance(count_data, dict):
+        return []
+
+    # Step names are like "1. Signup", "2. Purchase" — sort by prefix
+    step_names = sorted(count_data.keys())
+
+    # Helper to get a metric value for a step (handles "all" segment)
+    def _get_val(metric: str, step_name: str) -> Any:
+        metric_data = funnel_data.get(metric, {}) if funnel_data else {}
+        step_data = metric_data.get(step_name, {})
+        if isinstance(step_data, dict):
+            return step_data.get("all", 0)
+        return step_data if step_data is not None else 0
+
+    # Build step dicts
+    result: list[dict[str, Any]] = []
+    for step_name in step_names:
+        # Strip "N. " prefix to get clean event name
+        import re
+
+        match = re.match(r"^\d+\.\s*(.+)$", step_name)
+        event = match.group(1) if match else step_name
+
+        result.append(
+            {
+                "event": event,
+                "count": _get_val("count", step_name) or 0,
+                "step_conv_ratio": _get_val("step_conv_ratio", step_name) or 0.0,
+                "overall_conv_ratio": _get_val("overall_conv_ratio", step_name) or 0.0,
+                "avg_time": _get_val("avg_time", step_name) or 0.0,
+                "avg_time_from_start": _get_val("avg_time_from_start", step_name)
+                or 0.0,
+            }
+        )
+
+    return result
+
+
+def _transform_funnel_result(
+    raw: dict[str, Any],
+    bookmark_params: dict[str, Any],
+) -> FunnelQueryResult:
+    """Transform raw insights query funnel response into FunnelQueryResult.
+
+    Extracts computed_at, date_range, step data from the series, and
+    raw metadata. The response follows the standard insights response
+    envelope but the ``series`` field contains funnel step data.
+
+    Args:
+        raw: Raw API response dictionary from insights query.
+        bookmark_params: The bookmark params dict sent to the API
+            (preserved in the result for debugging/persistence).
+
+    Returns:
+        Typed FunnelQueryResult with step data and metadata.
+
+    Raises:
+        QueryError: If the response contains an error or is missing
+            required fields.
+    """
+    # Check for error responses that leaked through as HTTP 200
+    if "error" in raw:
+        raise QueryError(
+            f"Funnel query failed: {raw['error']}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    date_range = raw.get("date_range", {})
+    series = raw.get("series", {})
+    steps_data = _extract_funnel_steps_from_series(series)
+
+    return FunnelQueryResult(
+        computed_at=raw.get("computed_at", ""),
+        from_date=date_range.get("from_date", ""),
+        to_date=date_range.get("to_date", ""),
+        steps_data=steps_data,
+        series=series,
         params=bookmark_params,
         meta=raw.get("meta", {}),
     )
@@ -802,6 +971,48 @@ class LiveQueryService:
         }
         raw = self._api_client.insights_query(body)
         return _transform_query_result(raw, bookmark_params)
+
+    def query_funnel(
+        self,
+        bookmark_params: dict[str, Any],
+        project_id: int,
+    ) -> FunnelQueryResult:
+        """Execute an inline funnel query with pre-built bookmark params.
+
+        Posts funnel bookmark params to the insights query endpoint
+        (the API detects ``behavior.type == "funnel"`` and delegates
+        to the funnels query engine), then transforms the response
+        into a FunnelQueryResult with lazy DataFrame.
+
+        Args:
+            bookmark_params: Pre-built funnel bookmark params dict.
+            project_id: Mixpanel project ID.
+
+        Returns:
+            FunnelQueryResult with step data, conversion rates,
+            and metadata.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid bookmark params.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            result = live_query.query_funnel(
+                bookmark_params={"sections": {...}, "displayOptions": {...}},
+                project_id=12345,
+            )
+            print(result.overall_conversion_rate)
+            ```
+        """
+        body: dict[str, Any] = {
+            "bookmark": bookmark_params,
+            "project_id": project_id,
+            "queryLimits": {"limit": 3000},
+        }
+        raw = self._api_client.insights_query(body)
+        return _transform_funnel_result(raw, bookmark_params)
 
     def query_flows(
         self,

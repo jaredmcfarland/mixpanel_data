@@ -42,7 +42,11 @@ from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
-from mixpanel_data._internal.validation import validate_bookmark, validate_query_args
+from mixpanel_data._internal.validation import (
+    validate_bookmark,
+    validate_funnel_args,
+    validate_query_args,
+)
 from mixpanel_data._literal_types import QueryTimeUnit
 from mixpanel_data.exceptions import (
     BookmarkValidationError,
@@ -103,6 +107,7 @@ from mixpanel_data.types import (
     EventCountsResult,
     EventDefinition,
     EventDeletionRequest,
+    Exclusion,
     Experiment,
     ExperimentConcludeParams,
     ExperimentDecideParams,
@@ -114,8 +119,12 @@ from mixpanel_data.types import (
     Formula,
     FrequencyResult,
     FunnelInfo,
+    FunnelMathType,
+    FunnelQueryResult,
     FunnelResult,
+    FunnelStep,
     GroupBy,
+    HoldingConstant,
     InitSchemaEnforcementParams,
     JQLResult,
     LexiconSchema,
@@ -2147,6 +2156,472 @@ class Workspace:
             raise BookmarkValidationError(bookmark_errors)
 
         return params
+
+    # =========================================================================
+    # Funnel Query (Phase 032)
+    # =========================================================================
+
+    def _build_funnel_params(
+        self,
+        *,
+        steps: list[FunnelStep],
+        conversion_window: int,
+        conversion_window_unit: str,
+        order: str,
+        math: str,
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        unit: QueryTimeUnit,
+        group_by: str | GroupBy | list[str | GroupBy] | None,
+        where: Filter | list[Filter] | None,
+        exclusions: list[Exclusion],
+        holding_constant: list[HoldingConstant],
+        mode: str,
+    ) -> dict[str, Any]:
+        """Build funnel bookmark params dict from typed arguments.
+
+        Generates the complete bookmark JSON structure expected by
+        the Mixpanel insights query API for funnel-type bookmarks.
+
+        Args:
+            steps: Normalized FunnelStep objects.
+            conversion_window: Conversion window size.
+            conversion_window_unit: Conversion window time unit.
+            order: Funnel step ordering mode.
+            math: Aggregation function.
+            from_date: Start date (YYYY-MM-DD) or None.
+            to_date: End date (YYYY-MM-DD) or None.
+            last: Relative date range in days.
+            unit: Time granularity.
+            group_by: Breakdown specification.
+            where: Filter conditions.
+            exclusions: Normalized Exclusion objects.
+            holding_constant: Normalized HoldingConstant objects.
+            mode: Display mode (steps, trends, table).
+
+        Returns:
+            Bookmark params dict ready for insights query API.
+        """
+        # Build behaviors array from steps
+        behaviors: list[dict[str, Any]] = []
+        for step in steps:
+            behavior_entry: dict[str, Any] = {
+                "type": "event",
+                "id": None,
+                "name": step.event,
+                "filters": [],
+                "filtersDeterminer": step.filters_combinator,
+                "funnelOrder": order,
+            }
+            # Per-step filters
+            if step.filters:
+                behavior_entry["filters"] = [
+                    build_filter_entry(f) for f in step.filters
+                ]
+            # Per-step label → renamed
+            if step.label is not None:
+                behavior_entry["renamed"] = step.label
+            # Per-step order override
+            if step.order is not None:
+                behavior_entry["funnelOrder"] = step.order
+            behaviors.append(behavior_entry)
+
+        # Build exclusions array (Phase 5 populates this)
+        exclusions_list: list[dict[str, Any]] = []
+        for ex in exclusions:
+            ex_entry: dict[str, Any] = {
+                "event": ex.event,
+            }
+            # Step range — API uses 1-indexed, Exclusion uses 0-indexed
+            api_from = ex.from_step + 1
+            api_to = (ex.to_step + 1) if ex.to_step is not None else len(steps)
+            ex_entry["steps"] = {
+                "from": api_from,
+                "to": api_to,
+            }
+            exclusions_list.append(ex_entry)
+
+        # Build aggregateBy array (Phase 5 populates this)
+        aggregate_by: list[dict[str, Any]] = []
+        for hc in holding_constant:
+            aggregate_by.append(
+                {
+                    "value": hc.property,
+                    "resourceType": hc.resource_type,
+                }
+            )
+
+        # Build behavior block
+        behavior: dict[str, Any] = {
+            "type": "funnel",
+            "resourceType": "events",
+            "behaviors": behaviors,
+            "conversionWindowDuration": conversion_window,
+            "conversionWindowUnit": conversion_window_unit,
+            "funnelOrder": order,
+            "exclusions": exclusions_list,
+            "aggregateBy": aggregate_by,
+            "filter": [],
+        }
+
+        # Build measurement
+        measurement: dict[str, Any] = {
+            "math": math,
+            "property": None,
+            "stepIndex": None,
+        }
+
+        # Build show clause
+        show: list[dict[str, Any]] = [
+            {
+                "type": "metric",
+                "behavior": behavior,
+                "measurement": measurement,
+            }
+        ]
+
+        # Build sections using shared builders
+        time_section = build_time_section(
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+        )
+        filter_section = build_filter_section(where)
+        group_section = build_group_section(group_by)
+
+        # Chart type mapping
+        chart_type_map = {
+            "steps": "funnel-steps",
+            "trends": "line",
+            "table": "table",
+        }
+
+        return {
+            "sections": {
+                "show": show,
+                "time": time_section,
+                "filter": filter_section,
+                "group": group_section,
+                "formula": [],
+            },
+            "displayOptions": {
+                "chartType": chart_type_map.get(mode, "funnel-steps"),
+            },
+        }
+
+    def _resolve_and_build_funnel_params(
+        self,
+        *,
+        steps: list[str | FunnelStep],
+        conversion_window: int,
+        conversion_window_unit: str,
+        order: str,
+        math: str,
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        unit: QueryTimeUnit,
+        group_by: str | GroupBy | list[str | GroupBy] | None,
+        where: Filter | list[Filter] | None,
+        exclusions: list[str | Exclusion] | None,
+        holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None,
+        mode: str,
+    ) -> dict[str, Any]:
+        """Normalize, validate, and build funnel bookmark params.
+
+        Shared implementation for :meth:`query_funnel` and
+        :meth:`build_funnel_params`. Handles normalization of
+        string shorthand to typed objects, argument validation
+        (Layer 1), bookmark construction, and structure validation
+        (Layer 2).
+
+        Args:
+            steps: Funnel step specs (strings or FunnelStep objects).
+            conversion_window: Conversion window size.
+            conversion_window_unit: Conversion window time unit.
+            order: Funnel step ordering mode.
+            math: Aggregation function.
+            from_date: Start date (YYYY-MM-DD) or None.
+            to_date: End date (YYYY-MM-DD) or None.
+            last: Relative date range in days.
+            unit: Time granularity.
+            group_by: Breakdown specification.
+            where: Filter conditions.
+            exclusions: Events to exclude, or None.
+            holding_constant: Properties to hold constant, or None.
+            mode: Display mode.
+
+        Returns:
+            Validated bookmark params dict.
+
+        Raises:
+            BookmarkValidationError: If validation fails at any layer.
+        """
+        # Normalize steps: str → FunnelStep
+        normalized_steps = [FunnelStep(s) if isinstance(s, str) else s for s in steps]
+
+        # Normalize exclusions: str → Exclusion
+        normalized_exclusions: list[Exclusion] = []
+        if exclusions is not None:
+            normalized_exclusions = [
+                Exclusion(e) if isinstance(e, str) else e for e in exclusions
+            ]
+
+        # Normalize holding_constant: str → HoldingConstant
+        normalized_hc: list[HoldingConstant] = []
+        if holding_constant is not None:
+            if isinstance(holding_constant, (str, HoldingConstant)):
+                hc_list: list[str | HoldingConstant] = [holding_constant]
+            else:
+                hc_list = list(holding_constant)
+            normalized_hc = [
+                HoldingConstant(h) if isinstance(h, str) else h for h in hc_list
+            ]
+
+        # Layer 1: Argument validation
+        arg_errors = validate_funnel_args(
+            steps=normalized_steps,
+            conversion_window=conversion_window,
+            conversion_window_unit=conversion_window_unit,
+            math=math,
+            exclusions=normalized_exclusions if normalized_exclusions else None,
+            holding_constant=normalized_hc if normalized_hc else None,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            group_by=group_by,
+        )
+        if any(e.severity == "error" for e in arg_errors):
+            raise BookmarkValidationError(arg_errors)
+
+        # Build bookmark params
+        params = self._build_funnel_params(
+            steps=normalized_steps,
+            conversion_window=conversion_window,
+            conversion_window_unit=conversion_window_unit,
+            order=order,
+            math=math,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            group_by=group_by,
+            where=where,
+            exclusions=normalized_exclusions,
+            holding_constant=normalized_hc,
+            mode=mode,
+        )
+
+        # Layer 2: Bookmark structure validation
+        bookmark_errors = validate_bookmark(params, bookmark_type="funnels")
+        if any(e.severity == "error" for e in bookmark_errors):
+            raise BookmarkValidationError(bookmark_errors)
+
+        return params
+
+    def query_funnel(
+        self,
+        steps: list[str | FunnelStep],
+        *,
+        conversion_window: int = 14,
+        conversion_window_unit: Literal[
+            "second", "minute", "hour", "day", "week", "month", "session"
+        ] = "day",
+        order: Literal["loose", "any"] = "loose",
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        unit: QueryTimeUnit = "day",
+        math: FunnelMathType = "conversion_rate_unique",
+        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        where: Filter | list[Filter] | None = None,
+        exclusions: list[str | Exclusion] | None = None,
+        holding_constant: (
+            str | HoldingConstant | list[str | HoldingConstant] | None
+        ) = None,
+        mode: Literal["steps", "trends", "table"] = "steps",
+    ) -> FunnelQueryResult:
+        """Run a typed funnel query against the Mixpanel API.
+
+        Generates funnel bookmark params from keyword arguments, POSTs
+        them inline to ``/api/query/insights``, and returns a structured
+        FunnelQueryResult with lazy DataFrame conversion.
+
+        Args:
+            steps: Funnel step specifications. At least 2 required.
+                Accepts event name strings or ``FunnelStep`` objects
+                for per-step filters, labels, and ordering.
+            conversion_window: How long users have to complete the
+                funnel. Default: 14.
+            conversion_window_unit: Time unit for conversion window.
+                Default: ``"day"``.
+            order: Step ordering mode. ``"loose"`` requires steps in
+                order but allows other events between. ``"any"`` allows
+                steps in any order. Default: ``"loose"``.
+            from_date: Start date (YYYY-MM-DD). If set, overrides
+                ``last``.
+            to_date: End date (YYYY-MM-DD). Requires ``from_date``.
+            last: Relative time range in days. Default: 30.
+            unit: Time aggregation unit. Default: ``"day"``.
+            math: Funnel aggregation function. Default:
+                ``"conversion_rate_unique"``.
+            group_by: Break down results by property.
+            where: Filter results by conditions.
+            exclusions: Events to exclude between steps. Accepts
+                event name strings or ``Exclusion`` objects.
+            holding_constant: Properties to hold constant across
+                steps. Accepts strings, ``HoldingConstant`` objects,
+                or a list mixing both.
+            mode: Result display mode. ``"steps"`` shows step-level
+                data, ``"trends"`` shows conversion over time,
+                ``"table"`` shows tabular breakdown. Default:
+                ``"steps"``.
+
+        Returns:
+            FunnelQueryResult with step data, DataFrame, and metadata.
+
+        Raises:
+            BookmarkValidationError: If arguments violate validation
+                rules (before API call).
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid query parameters.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Simple two-step funnel
+            result = ws.query_funnel(["Signup", "Purchase"])
+            print(result.overall_conversion_rate)
+
+            # Configured funnel
+            result = ws.query_funnel(
+                ["Signup", "Add to Cart", "Checkout", "Purchase"],
+                conversion_window=7,
+                order="loose",
+                last=90,
+            )
+            print(result.df)
+            ```
+        """
+        params = self._resolve_and_build_funnel_params(
+            steps=steps,
+            conversion_window=conversion_window,
+            conversion_window_unit=conversion_window_unit,
+            order=order,
+            math=math,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            group_by=group_by,
+            where=where,
+            exclusions=exclusions,
+            holding_constant=holding_constant,
+            mode=mode,
+        )
+
+        credentials = self._credentials
+        if credentials is None:
+            raise ConfigError(
+                "API access requires credentials. "
+                "Use Workspace() with credentials instead of Workspace.open()."
+            )
+        return self._live_query_service.query_funnel(
+            bookmark_params=params,
+            project_id=int(credentials.project_id),
+        )
+
+    def build_funnel_params(
+        self,
+        steps: list[str | FunnelStep],
+        *,
+        conversion_window: int = 14,
+        conversion_window_unit: Literal[
+            "second", "minute", "hour", "day", "week", "month", "session"
+        ] = "day",
+        order: Literal["loose", "any"] = "loose",
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        unit: QueryTimeUnit = "day",
+        math: FunnelMathType = "conversion_rate_unique",
+        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        where: Filter | list[Filter] | None = None,
+        exclusions: list[str | Exclusion] | None = None,
+        holding_constant: (
+            str | HoldingConstant | list[str | HoldingConstant] | None
+        ) = None,
+        mode: Literal["steps", "trends", "table"] = "steps",
+    ) -> dict[str, Any]:
+        """Build validated funnel bookmark params without executing.
+
+        Has the same signature as :meth:`query_funnel` but returns the
+        generated bookmark params dict instead of querying the API.
+        Useful for debugging, inspecting generated JSON, persisting
+        via :meth:`create_bookmark`, or testing.
+
+        Args:
+            steps: Funnel step specifications. At least 2 required.
+            conversion_window: Conversion window size. Default: 14.
+            conversion_window_unit: Time unit. Default: ``"day"``.
+            order: Step ordering mode. Default: ``"loose"``.
+            from_date: Start date (YYYY-MM-DD) or None.
+            to_date: End date (YYYY-MM-DD) or None.
+            last: Relative time range in days. Default: 30.
+            unit: Time aggregation unit. Default: ``"day"``.
+            math: Aggregation function. Default:
+                ``"conversion_rate_unique"``.
+            group_by: Break down results by property.
+            where: Filter results by conditions.
+            exclusions: Events to exclude between steps.
+            holding_constant: Properties to hold constant.
+            mode: Display mode. Default: ``"steps"``.
+
+        Returns:
+            Bookmark params dict with ``sections`` and
+            ``displayOptions`` keys.
+
+        Raises:
+            BookmarkValidationError: If arguments violate validation
+                rules.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Inspect generated JSON
+            params = ws.build_funnel_params(["Signup", "Purchase"])
+            print(json.dumps(params, indent=2))
+
+            # Save as a report
+            ws.create_bookmark(CreateBookmarkParams(
+                name="Signup → Purchase Funnel",
+                bookmark_type="funnels",
+                params=params,
+            ))
+            ```
+        """
+        return self._resolve_and_build_funnel_params(
+            steps=steps,
+            conversion_window=conversion_window,
+            conversion_window_unit=conversion_window_unit,
+            order=order,
+            math=math,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+            group_by=group_by,
+            where=where,
+            exclusions=exclusions,
+            holding_constant=holding_constant,
+            mode=mode,
+        )
 
     # =========================================================================
     # ESCAPE HATCHES

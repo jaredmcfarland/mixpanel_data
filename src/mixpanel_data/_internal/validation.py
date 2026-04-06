@@ -19,12 +19,17 @@ from difflib import get_close_matches
 from typing import Any, Literal
 
 from mixpanel_data._internal.bookmark_enums import (
+    _MAX_FUNNEL_STEPS,
+    _MAX_HOLDING_CONSTANT,
     MATH_NO_PER_USER,
     MATH_PROPERTY_OPTIONAL,
     MATH_REQUIRING_PROPERTY,
+    MAX_CONVERSION_WINDOW,
     VALID_CHART_TYPES,
+    VALID_CONVERSION_WINDOW_UNITS,
     VALID_FILTER_OPERATORS,
     VALID_FILTERS_DETERMINER,
+    VALID_MATH_FUNNELS,
     VALID_MATH_INSIGHTS,
     VALID_METRIC_TYPES,
     VALID_PER_USER_AGGREGATIONS,
@@ -37,7 +42,9 @@ from mixpanel_data.exceptions import ValidationError
 # Avoid circular imports — these are only needed for isinstance checks
 # at runtime, so import the types module (not individual names from types.py)
 from mixpanel_data.types import (
+    Exclusion,
     Formula,
+    FunnelStep,
     GroupBy,
     MathType,
     Metric,
@@ -408,6 +415,300 @@ def validate_group_by_args(
                         code="V18_BUCKET_ORDER",
                     )
                 )
+
+    return errors
+
+
+# =============================================================================
+# Funnel argument validation (F1-F6)
+# =============================================================================
+
+
+def validate_funnel_args(
+    *,
+    steps: Sequence[str | FunnelStep],
+    conversion_window: int,
+    conversion_window_unit: str = "day",
+    math: str = "conversion_rate_unique",
+    exclusions: list[Exclusion] | None,
+    holding_constant: list[Any] | None = None,
+    from_date: str | None,
+    to_date: str | None,
+    last: int,
+    group_by: str | GroupBy | list[str | GroupBy] | None,
+) -> list[ValidationError]:
+    """Validate funnel query arguments before bookmark construction (Layer 1).
+
+    Implements funnel-specific validation rules F1-F9 plus reused
+    time and group-by validators. Returns all errors found so callers
+    can fix multiple issues in a single pass.
+
+    Args:
+        steps: Funnel step specifications (event names or FunnelStep objects).
+        conversion_window: Conversion window size (must be positive).
+        conversion_window_unit: Time unit for conversion window.
+            Must be one of: second, minute, hour, day, week, month,
+            session. Default: ``"day"``.
+        math: Funnel aggregation function. Default:
+            ``"conversion_rate_unique"``.
+        exclusions: Events to exclude between steps, or ``None``.
+        holding_constant: Properties to hold constant, or ``None``.
+        from_date: Start date (YYYY-MM-DD) or ``None``.
+        to_date: End date (YYYY-MM-DD) or ``None``.
+        last: Number of days for relative date range.
+        group_by: Breakdown specification.
+
+    Returns:
+        List of validation errors. Empty list means all arguments are valid.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.validation import validate_funnel_args
+
+        errors = validate_funnel_args(
+            steps=["Signup", "Purchase"],
+            conversion_window=14,
+            exclusions=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            group_by=None,
+        )
+        assert errors == []
+        ```
+    """
+    errors: list[ValidationError] = []
+
+    # F1: At least 2 steps required
+    if len(steps) < 2:
+        errors.append(
+            ValidationError(
+                path="steps",
+                message=f"At least 2 steps are required (got {len(steps)})",
+                code="F1_MIN_STEPS",
+            )
+        )
+
+    # F1b: Maximum 100 steps
+    if len(steps) > _MAX_FUNNEL_STEPS:
+        errors.append(
+            ValidationError(
+                path="steps",
+                message=(
+                    f"Maximum {_MAX_FUNNEL_STEPS} steps allowed (got {len(steps)})"
+                ),
+                code="F1_MAX_STEPS",
+            )
+        )
+
+    # F2: Each step event must be non-empty string, no control/invisible chars
+    for i, step in enumerate(steps):
+        event = step.event if isinstance(step, FunnelStep) else step
+        if not isinstance(event, str) or not event.strip():
+            errors.append(
+                ValidationError(
+                    path=f"steps[{i}]",
+                    message="Step event name must be a non-empty string",
+                    code="F2_EMPTY_STEP_EVENT",
+                )
+            )
+            continue
+        # F2b: No control characters
+        if _CONTROL_CHAR_RE.search(event):
+            errors.append(
+                ValidationError(
+                    path=f"steps[{i}]",
+                    message=(f"Step event name contains control characters: {event!r}"),
+                    code="F2_CONTROL_CHAR_STEP_EVENT",
+                )
+            )
+        # F2c: No invisible-only names
+        if _INVISIBLE_RE.match(event):
+            errors.append(
+                ValidationError(
+                    path=f"steps[{i}]",
+                    message="Step event name contains only invisible characters",
+                    code="F2_INVISIBLE_STEP_EVENT",
+                )
+            )
+
+    # F3: Positive integer conversion window
+    if not isinstance(conversion_window, int) or isinstance(conversion_window, bool):
+        errors.append(
+            ValidationError(
+                path="conversion_window",
+                message=(
+                    f"conversion_window must be an integer, "
+                    f"got {type(conversion_window).__name__}"
+                ),
+                code="F3_CONVERSION_WINDOW_TYPE",
+            )
+        )
+    elif conversion_window <= 0:
+        errors.append(
+            ValidationError(
+                path="conversion_window",
+                message="conversion_window must be a positive integer",
+                code="F3_CONVERSION_WINDOW_POSITIVE",
+            )
+        )
+
+    # F3b: Maximum conversion window per unit
+    if conversion_window_unit in MAX_CONVERSION_WINDOW and conversion_window > 0:
+        max_val = MAX_CONVERSION_WINDOW[conversion_window_unit]
+        if conversion_window > max_val:
+            errors.append(
+                ValidationError(
+                    path="conversion_window",
+                    message=(
+                        f"conversion_window={conversion_window} exceeds "
+                        f"maximum of {max_val} for unit "
+                        f"'{conversion_window_unit}'"
+                    ),
+                    code="F3_CONVERSION_WINDOW_MAX",
+                )
+            )
+
+    # F7: Conversion window unit validation
+    if conversion_window_unit not in VALID_CONVERSION_WINDOW_UNITS:
+        errors.append(
+            _enum_error(
+                path="conversion_window_unit",
+                field="conversion_window_unit",
+                value=conversion_window_unit,
+                valid=VALID_CONVERSION_WINDOW_UNITS,
+                code="F7_INVALID_WINDOW_UNIT",
+            )
+        )
+
+    # F7b: Minimum conversion window per unit (second requires >=2)
+    if conversion_window_unit == "second" and 0 < conversion_window < 2:
+        errors.append(
+            ValidationError(
+                path="conversion_window",
+                message=(
+                    f"conversion_window must be at least 2 when "
+                    f"conversion_window_unit='second' (got {conversion_window})"
+                ),
+                code="F7_SECOND_MIN_WINDOW",
+                suggestion=("2",),
+            )
+        )
+
+    # F9: Session math requires session window
+    _SESSION_MATH = frozenset({"conversion_rate_session"})
+    if math in _SESSION_MATH and conversion_window_unit != "session":
+        errors.append(
+            ValidationError(
+                path="math",
+                message=(f"math='{math}' requires conversion_window_unit='session'"),
+                code="F9_SESSION_MATH_REQUIRES_SESSION_WINDOW",
+            )
+        )
+    if (
+        conversion_window_unit == "session"
+        and math not in _SESSION_MATH
+        and conversion_window != 1
+    ):
+        errors.append(
+            ValidationError(
+                path="conversion_window",
+                message=(
+                    "conversion_window_unit='session' requires conversion_window=1"
+                ),
+                code="F9_SESSION_WINDOW_REQUIRES_ONE",
+            )
+        )
+
+    # F4: Non-empty exclusion event names and step range validation
+    if exclusions is not None:
+        for i, ex in enumerate(exclusions):
+            if not ex.event or not ex.event.strip():
+                errors.append(
+                    ValidationError(
+                        path=f"exclusions[{i}]",
+                        message="Exclusion event name must be a non-empty string",
+                        code="F4_EMPTY_EXCLUSION_EVENT",
+                    )
+                )
+            # F4 control char check on exclusion events
+            elif _CONTROL_CHAR_RE.search(ex.event):
+                errors.append(
+                    ValidationError(
+                        path=f"exclusions[{i}]",
+                        message=(
+                            f"Exclusion event name contains control "
+                            f"characters: {ex.event!r}"
+                        ),
+                        code="F4_CONTROL_CHAR_EXCLUSION",
+                    )
+                )
+            # F4e: from_step must be non-negative
+            if ex.from_step < 0:
+                errors.append(
+                    ValidationError(
+                        path=f"exclusions[{i}]",
+                        message=(
+                            f"Exclusion from_step must be >= 0 (got {ex.from_step})"
+                        ),
+                        code="F4_EXCLUSION_NEGATIVE_STEP",
+                    )
+                )
+            # F4b: to_step must be > from_step (server requires strict from < to)
+            if ex.to_step is not None and ex.to_step <= ex.from_step:
+                errors.append(
+                    ValidationError(
+                        path=f"exclusions[{i}]",
+                        message=(
+                            f"Exclusion to_step ({ex.to_step}) must be > "
+                            f"from_step ({ex.from_step})"
+                        ),
+                        code="F4_EXCLUSION_STEP_ORDER",
+                    )
+                )
+            # F4c: to_step must not exceed step count
+            if ex.to_step is not None and ex.to_step >= len(steps):
+                errors.append(
+                    ValidationError(
+                        path=f"exclusions[{i}]",
+                        message=(
+                            f"Exclusion to_step ({ex.to_step}) exceeds "
+                            f"step count ({len(steps)})"
+                        ),
+                        code="F4_EXCLUSION_STEP_BOUNDS",
+                    )
+                )
+            # F4d: from_step must not exceed step count
+            if ex.from_step >= len(steps):
+                errors.append(
+                    ValidationError(
+                        path=f"exclusions[{i}]",
+                        message=(
+                            f"Exclusion from_step ({ex.from_step}) exceeds "
+                            f"step count ({len(steps)})"
+                        ),
+                        code="F4_EXCLUSION_STEP_BOUNDS",
+                    )
+                )
+
+    # F8: Maximum holding constant properties
+    if holding_constant is not None and len(holding_constant) > _MAX_HOLDING_CONSTANT:
+        errors.append(
+            ValidationError(
+                path="holding_constant",
+                message=(
+                    f"Maximum {_MAX_HOLDING_CONSTANT} holding_constant "
+                    f"properties allowed (got {len(holding_constant)})"
+                ),
+                code="F8_MAX_HOLDING_CONSTANT",
+            )
+        )
+
+    # F5: Time argument validation (delegated)
+    errors.extend(validate_time_args(from_date=from_date, to_date=to_date, last=last))
+
+    # F6: GroupBy validation (delegated)
+    errors.extend(validate_group_by_args(group_by=group_by))
 
     return errors
 
@@ -1033,11 +1334,11 @@ def _validate_measurement(
     errors: list[ValidationError] = []
     path = f"{show_path}.measurement"
 
-    # B9: Validate math type (context-dependent for future funnel/retention)
+    # B9: Validate math type (context-dependent for funnel/retention)
     math = measurement.get("math")
     if math is not None:
         valid_math = (
-            VALID_MATH_INSIGHTS if bookmark_type == "insights" else VALID_MATH_INSIGHTS
+            VALID_MATH_FUNNELS if bookmark_type == "funnels" else VALID_MATH_INSIGHTS
         )
         if math not in valid_math:
             errors.append(
