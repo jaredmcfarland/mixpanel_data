@@ -26,8 +26,10 @@ Example:
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Iterator, Sequence
+from datetime import date as _date
 from pathlib import Path
 from typing import Any, Literal
 
@@ -197,6 +199,7 @@ from mixpanel_data.types import (
 # Limit validation bounds (Mixpanel API restriction)
 _MIN_LIMIT = 1
 _MAX_LIMIT = 100_000
+_CTRL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def _validate_limit(limit: int | None) -> None:
@@ -2845,7 +2848,7 @@ class Workspace:
             last: Relative time range in days.
             conversion_window: Conversion window size.
             conversion_window_unit: Conversion window unit
-                (``"day"``, ``"week"``, ``"month"``).
+                (``"day"``, ``"week"``, ``"month"``, ``"session"``).
             count_type: Counting method (``"unique"``, ``"total"``,
                 ``"session"``).
             cardinality: Number of top paths to display.
@@ -3014,13 +3017,10 @@ class Workspace:
                     )
                 )
         # Per-step filter property validation
-        import re
-
-        _ctrl_re = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
         for i, s in enumerate(steps):
             if s.filters:
                 for fi, f in enumerate(s.filters):
-                    if _ctrl_re.search(f._property):
+                    if _CTRL_RE.search(f._property):
                         step_errors.append(
                             ValidationError(
                                 path=f"steps[{i}].filters[{fi}]",
@@ -3049,6 +3049,11 @@ class Workspace:
 
         if any(e.severity == "error" for e in step_errors):
             raise BookmarkValidationError(step_errors)
+
+        # Default to_date to today when from_date is set alone, so the
+        # absolute date isn't silently ignored by build_date_range().
+        if from_date is not None and to_date is None:
+            to_date = _date.today().isoformat()
 
         # Layer 1: Argument validation
         event_names = [s.event for s in steps]

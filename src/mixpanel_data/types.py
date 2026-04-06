@@ -8463,7 +8463,7 @@ class FlowQueryResult(ResultWithDataFrame):
     mode: Literal["sankey", "paths"] = "sankey"
     _nodes_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
     _edges_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
-    _graph_cache: Any = field(default=None, repr=False, kw_only=True)
+    _graph_cache: nx.DiGraph | None = field(default=None, repr=False, kw_only=True)
 
     @property
     def nodes_df(self) -> pd.DataFrame:
@@ -8515,9 +8515,7 @@ class FlowQueryResult(ResultWithDataFrame):
             "is_custom_event",
             "conversion_rate_change",
         ]
-        result_df = (
-            pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
-        )
+        result_df = pd.DataFrame(rows, columns=cols)
         object.__setattr__(self, "_nodes_df_cache", result_df)
         return result_df
 
@@ -8572,9 +8570,7 @@ class FlowQueryResult(ResultWithDataFrame):
             "count",
             "target_type",
         ]
-        result_df = (
-            pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
-        )
+        result_df = pd.DataFrame(rows, columns=cols)
         object.__setattr__(self, "_edges_df_cache", result_df)
         return result_df
 
@@ -8673,9 +8669,7 @@ class FlowQueryResult(ResultWithDataFrame):
                     }
                 )
         cols = ["path_index", "step", "event", "type", "count"]
-        result_df = (
-            pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
-        )
+        result_df = pd.DataFrame(rows, columns=cols)
         object.__setattr__(self, "_df_cache", result_df)
         return result_df
 
@@ -8689,14 +8683,17 @@ class FlowQueryResult(ResultWithDataFrame):
             n: Maximum number of transitions to return. Default: 10.
 
         Returns:
-            List of (source_event, target_event, count) tuples sorted
-            by count descending. Returns empty list if no edges exist.
+            List of (source_node, target_node, count) tuples sorted
+            by count descending, where each node is formatted as
+            ``"{event}@{step}"`` (e.g. ``"Login@0"``). Returns empty
+            list if no edges exist.
 
         Example:
             ```python
             result = ws.query_flow("Login", forward=3)
             for src, tgt, count in result.top_transitions(n=5):
                 print(f"{src} -> {tgt}: {count}")
+            # Login@0 -> Search@1: 150
             ```
         """
         edf = self.edges_df
@@ -8704,12 +8701,15 @@ class FlowQueryResult(ResultWithDataFrame):
             return []
         sorted_df = edf.sort_values("count", ascending=False).head(n)
         return [
-            (
-                f"{row['source_event']}@{row['source_step']}",
-                f"{row['target_event']}@{row['target_step']}",
-                int(row["count"]),
+            (f"{se}@{ss}", f"{te}@{ts}", int(c))
+            for se, ss, te, ts, c in zip(
+                sorted_df["source_event"],
+                sorted_df["source_step"],
+                sorted_df["target_event"],
+                sorted_df["target_step"],
+                sorted_df["count"],
+                strict=True,
             )
-            for _, row in sorted_df.iterrows()
         ]
 
     def drop_off_summary(self) -> dict[str, Any]:
