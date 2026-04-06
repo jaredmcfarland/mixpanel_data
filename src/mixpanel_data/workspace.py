@@ -2230,7 +2230,7 @@ class Workspace:
                 behavior_entry["funnelOrder"] = step.order
             behaviors.append(behavior_entry)
 
-        # Build exclusions array (Phase 5 populates this)
+        # Build exclusions array
         exclusions_list: list[dict[str, Any]] = []
         for ex in exclusions:
             ex_entry: dict[str, Any] = {
@@ -2245,15 +2245,11 @@ class Workspace:
             }
             exclusions_list.append(ex_entry)
 
-        # Build aggregateBy array (Phase 5 populates this)
-        aggregate_by: list[dict[str, Any]] = []
-        for hc in holding_constant:
-            aggregate_by.append(
-                {
-                    "value": hc.property,
-                    "resourceType": hc.resource_type,
-                }
-            )
+        # Build aggregateBy array
+        aggregate_by: list[dict[str, Any]] = [
+            {"value": hc.property, "resourceType": hc.resource_type}
+            for hc in holding_constant
+        ]
 
         # Build behavior block
         behavior: dict[str, Any] = {

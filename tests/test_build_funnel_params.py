@@ -213,6 +213,21 @@ class TestBuildFunnelParamsConfiguration:
         behavior = result["sections"]["show"][0]["behavior"]
         assert behavior["funnelOrder"] == "any"
 
+    def test_per_step_order_override(self, ws: Workspace) -> None:
+        """Verify per-step order override sets funnelOrder on that behavior entry."""
+        result = ws.build_funnel_params(
+            [
+                FunnelStep("Signup"),
+                FunnelStep("Browse"),
+                FunnelStep("Purchase", order="any"),
+            ],
+            order="loose",
+        )
+        behaviors = result["sections"]["show"][0]["behavior"]["behaviors"]
+        assert behaviors[0]["funnelOrder"] == "loose"
+        assert behaviors[1]["funnelOrder"] == "loose"
+        assert behaviors[2]["funnelOrder"] == "any"
+
     def test_from_date_to_date_time_section(self, ws: Workspace) -> None:
         """Verify from_date/to_date produces a 'between' time section."""
         result = ws.build_funnel_params(

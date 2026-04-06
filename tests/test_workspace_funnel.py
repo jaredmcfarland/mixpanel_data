@@ -121,6 +121,28 @@ MOCK_FUNNEL_RESPONSE: dict[str, Any] = {
 # =============================================================================
 
 
+class TestQueryFunnelConfigError:
+    """Tests for query_funnel() when credentials are missing."""
+
+    def test_no_credentials_raises_config_error(
+        self,
+        mock_api_client: MagicMock,
+    ) -> None:
+        """query_funnel raises ConfigError when credentials are None."""
+        from mixpanel_data.exceptions import ConfigError
+
+        no_creds_manager = MagicMock(spec=ConfigManager)
+        no_creds_manager.resolve_credentials.return_value = None
+
+        ws = Workspace(
+            _config_manager=no_creds_manager,
+            _api_client=mock_api_client,
+        )
+
+        with pytest.raises(ConfigError, match="credentials"):
+            ws.query_funnel(["Signup", "Purchase"])
+
+
 class TestQueryFunnelValidation:
     """Tests for query_funnel() validation integration.
 

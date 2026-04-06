@@ -10,6 +10,7 @@ analytics data changes frequently and queries should return fresh data.
 from __future__ import annotations
 
 import re
+import warnings
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -48,6 +49,9 @@ from mixpanel_data.types import (
 
 if TYPE_CHECKING:
     from mixpanel_data._internal.api_client import MixpanelAPIClient
+
+_STEP_PREFIX_RE = re.compile(r"^(\d+)\.\s*(.+)$")
+"""Matches step names like ``"1. Signup"`` and captures (index, event_name)."""
 
 
 def _extract_steps_from_date_data(date_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -391,6 +395,13 @@ def _extract_funnel_steps_from_series(
             break
 
     if funnel_data is None:
+        if series:
+            warnings.warn(
+                "Funnel query returned data in an unrecognized format "
+                f"(series keys: {sorted(series.keys())}). "
+                "The raw response is available in the 'series' field.",
+                stacklevel=2,
+            )
         return []
 
     # Extract step names from the "count" metric (always present)
@@ -400,7 +411,6 @@ def _extract_funnel_steps_from_series(
 
     # Step names are like "1. Signup", "2. Purchase" — sort by numeric prefix
     # to handle 10+ steps correctly (lexicographic sort would put "10." before "2.")
-    _STEP_PREFIX_RE = re.compile(r"^(\d+)\.\s*(.+)$")
 
     def _step_sort_key(name: str) -> tuple[int, str]:
         m = _STEP_PREFIX_RE.match(name)
@@ -410,7 +420,7 @@ def _extract_funnel_steps_from_series(
 
     # Helper to get a metric value for a step (handles "all" segment)
     def _get_val(metric: str, step_name: str) -> Any:
-        metric_data = funnel_data.get(metric, {}) if funnel_data else {}
+        metric_data = funnel_data.get(metric, {})
         step_data = metric_data.get(step_name, {})
         if isinstance(step_data, dict):
             return step_data.get("all", 0)
@@ -425,12 +435,11 @@ def _extract_funnel_steps_from_series(
         result.append(
             {
                 "event": event,
-                "count": _get_val("count", step_name) or 0,
-                "step_conv_ratio": _get_val("step_conv_ratio", step_name) or 0.0,
-                "overall_conv_ratio": _get_val("overall_conv_ratio", step_name) or 0.0,
-                "avg_time": _get_val("avg_time", step_name) or 0.0,
-                "avg_time_from_start": _get_val("avg_time_from_start", step_name)
-                or 0.0,
+                "count": _get_val("count", step_name),
+                "step_conv_ratio": _get_val("step_conv_ratio", step_name),
+                "overall_conv_ratio": _get_val("overall_conv_ratio", step_name),
+                "avg_time": _get_val("avg_time", step_name),
+                "avg_time_from_start": _get_val("avg_time_from_start", step_name),
             }
         )
 
@@ -468,8 +477,17 @@ def _transform_funnel_result(
             request_body=bookmark_params,
         )
 
+    if "series" not in raw:
+        raise QueryError(
+            "Funnel query returned unexpected response shape "
+            f"(missing 'series' key). Keys present: {sorted(raw.keys())}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
     date_range = raw.get("date_range", {})
-    series = raw.get("series", {})
+    series = raw["series"]
     steps_data = _extract_funnel_steps_from_series(series)
 
     return FunnelQueryResult(

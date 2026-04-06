@@ -1204,3 +1204,63 @@ class TestValidateFunnelArgsF11MathRejectsProperty:
             **_valid_funnel_args(math="average", math_property="amount")
         )
         assert "F11_MATH_REJECTS_PROPERTY" not in _codes(errors)
+
+
+# =============================================================================
+# F8b: HoldingConstant property validation
+# =============================================================================
+
+
+class TestF8bHoldingConstantPropertyValidation:
+    """Tests for F8b: empty holding constant property names."""
+
+    def test_empty_string_property_produces_error(self) -> None:
+        """HoldingConstant with empty property name produces F8 error."""
+        from mixpanel_data.types import HoldingConstant
+
+        errors = validate_funnel_args(
+            **_valid_funnel_args(
+                holding_constant=[HoldingConstant("")],
+            )
+        )
+        assert "F8_EMPTY_HOLDING_CONSTANT_PROPERTY" in _codes(errors)
+
+    def test_whitespace_only_property_produces_error(self) -> None:
+        """HoldingConstant with whitespace-only property produces F8 error."""
+        from mixpanel_data.types import HoldingConstant
+
+        errors = validate_funnel_args(
+            **_valid_funnel_args(
+                holding_constant=[HoldingConstant("   ")],
+            )
+        )
+        assert "F8_EMPTY_HOLDING_CONSTANT_PROPERTY" in _codes(errors)
+
+    def test_valid_property_no_error(self) -> None:
+        """HoldingConstant with valid property name produces no F8b error."""
+        from mixpanel_data.types import HoldingConstant
+
+        errors = validate_funnel_args(
+            **_valid_funnel_args(
+                holding_constant=[HoldingConstant("platform")],
+            )
+        )
+        assert "F8_EMPTY_HOLDING_CONSTANT_PROPERTY" not in _codes(errors)
+
+    def test_multiple_with_one_empty_produces_indexed_error(self) -> None:
+        """Multiple holding constants with one empty produces error with index."""
+        from mixpanel_data.types import HoldingConstant
+
+        errors = validate_funnel_args(
+            **_valid_funnel_args(
+                holding_constant=[
+                    HoldingConstant("platform"),
+                    HoldingConstant(""),
+                ],
+            )
+        )
+        f8_errors = [
+            e for e in errors if e.code == "F8_EMPTY_HOLDING_CONSTANT_PROPERTY"
+        ]
+        assert len(f8_errors) == 1
+        assert "holding_constant[1]" in f8_errors[0].path

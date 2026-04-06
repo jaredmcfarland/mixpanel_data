@@ -260,6 +260,15 @@ result = ws.query_funnel(["Signup", "Purchase"], math="unique")
 | `"min"` / `"max"` | Extremes |
 | `"p25"` / `"p75"` / `"p90"` / `"p99"` | Percentiles |
 
+```python
+# Average purchase amount at each step
+result = ws.query_funnel(
+    ["Signup", "Purchase"],
+    math="average",
+    math_property="amount",
+)
+```
+
 ## Filters
 
 ### Global Filters
@@ -406,17 +415,17 @@ result = ws.query_funnel(
 
 ### Relative (Default)
 
-By default, `query_funnel()` returns the last 30 days. Customize with `last` and `unit`:
+By default, `query_funnel()` returns the last 30 days. Customize with `last` (always in days) and `unit` (aggregation granularity):
 
 ```python
 # Last 7 days
 result = ws.query_funnel(["Signup", "Purchase"], last=7)
 
-# Last 12 weeks (weekly granularity)
-result = ws.query_funnel(["Signup", "Purchase"], last=12, unit="week")
+# Last 84 days (~12 weeks), weekly granularity
+result = ws.query_funnel(["Signup", "Purchase"], last=84, unit="week")
 
-# Last 6 months
-result = ws.query_funnel(["Signup", "Purchase"], last=6, unit="month")
+# Last 180 days (~6 months), monthly granularity
+result = ws.query_funnel(["Signup", "Purchase"], last=180, unit="month")
 ```
 
 ### Absolute
@@ -549,6 +558,8 @@ print(json.dumps(result.params, indent=2))
 | Second unit requires window >= 2 | `F7_SECOND_MIN_WINDOW` | Must be at least 2 for seconds |
 | More than 3 holding constant | `F8_MAX_HOLDING_CONSTANT` | Maximum 3 holding_constant properties |
 | Session math without session unit | `F9_SESSION_MATH_REQUIRES_SESSION_WINDOW` | Requires conversion_window_unit='session' |
+| Property math missing math_property | `F10_MATH_MISSING_PROPERTY` | Property-aggregation math types require math_property |
+| Non-property math given math_property | `F11_MATH_REJECTS_PROPERTY` | Count/rate math types don't accept math_property |
 
 ## Complete Examples
 

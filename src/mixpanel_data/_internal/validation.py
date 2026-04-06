@@ -3,7 +3,7 @@
 Two validation layers:
 
 - ``validate_query_args()``: Validates Python-level arguments before
-  bookmark construction (Layer 1, rules V0-V20).
+  bookmark construction (Layer 1, rules V0-V27).
 - ``validate_bookmark()``: Validates the bookmark JSON dict after
   construction (Layer 2, rules B1-B19).
 
@@ -51,6 +51,9 @@ from mixpanel_data.types import (
     Metric,
     PerUserAggregation,
 )
+
+_SESSION_MATH: frozenset[str] = frozenset({"conversion_rate_session"})
+"""Session-based math types requiring conversion_window_unit='session'."""
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _FORMULA_POSITION_RE = re.compile(r"[A-Z]")
@@ -610,7 +613,6 @@ def validate_funnel_args(
             )
 
         # F9: Session math requires session window
-        _SESSION_MATH = frozenset({"conversion_rate_session"})
         if math in _SESSION_MATH and conversion_window_unit != "session":
             errors.append(
                 ValidationError(
@@ -738,7 +740,20 @@ def validate_funnel_args(
                     )
                 )
 
-    # F8: Maximum holding constant properties
+    # F8: Holding constant validation
+    if holding_constant is not None:
+        # F8b: Each holding constant property must be a non-empty string
+        for i, hc in enumerate(holding_constant):
+            prop = hc.property if isinstance(hc, HoldingConstant) else hc
+            if not isinstance(prop, str) or not prop.strip():
+                errors.append(
+                    ValidationError(
+                        path=f"holding_constant[{i}]",
+                        message="Holding constant property name must be a non-empty string",
+                        code="F8_EMPTY_HOLDING_CONSTANT_PROPERTY",
+                    )
+                )
+
     if holding_constant is not None and len(holding_constant) > _MAX_HOLDING_CONSTANT:
         errors.append(
             ValidationError(
@@ -1371,9 +1386,9 @@ def _validate_measurement(
     Args:
         measurement: The measurement dict.
         show_path: Parent show clause path for error reporting.
-        bookmark_type: Context for math type validation. Currently
-            only ``"insights"`` is supported; reserved for future
-            funnel/retention context-dependent validation.
+        bookmark_type: Context for math type validation. When
+            ``"funnels"``, validates against funnel-specific math types;
+            defaults to insights math types otherwise.
 
     Returns:
         List of validation errors for this measurement.
