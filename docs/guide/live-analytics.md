@@ -101,7 +101,10 @@ result.to_dict()      # JSON-serializable dict
 
 ## Funnels
 
-Analyze conversion through a sequence of steps:
+!!! tip "Looking for Ad-Hoc Funnel Queries?"
+    For typed funnel definitions with per-step filters, exclusions, holding constant properties, and conversion window control — without creating a saved funnel first — see **[Funnel Queries](query-funnels.md)**.
+
+Analyze conversion through a sequence of saved steps:
 
 === "Python"
 

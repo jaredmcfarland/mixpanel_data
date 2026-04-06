@@ -25,10 +25,12 @@ Build typed analytics queries against Mixpanel's Insights engine — the same en
 
 Use the legacy methods when:
 
-- You need funnel conversion analysis → `funnel()`
+- You need to query a saved funnel by ID → `funnel()`
 - You need cohort retention curves → `retention()`
 - You need raw JQL execution → `jql()`
 - You need Flows analysis → `query_flows()`
+
+For ad-hoc funnel conversion analysis with typed step definitions, see **[Funnel Queries](query-funnels.md)**.
 
 ## Getting Started
 
@@ -704,14 +706,15 @@ ws.create_bookmark(CreateBookmarkParams(
 
 ## What's Next
 
-`query()` is the foundation for a family of typed query methods. Future additions will follow the same pattern — typed Python arguments generating the correct bookmark params:
+`query()` is the foundation for a family of typed query methods. Each follows the same pattern — typed Python arguments generating the correct bookmark params:
 
-- **`query_funnel()`** — Ad-hoc funnel conversion analysis with typed step definitions
-- **`query_retention()`** — Ad-hoc retention curves with event pairs
-- **Cohort behaviors** — Querying by cohort membership
+- **[`query_funnel()`](query-funnels.md)** — Ad-hoc funnel conversion analysis with typed step definitions, exclusions, and conversion windows
+- **`query_retention()`** — Ad-hoc retention curves with event pairs (coming soon)
+- **Cohort behaviors** — Querying by cohort membership (coming soon)
 
 ## Next Steps
 
+- [Funnel Queries](query-funnels.md) — Typed funnel conversion analysis
 - [Live Analytics](live-analytics.md) — Legacy query methods (segmentation, funnels, retention)
 - [Data Discovery](discovery.md) — Explore events and properties before querying
 - [API Reference — Workspace](../api/workspace.md) — Full method signature

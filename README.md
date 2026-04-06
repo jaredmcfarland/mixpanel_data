@@ -11,7 +11,7 @@ A complete programmable interface to Mixpanel analytics—Python library and CLI
 
 Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_data** provides a unified interface: discover your schema, run analytics queries, stream data, and manage entities—all through consistent Python methods or CLI commands.
 
-Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, breakdowns), segmentation, funnels, retention, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
+Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, breakdowns), typed funnel queries (ad-hoc steps, exclusions, conversion windows), segmentation, retention, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
 
 ## Installation
 
@@ -125,6 +125,14 @@ result = ws.query("Purchase",                          # filtered with breakdown
     group_by=GroupBy("amount", property_type="number", bucket_size=50),
 )
 print(result.df)  # pandas DataFrame
+
+# Typed funnel query — define steps inline
+funnel = ws.query_funnel(
+    ["Signup", "Add to Cart", "Purchase"],
+    conversion_window=7,
+    last=90,
+)
+print(funnel.overall_conversion_rate)  # e.g. 0.12
 
 # Legacy live analytics queries
 result = ws.segmentation(
@@ -243,6 +251,7 @@ Full documentation: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarl
 - [Installation](https://jaredmcfarland.github.io/mixpanel_data/getting-started/installation/)
 - [Quick Start](https://jaredmcfarland.github.io/mixpanel_data/getting-started/quickstart/)
 - [Insights Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query/) — Typed analytics with DAU, formulas, filters, breakdowns
+- [Funnel Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-funnels/) — Typed funnel conversion analysis with steps, exclusions, conversion windows
 - [CLI Reference](https://jaredmcfarland.github.io/mixpanel_data/cli/)
 - [Python API](https://jaredmcfarland.github.io/mixpanel_data/api/)
 - [Streaming Guide](https://jaredmcfarland.github.io/mixpanel_data/guide/streaming/)

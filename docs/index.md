@@ -16,7 +16,7 @@ A complete programmable interface to Mixpanel analytics—available as both a Py
 
 Mixpanel's web UI is built for interactive exploration. But many workflows need something different: scripts that run unattended, notebooks that combine Mixpanel data with other sources, agents that query analytics programmatically, or pipelines that move data between systems.
 
-`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—segmentation, funnels, retention, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
+`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, segmentation, retention, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
 
 ## Two Interfaces, One Capability Set
 
@@ -83,6 +83,14 @@ result = ws.query(
     where=[Filter.equals("country", "US"), Filter.greater_than("amount", 50)],
     group_by="platform",
 )
+
+# Typed funnel query — define steps inline
+funnel_result = ws.query_funnel(
+    ["Signup", "Add to Cart", "Purchase"],
+    conversion_window=7,
+    last=90,
+)
+print(funnel_result.overall_conversion_rate)
 
 # Legacy live queries
 segmentation = ws.segmentation(
@@ -186,7 +194,8 @@ Discovery commands let you survey what exists before writing queries—no guessi
 **Live Queries** — Execute Mixpanel analytics directly:
 
 - Segmentation with filtering, grouping, and time bucketing
-- Funnel conversion analysis
+- Typed funnel queries with ad-hoc step definitions, exclusions, and conversion windows
+- Funnel conversion analysis (legacy saved funnels)
 - Retention analysis
 - Saved reports (Insights, Funnels, Flows, Retention)
 - User activity feeds
@@ -248,6 +257,7 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Installation](getting-started/installation.md) — Get started with pip or uv
 - [Quick Start](getting-started/quickstart.md) — Your first queries in 5 minutes
 - [Insights Queries](guide/query.md) — Typed analytics queries with DAU, formulas, filters, and breakdowns
+- [Funnel Queries](guide/query-funnels.md) — Typed funnel conversion analysis with steps, exclusions, and conversion windows
 - [API Reference](api/index.md) — Complete Python API documentation
 - [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks
 - [Data Governance](guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables

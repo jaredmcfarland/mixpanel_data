@@ -217,6 +217,31 @@ result = ws.query(
 
 See the [Insights Queries guide](../guide/query.md) for full coverage.
 
+### Funnel Queries
+
+Define funnels inline with typed steps — no saved funnel required:
+
+```python
+from mixpanel_data import FunnelStep, Filter
+
+# Simple funnel
+result = ws.query_funnel(["Signup", "Purchase"])
+print(f"Conversion: {result.overall_conversion_rate:.1%}")
+
+# With per-step filters and conversion window
+result = ws.query_funnel(
+    [
+        FunnelStep("Signup"),
+        FunnelStep("Purchase", filters=[Filter.greater_than("amount", 50)]),
+    ],
+    conversion_window=7,
+    last=90,
+)
+print(result.df)
+```
+
+See the [Funnel Queries guide](../guide/query-funnels.md) for full coverage.
+
 ### Legacy Query Methods
 
 For segmentation, funnels, and retention via the older Query API:
@@ -321,6 +346,7 @@ For ETL pipelines or data processing, stream data directly:
 
 - [Configuration](configuration.md) — Multiple accounts and advanced settings
 - [Insights Queries](../guide/query.md) — Typed analytics with DAU, formulas, filters, and breakdowns
+- [Funnel Queries](../guide/query-funnels.md) — Typed funnel conversion analysis
 - [Live Analytics](../guide/live-analytics.md) — Segmentation, funnels, retention
 - [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
 - [Data Governance](../guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, and lookup tables

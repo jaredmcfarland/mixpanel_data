@@ -59,6 +59,30 @@ Types for `Workspace.query()` — typed Insights engine queries with composable 
       show_root_heading: true
       show_root_toc_entry: true
 
+## Funnel Query Types
+
+Types for `Workspace.query_funnel()` — typed funnel conversion analysis with step definitions, exclusions, and conversion windows.
+
+::: mixpanel_data.FunnelStep
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.Exclusion
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.HoldingConstant
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FunnelQueryResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Legacy Query Results
 
 ::: mixpanel_data.SegmentationResult
@@ -71,7 +95,7 @@ Types for `Workspace.query()` — typed Insights engine queries with composable 
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.FunnelStep
+::: mixpanel_data.FunnelResultStep
     options:
       show_root_heading: true
       show_root_toc_entry: true

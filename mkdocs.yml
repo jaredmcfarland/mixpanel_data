@@ -81,6 +81,7 @@ plugins:
         User Guide:
           - guide/discovery.md
           - guide/query.md
+          - guide/query-funnels.md
           - guide/live-analytics.md
           - guide/streaming.md
           - guide/entity-management.md
@@ -130,6 +131,7 @@ plugins:
         User Guide:
           - guide/discovery.md: "Explore schema, events, properties, cohorts"
           - guide/query.md: "Typed insights queries — DAU, formulas, filters, breakdowns"
+          - guide/query-funnels.md: "Typed funnel queries — steps, exclusions, conversion windows"
           - guide/live-analytics.md: "Segmentation, funnels, retention, JQL"
           - guide/streaming.md: "Stream events and profiles for ETL"
           - guide/entity-management.md: "Create, update, delete dashboards, reports, and cohorts"
@@ -170,6 +172,7 @@ nav:
   - User Guide:
       - Data Discovery: guide/discovery.md
       - Insights Queries: guide/query.md
+      - Funnel Queries: guide/query-funnels.md
       - Live Analytics: guide/live-analytics.md
       - Streaming Data: guide/streaming.md
       - Entity Management: guide/entity-management.md
