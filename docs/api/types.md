@@ -112,6 +112,25 @@ Types for `Workspace.query_retention()` — typed retention analysis with event 
       show_root_heading: true
       show_root_toc_entry: true
 
+## Flow Query Types
+
+Types for `Workspace.query_flow()` — typed flow path analysis with step definitions, direction controls, and visualization modes.
+
+::: mixpanel_data.FlowStep
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FlowTreeNode
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FlowQueryResult
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Legacy Query Results
 
 ::: mixpanel_data.SegmentationResult

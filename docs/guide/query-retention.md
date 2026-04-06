@@ -544,6 +544,7 @@ ws.create_bookmark(CreateBookmarkParams(
 
 - [Insights Queries](query.md) — Typed analytics with DAU, formulas, filters, and breakdowns
 - [Funnel Queries](query-funnels.md) — Typed funnel conversion analysis with steps, exclusions, and conversion windows
+- [Flow Queries](query-flows.md) — Typed flow path analysis with steps, directions, and graph output
 - [Live Analytics — Retention](live-analytics.md#retention) — Legacy retention method
 - [API Reference — Workspace](../api/workspace.md) — Full method signatures
 - [API Reference — Types](../api/types.md) — RetentionEvent, RetentionQueryResult, RetentionAlignment, RetentionMode, RetentionMathType details

@@ -212,8 +212,8 @@ class TestNewEnumConstants:
         assert isinstance(VALID_FLOWS_COUNT_TYPES, frozenset)
 
     def test_valid_flows_chart_types_values(self) -> None:
-        """VALID_FLOWS_CHART_TYPES contains 'sankey' and 'top-paths'."""
-        assert {"sankey", "top-paths"} == VALID_FLOWS_CHART_TYPES
+        """VALID_FLOWS_CHART_TYPES contains 'sankey', 'top-paths', and 'tree'."""
+        assert {"sankey", "top-paths", "tree"} == VALID_FLOWS_CHART_TYPES
 
     def test_valid_flows_chart_types_is_frozenset(self) -> None:
         """VALID_FLOWS_CHART_TYPES is a frozenset."""

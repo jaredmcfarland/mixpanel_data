@@ -28,4 +28,25 @@ QueryTimeUnit = Literal["hour", "day", "week", "month", "quarter"]
 # Count/aggregation methods
 CountType = Literal["general", "unique", "average"]
 
-__all__ = ["TimeUnit", "HourDayUnit", "QueryTimeUnit", "CountType"]
+# Counting methods for flows analysis
+FlowCountType = Literal["unique", "total", "session"]
+
+# Chart types for flows visualization
+FlowChartType = Literal["sankey", "paths", "tree"]
+
+# Node types in a flow tree response
+FlowNodeType = Literal["ANCHOR", "NORMAL", "DROPOFF", "PRUNED", "FORWARD", "REVERSE"]
+
+# Anchor types in a flow tree response
+FlowAnchorType = Literal["NORMAL", "RELATIVE_REVERSE", "RELATIVE_FORWARD"]
+
+__all__ = [
+    "TimeUnit",
+    "HourDayUnit",
+    "QueryTimeUnit",
+    "CountType",
+    "FlowCountType",
+    "FlowChartType",
+    "FlowNodeType",
+    "FlowAnchorType",
+]

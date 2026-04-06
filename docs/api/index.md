@@ -28,6 +28,9 @@ from mixpanel_data import (
 # Retention Query types
 from mixpanel_data import RetentionEvent, RetentionQueryResult
 
+# Flow Query types
+from mixpanel_data import FlowStep, FlowTreeNode, FlowQueryResult
+
 # Auth utilities
 from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
 
@@ -70,6 +73,7 @@ The main entry point for all operations:
 - **Insights Queries** — Typed analytics queries using the Insights engine (`query()`)
 - **Funnel Queries** — Typed funnel conversion analysis (`query_funnel()`)
 - **Retention Queries** — Typed retention analysis with event pairs (`query_retention()`)
+- **Flow Queries** — Typed flow path analysis (`query_flow()`)
 - **Live Queries** — Legacy analytics endpoints (segmentation, funnels, retention, JQL)
 - **Streaming** — Stream events and profiles directly from Mixpanel (ETL, pipelines)
 - **Entity CRUD & Data Governance** — Create, read, update, delete dashboards, reports, cohorts, feature flags, experiments, plus Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, volume anomalies, and event deletion requests
@@ -109,6 +113,7 @@ Typed results for all operations:
 - **Metric**, **Filter**, **Formula**, **GroupBy** — Query building blocks
 - **FunnelQueryResult**, **FunnelStep**, **Exclusion** — Typed funnel results
 - **RetentionQueryResult**, **RetentionEvent**, **RetentionAlignment**, **RetentionMode**, **RetentionMathType** — Typed retention results
+- **FlowQueryResult**, **FlowStep**, **FlowTreeNode** — Typed flow analysis results
 - **SegmentationResult** — Time-series data (legacy)
 - **FunnelResult** — Funnel conversion data (legacy)
 - **RetentionResult** — Retention cohort data (legacy)
@@ -125,11 +130,14 @@ The library exports these type aliases:
 
 ```python
 from mixpanel_data import CountType, HourDayUnit, TimeUnit, FilterDateUnit
+from mixpanel_data import FlowCountType, FlowChartType
 
 # CountType: Literal["general", "unique", "average", "median", "min", "max"]
 # HourDayUnit: Literal["hour", "day"]
 # TimeUnit: Literal["day", "week", "month", "quarter", "year"]
 # FilterDateUnit: Literal["hour", "day", "week", "month"]
+# FlowCountType: Literal["unique", "total", "session"]
+# FlowChartType: Literal["sankey", "paths", "tree"]
 ```
 
 ## Complete API Reference

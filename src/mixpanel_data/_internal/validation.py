@@ -29,6 +29,10 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_CONVERSION_WINDOW_UNITS,
     VALID_FILTER_OPERATORS,
     VALID_FILTERS_DETERMINER,
+    VALID_FLOWS_CHART_TYPES,
+    VALID_FLOWS_CONVERSION_WINDOW_UNITS,
+    VALID_FLOWS_COUNT_TYPES,
+    VALID_FLOWS_MODES,
     VALID_MATH_FUNNELS,
     VALID_MATH_INSIGHTS,
     VALID_MATH_RETENTION,
@@ -61,6 +65,25 @@ _SESSION_MATH: frozenset[str] = frozenset({"conversion_rate_session"})
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _FORMULA_POSITION_RE = re.compile(r"[A-Z]")
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def contains_control_chars(s: str) -> bool:
+    """Check whether a string contains ASCII control characters.
+
+    Detects characters in the ranges ``\\x00-\\x08``, ``\\x0b``,
+    ``\\x0c``, ``\\x0e-\\x1f``, and ``\\x7f`` (DEL). These characters
+    are almost never intentional in event or property names and can
+    cause silent issues in API queries.
+
+    Args:
+        s: The string to check.
+
+    Returns:
+        ``True`` if *s* contains at least one control character.
+    """
+    return bool(_CONTROL_CHAR_RE.search(s))
+
+
 _INVISIBLE_RE = re.compile(r"^[\s\u200b\u200c\u200d\ufeff\u00ad\u2060]*$")
 _MAX_LAST_DAYS = 3650  # 10 years — generous but sane upper bound
 _MAX_ROLLING = 365  # rolling window sanity cap
@@ -1044,6 +1067,382 @@ def validate_retention_args(
                         code="R12_EMPTY_GROUP_BY",
                     )
                 )
+
+    return errors
+
+
+# =============================================================================
+# Flow argument validation (FL1-FL10)
+# =============================================================================
+
+_MAX_FLOW_STEPS_DIRECTION = 5
+"""Maximum number of forward or reverse steps in a flow query (0-5)."""
+
+_MAX_FLOW_CARDINALITY = 50
+"""Maximum cardinality (number of top paths shown) in a flow query."""
+
+_FLOW_MAX_WINDOW: dict[str, int] = {
+    "month": 12,
+    "week": 52,
+    "day": 366,
+}
+"""Maximum conversion window per unit (366-day equivalent for a leap year)."""
+
+
+def validate_flow_args(
+    *,
+    steps: list[str],
+    forward: int = 3,
+    reverse: int = 0,
+    count_type: str = "unique",
+    mode: str = "sankey",
+    cardinality: int = 3,
+    conversion_window: int = 7,
+    conversion_window_unit: str = "day",
+    from_date: str | None = None,
+    to_date: str | None = None,
+    last: int = 30,
+) -> list[ValidationError]:
+    """Validate flow query arguments before bookmark construction (Layer 1).
+
+    Implements flow-specific validation rules FL1-FL10 plus enum checks
+    and reused time validators. Returns all errors found so callers
+    can fix multiple issues in a single pass.
+
+    Args:
+        steps: List of event names that define the flow anchor points.
+            Must contain at least one event.
+        forward: Number of steps to show after the anchor event.
+            Must be in range 0-5. Default: ``3``.
+        reverse: Number of steps to show before the anchor event.
+            Must be in range 0-5. Default: ``0``.
+        count_type: Counting method for flow analysis. Must be one of:
+            unique, total, session. Default: ``"unique"``.
+        mode: Display mode for flow results. Must be one of:
+            sankey, paths. Default: ``"sankey"``.
+        cardinality: Number of top paths to display. Must be in
+            range 1-50. Default: ``3``.
+        conversion_window: Conversion window size. Must be a positive
+            integer. Default: ``7``.
+        conversion_window_unit: Time unit for conversion window. Must
+            be one of: day, week, month, session. Default: ``"day"``.
+        from_date: Start date (YYYY-MM-DD) or ``None``.
+        to_date: End date (YYYY-MM-DD) or ``None``.
+        last: Number of days for relative date range. Default: ``30``.
+
+    Returns:
+        List of validation errors. Empty list means all arguments are valid.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.validation import validate_flow_args
+
+        errors = validate_flow_args(
+            steps=["Purchase"],
+            forward=3,
+            reverse=0,
+        )
+        assert errors == []
+        ```
+    """
+    errors: list[ValidationError] = []
+
+    # FL1: steps must be non-empty
+    if len(steps) == 0:
+        errors.append(
+            ValidationError(
+                path="steps",
+                message="At least one step event is required",
+                code="FL1_EMPTY_STEPS",
+            )
+        )
+
+    # FL2: Each step event must be non-empty string, no control/invisible chars
+    for i, event in enumerate(steps):
+        if not isinstance(event, str) or not event.strip():
+            errors.append(
+                ValidationError(
+                    path=f"steps[{i}]",
+                    message="Step event name must be a non-empty string",
+                    code="FL2_EMPTY_STEP_EVENT",
+                )
+            )
+            continue
+        # FL2b: No control characters
+        if _CONTROL_CHAR_RE.search(event):
+            errors.append(
+                ValidationError(
+                    path=f"steps[{i}]",
+                    message=(f"Step event name contains control characters: {event!r}"),
+                    code="FL2_CONTROL_CHAR_STEP_EVENT",
+                )
+            )
+        # FL2c: No invisible-only names
+        if _INVISIBLE_RE.match(event):
+            errors.append(
+                ValidationError(
+                    path=f"steps[{i}]",
+                    message="Step event name contains only invisible characters",
+                    code="FL2_INVISIBLE_STEP_EVENT",
+                )
+            )
+
+    # FL3: forward must be in range 0-5
+    if forward < 0 or forward > _MAX_FLOW_STEPS_DIRECTION:
+        errors.append(
+            ValidationError(
+                path="forward",
+                message=(
+                    f"forward must be between 0 and {_MAX_FLOW_STEPS_DIRECTION} "
+                    f"(got {forward})"
+                ),
+                code="FL3_FORWARD_RANGE",
+            )
+        )
+
+    # FL4: reverse must be in range 0-5
+    if reverse < 0 or reverse > _MAX_FLOW_STEPS_DIRECTION:
+        errors.append(
+            ValidationError(
+                path="reverse",
+                message=(
+                    f"reverse must be between 0 and {_MAX_FLOW_STEPS_DIRECTION} "
+                    f"(got {reverse})"
+                ),
+                code="FL4_REVERSE_RANGE",
+            )
+        )
+
+    # FL5: forward + reverse must be > 0 (at least one direction)
+    if forward + reverse == 0:
+        errors.append(
+            ValidationError(
+                path="forward",
+                message=(
+                    "At least one of forward or reverse must be > 0; "
+                    "both are currently 0"
+                ),
+                code="FL5_NO_DIRECTION",
+            )
+        )
+
+    # FL6: cardinality must be in range 1-50
+    if cardinality < 1 or cardinality > _MAX_FLOW_CARDINALITY:
+        errors.append(
+            ValidationError(
+                path="cardinality",
+                message=(
+                    f"cardinality must be between 1 and {_MAX_FLOW_CARDINALITY} "
+                    f"(got {cardinality})"
+                ),
+                code="FL6_CARDINALITY_RANGE",
+            )
+        )
+
+    # FL7: conversion_window must be positive
+    if conversion_window <= 0:
+        errors.append(
+            ValidationError(
+                path="conversion_window",
+                message="conversion_window must be a positive integer",
+                code="FL7_CONVERSION_WINDOW_POSITIVE",
+            )
+        )
+
+    # FL7b: conversion_window max per unit (366-day equivalent)
+    if (
+        conversion_window > 0
+        and conversion_window_unit in _FLOW_MAX_WINDOW
+        and conversion_window > _FLOW_MAX_WINDOW[conversion_window_unit]
+    ):
+        max_val = _FLOW_MAX_WINDOW[conversion_window_unit]
+        errors.append(
+            ValidationError(
+                path="conversion_window",
+                message=(
+                    f"conversion_window={conversion_window} exceeds "
+                    f"maximum of {max_val} for unit "
+                    f"'{conversion_window_unit}'"
+                ),
+                code="FL7_CONVERSION_WINDOW_MAX",
+            )
+        )
+
+    # Enum: count_type validation
+    if count_type not in VALID_FLOWS_COUNT_TYPES:
+        errors.append(
+            _enum_error(
+                path="count_type",
+                field="count_type",
+                value=count_type,
+                valid=VALID_FLOWS_COUNT_TYPES,
+                code="FL_INVALID_COUNT_TYPE",
+            )
+        )
+
+    # Enum: mode validation
+    if mode not in VALID_FLOWS_MODES:
+        errors.append(
+            _enum_error(
+                path="mode",
+                field="mode",
+                value=mode,
+                valid=VALID_FLOWS_MODES,
+                code="FL_INVALID_MODE",
+            )
+        )
+
+    # Enum: conversion_window_unit validation
+    if conversion_window_unit not in VALID_FLOWS_CONVERSION_WINDOW_UNITS:
+        errors.append(
+            _enum_error(
+                path="conversion_window_unit",
+                field="conversion_window_unit",
+                value=conversion_window_unit,
+                valid=VALID_FLOWS_CONVERSION_WINDOW_UNITS,
+                code="FL_INVALID_WINDOW_UNIT",
+            )
+        )
+
+    # FL9: count_type='session' requires conversion_window_unit='session'
+    if count_type == "session" and conversion_window_unit != "session":
+        errors.append(
+            ValidationError(
+                path="count_type",
+                message=(
+                    "count_type='session' requires conversion_window_unit='session'"
+                ),
+                code="FL9_SESSION_REQUIRES_SESSION_WINDOW",
+            )
+        )
+
+    # FL10: conversion_window_unit='session' requires conversion_window=1
+    if conversion_window_unit == "session" and conversion_window != 1:
+        errors.append(
+            ValidationError(
+                path="conversion_window",
+                message=(
+                    "conversion_window_unit='session' requires conversion_window=1"
+                ),
+                code="FL10_SESSION_WINDOW_REQUIRES_ONE",
+            )
+        )
+
+    # FL8: Time argument validation (delegated)
+    errors.extend(validate_time_args(from_date=from_date, to_date=to_date, last=last))
+
+    return errors
+
+
+# =============================================================================
+# Flow bookmark validation (FLB1-FLB6)
+# =============================================================================
+
+
+def validate_flow_bookmark(
+    params: dict[str, Any],
+) -> list[ValidationError]:
+    """Validate a flat flow bookmark params dict after construction (Layer 2).
+
+    Validates the structural integrity and enum values of a built
+    flow bookmark params dict before it is sent to the Mixpanel API.
+    Flows use a flat structure without ``sections``/``displayOptions``,
+    so this is a separate function from ``validate_bookmark()``.
+
+    Args:
+        params: The flow bookmark params dict (flat structure with
+            ``steps``, ``date_range``, ``chartType``, ``count_type``,
+            and ``version`` keys).
+
+    Returns:
+        List of validation errors. Empty list means the bookmark is valid.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.validation import validate_flow_bookmark
+
+        errors = validate_flow_bookmark({
+            "steps": [{"event": "Purchase", "forward": 3, "reverse": 0}],
+            "date_range": {"type": "in the last", "from_date": {"unit": "day", "value": 30}, "to_date": "$now"},
+            "chartType": "sankey",
+            "count_type": "unique",
+            "version": 2,
+        })
+        assert errors == []
+        ```
+    """
+    errors: list[ValidationError] = []
+
+    # FLB1: steps must be present and non-empty
+    steps = params.get("steps")
+    if not isinstance(steps, list) or len(steps) == 0:
+        errors.append(
+            ValidationError(
+                path="steps",
+                message="Flow bookmark must have at least one step",
+                code="FLB1_EMPTY_STEPS",
+            )
+        )
+    else:
+        # FLB2: Each step event must be non-empty
+        for i, step in enumerate(steps):
+            if isinstance(step, dict):
+                event = step.get("event")
+                if not isinstance(event, str) or not event.strip():
+                    errors.append(
+                        ValidationError(
+                            path=f"steps[{i}].event",
+                            message="Step event name must be a non-empty string",
+                            code="FLB2_EMPTY_STEP_EVENT",
+                        )
+                    )
+
+    # FLB3: count_type validation
+    count_type = params.get("count_type")
+    if count_type is not None and count_type not in VALID_FLOWS_COUNT_TYPES:
+        errors.append(
+            _enum_error(
+                path="count_type",
+                field="count_type",
+                value=str(count_type),
+                valid=VALID_FLOWS_COUNT_TYPES,
+                code="FLB3_INVALID_COUNT_TYPE",
+            )
+        )
+
+    # FLB4: chartType validation
+    chart_type = params.get("chartType")
+    if chart_type is not None and chart_type not in VALID_FLOWS_CHART_TYPES:
+        errors.append(
+            _enum_error(
+                path="chartType",
+                field="chartType",
+                value=str(chart_type),
+                valid=VALID_FLOWS_CHART_TYPES,
+                code="FLB4_INVALID_CHART_TYPE",
+            )
+        )
+
+    # FLB5: date_range must be present
+    if "date_range" not in params:
+        errors.append(
+            ValidationError(
+                path="date_range",
+                message="Flow bookmark requires a date_range",
+                code="FLB5_MISSING_DATE_RANGE",
+            )
+        )
+
+    # FLB6: version must be 2
+    version = params.get("version")
+    if version != 2:
+        errors.append(
+            ValidationError(
+                path="version",
+                message=f"Flow bookmark version must be 2 (got {version})",
+                code="FLB6_INVALID_VERSION",
+            )
+        )
 
     return errors
 

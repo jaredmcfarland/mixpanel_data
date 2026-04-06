@@ -18,12 +18,17 @@ from __future__ import annotations
 
 import math
 import re
+import warnings
 from dataclasses import dataclass, field
 from datetime import date as dt_date
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
+from mixpanel_data._literal_types import FlowAnchorType, FlowNodeType
+
+if TYPE_CHECKING:
+    import networkx as nx
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
@@ -802,7 +807,7 @@ class BookmarkInfo:
     """Metadata for a saved report (bookmark) from the Mixpanel Bookmarks API.
 
     Represents a saved Insights, Funnel, Retention, or Flows report
-    that can be queried using query_saved_report() or query_flows().
+    that can be queried using query_saved_report() or query_saved_flows().
 
     Attributes:
         id: Unique bookmark identifier.
@@ -8350,3 +8355,906 @@ class RetentionQueryResult(ResultWithDataFrame):
         if self.segment_averages:
             d["segment_averages"] = self.segment_averages
         return d
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Parse a value to int, returning *default* on failure.
+
+    The Mixpanel flows API returns ``totalCount`` as a string.
+    Some edge cases (empty string, ``None``, non-numeric) would
+    crash a bare ``int()`` call.  Emits a warning when unexpected
+    types or non-numeric strings are encountered so that silent
+    data corruption is detectable.
+
+    Args:
+        value: Value to parse (typically a string like ``"100"``).
+        default: Fallback when parsing fails. Default: ``0``.
+
+    Returns:
+        Parsed integer, or *default* if parsing fails.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            warnings.warn(
+                f"Non-numeric string for count field: {value!r}; "
+                f"using default {default}",
+                stacklevel=2,
+            )
+            return default
+    if value is None:
+        return default
+    warnings.warn(
+        f"Unexpected type for count field: "
+        f"{type(value).__name__} ({value!r}); using default {default}",
+        stacklevel=2,
+    )
+    return default
+
+
+# =============================================================================
+# Flow Query Types (Phase 034)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class FlowStep:
+    """An anchor event in a flow query with per-step configuration.
+
+    Each flow step identifies a specific event and optional constraints
+    (forward/reverse step counts, filters) that define a node in the
+    flow analysis.
+
+    Attributes:
+        event: The event name to anchor this step on.
+        forward: Maximum number of forward steps to trace from this event.
+            ``None`` means use the query-level default.
+        reverse: Maximum number of reverse steps to trace from this event.
+            ``None`` means use the query-level default.
+        label: Optional display label for this step. If ``None``, the event
+            name is used as the label.
+        filters: Optional list of ``Filter`` conditions to narrow the events
+            matching this step. ``None`` means no per-step filtering.
+        filters_combinator: How to combine multiple filters — ``"all"``
+            requires every filter to match (AND), ``"any"`` requires at
+            least one (OR). Defaults to ``"all"``.
+
+    Example:
+        ```python
+        step = FlowStep(
+            "Purchase",
+            forward=5,
+            reverse=3,
+            label="Buy",
+            filters=[Filter.equals("country", "US")],
+            filters_combinator="all",
+        )
+        ```
+    """
+
+    event: str
+    forward: int | None = None
+    reverse: int | None = None
+    label: str | None = None
+    filters: list[Filter] | None = None
+    filters_combinator: Literal["all", "any"] = "all"
+
+
+@dataclass(frozen=True)
+class FlowTreeNode:
+    """A node in a recursive flow prefix tree.
+
+    Represents a single event in a flow path tree returned by the Mixpanel
+    Flows API when using ``mode="tree"``. Each node tracks aggregate counts
+    (total, drop-off, converted) and optionally timing percentiles. Children
+    represent subsequent events in the flow.
+
+    The tree preserves full path context — unlike the sankey graph which
+    merges nodes at the same step position, each tree node is unique to
+    its specific path from root.
+
+    Attributes:
+        event: The event name at this position in the flow.
+        type: Node type — ``"ANCHOR"``, ``"NORMAL"``, ``"DROPOFF"``,
+            ``"PRUNED"``, ``"FORWARD"``, or ``"REVERSE"``.
+        step_number: Zero-based step index in the flow.
+        total_count: Total number of users reaching this node.
+        drop_off_count: Number of users who dropped off at this node.
+        converted_count: Number of users who continued past this node.
+        anchor_type: Anchor classification — ``"NORMAL"``,
+            ``"RELATIVE_REVERSE"``, or ``"RELATIVE_FORWARD"``.
+        is_computed: Whether this is a computed/custom event.
+        children: Child nodes representing subsequent events. Defaults
+            to an empty tuple.
+        time_percentiles_from_start: Timing percentile data from flow
+            start to this node. Empty dict if timing data is not enabled.
+        time_percentiles_from_prev: Timing percentile data from the
+            previous node to this node. Empty dict if timing data is
+            not enabled.
+
+    Example:
+        ```python
+        root = FlowTreeNode(
+            event="Login", type="ANCHOR", step_number=0,
+            total_count=1000, drop_off_count=50, converted_count=950,
+            children=(
+                FlowTreeNode(
+                    event="Search", type="NORMAL", step_number=1,
+                    total_count=600,
+                ),
+            ),
+        )
+        root.depth          # 1
+        root.conversion_rate  # 0.95
+        root.all_paths()    # [[root, search_node]]
+        ```
+    """
+
+    event: str
+    type: FlowNodeType
+    step_number: int
+    total_count: int
+    drop_off_count: int = 0
+    converted_count: int = 0
+    anchor_type: FlowAnchorType = "NORMAL"
+    is_computed: bool = False
+    children: tuple[FlowTreeNode, ...] = ()
+    time_percentiles_from_start: dict[str, Any] = field(default_factory=dict)
+    time_percentiles_from_prev: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def depth(self) -> int:
+        """Maximum depth of the subtree rooted at this node.
+
+        A leaf node has depth 0. A node with one level of children
+        has depth 1, and so on.
+
+        Returns:
+            Non-negative integer representing the longest path from
+            this node to any leaf descendant.
+
+        Example:
+            ```python
+            leaf = FlowTreeNode(
+                event="Purchase", type="ANCHOR",
+                step_number=0, total_count=100,
+            )
+            leaf.depth  # 0
+            ```
+        """
+        if not self.children:
+            return 0
+        return 1 + max(c.depth for c in self.children)
+
+    @property
+    def node_count(self) -> int:
+        """Total number of nodes in the subtree including this node.
+
+        Returns:
+            Positive integer (always >= 1).
+
+        Example:
+            ```python
+            node.node_count  # 7
+            ```
+        """
+        return 1 + sum(c.node_count for c in self.children)
+
+    @property
+    def leaf_count(self) -> int:
+        """Number of leaf nodes (nodes with no children) in the subtree.
+
+        Returns:
+            Positive integer (always >= 1).
+
+        Example:
+            ```python
+            node.leaf_count  # 4
+            ```
+        """
+        if not self.children:
+            return 1
+        return sum(c.leaf_count for c in self.children)
+
+    @property
+    def conversion_rate(self) -> float:
+        """Fraction of users who converted at this node.
+
+        Computed as ``converted_count / total_count``. Returns ``0.0``
+        when ``total_count`` is zero to avoid division errors.
+
+        Returns:
+            Float in ``[0.0, 1.0]``.
+
+        Example:
+            ```python
+            node.conversion_rate  # 0.95
+            ```
+        """
+        if self.total_count == 0:
+            return 0.0
+        return self.converted_count / self.total_count
+
+    @property
+    def drop_off_rate(self) -> float:
+        """Fraction of users who dropped off at this node.
+
+        Computed as ``drop_off_count / total_count``. Returns ``0.0``
+        when ``total_count`` is zero to avoid division errors.
+
+        Returns:
+            Float in ``[0.0, 1.0]``.
+
+        Example:
+            ```python
+            node.drop_off_rate  # 0.05
+            ```
+        """
+        if self.total_count == 0:
+            return 0.0
+        return self.drop_off_count / self.total_count
+
+    def all_paths(self) -> list[list[FlowTreeNode]]:
+        """Return all root-to-leaf paths through this subtree.
+
+        Each path is a list of ``FlowTreeNode`` objects from this node
+        down to a leaf, preserving the full node chain so callers can
+        inspect counts, rates, and timing along each path.
+
+        Returns:
+            List of paths, where each path is a list of nodes. The
+            number of paths equals ``leaf_count``.
+
+        Example:
+            ```python
+            for path in root.all_paths():
+                events = [n.event for n in path]
+                print(" -> ".join(events))
+            # Login -> Search -> Purchase
+            # Login -> Search -> DROPOFF
+            # Login -> Browse -> Purchase
+            # Login -> DROPOFF
+            ```
+        """
+        if not self.children:
+            return [[self]]
+        paths: list[list[FlowTreeNode]] = []
+        for child in self.children:
+            for child_path in child.all_paths():
+                paths.append([self, *child_path])
+        return paths
+
+    def find(self, event: str) -> list[FlowTreeNode]:
+        """Find all nodes matching an event name via depth-first search.
+
+        Args:
+            event: The event name to search for.
+
+        Returns:
+            List of matching ``FlowTreeNode`` objects. Empty list if
+            no nodes match.
+
+        Example:
+            ```python
+            purchases = root.find("Purchase")
+            # [FlowTreeNode(event="Purchase", ...), ...]
+            ```
+        """
+        results: list[FlowTreeNode] = []
+        if self.event == event:
+            results.append(self)
+        for child in self.children:
+            results.extend(child.find(event))
+        return results
+
+    def flatten(self) -> list[FlowTreeNode]:
+        """Return all nodes in pre-order (depth-first) traversal.
+
+        The root node appears first, followed by its children's subtrees
+        in order.
+
+        Returns:
+            List of all nodes in the subtree. Length equals
+            ``node_count``.
+
+        Example:
+            ```python
+            for node in root.flatten():
+                print(f"{node.event}: {node.total_count}")
+            ```
+        """
+        result: list[FlowTreeNode] = [self]
+        for child in self.children:
+            result.extend(child.flatten())
+        return result
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the tree node recursively to a dictionary.
+
+        Returns:
+            Dictionary with all node attributes and recursively
+            serialized children. Suitable for JSON serialization.
+
+        Example:
+            ```python
+            d = node.to_dict()
+            d["event"]     # "Login"
+            d["children"]  # [{"event": "Search", ...}, ...]
+            ```
+        """
+        return {
+            "event": self.event,
+            "type": self.type,
+            "step_number": self.step_number,
+            "total_count": self.total_count,
+            "drop_off_count": self.drop_off_count,
+            "converted_count": self.converted_count,
+            "anchor_type": self.anchor_type,
+            "is_computed": self.is_computed,
+            "children": [c.to_dict() for c in self.children],
+            "time_percentiles_from_start": self.time_percentiles_from_start,
+            "time_percentiles_from_prev": self.time_percentiles_from_prev,
+        }
+
+    def render(
+        self,
+        _prefix: str = "",
+        _is_last: bool = True,
+        _is_root: bool = True,
+    ) -> str:
+        """Render the tree as an ASCII string for debugging.
+
+        Uses box-drawing characters (``\u251c\u2500\u2500``, ``\u2514\u2500\u2500``, ``\u2502``) to display
+        the tree hierarchy with event names and counts.
+
+        Args:
+            _prefix: Internal prefix for recursive indentation.
+                Do not pass this argument directly.
+            _is_last: Internal flag for connector selection.
+                Do not pass this argument directly.
+            _is_root: Internal flag distinguishing the root call
+                from recursive children. Do not pass directly.
+
+        Returns:
+            Multi-line string representation of the tree.
+
+        Example:
+            ```python
+            print(root.render())
+            # Login (1000)
+            # \u251c\u2500\u2500 Search (600)
+            # \u2502   \u251c\u2500\u2500 Purchase (400)
+            # \u2502   \u2514\u2500\u2500 DROPOFF (100)
+            # \u251c\u2500\u2500 Browse (300)
+            # \u2502   \u2514\u2500\u2500 Purchase (200)
+            # \u2514\u2500\u2500 DROPOFF (50)
+            ```
+        """
+        if _is_root:
+            line = f"{self.event} ({self.total_count})\n"
+            child_prefix = ""
+        else:
+            connector = "\u2514\u2500\u2500 " if _is_last else "\u251c\u2500\u2500 "
+            line = f"{_prefix}{connector}{self.event} ({self.total_count})\n"
+            child_prefix = _prefix + ("    " if _is_last else "\u2502   ")
+
+        for i, child in enumerate(self.children):
+            is_last_child = i == len(self.children) - 1
+            line += child.render(
+                _prefix=child_prefix, _is_last=is_last_child, _is_root=False
+            )
+
+        return line
+
+    def to_anytree(self) -> Any:
+        """Convert to an ``anytree.AnyNode`` tree with parent references.
+
+        Creates a parallel anytree representation of this subtree. Each
+        anytree node carries the same attributes (event, type, counts,
+        etc.) and gains parent references, path resolution, and rendering
+        capabilities from the anytree library.
+
+        Returns:
+            An ``anytree.AnyNode`` root with the full subtree attached.
+            Use ``node.parent``, ``node.path``, ``node.children``,
+            and ``anytree.RenderTree`` for navigation and display.
+
+        Example:
+            ```python
+            from anytree import RenderTree, findall
+
+            at = root.to_anytree()
+            print(RenderTree(at))
+
+            # Parent references
+            purchase = findall(at, filter_=lambda n: n.event == "Purchase")[0]
+            purchase.parent.event  # "Search"
+            [n.event for n in purchase.path]  # ["Login", "Search", "Purchase"]
+            ```
+        """
+        return self._build_anytree_node(parent=None)
+
+    def _build_anytree_node(self, parent: Any) -> Any:
+        """Recursively build an anytree node tree.
+
+        Args:
+            parent: The parent ``AnyNode``, or ``None`` for the root.
+
+        Returns:
+            An ``anytree.AnyNode`` with children attached.
+        """
+        from anytree import AnyNode
+
+        node = AnyNode(
+            parent=parent,
+            event=self.event,
+            type=self.type,
+            step_number=self.step_number,
+            total_count=self.total_count,
+            drop_off_count=self.drop_off_count,
+            converted_count=self.converted_count,
+            anchor_type=self.anchor_type,
+            is_computed=self.is_computed,
+        )
+        for child in self.children:
+            child._build_anytree_node(parent=node)
+        return node
+
+
+@dataclass(frozen=True)
+class FlowQueryResult(ResultWithDataFrame):
+    """Result of an ad-hoc flow query.
+
+    Holds the raw flow analysis data returned by the Mixpanel API,
+    including step nodes, flow edges, breakdowns, and overall conversion.
+
+    Attributes:
+        computed_at: ISO-8601 timestamp when the query was computed.
+        steps: List of step-node dicts from the API response.
+        flows: List of flow-edge dicts describing transitions between steps.
+        breakdowns: List of breakdown dicts when a breakdown property is used.
+        overall_conversion_rate: Overall conversion rate across the flow
+            (0.0 to 1.0).
+        params: The query parameters that produced this result.
+        meta: API metadata (sampling factor, request timing, etc.).
+        mode: The flow visualization mode — ``"sankey"`` for Sankey diagrams,
+            ``"paths"`` for top-paths analysis, or ``"tree"`` for prefix
+            tree analysis.
+
+    Example:
+        ```python
+        result = FlowQueryResult(
+            computed_at="2025-01-15T10:00:00",
+            steps=[{"event": "Login", "count": 100}],
+            flows=[{"path": ["Login", "Purchase"], "count": 30}],
+            overall_conversion_rate=0.3,
+        )
+        result.to_dict()
+        # {"computed_at": "2025-01-15T10:00:00", ...}
+        ```
+    """
+
+    computed_at: str
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    flows: list[dict[str, Any]] = field(default_factory=list)
+    breakdowns: list[dict[str, Any]] = field(default_factory=list)
+    overall_conversion_rate: float = 0.0
+    params: dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
+    mode: Literal["sankey", "paths", "tree"] = "sankey"
+    trees: list[FlowTreeNode] = field(default_factory=list)
+    _nodes_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
+    _edges_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
+    _graph_cache: Any = field(default=None, repr=False, kw_only=True)
+    _trees_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
+    _anytree_cache: list[Any] | None = field(default=None, repr=False, kw_only=True)
+
+    @property
+    def nodes_df(self) -> pd.DataFrame:
+        """Extract a flat DataFrame of nodes from sankey step data.
+
+        Each row represents a single node in the flow graph, with columns
+        for step index, event name, node type, count, anchor type,
+        custom event flag, and conversion rate change.
+
+        The ``totalCount`` field in the API response is a string and is
+        parsed to ``int`` here.
+
+        Returns:
+            DataFrame with columns: ``step``, ``event``, ``type``,
+            ``count``, ``anchor_type``, ``is_custom_event``,
+            ``conversion_rate_change``. Returns an empty DataFrame with
+            the correct columns when ``steps`` is empty.
+
+        Example:
+            ```python
+            result = workspace.query_flow(steps=[FlowStep("Login")])
+            result.nodes_df
+            #    step   event   type  count anchor_type  ...
+            # 0     0   Login  ANCHOR   100      NORMAL  ...
+            ```
+        """
+        if self._nodes_df_cache is not None:
+            return self._nodes_df_cache
+        rows: list[dict[str, Any]] = []
+        for step_idx, step in enumerate(self.steps):
+            for node in step.get("nodes", []):
+                rows.append(
+                    {
+                        "step": step_idx,
+                        "event": node.get("event", ""),
+                        "type": node.get("type", ""),
+                        "count": _safe_int(node.get("totalCount", "0")),
+                        "anchor_type": node.get("anchorType", ""),
+                        "is_custom_event": node.get("isCustomEvent", False),
+                        "conversion_rate_change": node.get("conversionRateChange", 0.0),
+                    }
+                )
+        cols = [
+            "step",
+            "event",
+            "type",
+            "count",
+            "anchor_type",
+            "is_custom_event",
+            "conversion_rate_change",
+        ]
+        result_df = pd.DataFrame(rows, columns=cols)
+        object.__setattr__(self, "_nodes_df_cache", result_df)
+        return result_df
+
+    @property
+    def edges_df(self) -> pd.DataFrame:
+        """Extract a flat DataFrame of edges from sankey step data.
+
+        Each row represents a directed edge between two nodes in the flow
+        graph, with columns for source step/event, target step/event,
+        edge count, and target node type.
+
+        The ``totalCount`` field in the API response is a string and is
+        parsed to ``int`` here.
+
+        Returns:
+            DataFrame with columns: ``source_step``, ``source_event``,
+            ``target_step``, ``target_event``, ``count``, ``target_type``.
+            Returns an empty DataFrame with the correct columns when
+            ``steps`` is empty.
+
+        Example:
+            ```python
+            result = workspace.query_flow(steps=[FlowStep("Login")])
+            result.edges_df
+            #    source_step source_event  target_step target_event  count target_type
+            # 0            0        Login            1       Search     80      NORMAL
+            ```
+        """
+        if self._edges_df_cache is not None:
+            return self._edges_df_cache
+        rows: list[dict[str, Any]] = []
+        for step_idx, step in enumerate(self.steps):
+            for node in step.get("nodes", []):
+                for edge in node.get("edges", []):
+                    rows.append(
+                        {
+                            "source_step": step_idx,
+                            "source_event": node.get("event", ""),
+                            "target_step": _safe_int(
+                                edge.get("step", step_idx + 1), default=step_idx + 1
+                            ),
+                            "target_event": edge.get("event", ""),
+                            "count": _safe_int(edge.get("totalCount", "0")),
+                            "target_type": edge.get("type", ""),
+                        }
+                    )
+        cols = [
+            "source_step",
+            "source_event",
+            "target_step",
+            "target_event",
+            "count",
+            "target_type",
+        ]
+        result_df = pd.DataFrame(rows, columns=cols)
+        object.__setattr__(self, "_edges_df_cache", result_df)
+        return result_df
+
+    @property
+    def graph(self) -> nx.DiGraph:
+        """Build a networkx directed graph from sankey step data.
+
+        Nodes are keyed as ``"{event}@{step}"`` to distinguish the same
+        event appearing at different steps (e.g. ``"Login@0"`` vs
+        ``"Login@2"``). Each node carries ``step``, ``event``, ``type``,
+        ``count``, and ``anchor_type`` attributes. Each edge carries
+        ``count`` and ``type`` attributes.
+
+        The graph is lazily constructed on first access and cached for
+        subsequent calls.
+
+        Returns:
+            A ``networkx.DiGraph`` representing the flow. Returns an
+            empty graph when ``steps`` is empty.
+
+        Example:
+            ```python
+            result = workspace.query_flow(steps=[FlowStep("Login")])
+            G = result.graph
+            G.nodes["Login@0"]["count"]
+            # 100
+            ```
+        """
+        import networkx as nx  # lazy — only paid when graph is accessed
+
+        if self._graph_cache is not None:
+            return self._graph_cache
+        graph: nx.DiGraph = nx.DiGraph()
+        for step_idx, step in enumerate(self.steps):
+            for node in step.get("nodes", []):
+                node_id = f"{node.get('event', '')}@{step_idx}"
+                graph.add_node(
+                    node_id,
+                    step=step_idx,
+                    event=node.get("event", ""),
+                    type=node.get("type", ""),
+                    count=_safe_int(node.get("totalCount", "0")),
+                    anchor_type=node.get("anchorType", ""),
+                )
+                for edge in node.get("edges", []):
+                    target_step = _safe_int(
+                        edge.get("step", step_idx + 1), default=step_idx + 1
+                    )
+                    target_id = f"{edge.get('event', '')}@{target_step}"
+                    graph.add_edge(
+                        node_id,
+                        target_id,
+                        count=_safe_int(edge.get("totalCount", "0")),
+                        type=edge.get("type", ""),
+                    )
+        object.__setattr__(self, "_graph_cache", graph)
+        return graph
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Mode-aware DataFrame from flow data.
+
+        For ``sankey`` mode, returns the same DataFrame as ``nodes_df``
+        (one row per node with step, event, type, count, etc.).
+
+        For ``paths`` mode, returns a tabular DataFrame with one row per
+        step in each flow path, including ``path_index``, ``step``,
+        ``event``, ``type``, and ``count`` columns.
+
+        Returns:
+            DataFrame built from nodes (sankey) or flow paths (paths).
+            Returns an empty DataFrame if no data is available.
+
+        Example:
+            ```python
+            result = workspace.query_flow(
+                steps=[FlowStep("Login")], mode="sankey"
+            )
+            result.df.columns
+            # Index(['step', 'event', 'type', 'count', ...])
+            ```
+        """
+        if self.mode == "sankey":
+            return self.nodes_df
+        if self.mode == "tree":
+            return self._build_tree_df()
+        # paths mode
+        if self._df_cache is not None:
+            return self._df_cache
+        rows: list[dict[str, Any]] = []
+        for path_idx, flow in enumerate(self.flows):
+            for step_idx, fs in enumerate(flow.get("flowSteps", [])):
+                rows.append(
+                    {
+                        "path_index": path_idx,
+                        "step": step_idx,
+                        "event": fs.get("event", ""),
+                        "type": fs.get("type", ""),
+                        "count": _safe_int(fs.get("totalCount", "0")),
+                    }
+                )
+        cols = ["path_index", "step", "event", "type", "count"]
+        result_df = pd.DataFrame(rows, columns=cols)
+        object.__setattr__(self, "_df_cache", result_df)
+        return result_df
+
+    def _build_tree_df(self) -> pd.DataFrame:
+        """Flatten tree data into a DataFrame for tree mode.
+
+        Each row represents a single node in the tree, with a ``path``
+        column showing the full event chain from root to that node
+        (e.g., ``"Login > Search > Purchase"``).
+
+        Returns:
+            DataFrame with columns: ``tree_index``, ``depth``, ``path``,
+            ``event``, ``type``, ``step_number``, ``total_count``,
+            ``drop_off_count``, ``converted_count``. Returns an empty
+            DataFrame with correct columns when ``trees`` is empty.
+        """
+        if self._trees_df_cache is not None:
+            return self._trees_df_cache
+        cols = [
+            "tree_index",
+            "depth",
+            "path",
+            "event",
+            "type",
+            "step_number",
+            "total_count",
+            "drop_off_count",
+            "converted_count",
+        ]
+        rows: list[dict[str, Any]] = []
+        for tree_idx, tree in enumerate(self.trees):
+            self._flatten_tree_node(tree, tree_idx, [], rows)
+        result_df = pd.DataFrame(rows, columns=cols)
+        object.__setattr__(self, "_trees_df_cache", result_df)
+        return result_df
+
+    @staticmethod
+    def _flatten_tree_node(
+        node: FlowTreeNode,
+        tree_index: int,
+        ancestors: list[str],
+        rows: list[dict[str, Any]],
+    ) -> None:
+        """Recursively flatten a FlowTreeNode into DataFrame rows.
+
+        Args:
+            node: The current tree node to flatten.
+            tree_index: Index of the tree this node belongs to.
+            ancestors: List of ancestor event names for path building.
+            rows: Accumulator list for row dicts (mutated in place).
+        """
+        path_parts = [*ancestors, node.event]
+        rows.append(
+            {
+                "tree_index": tree_index,
+                "depth": len(ancestors),
+                "path": " > ".join(path_parts),
+                "event": node.event,
+                "type": node.type,
+                "step_number": node.step_number,
+                "total_count": node.total_count,
+                "drop_off_count": node.drop_off_count,
+                "converted_count": node.converted_count,
+            }
+        )
+        for child in node.children:
+            FlowQueryResult._flatten_tree_node(child, tree_index, path_parts, rows)
+
+    def top_transitions(self, n: int = 10) -> list[tuple[str, str, int]]:
+        """Return the N highest-traffic transitions between events.
+
+        Uses the edges DataFrame to find the most common transitions,
+        sorted by count descending.
+
+        Args:
+            n: Maximum number of transitions to return. Default: 10.
+
+        Returns:
+            List of (source_node, target_node, count) tuples sorted
+            by count descending, where each node is formatted as
+            ``"{event}@{step}"`` (e.g. ``"Login@0"``). Returns empty
+            list if no edges exist.
+
+        Example:
+            ```python
+            result = ws.query_flow("Login", forward=3)
+            for src, tgt, count in result.top_transitions(n=5):
+                print(f"{src} -> {tgt}: {count}")
+            # Login@0 -> Search@1: 150
+            ```
+        """
+        edf = self.edges_df
+        if edf.empty:
+            return []
+        sorted_df = edf.sort_values("count", ascending=False).head(n)
+        return [
+            (f"{se}@{ss}", f"{te}@{ts}", int(c))
+            for se, ss, te, ts, c in zip(
+                sorted_df["source_event"],
+                sorted_df["source_step"],
+                sorted_df["target_event"],
+                sorted_df["target_step"],
+                sorted_df["count"],
+                strict=True,
+            )
+        ]
+
+    def drop_off_summary(self) -> dict[str, Any]:
+        """Per-step drop-off counts and rates.
+
+        Analyzes each step to identify drop-off nodes (type == "DROPOFF")
+        and calculates the drop-off rate relative to total traffic at
+        that step.
+
+        Returns:
+            Dict mapping step keys (e.g., "step_0") to dicts with:
+            - total: Total count at that step
+            - dropoff: Count of users who dropped off
+            - rate: Drop-off rate (0.0 to 1.0)
+            Returns empty dict if no steps exist.
+
+        Example:
+            ```python
+            result = ws.query_flow("Login", forward=3)
+            for step, info in result.drop_off_summary().items():
+                print(f"{step}: {info['rate']:.0%} drop-off")
+            ```
+        """
+        if not self.steps:
+            return {}
+        summary: dict[str, Any] = {}
+        for step_idx, step in enumerate(self.steps):
+            total = 0
+            dropoff = 0
+            for node in step.get("nodes", []):
+                count = _safe_int(node.get("totalCount", "0"))
+                node_type = node.get("type", "")
+                total += count
+                # Count dropoff edges only from non-DROPOFF nodes.
+                # DROPOFF nodes represent prior-step dropoffs carried
+                # forward; their self-edges would double-count.
+                if node_type != "DROPOFF":
+                    for edge in node.get("edges", []):
+                        if edge.get("type") == "DROPOFF":
+                            dropoff += _safe_int(edge.get("totalCount", "0"))
+            rate = dropoff / total if total > 0 else 0.0
+            summary[f"step_{step_idx}"] = {
+                "total": total,
+                "dropoff": dropoff,
+                "rate": rate,
+            }
+        return summary
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the flow query result for JSON output.
+
+        Returns:
+            Dictionary with all FlowQueryResult fields suitable for
+            JSON serialization.
+        """
+        return {
+            "computed_at": self.computed_at,
+            "steps": self.steps,
+            "flows": self.flows,
+            "breakdowns": self.breakdowns,
+            "overall_conversion_rate": self.overall_conversion_rate,
+            "params": self.params,
+            "meta": self.meta,
+            "mode": self.mode,
+            "trees": [t.to_dict() for t in self.trees],
+        }
+
+    @property
+    def anytree(self) -> list[Any]:
+        """Lazily-cached list of ``anytree.AnyNode`` roots from tree data.
+
+        Each ``FlowTreeNode`` in ``trees`` is converted to an anytree
+        node tree via ``to_anytree()``, enabling parent references,
+        path resolution, and ``RenderTree`` display.
+
+        Returns:
+            List of ``anytree.AnyNode`` root nodes. Empty list when
+            ``trees`` is empty.
+
+        Example:
+            ```python
+            result = ws.query_flow("Login", mode="tree")
+            for root in result.anytree:
+                from anytree import RenderTree
+                print(RenderTree(root))
+            ```
+        """
+        if self._anytree_cache is not None:
+            return self._anytree_cache
+        roots = [t.to_anytree() for t in self.trees]
+        object.__setattr__(self, "_anytree_cache", roots)
+        return roots

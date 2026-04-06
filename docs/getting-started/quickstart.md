@@ -267,6 +267,29 @@ result = ws.query_retention(
 
 See the [Retention Queries guide](../guide/query-retention.md) for full coverage.
 
+### Flow Queries
+
+Analyze user paths through your product — what do users do before and after key events:
+
+```python
+from mixpanel_data import FlowStep, Filter
+
+# What happens after Purchase?
+result = ws.query_flow("Purchase", forward=3, last=90)
+print(result.top_transitions(5))
+
+# With per-step filters and reverse analysis
+result = ws.query_flow(
+    FlowStep("Purchase", filters=[Filter.greater_than("amount", 50)]),
+    forward=3,
+    reverse=2,
+)
+print(result.nodes_df)
+print(result.edges_df)
+```
+
+See the [Flow Queries guide](../guide/query-flows.md) for full coverage.
+
 ### Legacy Query Methods
 
 For segmentation, funnels, and retention via the older Query API:
@@ -373,6 +396,7 @@ For ETL pipelines or data processing, stream data directly:
 - [Insights Queries](../guide/query.md) — Typed analytics with DAU, formulas, filters, and breakdowns
 - [Funnel Queries](../guide/query-funnels.md) — Typed funnel conversion analysis
 - [Retention Queries](../guide/query-retention.md) — Typed retention analysis with event pairs and custom buckets
+- [Flow Queries](../guide/query-flows.md) — Typed flow path analysis with direction controls and visualization modes
 - [Live Analytics](../guide/live-analytics.md) — Segmentation, funnels, retention
 - [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
 - [Data Governance](../guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, and lookup tables

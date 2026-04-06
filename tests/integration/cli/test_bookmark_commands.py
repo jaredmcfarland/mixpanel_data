@@ -214,7 +214,7 @@ class TestQueryFlows:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """Test querying flows report in JSON format."""
-        mock_workspace.query_flows.return_value = FlowsResult(
+        mock_workspace.query_saved_flows.return_value = FlowsResult(
             bookmark_id=12345,
             computed_at="2024-01-15T10:00:00",
             steps=[
@@ -238,13 +238,13 @@ class TestQueryFlows:
         assert data["bookmark_id"] == 12345
         assert len(data["steps"]) == 2
         assert data["overall_conversion_rate"] == 0.5
-        mock_workspace.query_flows.assert_called_once_with(bookmark_id=12345)
+        mock_workspace.query_saved_flows.assert_called_once_with(bookmark_id=12345)
 
     def test_flows_with_metadata(
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """Test querying flows report with metadata."""
-        mock_workspace.query_flows.return_value = FlowsResult(
+        mock_workspace.query_saved_flows.return_value = FlowsResult(
             bookmark_id=12345,
             computed_at="2024-01-15T10:00:00",
             steps=[],
@@ -269,7 +269,7 @@ class TestQueryFlows:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """Test querying flows report in plain format."""
-        mock_workspace.query_flows.return_value = FlowsResult(
+        mock_workspace.query_saved_flows.return_value = FlowsResult(
             bookmark_id=12345,
             computed_at="2024-01-15T10:00:00",
             steps=[{"step": 1, "event": "Page View", "count": 1000}],

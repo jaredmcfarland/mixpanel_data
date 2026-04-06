@@ -1988,7 +1988,7 @@ class MixpanelAPIClient:
         )
         return result
 
-    def query_flows(
+    def query_saved_flows(
         self,
         bookmark_id: int,
     ) -> dict[str, Any]:
@@ -2014,6 +2014,38 @@ class MixpanelAPIClient:
             "query_type": "flows_sankey",
         }
         result: dict[str, Any] = self._request("GET", url, params=params)
+        return result
+
+    def arb_funnels_query(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Execute an inline flow/funnel query via the arb_funnels endpoint.
+
+        Posts bookmark params directly to ``/arb_funnels`` with a
+        ``query_type`` field that selects between flows_sankey and
+        flows_top_paths. Unlike ``query_saved_flows`` which queries
+        a saved report by ID, this method executes ad-hoc flow queries
+        from programmatically built bookmark params.
+
+        Args:
+            body: Request body containing ``bookmark`` (params dict),
+                ``project_id`` (int), and ``query_type`` (str — one of
+                ``"flows_sankey"`` or ``"flows_top_paths"``).
+
+        Returns:
+            Raw API response with steps, flows, breakdowns, and
+            conversion rate fields.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid bookmark params.
+            RateLimitError: Rate limit exceeded.
+        """
+        url = self._build_url("query", "/arb_funnels")
+        result: dict[str, Any] = self._request(
+            "POST",
+            url,
+            data=body,
+            inject_project_id=False,
+        )
         return result
 
     def frequency(

@@ -8,6 +8,10 @@ run live analytics, stream data, and manage entities via the App API.
 from mixpanel_data._internal.validation import validate_bookmark
 from mixpanel_data._literal_types import (
     CountType,
+    FlowAnchorType,
+    FlowChartType,
+    FlowCountType,
+    FlowNodeType,
     HourDayUnit,
     QueryTimeUnit,
     TimeUnit,
@@ -121,7 +125,10 @@ from mixpanel_data.types import (
     FlagHistoryParams,
     FlagHistoryResponse,
     FlagLimitsResponse,
+    FlowQueryResult,
     FlowsResult,
+    FlowStep,
+    FlowTreeNode,
     Formula,
     FrequencyResult,
     FunnelInfo,
@@ -217,6 +224,10 @@ __all__ = [
     "validate_bookmark",
     # Type aliases
     "CountType",
+    "FlowCountType",
+    "FlowChartType",
+    "FlowNodeType",
+    "FlowAnchorType",
     "QueryTimeUnit",
     "HourDayUnit",
     "TimeUnit",
@@ -425,4 +436,8 @@ __all__ = [
     "RetentionMathType",
     "RetentionMode",
     "RetentionQueryResult",
+    # Flow Query types (Phase 034)
+    "FlowStep",
+    "FlowTreeNode",
+    "FlowQueryResult",
 ]

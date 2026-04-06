@@ -353,7 +353,7 @@ def show_related(type_name: str) -> None:
 _BOOKMARK_RELATED = frozenset(
     {
         "query_saved_report",
-        "query_flows",
+        "query_saved_flows",
         "SavedReportResult",
         "SavedReportType",
         "FlowsResult",

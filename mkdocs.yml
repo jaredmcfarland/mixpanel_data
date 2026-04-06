@@ -83,6 +83,7 @@ plugins:
           - guide/query.md
           - guide/query-funnels.md
           - guide/query-retention.md
+          - guide/query-flows.md
           - guide/live-analytics.md
           - guide/streaming.md
           - guide/entity-management.md
@@ -121,7 +122,7 @@ plugins:
       markdown_description: |
         mixpanel_data is a complete programmable interface to Mixpanel analytics.
         Python library and CLI for discovery, querying, streaming, and entity management.
-        Discover your schema, run live analytics (segmentation, funnels, retention),
+        Discover your schema, run live analytics (segmentation, funnels, retention, flows),
         execute JQL, and stream data for processing.
       sections:
         Getting Started:
@@ -134,6 +135,7 @@ plugins:
           - guide/query.md: "Typed insights queries — DAU, formulas, filters, breakdowns"
           - guide/query-funnels.md: "Typed funnel queries — steps, exclusions, conversion windows"
           - guide/query-retention.md: "Typed retention queries — event pairs, custom buckets, alignment modes"
+          - guide/query-flows.md: "Typed flow queries — path analysis, direction controls, visualization modes"
           - guide/live-analytics.md: "Segmentation, funnels, retention, JQL"
           - guide/streaming.md: "Stream events and profiles for ETL"
           - guide/entity-management.md: "Create, update, delete dashboards, reports, and cohorts"
@@ -176,6 +178,7 @@ nav:
       - Insights Queries: guide/query.md
       - Funnel Queries: guide/query-funnels.md
       - Retention Queries: guide/query-retention.md
+      - Flow Queries: guide/query-flows.md
       - Live Analytics: guide/live-analytics.md
       - Streaming Data: guide/streaming.md
       - Entity Management: guide/entity-management.md

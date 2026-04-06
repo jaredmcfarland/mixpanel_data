@@ -25,7 +25,9 @@ from mixpanel_data.types import (
     EngagementBucket,
     EngagementDistributionResult,
     EventCountsResult,
+    FlowQueryResult,
     FlowsResult,
+    FlowTreeNode,
     FrequencyResult,
     FunnelQueryResult,
     FunnelResult,
@@ -46,6 +48,7 @@ from mixpanel_data.types import (
     SavedReportResult,
     SegmentationResult,
     UserEvent,
+    _safe_int,
 )
 
 if TYPE_CHECKING:
@@ -1260,7 +1263,63 @@ class LiveQueryService:
         raw = self._api_client.insights_query(body)
         return _transform_retention_result(raw, bookmark_params)
 
-    def query_flows(
+    def query_flow(
+        self,
+        bookmark_params: dict[str, Any],
+        project_id: int,
+        mode: str = "sankey",
+    ) -> FlowQueryResult:
+        """Execute an inline flow query with pre-built bookmark params.
+
+        Posts flow bookmark params to the ``/arb_funnels`` endpoint with
+        the appropriate ``query_type`` (``flows_sankey`` or
+        ``flows_top_paths``), then transforms the response into a
+        structured ``FlowQueryResult``.
+
+        Args:
+            bookmark_params: Pre-built flow bookmark params dict (flat
+                structure with ``steps``, ``date_range``, ``chartType``,
+                ``count_type``, and ``version`` keys).
+            project_id: Mixpanel project ID.
+            mode: Flow visualization mode — ``"sankey"`` for Sankey
+                diagrams, ``"paths"`` for top-paths analysis, or
+                ``"tree"`` for prefix tree analysis.
+                Default: ``"sankey"``.
+
+        Returns:
+            FlowQueryResult with steps, flows, breakdowns, conversion
+            rate, and metadata.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid bookmark params or error-as-200.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            result = live_query.query_flow(
+                bookmark_params={"steps": [...], "chartType": "sankey", ...},
+                project_id=12345,
+                mode="sankey",
+            )
+            print(f"Conversion: {result.overall_conversion_rate:.1%}")
+            ```
+        """
+        if mode == "paths":
+            query_type = "flows_top_paths"
+        elif mode == "tree":
+            query_type = "flows"
+        else:
+            query_type = "flows_sankey"
+        body: dict[str, Any] = {
+            "bookmark": bookmark_params,
+            "project_id": project_id,
+            "query_type": query_type,
+        }
+        raw = self._api_client.arb_funnels_query(body)
+        return _transform_flow_result(raw, bookmark_params, mode=mode)
+
+    def query_saved_flows(
         self,
         bookmark_id: int,
     ) -> FlowsResult:
@@ -1282,12 +1341,12 @@ class LiveQueryService:
 
         Example:
             ```python
-            result = live_query.query_flows(bookmark_id=12345678)
+            result = live_query.query_saved_flows(bookmark_id=12345678)
             print(f"Conversion rate: {result.overall_conversion_rate:.1%}")
             print(result.df.head())
             ```
         """
-        raw = self._api_client.query_flows(bookmark_id=bookmark_id)
+        raw = self._api_client.query_saved_flows(bookmark_id=bookmark_id)
         return _transform_flows(raw, bookmark_id)
 
     def frequency(
@@ -2012,6 +2071,187 @@ def _transform_saved_report(
     )
 
 
+def _transform_flow_result(
+    raw: dict[str, Any],
+    bookmark_params: dict[str, Any],
+    mode: str,
+) -> FlowQueryResult:
+    """Transform raw arb_funnels flow response into FlowQueryResult.
+
+    Extracts computed_at, steps, flows, breakdowns, and overall
+    conversion rate from the API response. Handles sankey, top-paths,
+    and tree modes. Detects error-as-200 responses and raises
+    ``QueryError``.
+
+    Args:
+        raw: Raw API response dictionary from arb_funnels query.
+        bookmark_params: The bookmark params dict sent to the API
+            (preserved in the result for debugging/persistence).
+        mode: Flow visualization mode — ``"sankey"``, ``"paths"``,
+            or ``"tree"``.
+
+    Returns:
+        Typed FlowQueryResult with steps, flows, breakdowns,
+        conversion rate, and metadata.
+
+    Raises:
+        QueryError: If the response contains an error field
+            (error-as-200 pattern).
+
+    Example:
+        ```python
+        result = _transform_flow_result(
+            raw={"computed_at": "...", "steps": [...], ...},
+            bookmark_params={"steps": [...], ...},
+            mode="sankey",
+        )
+        print(result.overall_conversion_rate)
+        ```
+    """
+    # Check for error responses that leaked through as HTTP 200
+    if "error" in raw:
+        raise QueryError(
+            f"Flow query failed: {raw['error']}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    # Validate expected response shape (consistent with insights/funnel transforms).
+    # Tree mode may legitimately return only metadata with no trees key,
+    # so only sankey/paths modes enforce structural presence.
+    _expected_keys = {"steps", "flows", "trees", "computed_at", "metadata"}
+    if (
+        mode != "tree"
+        and "steps" not in raw
+        and "flows" not in raw
+        and not _expected_keys.intersection(raw.keys())
+    ):
+        raise QueryError(
+            "Flow query returned unexpected response shape "
+            f"(missing 'steps' and 'flows' keys). "
+            f"Keys present: {sorted(raw.keys())}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    computed_at: str = raw.get("computed_at", "")
+    steps: list[dict[str, Any]] = raw.get("steps", [])
+    flows: list[dict[str, Any]] = raw.get("flows", [])
+    breakdowns: list[dict[str, Any]] = raw.get("breakdowns", [])
+    overall_conversion_rate: float = raw.get("overallConversionRate", 0.0)
+    metadata: dict[str, Any] = raw.get("metadata", {})
+
+    # Parse tree data when in tree mode
+    trees: list[FlowTreeNode] = []
+    if mode == "tree":
+        for tree_dict in raw.get("trees", []):
+            root_dict = tree_dict.get("root", {})
+            if root_dict:
+                parsed_root = _parse_tree_node(root_dict)
+                # The API returns a virtual root node with step=null.
+                # The actual anchor events are its children. If the
+                # root has no event (virtual), unwrap the children
+                # as separate trees. If the root has an event (e.g.
+                # from test fixtures), keep it as-is.
+                if parsed_root.event:
+                    trees.append(parsed_root)
+                else:
+                    trees.extend(parsed_root.children)
+
+    # Determine the result mode literal
+    result_mode: Literal["sankey", "paths", "tree"]
+    if mode == "tree":
+        result_mode = "tree"
+    elif mode == "paths":
+        result_mode = "paths"
+    else:
+        result_mode = "sankey"
+
+    return FlowQueryResult(
+        computed_at=computed_at,
+        steps=steps,
+        flows=flows,
+        breakdowns=breakdowns,
+        overall_conversion_rate=overall_conversion_rate,
+        params=bookmark_params,
+        meta=metadata,
+        mode=result_mode,
+        trees=trees,
+    )
+
+
+def _parse_tree_node(raw: dict[str, Any]) -> FlowTreeNode:
+    """Parse a recursive raw dict into a FlowTreeNode.
+
+    Extracts step metadata (event, type, step_number) from the ``step``
+    sub-dict and count data from the top level. Recursively parses
+    child nodes.
+
+    Handles both camelCase (live API: ``stepNumber``, ``totalCount``,
+    ``dropOffTotalCount``, ``convertedTotalCount``) and snake_case
+    (``step_number``, ``total_count``, ``drop_off_total_count``,
+    ``converted_total_count``) field names.
+
+    Args:
+        raw: Raw dict from the API response representing a single tree
+            node with ``step``, ``children``, and count fields.
+
+    Returns:
+        A frozen ``FlowTreeNode`` with recursively parsed children.
+
+    Example:
+        ```python
+        node = _parse_tree_node({
+            "step": {"event": "Login", "type": "ANCHOR", ...},
+            "children": [...],
+            "totalCount": 100,
+            ...
+        })
+        node.event  # "Login"
+        ```
+    """
+    step: dict[str, Any] = raw.get("step") or {}
+    children = tuple(_parse_tree_node(c) for c in raw.get("children", []))
+
+    # Support both camelCase (live API) and snake_case (test fixtures)
+    step_number_raw = step.get("stepNumber", step.get("step_number", 0))
+    total_count = raw.get("totalCount", raw.get("total_count", 0))
+    drop_off_count = raw.get("dropOffTotalCount", raw.get("drop_off_total_count", 0))
+    converted_count = raw.get(
+        "convertedTotalCount", raw.get("converted_total_count", 0)
+    )
+    anchor_type = step.get("anchorType", step.get("anchor_type", "NORMAL"))
+    is_computed = step.get("isComputed", step.get("is_computed", False))
+
+    # Time percentiles: camelCase or snake_case, may be null
+    tp_start = (
+        raw.get("timePercentilesFromStart")
+        or raw.get("time_percentiles_from_start")
+        or {}
+    )
+    tp_prev = (
+        raw.get("timePercentilesFromPrev")
+        or raw.get("time_percentiles_from_prev")
+        or {}
+    )
+
+    return FlowTreeNode(
+        event=step.get("event", ""),
+        type=step.get("type", ""),
+        step_number=_safe_int(step_number_raw),
+        total_count=_safe_int(total_count),
+        drop_off_count=_safe_int(drop_off_count),
+        converted_count=_safe_int(converted_count),
+        anchor_type=anchor_type,
+        is_computed=is_computed,
+        children=children,
+        time_percentiles_from_start=tp_start if isinstance(tp_start, dict) else {},
+        time_percentiles_from_prev=tp_prev if isinstance(tp_prev, dict) else {},
+    )
+
+
 def _transform_flows(
     raw: dict[str, Any],
     bookmark_id: int,
@@ -2424,9 +2664,9 @@ def _transform_property_coverage(
         Typed PropertyCoverageResult with coverage statistics.
     """
     # JQL reduce returns a list with one element
-    data = raw[0] if raw else {"total": 0, "properties": {}}
-    total_events = data.get("total", 0)
-    prop_counts = data.get("properties", {})
+    data: dict[str, Any] = raw[0] if raw else {"total": 0, "properties": {}}
+    total_events: int = int(data.get("total", 0))
+    prop_counts: dict[str, int] = data.get("properties", {})
 
     coverage = tuple(
         PropertyCoverage(
