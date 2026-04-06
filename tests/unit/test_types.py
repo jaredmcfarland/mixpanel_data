@@ -13,7 +13,7 @@ from mixpanel_data.types import (
     EventCountsResult,
     FunnelInfo,
     FunnelResult,
-    FunnelStep,
+    FunnelResultStep,
     JQLResult,
     PropertyCountsResult,
     ResultWithDataFrame,
@@ -262,11 +262,11 @@ class TestSegmentationResult:
 
 
 class TestFunnelResult:
-    """Tests for FunnelResult and FunnelStep."""
+    """Tests for FunnelResult and FunnelResultStep."""
 
     def test_funnel_step_creation(self) -> None:
-        """Test creating a FunnelStep."""
-        step = FunnelStep(
+        """Test creating a FunnelResultStep."""
+        step = FunnelResultStep(
             event="Sign Up",
             count=1000,
             conversion_rate=1.0,
@@ -279,9 +279,9 @@ class TestFunnelResult:
     def test_funnel_result_creation(self) -> None:
         """Test creating a FunnelResult."""
         steps = [
-            FunnelStep(event="View", count=1000, conversion_rate=1.0),
-            FunnelStep(event="Click", count=500, conversion_rate=0.5),
-            FunnelStep(event="Purchase", count=100, conversion_rate=0.2),
+            FunnelResultStep(event="View", count=1000, conversion_rate=1.0),
+            FunnelResultStep(event="Click", count=500, conversion_rate=0.5),
+            FunnelResultStep(event="Purchase", count=100, conversion_rate=0.2),
         ]
 
         result = FunnelResult(
@@ -301,8 +301,8 @@ class TestFunnelResult:
     def test_steps_iteration(self) -> None:
         """Steps should be iterable."""
         steps = [
-            FunnelStep(event="A", count=100, conversion_rate=1.0),
-            FunnelStep(event="B", count=50, conversion_rate=0.5),
+            FunnelResultStep(event="A", count=100, conversion_rate=1.0),
+            FunnelResultStep(event="B", count=50, conversion_rate=0.5),
         ]
 
         result = FunnelResult(
@@ -320,8 +320,8 @@ class TestFunnelResult:
     def test_df_has_expected_columns(self) -> None:
         """df should have step, event, count, conversion_rate columns."""
         steps = [
-            FunnelStep(event="View", count=1000, conversion_rate=1.0),
-            FunnelStep(event="Click", count=500, conversion_rate=0.5),
+            FunnelResultStep(event="View", count=1000, conversion_rate=1.0),
+            FunnelResultStep(event="Click", count=500, conversion_rate=0.5),
         ]
 
         result = FunnelResult(
@@ -342,7 +342,7 @@ class TestFunnelResult:
 
     def test_df_cached(self) -> None:
         """df should be cached on first access."""
-        steps = [FunnelStep(event="View", count=1000, conversion_rate=1.0)]
+        steps = [FunnelResultStep(event="View", count=1000, conversion_rate=1.0)]
         result = FunnelResult(
             funnel_id=1,
             funnel_name="Test",
@@ -359,7 +359,7 @@ class TestFunnelResult:
     def test_to_dict_serializable(self) -> None:
         """to_dict should be JSON serializable."""
         steps = [
-            FunnelStep(event="View", count=1000, conversion_rate=1.0),
+            FunnelResultStep(event="View", count=1000, conversion_rate=1.0),
         ]
 
         result = FunnelResult(
@@ -557,7 +557,7 @@ class TestResultTypeImmutability:
                 cohorts=[],
             ),
             JQLResult(),
-            FunnelStep(event="e", count=0, conversion_rate=0),
+            FunnelResultStep(event="e", count=0, conversion_rate=0),
             CohortInfo(date="2024-01-01", size=0, retention=[]),
         ]
 
