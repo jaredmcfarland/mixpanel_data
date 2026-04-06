@@ -17,10 +17,13 @@ Usage:
 
 from __future__ import annotations
 
+from typing import cast
+
 from anytree import PreOrderIter
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from mixpanel_data._literal_types import FlowNodeType
 from mixpanel_data.types import FlowQueryResult, FlowTreeNode
 
 # =============================================================================
@@ -56,7 +59,7 @@ def flow_tree_nodes(draw: st.DrawFn, max_depth: int = 3) -> FlowTreeNode:
         A randomly generated FlowTreeNode tree.
     """
     event = draw(event_names)
-    node_type = draw(node_types)
+    node_type = cast(FlowNodeType, draw(node_types))
     step_number = draw(st.integers(min_value=0, max_value=10))
     total = draw(st.integers(min_value=0, max_value=10000))
     dropoff = draw(st.integers(min_value=0, max_value=total))
