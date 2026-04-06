@@ -2169,6 +2169,7 @@ class Workspace:
         conversion_window_unit: str,
         order: str,
         math: str,
+        math_property: str | None,
         from_date: str | None,
         to_date: str | None,
         last: int,
@@ -2190,6 +2191,8 @@ class Workspace:
             conversion_window_unit: Conversion window time unit.
             order: Funnel step ordering mode.
             math: Aggregation function.
+            math_property: Numeric property name for property-aggregation
+                math types (average, median, etc.), or None.
             from_date: Start date (YYYY-MM-DD) or None.
             to_date: End date (YYYY-MM-DD) or None.
             last: Relative date range in days.
@@ -2268,7 +2271,15 @@ class Workspace:
         # Build measurement
         measurement: dict[str, Any] = {
             "math": math,
-            "property": None,
+            "property": (
+                {
+                    "name": math_property,
+                    "type": "number",
+                    "resourceType": "events",
+                }
+                if math_property
+                else None
+            ),
             "stepIndex": None,
         }
 
@@ -2319,6 +2330,7 @@ class Workspace:
         conversion_window_unit: str,
         order: str,
         math: str,
+        math_property: str | None,
         from_date: str | None,
         to_date: str | None,
         last: int,
@@ -2343,6 +2355,8 @@ class Workspace:
             conversion_window_unit: Conversion window time unit.
             order: Funnel step ordering mode.
             math: Aggregation function.
+            math_property: Numeric property name for property-aggregation
+                math types, or None.
             from_date: Start date (YYYY-MM-DD) or None.
             to_date: End date (YYYY-MM-DD) or None.
             last: Relative date range in days.
@@ -2386,6 +2400,7 @@ class Workspace:
             conversion_window=conversion_window,
             conversion_window_unit=conversion_window_unit,
             math=math,
+            math_property=math_property,
             exclusions=normalized_exclusions if normalized_exclusions else None,
             holding_constant=normalized_hc if normalized_hc else None,
             from_date=from_date,
@@ -2403,6 +2418,7 @@ class Workspace:
             conversion_window_unit=conversion_window_unit,
             order=order,
             math=math,
+            math_property=math_property,
             from_date=from_date,
             to_date=to_date,
             last=last,
@@ -2435,6 +2451,7 @@ class Workspace:
         last: int = 30,
         unit: QueryTimeUnit = "day",
         math: FunnelMathType = "conversion_rate_unique",
+        math_property: str | None = None,
         group_by: str | GroupBy | list[str | GroupBy] | None = None,
         where: Filter | list[Filter] | None = None,
         exclusions: list[str | Exclusion] | None = None,
@@ -2467,6 +2484,11 @@ class Workspace:
             unit: Time aggregation unit. Default: ``"day"``.
             math: Funnel aggregation function. Default:
                 ``"conversion_rate_unique"``.
+            math_property: Numeric property name for property-aggregation
+                math types (``"average"``, ``"median"``, ``"min"``,
+                ``"max"``, ``"p25"``, ``"p75"``, ``"p90"``, ``"p99"``).
+                Required when using those math types; must be ``None``
+                for count/rate math types. Default: ``None``.
             group_by: Break down results by property.
             where: Filter results by conditions.
             exclusions: Events to exclude between steps. Accepts
@@ -2514,6 +2536,7 @@ class Workspace:
             conversion_window_unit=conversion_window_unit,
             order=order,
             math=math,
+            math_property=math_property,
             from_date=from_date,
             to_date=to_date,
             last=last,
@@ -2550,6 +2573,7 @@ class Workspace:
         last: int = 30,
         unit: QueryTimeUnit = "day",
         math: FunnelMathType = "conversion_rate_unique",
+        math_property: str | None = None,
         group_by: str | GroupBy | list[str | GroupBy] | None = None,
         where: Filter | list[Filter] | None = None,
         exclusions: list[str | Exclusion] | None = None,
@@ -2576,6 +2600,9 @@ class Workspace:
             unit: Time aggregation unit. Default: ``"day"``.
             math: Aggregation function. Default:
                 ``"conversion_rate_unique"``.
+            math_property: Numeric property name for property-aggregation
+                math types. Required for ``"average"``, ``"median"``,
+                etc. Default: ``None``.
             group_by: Break down results by property.
             where: Filter results by conditions.
             exclusions: Events to exclude between steps.
@@ -2612,6 +2639,7 @@ class Workspace:
             conversion_window_unit=conversion_window_unit,
             order=order,
             math=math,
+            math_property=math_property,
             from_date=from_date,
             to_date=to_date,
             last=last,

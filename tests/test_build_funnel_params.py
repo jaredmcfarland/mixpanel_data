@@ -248,6 +248,37 @@ class TestBuildFunnelParamsConfiguration:
         measurement = result["sections"]["show"][0]["measurement"]
         assert measurement["math"] == "unique"
 
+    def test_math_property_none_by_default(self, ws: Workspace) -> None:
+        """Verify measurement.property is None when math_property not provided."""
+        result = ws.build_funnel_params(["Signup", "Purchase"])
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["property"] is None
+
+    def test_math_property_populates_measurement(self, ws: Workspace) -> None:
+        """Verify math_property populates measurement.property dict."""
+        result = ws.build_funnel_params(
+            ["Signup", "Purchase"],
+            math="average",
+            math_property="amount",
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["property"] == {
+            "name": "amount",
+            "type": "number",
+            "resourceType": "events",
+        }
+
+    def test_math_property_with_median(self, ws: Workspace) -> None:
+        """Verify math_property works with median math type."""
+        result = ws.build_funnel_params(
+            ["Signup", "Purchase"],
+            math="median",
+            math_property="duration",
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["math"] == "median"
+        assert measurement["property"]["name"] == "duration"
+
     def test_mode_steps_chart_type(self, ws: Workspace) -> None:
         """Verify mode='steps' produces chartType='funnel-steps'."""
         result = ws.build_funnel_params(

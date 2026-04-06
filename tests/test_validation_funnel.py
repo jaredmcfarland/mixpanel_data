@@ -44,6 +44,7 @@ def _valid_funnel_args(**overrides: Any) -> dict[str, Any]:
         "conversion_window": 14,
         "conversion_window_unit": "day",
         "math": "conversion_rate_unique",
+        "math_property": None,
         "exclusions": None,
         "holding_constant": None,
         "from_date": None,
@@ -1125,3 +1126,81 @@ class TestValidateFunnelArgsF3Type:
         """Integer conversion_window produces no F3_CONVERSION_WINDOW_TYPE."""
         errors = validate_funnel_args(**_valid_funnel_args(conversion_window=14))
         assert "F3_CONVERSION_WINDOW_TYPE" not in _codes(errors)
+
+
+class TestValidateFunnelArgsF10MathProperty:
+    """Tests for F10: property math requires math_property."""
+
+    def test_average_without_property_returns_f10_error(self) -> None:
+        """math='average' without math_property produces F10_MATH_MISSING_PROPERTY."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="average", math_property=None)
+        )
+        assert "F10_MATH_MISSING_PROPERTY" in _codes(errors)
+
+    def test_median_without_property_returns_f10_error(self) -> None:
+        """math='median' without math_property produces F10_MATH_MISSING_PROPERTY."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="median", math_property=None)
+        )
+        assert "F10_MATH_MISSING_PROPERTY" in _codes(errors)
+
+    def test_p99_without_property_returns_f10_error(self) -> None:
+        """math='p99' without math_property produces F10_MATH_MISSING_PROPERTY."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="p99", math_property=None)
+        )
+        assert "F10_MATH_MISSING_PROPERTY" in _codes(errors)
+
+    def test_average_with_property_no_f10_error(self) -> None:
+        """math='average' with math_property produces no F10 error."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="average", math_property="amount")
+        )
+        assert "F10_MATH_MISSING_PROPERTY" not in _codes(errors)
+
+    def test_conversion_rate_unique_without_property_no_f10_error(self) -> None:
+        """math='conversion_rate_unique' without math_property produces no F10 error."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="conversion_rate_unique", math_property=None)
+        )
+        assert "F10_MATH_MISSING_PROPERTY" not in _codes(errors)
+
+    def test_unique_without_property_no_f10_error(self) -> None:
+        """math='unique' without math_property produces no F10 error."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="unique", math_property=None)
+        )
+        assert "F10_MATH_MISSING_PROPERTY" not in _codes(errors)
+
+
+class TestValidateFunnelArgsF11MathRejectsProperty:
+    """Tests for F11: non-property math rejects math_property."""
+
+    def test_conversion_rate_unique_with_property_returns_f11_error(self) -> None:
+        """math='conversion_rate_unique' with math_property produces F11_MATH_REJECTS_PROPERTY."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="conversion_rate_unique", math_property="amount")
+        )
+        assert "F11_MATH_REJECTS_PROPERTY" in _codes(errors)
+
+    def test_unique_with_property_returns_f11_error(self) -> None:
+        """math='unique' with math_property produces F11_MATH_REJECTS_PROPERTY."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="unique", math_property="amount")
+        )
+        assert "F11_MATH_REJECTS_PROPERTY" in _codes(errors)
+
+    def test_total_with_property_no_f11_error(self) -> None:
+        """math='total' is in MATH_PROPERTY_OPTIONAL, so math_property is accepted."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="total", math_property="amount")
+        )
+        assert "F11_MATH_REJECTS_PROPERTY" not in _codes(errors)
+
+    def test_average_with_property_no_f11_error(self) -> None:
+        """math='average' with math_property produces no F11 error."""
+        errors = validate_funnel_args(
+            **_valid_funnel_args(math="average", math_property="amount")
+        )
+        assert "F11_MATH_REJECTS_PROPERTY" not in _codes(errors)

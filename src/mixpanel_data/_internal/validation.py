@@ -431,6 +431,7 @@ def validate_funnel_args(
     conversion_window: int,
     conversion_window_unit: str = "day",
     math: str = "conversion_rate_unique",
+    math_property: str | None = None,
     exclusions: list[Exclusion] | None,
     holding_constant: Sequence[str | HoldingConstant] | None = None,
     from_date: str | None,
@@ -440,7 +441,7 @@ def validate_funnel_args(
 ) -> list[ValidationError]:
     """Validate funnel query arguments before bookmark construction (Layer 1).
 
-    Implements funnel-specific validation rules F1-F9 plus reused
+    Implements funnel-specific validation rules F1-F11 plus reused
     time and group-by validators. Returns all errors found so callers
     can fix multiple issues in a single pass.
 
@@ -452,6 +453,10 @@ def validate_funnel_args(
             session. Default: ``"day"``.
         math: Funnel aggregation function. Default:
             ``"conversion_rate_unique"``.
+        math_property: Numeric property name for property-aggregation
+            math types (average, median, min, max, p25, p75, p90, p99).
+            Required when ``math`` is a property-aggregation type;
+            must be ``None`` otherwise. Default: ``None``.
         exclusions: Events to exclude between steps, or ``None``.
         holding_constant: Properties to hold constant, or ``None``.
         from_date: Start date (YYYY-MM-DD) or ``None``.
@@ -630,6 +635,37 @@ def validate_funnel_args(
                     code="F9_SESSION_WINDOW_REQUIRES_ONE",
                 )
             )
+
+    # F10: Property math requires math_property
+    if math in MATH_REQUIRING_PROPERTY and math_property is None:
+        errors.append(
+            ValidationError(
+                path="math_property",
+                message=(
+                    f"math='{math}' requires a math_property "
+                    f"(numeric property name to aggregate)"
+                ),
+                code="F10_MATH_MISSING_PROPERTY",
+            )
+        )
+
+    # F11: Non-property math rejects math_property
+    if (
+        math not in MATH_REQUIRING_PROPERTY
+        and math not in MATH_PROPERTY_OPTIONAL
+        and math_property is not None
+    ):
+        valid = sorted(MATH_REQUIRING_PROPERTY | MATH_PROPERTY_OPTIONAL)
+        errors.append(
+            ValidationError(
+                path="math_property",
+                message=(
+                    f"math='{math}' does not support math_property; "
+                    f"valid math types for property aggregation: {valid}"
+                ),
+                code="F11_MATH_REJECTS_PROPERTY",
+            )
+        )
 
     # F4: Non-empty exclusion event names and step range validation
     if exclusions is not None:
