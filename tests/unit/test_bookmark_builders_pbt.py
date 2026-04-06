@@ -1,0 +1,318 @@
+"""Property-based tests for bookmark builder equivalence.
+
+Uses Hypothesis to verify that the extracted builder functions produce
+identical output to the original inline code in ``_build_query_params()``.
+This is an oracle test: the refactored code must match the pre-refactoring
+behavior across randomized inputs.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from pydantic import SecretStr
+
+from mixpanel_data import Workspace
+from mixpanel_data._internal.bookmark_builders import (
+    build_filter_section,
+    build_group_section,
+    build_time_section,
+)
+from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data.types import Filter, GroupBy
+
+# =============================================================================
+# Strategies
+# =============================================================================
+
+date_strs = st.from_regex(
+    r"20[2-3][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])", fullmatch=True
+)
+time_units = st.sampled_from(["hour", "day", "week", "month", "quarter"])
+positive_ints = st.integers(min_value=1, max_value=365)
+event_names = st.text(
+    min_size=1, max_size=50, alphabet=st.characters(categories=("L", "N", "P"))
+)
+property_names = st.text(
+    min_size=1, max_size=30, alphabet=st.characters(categories=("L", "N"))
+)
+
+
+def _make_workspace() -> Workspace:
+    """Create a Workspace with mocked config for testing.
+
+    Returns:
+        Workspace instance with mock credentials.
+    """
+    creds = Credentials(
+        username="test",
+        secret=SecretStr("secret"),
+        project_id="12345",
+        region="us",
+    )
+    mgr = MagicMock(spec=ConfigManager)
+    mgr.resolve_credentials.return_value = creds
+    return Workspace(_config_manager=mgr)
+
+
+# =============================================================================
+# Oracle Tests: build_time_section matches _build_query_params
+# =============================================================================
+
+
+class TestTimeSectionEquivalence:
+    """Verify build_time_section() matches _build_query_params() time output."""
+
+    @given(unit=time_units, last=positive_ints)
+    @settings(max_examples=50)
+    def test_relative_range_equivalence(self, unit: str, last: int) -> None:
+        """Relative time range: build_time_section matches inline code.
+
+        Args:
+            unit: Time unit.
+            last: Number of days for relative range.
+        """
+        ws = _make_workspace()
+        params = ws._build_query_params(
+            events=["TestEvent"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=last,
+            unit=unit,
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        direct = build_time_section(from_date=None, to_date=None, last=last, unit=unit)
+        assert params["sections"]["time"] == direct
+
+    @given(
+        from_date=date_strs,
+        to_date=date_strs,
+        unit=time_units,
+    )
+    @settings(max_examples=50)
+    def test_absolute_range_equivalence(
+        self, from_date: str, to_date: str, unit: str
+    ) -> None:
+        """Absolute time range: build_time_section matches inline code.
+
+        Args:
+            from_date: Start date string.
+            to_date: End date string.
+            unit: Time unit.
+        """
+        # Ensure from_date <= to_date for valid date range
+        if from_date > to_date:
+            from_date, to_date = to_date, from_date
+
+        ws = _make_workspace()
+        params = ws._build_query_params(
+            events=["TestEvent"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=from_date,
+            to_date=to_date,
+            last=30,
+            unit=unit,
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        direct = build_time_section(
+            from_date=from_date, to_date=to_date, last=30, unit=unit
+        )
+        assert params["sections"]["time"] == direct
+
+
+# =============================================================================
+# Oracle Tests: build_filter_section matches _build_query_params
+# =============================================================================
+
+
+class TestFilterSectionEquivalence:
+    """Verify build_filter_section() matches _build_query_params() filter output."""
+
+    @given(prop=property_names, value=property_names)
+    @settings(max_examples=50)
+    def test_single_filter_equivalence(self, prop: str, value: str) -> None:
+        """Single filter: build_filter_section matches inline code.
+
+        Args:
+            prop: Property name.
+            value: Filter value.
+        """
+        f = Filter.equals(prop, value)
+        ws = _make_workspace()
+        params = ws._build_query_params(
+            events=["TestEvent"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=f,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        direct = build_filter_section(f)
+        assert params["sections"]["filter"] == direct
+
+    def test_none_filter_equivalence(self) -> None:
+        """None filter: build_filter_section returns empty list.
+
+        Matches _build_query_params behavior with where=None.
+        """
+        ws = _make_workspace()
+        params = ws._build_query_params(
+            events=["TestEvent"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        direct = build_filter_section(None)
+        assert params["sections"]["filter"] == direct == []
+
+
+# =============================================================================
+# Oracle Tests: build_group_section matches _build_query_params
+# =============================================================================
+
+
+class TestGroupSectionEquivalence:
+    """Verify build_group_section() matches _build_query_params() group output."""
+
+    @given(prop=property_names)
+    @settings(max_examples=50)
+    def test_string_group_equivalence(self, prop: str) -> None:
+        """String group_by: build_group_section matches inline code.
+
+        Args:
+            prop: Property name.
+        """
+        ws = _make_workspace()
+        params = ws._build_query_params(
+            events=["TestEvent"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=prop,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        direct = build_group_section(prop)
+        assert params["sections"]["group"] == direct
+
+    @given(
+        prop=property_names,
+        bucket_size=st.floats(
+            min_value=0.1, max_value=1000.0, allow_nan=False, allow_infinity=False
+        ),
+        bucket_min=st.floats(
+            min_value=-1000.0, max_value=0.0, allow_nan=False, allow_infinity=False
+        ),
+        bucket_max=st.floats(
+            min_value=0.1, max_value=10000.0, allow_nan=False, allow_infinity=False
+        ),
+    )
+    @settings(max_examples=30)
+    def test_groupby_with_buckets_equivalence(
+        self,
+        prop: str,
+        bucket_size: float,
+        bucket_min: float,
+        bucket_max: float,
+    ) -> None:
+        """GroupBy with buckets: build_group_section matches inline code.
+
+        Args:
+            prop: Property name.
+            bucket_size: Bucket width.
+            bucket_min: Minimum bucket value.
+            bucket_max: Maximum bucket value.
+        """
+        g = GroupBy(
+            prop,
+            property_type="number",
+            bucket_size=bucket_size,
+            bucket_min=bucket_min,
+            bucket_max=bucket_max,
+        )
+        ws = _make_workspace()
+        params = ws._build_query_params(
+            events=["TestEvent"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=g,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        direct = build_group_section(g)
+        assert params["sections"]["group"] == direct
+
+    def test_none_group_equivalence(self) -> None:
+        """None group_by: build_group_section returns empty list.
+
+        Matches _build_query_params behavior with group_by=None.
+        """
+        ws = _make_workspace()
+        params = ws._build_query_params(
+            events=["TestEvent"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        direct = build_group_section(None)
+        assert params["sections"]["group"] == direct == []

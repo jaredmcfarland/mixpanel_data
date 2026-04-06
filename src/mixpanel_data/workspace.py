@@ -32,6 +32,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
+from mixpanel_data._internal.bookmark_builders import (
+    build_filter_entry,
+    build_filter_section,
+    build_group_section,
+    build_time_section,
+)
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
@@ -1702,74 +1708,18 @@ class Workspace:
             show.append(formula_entry)
 
         # --- Build sections.time (array) ---
-        if from_date is not None and to_date is not None:
-            time_entry: dict[str, Any] = {
-                "dateRangeType": "between",
-                "unit": unit,
-                "value": [from_date, to_date],
-            }
-        elif from_date is not None:
-            # "since" with raw dates isn't supported by the API;
-            # use "between" with from_date through today
-            import datetime as _dt
-
-            today = _dt.date.today().isoformat()
-            time_entry = {
-                "dateRangeType": "between",
-                "unit": unit,
-                "value": [from_date, today],
-            }
-        else:
-            time_entry = {
-                "dateRangeType": "in the last",
-                "unit": unit,
-                "window": {"unit": "day", "value": last},
-            }
-        time_section: list[dict[str, Any]] = [time_entry]
+        time_section = build_time_section(
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            unit=unit,
+        )
 
         # --- Build sections.filter[] ---
-        filter_section: list[dict[str, Any]] = []
-        if where is not None:
-            filters_list = where if isinstance(where, list) else [where]
-            filter_section = [self._build_filter_entry(f) for f in filters_list]
+        filter_section = build_filter_section(where)
 
         # --- Build sections.group[] ---
-        group_section: list[dict[str, Any]] = []
-        if group_by is not None:
-            groups = group_by if isinstance(group_by, list) else [group_by]
-            for g in groups:
-                if isinstance(g, str):
-                    group_section.append(
-                        {
-                            "value": g,
-                            "propertyName": g,
-                            "resourceType": "events",
-                            "propertyType": "string",
-                            "propertyDefaultType": "string",
-                        }
-                    )
-                elif isinstance(g, GroupBy):
-                    group_entry: dict[str, Any] = {
-                        "value": g.property,
-                        "propertyName": g.property,
-                        "resourceType": "events",
-                        "propertyType": g.property_type,
-                        "propertyDefaultType": g.property_type,
-                    }
-                    if g.bucket_size is not None:
-                        group_entry["customBucket"] = {
-                            "bucketSize": g.bucket_size,
-                        }
-                        if g.bucket_min is not None:
-                            group_entry["customBucket"]["min"] = g.bucket_min
-                        if g.bucket_max is not None:
-                            group_entry["customBucket"]["max"] = g.bucket_max
-                    group_section.append(group_entry)
-                else:
-                    raise TypeError(
-                        f"group_by elements must be str or GroupBy, "
-                        f"got {type(g).__name__}: {g!r}"
-                    )
+        group_section = build_group_section(group_by)
 
         # --- Build displayOptions ---
         chart_type_map = {
@@ -1805,6 +1755,9 @@ class Workspace:
     def _build_filter_entry(f: Filter) -> dict[str, Any]:
         """Convert a Filter object to a bookmark filter dict.
 
+        Delegates to :func:`~mixpanel_data._internal.bookmark_builders.build_filter_entry`.
+        Kept as a static method for backward compatibility.
+
         Args:
             f: A Filter object.
 
@@ -1812,17 +1765,7 @@ class Workspace:
             Bookmark filter dict matching Mixpanel's expected format.
             Includes ``filterDateUnit`` for relative date filters.
         """
-        entry: dict[str, Any] = {
-            "resourceType": f._resource_type,
-            "filterType": f._property_type,
-            "defaultType": f._property_type,
-            "value": f._property,
-            "filterValue": f._value,
-            "filterOperator": f._operator,
-        }
-        if f._date_unit is not None:
-            entry["filterDateUnit"] = f._date_unit
-        return entry
+        return build_filter_entry(f)
 
     def query(
         self,

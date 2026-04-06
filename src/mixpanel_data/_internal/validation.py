@@ -151,6 +151,268 @@ def _enum_error(
 
 
 # =============================================================================
+# Reusable sub-validators (time, group-by)
+# =============================================================================
+
+
+def validate_time_args(
+    *,
+    from_date: str | None,
+    to_date: str | None,
+    last: int,
+) -> list[ValidationError]:
+    """Validate time-range arguments (rules V7-V10, V15, V20).
+
+    Extracted from ``validate_query_args()`` so callers building
+    non-Insights bookmark types can reuse the same date/last checks
+    without pulling in the full query-arg validator.
+
+    Args:
+        from_date: Start date in YYYY-MM-DD format, or ``None``.
+        to_date: End date in YYYY-MM-DD format, or ``None``.
+        last: Number of days for a relative date range. The default
+            value used by ``Workspace.query()`` is ``30``.
+
+    Returns:
+        List of validation errors. Empty list means all time
+        arguments are valid.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.validation import validate_time_args
+
+        errors = validate_time_args(
+            from_date="2024-01-01",
+            to_date="2024-01-31",
+            last=30,
+        )
+        assert errors == []
+        ```
+    """
+    errors: list[ValidationError] = []
+
+    # V7: last must be positive
+    if last <= 0:
+        errors.append(
+            ValidationError(
+                path="last",
+                message="last must be a positive integer",
+                code="V7_LAST_POSITIVE",
+            )
+        )
+
+    # V8: Date format and calendar validation
+    if from_date is not None:
+        if not _DATE_RE.match(from_date):
+            errors.append(
+                ValidationError(
+                    path="from_date",
+                    message=f"from_date must be YYYY-MM-DD format (got '{from_date}')",
+                    code="V8_DATE_FORMAT",
+                )
+            )
+        elif not _is_valid_date(from_date):
+            errors.append(
+                ValidationError(
+                    path="from_date",
+                    message=f"from_date '{from_date}' is not a valid calendar date",
+                    code="V8_DATE_INVALID",
+                )
+            )
+    if to_date is not None:
+        if not _DATE_RE.match(to_date):
+            errors.append(
+                ValidationError(
+                    path="to_date",
+                    message=f"to_date must be YYYY-MM-DD format (got '{to_date}')",
+                    code="V8_DATE_FORMAT",
+                )
+            )
+        elif not _is_valid_date(to_date):
+            errors.append(
+                ValidationError(
+                    path="to_date",
+                    message=f"to_date '{to_date}' is not a valid calendar date",
+                    code="V8_DATE_INVALID",
+                )
+            )
+
+    # V9: to_date requires from_date
+    if to_date is not None and from_date is None:
+        errors.append(
+            ValidationError(
+                path="to_date",
+                message="to_date requires from_date",
+                code="V9_TO_REQUIRES_FROM",
+            )
+        )
+
+    # V10: Cannot combine explicit dates with non-default last
+    if from_date is not None and last != 30:
+        errors.append(
+            ValidationError(
+                path="last",
+                message=(
+                    f"Cannot combine last={last} with explicit dates; "
+                    f"use either last or from_date/to_date"
+                ),
+                code="V10_DATE_LAST_EXCLUSIVE",
+            )
+        )
+
+    # V15: Date ordering — from_date must be <= to_date
+    if (
+        from_date is not None
+        and to_date is not None
+        and _DATE_RE.match(from_date)
+        and _DATE_RE.match(to_date)
+        and from_date > to_date
+    ):
+        errors.append(
+            ValidationError(
+                path="from_date",
+                message=(
+                    f"from_date '{from_date}' is after to_date '{to_date}'; "
+                    f"dates must be in chronological order"
+                ),
+                code="V15_DATE_ORDER",
+            )
+        )
+
+    # V20: last must not be absurdly large
+    if last > _MAX_LAST_DAYS:
+        errors.append(
+            ValidationError(
+                path="last",
+                message=(
+                    f"last={last} exceeds maximum of {_MAX_LAST_DAYS} days (~10 years)"
+                ),
+                code="V20_LAST_TOO_LARGE",
+            )
+        )
+
+    return errors
+
+
+def validate_group_by_args(
+    *,
+    group_by: str | GroupBy | list[str | GroupBy] | None,
+) -> list[ValidationError]:
+    """Validate group-by arguments (rules V11-V12, V18, V24).
+
+    Extracted from ``validate_query_args()`` so callers building
+    non-Insights bookmark types can reuse the same bucket checks
+    without pulling in the full query-arg validator.
+
+    Args:
+        group_by: Breakdown specification — a property name string,
+            a ``GroupBy`` object with optional bucket config, a list
+            of either, or ``None`` for no breakdown.
+
+    Returns:
+        List of validation errors. Empty list means all group-by
+        arguments are valid.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.validation import validate_group_by_args
+        from mixpanel_data.types import GroupBy
+
+        errors = validate_group_by_args(
+            group_by=GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=50,
+                bucket_min=0,
+                bucket_max=500,
+            ),
+        )
+        assert errors == []
+        ```
+    """
+    errors: list[ValidationError] = []
+
+    if group_by is None:
+        return errors
+
+    groups = group_by if isinstance(group_by, list) else [group_by]
+    for i, g in enumerate(groups):
+        if isinstance(g, GroupBy):
+            gpath = f"group_by[{i}]" if len(groups) > 1 else "group_by"
+
+            # V24: Bucket values must be finite (not NaN or Inf)
+            for fname, fval in [
+                ("bucket_size", g.bucket_size),
+                ("bucket_min", g.bucket_min),
+                ("bucket_max", g.bucket_max),
+            ]:
+                if not _is_finite(fval):
+                    errors.append(
+                        ValidationError(
+                            path=gpath,
+                            message=f"{fname} must be a finite number, got {fval}",
+                            code="V24_BUCKET_NOT_FINITE",
+                        )
+                    )
+
+            if (
+                g.bucket_min is not None or g.bucket_max is not None
+            ) and g.bucket_size is None:
+                errors.append(
+                    ValidationError(
+                        path=gpath,
+                        message="bucket_min/bucket_max require bucket_size",
+                        code="V11_BUCKET_REQUIRES_SIZE",
+                    )
+                )
+            if g.bucket_size is not None and g.bucket_size <= 0:
+                errors.append(
+                    ValidationError(
+                        path=gpath,
+                        message="bucket_size must be positive",
+                        code="V12_BUCKET_SIZE_POSITIVE",
+                    )
+                )
+            if g.bucket_size is not None and g.property_type != "number":
+                errors.append(
+                    ValidationError(
+                        path=gpath,
+                        message="bucket_size requires property_type='number'",
+                        code="V12B_BUCKET_REQUIRES_NUMBER",
+                    )
+                )
+            if g.bucket_size is not None and (
+                g.bucket_min is None or g.bucket_max is None
+            ):
+                errors.append(
+                    ValidationError(
+                        path=gpath,
+                        message="bucket_size requires both bucket_min and bucket_max",
+                        code="V12C_BUCKET_REQUIRES_BOUNDS",
+                    )
+                )
+
+            # V18: bucket_min must be < bucket_max
+            if (
+                g.bucket_min is not None
+                and g.bucket_max is not None
+                and g.bucket_min >= g.bucket_max
+            ):
+                errors.append(
+                    ValidationError(
+                        path=gpath,
+                        message=(
+                            f"bucket_min ({g.bucket_min}) must be less than "
+                            f"bucket_max ({g.bucket_max})"
+                        ),
+                        code="V18_BUCKET_ORDER",
+                    )
+                )
+
+    return errors
+
+
+# =============================================================================
 # Layer 1: Argument Validation (V0-V14)
 # =============================================================================
 
@@ -411,181 +673,11 @@ def validate_query_args(
             )
         )
 
-    # V7: last must be positive
-    if last <= 0:
-        errors.append(
-            ValidationError(
-                path="last",
-                message="last must be a positive integer",
-                code="V7_LAST_POSITIVE",
-            )
-        )
+    # V7-V10, V15, V20: Time argument validation (delegated)
+    errors.extend(validate_time_args(from_date=from_date, to_date=to_date, last=last))
 
-    # V8: Date format and calendar validation
-    if from_date is not None:
-        if not _DATE_RE.match(from_date):
-            errors.append(
-                ValidationError(
-                    path="from_date",
-                    message=f"from_date must be YYYY-MM-DD format (got '{from_date}')",
-                    code="V8_DATE_FORMAT",
-                )
-            )
-        elif not _is_valid_date(from_date):
-            errors.append(
-                ValidationError(
-                    path="from_date",
-                    message=f"from_date '{from_date}' is not a valid calendar date",
-                    code="V8_DATE_INVALID",
-                )
-            )
-    if to_date is not None:
-        if not _DATE_RE.match(to_date):
-            errors.append(
-                ValidationError(
-                    path="to_date",
-                    message=f"to_date must be YYYY-MM-DD format (got '{to_date}')",
-                    code="V8_DATE_FORMAT",
-                )
-            )
-        elif not _is_valid_date(to_date):
-            errors.append(
-                ValidationError(
-                    path="to_date",
-                    message=f"to_date '{to_date}' is not a valid calendar date",
-                    code="V8_DATE_INVALID",
-                )
-            )
-
-    # V9: to_date requires from_date
-    if to_date is not None and from_date is None:
-        errors.append(
-            ValidationError(
-                path="to_date",
-                message="to_date requires from_date",
-                code="V9_TO_REQUIRES_FROM",
-            )
-        )
-
-    # V10: Cannot combine explicit dates with non-default last
-    if from_date is not None and last != 30:
-        errors.append(
-            ValidationError(
-                path="last",
-                message=(
-                    f"Cannot combine last={last} with explicit dates; "
-                    f"use either last or from_date/to_date"
-                ),
-                code="V10_DATE_LAST_EXCLUSIVE",
-            )
-        )
-
-    # V15: Date ordering — from_date must be <= to_date
-    if (
-        from_date is not None
-        and to_date is not None
-        and _DATE_RE.match(from_date)
-        and _DATE_RE.match(to_date)
-        and from_date > to_date
-    ):
-        errors.append(
-            ValidationError(
-                path="from_date",
-                message=(
-                    f"from_date '{from_date}' is after to_date '{to_date}'; "
-                    f"dates must be in chronological order"
-                ),
-                code="V15_DATE_ORDER",
-            )
-        )
-
-    # V20: last must not be absurdly large
-    if last > _MAX_LAST_DAYS:
-        errors.append(
-            ValidationError(
-                path="last",
-                message=(
-                    f"last={last} exceeds maximum of {_MAX_LAST_DAYS} days (~10 years)"
-                ),
-                code="V20_LAST_TOO_LARGE",
-            )
-        )
-
-    # V11-V12: GroupBy validation
-    if group_by is not None:
-        groups = group_by if isinstance(group_by, list) else [group_by]
-        for i, g in enumerate(groups):
-            if isinstance(g, GroupBy):
-                gpath = f"group_by[{i}]" if len(groups) > 1 else "group_by"
-
-                # V24: Bucket values must be finite (not NaN or Inf)
-                for fname, fval in [
-                    ("bucket_size", g.bucket_size),
-                    ("bucket_min", g.bucket_min),
-                    ("bucket_max", g.bucket_max),
-                ]:
-                    if not _is_finite(fval):
-                        errors.append(
-                            ValidationError(
-                                path=gpath,
-                                message=f"{fname} must be a finite number, got {fval}",
-                                code="V24_BUCKET_NOT_FINITE",
-                            )
-                        )
-
-                if (
-                    g.bucket_min is not None or g.bucket_max is not None
-                ) and g.bucket_size is None:
-                    errors.append(
-                        ValidationError(
-                            path=gpath,
-                            message="bucket_min/bucket_max require bucket_size",
-                            code="V11_BUCKET_REQUIRES_SIZE",
-                        )
-                    )
-                if g.bucket_size is not None and g.bucket_size <= 0:
-                    errors.append(
-                        ValidationError(
-                            path=gpath,
-                            message="bucket_size must be positive",
-                            code="V12_BUCKET_SIZE_POSITIVE",
-                        )
-                    )
-                if g.bucket_size is not None and g.property_type != "number":
-                    errors.append(
-                        ValidationError(
-                            path=gpath,
-                            message="bucket_size requires property_type='number'",
-                            code="V12B_BUCKET_REQUIRES_NUMBER",
-                        )
-                    )
-                if g.bucket_size is not None and (
-                    g.bucket_min is None or g.bucket_max is None
-                ):
-                    errors.append(
-                        ValidationError(
-                            path=gpath,
-                            message="bucket_size requires both bucket_min and bucket_max",
-                            code="V12C_BUCKET_REQUIRES_BOUNDS",
-                        )
-                    )
-
-                # V18: bucket_min must be < bucket_max
-                if (
-                    g.bucket_min is not None
-                    and g.bucket_max is not None
-                    and g.bucket_min >= g.bucket_max
-                ):
-                    errors.append(
-                        ValidationError(
-                            path=gpath,
-                            message=(
-                                f"bucket_min ({g.bucket_min}) must be less than "
-                                f"bucket_max ({g.bucket_max})"
-                            ),
-                            code="V18_BUCKET_ORDER",
-                        )
-                    )
+    # V11-V12, V18, V24: GroupBy validation (delegated)
+    errors.extend(validate_group_by_args(group_by=group_by))
 
     # V13-V14: Per-Metric validation
     for idx, item in enumerate(events):

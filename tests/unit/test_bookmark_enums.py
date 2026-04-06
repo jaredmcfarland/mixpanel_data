@@ -15,8 +15,12 @@ from mixpanel_data._internal.bookmark_enums import (
     MATH_REQUIRING_PROPERTY,
     VALID_ANALYSIS_TYPES,
     VALID_CHART_TYPES,
+    VALID_CONVERSION_WINDOW_UNITS,
     VALID_FILTER_OPERATORS,
     VALID_FILTERS_DETERMINER,
+    VALID_FLOWS_CHART_TYPES,
+    VALID_FLOWS_COUNT_TYPES,
+    VALID_FUNNEL_ORDER,
     VALID_MATH_FUNNELS,
     VALID_MATH_INSIGHTS,
     VALID_MATH_RETENTION,
@@ -26,6 +30,8 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_PROPERTY_TYPES,
     VALID_QUERY_TIME_UNITS,
     VALID_RESOURCE_TYPES,
+    VALID_RETENTION_ALIGNMENT,
+    VALID_RETENTION_UNITS,
     VALID_TIME_UNITS,
 )
 from mixpanel_data.types import (
@@ -159,3 +165,105 @@ class TestEnumCardinality:
             "rolling",
             "cumulative",
         } == VALID_ANALYSIS_TYPES
+
+
+class TestNewEnumConstants:
+    """Tests for new frozenset constants added in Phase 1 (T002)."""
+
+    def test_valid_funnel_order_values(self) -> None:
+        """VALID_FUNNEL_ORDER contains exactly 'loose' and 'any'."""
+        assert {"loose", "any"} == VALID_FUNNEL_ORDER
+
+    def test_valid_funnel_order_is_frozenset(self) -> None:
+        """VALID_FUNNEL_ORDER is a frozenset for immutability."""
+        assert isinstance(VALID_FUNNEL_ORDER, frozenset)
+
+    def test_valid_conversion_window_units_values(self) -> None:
+        """VALID_CONVERSION_WINDOW_UNITS contains all 7 expected units."""
+        expected = {"second", "minute", "hour", "day", "week", "month", "session"}
+        assert expected == VALID_CONVERSION_WINDOW_UNITS
+
+    def test_valid_conversion_window_units_is_frozenset(self) -> None:
+        """VALID_CONVERSION_WINDOW_UNITS is a frozenset."""
+        assert isinstance(VALID_CONVERSION_WINDOW_UNITS, frozenset)
+
+    def test_valid_retention_units_values(self) -> None:
+        """VALID_RETENTION_UNITS contains exactly 'day', 'week', 'month'."""
+        assert {"day", "week", "month"} == VALID_RETENTION_UNITS
+
+    def test_valid_retention_units_is_frozenset(self) -> None:
+        """VALID_RETENTION_UNITS is a frozenset."""
+        assert isinstance(VALID_RETENTION_UNITS, frozenset)
+
+    def test_valid_retention_alignment_values(self) -> None:
+        """VALID_RETENTION_ALIGNMENT contains 'birth' and 'interval_start'."""
+        assert {"birth", "interval_start"} == VALID_RETENTION_ALIGNMENT
+
+    def test_valid_retention_alignment_is_frozenset(self) -> None:
+        """VALID_RETENTION_ALIGNMENT is a frozenset."""
+        assert isinstance(VALID_RETENTION_ALIGNMENT, frozenset)
+
+    def test_valid_flows_count_types_values(self) -> None:
+        """VALID_FLOWS_COUNT_TYPES contains 'unique', 'total', 'session'."""
+        assert {"unique", "total", "session"} == VALID_FLOWS_COUNT_TYPES
+
+    def test_valid_flows_count_types_is_frozenset(self) -> None:
+        """VALID_FLOWS_COUNT_TYPES is a frozenset."""
+        assert isinstance(VALID_FLOWS_COUNT_TYPES, frozenset)
+
+    def test_valid_flows_chart_types_values(self) -> None:
+        """VALID_FLOWS_CHART_TYPES contains 'sankey' and 'top-paths'."""
+        assert {"sankey", "top-paths"} == VALID_FLOWS_CHART_TYPES
+
+    def test_valid_flows_chart_types_is_frozenset(self) -> None:
+        """VALID_FLOWS_CHART_TYPES is a frozenset."""
+        assert isinstance(VALID_FLOWS_CHART_TYPES, frozenset)
+
+
+class TestExtendedMathFunnels:
+    """Tests for extended VALID_MATH_FUNNELS with property aggregation (T003)."""
+
+    def test_contains_original_values(self) -> None:
+        """VALID_MATH_FUNNELS still contains all original counting/conversion types."""
+        original = {
+            "general",
+            "unique",
+            "session",
+            "total",
+            "conversion_rate",
+            "conversion_rate_unique",
+            "conversion_rate_total",
+            "conversion_rate_session",
+        }
+        assert original <= VALID_MATH_FUNNELS
+
+    def test_contains_property_aggregation_types(self) -> None:
+        """VALID_MATH_FUNNELS includes property aggregation types."""
+        property_agg = {"average", "median", "min", "max", "p25", "p75", "p90", "p99"}
+        assert property_agg <= VALID_MATH_FUNNELS
+
+    def test_all_expected_values(self) -> None:
+        """VALID_MATH_FUNNELS contains exactly 16 expected values."""
+        expected = {
+            "general",
+            "unique",
+            "session",
+            "total",
+            "conversion_rate",
+            "conversion_rate_unique",
+            "conversion_rate_total",
+            "conversion_rate_session",
+            "average",
+            "median",
+            "min",
+            "max",
+            "p25",
+            "p75",
+            "p90",
+            "p99",
+        }
+        assert expected == VALID_MATH_FUNNELS
+
+    def test_funnels_still_subset_of_all(self) -> None:
+        """Extended VALID_MATH_FUNNELS remains a subset of VALID_MATH_TYPES."""
+        assert VALID_MATH_FUNNELS <= VALID_MATH_TYPES

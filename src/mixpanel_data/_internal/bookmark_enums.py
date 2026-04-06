@@ -98,9 +98,22 @@ VALID_MATH_FUNNELS: frozenset[str] = frozenset(
         "conversion_rate_unique",
         "conversion_rate_total",
         "conversion_rate_session",
+        # Property aggregation types (funnel measure on property)
+        "average",
+        "median",
+        "min",
+        "max",
+        "p25",
+        "p75",
+        "p90",
+        "p99",
     }
 )
-"""Valid math types for funnel context."""
+"""Valid math types for funnel context.
+
+Includes counting/conversion types and property aggregation types
+(average, median, min, max, percentiles) for funnel measure-on-property.
+"""
 
 VALID_MATH_RETENTION: frozenset[str] = frozenset(
     {
@@ -360,3 +373,51 @@ VALID_DATE_RANGE_TYPES: frozenset[str] = frozenset(
     }
 )
 """Valid date range types for time section clauses."""
+
+# =============================================================================
+# Funnel-Specific Constants
+# =============================================================================
+
+VALID_FUNNEL_ORDER: frozenset[str] = frozenset({"loose", "any"})
+"""Valid funnel step ordering modes.
+
+``"loose"`` requires steps in order but allows other events between.
+``"any"`` allows steps in any order.
+"""
+
+VALID_CONVERSION_WINDOW_UNITS: frozenset[str] = frozenset(
+    {
+        "second",
+        "minute",
+        "hour",
+        "day",
+        "week",
+        "month",
+        "session",
+    }
+)
+"""Valid time units for funnel conversion window."""
+
+# =============================================================================
+# Retention-Specific Constants
+# =============================================================================
+
+VALID_RETENTION_UNITS: frozenset[str] = frozenset({"day", "week", "month"})
+"""Valid time units for retention period grouping."""
+
+VALID_RETENTION_ALIGNMENT: frozenset[str] = frozenset({"birth", "interval_start"})
+"""Valid retention alignment modes.
+
+``"birth"`` aligns each user to their first qualifying event.
+``"interval_start"`` aligns to the start of each calendar period.
+"""
+
+# =============================================================================
+# Flows-Specific Constants
+# =============================================================================
+
+VALID_FLOWS_COUNT_TYPES: frozenset[str] = frozenset({"unique", "total", "session"})
+"""Valid counting methods for flows analysis."""
+
+VALID_FLOWS_CHART_TYPES: frozenset[str] = frozenset({"sankey", "top-paths"})
+"""Valid chart types for flows visualization."""
