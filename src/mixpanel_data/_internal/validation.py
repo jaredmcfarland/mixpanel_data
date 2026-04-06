@@ -435,7 +435,8 @@ def validate_query_args(
 ) -> list[ValidationError]:
     """Validate query arguments before bookmark construction (Layer 1).
 
-    Implements validation rules V0-V20.
+    Implements validation rules V0-V27, delegating time (V7-V10, V15,
+    V20) and group-by (V11-V12, V18, V24) to extracted helpers.
     Returns all errors found, not just the first, so callers can
     fix multiple issues in a single pass.
 

@@ -19,6 +19,7 @@ from hypothesis import strategies as st
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
+from mixpanel_data._internal.bookmark_builders import build_filter_entry
 from mixpanel_data._internal.bookmark_enums import (
     MATH_REQUIRING_PROPERTY,
     VALID_FILTER_OPERATORS,
@@ -121,7 +122,7 @@ class TestMetricParamsInvariant:
             from_date=None,
             to_date=None,
             last=last,
-            unit=unit,
+            unit=unit,  # type: ignore[arg-type]
             group_by=None,
             where=None,
             formulas=[],
@@ -346,9 +347,8 @@ class TestDateFilterInvariant:
         self, prop: str, quantity: int, unit: str
     ) -> None:
         """Relative date filters always emit filterDateUnit in bookmark."""
-        ws = _make_ws()
         f = Filter.in_the_last(prop, quantity, unit)  # type: ignore[arg-type]
-        entry = ws._build_filter_entry(f)
+        entry = build_filter_entry(f)
         assert entry["filterDateUnit"] == unit
         assert entry["filterValue"] == quantity
 
@@ -567,7 +567,7 @@ class TestFilterSerializationEnumConsistency:
     def test_equals_produces_valid_enums(self, prop: str, value: str) -> None:
         """Filter.equals serializes with valid operator, type, and resourceType."""
         f = Filter.equals(prop, value)
-        entry = Workspace._build_filter_entry(f)
+        entry = build_filter_entry(f)
         assert entry["filterOperator"] in VALID_FILTER_OPERATORS
         assert entry["filterType"] in VALID_PROPERTY_TYPES
         assert entry["resourceType"] in VALID_RESOURCE_TYPES
@@ -577,7 +577,7 @@ class TestFilterSerializationEnumConsistency:
         """Filter.greater_than and less_than serialize with valid enums."""
         for factory in [Filter.greater_than, Filter.less_than]:
             f = factory(prop, value)
-            entry = Workspace._build_filter_entry(f)
+            entry = build_filter_entry(f)
             assert entry["filterOperator"] in VALID_FILTER_OPERATORS
             assert entry["filterType"] in VALID_PROPERTY_TYPES
             assert entry["resourceType"] in VALID_RESOURCE_TYPES
@@ -592,7 +592,7 @@ class TestFilterSerializationEnumConsistency:
     ) -> None:
         """Filter.between serializes with valid operator enum."""
         f = Filter.between(prop, min_val, max_val)
-        entry = Workspace._build_filter_entry(f)
+        entry = build_filter_entry(f)
         assert entry["filterOperator"] in VALID_FILTER_OPERATORS
         assert entry["filterType"] in VALID_PROPERTY_TYPES
 
@@ -601,7 +601,7 @@ class TestFilterSerializationEnumConsistency:
         """Filter.is_set/is_not_set serialize with valid enums."""
         for factory in [Filter.is_set, Filter.is_not_set]:
             f = factory(prop)
-            entry = Workspace._build_filter_entry(f)
+            entry = build_filter_entry(f)
             assert entry["filterOperator"] in VALID_FILTER_OPERATORS
             assert entry["filterType"] in VALID_PROPERTY_TYPES
 
@@ -610,7 +610,7 @@ class TestFilterSerializationEnumConsistency:
         """Filter.is_true/is_false serialize with valid enums."""
         for factory in [Filter.is_true, Filter.is_false]:
             f = factory(prop)
-            entry = Workspace._build_filter_entry(f)
+            entry = build_filter_entry(f)
             assert entry["filterOperator"] in VALID_FILTER_OPERATORS
             assert entry["filterType"] in VALID_PROPERTY_TYPES
 

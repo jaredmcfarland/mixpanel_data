@@ -72,6 +72,9 @@ NUMBER_OPERATOR_MAP: dict[str, str] = {
 DATETIME_OPERATOR_MAP: dict[str, str] = {
     "was on": "==",
     "was not on": "!=",
+    # Segfilter operators describe the operand's relation to matching values,
+    # not the event's relation to the operand. So "was before <date>" becomes
+    # ">" because the operand date is greater than the matching event dates.
     "was before": ">",
     "was since": "<",
     "was in the": ">",
@@ -81,11 +84,8 @@ DATETIME_OPERATOR_MAP: dict[str, str] = {
 }
 """Maps datetime-typed Filter operators to segfilter operators."""
 
-# Operators that take no value (set/unset checks)
-_STRING_SETNESS_OPS: frozenset[str] = frozenset({"is set", "is not set"})
-
-# Number operators that take no value
-_NUMBER_SETNESS_OPS: frozenset[str] = frozenset({"is set", "is not set"})
+# Operators that take no value (set/unset checks) — shared across string and number types
+_SETNESS_OPS: frozenset[str] = frozenset({"is set", "is not set"})
 
 # Number operators that take a two-element list
 _NUMBER_RANGE_OPS: frozenset[str] = frozenset({"is between", "between", "not between"})
@@ -118,26 +118,7 @@ def _convert_date_format(date_str: str) -> str:
         ```
     """
     year, month, day = date_str.split("-")
-    return f"{month}/{day}/{year}"
-
-
-def _pluralize_unit(unit: str) -> str:
-    """Pluralize a time unit string by appending 's'.
-
-    Args:
-        unit: Singular time unit (e.g. ``"day"``, ``"hour"``,
-            ``"week"``, ``"month"``, ``"minute"``).
-
-    Returns:
-        Pluralized unit (e.g. ``"days"``, ``"hours"``).
-
-    Example:
-        ```python
-        _pluralize_unit("day")
-        # "days"
-        ```
-    """
-    return f"{unit}s"
+    return f"{month.zfill(2)}/{day.zfill(2)}/{year}"
 
 
 # =============================================================================
@@ -166,7 +147,7 @@ def _build_string_filter(operator: str, value: Any) -> dict[str, Any]:
 
     seg_op = STRING_OPERATOR_MAP[operator]
 
-    if operator in _STRING_SETNESS_OPS:
+    if operator in _SETNESS_OPS:
         operand: Any = ""
     else:
         operand = value
@@ -195,7 +176,7 @@ def _build_number_filter(operator: str, value: Any) -> dict[str, Any]:
 
     seg_op = NUMBER_OPERATOR_MAP[operator]
 
-    if operator in _NUMBER_SETNESS_OPS:
+    if operator in _SETNESS_OPS:
         operand: Any = ""
     elif operator in _NUMBER_RANGE_OPS:
         operand = [str(v) for v in value]
@@ -254,7 +235,7 @@ def _build_datetime_filter(
     if operator in _DATETIME_RELATIVE_OPS:
         result["operand"] = value
         if date_unit is not None:
-            result["unit"] = _pluralize_unit(date_unit)
+            result["unit"] = f"{date_unit}s"
     elif operator in _DATETIME_RANGE_OPS:
         result["operand"] = [_convert_date_format(d) for d in value]
     else:

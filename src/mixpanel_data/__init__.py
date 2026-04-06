@@ -6,7 +6,12 @@ run live analytics, stream data, and manage entities via the App API.
 """
 
 from mixpanel_data._internal.validation import validate_bookmark
-from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
+from mixpanel_data._literal_types import (
+    CountType,
+    HourDayUnit,
+    QueryTimeUnit,
+    TimeUnit,
+)
 from mixpanel_data.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
@@ -202,6 +207,7 @@ __all__ = [
     "validate_bookmark",
     # Type aliases
     "CountType",
+    "QueryTimeUnit",
     "HourDayUnit",
     "TimeUnit",
     # Exceptions

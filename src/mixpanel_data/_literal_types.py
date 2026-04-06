@@ -22,7 +22,10 @@ TimeUnit = Literal["day", "week", "month"]
 # Time units for numeric aggregations (segmentation_numeric, sum, average)
 HourDayUnit = Literal["hour", "day"]
 
+# Time units for bookmark query API (query, build_params, build_time_section)
+QueryTimeUnit = Literal["hour", "day", "week", "month", "quarter"]
+
 # Count/aggregation methods
 CountType = Literal["general", "unique", "average"]
 
-__all__ = ["TimeUnit", "HourDayUnit", "CountType"]
+__all__ = ["TimeUnit", "HourDayUnit", "QueryTimeUnit", "CountType"]

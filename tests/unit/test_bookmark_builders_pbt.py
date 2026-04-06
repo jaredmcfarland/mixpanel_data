@@ -83,7 +83,7 @@ class TestTimeSectionEquivalence:
             from_date=None,
             to_date=None,
             last=last,
-            unit=unit,
+            unit=unit,  # type: ignore[arg-type]
             group_by=None,
             where=None,
             formulas=[],
@@ -91,7 +91,7 @@ class TestTimeSectionEquivalence:
             cumulative=False,
             mode="timeseries",
         )
-        direct = build_time_section(from_date=None, to_date=None, last=last, unit=unit)
+        direct = build_time_section(from_date=None, to_date=None, last=last, unit=unit)  # type: ignore[arg-type]
         assert params["sections"]["time"] == direct
 
     @given(
@@ -123,7 +123,7 @@ class TestTimeSectionEquivalence:
             from_date=from_date,
             to_date=to_date,
             last=30,
-            unit=unit,
+            unit=unit,  # type: ignore[arg-type]
             group_by=None,
             where=None,
             formulas=[],
@@ -132,7 +132,10 @@ class TestTimeSectionEquivalence:
             mode="timeseries",
         )
         direct = build_time_section(
-            from_date=from_date, to_date=to_date, last=30, unit=unit
+            from_date=from_date,
+            to_date=to_date,
+            last=30,
+            unit=unit,  # type: ignore[arg-type]
         )
         assert params["sections"]["time"] == direct
 

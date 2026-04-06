@@ -11,7 +11,6 @@ import pytest
 from mixpanel_data._internal.segfilter import (
     RESOURCE_TYPE_MAP,
     _convert_date_format,
-    _pluralize_unit,
     build_segfilter_entry,
 )
 from mixpanel_data.types import Filter
@@ -477,30 +476,6 @@ class TestConvertDateFormat:
     def test_december(self) -> None:
         """December date converts correctly."""
         assert _convert_date_format("2025-12-31") == "12/31/2025"
-
-
-class TestPluralizeUnit:
-    """Tests for _pluralize_unit helper."""
-
-    def test_day(self) -> None:
-        """'day' pluralizes to 'days'."""
-        assert _pluralize_unit("day") == "days"
-
-    def test_hour(self) -> None:
-        """'hour' pluralizes to 'hours'."""
-        assert _pluralize_unit("hour") == "hours"
-
-    def test_week(self) -> None:
-        """'week' pluralizes to 'weeks'."""
-        assert _pluralize_unit("week") == "weeks"
-
-    def test_month(self) -> None:
-        """'month' pluralizes to 'months'."""
-        assert _pluralize_unit("month") == "months"
-
-    def test_minute(self) -> None:
-        """'minute' pluralizes to 'minutes'."""
-        assert _pluralize_unit("minute") == "minutes"
 
 
 # =============================================================================

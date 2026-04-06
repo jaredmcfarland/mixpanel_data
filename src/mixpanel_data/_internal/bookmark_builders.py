@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from mixpanel_data._literal_types import QueryTimeUnit
 from mixpanel_data.types import Filter, GroupBy
 
 
@@ -20,7 +21,7 @@ def build_time_section(
     from_date: str | None,
     to_date: str | None,
     last: int,
-    unit: str,
+    unit: QueryTimeUnit,
 ) -> list[dict[str, Any]]:
     """Build the ``sections.time`` array for bookmark params.
 
@@ -57,18 +58,12 @@ def build_time_section(
         #   "value": ["2025-01-01", "2025-01-31"]}]
         ```
     """
-    if from_date is not None and to_date is not None:
+    if from_date is not None:
+        effective_to = to_date if to_date is not None else date.today().isoformat()
         time_entry: dict[str, Any] = {
             "dateRangeType": "between",
             "unit": unit,
-            "value": [from_date, to_date],
-        }
-    elif from_date is not None:
-        today = date.today().isoformat()
-        time_entry = {
-            "dateRangeType": "between",
-            "unit": unit,
-            "value": [from_date, today],
+            "value": [from_date, effective_to],
         }
     else:
         time_entry = {
@@ -87,7 +82,7 @@ def build_date_range(
 ) -> dict[str, Any]:
     """Build a flat date range dict for flows (non-sections format).
 
-    Flows use a flat ``dateRange`` object rather than the sections-based
+    Flows use a flat ``date_range`` object rather than the sections-based
     ``sections.time`` array used by insights.
 
     Args:

@@ -43,6 +43,7 @@ from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
 from mixpanel_data._internal.validation import validate_bookmark, validate_query_args
+from mixpanel_data._literal_types import QueryTimeUnit
 from mixpanel_data.exceptions import (
     BookmarkValidationError,
     ConfigError,
@@ -1604,7 +1605,7 @@ class Workspace:
         from_date: str | None,
         to_date: str | None,
         last: int,
-        unit: str,
+        unit: QueryTimeUnit,
         group_by: str | GroupBy | list[str | GroupBy] | None,
         where: Filter | list[Filter] | None,
         formulas: Sequence[Formula],
@@ -1675,7 +1676,7 @@ class Workspace:
             # Build behavior block with optional per-metric filters
             behavior_filters: list[dict[str, Any]] = []
             if item_filters:
-                behavior_filters = [self._build_filter_entry(f) for f in item_filters]
+                behavior_filters = [build_filter_entry(f) for f in item_filters]
 
             entry: dict[str, Any] = {
                 "type": "metric",
@@ -1751,22 +1752,6 @@ class Workspace:
             "displayOptions": display_options,
         }
 
-    @staticmethod
-    def _build_filter_entry(f: Filter) -> dict[str, Any]:
-        """Convert a Filter object to a bookmark filter dict.
-
-        Delegates to :func:`~mixpanel_data._internal.bookmark_builders.build_filter_entry`.
-        Kept as a static method for backward compatibility.
-
-        Args:
-            f: A Filter object.
-
-        Returns:
-            Bookmark filter dict matching Mixpanel's expected format.
-            Includes ``filterDateUnit`` for relative date filters.
-        """
-        return build_filter_entry(f)
-
     def query(
         self,
         events: str | Metric | Formula | Sequence[str | Metric | Formula],
@@ -1774,7 +1759,7 @@ class Workspace:
         from_date: str | None = None,
         to_date: str | None = None,
         last: int = 30,
-        unit: Literal["hour", "day", "week", "month", "quarter"] = "day",
+        unit: QueryTimeUnit = "day",
         math: MathType = "total",
         math_property: str | None = None,
         per_user: PerUserAggregation | None = None,
@@ -1902,7 +1887,7 @@ class Workspace:
         from_date: str | None = None,
         to_date: str | None = None,
         last: int = 30,
-        unit: Literal["hour", "day", "week", "month", "quarter"] = "day",
+        unit: QueryTimeUnit = "day",
         math: MathType = "total",
         math_property: str | None = None,
         per_user: PerUserAggregation | None = None,
@@ -1994,7 +1979,7 @@ class Workspace:
         from_date: str | None,
         to_date: str | None,
         last: int,
-        unit: str,
+        unit: QueryTimeUnit,
         math: MathType,
         math_property: str | None,
         per_user: PerUserAggregation | None,
