@@ -48,7 +48,7 @@ from mixpanel_data._internal.validation import (
     validate_query_args,
     validate_retention_args,
 )
-from mixpanel_data._literal_types import QueryTimeUnit
+from mixpanel_data._literal_types import QueryTimeUnit, TimeUnit
 from mixpanel_data.exceptions import (
     BookmarkValidationError,
     ConfigError,
@@ -149,8 +149,10 @@ from mixpanel_data.types import (
     PublicWorkspace,
     QueryResult,
     ReplaceSchemaEnforcementParams,
+    RetentionAlignment,
     RetentionEvent,
     RetentionMathType,
+    RetentionMode,
     RetentionQueryResult,
     RetentionResult,
     SavedCohort,
@@ -2660,17 +2662,17 @@ class Workspace:
         *,
         born_event: RetentionEvent,
         return_event: RetentionEvent,
-        retention_unit: str,
-        alignment: str,
+        retention_unit: TimeUnit,
+        alignment: RetentionAlignment,
         bucket_sizes: list[int] | None,
-        math: str,
+        math: RetentionMathType,
         from_date: str | None,
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
         group_by: str | GroupBy | list[str | GroupBy] | None,
         where: Filter | list[Filter] | None,
-        mode: str,
+        mode: RetentionMode,
     ) -> dict[str, Any]:
         """Build retention bookmark params dict from typed arguments.
 
@@ -2770,17 +2772,17 @@ class Workspace:
         *,
         born_event: str | RetentionEvent,
         return_event: str | RetentionEvent,
-        retention_unit: str,
-        alignment: str,
+        retention_unit: TimeUnit,
+        alignment: RetentionAlignment,
         bucket_sizes: list[int] | None,
-        math: str,
+        math: RetentionMathType,
         from_date: str | None,
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
         group_by: str | GroupBy | list[str | GroupBy] | None,
         where: Filter | list[Filter] | None,
-        mode: str,
+        mode: RetentionMode,
     ) -> dict[str, Any]:
         """Normalize, validate, and build retention bookmark params.
 
@@ -2868,8 +2870,8 @@ class Workspace:
         born_event: str | RetentionEvent,
         return_event: str | RetentionEvent,
         *,
-        retention_unit: Literal["day", "week", "month"] = "week",
-        alignment: Literal["birth", "interval_start"] = "birth",
+        retention_unit: TimeUnit = "week",
+        alignment: RetentionAlignment = "birth",
         bucket_sizes: list[int] | None = None,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -2878,7 +2880,7 @@ class Workspace:
         math: RetentionMathType = "retention_rate",
         group_by: str | GroupBy | list[str | GroupBy] | None = None,
         where: Filter | list[Filter] | None = None,
-        mode: Literal["curve", "trends", "table"] = "curve",
+        mode: RetentionMode = "curve",
     ) -> RetentionQueryResult:
         """Run a typed retention query against the Mixpanel API.
 
@@ -2900,7 +2902,9 @@ class Workspace:
                 ``last``.
             to_date: End date (YYYY-MM-DD). Requires ``from_date``.
             last: Relative time range in days. Default: 30.
-            unit: Time aggregation unit. Default: ``"day"``.
+            unit: Time aggregation unit (``day``, ``week``, or
+                ``month`` — ``hour`` is not supported for retention).
+                Default: ``"day"``.
             math: Retention aggregation function. Default:
                 ``"retention_rate"``.
             group_by: Break down results by property.
@@ -2969,8 +2973,8 @@ class Workspace:
         born_event: str | RetentionEvent,
         return_event: str | RetentionEvent,
         *,
-        retention_unit: Literal["day", "week", "month"] = "week",
-        alignment: Literal["birth", "interval_start"] = "birth",
+        retention_unit: TimeUnit = "week",
+        alignment: RetentionAlignment = "birth",
         bucket_sizes: list[int] | None = None,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -2979,14 +2983,15 @@ class Workspace:
         math: RetentionMathType = "retention_rate",
         group_by: str | GroupBy | list[str | GroupBy] | None = None,
         where: Filter | list[Filter] | None = None,
-        mode: Literal["curve", "trends", "table"] = "curve",
+        mode: RetentionMode = "curve",
     ) -> dict[str, Any]:
         """Build validated retention bookmark params without executing.
 
-        Has the same signature as :meth:`query_retention` but returns the
-        generated bookmark params dict instead of querying the API.
-        Useful for debugging, inspecting generated JSON, persisting
-        via :meth:`create_bookmark`, or testing.
+        Accepts the same arguments as :meth:`query_retention` but returns
+        the generated bookmark params ``dict`` (not a
+        ``RetentionQueryResult``) instead of querying the API. Useful for
+        debugging, inspecting generated JSON, persisting via
+        :meth:`create_bookmark`, or testing.
 
         Args:
             born_event: Event that defines cohort membership.
@@ -2997,7 +3002,9 @@ class Workspace:
             from_date: Start date (YYYY-MM-DD) or None.
             to_date: End date (YYYY-MM-DD) or None.
             last: Relative time range in days. Default: 30.
-            unit: Time aggregation unit. Default: ``"day"``.
+            unit: Time aggregation unit (``day``, ``week``, or
+                ``month`` — ``hour`` is not supported for retention).
+                Default: ``"day"``.
             math: Aggregation function. Default:
                 ``"retention_rate"``.
             group_by: Break down results by property.

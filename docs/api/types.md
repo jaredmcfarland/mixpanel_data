@@ -92,6 +92,21 @@ Types for `Workspace.query_retention()` — typed retention analysis with event 
       show_root_heading: true
       show_root_toc_entry: true
 
+::: mixpanel_data.RetentionAlignment
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.RetentionMode
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.RetentionMathType
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ::: mixpanel_data.RetentionQueryResult
     options:
       show_root_heading: true

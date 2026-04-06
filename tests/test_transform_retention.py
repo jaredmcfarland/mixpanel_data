@@ -233,6 +233,302 @@ class TestTransformRetentionErrors:
         assert "2025-01-01" in result.cohorts
         assert result.average["first"] == 100
 
+    def test_segmented_response_extracts_segments(self) -> None:
+        """Response with $overall + named segments populates segments dict."""
+        raw = _mock_response(
+            series={
+                "Signup and then Login": {
+                    "$overall": {
+                        "2025-01-01": {
+                            "first": 100,
+                            "counts": [100, 50],
+                            "rates": [1.0, 0.5],
+                        },
+                        "$average": {
+                            "first": 100,
+                            "counts": [100, 50],
+                            "rates": [1.0, 0.5],
+                        },
+                    },
+                    "iOS": {
+                        "2025-01-01": {
+                            "first": 60,
+                            "counts": [60, 30],
+                            "rates": [1.0, 0.5],
+                        },
+                        "$average": {
+                            "first": 60,
+                            "counts": [60, 30],
+                            "rates": [1.0, 0.5],
+                        },
+                    },
+                    "Android": {
+                        "2025-01-01": {
+                            "first": 40,
+                            "counts": [40, 20],
+                            "rates": [1.0, 0.5],
+                        },
+                        "$average": {
+                            "first": 40,
+                            "counts": [40, 20],
+                            "rates": [1.0, 0.5],
+                        },
+                    },
+                }
+            }
+        )
+
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert "iOS" in result.segments
+        assert "Android" in result.segments
+        assert "iOS" in result.segment_averages
+        assert "Android" in result.segment_averages
+
+    def test_segmented_response_cohorts_from_overall(self) -> None:
+        """Segmented response uses $overall for primary cohorts field."""
+        raw = _mock_response(
+            series={
+                "Signup and then Login": {
+                    "$overall": {
+                        "2025-01-01": {
+                            "first": 100,
+                            "counts": [100, 50],
+                            "rates": [1.0, 0.5],
+                        },
+                    },
+                    "iOS": {
+                        "2025-01-01": {
+                            "first": 60,
+                            "counts": [60, 30],
+                            "rates": [1.0, 0.5],
+                        },
+                    },
+                }
+            }
+        )
+
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert result.cohorts["2025-01-01"]["first"] == 100
+
+
+# =============================================================================
+# TestTransformRetentionNonDictSeries (T056)
+# =============================================================================
+
+
+class TestTransformRetentionNonDictSeries:
+    """Tests for _transform_retention_result when series is not a dict."""
+
+    def test_series_as_list_raises_query_error(self) -> None:
+        """series=[] raises QueryError with descriptive message."""
+        raw = _mock_response(series=[])
+
+        with pytest.raises(QueryError, match="series.*list.*expected dict"):
+            _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+    def test_series_as_string_raises_query_error(self) -> None:
+        """series='pending' raises QueryError."""
+        raw = _mock_response(series="pending")
+
+        with pytest.raises(QueryError, match="series.*str.*expected dict"):
+            _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+    def test_series_as_int_raises_query_error(self) -> None:
+        """series=0 raises QueryError."""
+        raw = _mock_response(series=0)
+
+        with pytest.raises(QueryError, match="series.*int.*expected dict"):
+            _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+    def test_non_dict_metric_value_raises_query_error(self) -> None:
+        """series={'metric': 'error string'} raises QueryError."""
+        raw = _mock_response(series={"Signup and then Login": "error: timeout"})
+
+        with pytest.raises(QueryError, match="not a dict.*got str"):
+            _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+    def test_non_dict_metric_value_as_list_raises_query_error(self) -> None:
+        """series={'metric': [1, 2]} raises QueryError."""
+        raw = _mock_response(series={"Signup and then Login": [1, 2, 3]})
+
+        with pytest.raises(QueryError, match="not a dict.*got list"):
+            _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+
+# =============================================================================
+# TestTransformRetentionSegments (T055)
+# =============================================================================
+
+
+_SEGMENTED_SERIES: dict[str, Any] = {
+    "Signup and then Login": {
+        "$overall": {
+            "2025-01-01": {
+                "first": 200,
+                "counts": [200, 100],
+                "rates": [1.0, 0.5],
+            },
+            "$average": {
+                "first": 200,
+                "counts": [200, 100],
+                "rates": [1.0, 0.5],
+            },
+        },
+        "iOS": {
+            "2025-01-01": {
+                "first": 120,
+                "counts": [120, 60],
+                "rates": [1.0, 0.5],
+            },
+            "$average": {
+                "first": 120,
+                "counts": [120, 60],
+                "rates": [1.0, 0.5],
+            },
+        },
+        "Android": {
+            "2025-01-01": {
+                "first": 80,
+                "counts": [80, 40],
+                "rates": [1.0, 0.5],
+            },
+            "$average": {
+                "first": 80,
+                "counts": [80, 40],
+                "rates": [1.0, 0.5],
+            },
+        },
+    }
+}
+
+
+class TestTransformRetentionSegments:
+    """Tests for segmented retention response parsing (T055)."""
+
+    def test_segments_dict_has_correct_keys(self) -> None:
+        """Segment names match response keys (excluding $overall)."""
+        raw = _mock_response(series=_SEGMENTED_SERIES)
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert sorted(result.segments.keys()) == ["Android", "iOS"]
+
+    def test_segment_cohort_data_preserved(self) -> None:
+        """Each segment's cohort data (first, counts, rates) is intact."""
+        raw = _mock_response(series=_SEGMENTED_SERIES)
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        ios_cohort = result.segments["iOS"]["2025-01-01"]
+        assert ios_cohort["first"] == 120
+        assert ios_cohort["counts"] == [120, 60]
+        assert ios_cohort["rates"] == [1.0, 0.5]
+
+    def test_segment_averages_extracted(self) -> None:
+        """$average within each segment goes to segment_averages."""
+        raw = _mock_response(series=_SEGMENTED_SERIES)
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert result.segment_averages["iOS"]["first"] == 120
+        assert result.segment_averages["Android"]["first"] == 80
+
+    def test_unsegmented_response_has_empty_segments(self) -> None:
+        """Unsegmented response (no $overall) has empty segments dict."""
+        raw = _mock_response()
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert result.segments == {}
+        assert result.segment_averages == {}
+
+    def test_overall_only_response_has_empty_segments(self) -> None:
+        """Response with $overall but no named segments has empty segments."""
+        raw = _mock_response(
+            series={
+                "Signup and then Login": {
+                    "$overall": {
+                        "2025-01-01": {
+                            "first": 100,
+                            "counts": [100, 50],
+                            "rates": [1.0, 0.5],
+                        },
+                    }
+                }
+            }
+        )
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert result.segments == {}
+        assert result.segment_averages == {}
+
+
+# =============================================================================
+# TestTransformRetentionDateNormalization (T056)
+# =============================================================================
+
+
+class TestTransformRetentionDateNormalization:
+    """Tests for cohort date key normalization (T056)."""
+
+    def test_iso_timestamp_keys_normalized(self) -> None:
+        """ISO timestamp cohort keys are normalized to YYYY-MM-DD."""
+        raw = _mock_response(
+            series={
+                "Signup and then Login": {
+                    "2025-01-01T00:00:00+00:00": {
+                        "first": 100,
+                        "counts": [100, 50],
+                        "rates": [1.0, 0.5],
+                    },
+                    "$average": {
+                        "first": 100,
+                        "counts": [100, 50],
+                        "rates": [1.0, 0.5],
+                    },
+                }
+            }
+        )
+
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert "2025-01-01" in result.cohorts
+        assert "2025-01-01T00:00:00+00:00" not in result.cohorts
+
+    def test_plain_date_keys_unchanged(self) -> None:
+        """Plain YYYY-MM-DD cohort keys are preserved as-is."""
+        raw = _mock_response()
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert "2025-01-01" in result.cohorts
+        assert "2025-01-02" in result.cohorts
+
+    def test_segment_date_keys_normalized(self) -> None:
+        """ISO timestamp keys are normalized within segment cohort data."""
+        raw = _mock_response(
+            series={
+                "Signup and then Login": {
+                    "$overall": {
+                        "2025-01-01T00:00:00+00:00": {
+                            "first": 100,
+                            "counts": [100, 50],
+                            "rates": [1.0, 0.5],
+                        },
+                    },
+                    "iOS": {
+                        "2025-01-01T00:00:00+00:00": {
+                            "first": 60,
+                            "counts": [60, 30],
+                            "rates": [1.0, 0.5],
+                        },
+                    },
+                }
+            }
+        )
+
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert "2025-01-01" in result.cohorts
+        assert "2025-01-01" in result.segments["iOS"]
+
 
 # =============================================================================
 # TestTransformRetentionFormatVariations (T054)

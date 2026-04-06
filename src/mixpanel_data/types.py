@@ -8097,6 +8097,32 @@ class FunnelQueryResult(ResultWithDataFrame):
 # Retention Query Types (Phase 033)
 # =============================================================================
 
+RetentionAlignment = Literal["birth", "interval_start"]
+"""Retention alignment mode.
+
++------------------+----------------------------------------------+
+| Value            | Meaning                                      |
++==================+==============================================+
+| birth            | Align to each cohort's born date (default)   |
++------------------+----------------------------------------------+
+| interval_start   | Align all cohorts to the same start date     |
++------------------+----------------------------------------------+
+"""
+
+RetentionMode = Literal["curve", "trends", "table"]
+"""Display mode for retention query results.
+
++--------+----------------------------------------------+
+| Value  | Meaning                                      |
++========+==============================================+
+| curve  | Retention curve (default)                    |
++--------+----------------------------------------------+
+| trends | Trend lines over time                        |
++--------+----------------------------------------------+
+| table  | Tabular cohort × bucket grid                 |
++--------+----------------------------------------------+
+"""
+
 RetentionMathType = Literal["retention_rate", "unique"]
 """Aggregation function for retention query metrics.
 
@@ -8161,45 +8187,47 @@ class RetentionQueryResult(ResultWithDataFrame):
 
     Contains cohort-level retention data, the generated bookmark params
     (for debugging or persisting as a saved report), and a lazy
-    DataFrame conversion.
+    DataFrame conversion. Supports both unsegmented and segmented
+    (``group_by``) queries.
 
     Attributes:
         computed_at: When the query was computed (ISO format).
         from_date: Effective start date from the response.
         to_date: Effective end date from the response.
-        cohorts: Cohort-level retention data. Keys are cohort date
-            strings, values are dicts with ``first`` (cohort size),
-            ``counts`` (list of retained user counts per bucket),
-            and ``rates`` (list of retention rates per bucket).
+        cohorts: Aggregate cohort-level retention data. Keys are cohort
+            date strings (``YYYY-MM-DD``), values are dicts with
+            ``first`` (cohort size), ``counts`` (list of retained user
+            counts per bucket), and ``rates`` (list of retention rates
+            per bucket). For segmented queries, this contains the
+            ``$overall`` aggregate.
         average: Synthetic ``$average`` cohort data. Same structure
             as individual cohort entries.
         params: Generated bookmark params sent to the API
             (for debugging or persistence via ``create_bookmark``).
         meta: Response metadata (e.g. ``sampling_factor``,
             ``is_cached``).
+        segments: Per-segment cohort data. Maps segment name to a dict
+            of cohort_date → {first, counts, rates}. Empty for
+            unsegmented queries.
+        segment_averages: Per-segment ``$average`` cohort data. Maps
+            segment name to {first, counts, rates}. Empty for
+            unsegmented queries.
 
     Example:
         ```python
+        # Unsegmented retention
         result = ws.query_retention("Signup", "Login")
-
-        # Cohort data
-        for date, data in result.cohorts.items():
-            print(f"{date}: {data['first']} users, "
-                  f"retention: {data['rates']}")
-
-        # Average retention
-        print(result.average)
-
-        # DataFrame view
         print(result.df)
         #   cohort_date  bucket  count  rate
 
-        # Save as a report
-        ws.create_bookmark(CreateBookmarkParams(
-            name="Signup → Login Retention",
-            bookmark_type="retention",
-            params=result.params,
-        ))
+        # Segmented retention
+        result = ws.query_retention(
+            "Signup", "Login", group_by="platform"
+        )
+        print(result.df)
+        #   segment  cohort_date  bucket  count  rate
+        for name, cohorts in result.segments.items():
+            print(f"{name}: {len(cohorts)} cohorts")
         ```
     """
 
@@ -8213,10 +8241,13 @@ class RetentionQueryResult(ResultWithDataFrame):
     """Effective end date from the response."""
 
     cohorts: dict[str, dict[str, Any]] = field(default_factory=dict)
-    """Cohort-level retention data (cohort_date → {first, counts, rates})."""
+    """Cohort-level retention data (cohort_date → {first, counts, rates}).
+
+    For segmented queries, this contains the ``$overall`` aggregate.
+    """
 
     average: dict[str, Any] = field(default_factory=dict)
-    """Synthetic $average cohort data."""
+    """Synthetic $average cohort data (aggregate across all cohorts)."""
 
     params: dict[str, Any] = field(default_factory=dict)
     """Generated bookmark params sent to API."""
@@ -8224,35 +8255,71 @@ class RetentionQueryResult(ResultWithDataFrame):
     meta: dict[str, Any] = field(default_factory=dict)
     """Response metadata (sampling_factor, is_cached, etc.)."""
 
+    segments: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
+    """Per-segment cohort data (segment_name → cohort_date → {first, counts, rates}).
+
+    Empty for unsegmented queries. Populated when ``group_by`` is used
+    and the API returns breakdown segments alongside ``$overall``.
+    """
+
+    segment_averages: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """Per-segment $average cohort data (segment_name → {first, counts, rates}).
+
+    Empty for unsegmented queries.
+    """
+
     @property
     def df(self) -> pd.DataFrame:
         """Convert to DataFrame with one row per (cohort_date, bucket) pair.
 
-        Columns: ``cohort_date``, ``bucket``, ``count``, ``rate``.
+        For unsegmented queries, columns are:
+        ``cohort_date``, ``bucket``, ``count``, ``rate``.
+
+        For segmented queries (when ``segments`` is non-empty), columns are:
+        ``segment``, ``cohort_date``, ``bucket``, ``count``, ``rate``.
 
         Returns:
             Normalized DataFrame. Empty DataFrame with correct columns
-            if ``cohorts`` is empty.
+            if data is empty.
         """
         if self._df_cache is not None:
             return self._df_cache
 
-        cols = ["cohort_date", "bucket", "count", "rate"]
-
         rows: list[dict[str, Any]] = []
-        for cohort_date in sorted(self.cohorts.keys()):
-            cohort = self.cohorts[cohort_date]
-            counts = cohort.get("counts", [])
-            rates = cohort.get("rates", [])
-            for i, count in enumerate(counts):
-                rows.append(
-                    {
-                        "cohort_date": cohort_date,
-                        "bucket": i,
-                        "count": count,
-                        "rate": rates[i] if i < len(rates) else 0.0,
-                    }
-                )
+
+        if self.segments:
+            cols = ["segment", "cohort_date", "bucket", "count", "rate"]
+            for segment_name in sorted(self.segments.keys()):
+                segment_cohorts = self.segments[segment_name]
+                for cohort_date in sorted(segment_cohorts.keys()):
+                    cohort = segment_cohorts[cohort_date]
+                    counts = cohort.get("counts", [])
+                    rates = cohort.get("rates", [])
+                    for i, count in enumerate(counts):
+                        rows.append(
+                            {
+                                "segment": segment_name,
+                                "cohort_date": cohort_date,
+                                "bucket": i,
+                                "count": count,
+                                "rate": rates[i] if i < len(rates) else 0.0,
+                            }
+                        )
+        else:
+            cols = ["cohort_date", "bucket", "count", "rate"]
+            for cohort_date in sorted(self.cohorts.keys()):
+                cohort = self.cohorts[cohort_date]
+                counts = cohort.get("counts", [])
+                rates = cohort.get("rates", [])
+                for i, count in enumerate(counts):
+                    rows.append(
+                        {
+                            "cohort_date": cohort_date,
+                            "bucket": i,
+                            "count": count,
+                            "rate": rates[i] if i < len(rates) else 0.0,
+                        }
+                    )
 
         result_df = (
             pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
@@ -8266,8 +8333,10 @@ class RetentionQueryResult(ResultWithDataFrame):
 
         Returns:
             Dictionary with all RetentionQueryResult fields.
+            Includes ``segments`` and ``segment_averages`` only
+            when non-empty.
         """
-        return {
+        d: dict[str, Any] = {
             "computed_at": self.computed_at,
             "from_date": self.from_date,
             "to_date": self.to_date,
@@ -8276,3 +8345,8 @@ class RetentionQueryResult(ResultWithDataFrame):
             "params": self.params,
             "meta": self.meta,
         }
+        if self.segments:
+            d["segments"] = self.segments
+        if self.segment_averages:
+            d["segment_averages"] = self.segment_averages
+        return d

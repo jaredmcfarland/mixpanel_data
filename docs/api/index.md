@@ -108,7 +108,7 @@ Typed results for all operations:
 - **QueryResult** — Insights query results (from `query()`)
 - **Metric**, **Filter**, **Formula**, **GroupBy** — Query building blocks
 - **FunnelQueryResult**, **FunnelStep**, **Exclusion** — Typed funnel results
-- **RetentionQueryResult**, **RetentionEvent** — Typed retention results
+- **RetentionQueryResult**, **RetentionEvent**, **RetentionAlignment**, **RetentionMode**, **RetentionMathType** — Typed retention results
 - **SegmentationResult** — Time-series data (legacy)
 - **FunnelResult** — Funnel conversion data (legacy)
 - **RetentionResult** — Retention cohort data (legacy)

@@ -1,4 +1,4 @@
-"""Unit tests for retention argument validation rules (R1-R9).
+"""Unit tests for retention argument validation rules (R1-R12).
 
 Tests ``validate_retention_args()`` which validates Python-level arguments
 before retention bookmark construction. Each rule class covers one or more
@@ -14,6 +14,9 @@ Validation rules:
     R7: retention_unit must be in {"day", "week", "month"}.
     R8: alignment must be in {"birth", "interval_start"}.
     R9: math must be in {"retention_rate", "unique"}.
+    R10: mode must be in {"curve", "trends", "table"}.
+    R11: unit must be in {"day", "week", "month"}.
+    R12: group_by strings must be non-empty.
 
 Also tests multi-error collection (fail-fast validation).
 """
@@ -833,3 +836,177 @@ class TestValidateRetentionR12:
         r12 = [e for e in errors if e.code == "R12_EMPTY_GROUP_BY"]
         assert len(r12) == 1
         assert r12[0].path == "group_by"
+
+
+# =============================================================================
+# R5: bucket_sizes boolean edge case
+# =============================================================================
+
+
+class TestValidateRetentionR5Boolean:
+    """Tests for R5: boolean values in bucket_sizes are rejected.
+
+    Python's ``bool`` is a subclass of ``int``, so ``True``/``False``
+    pass ``isinstance(val, int)``. The validator must explicitly reject
+    booleans.
+    """
+
+    def test_boolean_true_rejected(self) -> None:
+        """bucket_sizes=[True, 3] must produce R5_BUCKET_SIZES_POSITIVE."""
+        errors = validate_retention_args(
+            **_valid_retention_args(bucket_sizes=[True, 3])
+        )
+        assert any(e.code == "R5_BUCKET_SIZES_POSITIVE" for e in errors)
+
+    def test_boolean_false_rejected(self) -> None:
+        """bucket_sizes=[False] must produce R5_BUCKET_SIZES_POSITIVE."""
+        errors = validate_retention_args(**_valid_retention_args(bucket_sizes=[False]))
+        assert any(e.code == "R5_BUCKET_SIZES_POSITIVE" for e in errors)
+
+
+# =============================================================================
+# Layer 2: B20/B21 filter validation (via validate_bookmark)
+# =============================================================================
+
+
+class TestValidateBookmarkRetentionB20:
+    """Tests for B20: filterValue must not be an empty list.
+
+    These rules apply to all bookmark types. Tested here with
+    ``bookmark_type="retention"`` since B20/B21 were added in this PR.
+    """
+
+    def test_empty_filter_value_list_rejected(self) -> None:
+        """filterValue=[] must produce B20_EMPTY_FILTER_VALUE."""
+        from mixpanel_data._internal.validation import validate_bookmark
+
+        bookmark: dict[str, Any] = {
+            "sections": {
+                "show": [
+                    {
+                        "behavior": {
+                            "type": "event",
+                            "resourceType": "events",
+                            "value": {"name": "Signup"},
+                        },
+                        "measurement": {"math": "retention_rate"},
+                    }
+                ],
+                "time": [{"unit": "day", "dateRangeType": "in the last", "value": 30}],
+                "filter": [
+                    {
+                        "filterType": "string",
+                        "filterOperator": "in",
+                        "filterValue": [],
+                        "propertyObjectKey": "properties",
+                        "resourceType": "events",
+                        "propertyName": "country",
+                    }
+                ],
+                "group": [],
+            },
+            "displayOptions": {"chartType": "line", "analysis": "linear"},
+        }
+        errors = validate_bookmark(bookmark, bookmark_type="retention")
+        assert any(e.code == "B20_EMPTY_FILTER_VALUE" for e in errors)
+
+
+class TestValidateBookmarkRetentionB21:
+    """Tests for B21: filterValue list must not exceed max size."""
+
+    def test_filter_value_too_many_rejected(self) -> None:
+        """filterValue with >1000 entries must produce B21_FILTER_VALUE_TOO_MANY."""
+        from mixpanel_data._internal.validation import validate_bookmark
+
+        bookmark: dict[str, Any] = {
+            "sections": {
+                "show": [
+                    {
+                        "behavior": {
+                            "type": "event",
+                            "resourceType": "events",
+                            "value": {"name": "Signup"},
+                        },
+                        "measurement": {"math": "retention_rate"},
+                    }
+                ],
+                "time": [{"unit": "day", "dateRangeType": "in the last", "value": 30}],
+                "filter": [
+                    {
+                        "filterType": "string",
+                        "filterOperator": "in",
+                        "filterValue": [f"val_{i}" for i in range(1001)],
+                        "propertyObjectKey": "properties",
+                        "resourceType": "events",
+                        "propertyName": "country",
+                    }
+                ],
+                "group": [],
+            },
+            "displayOptions": {"chartType": "line", "analysis": "linear"},
+        }
+        errors = validate_bookmark(bookmark, bookmark_type="retention")
+        assert any(e.code == "B21_FILTER_VALUE_TOO_MANY" for e in errors)
+
+
+# =============================================================================
+# Layer 2: B9 retention math dispatch
+# =============================================================================
+
+
+class TestValidateBookmarkRetentionB9MathDispatch:
+    """Tests for B9: retention bookmarks route to VALID_MATH_RETENTION.
+
+    Ensures that insights-only math types (e.g., ``"dau"``) are rejected
+    when the bookmark type is ``"retention"``.
+    """
+
+    def test_insights_only_math_rejected_for_retention(self) -> None:
+        """math='dau' must produce B9_INVALID_MATH for retention bookmarks."""
+        from mixpanel_data._internal.validation import validate_bookmark
+
+        bookmark: dict[str, Any] = {
+            "sections": {
+                "show": [
+                    {
+                        "behavior": {
+                            "type": "event",
+                            "resourceType": "events",
+                            "value": {"name": "Signup"},
+                        },
+                        "measurement": {"math": "dau"},
+                    }
+                ],
+                "time": [{"unit": "day", "dateRangeType": "in the last", "value": 30}],
+                "filter": [],
+                "group": [],
+            },
+            "displayOptions": {"chartType": "line", "analysis": "linear"},
+        }
+        errors = validate_bookmark(bookmark, bookmark_type="retention")
+        assert any(e.code == "B9_INVALID_MATH" for e in errors)
+
+    def test_valid_retention_math_accepted(self) -> None:
+        """math='retention_rate' must not produce B9_INVALID_MATH for retention."""
+        from mixpanel_data._internal.validation import validate_bookmark
+
+        bookmark: dict[str, Any] = {
+            "sections": {
+                "show": [
+                    {
+                        "behavior": {
+                            "type": "event",
+                            "resourceType": "events",
+                            "value": {"name": "Signup"},
+                        },
+                        "measurement": {"math": "retention_rate"},
+                    }
+                ],
+                "time": [{"unit": "day", "dateRangeType": "in the last", "value": 30}],
+                "filter": [],
+                "group": [],
+            },
+            "displayOptions": {"chartType": "line", "analysis": "linear"},
+        }
+        errors = validate_bookmark(bookmark, bookmark_type="retention")
+        assert not any(e.code == "B9_INVALID_MATH" for e in errors)

@@ -239,6 +239,117 @@ class TestRetentionQueryResultDataFrame:
         assert len(df) == 0
         assert list(df.columns) == ["cohort_date", "bucket", "count", "rate"]
 
+    def test_rates_shorter_than_counts_uses_zero(self) -> None:
+        """When rates has fewer entries than counts, missing rates default to 0.0."""
+        r = _make_result(
+            cohorts={
+                "2025-01-01": {
+                    "first": 100,
+                    "counts": [100, 50, 25],
+                    "rates": [1.0],  # Only 1 rate for 3 counts
+                },
+            }
+        )
+        df = r.df
+        assert len(df) == 3
+        # First bucket has the rate
+        assert df.iloc[0]["rate"] == 1.0
+        # Remaining buckets fall back to 0.0
+        assert df.iloc[1]["rate"] == 0.0
+        assert df.iloc[2]["rate"] == 0.0
+
+    def test_rates_empty_all_default_to_zero(self) -> None:
+        """When rates is empty, all rate values default to 0.0."""
+        r = _make_result(
+            cohorts={
+                "2025-01-01": {
+                    "first": 50,
+                    "counts": [50, 25],
+                    "rates": [],
+                },
+            }
+        )
+        df = r.df
+        assert len(df) == 2
+        assert df.iloc[0]["rate"] == 0.0
+        assert df.iloc[1]["rate"] == 0.0
+
+
+class TestRetentionQueryResultDataFrameSegmented:
+    """Tests for RetentionQueryResult.df with segmented data."""
+
+    def test_df_with_segments_has_segment_column(self) -> None:
+        """When segments populated, df has 5 columns including segment."""
+        r = _make_result(
+            segments={
+                "iOS": {
+                    "2025-01-01": {
+                        "first": 60,
+                        "counts": [60, 30],
+                        "rates": [1.0, 0.5],
+                    },
+                },
+                "Android": {
+                    "2025-01-01": {
+                        "first": 40,
+                        "counts": [40, 20],
+                        "rates": [1.0, 0.5],
+                    },
+                },
+            }
+        )
+        df = r.df
+        assert list(df.columns) == ["segment", "cohort_date", "bucket", "count", "rate"]
+
+    def test_df_with_segments_row_count(self) -> None:
+        """Segmented df has correct number of rows."""
+        r = _make_result(
+            segments={
+                "iOS": {
+                    "2025-01-01": {
+                        "first": 60,
+                        "counts": [60, 30],
+                        "rates": [1.0, 0.5],
+                    },
+                },
+                "Android": {
+                    "2025-01-01": {
+                        "first": 40,
+                        "counts": [40, 20],
+                        "rates": [1.0, 0.5],
+                    },
+                },
+            }
+        )
+        df = r.df
+        # 2 segments × 1 cohort × 2 buckets = 4 rows
+        assert len(df) == 4
+
+    def test_df_with_segments_values_correct(self) -> None:
+        """Segmented df values match segment cohort data."""
+        r = _make_result(
+            segments={
+                "iOS": {
+                    "2025-01-01": {
+                        "first": 60,
+                        "counts": [60, 30],
+                        "rates": [1.0, 0.5],
+                    },
+                },
+            }
+        )
+        df = r.df
+        row = df[(df["segment"] == "iOS") & (df["bucket"] == 0)]
+        assert len(row) == 1
+        assert row.iloc[0]["count"] == 60
+        assert row.iloc[0]["rate"] == 1.0
+
+    def test_df_without_segments_no_segment_column(self) -> None:
+        """Without segments, df has 4 columns (backward compat)."""
+        r = _make_result()
+        df = r.df
+        assert list(df.columns) == ["cohort_date", "bucket", "count", "rate"]
+
 
 class TestRetentionQueryResultToDict:
     """Tests for RetentionQueryResult.to_dict() serialization."""
@@ -260,6 +371,34 @@ class TestRetentionQueryResultToDict:
         assert "average" in d
         assert "params" in d
         assert "meta" in d
+
+    def test_to_dict_includes_segments_when_present(self) -> None:
+        """to_dict() includes segments and segment_averages when non-empty."""
+        r = _make_result(
+            segments={
+                "iOS": {
+                    "2025-01-01": {
+                        "first": 60,
+                        "counts": [60, 30],
+                        "rates": [1.0, 0.5],
+                    },
+                },
+            },
+            segment_averages={
+                "iOS": {"first": 60, "counts": [60, 30], "rates": [1.0, 0.5]},
+            },
+        )
+        d = r.to_dict()
+        assert "segments" in d
+        assert "segment_averages" in d
+        assert d["segments"]["iOS"]["2025-01-01"]["first"] == 60
+
+    def test_to_dict_excludes_segments_when_empty(self) -> None:
+        """to_dict() omits segments and segment_averages when empty."""
+        r = _make_result()
+        d = r.to_dict()
+        assert "segments" not in d
+        assert "segment_averages" not in d
 
 
 class TestRetentionQueryResultAverage:

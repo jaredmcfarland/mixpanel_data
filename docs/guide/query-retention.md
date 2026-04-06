@@ -546,4 +546,4 @@ ws.create_bookmark(CreateBookmarkParams(
 - [Funnel Queries](query-funnels.md) — Typed funnel conversion analysis with steps, exclusions, and conversion windows
 - [Live Analytics — Retention](live-analytics.md#retention) — Legacy retention method
 - [API Reference — Workspace](../api/workspace.md) — Full method signatures
-- [API Reference — Types](../api/types.md) — RetentionEvent, RetentionQueryResult details
+- [API Reference — Types](../api/types.md) — RetentionEvent, RetentionQueryResult, RetentionAlignment, RetentionMode, RetentionMathType details

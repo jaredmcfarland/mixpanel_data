@@ -829,6 +829,10 @@ def validate_retention_args(
             order), or ``None`` for default uniform buckets.
         math: Retention aggregation function. Must be one of:
             retention_rate, unique. Default: ``"retention_rate"``.
+        mode: Display mode for retention results. Must be one of:
+            curve, trends, table. Default: ``"curve"``.
+        unit: Time unit for retention buckets. Must be one of:
+            day, week, month. Default: ``"day"``.
         from_date: Start date (YYYY-MM-DD) or ``None``.
         to_date: End date (YYYY-MM-DD) or ``None``.
         last: Number of days for relative date range.
@@ -910,6 +914,63 @@ def validate_retention_args(
                 )
             )
 
+    # R3: Time argument validation (delegated)
+    errors.extend(validate_time_args(from_date=from_date, to_date=to_date, last=last))
+
+    # R4: GroupBy validation (delegated)
+    errors.extend(validate_group_by_args(group_by=group_by))
+
+    # R5: bucket_sizes values must be positive integers
+    all_valid_ints = True
+    if bucket_sizes is not None:
+        for i, val in enumerate(bucket_sizes):
+            if isinstance(val, float):
+                all_valid_ints = False
+                errors.append(
+                    ValidationError(
+                        path=f"bucket_sizes[{i}]",
+                        message=f"bucket_sizes[{i}] must be an integer, got float",
+                        code="R5_BUCKET_SIZES_INTEGER",
+                    )
+                )
+            elif not isinstance(val, int) or isinstance(val, bool) or val <= 0:
+                all_valid_ints = False
+                errors.append(
+                    ValidationError(
+                        path="bucket_sizes",
+                        message="bucket_sizes values must be positive integers",
+                        code="R5_BUCKET_SIZES_POSITIVE",
+                    )
+                )
+
+        # R5c: Maximum bucket count
+        if len(bucket_sizes) > _MAX_RETENTION_BUCKETS:
+            errors.append(
+                ValidationError(
+                    path="bucket_sizes",
+                    message=(
+                        f"bucket_sizes has {len(bucket_sizes)} entries, "
+                        f"maximum is {_MAX_RETENTION_BUCKETS}"
+                    ),
+                    code="R5_BUCKET_SIZES_TOO_MANY",
+                )
+            )
+
+        # R6: bucket_sizes must be in strictly ascending order
+        # Only check when all elements are valid positive ints to avoid
+        # TypeError on comparison with non-numeric values.
+        if all_valid_ints and len(bucket_sizes) >= 2:
+            for i in range(1, len(bucket_sizes)):
+                if bucket_sizes[i] <= bucket_sizes[i - 1]:
+                    errors.append(
+                        ValidationError(
+                            path="bucket_sizes",
+                            message="bucket_sizes must be in strictly ascending order",
+                            code="R6_BUCKET_SIZES_ASCENDING",
+                        )
+                    )
+                    break
+
     # R7: retention_unit validation
     if retention_unit not in VALID_RETENTION_UNITS:
         errors.append(
@@ -983,63 +1044,6 @@ def validate_retention_args(
                         code="R12_EMPTY_GROUP_BY",
                     )
                 )
-
-    # R5: bucket_sizes values must be positive integers
-    all_valid_ints = True
-    if bucket_sizes is not None:
-        for i, val in enumerate(bucket_sizes):
-            if isinstance(val, float):
-                all_valid_ints = False
-                errors.append(
-                    ValidationError(
-                        path=f"bucket_sizes[{i}]",
-                        message=f"bucket_sizes[{i}] must be an integer, got float",
-                        code="R5_BUCKET_SIZES_INTEGER",
-                    )
-                )
-            elif not isinstance(val, int) or isinstance(val, bool) or val <= 0:
-                all_valid_ints = False
-                errors.append(
-                    ValidationError(
-                        path="bucket_sizes",
-                        message="bucket_sizes values must be positive integers",
-                        code="R5_BUCKET_SIZES_POSITIVE",
-                    )
-                )
-
-        # R6: bucket_sizes must be in strictly ascending order
-        # Only check when all elements are valid positive ints to avoid
-        # TypeError on comparison with non-numeric values.
-        if all_valid_ints and len(bucket_sizes) >= 2:
-            for i in range(1, len(bucket_sizes)):
-                if bucket_sizes[i] <= bucket_sizes[i - 1]:
-                    errors.append(
-                        ValidationError(
-                            path="bucket_sizes",
-                            message="bucket_sizes must be in strictly ascending order",
-                            code="R6_BUCKET_SIZES_ASCENDING",
-                        )
-                    )
-                    break
-
-        # R5c: Maximum bucket count
-        if len(bucket_sizes) > _MAX_RETENTION_BUCKETS:
-            errors.append(
-                ValidationError(
-                    path="bucket_sizes",
-                    message=(
-                        f"bucket_sizes has {len(bucket_sizes)} entries, "
-                        f"maximum is {_MAX_RETENTION_BUCKETS}"
-                    ),
-                    code="R5_BUCKET_SIZES_TOO_MANY",
-                )
-            )
-
-    # R3: Time argument validation (delegated)
-    errors.extend(validate_time_args(from_date=from_date, to_date=to_date, last=last))
-
-    # R4: GroupBy validation (delegated)
-    errors.extend(validate_group_by_args(group_by=group_by))
 
     return errors
 
