@@ -455,19 +455,19 @@ class TestQuerySavedReport:
 
 
 class TestQueryFlows:
-    """Tests for Workspace.query_flows()."""
+    """Tests for Workspace.query_saved_flows()."""
 
-    def test_query_flows_delegation(
+    def test_query_saved_flows_delegation(
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """query_flows() should delegate to LiveQueryService."""
+        """query_saved_flows() should delegate to LiveQueryService."""
         from mixpanel_data.types import FlowsResult
 
         ws = workspace_factory()
         try:
             mock_live_query = MagicMock()
-            mock_live_query.query_flows.return_value = FlowsResult(
+            mock_live_query.query_saved_flows.return_value = FlowsResult(
                 bookmark_id=12345,
                 computed_at="2024-01-15T10:00:00",
                 steps=[{"step": 1, "event": "Page View", "count": 1000}],
@@ -476,46 +476,46 @@ class TestQueryFlows:
             )
             ws._live_query = mock_live_query
 
-            result = ws.query_flows(bookmark_id=12345)
+            result = ws.query_saved_flows(bookmark_id=12345)
 
             assert result.bookmark_id == 12345
-            mock_live_query.query_flows.assert_called_once_with(bookmark_id=12345)
+            mock_live_query.query_saved_flows.assert_called_once_with(bookmark_id=12345)
         finally:
             ws.close()
 
-    def test_query_flows_returns_flows_result(
+    def test_query_saved_flows_returns_flows_result(
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """query_flows() should return FlowsResult instance."""
+        """query_saved_flows() should return FlowsResult instance."""
         from mixpanel_data.types import FlowsResult
 
         ws = workspace_factory()
         try:
             mock_live_query = MagicMock()
-            mock_live_query.query_flows.return_value = FlowsResult(
+            mock_live_query.query_saved_flows.return_value = FlowsResult(
                 bookmark_id=12345,
                 computed_at="2024-01-15T10:00:00",
             )
             ws._live_query = mock_live_query
 
-            result = ws.query_flows(bookmark_id=12345)
+            result = ws.query_saved_flows(bookmark_id=12345)
 
             assert isinstance(result, FlowsResult)
         finally:
             ws.close()
 
-    def test_query_flows_with_steps_and_breakdowns(
+    def test_query_saved_flows_with_steps_and_breakdowns(
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """query_flows() should return steps and breakdowns data."""
+        """query_saved_flows() should return steps and breakdowns data."""
         from mixpanel_data.types import FlowsResult
 
         ws = workspace_factory()
         try:
             mock_live_query = MagicMock()
-            mock_live_query.query_flows.return_value = FlowsResult(
+            mock_live_query.query_saved_flows.return_value = FlowsResult(
                 bookmark_id=12345,
                 computed_at="2024-01-15T10:00:00",
                 steps=[
@@ -529,7 +529,7 @@ class TestQueryFlows:
             )
             ws._live_query = mock_live_query
 
-            result = ws.query_flows(bookmark_id=12345)
+            result = ws.query_saved_flows(bookmark_id=12345)
 
             assert len(result.steps) == 2
             assert len(result.breakdowns) == 1

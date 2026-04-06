@@ -442,3 +442,19 @@ VALID_FLOWS_COUNT_TYPES: frozenset[str] = frozenset({"unique", "total", "session
 
 VALID_FLOWS_CHART_TYPES: frozenset[str] = frozenset({"sankey", "top-paths"})
 """Valid chart types for flows visualization."""
+
+VALID_FLOWS_MODES: frozenset[str] = frozenset({"sankey", "paths"})
+"""Valid user-facing mode values for flow queries.
+
+Maps to chart types internally: ``"sankey"`` → ``"sankey"``,
+``"paths"`` → ``"top-paths"`` (API uses ``"top-paths"``).
+"""
+
+VALID_FLOWS_CONVERSION_WINDOW_UNITS: frozenset[str] = frozenset(
+    {"day", "week", "month", "session"}
+)
+"""Valid time units for flows conversion window.
+
+Includes ``"session"`` for session-based counting
+(requires ``count_type="session"`` and ``conversion_window=1``).
+"""

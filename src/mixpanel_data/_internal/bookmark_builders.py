@@ -251,3 +251,204 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
     if f._date_unit is not None:
         entry["filterDateUnit"] = f._date_unit
     return entry
+
+
+# ---------------------------------------------------------------------------
+# Operator mapping: bookmark operator → segfilter operator
+# ---------------------------------------------------------------------------
+_SEGFILTER_OPERATOR_MAP: dict[str, str] = {
+    "equals": "==",
+    "does not equal": "!=",
+    "contains": "in",
+    "does not contain": "not in",
+    "is greater than": ">",
+    "is less than": "<",
+    "is greater than or equal to": ">=",
+    "is less than or equal to": "<=",
+    "is between": "><",
+    "is not between": "!><",
+    # Date operators reuse the same symbols
+    "was on": "==",
+    "was not on": "!=",
+    "was before": "<",
+    "was since": ">=",
+    "was between": "><",
+}
+
+# ---------------------------------------------------------------------------
+# Resource type → segfilter property source
+# ---------------------------------------------------------------------------
+_SEGFILTER_SOURCE_MAP: dict[str, str] = {
+    "events": "properties",
+    "people": "user",
+}
+
+
+def _is_iso_date(value: object) -> bool:
+    """Check whether *value* looks like a ``YYYY-MM-DD`` date string.
+
+    Args:
+        value: The object to test.
+
+    Returns:
+        ``True`` when *value* is a string matching the ISO-8601 date
+        pattern ``YYYY-MM-DD``; ``False`` otherwise.
+    """
+    if not isinstance(value, str):
+        return False
+    parts = value.split("-")
+    return len(parts) == 3 and all(p.isdigit() for p in parts) and len(parts[0]) == 4
+
+
+def _iso_to_mdy(date_str: str) -> str:
+    """Convert an ISO date string to ``MM/DD/YYYY`` format.
+
+    Args:
+        date_str: Date in ``YYYY-MM-DD`` format.
+
+    Returns:
+        Date formatted as ``MM/DD/YYYY``.
+    """
+    yyyy, mm, dd = date_str.split("-")
+    return f"{mm}/{dd}/{yyyy}"
+
+
+def _serialize_segfilter_value(
+    value: str | int | float | list[str] | list[int | float] | None,
+    prop_type: str,
+    operator: str,
+) -> str | list[str]:
+    """Serialize a Filter value into the segfilter operand format.
+
+    Applies type-specific conversions:
+
+    - **is_set / is_not_set**: empty string regardless of value.
+    - **Numbers**: stringified (``50`` becomes ``"50"``).
+    - **Number ranges** (between): each element stringified.
+    - **Booleans** (true/false): ``"true"`` or ``"false"``.
+    - **Dates** (``YYYY-MM-DD``): converted to ``MM/DD/YYYY``.
+    - **Date ranges**: each element converted.
+    - **Strings**: kept as-is.
+
+    Args:
+        value: The raw filter value from a ``Filter`` object.
+        prop_type: The property type (``"string"``, ``"number"``,
+            ``"boolean"``, ``"datetime"``).
+        operator: The *bookmark* operator string (before segfilter
+            mapping), used to detect set/not-set and boolean operators.
+
+    Returns:
+        Serialized operand — a single string or a list of strings.
+    """
+    # Existence checks always use empty string
+    if operator in ("is set", "is not set"):
+        return ""
+
+    # Boolean filters
+    if operator == "true":
+        return "true"
+    if operator == "false":
+        return "false"
+
+    # List values (equals, not-equals, between, date_between)
+    if isinstance(value, list):
+        result: list[str] = []
+        for v in value:
+            if isinstance(v, (int, float)):
+                result.append(str(int(v)) if isinstance(v, int) else str(v))
+            elif isinstance(v, str) and _is_iso_date(v):
+                result.append(_iso_to_mdy(v))
+            else:
+                result.append(str(v))
+        return result
+
+    # Scalar numeric
+    if isinstance(value, (int, float)):
+        return str(int(value)) if isinstance(value, int) else str(value)
+
+    # Scalar datetime
+    if isinstance(value, str) and prop_type == "datetime" and _is_iso_date(value):
+        return _iso_to_mdy(value)
+
+    # Scalar string (or anything else)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def build_segfilter_entry(f: Filter) -> dict[str, Any]:
+    """Convert a ``Filter`` object to a legacy segfilter dict.
+
+    Flows per-step filters use a "segfilter" format that differs from
+    the bookmark-style filter format used by insights, funnels, and
+    retention.  This function bridges the two representations.
+
+    Args:
+        f: A ``Filter`` object constructed via its class methods or
+            direct instantiation.
+
+    Returns:
+        Segfilter dict with the following structure::
+
+            {
+                "property": {"name": ..., "source": ..., "type": ...},
+                "type": <property_type>,
+                "selected_property_type": <property_type>,
+                "filter": {"operator": ..., "operand": ...},
+            }
+
+        For boolean filters (``"true"`` / ``"false"`` operators) the
+        ``"operator"`` key is omitted from the ``filter`` sub-dict.
+
+    Example:
+        ```python
+        from mixpanel_data import Filter
+        from mixpanel_data._internal.bookmark_builders import build_segfilter_entry
+
+        entry = build_segfilter_entry(Filter.equals("country", "US"))
+        # {
+        #     "property": {"name": "country", "source": "properties", "type": "string"},
+        #     "type": "string",
+        #     "selected_property_type": "string",
+        #     "filter": {"operator": "==", "operand": ["US"]},
+        # }
+        ```
+    """
+    prop_type: str = f._property_type
+    source: str = _SEGFILTER_SOURCE_MAP.get(f._resource_type, f._resource_type)
+    operator: str = f._operator
+
+    # Validate operator is known before building segfilter
+    _valid_segfilter_operators = set(_SEGFILTER_OPERATOR_MAP.keys()) | {
+        "is set",
+        "is not set",
+        "true",
+        "false",
+    }
+    if operator not in _valid_segfilter_operators:
+        msg = (
+            f"Unknown filter operator {operator!r} for segfilter conversion. "
+            f"Use Filter factory methods (e.g. Filter.equals()) instead of "
+            f"direct construction."
+        )
+        raise ValueError(msg)
+
+    operand = _serialize_segfilter_value(f._value, prop_type, operator)
+
+    # Build the filter sub-dict — boolean filters omit the operator key
+    if operator in ("true", "false"):
+        filter_dict: dict[str, Any] = {"operand": operand}
+    else:
+        # Existence operators differ by property type
+        if operator in ("is set", "is not set") and prop_type == "string":
+            segfilter_op = "set" if operator == "is set" else "not set"
+        else:
+            segfilter_op = _SEGFILTER_OPERATOR_MAP.get(operator, operator)
+        filter_dict = {"operator": segfilter_op, "operand": operand}
+
+    return {
+        "property": {"name": f._property, "source": source, "type": prop_type},
+        "type": prop_type,
+        "selected_property_type": prop_type,
+        "filter": filter_dict,
+    }

@@ -24,6 +24,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Generic, Literal, TypeVar
 
+import networkx as nx
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
@@ -8350,3 +8351,427 @@ class RetentionQueryResult(ResultWithDataFrame):
         if self.segment_averages:
             d["segment_averages"] = self.segment_averages
         return d
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Parse a value to int, returning *default* on failure.
+
+    The Mixpanel flows API returns ``totalCount`` as a string.
+    Some edge cases (empty string, ``None``, non-numeric) would
+    crash a bare ``int()`` call.
+
+    Args:
+        value: Value to parse (typically a string like ``"100"``).
+        default: Fallback when parsing fails. Default: ``0``.
+
+    Returns:
+        Parsed integer, or *default* if parsing fails.
+    """
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+# =============================================================================
+# Flow Query Types (Phase 034)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class FlowStep:
+    """An anchor event in a flow query with per-step configuration.
+
+    Each flow step identifies a specific event and optional constraints
+    (forward/reverse step counts, filters) that define a node in the
+    flow analysis.
+
+    Attributes:
+        event: The event name to anchor this step on.
+        forward: Maximum number of forward steps to trace from this event.
+            ``None`` means use the query-level default.
+        reverse: Maximum number of reverse steps to trace from this event.
+            ``None`` means use the query-level default.
+        label: Optional display label for this step. If ``None``, the event
+            name is used as the label.
+        filters: Optional list of ``Filter`` conditions to narrow the events
+            matching this step. ``None`` means no per-step filtering.
+        filters_combinator: How to combine multiple filters — ``"all"``
+            requires every filter to match (AND), ``"any"`` requires at
+            least one (OR). Defaults to ``"all"``.
+
+    Example:
+        ```python
+        step = FlowStep(
+            "Purchase",
+            forward=5,
+            reverse=3,
+            label="Buy",
+            filters=[Filter.equals("country", "US")],
+            filters_combinator="all",
+        )
+        ```
+    """
+
+    event: str
+    forward: int | None = None
+    reverse: int | None = None
+    label: str | None = None
+    filters: list[Filter] | None = None
+    filters_combinator: Literal["all", "any"] = "all"
+
+
+@dataclass(frozen=True)
+class FlowQueryResult(ResultWithDataFrame):
+    """Result of an ad-hoc flow query.
+
+    Holds the raw flow analysis data returned by the Mixpanel API,
+    including step nodes, flow edges, breakdowns, and overall conversion.
+
+    Attributes:
+        computed_at: ISO-8601 timestamp when the query was computed.
+        steps: List of step-node dicts from the API response.
+        flows: List of flow-edge dicts describing transitions between steps.
+        breakdowns: List of breakdown dicts when a breakdown property is used.
+        overall_conversion_rate: Overall conversion rate across the flow
+            (0.0 to 1.0).
+        params: The query parameters that produced this result.
+        meta: API metadata (sampling factor, request timing, etc.).
+        mode: The flow visualization mode — ``"sankey"`` for Sankey diagrams,
+            ``"paths"`` for top-paths analysis.
+
+    Example:
+        ```python
+        result = FlowQueryResult(
+            computed_at="2025-01-15T10:00:00",
+            steps=[{"event": "Login", "count": 100}],
+            flows=[{"path": ["Login", "Purchase"], "count": 30}],
+            overall_conversion_rate=0.3,
+        )
+        result.to_dict()
+        # {"computed_at": "2025-01-15T10:00:00", ...}
+        ```
+    """
+
+    computed_at: str
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    flows: list[dict[str, Any]] = field(default_factory=list)
+    breakdowns: list[dict[str, Any]] = field(default_factory=list)
+    overall_conversion_rate: float = 0.0
+    params: dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
+    mode: Literal["sankey", "paths"] = "sankey"
+    _nodes_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
+    _edges_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
+    _graph_cache: Any = field(default=None, repr=False, kw_only=True)
+
+    @property
+    def nodes_df(self) -> pd.DataFrame:
+        """Extract a flat DataFrame of nodes from sankey step data.
+
+        Each row represents a single node in the flow graph, with columns
+        for step index, event name, node type, count, anchor type,
+        custom event flag, and conversion rate change.
+
+        The ``totalCount`` field in the API response is a string and is
+        parsed to ``int`` here.
+
+        Returns:
+            DataFrame with columns: ``step``, ``event``, ``type``,
+            ``count``, ``anchor_type``, ``is_custom_event``,
+            ``conversion_rate_change``. Returns an empty DataFrame with
+            the correct columns when ``steps`` is empty.
+
+        Example:
+            ```python
+            result = workspace.query_flow(steps=[FlowStep("Login")])
+            result.nodes_df
+            #    step   event   type  count anchor_type  ...
+            # 0     0   Login  ANCHOR   100      NORMAL  ...
+            ```
+        """
+        if self._nodes_df_cache is not None:
+            return self._nodes_df_cache
+        rows: list[dict[str, Any]] = []
+        for step_idx, step in enumerate(self.steps):
+            for node in step.get("nodes", []):
+                rows.append(
+                    {
+                        "step": step_idx,
+                        "event": node.get("event", ""),
+                        "type": node.get("type", ""),
+                        "count": _safe_int(node.get("totalCount", "0")),
+                        "anchor_type": node.get("anchorType", ""),
+                        "is_custom_event": node.get("isCustomEvent", False),
+                        "conversion_rate_change": node.get("conversionRateChange", 0.0),
+                    }
+                )
+        cols = [
+            "step",
+            "event",
+            "type",
+            "count",
+            "anchor_type",
+            "is_custom_event",
+            "conversion_rate_change",
+        ]
+        result_df = (
+            pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
+        )
+        object.__setattr__(self, "_nodes_df_cache", result_df)
+        return result_df
+
+    @property
+    def edges_df(self) -> pd.DataFrame:
+        """Extract a flat DataFrame of edges from sankey step data.
+
+        Each row represents a directed edge between two nodes in the flow
+        graph, with columns for source step/event, target step/event,
+        edge count, and target node type.
+
+        The ``totalCount`` field in the API response is a string and is
+        parsed to ``int`` here.
+
+        Returns:
+            DataFrame with columns: ``source_step``, ``source_event``,
+            ``target_step``, ``target_event``, ``count``, ``target_type``.
+            Returns an empty DataFrame with the correct columns when
+            ``steps`` is empty.
+
+        Example:
+            ```python
+            result = workspace.query_flow(steps=[FlowStep("Login")])
+            result.edges_df
+            #    source_step source_event  target_step target_event  count target_type
+            # 0            0        Login            1       Search     80      NORMAL
+            ```
+        """
+        if self._edges_df_cache is not None:
+            return self._edges_df_cache
+        rows: list[dict[str, Any]] = []
+        for step_idx, step in enumerate(self.steps):
+            for node in step.get("nodes", []):
+                for edge in node.get("edges", []):
+                    rows.append(
+                        {
+                            "source_step": step_idx,
+                            "source_event": node.get("event", ""),
+                            "target_step": _safe_int(
+                                edge.get("step", step_idx + 1), default=step_idx + 1
+                            ),
+                            "target_event": edge.get("event", ""),
+                            "count": _safe_int(edge.get("totalCount", "0")),
+                            "target_type": edge.get("type", ""),
+                        }
+                    )
+        cols = [
+            "source_step",
+            "source_event",
+            "target_step",
+            "target_event",
+            "count",
+            "target_type",
+        ]
+        result_df = (
+            pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
+        )
+        object.__setattr__(self, "_edges_df_cache", result_df)
+        return result_df
+
+    @property
+    def graph(self) -> nx.DiGraph:
+        """Build a networkx directed graph from sankey step data.
+
+        Nodes are keyed as ``"{event}@{step}"`` to distinguish the same
+        event appearing at different steps (e.g. ``"Login@0"`` vs
+        ``"Login@2"``). Each node carries ``step``, ``event``, ``type``,
+        ``count``, and ``anchor_type`` attributes. Each edge carries
+        ``count`` and ``type`` attributes.
+
+        The graph is lazily constructed on first access and cached for
+        subsequent calls.
+
+        Returns:
+            A ``networkx.DiGraph`` representing the flow. Returns an
+            empty graph when ``steps`` is empty.
+
+        Example:
+            ```python
+            result = workspace.query_flow(steps=[FlowStep("Login")])
+            G = result.graph
+            G.nodes["Login@0"]["count"]
+            # 100
+            ```
+        """
+        if self._graph_cache is not None:
+            return self._graph_cache
+        graph: nx.DiGraph = nx.DiGraph()
+        for step_idx, step in enumerate(self.steps):
+            for node in step.get("nodes", []):
+                node_id = f"{node.get('event', '')}@{step_idx}"
+                graph.add_node(
+                    node_id,
+                    step=step_idx,
+                    event=node.get("event", ""),
+                    type=node.get("type", ""),
+                    count=_safe_int(node.get("totalCount", "0")),
+                    anchor_type=node.get("anchorType", ""),
+                )
+                for edge in node.get("edges", []):
+                    target_step = _safe_int(
+                        edge.get("step", step_idx + 1), default=step_idx + 1
+                    )
+                    target_id = f"{edge.get('event', '')}@{target_step}"
+                    graph.add_edge(
+                        node_id,
+                        target_id,
+                        count=_safe_int(edge.get("totalCount", "0")),
+                        type=edge.get("type", ""),
+                    )
+        object.__setattr__(self, "_graph_cache", graph)
+        return graph
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Mode-aware DataFrame from flow data.
+
+        For ``sankey`` mode, returns the same DataFrame as ``nodes_df``
+        (one row per node with step, event, type, count, etc.).
+
+        For ``paths`` mode, returns a tabular DataFrame with one row per
+        step in each flow path, including ``path_index``, ``step``,
+        ``event``, ``type``, and ``count`` columns.
+
+        Returns:
+            DataFrame built from nodes (sankey) or flow paths (paths).
+            Returns an empty DataFrame if no data is available.
+
+        Example:
+            ```python
+            result = workspace.query_flow(
+                steps=[FlowStep("Login")], mode="sankey"
+            )
+            result.df.columns
+            # Index(['step', 'event', 'type', 'count', ...])
+            ```
+        """
+        if self.mode == "sankey":
+            return self.nodes_df
+        # paths mode
+        if self._df_cache is not None:
+            return self._df_cache
+        rows: list[dict[str, Any]] = []
+        for path_idx, flow in enumerate(self.flows):
+            for step_idx, fs in enumerate(flow.get("flowSteps", [])):
+                rows.append(
+                    {
+                        "path_index": path_idx,
+                        "step": step_idx,
+                        "event": fs.get("event", ""),
+                        "type": fs.get("type", ""),
+                        "count": _safe_int(fs.get("totalCount", "0")),
+                    }
+                )
+        cols = ["path_index", "step", "event", "type", "count"]
+        result_df = (
+            pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
+        )
+        object.__setattr__(self, "_df_cache", result_df)
+        return result_df
+
+    def top_transitions(self, n: int = 10) -> list[tuple[str, str, int]]:
+        """Return the N highest-traffic transitions between events.
+
+        Uses the edges DataFrame to find the most common transitions,
+        sorted by count descending.
+
+        Args:
+            n: Maximum number of transitions to return. Default: 10.
+
+        Returns:
+            List of (source_event, target_event, count) tuples sorted
+            by count descending. Returns empty list if no edges exist.
+
+        Example:
+            ```python
+            result = ws.query_flow("Login", forward=3)
+            for src, tgt, count in result.top_transitions(n=5):
+                print(f"{src} -> {tgt}: {count}")
+            ```
+        """
+        edf = self.edges_df
+        if edf.empty:
+            return []
+        sorted_df = edf.sort_values("count", ascending=False).head(n)
+        return [
+            (
+                f"{row['source_event']}@{row['source_step']}",
+                f"{row['target_event']}@{row['target_step']}",
+                int(row["count"]),
+            )
+            for _, row in sorted_df.iterrows()
+        ]
+
+    def drop_off_summary(self) -> dict[str, Any]:
+        """Per-step drop-off counts and rates.
+
+        Analyzes each step to identify drop-off nodes (type == "DROPOFF")
+        and calculates the drop-off rate relative to total traffic at
+        that step.
+
+        Returns:
+            Dict mapping step keys (e.g., "step_0") to dicts with:
+            - total: Total count at that step
+            - dropoff: Count of users who dropped off
+            - rate: Drop-off rate (0.0 to 1.0)
+            Returns empty dict if no steps exist.
+
+        Example:
+            ```python
+            result = ws.query_flow("Login", forward=3)
+            for step, info in result.drop_off_summary().items():
+                print(f"{step}: {info['rate']:.0%} drop-off")
+            ```
+        """
+        if not self.steps:
+            return {}
+        summary: dict[str, Any] = {}
+        for step_idx, step in enumerate(self.steps):
+            total = 0
+            dropoff = 0
+            for node in step.get("nodes", []):
+                count = _safe_int(node.get("totalCount", "0"))
+                node_type = node.get("type", "")
+                total += count
+                # Count dropoff edges only from non-DROPOFF nodes.
+                # DROPOFF nodes represent prior-step dropoffs carried
+                # forward; their self-edges would double-count.
+                if node_type != "DROPOFF":
+                    for edge in node.get("edges", []):
+                        if edge.get("type") == "DROPOFF":
+                            dropoff += _safe_int(edge.get("totalCount", "0"))
+            rate = dropoff / total if total > 0 else 0.0
+            summary[f"step_{step_idx}"] = {
+                "total": total,
+                "dropoff": dropoff,
+                "rate": rate,
+            }
+        return summary
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the flow query result for JSON output.
+
+        Returns:
+            Dictionary with all FlowQueryResult fields suitable for
+            JSON serialization.
+        """
+        return {
+            "computed_at": self.computed_at,
+            "steps": self.steps,
+            "flows": self.flows,
+            "breakdowns": self.breakdowns,
+            "overall_conversion_rate": self.overall_conversion_rate,
+            "params": self.params,
+            "meta": self.meta,
+            "mode": self.mode,
+        }

@@ -778,7 +778,7 @@ def query_flows(
     workspace = get_workspace(ctx)
 
     with status_spinner(ctx, "Querying flows report..."):
-        result = workspace.query_flows(bookmark_id=bookmark_id)
+        result = workspace.query_saved_flows(bookmark_id=bookmark_id)
 
     present_result(ctx, result, format, jq_filter=jq_filter)
 

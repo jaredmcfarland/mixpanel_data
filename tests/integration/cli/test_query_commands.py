@@ -1297,7 +1297,7 @@ class TestQueryFlows:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """Test flows query with bookmark ID."""
-        mock_workspace.query_flows.return_value = FlowsResult(
+        mock_workspace.query_saved_flows.return_value = FlowsResult(
             bookmark_id=12345,
             computed_at="2024-02-01T00:00:00Z",
             steps=[{"event": "View Page", "count": 1000}],
@@ -1322,7 +1322,7 @@ class TestQueryFlows:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """Table format should use normalized data from steps."""
-        mock_workspace.query_flows.return_value = FlowsResult(
+        mock_workspace.query_saved_flows.return_value = FlowsResult(
             bookmark_id=12345,
             computed_at="2024-02-01T00:00:00Z",
             steps=[

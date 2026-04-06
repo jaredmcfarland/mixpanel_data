@@ -33,9 +33,11 @@ from typing import Any, Literal
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.bookmark_builders import (
+    build_date_range,
     build_filter_entry,
     build_filter_section,
     build_group_section,
+    build_segfilter_entry,
     build_time_section,
 )
 from mixpanel_data._internal.config import ConfigManager, Credentials
@@ -44,6 +46,8 @@ from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
 from mixpanel_data._internal.validation import (
     validate_bookmark,
+    validate_flow_args,
+    validate_flow_bookmark,
     validate_funnel_args,
     validate_query_args,
     validate_retention_args,
@@ -116,7 +120,9 @@ from mixpanel_data.types import (
     Filter,
     FlagHistoryResponse,
     FlagLimitsResponse,
+    FlowQueryResult,
     FlowsResult,
+    FlowStep,
     Formula,
     FrequencyResult,
     FunnelInfo,
@@ -211,6 +217,45 @@ def _validate_limit(limit: int | None) -> None:
         raise ValueError(f"limit must be at least {_MIN_LIMIT}, got {limit}")
     if limit > _MAX_LIMIT:
         raise ValueError(f"limit must be at most {_MAX_LIMIT}, got {limit}")
+
+
+def _check_step_direction(
+    value: int | None,
+    name: str,
+    step_path: str,
+) -> list[ValidationError]:
+    """Validate a per-step forward/reverse value for type and range.
+
+    Args:
+        value: The forward or reverse value (None means inherit default).
+        name: Field name (``"forward"`` or ``"reverse"``).
+        step_path: Parent path for error reporting (e.g. ``"steps[0]"``).
+
+    Returns:
+        List of validation errors (empty if valid).
+    """
+    if value is None:
+        return []
+    if isinstance(value, bool) or not isinstance(value, int):
+        return [
+            ValidationError(
+                path=f"{step_path}.{name}",
+                message=(
+                    f"Per-step {name} must be an integer (got {type(value).__name__})"
+                ),
+                code=f"FL_TYPE_{name.upper()}",
+            )
+        ]
+    if value < 0 or value > 5:
+        code = "FL3_FORWARD_RANGE" if name == "forward" else "FL4_REVERSE_RANGE"
+        return [
+            ValidationError(
+                path=f"{step_path}.{name}",
+                message=f"Per-step {name} must be between 0 and 5 (got {value})",
+                code=code,
+            )
+        ]
+    return []
 
 
 class Workspace:
@@ -1217,8 +1262,8 @@ class Workspace:
             to_date=to_date,
         )
 
-    def query_flows(self, bookmark_id: int) -> FlowsResult:
-        """Query a saved Flows report.
+    def query_saved_flows(self, bookmark_id: int) -> FlowsResult:
+        """Query a saved Flows report (formerly query_flows).
 
         Executes a saved Flows report by its bookmark ID, returning
         step data, breakdowns, and conversion rates.
@@ -1233,7 +1278,7 @@ class Workspace:
             ConfigError: If API credentials not available.
             QueryError: If bookmark_id is invalid or report not found.
         """
-        return self._live_query_service.query_flows(bookmark_id=bookmark_id)
+        return self._live_query_service.query_saved_flows(bookmark_id=bookmark_id)
 
     def frequency(
         self,
@@ -2766,6 +2811,478 @@ class Workspace:
                 "chartType": chart_type_map.get(mode, "retention-curve"),
             },
         }
+
+    # =========================================================================
+    # FLOW QUERY (inline ad-hoc)
+    # =========================================================================
+
+    def _build_flow_params(
+        self,
+        *,
+        steps: list[FlowStep],
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        conversion_window: int,
+        conversion_window_unit: str,
+        count_type: str,
+        cardinality: int,
+        collapse_repeated: bool,
+        hidden_events: list[str] | None,
+        mode: str,
+    ) -> dict[str, Any]:
+        """Build a flat flow bookmark params dict from typed arguments.
+
+        Constructs the Mixpanel bookmark JSON structure for flow queries.
+        Flows use a flat dict format (no ``sections``/``displayOptions``
+        wrapper) with ``steps``, ``date_range``, and display options at
+        the top level.
+
+        Args:
+            steps: List of FlowStep objects defining anchor events.
+            from_date: Start date (YYYY-MM-DD) or ``None``.
+            to_date: End date (YYYY-MM-DD) or ``None``.
+            last: Relative time range in days.
+            conversion_window: Conversion window size.
+            conversion_window_unit: Conversion window unit
+                (``"day"``, ``"week"``, ``"month"``).
+            count_type: Counting method (``"unique"``, ``"total"``,
+                ``"session"``).
+            cardinality: Number of top paths to display.
+            collapse_repeated: Whether to merge consecutive repeated
+                events.
+            hidden_events: Events to hide from the flow visualization.
+            mode: Display mode (``"sankey"`` or ``"paths"``).
+
+        Returns:
+            Flat bookmark params dict ready for API submission.
+
+        Example:
+            ```python
+            params = ws._build_flow_params(
+                steps=[FlowStep("Login")],
+                from_date=None,
+                to_date=None,
+                last=30,
+                conversion_window=7,
+                conversion_window_unit="day",
+                count_type="unique",
+                cardinality=3,
+                collapse_repeated=False,
+                hidden_events=None,
+                mode="sankey",
+            )
+            ```
+        """
+        return {
+            "steps": [
+                {
+                    "event": step.event,
+                    "step_label": step.label or step.event,
+                    "forward": step.forward or 0,
+                    "reverse": step.reverse or 0,
+                    "bool_op": ("or" if step.filters_combinator == "any" else "and"),
+                    "property_filter_params_list": [
+                        build_segfilter_entry(f) for f in (step.filters or [])
+                    ],
+                }
+                for step in steps
+            ],
+            "date_range": build_date_range(
+                from_date=from_date, to_date=to_date, last=last
+            ),
+            "chartType": "top-paths" if mode == "paths" else "sankey",
+            "flows_merge_type": "list" if mode == "paths" else "graph",
+            "count_type": count_type,
+            "cardinality_threshold": cardinality,
+            "version": 2,
+            "conversion_window": {
+                "unit": conversion_window_unit,
+                "value": conversion_window,
+            },
+            "anchor_position": 1,
+            "collapse_repeated": collapse_repeated,
+            "show_custom_events": True,
+            "hidden_events": hidden_events or [],
+            "exclusions": [],
+        }
+
+    def _resolve_and_build_flow_params(
+        self,
+        *,
+        event: str | FlowStep | Sequence[str | FlowStep],
+        forward: int,
+        reverse: int,
+        from_date: str | None,
+        to_date: str | None,
+        last: int,
+        conversion_window: int,
+        conversion_window_unit: str,
+        count_type: str,
+        cardinality: int,
+        collapse_repeated: bool,
+        hidden_events: list[str] | None,
+        mode: str,
+    ) -> dict[str, Any]:
+        """Normalize, validate, and build flow bookmark params.
+
+        Shared implementation for :meth:`query_flow` and
+        :meth:`build_flow_params`. Handles normalization of string
+        shorthand to ``FlowStep`` objects, argument validation (Layer 1),
+        bookmark construction, and structure validation (Layer 2).
+
+        Args:
+            event: Event specification — a string, ``FlowStep``, or a
+                list of strings/``FlowStep`` objects.
+            forward: Default forward step count for steps without one.
+            reverse: Default reverse step count for steps without one.
+            from_date: Start date (YYYY-MM-DD) or ``None``.
+            to_date: End date (YYYY-MM-DD) or ``None``.
+            last: Relative time range in days.
+            conversion_window: Conversion window size.
+            conversion_window_unit: Conversion window unit.
+            count_type: Counting method.
+            cardinality: Number of top paths to display.
+            collapse_repeated: Whether to merge consecutive repeated
+                events.
+            hidden_events: Events to hide from visualization.
+            mode: Display mode.
+
+        Returns:
+            Validated flow bookmark params dict.
+
+        Raises:
+            BookmarkValidationError: If validation fails at any layer.
+        """
+        # Normalize input: str → FlowStep, single → list
+        if isinstance(event, str):
+            raw_steps: list[str | FlowStep] = [FlowStep(event)]
+        elif isinstance(event, FlowStep):
+            raw_steps = [event]
+        else:
+            raw_steps = list(event)
+
+        steps: list[FlowStep] = [
+            FlowStep(s) if isinstance(s, str) else s for s in raw_steps
+        ]
+
+        # Apply top-level forward/reverse defaults to steps where None
+        steps = [
+            FlowStep(
+                event=s.event,
+                forward=s.forward if s.forward is not None else forward,
+                reverse=s.reverse if s.reverse is not None else reverse,
+                label=s.label,
+                filters=s.filters,
+                filters_combinator=s.filters_combinator,
+            )
+            for s in steps
+        ]
+
+        # Layer 0.5: Per-step validation (FlowStep-level fields that
+        # validate_flow_args cannot see — it only receives event names)
+        step_errors: list[ValidationError] = []
+
+        # Top-level forward/reverse type checks (must be int, not bool/float)
+        for fname, fval in [("forward", forward), ("reverse", reverse)]:
+            if isinstance(fval, bool) or not isinstance(fval, int):
+                step_errors.append(
+                    ValidationError(
+                        path=fname,
+                        message=(
+                            f"{fname} must be an integer (got {type(fval).__name__})"
+                        ),
+                        code=f"FL_TYPE_{fname.upper()}",
+                    )
+                )
+
+        for i, s in enumerate(steps):
+            spath = f"steps[{i}]"
+            # Per-step forward/reverse type + range checks
+            step_errors.extend(_check_step_direction(s.forward, "forward", spath))
+            step_errors.extend(_check_step_direction(s.reverse, "reverse", spath))
+            # Per-step filters_combinator must be "all" or "any"
+            if s.filters_combinator not in ("all", "any"):
+                step_errors.append(
+                    ValidationError(
+                        path=f"{spath}.filters_combinator",
+                        message=(
+                            f"filters_combinator must be 'all' or 'any' "
+                            f"(got {s.filters_combinator!r})"
+                        ),
+                        code="FL_INVALID_FILTERS_COMBINATOR",
+                    )
+                )
+        # Per-step filter property validation
+        import re
+
+        _ctrl_re = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+        for i, s in enumerate(steps):
+            if s.filters:
+                for fi, f in enumerate(s.filters):
+                    if _ctrl_re.search(f._property):
+                        step_errors.append(
+                            ValidationError(
+                                path=f"steps[{i}].filters[{fi}]",
+                                message=(
+                                    f"Filter property name contains "
+                                    f"control characters: {f._property!r}"
+                                ),
+                                code="FL_FILTER_CONTROL_CHAR",
+                            )
+                        )
+
+        # hidden_events type validation
+        if hidden_events is not None:
+            for i, he in enumerate(hidden_events):
+                if not isinstance(he, str):
+                    step_errors.append(
+                        ValidationError(
+                            path=f"hidden_events[{i}]",
+                            message=(
+                                f"hidden_events values must be strings "
+                                f"(got {type(he).__name__})"
+                            ),
+                            code="FL_INVALID_HIDDEN_EVENT_TYPE",
+                        )
+                    )
+
+        if any(e.severity == "error" for e in step_errors):
+            raise BookmarkValidationError(step_errors)
+
+        # Layer 1: Argument validation
+        event_names = [s.event for s in steps]
+        arg_errors = validate_flow_args(
+            steps=event_names,
+            forward=forward,
+            reverse=reverse,
+            count_type=count_type,
+            mode=mode,
+            cardinality=cardinality,
+            conversion_window=conversion_window,
+            conversion_window_unit=conversion_window_unit,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+        )
+        if any(e.severity == "error" for e in arg_errors):
+            raise BookmarkValidationError(arg_errors)
+
+        # Build bookmark params
+        params = self._build_flow_params(
+            steps=steps,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            conversion_window=conversion_window,
+            conversion_window_unit=conversion_window_unit,
+            count_type=count_type,
+            cardinality=cardinality,
+            collapse_repeated=collapse_repeated,
+            hidden_events=hidden_events,
+            mode=mode,
+        )
+
+        # Layer 2: Bookmark structure validation
+        bookmark_errors = validate_flow_bookmark(params)
+        if any(e.severity == "error" for e in bookmark_errors):
+            raise BookmarkValidationError(bookmark_errors)
+
+        return params
+
+    def query_flow(
+        self,
+        event: str | FlowStep | Sequence[str | FlowStep],
+        *,
+        forward: int = 3,
+        reverse: int = 0,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        conversion_window: int = 7,
+        conversion_window_unit: Literal["day", "week", "month", "session"] = "day",
+        count_type: Literal["unique", "total", "session"] = "unique",
+        cardinality: int = 3,
+        collapse_repeated: bool = False,
+        hidden_events: list[str] | None = None,
+        mode: Literal["sankey", "paths"] = "sankey",
+    ) -> FlowQueryResult:
+        """Run a typed flow query against the Mixpanel API.
+
+        Generates flow bookmark params from keyword arguments, POSTs
+        them inline to ``/arb_funnels``, and returns a structured
+        ``FlowQueryResult`` with lazy DataFrame conversion.
+
+        Args:
+            event: Event specification. Accepts an event name string,
+                a ``FlowStep`` object for per-step configuration, or
+                a list of strings/``FlowStep`` objects for multi-step
+                flows.
+            forward: Default number of forward steps to trace from
+                each anchor event. Overridden by per-step values.
+                Default: ``3``.
+            reverse: Default number of reverse steps to trace from
+                each anchor event. Overridden by per-step values.
+                Default: ``0``.
+            from_date: Start date (YYYY-MM-DD). If set, overrides
+                ``last``.
+            to_date: End date (YYYY-MM-DD). Requires ``from_date``.
+            last: Relative time range in days. Default: 30.
+            conversion_window: Conversion window size. Default: 7.
+            conversion_window_unit: Conversion window unit.
+                Default: ``"day"``.
+            count_type: Counting method for flow analysis.
+                Default: ``"unique"``.
+            cardinality: Number of top paths to display.
+                Default: ``3``.
+            collapse_repeated: Whether to merge consecutive repeated
+                events. Default: ``False``.
+            hidden_events: Events to hide from the flow visualization.
+                Default: ``None``.
+            mode: Flow visualization mode. Default: ``"sankey"``.
+
+        Returns:
+            FlowQueryResult with steps, flows, breakdowns, and
+            metadata.
+
+        Raises:
+            BookmarkValidationError: If arguments violate validation
+                rules (before API call).
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid query parameters.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Simple flow query
+            result = ws.query_flow("Login")
+            print(result.overall_conversion_rate)
+
+            # With configuration
+            result = ws.query_flow(
+                FlowStep("Login", forward=5, reverse=2),
+                mode="paths",
+                last=90,
+            )
+            print(result.df)
+            ```
+        """
+        params = self._resolve_and_build_flow_params(
+            event=event,
+            forward=forward,
+            reverse=reverse,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            conversion_window=conversion_window,
+            conversion_window_unit=conversion_window_unit,
+            count_type=count_type,
+            cardinality=cardinality,
+            collapse_repeated=collapse_repeated,
+            hidden_events=hidden_events,
+            mode=mode,
+        )
+
+        credentials = self._credentials
+        if credentials is None:
+            raise ConfigError(
+                "API access requires credentials. "
+                "Use Workspace() with credentials instead of Workspace.open()."
+            )
+        return self._live_query_service.query_flow(
+            bookmark_params=params,
+            project_id=int(credentials.project_id),
+            mode=mode,
+        )
+
+    def build_flow_params(
+        self,
+        event: str | FlowStep | Sequence[str | FlowStep],
+        *,
+        forward: int = 3,
+        reverse: int = 0,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        last: int = 30,
+        conversion_window: int = 7,
+        conversion_window_unit: Literal["day", "week", "month", "session"] = "day",
+        count_type: Literal["unique", "total", "session"] = "unique",
+        cardinality: int = 3,
+        collapse_repeated: bool = False,
+        hidden_events: list[str] | None = None,
+        mode: Literal["sankey", "paths"] = "sankey",
+    ) -> dict[str, Any]:
+        """Build validated flow bookmark params without executing.
+
+        Accepts the same arguments as :meth:`query_flow` but returns
+        the generated bookmark params ``dict`` instead of querying
+        the API. Useful for debugging, inspecting generated JSON,
+        persisting via :meth:`create_bookmark`, or testing.
+
+        Args:
+            event: Event specification. Accepts an event name string,
+                a ``FlowStep`` object, or a list of strings/``FlowStep``
+                objects.
+            forward: Default forward step count. Default: ``3``.
+            reverse: Default reverse step count. Default: ``0``.
+            from_date: Start date (YYYY-MM-DD) or ``None``.
+            to_date: End date (YYYY-MM-DD) or ``None``.
+            last: Relative time range in days. Default: 30.
+            conversion_window: Conversion window size. Default: 7.
+            conversion_window_unit: Conversion window unit.
+                Default: ``"day"``.
+            count_type: Counting method. Default: ``"unique"``.
+            cardinality: Number of top paths. Default: ``3``.
+            collapse_repeated: Merge repeated events. Default: ``False``.
+            hidden_events: Events to hide. Default: ``None``.
+            mode: Display mode. Default: ``"sankey"``.
+
+        Returns:
+            Flat bookmark params dict with ``steps``, ``date_range``,
+            ``chartType``, ``count_type``, and ``version`` keys.
+
+        Raises:
+            BookmarkValidationError: If arguments violate validation
+                rules.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Inspect generated JSON
+            params = ws.build_flow_params("Login")
+            print(json.dumps(params, indent=2))
+
+            # Save as a report
+            ws.create_bookmark(CreateBookmarkParams(
+                name="Login Flow",
+                bookmark_type="flows",
+                params=params,
+            ))
+            ```
+        """
+        return self._resolve_and_build_flow_params(
+            event=event,
+            forward=forward,
+            reverse=reverse,
+            from_date=from_date,
+            to_date=to_date,
+            last=last,
+            conversion_window=conversion_window,
+            conversion_window_unit=conversion_window_unit,
+            count_type=count_type,
+            cardinality=cardinality,
+            collapse_repeated=collapse_repeated,
+            hidden_events=hidden_events,
+            mode=mode,
+        )
+
+    # =========================================================================
+    # RETENTION QUERY (inline ad-hoc)
+    # =========================================================================
 
     def _resolve_and_build_retention_params(
         self,

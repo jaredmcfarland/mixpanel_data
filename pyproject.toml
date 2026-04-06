@@ -33,6 +33,7 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.0",
     "jq>=1.9.0",
+    "networkx>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -99,6 +100,10 @@ warn_return_any = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "networkx.*"
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"

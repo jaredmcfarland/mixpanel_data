@@ -25,6 +25,7 @@ from mixpanel_data.types import (
     EngagementBucket,
     EngagementDistributionResult,
     EventCountsResult,
+    FlowQueryResult,
     FlowsResult,
     FrequencyResult,
     FunnelQueryResult,
@@ -1260,7 +1261,57 @@ class LiveQueryService:
         raw = self._api_client.insights_query(body)
         return _transform_retention_result(raw, bookmark_params)
 
-    def query_flows(
+    def query_flow(
+        self,
+        bookmark_params: dict[str, Any],
+        project_id: int,
+        mode: str = "sankey",
+    ) -> FlowQueryResult:
+        """Execute an inline flow query with pre-built bookmark params.
+
+        Posts flow bookmark params to the ``/arb_funnels`` endpoint with
+        the appropriate ``query_type`` (``flows_sankey`` or
+        ``flows_top_paths``), then transforms the response into a
+        structured ``FlowQueryResult``.
+
+        Args:
+            bookmark_params: Pre-built flow bookmark params dict (flat
+                structure with ``steps``, ``date_range``, ``chartType``,
+                ``count_type``, and ``version`` keys).
+            project_id: Mixpanel project ID.
+            mode: Flow visualization mode — ``"sankey"`` for Sankey
+                diagrams, ``"paths"`` for top-paths analysis.
+                Default: ``"sankey"``.
+
+        Returns:
+            FlowQueryResult with steps, flows, breakdowns, conversion
+            rate, and metadata.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid bookmark params or error-as-200.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            result = live_query.query_flow(
+                bookmark_params={"steps": [...], "chartType": "sankey", ...},
+                project_id=12345,
+                mode="sankey",
+            )
+            print(f"Conversion: {result.overall_conversion_rate:.1%}")
+            ```
+        """
+        query_type = "flows_top_paths" if mode == "paths" else "flows_sankey"
+        body: dict[str, Any] = {
+            "bookmark": bookmark_params,
+            "project_id": project_id,
+            "query_type": query_type,
+        }
+        raw = self._api_client.arb_funnels_query(body)
+        return _transform_flow_result(raw, bookmark_params, mode=mode)
+
+    def query_saved_flows(
         self,
         bookmark_id: int,
     ) -> FlowsResult:
@@ -1282,12 +1333,12 @@ class LiveQueryService:
 
         Example:
             ```python
-            result = live_query.query_flows(bookmark_id=12345678)
+            result = live_query.query_saved_flows(bookmark_id=12345678)
             print(f"Conversion rate: {result.overall_conversion_rate:.1%}")
             print(result.df.head())
             ```
         """
-        raw = self._api_client.query_flows(bookmark_id=bookmark_id)
+        raw = self._api_client.query_saved_flows(bookmark_id=bookmark_id)
         return _transform_flows(raw, bookmark_id)
 
     def frequency(
@@ -2009,6 +2060,70 @@ def _transform_saved_report(
         to_date=to_date,
         headers=headers,
         series=series,
+    )
+
+
+def _transform_flow_result(
+    raw: dict[str, Any],
+    bookmark_params: dict[str, Any],
+    mode: str,
+) -> FlowQueryResult:
+    """Transform raw arb_funnels flow response into FlowQueryResult.
+
+    Extracts computed_at, steps, flows, breakdowns, and overall
+    conversion rate from the API response. Handles both sankey and
+    top-paths modes. Detects error-as-200 responses and raises
+    ``QueryError``.
+
+    Args:
+        raw: Raw API response dictionary from arb_funnels query.
+        bookmark_params: The bookmark params dict sent to the API
+            (preserved in the result for debugging/persistence).
+        mode: Flow visualization mode — ``"sankey"`` or ``"paths"``.
+
+    Returns:
+        Typed FlowQueryResult with steps, flows, breakdowns,
+        conversion rate, and metadata.
+
+    Raises:
+        QueryError: If the response contains an error field
+            (error-as-200 pattern).
+
+    Example:
+        ```python
+        result = _transform_flow_result(
+            raw={"computed_at": "...", "steps": [...], ...},
+            bookmark_params={"steps": [...], ...},
+            mode="sankey",
+        )
+        print(result.overall_conversion_rate)
+        ```
+    """
+    # Check for error responses that leaked through as HTTP 200
+    if "error" in raw:
+        raise QueryError(
+            f"Flow query failed: {raw['error']}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    computed_at: str = raw.get("computed_at", "")
+    steps: list[dict[str, Any]] = raw.get("steps", [])
+    flows: list[dict[str, Any]] = raw.get("flows", [])
+    breakdowns: list[dict[str, Any]] = raw.get("breakdowns", [])
+    overall_conversion_rate: float = raw.get("overallConversionRate", 0.0)
+    metadata: dict[str, Any] = raw.get("metadata", {})
+
+    return FlowQueryResult(
+        computed_at=computed_at,
+        steps=steps,
+        flows=flows,
+        breakdowns=breakdowns,
+        overall_conversion_rate=overall_conversion_rate,
+        params=bookmark_params,
+        meta=metadata,
+        mode="paths" if mode == "paths" else "sankey",
     )
 
 

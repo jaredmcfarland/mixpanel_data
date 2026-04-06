@@ -244,10 +244,12 @@ class TestListBookmarksErrors:
 
 
 class TestQueryFlows:
-    """Tests for MixpanelAPIClient.query_flows()."""
+    """Tests for MixpanelAPIClient.query_saved_flows()."""
 
-    def test_query_flows_endpoint_url(self, test_credentials: Credentials) -> None:
-        """query_flows() should call /api/query/arb_funnels with query_type=flows_sankey."""
+    def test_query_saved_flows_endpoint_url(
+        self, test_credentials: Credentials
+    ) -> None:
+        """query_saved_flows() should call /api/query/arb_funnels with query_type=flows_sankey."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             assert "/api/query/arb_funnels" in str(request.url)
@@ -264,12 +266,12 @@ class TestQueryFlows:
             )
 
         with create_mock_client(test_credentials, handler) as client:
-            client.query_flows(bookmark_id=12345)
+            client.query_saved_flows(bookmark_id=12345)
 
-    def test_query_flows_returns_raw_response(
+    def test_query_saved_flows_returns_raw_response(
         self, test_credentials: Credentials
     ) -> None:
-        """query_flows() should return raw API response."""
+        """query_saved_flows() should return raw API response."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(
@@ -287,15 +289,17 @@ class TestQueryFlows:
             )
 
         with create_mock_client(test_credentials, handler) as client:
-            result = client.query_flows(bookmark_id=12345)
+            result = client.query_saved_flows(bookmark_id=12345)
 
         assert "steps" in result
         assert len(result["steps"]) == 2
         assert result["overallConversionRate"] == 0.5
         assert result["computed_at"] == "2024-01-15T10:00:00"
 
-    def test_query_flows_auth_error_on_401(self, test_credentials: Credentials) -> None:
-        """query_flows() should raise AuthenticationError on 401."""
+    def test_query_saved_flows_auth_error_on_401(
+        self, test_credentials: Credentials
+    ) -> None:
+        """query_saved_flows() should raise AuthenticationError on 401."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(401, json={"error": "Invalid credentials"})
@@ -304,12 +308,12 @@ class TestQueryFlows:
             create_mock_client(test_credentials, handler) as client,
             pytest.raises(AuthenticationError),
         ):
-            client.query_flows(bookmark_id=12345)
+            client.query_saved_flows(bookmark_id=12345)
 
-    def test_query_flows_query_error_on_404(
+    def test_query_saved_flows_query_error_on_404(
         self, test_credentials: Credentials
     ) -> None:
-        """query_flows() should raise QueryError on 404 (bookmark not found)."""
+        """query_saved_flows() should raise QueryError on 404 (bookmark not found)."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(404, json={"error": "Bookmark not found"})
@@ -318,7 +322,7 @@ class TestQueryFlows:
             create_mock_client(test_credentials, handler) as client,
             pytest.raises(QueryError) as exc_info,
         ):
-            client.query_flows(bookmark_id=99999)
+            client.query_saved_flows(bookmark_id=99999)
 
         assert "Bookmark not found" in str(exc_info.value)
 
