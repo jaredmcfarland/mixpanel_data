@@ -31,10 +31,13 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_FILTERS_DETERMINER,
     VALID_MATH_FUNNELS,
     VALID_MATH_INSIGHTS,
+    VALID_MATH_RETENTION,
     VALID_METRIC_TYPES,
     VALID_PER_USER_AGGREGATIONS,
     VALID_PROPERTY_TYPES,
     VALID_RESOURCE_TYPES,
+    VALID_RETENTION_ALIGNMENT,
+    VALID_RETENTION_UNITS,
     VALID_TIME_UNITS,
 )
 from mixpanel_data.exceptions import ValidationError
@@ -61,6 +64,7 @@ _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _INVISIBLE_RE = re.compile(r"^[\s\u200b\u200c\u200d\ufeff\u00ad\u2060]*$")
 _MAX_LAST_DAYS = 3650  # 10 years — generous but sane upper bound
 _MAX_ROLLING = 365  # rolling window sanity cap
+_MAX_FILTER_VALUES = 1000  # server rejects queries with very large filter value lists
 
 
 def _is_valid_date(date_str: str) -> bool:
@@ -776,6 +780,266 @@ def validate_funnel_args(
 
 
 # =============================================================================
+# Retention argument validation (R1-R9)
+# =============================================================================
+
+_VALID_RETENTION_MATH_PUBLIC: frozenset[str] = frozenset({"retention_rate", "unique"})
+"""Public-facing retention math types (Layer 1).
+
+The L2 validator uses ``VALID_MATH_RETENTION`` which also includes
+``"total"`` and ``"average"`` for internal bookmark params.
+"""
+
+_VALID_RETENTION_MODES: frozenset[str] = frozenset({"curve", "trends", "table"})
+"""Valid display modes for retention queries."""
+
+_MAX_RETENTION_BUCKETS = 730
+"""Maximum number of custom retention buckets allowed by the API."""
+
+
+def validate_retention_args(
+    *,
+    born_event: str,
+    return_event: str,
+    retention_unit: str = "week",
+    alignment: str = "birth",
+    bucket_sizes: list[int] | None = None,
+    math: str = "retention_rate",
+    mode: str = "curve",
+    unit: str = "day",
+    from_date: str | None = None,
+    to_date: str | None = None,
+    last: int = 30,
+    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+) -> list[ValidationError]:
+    """Validate retention query arguments before bookmark construction (Layer 1).
+
+    Implements retention-specific validation rules R1-R9 plus reused
+    time and group-by validators. Returns all errors found so callers
+    can fix multiple issues in a single pass.
+
+    Args:
+        born_event: Event name that defines cohort membership.
+        return_event: Event name that defines return.
+        retention_unit: Retention period unit. Must be one of:
+            day, week, month. Default: ``"week"``.
+        alignment: Retention alignment mode. Must be one of:
+            birth, interval_start. Default: ``"birth"``.
+        bucket_sizes: Custom bucket sizes (positive ints in ascending
+            order), or ``None`` for default uniform buckets.
+        math: Retention aggregation function. Must be one of:
+            retention_rate, unique. Default: ``"retention_rate"``.
+        from_date: Start date (YYYY-MM-DD) or ``None``.
+        to_date: End date (YYYY-MM-DD) or ``None``.
+        last: Number of days for relative date range.
+        group_by: Breakdown specification.
+
+    Returns:
+        List of validation errors. Empty list means all arguments are valid.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.validation import validate_retention_args
+
+        errors = validate_retention_args(
+            born_event="Signup",
+            return_event="Login",
+        )
+        assert errors == []
+        ```
+    """
+    errors: list[ValidationError] = []
+
+    # R1: born_event must be non-empty string
+    if not born_event.strip():
+        errors.append(
+            ValidationError(
+                path="born_event",
+                message="born_event must be a non-empty string",
+                code="R1_EMPTY_BORN_EVENT",
+            )
+        )
+    else:
+        # R1b: No control characters
+        if _CONTROL_CHAR_RE.search(born_event):
+            errors.append(
+                ValidationError(
+                    path="born_event",
+                    message=(f"born_event contains control characters: {born_event!r}"),
+                    code="R1_CONTROL_CHAR_BORN_EVENT",
+                )
+            )
+        # R1c: No invisible-only names
+        if _INVISIBLE_RE.match(born_event):
+            errors.append(
+                ValidationError(
+                    path="born_event",
+                    message="born_event contains only invisible characters",
+                    code="R1_INVISIBLE_BORN_EVENT",
+                )
+            )
+
+    # R2: return_event must be non-empty string
+    if not return_event.strip():
+        errors.append(
+            ValidationError(
+                path="return_event",
+                message="return_event must be a non-empty string",
+                code="R2_EMPTY_RETURN_EVENT",
+            )
+        )
+    else:
+        # R2b: No control characters
+        if _CONTROL_CHAR_RE.search(return_event):
+            errors.append(
+                ValidationError(
+                    path="return_event",
+                    message=(
+                        f"return_event contains control characters: {return_event!r}"
+                    ),
+                    code="R2_CONTROL_CHAR_RETURN_EVENT",
+                )
+            )
+        # R2c: No invisible-only names
+        if _INVISIBLE_RE.match(return_event):
+            errors.append(
+                ValidationError(
+                    path="return_event",
+                    message="return_event contains only invisible characters",
+                    code="R2_INVISIBLE_RETURN_EVENT",
+                )
+            )
+
+    # R7: retention_unit validation
+    if retention_unit not in VALID_RETENTION_UNITS:
+        errors.append(
+            _enum_error(
+                path="retention_unit",
+                field="retention_unit",
+                value=retention_unit,
+                valid=VALID_RETENTION_UNITS,
+                code="R7_INVALID_RETENTION_UNIT",
+            )
+        )
+
+    # R8: alignment validation
+    if alignment not in VALID_RETENTION_ALIGNMENT:
+        errors.append(
+            _enum_error(
+                path="alignment",
+                field="alignment",
+                value=alignment,
+                valid=VALID_RETENTION_ALIGNMENT,
+                code="R8_INVALID_ALIGNMENT",
+            )
+        )
+
+    # R9: math validation (public-facing subset)
+    if math not in _VALID_RETENTION_MATH_PUBLIC:
+        errors.append(
+            _enum_error(
+                path="math",
+                field="math",
+                value=math,
+                valid=_VALID_RETENTION_MATH_PUBLIC,
+                code="R9_INVALID_MATH",
+            )
+        )
+
+    # R10: mode validation
+    if mode not in _VALID_RETENTION_MODES:
+        errors.append(
+            _enum_error(
+                path="mode",
+                field="mode",
+                value=str(mode),
+                valid=_VALID_RETENTION_MODES,
+                code="R10_INVALID_MODE",
+            )
+        )
+
+    # R11: unit must be valid for retention context (day, week, month only)
+    if unit not in VALID_RETENTION_UNITS:
+        errors.append(
+            _enum_error(
+                path="unit",
+                field="unit",
+                value=str(unit),
+                valid=VALID_RETENTION_UNITS,
+                code="R11_INVALID_UNIT",
+            )
+        )
+
+    # R12: group_by strings must be non-empty
+    if group_by is not None:
+        gb_list = group_by if isinstance(group_by, list) else [group_by]
+        for i, g in enumerate(gb_list):
+            if isinstance(g, str) and not g.strip():
+                gpath = f"group_by[{i}]" if len(gb_list) > 1 else "group_by"
+                errors.append(
+                    ValidationError(
+                        path=gpath,
+                        message="group_by property name must be a non-empty string",
+                        code="R12_EMPTY_GROUP_BY",
+                    )
+                )
+
+    # R5: bucket_sizes values must be positive integers
+    if bucket_sizes is not None:
+        for i, val in enumerate(bucket_sizes):
+            if isinstance(val, float):
+                errors.append(
+                    ValidationError(
+                        path=f"bucket_sizes[{i}]",
+                        message=f"bucket_sizes[{i}] must be an integer, got float",
+                        code="R5_BUCKET_SIZES_INTEGER",
+                    )
+                )
+            elif not isinstance(val, int) or isinstance(val, bool) or val <= 0:
+                errors.append(
+                    ValidationError(
+                        path="bucket_sizes",
+                        message="bucket_sizes values must be positive integers",
+                        code="R5_BUCKET_SIZES_POSITIVE",
+                    )
+                )
+
+        # R6: bucket_sizes must be in strictly ascending order
+        if len(bucket_sizes) >= 2:
+            for i in range(1, len(bucket_sizes)):
+                if bucket_sizes[i] <= bucket_sizes[i - 1]:
+                    errors.append(
+                        ValidationError(
+                            path="bucket_sizes",
+                            message="bucket_sizes must be in strictly ascending order",
+                            code="R6_BUCKET_SIZES_ASCENDING",
+                        )
+                    )
+                    break
+
+        # R5c: Maximum bucket count
+        if len(bucket_sizes) > _MAX_RETENTION_BUCKETS:
+            errors.append(
+                ValidationError(
+                    path="bucket_sizes",
+                    message=(
+                        f"bucket_sizes has {len(bucket_sizes)} entries, "
+                        f"maximum is {_MAX_RETENTION_BUCKETS}"
+                    ),
+                    code="R5_BUCKET_SIZES_TOO_MANY",
+                )
+            )
+
+    # R3: Time argument validation (delegated)
+    errors.extend(validate_time_args(from_date=from_date, to_date=to_date, last=last))
+
+    # R4: GroupBy validation (delegated)
+    errors.extend(validate_group_by_args(group_by=group_by))
+
+    return errors
+
+
+# =============================================================================
 # Layer 1: Argument Validation (V0-V14)
 # =============================================================================
 
@@ -1399,9 +1663,12 @@ def _validate_measurement(
     # B9: Validate math type (context-dependent for funnel/retention)
     math = measurement.get("math")
     if math is not None:
-        valid_math = (
-            VALID_MATH_FUNNELS if bookmark_type == "funnels" else VALID_MATH_INSIGHTS
-        )
+        if bookmark_type == "funnels":
+            valid_math = VALID_MATH_FUNNELS
+        elif bookmark_type == "retention":
+            valid_math = VALID_MATH_RETENTION
+        else:
+            valid_math = VALID_MATH_INSIGHTS
         if math not in valid_math:
             errors.append(
                 _enum_error(
@@ -1643,6 +1910,30 @@ def _validate_filter_clause(
                 valid=VALID_FILTER_OPERATORS,
                 code="B15_INVALID_FILTER_OPERATOR",
                 severity="warning",
+            )
+        )
+
+    # B20: Validate filterValue is non-empty when present
+    fv = clause.get("filterValue")
+    if isinstance(fv, list) and len(fv) == 0:
+        errors.append(
+            ValidationError(
+                path=f"{path}.filterValue",
+                message="filterValue must not be an empty list",
+                code="B20_EMPTY_FILTER_VALUE",
+            )
+        )
+
+    # B21: Validate filterValue list length
+    if isinstance(fv, list) and len(fv) > _MAX_FILTER_VALUES:
+        errors.append(
+            ValidationError(
+                path=f"{path}.filterValue",
+                message=(
+                    f"filterValue has {len(fv)} entries, "
+                    f"maximum is {_MAX_FILTER_VALUES}"
+                ),
+                code="B21_FILTER_VALUE_TOO_MANY",
             )
         )
 

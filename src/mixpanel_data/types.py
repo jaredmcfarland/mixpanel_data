@@ -8091,3 +8091,188 @@ class FunnelQueryResult(ResultWithDataFrame):
             "params": self.params,
             "meta": self.meta,
         }
+
+
+# =============================================================================
+# Retention Query Types (Phase 033)
+# =============================================================================
+
+RetentionMathType = Literal["retention_rate", "unique"]
+"""Aggregation function for retention query metrics.
+
++----------------+----------------------------------------------+
+| Value          | Meaning                                      |
++================+==============================================+
+| retention_rate | Percentage of cohort retained (default)      |
++----------------+----------------------------------------------+
+| unique         | Raw unique user count per bucket              |
++----------------+----------------------------------------------+
+
+Maps directly to the ``measurement.math`` field in bookmark JSON.
+"""
+
+
+@dataclass(frozen=True)
+class RetentionEvent:
+    """An event specification for retention queries.
+
+    Wraps an event name with optional per-event filters. Use plain
+    event-name strings for simple retention queries. Use ``RetentionEvent``
+    objects when you need per-event filter conditions.
+
+    Attributes:
+        event: Mixpanel event name.
+        filters: Per-event filter conditions. Each ``Filter`` restricts
+            which events count. ``None`` means no filters.
+        filters_combinator: How per-event filters combine.
+            ``"all"`` requires all filters to match (AND logic).
+            ``"any"`` requires any filter to match (OR logic).
+
+    Example:
+        ```python
+        from mixpanel_data import RetentionEvent, Filter
+
+        # Simple event (equivalent to just using "Signup" string)
+        born = RetentionEvent("Signup")
+
+        # Event with per-event filter
+        born = RetentionEvent(
+            "Signup",
+            filters=[Filter.equals("source", "organic")],
+        )
+
+        ws.query_retention(born, "Login")
+        ```
+    """
+
+    event: str
+    """Mixpanel event name."""
+
+    filters: list[Filter] | None = None
+    """Per-event filter conditions."""
+
+    filters_combinator: Literal["all", "any"] = "all"
+    """How per-event filters combine (AND/OR)."""
+
+
+@dataclass(frozen=True)
+class RetentionQueryResult(ResultWithDataFrame):
+    """Result of a retention query via the insights API.
+
+    Contains cohort-level retention data, the generated bookmark params
+    (for debugging or persisting as a saved report), and a lazy
+    DataFrame conversion.
+
+    Attributes:
+        computed_at: When the query was computed (ISO format).
+        from_date: Effective start date from the response.
+        to_date: Effective end date from the response.
+        cohorts: Cohort-level retention data. Keys are cohort date
+            strings, values are dicts with ``first`` (cohort size),
+            ``counts`` (list of retained user counts per bucket),
+            and ``rates`` (list of retention rates per bucket).
+        average: Synthetic ``$average`` cohort data. Same structure
+            as individual cohort entries.
+        params: Generated bookmark params sent to the API
+            (for debugging or persistence via ``create_bookmark``).
+        meta: Response metadata (e.g. ``sampling_factor``,
+            ``is_cached``).
+
+    Example:
+        ```python
+        result = ws.query_retention("Signup", "Login")
+
+        # Cohort data
+        for date, data in result.cohorts.items():
+            print(f"{date}: {data['first']} users, "
+                  f"retention: {data['rates']}")
+
+        # Average retention
+        print(result.average)
+
+        # DataFrame view
+        print(result.df)
+        #   cohort_date  bucket  count  rate
+
+        # Save as a report
+        ws.create_bookmark(CreateBookmarkParams(
+            name="Signup → Login Retention",
+            bookmark_type="retention",
+            params=result.params,
+        ))
+        ```
+    """
+
+    computed_at: str
+    """When the query was computed (ISO format)."""
+
+    from_date: str
+    """Effective start date from the response."""
+
+    to_date: str
+    """Effective end date from the response."""
+
+    cohorts: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """Cohort-level retention data (cohort_date → {first, counts, rates})."""
+
+    average: dict[str, Any] = field(default_factory=dict)
+    """Synthetic $average cohort data."""
+
+    params: dict[str, Any] = field(default_factory=dict)
+    """Generated bookmark params sent to API."""
+
+    meta: dict[str, Any] = field(default_factory=dict)
+    """Response metadata (sampling_factor, is_cached, etc.)."""
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Convert to DataFrame with one row per (cohort_date, bucket) pair.
+
+        Columns: ``cohort_date``, ``bucket``, ``count``, ``rate``.
+
+        Returns:
+            Normalized DataFrame. Empty DataFrame with correct columns
+            if ``cohorts`` is empty.
+        """
+        if self._df_cache is not None:
+            return self._df_cache
+
+        cols = ["cohort_date", "bucket", "count", "rate"]
+
+        rows: list[dict[str, Any]] = []
+        for cohort_date in sorted(self.cohorts.keys()):
+            cohort = self.cohorts[cohort_date]
+            counts = cohort.get("counts", [])
+            rates = cohort.get("rates", [])
+            for i, count in enumerate(counts):
+                rows.append(
+                    {
+                        "cohort_date": cohort_date,
+                        "bucket": i,
+                        "count": count,
+                        "rate": rates[i] if i < len(rates) else 0.0,
+                    }
+                )
+
+        result_df = (
+            pd.DataFrame(rows, columns=cols) if rows else pd.DataFrame(columns=cols)
+        )
+
+        object.__setattr__(self, "_df_cache", result_df)
+        return result_df
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns:
+            Dictionary with all RetentionQueryResult fields.
+        """
+        return {
+            "computed_at": self.computed_at,
+            "from_date": self.from_date,
+            "to_date": self.to_date,
+            "cohorts": self.cohorts,
+            "average": self.average,
+            "params": self.params,
+            "meta": self.meta,
+        }

@@ -300,6 +300,7 @@ Task(subagent_type="mixpanel-data:narrator", prompt="...")
 - Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames) (029-insights-query-api)
 - N/A — live query only, no local persistence (029-insights-query-api)
 - Python 3.10+ (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), pandas (DataFrames) (031-shared-infra-extraction)
+- Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames) (033-retention-query)
 
 ## Recent Changes
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)

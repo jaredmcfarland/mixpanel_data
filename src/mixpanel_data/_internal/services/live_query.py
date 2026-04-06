@@ -41,6 +41,7 @@ from mixpanel_data.types import (
     PropertyDistributionResult,
     PropertyValueCount,
     QueryResult,
+    RetentionQueryResult,
     RetentionResult,
     SavedReportResult,
     SegmentationResult,
@@ -496,6 +497,89 @@ def _transform_funnel_result(
         to_date=date_range.get("to_date", ""),
         steps_data=steps_data,
         series=series,
+        params=bookmark_params,
+        meta=raw.get("meta", {}),
+    )
+
+
+def _transform_retention_result(
+    raw: dict[str, Any],
+    bookmark_params: dict[str, Any],
+) -> RetentionQueryResult:
+    """Transform raw insights query retention response into RetentionQueryResult.
+
+    Extracts computed_at, date_range, cohort data from the series, and
+    the synthetic ``$average`` cohort. Validates that the response
+    contains expected fields and is not an error-as-200.
+
+    The insights API always wraps retention data in a metric name key::
+
+        series = {
+            "EventA and then EventB": {
+                "2025-01-01T00:00:00+00:00": {"first": 100, "counts": [...], "rates": [...]},
+                "$average": {"first": 90, "counts": [...], "rates": [...]},
+            }
+        }
+
+    This function unwraps the outer metric key to extract the cohort dict.
+
+    Args:
+        raw: Raw API response dictionary from insights query.
+        bookmark_params: The bookmark params dict sent to the API
+            (preserved in the result for debugging/persistence).
+
+    Returns:
+        Typed RetentionQueryResult with cohort data and metadata.
+
+    Raises:
+        QueryError: If the response contains an error or is missing
+            required fields.
+    """
+    # Check for error responses that leaked through as HTTP 200
+    if "error" in raw:
+        raise QueryError(
+            f"Retention query failed: {raw['error']}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    if "series" not in raw:
+        raise QueryError(
+            "Retention query returned unexpected response shape "
+            f"(missing 'series' key). Keys present: {sorted(raw.keys())}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
+    date_range = raw.get("date_range", {})
+    series = raw.get("series", {})
+
+    # Unwrap the metric name key: series = {"metric_name": {date_cohorts}}
+    # The API always returns exactly one top-level key (the metric name).
+    cohort_data: dict[str, Any] = {}
+    if isinstance(series, dict):
+        for _metric_key, value in series.items():
+            if isinstance(value, dict):
+                cohort_data = value
+                break
+
+    # Extract $average synthetic cohort and date-keyed cohorts
+    average: dict[str, Any] = {}
+    cohorts: dict[str, dict[str, Any]] = {}
+    for key, value in cohort_data.items():
+        if key == "$average":
+            average = value if isinstance(value, dict) else {}
+        elif isinstance(value, dict):
+            cohorts[key] = value
+
+    return RetentionQueryResult(
+        computed_at=raw.get("computed_at", ""),
+        from_date=date_range.get("from_date", ""),
+        to_date=date_range.get("to_date", ""),
+        cohorts=cohorts,
+        average=average,
         params=bookmark_params,
         meta=raw.get("meta", {}),
     )
@@ -1037,6 +1121,48 @@ class LiveQueryService:
         }
         raw = self._api_client.insights_query(body)
         return _transform_funnel_result(raw, bookmark_params)
+
+    def query_retention(
+        self,
+        bookmark_params: dict[str, Any],
+        project_id: int,
+    ) -> RetentionQueryResult:
+        """Execute an inline retention query with pre-built bookmark params.
+
+        Posts retention bookmark params to the insights query endpoint
+        (the API detects ``behavior.type == "retention"`` and delegates
+        to the retention query engine), then transforms the response
+        into a RetentionQueryResult with lazy DataFrame.
+
+        Args:
+            bookmark_params: Pre-built retention bookmark params dict.
+            project_id: Mixpanel project ID.
+
+        Returns:
+            RetentionQueryResult with cohort data, DataFrame,
+            and metadata.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            QueryError: Invalid bookmark params.
+            RateLimitError: Rate limit exceeded.
+
+        Example:
+            ```python
+            result = live_query.query_retention(
+                bookmark_params={"sections": {...}, "displayOptions": {...}},
+                project_id=12345,
+            )
+            print(result.cohorts)
+            ```
+        """
+        body: dict[str, Any] = {
+            "bookmark": bookmark_params,
+            "project_id": project_id,
+            "queryLimits": {"limit": 3000},
+        }
+        raw = self._api_client.insights_query(body)
+        return _transform_retention_result(raw, bookmark_params)
 
     def query_flows(
         self,
