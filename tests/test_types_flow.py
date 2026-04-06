@@ -13,13 +13,14 @@ Tests cover:
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import networkx as nx
 import pandas as pd
 import pytest
 
-from mixpanel_data.types import Filter, FlowQueryResult, FlowStep
+from mixpanel_data.types import Filter, FlowQueryResult, FlowStep, _safe_int
 
 # =============================================================================
 # T012: FlowStep
@@ -462,6 +463,11 @@ class TestFlowQueryResultEdgesDf:
         ]
         assert list(df.columns) == expected_cols
 
+    def test_edges_df_count_parsed_as_int(self) -> None:
+        """Edge totalCount strings are parsed to int dtype."""
+        r = _make_result(steps=_sample_sankey_steps())
+        assert pd.api.types.is_integer_dtype(r.edges_df["count"])
+
     def test_edges_df_cached(self) -> None:
         """Second access returns the same cached object (id equality)."""
         r = _make_result(steps=_sample_sankey_steps())
@@ -714,3 +720,75 @@ class TestRenameVerification:
 
         assert hasattr(Workspace, "query_saved_flows")
         assert callable(Workspace.query_saved_flows)
+
+
+# =============================================================================
+# _safe_int — resilient integer parsing
+# =============================================================================
+
+
+class TestSafeInt:
+    """Tests for _safe_int() resilient integer parsing."""
+
+    def test_valid_string(self) -> None:
+        """String '100' is parsed to int 100."""
+        assert _safe_int("100") == 100
+
+    def test_int_passthrough(self) -> None:
+        """Integer values pass through unchanged."""
+        assert _safe_int(42) == 42
+
+    def test_zero_int(self) -> None:
+        """Integer zero passes through."""
+        assert _safe_int(0) == 0
+
+    def test_none_returns_default(self) -> None:
+        """None returns the default value without warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            assert _safe_int(None) == 0
+            assert len(w) == 0
+
+    def test_empty_string_warns(self) -> None:
+        """Empty string returns default and emits a warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = _safe_int("")
+            assert result == 0
+            assert len(w) == 1
+            assert "Non-numeric string" in str(w[0].message)
+
+    def test_non_numeric_string_warns(self) -> None:
+        """Non-numeric string 'N/A' returns default and warns."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = _safe_int("N/A")
+            assert result == 0
+            assert len(w) == 1
+            assert "Non-numeric string" in str(w[0].message)
+
+    def test_float_string_warns(self) -> None:
+        """Float string '100.5' returns default and warns."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = _safe_int("100.5")
+            assert result == 0
+            assert len(w) == 1
+            assert "Non-numeric string" in str(w[0].message)
+
+    def test_bool_warns(self) -> None:
+        """Boolean True is rejected (not treated as int 1)."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = _safe_int(True)
+            assert result == 0
+            assert len(w) == 1
+            assert "Unexpected type" in str(w[0].message)
+
+    def test_custom_default(self) -> None:
+        """Custom default value is used on failure."""
+        assert _safe_int(None, default=-1) == -1
+
+    def test_negative_string(self) -> None:
+        """Negative string '-5' is parsed correctly."""
+        assert _safe_int("-5") == -5

@@ -65,6 +65,25 @@ _SESSION_MATH: frozenset[str] = frozenset({"conversion_rate_session"})
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _FORMULA_POSITION_RE = re.compile(r"[A-Z]")
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def contains_control_chars(s: str) -> bool:
+    """Check whether a string contains ASCII control characters.
+
+    Detects characters in the ranges ``\\x00-\\x08``, ``\\x0b``,
+    ``\\x0c``, ``\\x0e-\\x1f``, and ``\\x7f`` (DEL). These characters
+    are almost never intentional in event or property names and can
+    cause silent issues in API queries.
+
+    Args:
+        s: The string to check.
+
+    Returns:
+        ``True`` if *s* contains at least one control character.
+    """
+    return bool(_CONTROL_CHAR_RE.search(s))
+
+
 _INVISIBLE_RE = re.compile(r"^[\s\u200b\u200c\u200d\ufeff\u00ad\u2060]*$")
 _MAX_LAST_DAYS = 3650  # 10 years — generous but sane upper bound
 _MAX_ROLLING = 365  # rolling window sanity cap
@@ -1053,7 +1072,7 @@ def validate_retention_args(
 
 
 # =============================================================================
-# Flow argument validation (FL1-FL8)
+# Flow argument validation (FL1-FL10)
 # =============================================================================
 
 _MAX_FLOW_STEPS_DIRECTION = 5

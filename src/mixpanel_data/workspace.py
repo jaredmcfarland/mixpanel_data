@@ -46,7 +46,7 @@ from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
 from mixpanel_data._internal.validation import (
-    _CONTROL_CHAR_RE,
+    contains_control_chars,
     validate_bookmark,
     validate_flow_args,
     validate_flow_bookmark,
@@ -2854,7 +2854,7 @@ class Workspace:
             collapse_repeated: Whether to merge consecutive repeated
                 events.
             hidden_events: Events to hide from the flow visualization.
-            mode: Display mode (``"sankey"`` or ``"paths"``).
+            mode: Display mode (``"sankey"``, ``"paths"``, or ``"tree"``).
 
         Returns:
             Flat bookmark params dict ready for API submission.
@@ -3021,7 +3021,7 @@ class Workspace:
         for i, s in enumerate(steps):
             if s.filters:
                 for fi, f in enumerate(s.filters):
-                    if _CONTROL_CHAR_RE.search(f._property):
+                    if contains_control_chars(f._property):
                         step_errors.append(
                             ValidationError(
                                 path=f"steps[{i}].filters[{fi}]",

@@ -48,6 +48,7 @@ from mixpanel_data.types import (
     SavedReportResult,
     SegmentationResult,
     UserEvent,
+    _safe_int,
 )
 
 if TYPE_CHECKING:
@@ -1281,7 +1282,8 @@ class LiveQueryService:
                 ``count_type``, and ``version`` keys).
             project_id: Mixpanel project ID.
             mode: Flow visualization mode — ``"sankey"`` for Sankey
-                diagrams, ``"paths"`` for top-paths analysis.
+                diagrams, ``"paths"`` for top-paths analysis, or
+                ``"tree"`` for prefix tree analysis.
                 Default: ``"sankey"``.
 
         Returns:
@@ -2115,6 +2117,25 @@ def _transform_flow_result(
             request_body=bookmark_params,
         )
 
+    # Validate expected response shape (consistent with insights/funnel transforms).
+    # Tree mode may legitimately return only metadata with no trees key,
+    # so only sankey/paths modes enforce structural presence.
+    _expected_keys = {"steps", "flows", "trees", "computed_at", "metadata"}
+    if (
+        mode != "tree"
+        and "steps" not in raw
+        and "flows" not in raw
+        and not _expected_keys.intersection(raw.keys())
+    ):
+        raise QueryError(
+            "Flow query returned unexpected response shape "
+            f"(missing 'steps' and 'flows' keys). "
+            f"Keys present: {sorted(raw.keys())}",
+            status_code=200,
+            response_body=raw,
+            request_body=bookmark_params,
+        )
+
     computed_at: str = raw.get("computed_at", "")
     steps: list[dict[str, Any]] = raw.get("steps", [])
     flows: list[dict[str, Any]] = raw.get("flows", [])
@@ -2219,10 +2240,10 @@ def _parse_tree_node(raw: dict[str, Any]) -> FlowTreeNode:
     return FlowTreeNode(
         event=step.get("event", ""),
         type=step.get("type", ""),
-        step_number=int(step_number_raw),
-        total_count=int(total_count),
-        drop_off_count=int(drop_off_count),
-        converted_count=int(converted_count),
+        step_number=_safe_int(step_number_raw),
+        total_count=_safe_int(total_count),
+        drop_off_count=_safe_int(drop_off_count),
+        converted_count=_safe_int(converted_count),
         anchor_type=anchor_type,
         is_computed=is_computed,
         children=children,

@@ -18,11 +18,14 @@ from __future__ import annotations
 
 import math
 import re
+import warnings
 from dataclasses import dataclass, field
 from datetime import date as dt_date
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
+
+from mixpanel_data._literal_types import FlowAnchorType, FlowNodeType
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -804,7 +807,7 @@ class BookmarkInfo:
     """Metadata for a saved report (bookmark) from the Mixpanel Bookmarks API.
 
     Represents a saved Insights, Funnel, Retention, or Flows report
-    that can be queried using query_saved_report() or query_flows().
+    that can be queried using query_saved_report() or query_saved_flows().
 
     Attributes:
         id: Unique bookmark identifier.
@@ -8359,7 +8362,9 @@ def _safe_int(value: Any, default: int = 0) -> int:
 
     The Mixpanel flows API returns ``totalCount`` as a string.
     Some edge cases (empty string, ``None``, non-numeric) would
-    crash a bare ``int()`` call.
+    crash a bare ``int()`` call.  Emits a warning when unexpected
+    types or non-numeric strings are encountered so that silent
+    data corruption is detectable.
 
     Args:
         value: Value to parse (typically a string like ``"100"``).
@@ -8368,10 +8373,26 @@ def _safe_int(value: Any, default: int = 0) -> int:
     Returns:
         Parsed integer, or *default* if parsing fails.
     """
-    try:
-        return int(value)
-    except (ValueError, TypeError):
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            warnings.warn(
+                f"Non-numeric string for count field: {value!r}; "
+                f"using default {default}",
+                stacklevel=2,
+            )
+            return default
+    if value is None:
         return default
+    warnings.warn(
+        f"Unexpected type for count field: "
+        f"{type(value).__name__} ({value!r}); using default {default}",
+        stacklevel=2,
+    )
+    return default
 
 
 # =============================================================================
@@ -8473,12 +8494,12 @@ class FlowTreeNode:
     """
 
     event: str
-    type: str
+    type: FlowNodeType
     step_number: int
     total_count: int
     drop_off_count: int = 0
     converted_count: int = 0
-    anchor_type: str = "NORMAL"
+    anchor_type: FlowAnchorType = "NORMAL"
     is_computed: bool = False
     children: tuple[FlowTreeNode, ...] = ()
     time_percentiles_from_start: dict[str, Any] = field(default_factory=dict)
@@ -8800,7 +8821,8 @@ class FlowQueryResult(ResultWithDataFrame):
         params: The query parameters that produced this result.
         meta: API metadata (sampling factor, request timing, etc.).
         mode: The flow visualization mode — ``"sankey"`` for Sankey diagrams,
-            ``"paths"`` for top-paths analysis.
+            ``"paths"`` for top-paths analysis, or ``"tree"`` for prefix
+            tree analysis.
 
     Example:
         ```python

@@ -1,7 +1,7 @@
 """Unit tests for flow argument and flow bookmark validation rules.
 
 Tests ``validate_flow_args()`` which validates Python-level arguments
-before flow bookmark construction (rules FL1-FL8, enum validation).
+before flow bookmark construction (rules FL1-FL10, enum validation).
 Tests ``validate_flow_bookmark()`` which validates the structural integrity
 of a flat flow bookmark params dict (rules FLB1-FLB6).
 
@@ -400,6 +400,77 @@ class TestValidateFlowFL7:
         fl7_errors = [e for e in errors if e.code == "FL7_CONVERSION_WINDOW_POSITIVE"]
         assert len(fl7_errors) == 1
         assert fl7_errors[0].path == "conversion_window"
+
+
+# =============================================================================
+# T016b: FL7b — conversion_window per-unit maximum
+# =============================================================================
+
+
+class TestValidateFlowFL7Max:
+    """Tests for FL7b: conversion_window per-unit max (366d/52w/12m)."""
+
+    def test_day_max_exceeded(self) -> None:
+        """conversion_window=367 with unit='day' must produce FL7_CONVERSION_WINDOW_MAX."""
+        errors = validate_flow_args(
+            **_valid_flow_args(conversion_window=367, conversion_window_unit="day")
+        )
+        assert any(e.code == "FL7_CONVERSION_WINDOW_MAX" for e in errors)
+
+    def test_day_max_at_boundary(self) -> None:
+        """conversion_window=366 with unit='day' must not produce FL7_CONVERSION_WINDOW_MAX."""
+        errors = validate_flow_args(
+            **_valid_flow_args(conversion_window=366, conversion_window_unit="day")
+        )
+        assert "FL7_CONVERSION_WINDOW_MAX" not in _codes(errors)
+
+    def test_week_max_exceeded(self) -> None:
+        """conversion_window=53 with unit='week' must produce FL7_CONVERSION_WINDOW_MAX."""
+        errors = validate_flow_args(
+            **_valid_flow_args(conversion_window=53, conversion_window_unit="week")
+        )
+        assert any(e.code == "FL7_CONVERSION_WINDOW_MAX" for e in errors)
+
+    def test_week_max_at_boundary(self) -> None:
+        """conversion_window=52 with unit='week' must not produce FL7_CONVERSION_WINDOW_MAX."""
+        errors = validate_flow_args(
+            **_valid_flow_args(conversion_window=52, conversion_window_unit="week")
+        )
+        assert "FL7_CONVERSION_WINDOW_MAX" not in _codes(errors)
+
+    def test_month_max_exceeded(self) -> None:
+        """conversion_window=13 with unit='month' must produce FL7_CONVERSION_WINDOW_MAX."""
+        errors = validate_flow_args(
+            **_valid_flow_args(conversion_window=13, conversion_window_unit="month")
+        )
+        assert any(e.code == "FL7_CONVERSION_WINDOW_MAX" for e in errors)
+
+    def test_month_max_at_boundary(self) -> None:
+        """conversion_window=12 with unit='month' must not produce FL7_CONVERSION_WINDOW_MAX."""
+        errors = validate_flow_args(
+            **_valid_flow_args(conversion_window=12, conversion_window_unit="month")
+        )
+        assert "FL7_CONVERSION_WINDOW_MAX" not in _codes(errors)
+
+    def test_session_unit_skips_max_check(self) -> None:
+        """conversion_window with unit='session' has no max limit."""
+        errors = validate_flow_args(
+            **_valid_flow_args(
+                conversion_window=1,
+                conversion_window_unit="session",
+                count_type="session",
+            )
+        )
+        assert "FL7_CONVERSION_WINDOW_MAX" not in _codes(errors)
+
+    def test_fl7_max_error_message_includes_limit(self) -> None:
+        """FL7_CONVERSION_WINDOW_MAX error message includes the per-unit limit."""
+        errors = validate_flow_args(
+            **_valid_flow_args(conversion_window=400, conversion_window_unit="day")
+        )
+        fl7_max = [e for e in errors if e.code == "FL7_CONVERSION_WINDOW_MAX"]
+        assert len(fl7_max) == 1
+        assert "366" in fl7_max[0].message
 
 
 # =============================================================================

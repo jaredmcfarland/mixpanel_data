@@ -34,6 +34,12 @@ FlowCountType = Literal["unique", "total", "session"]
 # Chart types for flows visualization
 FlowChartType = Literal["sankey", "paths", "tree"]
 
+# Node types in a flow tree response
+FlowNodeType = Literal["ANCHOR", "NORMAL", "DROPOFF", "PRUNED", "FORWARD", "REVERSE"]
+
+# Anchor types in a flow tree response
+FlowAnchorType = Literal["NORMAL", "RELATIVE_REVERSE", "RELATIVE_FORWARD"]
+
 __all__ = [
     "TimeUnit",
     "HourDayUnit",
@@ -41,4 +47,6 @@ __all__ = [
     "CountType",
     "FlowCountType",
     "FlowChartType",
+    "FlowNodeType",
+    "FlowAnchorType",
 ]
