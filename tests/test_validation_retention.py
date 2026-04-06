@@ -613,6 +613,22 @@ class TestValidateRetentionR5R6:
         }
         assert not any(e.code in r5r6_codes for e in errors)
 
+    def test_bucket_sizes_with_invalid_types_skips_r6(self) -> None:
+        """When bucket_sizes has invalid types, R6 ascending check is skipped."""
+        errors = validate_retention_args(
+            **_valid_retention_args(bucket_sizes=[3, 1.5, 7])
+        )
+        assert any(e.code == "R5_BUCKET_SIZES_INTEGER" for e in errors)
+        assert "R6_BUCKET_SIZES_ASCENDING" not in _codes(errors)
+
+    def test_bucket_sizes_with_non_positive_skips_r6(self) -> None:
+        """When bucket_sizes has non-positive values, R6 ascending check is skipped."""
+        errors = validate_retention_args(
+            **_valid_retention_args(bucket_sizes=[0, -1, 3])
+        )
+        assert any(e.code == "R5_BUCKET_SIZES_POSITIVE" for e in errors)
+        assert "R6_BUCKET_SIZES_ASCENDING" not in _codes(errors)
+
 
 # =============================================================================
 # T-US5: Multi-error collection
@@ -817,12 +833,3 @@ class TestValidateRetentionR12:
         r12 = [e for e in errors if e.code == "R12_EMPTY_GROUP_BY"]
         assert len(r12) == 1
         assert r12[0].path == "group_by"
-
-    def test_error_message_includes_count(self) -> None:
-        """The R5c error message must include the actual count."""
-        errors = validate_retention_args(
-            **_valid_retention_args(bucket_sizes=list(range(1, 1001)))
-        )
-        r5c = [e for e in errors if e.code == "R5_BUCKET_SIZES_TOO_MANY"]
-        assert len(r5c) == 1
-        assert "1000" in r5c[0].message

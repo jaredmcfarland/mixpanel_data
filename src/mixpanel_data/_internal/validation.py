@@ -780,7 +780,7 @@ def validate_funnel_args(
 
 
 # =============================================================================
-# Retention argument validation (R1-R9)
+# Retention argument validation (R1-R12)
 # =============================================================================
 
 _VALID_RETENTION_MATH_PUBLIC: frozenset[str] = frozenset({"retention_rate", "unique"})
@@ -814,7 +814,7 @@ def validate_retention_args(
 ) -> list[ValidationError]:
     """Validate retention query arguments before bookmark construction (Layer 1).
 
-    Implements retention-specific validation rules R1-R9 plus reused
+    Implements retention-specific validation rules R1-R12 plus reused
     time and group-by validators. Returns all errors found so callers
     can fix multiple issues in a single pass.
 
@@ -985,9 +985,11 @@ def validate_retention_args(
                 )
 
     # R5: bucket_sizes values must be positive integers
+    all_valid_ints = True
     if bucket_sizes is not None:
         for i, val in enumerate(bucket_sizes):
             if isinstance(val, float):
+                all_valid_ints = False
                 errors.append(
                     ValidationError(
                         path=f"bucket_sizes[{i}]",
@@ -996,6 +998,7 @@ def validate_retention_args(
                     )
                 )
             elif not isinstance(val, int) or isinstance(val, bool) or val <= 0:
+                all_valid_ints = False
                 errors.append(
                     ValidationError(
                         path="bucket_sizes",
@@ -1005,7 +1008,9 @@ def validate_retention_args(
                 )
 
         # R6: bucket_sizes must be in strictly ascending order
-        if len(bucket_sizes) >= 2:
+        # Only check when all elements are valid positive ints to avoid
+        # TypeError on comparison with non-numeric values.
+        if all_valid_ints and len(bucket_sizes) >= 2:
             for i in range(1, len(bucket_sizes)):
                 if bucket_sizes[i] <= bucket_sizes[i - 1]:
                     errors.append(

@@ -557,13 +557,30 @@ def _transform_retention_result(
     series = raw.get("series", {})
 
     # Unwrap the metric name key: series = {"metric_name": {date_cohorts}}
-    # The API always returns exactly one top-level key (the metric name).
+    # The API returns exactly one top-level key (the metric name) for
+    # non-segmented retention.  Segmented responses have multiple keys
+    # which RetentionQueryResult cannot represent — raise rather than
+    # silently dropping data.
     cohort_data: dict[str, Any] = {}
     if isinstance(series, dict):
+        if len(series) > 1:
+            raise QueryError(
+                "Retention query returned segmented series with "
+                f"{len(series)} keys that cannot be represented as a "
+                "single RetentionQueryResult without losing data. "
+                f"Keys: {sorted(series.keys())}",
+                status_code=200,
+                response_body=raw,
+                request_body=bookmark_params,
+            )
         for _metric_key, value in series.items():
             if isinstance(value, dict):
                 cohort_data = value
                 break
+
+    # Handle $overall wrapper (segmented responses may nest under $overall)
+    if "$overall" in cohort_data and isinstance(cohort_data["$overall"], dict):
+        cohort_data = cohort_data["$overall"]
 
     # Extract $average synthetic cohort and date-keyed cohorts
     average: dict[str, Any] = {}

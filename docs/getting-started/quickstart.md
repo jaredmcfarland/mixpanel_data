@@ -242,6 +242,31 @@ print(result.df)
 
 See the [Funnel Queries guide](../guide/query-funnels.md) for full coverage.
 
+### Retention Queries
+
+Measure cohort retention with typed event pairs — no saved report required:
+
+```python
+from mixpanel_data import RetentionEvent, Filter
+
+# Simple retention: do signups come back?
+result = ws.query_retention("Signup", "Login", retention_unit="week", last=90)
+print(result.df.head())
+#   cohort_date  bucket  count      rate
+# 0  2025-01-01       0   1000  1.000000
+# 1  2025-01-01       1    800  0.800000
+
+# With per-event filters and custom buckets
+result = ws.query_retention(
+    RetentionEvent("Signup", filters=[Filter.equals("source", "organic")]),
+    "Login",
+    retention_unit="day",
+    bucket_sizes=[1, 3, 7, 14, 30],
+)
+```
+
+See the [Retention Queries guide](../guide/query-retention.md) for full coverage.
+
 ### Legacy Query Methods
 
 For segmentation, funnels, and retention via the older Query API:
@@ -347,6 +372,7 @@ For ETL pipelines or data processing, stream data directly:
 - [Configuration](configuration.md) — Multiple accounts and advanced settings
 - [Insights Queries](../guide/query.md) — Typed analytics with DAU, formulas, filters, and breakdowns
 - [Funnel Queries](../guide/query-funnels.md) — Typed funnel conversion analysis
+- [Retention Queries](../guide/query-retention.md) — Typed retention analysis with event pairs and custom buckets
 - [Live Analytics](../guide/live-analytics.md) — Segmentation, funnels, retention
 - [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
 - [Data Governance](../guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, and lookup tables

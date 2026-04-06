@@ -16,7 +16,7 @@ A complete programmable interface to Mixpanel analytics—available as both a Py
 
 Mixpanel's web UI is built for interactive exploration. But many workflows need something different: scripts that run unattended, notebooks that combine Mixpanel data with other sources, agents that query analytics programmatically, or pipelines that move data between systems.
 
-`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, segmentation, retention, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
+`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, typed retention queries, segmentation, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
 
 ## Two Interfaces, One Capability Set
 
@@ -91,6 +91,16 @@ funnel_result = ws.query_funnel(
     last=90,
 )
 print(funnel_result.overall_conversion_rate)
+
+# Typed retention query — cohort retention with event pairs
+from mixpanel_data import RetentionEvent
+retention_result = ws.query_retention(
+    "Signup",
+    "Login",
+    retention_unit="week",
+    last=90,
+)
+print(retention_result.df.head())  # cohort_date | bucket | count | rate
 
 # Legacy live queries
 segmentation = ws.segmentation(
@@ -195,8 +205,9 @@ Discovery commands let you survey what exists before writing queries—no guessi
 
 - Segmentation with filtering, grouping, and time bucketing
 - Typed funnel queries with ad-hoc step definitions, exclusions, and conversion windows
+- Typed retention queries with event pairs, custom buckets, alignment modes, and segmentation
 - Funnel conversion analysis (legacy saved funnels)
-- Retention analysis
+- Retention analysis (legacy)
 - Saved reports (Insights, Funnels, Flows, Retention)
 - User activity feeds
 - Frequency and engagement analysis
@@ -258,6 +269,7 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Quick Start](getting-started/quickstart.md) — Your first queries in 5 minutes
 - [Insights Queries](guide/query.md) — Typed analytics queries with DAU, formulas, filters, and breakdowns
 - [Funnel Queries](guide/query-funnels.md) — Typed funnel conversion analysis with steps, exclusions, and conversion windows
+- [Retention Queries](guide/query-retention.md) — Typed retention analysis with event pairs, custom buckets, and alignment modes
 - [API Reference](api/index.md) — Complete Python API documentation
 - [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks
 - [Data Governance](guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables

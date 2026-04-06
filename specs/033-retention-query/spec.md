@@ -154,7 +154,7 @@ An analyst wants to view retention data in different formats — the default ret
 - **FR-023**: System MUST generate valid retention bookmark JSON with `behavior.type = "retention"`, two behaviors (born event and return event), and retention-specific fields (`retentionUnit`, `retentionCustomBucketSizes`, `retentionAlignmentType`).
 - **FR-024**: System MUST reuse shared bookmark builders for time section, filter section, and group section construction.
 - **FR-025**: Per-event filters from `RetentionEvent` objects MUST be converted to the bookmark filter format using the existing `build_filter_entry()` function.
-- **FR-026**: The measurement block MUST include retention-specific fields (`retentionBucketIndex`, `retentionSegmentationEvent`).
+- **FR-026**: The measurement block MUST include the `math` field. Retention-specific fields (`retentionBucketIndex`, `retentionSegmentationEvent`) are optional and only needed for advanced segmented retention views; they MAY be omitted for standard retention queries.
 
 #### Public Methods
 

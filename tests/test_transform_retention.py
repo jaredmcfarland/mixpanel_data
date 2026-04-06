@@ -193,6 +193,46 @@ class TestTransformRetentionErrors:
         assert result.cohorts == {}
         assert result.average == {}
 
+    def test_multiple_series_keys_raises_query_error(self) -> None:
+        """Multiple top-level series keys raise QueryError (segmented data)."""
+        raw = _mock_response(
+            series={
+                "metric_a": {
+                    "2025-01-01": {"first": 10, "counts": [10], "rates": [1.0]}
+                },
+                "metric_b": {"2025-01-01": {"first": 5, "counts": [5], "rates": [1.0]}},
+            }
+        )
+
+        with pytest.raises(QueryError, match="segmented series"):
+            _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+    def test_overall_wrapper_is_unwrapped(self) -> None:
+        """$overall key in cohort data is unwrapped correctly."""
+        raw = _mock_response(
+            series={
+                "Signup and then Login": {
+                    "$overall": {
+                        "2025-01-01": {
+                            "first": 100,
+                            "counts": [100, 50],
+                            "rates": [1.0, 0.5],
+                        },
+                        "$average": {
+                            "first": 100,
+                            "counts": [100, 50],
+                            "rates": [1.0, 0.5],
+                        },
+                    }
+                }
+            }
+        )
+
+        result = _transform_retention_result(raw, _BOOKMARK_PARAMS)
+
+        assert "2025-01-01" in result.cohorts
+        assert result.average["first"] == 100
+
 
 # =============================================================================
 # TestTransformRetentionFormatVariations (T054)
