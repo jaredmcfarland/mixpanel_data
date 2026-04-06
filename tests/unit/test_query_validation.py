@@ -4,6 +4,10 @@ Tests validation rules V7-V11 (time range) for US1,
 V1-V3 (aggregation) for US2, V13-V14 (per-Metric) for US2,
 V4 (formula) for US5, V5-V6 (analysis mode) for US6.
 
+Also tests reusable validation functions (US2 shared-infra):
+- ``validate_time_args()`` — V7-V10, V15, V20
+- ``validate_group_by_args()`` — V11-V12, V18, V24
+
 Validation is tested via Workspace.query() which raises
 BookmarkValidationError on invalid arguments.
 """
@@ -15,8 +19,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from mixpanel_data import Workspace
-from mixpanel_data._internal.validation import validate_query_args
+from mixpanel_data._internal.validation import (
+    validate_group_by_args,
+    validate_query_args,
+    validate_time_args,
+)
 from mixpanel_data.exceptions import BookmarkValidationError
+from mixpanel_data.types import GroupBy
 
 # =============================================================================
 # Fixtures
@@ -628,3 +637,186 @@ class TestHistogramValidation:
             per_user="total",
         )
         assert isinstance(result, dict)
+
+
+# =============================================================================
+# Reusable validate_time_args() (US2 shared-infra)
+# =============================================================================
+
+
+class TestValidateTimeArgs:
+    """Tests for the reusable validate_time_args() function.
+
+    Calls validate_time_args() directly (not through Workspace)
+    to verify time-related validation rules V7-V10, V15, V20.
+    """
+
+    def test_v7_last_zero(self) -> None:
+        """V7: last=0 returns error with code V7_LAST_POSITIVE."""
+        errors = validate_time_args(from_date=None, to_date=None, last=0)
+        assert len(errors) == 1
+        assert errors[0].code == "V7_LAST_POSITIVE"
+
+    def test_v7_last_negative(self) -> None:
+        """V7: last=-5 returns error with code V7_LAST_POSITIVE."""
+        errors = validate_time_args(from_date=None, to_date=None, last=-5)
+        assert len(errors) == 1
+        assert errors[0].code == "V7_LAST_POSITIVE"
+
+    def test_v8_from_date_bad_format(self) -> None:
+        """V8: from_date='01/01/2024' returns error with code V8_DATE_FORMAT."""
+        errors = validate_time_args(from_date="01/01/2024", to_date=None, last=30)
+        assert any(e.code == "V8_DATE_FORMAT" for e in errors)
+
+    def test_v8_to_date_bad_format(self) -> None:
+        """V8: to_date='Jan 31 2024' returns error with code V8_DATE_FORMAT."""
+        errors = validate_time_args(
+            from_date="2024-01-01", to_date="Jan 31 2024", last=30
+        )
+        assert any(e.code == "V8_DATE_FORMAT" for e in errors)
+
+    def test_v8_invalid_calendar_date(self) -> None:
+        """V8: from_date='2024-02-30' returns error with code V8_DATE_INVALID."""
+        errors = validate_time_args(from_date="2024-02-30", to_date=None, last=30)
+        assert any(e.code == "V8_DATE_INVALID" for e in errors)
+
+    def test_v9_to_date_without_from_date(self) -> None:
+        """V9: to_date without from_date returns error with code V9_TO_REQUIRES_FROM."""
+        errors = validate_time_args(from_date=None, to_date="2024-01-31", last=30)
+        assert any(e.code == "V9_TO_REQUIRES_FROM" for e in errors)
+
+    def test_v10_from_date_with_non_default_last(self) -> None:
+        """V10: from_date + last=7 (non-default) returns error V10_DATE_LAST_EXCLUSIVE."""
+        errors = validate_time_args(
+            from_date="2024-01-01", to_date="2024-01-31", last=7
+        )
+        assert any(e.code == "V10_DATE_LAST_EXCLUSIVE" for e in errors)
+
+    def test_v10_from_date_with_default_last_ok(self) -> None:
+        """V10: from_date + last=30 (default) produces NO error."""
+        errors = validate_time_args(
+            from_date="2024-01-01", to_date="2024-01-31", last=30
+        )
+        assert not any(e.code == "V10_DATE_LAST_EXCLUSIVE" for e in errors)
+
+    def test_v15_from_date_after_to_date(self) -> None:
+        """V15: from_date > to_date returns error with code V15_DATE_ORDER."""
+        errors = validate_time_args(
+            from_date="2024-02-01", to_date="2024-01-01", last=30
+        )
+        assert any(e.code == "V15_DATE_ORDER" for e in errors)
+
+    def test_v20_last_too_large(self) -> None:
+        """V20: last=5000 returns error with code V20_LAST_TOO_LARGE."""
+        errors = validate_time_args(from_date=None, to_date=None, last=5000)
+        assert any(e.code == "V20_LAST_TOO_LARGE" for e in errors)
+
+    def test_valid_date_range(self) -> None:
+        """Valid from_date+to_date with default last returns empty errors list."""
+        errors = validate_time_args(
+            from_date="2024-01-01", to_date="2024-01-31", last=30
+        )
+        assert errors == []
+
+    def test_valid_last_only(self) -> None:
+        """Valid: no dates, last=30 returns empty errors list."""
+        errors = validate_time_args(from_date=None, to_date=None, last=30)
+        assert errors == []
+
+
+# =============================================================================
+# Reusable validate_group_by_args() (US2 shared-infra)
+# =============================================================================
+
+
+class TestValidateGroupByArgs:
+    """Tests for the reusable validate_group_by_args() function.
+
+    Calls validate_group_by_args() directly (not through Workspace)
+    to verify group-by validation rules V11-V12, V18, V24.
+    """
+
+    def test_v11_bucket_min_without_bucket_size(self) -> None:
+        """V11: bucket_min without bucket_size returns V11_BUCKET_REQUIRES_SIZE."""
+        errors = validate_group_by_args(
+            group_by=GroupBy("amount", bucket_min=0),
+        )
+        assert any(e.code == "V11_BUCKET_REQUIRES_SIZE" for e in errors)
+
+    def test_v12_bucket_size_zero(self) -> None:
+        """V12: bucket_size=0 returns error with code V12_BUCKET_SIZE_POSITIVE."""
+        errors = validate_group_by_args(
+            group_by=GroupBy("amount", bucket_size=0),
+        )
+        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
+
+    def test_v12_bucket_size_negative(self) -> None:
+        """V12: bucket_size=-5 returns error with code V12_BUCKET_SIZE_POSITIVE."""
+        errors = validate_group_by_args(
+            group_by=GroupBy("amount", bucket_size=-5),
+        )
+        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
+
+    def test_v12b_bucket_size_wrong_property_type(self) -> None:
+        """V12B: bucket_size with property_type='string' returns V12B_BUCKET_REQUIRES_NUMBER."""
+        errors = validate_group_by_args(
+            group_by=GroupBy("amount", property_type="string", bucket_size=10),
+        )
+        assert any(e.code == "V12B_BUCKET_REQUIRES_NUMBER" for e in errors)
+
+    def test_v12c_bucket_size_without_bounds(self) -> None:
+        """V12C: bucket_size without bucket_min/bucket_max returns V12C_BUCKET_REQUIRES_BOUNDS."""
+        errors = validate_group_by_args(
+            group_by=GroupBy("amount", property_type="number", bucket_size=10),
+        )
+        assert any(e.code == "V12C_BUCKET_REQUIRES_BOUNDS" for e in errors)
+
+    def test_v18_bucket_min_gte_bucket_max(self) -> None:
+        """V18: bucket_min >= bucket_max returns error with code V18_BUCKET_ORDER."""
+        errors = validate_group_by_args(
+            group_by=GroupBy(
+                "amount",
+                property_type="number",
+                bucket_size=10,
+                bucket_min=100,
+                bucket_max=50,
+            ),
+        )
+        assert any(e.code == "V18_BUCKET_ORDER" for e in errors)
+
+    def test_v24_bucket_size_nan(self) -> None:
+        """V24: bucket_size=float('nan') returns V24_BUCKET_NOT_FINITE."""
+        errors = validate_group_by_args(
+            group_by=GroupBy("amount", bucket_size=float("nan")),
+        )
+        assert any(e.code == "V24_BUCKET_NOT_FINITE" for e in errors)
+
+    def test_v24_bucket_min_inf(self) -> None:
+        """V24: bucket_min=float('inf') returns V24_BUCKET_NOT_FINITE."""
+        errors = validate_group_by_args(
+            group_by=GroupBy("amount", bucket_min=float("inf")),
+        )
+        assert any(e.code == "V24_BUCKET_NOT_FINITE" for e in errors)
+
+    def test_valid_none_group_by(self) -> None:
+        """Valid: None group_by returns empty errors list."""
+        errors = validate_group_by_args(group_by=None)
+        assert errors == []
+
+    def test_valid_string_group_by(self) -> None:
+        """Valid: string group_by returns empty errors list."""
+        errors = validate_group_by_args(group_by="country")
+        assert errors == []
+
+    def test_valid_group_by_with_buckets(self) -> None:
+        """Valid: GroupBy with valid bucket config returns empty errors list."""
+        errors = validate_group_by_args(
+            group_by=GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=50,
+                bucket_min=0,
+                bucket_max=500,
+            ),
+        )
+        assert errors == []

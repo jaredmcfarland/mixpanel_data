@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mixpanel_data import Filter, Formula, GroupBy, Metric, Workspace
+from mixpanel_data._internal.bookmark_builders import build_filter_entry
 
 # =============================================================================
 # Fixtures
@@ -1179,33 +1180,33 @@ class TestBuildParams:
 class TestDateFilterParams:
     """T057: Date filter bookmark params generation."""
 
-    def test_absolute_date_omits_date_unit(self, ws: Workspace) -> None:
+    def test_absolute_date_omits_date_unit(self) -> None:
         """Absolute date filter (on) omits filterDateUnit."""
-        entry = ws._build_filter_entry(Filter.on("created", "2024-06-15"))
+        entry = build_filter_entry(Filter.on("created", "2024-06-15"))
         assert entry["filterType"] == "datetime"
         assert entry["filterOperator"] == "was on"
         assert entry["filterValue"] == "2024-06-15"
         assert "filterDateUnit" not in entry
 
-    def test_relative_date_includes_date_unit(self, ws: Workspace) -> None:
+    def test_relative_date_includes_date_unit(self) -> None:
         """Relative date filter (in_the_last) includes filterDateUnit."""
-        entry = ws._build_filter_entry(Filter.in_the_last("created", 7, "day"))
+        entry = build_filter_entry(Filter.in_the_last("created", 7, "day"))
         assert entry["filterDateUnit"] == "day"
         assert entry["filterValue"] == 7
         assert entry["filterType"] == "datetime"
 
-    def test_date_between_value_is_list(self, ws: Workspace) -> None:
+    def test_date_between_value_is_list(self) -> None:
         """Date between filter value is a two-element list."""
-        entry = ws._build_filter_entry(
+        entry = build_filter_entry(
             Filter.date_between("created", "2024-01-01", "2024-06-30")
         )
         assert entry["filterValue"] == ["2024-01-01", "2024-06-30"]
         assert entry["filterOperator"] == "was between"
         assert "filterDateUnit" not in entry
 
-    def test_existing_filters_unaffected(self, ws: Workspace) -> None:
+    def test_existing_filters_unaffected(self) -> None:
         """Non-date filters still omit filterDateUnit (backward compat)."""
-        entry = ws._build_filter_entry(Filter.equals("country", "US"))
+        entry = build_filter_entry(Filter.equals("country", "US"))
         assert "filterDateUnit" not in entry
 
     def test_date_filter_in_where_clause(self, ws: Workspace) -> None:
@@ -1218,22 +1219,22 @@ class TestDateFilterParams:
         assert filt["filterDateUnit"] == "day"
         assert filt["filterType"] == "datetime"
 
-    def test_before_filter_params(self, ws: Workspace) -> None:
+    def test_before_filter_params(self) -> None:
         """Filter.before() produces correct bookmark entry."""
-        entry = ws._build_filter_entry(Filter.before("created", "2024-01-01"))
+        entry = build_filter_entry(Filter.before("created", "2024-01-01"))
         assert entry["filterOperator"] == "was before"
         assert entry["filterValue"] == "2024-01-01"
         assert entry["filterType"] == "datetime"
 
-    def test_since_filter_params(self, ws: Workspace) -> None:
+    def test_since_filter_params(self) -> None:
         """Filter.since() produces correct bookmark entry."""
-        entry = ws._build_filter_entry(Filter.since("created", "2024-01-01"))
+        entry = build_filter_entry(Filter.since("created", "2024-01-01"))
         assert entry["filterOperator"] == "was since"
         assert entry["filterValue"] == "2024-01-01"
 
-    def test_not_in_the_last_includes_date_unit(self, ws: Workspace) -> None:
+    def test_not_in_the_last_includes_date_unit(self) -> None:
         """Filter.not_in_the_last() includes filterDateUnit."""
-        entry = ws._build_filter_entry(Filter.not_in_the_last("created", 30, "day"))
+        entry = build_filter_entry(Filter.not_in_the_last("created", 30, "day"))
         assert entry["filterDateUnit"] == "day"
         assert entry["filterOperator"] == "was not in the"
 
