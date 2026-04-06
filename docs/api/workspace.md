@@ -147,6 +147,8 @@ See the [Data Governance guide](../guide/data-governance.md) for complete covera
         - build_funnel_params
         - query_retention
         - build_retention_params
+        - query_flow
+        - build_flow_params
         - segmentation
         - funnel
         - retention
@@ -155,7 +157,7 @@ See the [Data Governance guide](../guide/data-governance.md) for complete covera
         - property_counts
         - activity_feed
         - query_saved_report
-        - query_flows
+        - query_saved_flows
         - frequency
         - segmentation_numeric
         - segmentation_sum

@@ -520,6 +520,11 @@ class TestValidateFlowEnums:
         errors = validate_flow_args(**_valid_flow_args(mode="paths"))
         assert "FL_INVALID_MODE" not in _codes(errors)
 
+    def test_valid_mode_tree_no_error(self) -> None:
+        """mode='tree' must not produce an FL_INVALID_MODE error."""
+        errors = validate_flow_args(**_valid_flow_args(mode="tree"))
+        assert "FL_INVALID_MODE" not in _codes(errors)
+
     def test_mode_close_match_has_suggestion(self) -> None:
         """A close-match mode must include a suggestion."""
         errors = validate_flow_args(**_valid_flow_args(mode="sanke"))
@@ -817,6 +822,11 @@ class TestValidateFlowBookmarkFLB4:
     def test_valid_chart_type_top_paths_no_error(self) -> None:
         """chartType='top-paths' must not produce an FLB4 error."""
         errors = validate_flow_bookmark(_valid_flow_bookmark(chartType="top-paths"))
+        assert "FLB4_INVALID_CHART_TYPE" not in _codes(errors)
+
+    def test_valid_chart_type_tree_no_error(self) -> None:
+        """chartType='tree' must not produce an FLB4 error."""
+        errors = validate_flow_bookmark(_valid_flow_bookmark(chartType="tree"))
         assert "FLB4_INVALID_CHART_TYPE" not in _codes(errors)
 
     def test_flb4_close_match_has_suggestion(self) -> None:

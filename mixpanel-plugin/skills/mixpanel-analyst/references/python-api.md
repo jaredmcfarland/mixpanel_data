@@ -242,7 +242,7 @@ ws.property_counts(
 
 ws.activity_feed(distinct_ids: list[str], *, from_date: str | None = None, to_date: str | None = None) -> ActivityFeedResult
 
-ws.query_flows(bookmark_id: int) -> FlowsResult
+ws.query_saved_flows(bookmark_id: int) -> FlowsResult
 
 ws.frequency(
     *, from_date: str, to_date: str,
@@ -538,7 +538,7 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 | `JQLResult` | `jql()` | `.df`, `.data` |
 | `EventCountsResult` | `event_counts()` | `.df`, `.data` |
 | `ActivityFeedResult` | `activity_feed()` | `.events` |
-| `FlowsResult` | `query_flows()` | `.df`, `.data` |
+| `FlowsResult` | `query_saved_flows()` | `.df`, `.data` |
 | `FrequencyResult` | `frequency()` | `.df`, `.data` |
 | `QueryResult` | `query()` | `.df`, `.params`, `.series`, `.meta`, `.from_date`, `.to_date`, `.computed_at` |
 

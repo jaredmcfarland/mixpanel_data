@@ -32,7 +32,7 @@ CountType = Literal["general", "unique", "average"]
 FlowCountType = Literal["unique", "total", "session"]
 
 # Chart types for flows visualization
-FlowChartType = Literal["sankey", "paths"]
+FlowChartType = Literal["sankey", "paths", "tree"]
 
 __all__ = [
     "TimeUnit",

@@ -34,6 +34,7 @@ dependencies = [
     "rich>=13.0",
     "jq>=1.9.0",
     "networkx>=3.0",
+    "anytree>=2.12",
 ]
 
 [project.optional-dependencies]
@@ -103,6 +104,10 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = "networkx.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "anytree.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

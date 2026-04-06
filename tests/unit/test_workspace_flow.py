@@ -16,7 +16,7 @@ from pydantic import SecretStr
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.exceptions import BookmarkValidationError, ConfigError
-from mixpanel_data.types import Filter, FlowQueryResult, FlowStep
+from mixpanel_data.types import Filter, FlowQueryResult, FlowStep, FlowTreeNode
 
 # =========================================================================
 # Fixtures
@@ -217,6 +217,32 @@ class TestBuildFlowParams:
 
             assert params["chartType"] == "top-paths"
             assert params["flows_merge_type"] == "list"
+        finally:
+            ws.close()
+
+    def test_chart_type_tree(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """mode='tree' maps to chartType='sankey' and flows_merge_type='tree'."""
+        ws = workspace_factory()
+        try:
+            params = ws._build_flow_params(
+                steps=[FlowStep("Login")],
+                from_date=None,
+                to_date=None,
+                last=30,
+                conversion_window=7,
+                conversion_window_unit="day",
+                count_type="unique",
+                cardinality=3,
+                collapse_repeated=False,
+                hidden_events=None,
+                mode="tree",
+            )
+
+            assert params["chartType"] == "sankey"
+            assert params["flows_merge_type"] == "tree"
         finally:
             ws.close()
 
@@ -869,5 +895,100 @@ class TestFlowStepDatetimeFilters:
             assert segfilter["filter"]["operator"] == ">"
             assert segfilter["filter"]["operand"] == 7
             assert segfilter["filter"]["unit"] == "days"
+        finally:
+            ws.close()
+
+
+# =========================================================================
+# T053: End-to-end tree mode integration test
+# =========================================================================
+
+
+def _sample_tree_api_response() -> dict[str, Any]:
+    """Build a sample tree flow API response for integration tests."""
+    return {
+        "computed_at": "2025-01-15T10:00:00",
+        "trees": [
+            {
+                "root": {
+                    "step": {
+                        "type": "ANCHOR",
+                        "step_number": 0,
+                        "event": "Login",
+                        "is_computed": False,
+                        "anchor_type": "NORMAL",
+                    },
+                    "children": [
+                        {
+                            "step": {
+                                "type": "NORMAL",
+                                "step_number": 1,
+                                "event": "Search",
+                                "is_computed": False,
+                                "anchor_type": "NORMAL",
+                            },
+                            "children": [],
+                            "total_count": 80,
+                            "drop_off_total_count": 10,
+                            "converted_total_count": 70,
+                        },
+                    ],
+                    "total_count": 100,
+                    "drop_off_total_count": 20,
+                    "converted_total_count": 80,
+                },
+                "num_steps": 2,
+                "segments": {"segments": []},
+            }
+        ],
+        "metadata": {"min_sampling_factor": 1},
+    }
+
+
+class TestQueryFlowTreeIntegration:
+    """End-to-end integration test for tree mode flow query."""
+
+    def test_query_flow_tree_round_trip(
+        self,
+        mock_api_client: MagicMock,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Full round-trip: query_flow(mode='tree') returns structured result."""
+        mock_api_client.arb_funnels_query.return_value = _sample_tree_api_response()
+        ws = workspace_factory()
+        try:
+            result = ws.query_flow("Login", mode="tree")
+
+            assert isinstance(result, FlowQueryResult)
+            assert result.mode == "tree"
+            assert len(result.trees) == 1
+
+            root = result.trees[0]
+            assert isinstance(root, FlowTreeNode)
+            assert root.event == "Login"
+            assert root.total_count == 100
+            assert root.drop_off_count == 20
+            assert root.converted_count == 80
+
+            assert len(root.children) == 1
+            assert root.children[0].event == "Search"
+            assert root.children[0].total_count == 80
+
+            # DataFrame works
+            df = result.df
+            assert len(df) == root.node_count
+            assert "path" in df.columns
+            assert "Login > Search" in df["path"].tolist()
+
+            # to_dict is JSON-serializable
+            d = result.to_dict()
+            assert len(d["trees"]) == 1
+            assert d["trees"][0]["event"] == "Login"
+
+            # anytree view works
+            at_roots = result.anytree
+            assert len(at_roots) == 1
+            assert at_roots[0].event == "Login"
+            assert len(at_roots[0].children) == 1
         finally:
             ws.close()

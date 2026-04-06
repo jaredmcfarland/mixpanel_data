@@ -394,6 +394,9 @@ Query Insights, Retention, or Funnel reports by bookmark ID:
 
 Query saved Flows reports:
 
+!!! tip "Prefer `query_flow()` for New Code"
+    The typed [`query_flow()`](query-flows.md) method lets you define flow analysis inline with per-step filters, direction controls, visualization modes, and NetworkX graph output — no saved report required. Use `query_saved_flows()` only when querying an existing saved Flows report.
+
 !!! tip "Flows Use Different IDs"
     Flows reports have their own bookmark IDs. Filter with `--type flows` when listing.
 
@@ -404,7 +407,7 @@ Query saved Flows reports:
     flows = ws.list_bookmarks(bookmark_type="flows")
     bookmark_id = flows[0].id  # e.g., 54321
 
-    result = ws.query_flows(bookmark_id=bookmark_id)
+    result = ws.query_saved_flows(bookmark_id=bookmark_id)
     print(f"Conversion rate: {result.overall_conversion_rate:.1%}")
     for step in result.steps:
         print(f"  {step}")

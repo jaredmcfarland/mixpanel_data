@@ -315,6 +315,7 @@ class TestFlowQueryResultPBT:
             "params",
             "meta",
             "mode",
+            "trees",
         }
         assert required_keys == set(d.keys())
 

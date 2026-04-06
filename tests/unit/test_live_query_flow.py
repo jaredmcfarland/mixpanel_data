@@ -248,3 +248,248 @@ class TestQueryFlow:
                 project_id=12345,
                 mode="sankey",
             )
+
+
+# =========================================================================
+# Tree response helpers and tests
+# =========================================================================
+
+
+def _sample_tree_response() -> dict[str, Any]:
+    """Build a sample tree flow API response for tests."""
+    return {
+        "computed_at": "2025-01-15T10:00:00",
+        "trees": [
+            {
+                "root": {
+                    "step": {
+                        "type": "ANCHOR",
+                        "step_number": 0,
+                        "event": "Login",
+                        "is_computed": False,
+                        "anchor_type": "NORMAL",
+                    },
+                    "children": [
+                        {
+                            "step": {
+                                "type": "NORMAL",
+                                "step_number": 1,
+                                "event": "Search",
+                                "is_computed": False,
+                                "anchor_type": "NORMAL",
+                            },
+                            "children": [
+                                {
+                                    "step": {
+                                        "type": "ANCHOR",
+                                        "step_number": 2,
+                                        "event": "Purchase",
+                                        "is_computed": False,
+                                        "anchor_type": "NORMAL",
+                                    },
+                                    "children": [],
+                                    "total_count": 40,
+                                    "drop_off_total_count": 0,
+                                    "converted_total_count": 40,
+                                },
+                            ],
+                            "total_count": 80,
+                            "drop_off_total_count": 10,
+                            "converted_total_count": 70,
+                        },
+                        {
+                            "step": {
+                                "type": "DROPOFF",
+                                "step_number": 1,
+                                "event": "DROPOFF",
+                                "is_computed": False,
+                                "anchor_type": "NORMAL",
+                            },
+                            "children": [],
+                            "total_count": 20,
+                            "drop_off_total_count": 20,
+                            "converted_total_count": 0,
+                        },
+                    ],
+                    "total_count": 100,
+                    "drop_off_total_count": 20,
+                    "converted_total_count": 80,
+                },
+                "num_steps": 3,
+                "segments": {"segments": []},
+            }
+        ],
+        "metadata": {"min_sampling_factor": 1},
+    }
+
+
+class TestParseTreeNode:
+    """Tests for _parse_tree_node recursive parser."""
+
+    def test_parses_root_node(self) -> None:
+        """_parse_tree_node extracts event, type, counts from root dict."""
+        from mixpanel_data._internal.services.live_query import (
+            _parse_tree_node,
+        )
+
+        raw = _sample_tree_response()["trees"][0]["root"]
+        node = _parse_tree_node(raw)
+
+        assert node.event == "Login"
+        assert node.type == "ANCHOR"
+        assert node.step_number == 0
+        assert node.total_count == 100
+        assert node.drop_off_count == 20
+        assert node.converted_count == 80
+        assert node.anchor_type == "NORMAL"
+        assert node.is_computed is False
+
+    def test_parses_children_recursively(self) -> None:
+        """_parse_tree_node builds recursive children."""
+        from mixpanel_data._internal.services.live_query import (
+            _parse_tree_node,
+        )
+
+        raw = _sample_tree_response()["trees"][0]["root"]
+        node = _parse_tree_node(raw)
+
+        assert len(node.children) == 2
+        assert node.children[0].event == "Search"
+        assert node.children[0].total_count == 80
+        assert len(node.children[0].children) == 1
+        assert node.children[0].children[0].event == "Purchase"
+
+    def test_parses_empty_children(self) -> None:
+        """_parse_tree_node handles leaf nodes with empty children."""
+        from mixpanel_data._internal.services.live_query import (
+            _parse_tree_node,
+        )
+
+        leaf_raw: dict[str, Any] = {
+            "step": {
+                "type": "DROPOFF",
+                "step_number": 1,
+                "event": "DROPOFF",
+                "is_computed": False,
+                "anchor_type": "NORMAL",
+            },
+            "children": [],
+            "total_count": 20,
+            "drop_off_total_count": 20,
+            "converted_total_count": 0,
+        }
+        node = _parse_tree_node(leaf_raw)
+        assert node.children == ()
+        assert node.total_count == 20
+
+    def test_parses_time_percentiles(self) -> None:
+        """_parse_tree_node extracts time percentile dicts."""
+        from mixpanel_data._internal.services.live_query import (
+            _parse_tree_node,
+        )
+
+        raw: dict[str, Any] = {
+            "step": {
+                "type": "NORMAL",
+                "step_number": 1,
+                "event": "Search",
+                "is_computed": False,
+                "anchor_type": "NORMAL",
+            },
+            "children": [],
+            "total_count": 50,
+            "drop_off_total_count": 5,
+            "converted_total_count": 45,
+            "time_percentiles_from_start": {
+                "percentiles": [50, 90],
+                "values": [1.2, 5.8],
+            },
+            "time_percentiles_from_prev": {
+                "percentiles": [50],
+                "values": [0.5],
+            },
+        }
+        node = _parse_tree_node(raw)
+        assert node.time_percentiles_from_start["percentiles"] == [50, 90]
+        assert node.time_percentiles_from_prev["values"] == [0.5]
+
+
+class TestTransformFlowResultTree:
+    """Tests for _transform_flow_result with tree mode."""
+
+    def test_tree_mode_extracts_trees(self) -> None:
+        """Tree mode parses trees from response into FlowTreeNode list."""
+        raw = _sample_tree_response()
+        bookmark = _sample_bookmark_params()
+
+        result = _transform_flow_result(raw, bookmark, mode="tree")
+
+        assert isinstance(result, FlowQueryResult)
+        assert result.mode == "tree"
+        assert len(result.trees) == 1
+        assert result.trees[0].event == "Login"
+        assert result.trees[0].total_count == 100
+
+    def test_tree_mode_handles_missing_trees_key(self) -> None:
+        """Tree mode gracefully handles missing 'trees' key."""
+        raw: dict[str, Any] = {
+            "computed_at": "2025-01-15T10:00:00",
+            "metadata": {},
+        }
+        bookmark = _sample_bookmark_params()
+
+        result = _transform_flow_result(raw, bookmark, mode="tree")
+
+        assert result.mode == "tree"
+        assert result.trees == []
+
+    def test_tree_mode_error_as_200(self) -> None:
+        """Error-as-200 still raises QueryError in tree mode."""
+        raw: dict[str, Any] = {"error": "Invalid tree query"}
+        bookmark = _sample_bookmark_params()
+
+        with pytest.raises(QueryError, match="Invalid tree query"):
+            _transform_flow_result(raw, bookmark, mode="tree")
+
+
+class TestQueryFlowTree:
+    """Tests for LiveQueryService.query_flow with tree mode."""
+
+    def test_tree_mode_uses_flows_query_type(
+        self,
+        mock_api_client: MagicMock,
+        live_query_service: LiveQueryService,
+    ) -> None:
+        """Tree mode uses query_type='flows' (raw tree response)."""
+        mock_api_client.arb_funnels_query.return_value = _sample_tree_response()
+        bookmark = _sample_bookmark_params()
+
+        live_query_service.query_flow(
+            bookmark_params=bookmark,
+            project_id=12345,
+            mode="tree",
+        )
+
+        call_args = mock_api_client.arb_funnels_query.call_args
+        body = call_args[0][0]
+        assert body["query_type"] == "flows"
+
+    def test_tree_mode_returns_populated_result(
+        self,
+        mock_api_client: MagicMock,
+        live_query_service: LiveQueryService,
+    ) -> None:
+        """Tree mode returns FlowQueryResult with populated trees."""
+        mock_api_client.arb_funnels_query.return_value = _sample_tree_response()
+        bookmark = _sample_bookmark_params()
+
+        result = live_query_service.query_flow(
+            bookmark_params=bookmark,
+            project_id=12345,
+            mode="tree",
+        )
+
+        assert isinstance(result, FlowQueryResult)
+        assert result.mode == "tree"
+        assert len(result.trees) == 1
+        assert result.trees[0].event == "Login"

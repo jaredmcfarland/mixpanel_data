@@ -157,7 +157,7 @@ ws.event_counts(events=["Login", "Signup"], from_date=..., to_date=...)
 ws.frequency(event="Purchase", from_date=..., to_date=...)
 ws.activity_feed(distinct_ids=["user123"])
 ws.query_saved_report(bookmark_id=456)
-ws.query_flows(bookmark_id=789)
+ws.query_saved_flows(bookmark_id=789)
 # segmentation_sum / segmentation_average: use query(event, math='average', math_property='...') instead.
 ```
 

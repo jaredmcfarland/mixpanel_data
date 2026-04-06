@@ -126,6 +126,7 @@ from mixpanel_data.types import (
     FlowQueryResult,
     FlowsResult,
     FlowStep,
+    FlowTreeNode,
     Formula,
     FrequencyResult,
     FunnelInfo,
@@ -433,5 +434,6 @@ __all__ = [
     "RetentionQueryResult",
     # Flow Query types (Phase 034)
     "FlowStep",
+    "FlowTreeNode",
     "FlowQueryResult",
 ]

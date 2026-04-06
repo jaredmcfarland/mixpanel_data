@@ -440,10 +440,10 @@ VALID_RETENTION_ALIGNMENT: frozenset[str] = frozenset({"birth", "interval_start"
 VALID_FLOWS_COUNT_TYPES: frozenset[str] = frozenset({"unique", "total", "session"})
 """Valid counting methods for flows analysis."""
 
-VALID_FLOWS_CHART_TYPES: frozenset[str] = frozenset({"sankey", "top-paths"})
+VALID_FLOWS_CHART_TYPES: frozenset[str] = frozenset({"sankey", "top-paths", "tree"})
 """Valid chart types for flows visualization."""
 
-VALID_FLOWS_MODES: frozenset[str] = frozenset({"sankey", "paths"})
+VALID_FLOWS_MODES: frozenset[str] = frozenset({"sankey", "paths", "tree"})
 """Valid user-facing mode values for flow queries.
 
 Maps to chart types internally: ``"sankey"`` → ``"sankey"``,

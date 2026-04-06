@@ -547,7 +547,7 @@ result = ws.query_saved_report(bookmark_id)
 df = result.df
 
 # Flows
-result = ws.query_flows(bookmark_id)
+result = ws.query_saved_flows(bookmark_id)
 ```
 
 ## Validation

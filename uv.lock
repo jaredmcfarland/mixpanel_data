@@ -33,6 +33,15 @@ wheels = [
 ]
 
 [[package]]
+name = "anytree"
+version = "2.13.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/a8/eb55fab589c56f9b6be2b3fd6997aa04bb6f3da93b01154ce6fc8e799db2/anytree-2.13.0.tar.gz", hash = "sha256:c9d3aa6825fdd06af7ebb05b4ef291d2db63e62bb1f9b7d9b71354be9d362714", size = 48389, upload-time = "2025-04-08T21:06:30.662Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7b/98/f6aa7fe0783e42be3093d8ef1b0ecdc22c34c0d69640dfb37f56925cb141/anytree-2.13.0-py3-none-any.whl", hash = "sha256:4cbcf10df36b1f1cba131b7e487ff3edafc9d6e932a3c70071b5b768bab901ff", size = 45077, upload-time = "2025-04-08T21:06:29.494Z" },
+]
+
+[[package]]
 name = "appnope"
 version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1201,6 +1210,7 @@ name = "mixpanel-data"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anytree" },
     { name = "httpx" },
     { name = "jq" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1246,6 +1256,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anytree", specifier = ">=2.12" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "hypothesis", extras = ["cli"], marker = "extra == 'dev'", specifier = ">=6.100" },
     { name = "ipykernel", marker = "extra == 'notebook'", specifier = ">=6.0" },

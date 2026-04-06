@@ -11,7 +11,7 @@ A complete programmable interface to Mixpanel analytics—Python library and CLI
 
 Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_data** provides a unified interface: discover your schema, run analytics queries, stream data, and manage entities—all through consistent Python methods or CLI commands.
 
-Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, breakdowns), typed funnel queries (ad-hoc steps, exclusions, conversion windows), typed retention queries (event pairs, custom buckets, alignment modes), segmentation, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
+Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, breakdowns), typed funnel queries (ad-hoc steps, exclusions, conversion windows), typed retention queries (event pairs, custom buckets, alignment modes), typed flow queries (path analysis, direction controls, visualization modes), segmentation, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
 
 ## Installation
 
@@ -143,6 +143,12 @@ retention = ws.query_retention(
 )
 print(retention.df.head())  # cohort_date | bucket | count | rate
 
+# Typed flow query — analyze user paths
+from mixpanel_data import FlowStep
+flow_result = ws.query_flow("Purchase", forward=3, reverse=1)
+print(flow_result.nodes_df.head())   # step | event | type | count
+print(flow_result.top_transitions(5))
+
 # Legacy live analytics queries
 result = ws.segmentation(
     event=events[0],
@@ -262,6 +268,7 @@ Full documentation: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarl
 - [Insights Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query/) — Typed analytics with DAU, formulas, filters, breakdowns
 - [Funnel Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-funnels/) — Typed funnel conversion analysis with steps, exclusions, conversion windows
 - [Retention Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-retention/) — Typed retention analysis with event pairs, custom buckets, alignment modes
+- [Flow Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-flows/) — Typed flow path analysis with direction controls, visualization modes
 - [CLI Reference](https://jaredmcfarland.github.io/mixpanel_data/cli/)
 - [Python API](https://jaredmcfarland.github.io/mixpanel_data/api/)
 - [Streaming Guide](https://jaredmcfarland.github.io/mixpanel_data/guide/streaming/)
@@ -275,7 +282,7 @@ The entire surface area is self-documenting. Every CLI command supports `--help`
 
 Key design features:
 
-- **Typed Insights Queries**: `query()`, `query_funnel()`, and `query_retention()` generate Mixpanel Insights bookmark params from typed Python arguments — DAU/WAU/MAU, formulas, funnel steps, retention event pairs, filters, breakdowns, and more
+- **Typed Insights Queries**: `query()`, `query_funnel()`, `query_retention()`, and `query_flow()` generate Mixpanel Insights bookmark params from typed Python arguments — DAU/WAU/MAU, formulas, funnel steps, retention event pairs, flow path analysis, filters, breakdowns, and more
 - **Entity CRUD & Data Governance**: Full lifecycle management of dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, webhooks, plus Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via Mixpanel App API
 - **Discoverable schema**: `events()`, `properties()`, `funnels()`, `cohorts()`, `bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands

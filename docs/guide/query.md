@@ -28,9 +28,10 @@ Use the legacy methods when:
 - You need to query a saved funnel by ID → `funnel()`
 - You need cohort retention curves → `query_retention()` ([Retention Queries](query-retention.md))
 - You need raw JQL execution → `jql()`
-- You need Flows analysis → `query_flows()`
+- You need to query a saved Flows report → `query_saved_flows()`
 
 For ad-hoc funnel conversion analysis with typed step definitions, see **[Funnel Queries](query-funnels.md)**.
+For ad-hoc flow path analysis with typed step definitions, see **[Flow Queries](query-flows.md)**.
 
 ## Getting Started
 
@@ -710,12 +711,14 @@ ws.create_bookmark(CreateBookmarkParams(
 
 - **[`query_funnel()`](query-funnels.md)** — Ad-hoc funnel conversion analysis with typed step definitions, exclusions, and conversion windows
 - **[`query_retention()`](query-retention.md)** — Ad-hoc retention curves with event pairs, custom buckets, and alignment modes
+- **[`query_flow()`](query-flows.md)** — Ad-hoc flow path analysis with step definitions, direction controls, and visualization modes
 - **Cohort behaviors** — Querying by cohort membership (coming soon)
 
 ## Next Steps
 
 - [Funnel Queries](query-funnels.md) — Typed funnel conversion analysis
 - [Retention Queries](query-retention.md) — Typed retention analysis with event pairs and custom buckets
+- [Flow Queries](query-flows.md) — Typed flow path analysis with steps, directions, and graph output
 - [Live Analytics](live-analytics.md) — Legacy query methods (segmentation, funnels, retention)
 - [Data Discovery](discovery.md) — Explore events and properties before querying
 - [API Reference — Workspace](../api/workspace.md) — Full method signature

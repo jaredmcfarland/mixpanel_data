@@ -2894,7 +2894,9 @@ class Workspace:
                 from_date=from_date, to_date=to_date, last=last
             ),
             "chartType": "top-paths" if mode == "paths" else "sankey",
-            "flows_merge_type": "list" if mode == "paths" else "graph",
+            "flows_merge_type": (
+                "tree" if mode == "tree" else "list" if mode == "paths" else "graph"
+            ),
             "count_type": count_type,
             "cardinality_threshold": cardinality,
             "version": 2,
@@ -3112,7 +3114,7 @@ class Workspace:
         cardinality: int = 3,
         collapse_repeated: bool = False,
         hidden_events: list[str] | None = None,
-        mode: Literal["sankey", "paths"] = "sankey",
+        mode: Literal["sankey", "paths", "tree"] = "sankey",
     ) -> FlowQueryResult:
         """Run a typed flow query against the Mixpanel API.
 
@@ -3220,7 +3222,7 @@ class Workspace:
         cardinality: int = 3,
         collapse_repeated: bool = False,
         hidden_events: list[str] | None = None,
-        mode: Literal["sankey", "paths"] = "sankey",
+        mode: Literal["sankey", "paths", "tree"] = "sankey",
     ) -> dict[str, Any]:
         """Build validated flow bookmark params without executing.
 

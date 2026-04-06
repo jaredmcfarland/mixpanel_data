@@ -47,7 +47,9 @@ with Workspace() as ws:
 
 **Core Analytics**: `segmentation()`, `funnel()`, `retention()`, `query_saved_report()`
 
-**Extended Live Queries**: `jql()`, `event_counts()`, `property_counts()`, `activity_feed()`, `query_flows()`, `frequency()`, `segmentation_numeric()`, `segmentation_sum()`, `segmentation_average()`
+**Typed Flow Queries**: `query_flow()`, `build_flow_params()`
+
+**Extended Live Queries**: `jql()`, `event_counts()`, `property_counts()`, `activity_feed()`, `query_saved_flows()`, `frequency()`, `segmentation_numeric()`, `segmentation_sum()`, `segmentation_average()`
 
 **JQL Discovery**: `property_distribution()`, `numeric_summary()`, `daily_counts()`, `engagement_distribution()`, `property_coverage()`
 

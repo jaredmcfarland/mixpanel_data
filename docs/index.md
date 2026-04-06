@@ -16,7 +16,7 @@ A complete programmable interface to Mixpanel analytics—available as both a Py
 
 Mixpanel's web UI is built for interactive exploration. But many workflows need something different: scripts that run unattended, notebooks that combine Mixpanel data with other sources, agents that query analytics programmatically, or pipelines that move data between systems.
 
-`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, typed retention queries, segmentation, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
+`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, typed retention queries, typed flow queries, segmentation, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
 
 ## Two Interfaces, One Capability Set
 
@@ -101,6 +101,12 @@ retention_result = ws.query_retention(
     last=90,
 )
 print(retention_result.df.head())  # cohort_date | bucket | count | rate
+
+# Typed flow query — analyze user paths through your product
+from mixpanel_data import FlowStep
+flow_result = ws.query_flow("Purchase", forward=3, reverse=1)
+print(flow_result.nodes_df.head())   # step | event | type | count
+print(flow_result.top_transitions(5))
 
 # Legacy live queries
 segmentation = ws.segmentation(
@@ -206,6 +212,7 @@ Discovery commands let you survey what exists before writing queries—no guessi
 - Segmentation with filtering, grouping, and time bucketing
 - Typed funnel queries with ad-hoc step definitions, exclusions, and conversion windows
 - Typed retention queries with event pairs, custom buckets, alignment modes, and segmentation
+- Typed flow queries with path analysis, direction controls, and visualization modes
 - Funnel conversion analysis (legacy saved funnels)
 - Retention analysis (legacy)
 - Saved reports (Insights, Funnels, Flows, Retention)
@@ -270,6 +277,7 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Insights Queries](guide/query.md) — Typed analytics queries with DAU, formulas, filters, and breakdowns
 - [Funnel Queries](guide/query-funnels.md) — Typed funnel conversion analysis with steps, exclusions, and conversion windows
 - [Retention Queries](guide/query-retention.md) — Typed retention analysis with event pairs, custom buckets, and alignment modes
+- [Flow Queries](guide/query-flows.md) — Typed flow path analysis with direction controls and visualization modes
 - [API Reference](api/index.md) — Complete Python API documentation
 - [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks
 - [Data Governance](guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables

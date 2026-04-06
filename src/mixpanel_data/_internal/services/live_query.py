@@ -27,6 +27,7 @@ from mixpanel_data.types import (
     EventCountsResult,
     FlowQueryResult,
     FlowsResult,
+    FlowTreeNode,
     FrequencyResult,
     FunnelQueryResult,
     FunnelResult,
@@ -1302,7 +1303,12 @@ class LiveQueryService:
             print(f"Conversion: {result.overall_conversion_rate:.1%}")
             ```
         """
-        query_type = "flows_top_paths" if mode == "paths" else "flows_sankey"
+        if mode == "paths":
+            query_type = "flows_top_paths"
+        elif mode == "tree":
+            query_type = "flows"
+        else:
+            query_type = "flows_sankey"
         body: dict[str, Any] = {
             "bookmark": bookmark_params,
             "project_id": project_id,
@@ -2071,15 +2077,16 @@ def _transform_flow_result(
     """Transform raw arb_funnels flow response into FlowQueryResult.
 
     Extracts computed_at, steps, flows, breakdowns, and overall
-    conversion rate from the API response. Handles both sankey and
-    top-paths modes. Detects error-as-200 responses and raises
+    conversion rate from the API response. Handles sankey, top-paths,
+    and tree modes. Detects error-as-200 responses and raises
     ``QueryError``.
 
     Args:
         raw: Raw API response dictionary from arb_funnels query.
         bookmark_params: The bookmark params dict sent to the API
             (preserved in the result for debugging/persistence).
-        mode: Flow visualization mode — ``"sankey"`` or ``"paths"``.
+        mode: Flow visualization mode — ``"sankey"``, ``"paths"``,
+            or ``"tree"``.
 
     Returns:
         Typed FlowQueryResult with steps, flows, breakdowns,
@@ -2115,6 +2122,32 @@ def _transform_flow_result(
     overall_conversion_rate: float = raw.get("overallConversionRate", 0.0)
     metadata: dict[str, Any] = raw.get("metadata", {})
 
+    # Parse tree data when in tree mode
+    trees: list[FlowTreeNode] = []
+    if mode == "tree":
+        for tree_dict in raw.get("trees", []):
+            root_dict = tree_dict.get("root", {})
+            if root_dict:
+                parsed_root = _parse_tree_node(root_dict)
+                # The API returns a virtual root node with step=null.
+                # The actual anchor events are its children. If the
+                # root has no event (virtual), unwrap the children
+                # as separate trees. If the root has an event (e.g.
+                # from test fixtures), keep it as-is.
+                if parsed_root.event:
+                    trees.append(parsed_root)
+                else:
+                    trees.extend(parsed_root.children)
+
+    # Determine the result mode literal
+    result_mode: Literal["sankey", "paths", "tree"]
+    if mode == "tree":
+        result_mode = "tree"
+    elif mode == "paths":
+        result_mode = "paths"
+    else:
+        result_mode = "sankey"
+
     return FlowQueryResult(
         computed_at=computed_at,
         steps=steps,
@@ -2123,7 +2156,78 @@ def _transform_flow_result(
         overall_conversion_rate=overall_conversion_rate,
         params=bookmark_params,
         meta=metadata,
-        mode="paths" if mode == "paths" else "sankey",
+        mode=result_mode,
+        trees=trees,
+    )
+
+
+def _parse_tree_node(raw: dict[str, Any]) -> FlowTreeNode:
+    """Parse a recursive raw dict into a FlowTreeNode.
+
+    Extracts step metadata (event, type, step_number) from the ``step``
+    sub-dict and count data from the top level. Recursively parses
+    child nodes.
+
+    Handles both camelCase (live API: ``stepNumber``, ``totalCount``,
+    ``dropOffTotalCount``, ``convertedTotalCount``) and snake_case
+    (``step_number``, ``total_count``, ``drop_off_total_count``,
+    ``converted_total_count``) field names.
+
+    Args:
+        raw: Raw dict from the API response representing a single tree
+            node with ``step``, ``children``, and count fields.
+
+    Returns:
+        A frozen ``FlowTreeNode`` with recursively parsed children.
+
+    Example:
+        ```python
+        node = _parse_tree_node({
+            "step": {"event": "Login", "type": "ANCHOR", ...},
+            "children": [...],
+            "totalCount": 100,
+            ...
+        })
+        node.event  # "Login"
+        ```
+    """
+    step: dict[str, Any] = raw.get("step") or {}
+    children = tuple(_parse_tree_node(c) for c in raw.get("children", []))
+
+    # Support both camelCase (live API) and snake_case (test fixtures)
+    step_number_raw = step.get("stepNumber", step.get("step_number", 0))
+    total_count = raw.get("totalCount", raw.get("total_count", 0))
+    drop_off_count = raw.get("dropOffTotalCount", raw.get("drop_off_total_count", 0))
+    converted_count = raw.get(
+        "convertedTotalCount", raw.get("converted_total_count", 0)
+    )
+    anchor_type = step.get("anchorType", step.get("anchor_type", "NORMAL"))
+    is_computed = step.get("isComputed", step.get("is_computed", False))
+
+    # Time percentiles: camelCase or snake_case, may be null
+    tp_start = (
+        raw.get("timePercentilesFromStart")
+        or raw.get("time_percentiles_from_start")
+        or {}
+    )
+    tp_prev = (
+        raw.get("timePercentilesFromPrev")
+        or raw.get("time_percentiles_from_prev")
+        or {}
+    )
+
+    return FlowTreeNode(
+        event=step.get("event", ""),
+        type=step.get("type", ""),
+        step_number=int(step_number_raw),
+        total_count=int(total_count),
+        drop_off_count=int(drop_off_count),
+        converted_count=int(converted_count),
+        anchor_type=anchor_type,
+        is_computed=is_computed,
+        children=children,
+        time_percentiles_from_start=tp_start if isinstance(tp_start, dict) else {},
+        time_percentiles_from_prev=tp_prev if isinstance(tp_prev, dict) else {},
     )
 
 
@@ -2539,9 +2643,9 @@ def _transform_property_coverage(
         Typed PropertyCoverageResult with coverage statistics.
     """
     # JQL reduce returns a list with one element
-    data = raw[0] if raw else {"total": 0, "properties": {}}
-    total_events = data.get("total", 0)
-    prop_counts = data.get("properties", {})
+    data: dict[str, Any] = raw[0] if raw else {"total": 0, "properties": {}}
+    total_events: int = int(data.get("total", 0))
+    prop_counts: dict[str, int] = data.get("properties", {})
 
     coverage = tuple(
         PropertyCoverage(

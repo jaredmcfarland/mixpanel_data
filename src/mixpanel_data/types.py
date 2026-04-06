@@ -8423,6 +8423,367 @@ class FlowStep:
 
 
 @dataclass(frozen=True)
+class FlowTreeNode:
+    """A node in a recursive flow prefix tree.
+
+    Represents a single event in a flow path tree returned by the Mixpanel
+    Flows API when using ``mode="tree"``. Each node tracks aggregate counts
+    (total, drop-off, converted) and optionally timing percentiles. Children
+    represent subsequent events in the flow.
+
+    The tree preserves full path context — unlike the sankey graph which
+    merges nodes at the same step position, each tree node is unique to
+    its specific path from root.
+
+    Attributes:
+        event: The event name at this position in the flow.
+        type: Node type — ``"ANCHOR"``, ``"NORMAL"``, ``"DROPOFF"``,
+            ``"PRUNED"``, ``"FORWARD"``, or ``"REVERSE"``.
+        step_number: Zero-based step index in the flow.
+        total_count: Total number of users reaching this node.
+        drop_off_count: Number of users who dropped off at this node.
+        converted_count: Number of users who continued past this node.
+        anchor_type: Anchor classification — ``"NORMAL"``,
+            ``"RELATIVE_REVERSE"``, or ``"RELATIVE_FORWARD"``.
+        is_computed: Whether this is a computed/custom event.
+        children: Child nodes representing subsequent events. Defaults
+            to an empty tuple.
+        time_percentiles_from_start: Timing percentile data from flow
+            start to this node. Empty dict if timing data is not enabled.
+        time_percentiles_from_prev: Timing percentile data from the
+            previous node to this node. Empty dict if timing data is
+            not enabled.
+
+    Example:
+        ```python
+        root = FlowTreeNode(
+            event="Login", type="ANCHOR", step_number=0,
+            total_count=1000, drop_off_count=50, converted_count=950,
+            children=(
+                FlowTreeNode(
+                    event="Search", type="NORMAL", step_number=1,
+                    total_count=600,
+                ),
+            ),
+        )
+        root.depth          # 1
+        root.conversion_rate  # 0.95
+        root.all_paths()    # [[root, search_node]]
+        ```
+    """
+
+    event: str
+    type: str
+    step_number: int
+    total_count: int
+    drop_off_count: int = 0
+    converted_count: int = 0
+    anchor_type: str = "NORMAL"
+    is_computed: bool = False
+    children: tuple[FlowTreeNode, ...] = ()
+    time_percentiles_from_start: dict[str, Any] = field(default_factory=dict)
+    time_percentiles_from_prev: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def depth(self) -> int:
+        """Maximum depth of the subtree rooted at this node.
+
+        A leaf node has depth 0. A node with one level of children
+        has depth 1, and so on.
+
+        Returns:
+            Non-negative integer representing the longest path from
+            this node to any leaf descendant.
+
+        Example:
+            ```python
+            leaf = FlowTreeNode(
+                event="Purchase", type="ANCHOR",
+                step_number=0, total_count=100,
+            )
+            leaf.depth  # 0
+            ```
+        """
+        if not self.children:
+            return 0
+        return 1 + max(c.depth for c in self.children)
+
+    @property
+    def node_count(self) -> int:
+        """Total number of nodes in the subtree including this node.
+
+        Returns:
+            Positive integer (always >= 1).
+
+        Example:
+            ```python
+            node.node_count  # 7
+            ```
+        """
+        return 1 + sum(c.node_count for c in self.children)
+
+    @property
+    def leaf_count(self) -> int:
+        """Number of leaf nodes (nodes with no children) in the subtree.
+
+        Returns:
+            Positive integer (always >= 1).
+
+        Example:
+            ```python
+            node.leaf_count  # 4
+            ```
+        """
+        if not self.children:
+            return 1
+        return sum(c.leaf_count for c in self.children)
+
+    @property
+    def conversion_rate(self) -> float:
+        """Fraction of users who converted at this node.
+
+        Computed as ``converted_count / total_count``. Returns ``0.0``
+        when ``total_count`` is zero to avoid division errors.
+
+        Returns:
+            Float in ``[0.0, 1.0]``.
+
+        Example:
+            ```python
+            node.conversion_rate  # 0.95
+            ```
+        """
+        if self.total_count == 0:
+            return 0.0
+        return self.converted_count / self.total_count
+
+    @property
+    def drop_off_rate(self) -> float:
+        """Fraction of users who dropped off at this node.
+
+        Computed as ``drop_off_count / total_count``. Returns ``0.0``
+        when ``total_count`` is zero to avoid division errors.
+
+        Returns:
+            Float in ``[0.0, 1.0]``.
+
+        Example:
+            ```python
+            node.drop_off_rate  # 0.05
+            ```
+        """
+        if self.total_count == 0:
+            return 0.0
+        return self.drop_off_count / self.total_count
+
+    def all_paths(self) -> list[list[FlowTreeNode]]:
+        """Return all root-to-leaf paths through this subtree.
+
+        Each path is a list of ``FlowTreeNode`` objects from this node
+        down to a leaf, preserving the full node chain so callers can
+        inspect counts, rates, and timing along each path.
+
+        Returns:
+            List of paths, where each path is a list of nodes. The
+            number of paths equals ``leaf_count``.
+
+        Example:
+            ```python
+            for path in root.all_paths():
+                events = [n.event for n in path]
+                print(" -> ".join(events))
+            # Login -> Search -> Purchase
+            # Login -> Search -> DROPOFF
+            # Login -> Browse -> Purchase
+            # Login -> DROPOFF
+            ```
+        """
+        if not self.children:
+            return [[self]]
+        paths: list[list[FlowTreeNode]] = []
+        for child in self.children:
+            for child_path in child.all_paths():
+                paths.append([self, *child_path])
+        return paths
+
+    def find(self, event: str) -> list[FlowTreeNode]:
+        """Find all nodes matching an event name via depth-first search.
+
+        Args:
+            event: The event name to search for.
+
+        Returns:
+            List of matching ``FlowTreeNode`` objects. Empty list if
+            no nodes match.
+
+        Example:
+            ```python
+            purchases = root.find("Purchase")
+            # [FlowTreeNode(event="Purchase", ...), ...]
+            ```
+        """
+        results: list[FlowTreeNode] = []
+        if self.event == event:
+            results.append(self)
+        for child in self.children:
+            results.extend(child.find(event))
+        return results
+
+    def flatten(self) -> list[FlowTreeNode]:
+        """Return all nodes in pre-order (depth-first) traversal.
+
+        The root node appears first, followed by its children's subtrees
+        in order.
+
+        Returns:
+            List of all nodes in the subtree. Length equals
+            ``node_count``.
+
+        Example:
+            ```python
+            for node in root.flatten():
+                print(f"{node.event}: {node.total_count}")
+            ```
+        """
+        result: list[FlowTreeNode] = [self]
+        for child in self.children:
+            result.extend(child.flatten())
+        return result
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the tree node recursively to a dictionary.
+
+        Returns:
+            Dictionary with all node attributes and recursively
+            serialized children. Suitable for JSON serialization.
+
+        Example:
+            ```python
+            d = node.to_dict()
+            d["event"]     # "Login"
+            d["children"]  # [{"event": "Search", ...}, ...]
+            ```
+        """
+        return {
+            "event": self.event,
+            "type": self.type,
+            "step_number": self.step_number,
+            "total_count": self.total_count,
+            "drop_off_count": self.drop_off_count,
+            "converted_count": self.converted_count,
+            "anchor_type": self.anchor_type,
+            "is_computed": self.is_computed,
+            "children": [c.to_dict() for c in self.children],
+            "time_percentiles_from_start": self.time_percentiles_from_start,
+            "time_percentiles_from_prev": self.time_percentiles_from_prev,
+        }
+
+    def render(
+        self,
+        _prefix: str = "",
+        _is_last: bool = True,
+        _is_root: bool = True,
+    ) -> str:
+        """Render the tree as an ASCII string for debugging.
+
+        Uses box-drawing characters (``\u251c\u2500\u2500``, ``\u2514\u2500\u2500``, ``\u2502``) to display
+        the tree hierarchy with event names and counts.
+
+        Args:
+            _prefix: Internal prefix for recursive indentation.
+                Do not pass this argument directly.
+            _is_last: Internal flag for connector selection.
+                Do not pass this argument directly.
+            _is_root: Internal flag distinguishing the root call
+                from recursive children. Do not pass directly.
+
+        Returns:
+            Multi-line string representation of the tree.
+
+        Example:
+            ```python
+            print(root.render())
+            # Login (1000)
+            # \u251c\u2500\u2500 Search (600)
+            # \u2502   \u251c\u2500\u2500 Purchase (400)
+            # \u2502   \u2514\u2500\u2500 DROPOFF (100)
+            # \u251c\u2500\u2500 Browse (300)
+            # \u2502   \u2514\u2500\u2500 Purchase (200)
+            # \u2514\u2500\u2500 DROPOFF (50)
+            ```
+        """
+        if _is_root:
+            line = f"{self.event} ({self.total_count})\n"
+            child_prefix = ""
+        else:
+            connector = "\u2514\u2500\u2500 " if _is_last else "\u251c\u2500\u2500 "
+            line = f"{_prefix}{connector}{self.event} ({self.total_count})\n"
+            child_prefix = _prefix + ("    " if _is_last else "\u2502   ")
+
+        for i, child in enumerate(self.children):
+            is_last_child = i == len(self.children) - 1
+            line += child.render(
+                _prefix=child_prefix, _is_last=is_last_child, _is_root=False
+            )
+
+        return line
+
+    def to_anytree(self) -> Any:
+        """Convert to an ``anytree.AnyNode`` tree with parent references.
+
+        Creates a parallel anytree representation of this subtree. Each
+        anytree node carries the same attributes (event, type, counts,
+        etc.) and gains parent references, path resolution, and rendering
+        capabilities from the anytree library.
+
+        Returns:
+            An ``anytree.AnyNode`` root with the full subtree attached.
+            Use ``node.parent``, ``node.path``, ``node.children``,
+            and ``anytree.RenderTree`` for navigation and display.
+
+        Example:
+            ```python
+            from anytree import RenderTree, findall
+
+            at = root.to_anytree()
+            print(RenderTree(at))
+
+            # Parent references
+            purchase = findall(at, filter_=lambda n: n.event == "Purchase")[0]
+            purchase.parent.event  # "Search"
+            [n.event for n in purchase.path]  # ["Login", "Search", "Purchase"]
+            ```
+        """
+        return self._build_anytree_node(parent=None)
+
+    def _build_anytree_node(self, parent: Any) -> Any:
+        """Recursively build an anytree node tree.
+
+        Args:
+            parent: The parent ``AnyNode``, or ``None`` for the root.
+
+        Returns:
+            An ``anytree.AnyNode`` with children attached.
+        """
+        from anytree import AnyNode
+
+        node = AnyNode(
+            parent=parent,
+            event=self.event,
+            type=self.type,
+            step_number=self.step_number,
+            total_count=self.total_count,
+            drop_off_count=self.drop_off_count,
+            converted_count=self.converted_count,
+            anchor_type=self.anchor_type,
+            is_computed=self.is_computed,
+        )
+        for child in self.children:
+            child._build_anytree_node(parent=node)
+        return node
+
+
+@dataclass(frozen=True)
 class FlowQueryResult(ResultWithDataFrame):
     """Result of an ad-hoc flow query.
 
@@ -8461,10 +8822,13 @@ class FlowQueryResult(ResultWithDataFrame):
     overall_conversion_rate: float = 0.0
     params: dict[str, Any] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
-    mode: Literal["sankey", "paths"] = "sankey"
+    mode: Literal["sankey", "paths", "tree"] = "sankey"
+    trees: list[FlowTreeNode] = field(default_factory=list)
     _nodes_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
     _edges_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
     _graph_cache: Any = field(default=None, repr=False, kw_only=True)
+    _trees_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
+    _anytree_cache: list[Any] | None = field(default=None, repr=False, kw_only=True)
 
     @property
     def nodes_df(self) -> pd.DataFrame:
@@ -8656,6 +9020,8 @@ class FlowQueryResult(ResultWithDataFrame):
         """
         if self.mode == "sankey":
             return self.nodes_df
+        if self.mode == "tree":
+            return self._build_tree_df()
         # paths mode
         if self._df_cache is not None:
             return self._df_cache
@@ -8675,6 +9041,71 @@ class FlowQueryResult(ResultWithDataFrame):
         result_df = pd.DataFrame(rows, columns=cols)
         object.__setattr__(self, "_df_cache", result_df)
         return result_df
+
+    def _build_tree_df(self) -> pd.DataFrame:
+        """Flatten tree data into a DataFrame for tree mode.
+
+        Each row represents a single node in the tree, with a ``path``
+        column showing the full event chain from root to that node
+        (e.g., ``"Login > Search > Purchase"``).
+
+        Returns:
+            DataFrame with columns: ``tree_index``, ``depth``, ``path``,
+            ``event``, ``type``, ``step_number``, ``total_count``,
+            ``drop_off_count``, ``converted_count``. Returns an empty
+            DataFrame with correct columns when ``trees`` is empty.
+        """
+        if self._trees_df_cache is not None:
+            return self._trees_df_cache
+        cols = [
+            "tree_index",
+            "depth",
+            "path",
+            "event",
+            "type",
+            "step_number",
+            "total_count",
+            "drop_off_count",
+            "converted_count",
+        ]
+        rows: list[dict[str, Any]] = []
+        for tree_idx, tree in enumerate(self.trees):
+            self._flatten_tree_node(tree, tree_idx, [], rows)
+        result_df = pd.DataFrame(rows, columns=cols)
+        object.__setattr__(self, "_trees_df_cache", result_df)
+        return result_df
+
+    @staticmethod
+    def _flatten_tree_node(
+        node: FlowTreeNode,
+        tree_index: int,
+        ancestors: list[str],
+        rows: list[dict[str, Any]],
+    ) -> None:
+        """Recursively flatten a FlowTreeNode into DataFrame rows.
+
+        Args:
+            node: The current tree node to flatten.
+            tree_index: Index of the tree this node belongs to.
+            ancestors: List of ancestor event names for path building.
+            rows: Accumulator list for row dicts (mutated in place).
+        """
+        path_parts = [*ancestors, node.event]
+        rows.append(
+            {
+                "tree_index": tree_index,
+                "depth": len(ancestors),
+                "path": " > ".join(path_parts),
+                "event": node.event,
+                "type": node.type,
+                "step_number": node.step_number,
+                "total_count": node.total_count,
+                "drop_off_count": node.drop_off_count,
+                "converted_count": node.converted_count,
+            }
+        )
+        for child in node.children:
+            FlowQueryResult._flatten_tree_node(child, tree_index, path_parts, rows)
 
     def top_transitions(self, n: int = 10) -> list[tuple[str, str, int]]:
         """Return the N highest-traffic transitions between events.
@@ -8777,4 +9208,31 @@ class FlowQueryResult(ResultWithDataFrame):
             "params": self.params,
             "meta": self.meta,
             "mode": self.mode,
+            "trees": [t.to_dict() for t in self.trees],
         }
+
+    @property
+    def anytree(self) -> list[Any]:
+        """Lazily-cached list of ``anytree.AnyNode`` roots from tree data.
+
+        Each ``FlowTreeNode`` in ``trees`` is converted to an anytree
+        node tree via ``to_anytree()``, enabling parent references,
+        path resolution, and ``RenderTree`` display.
+
+        Returns:
+            List of ``anytree.AnyNode`` root nodes. Empty list when
+            ``trees`` is empty.
+
+        Example:
+            ```python
+            result = ws.query_flow("Login", mode="tree")
+            for root in result.anytree:
+                from anytree import RenderTree
+                print(RenderTree(root))
+            ```
+        """
+        if self._anytree_cache is not None:
+            return self._anytree_cache
+        roots = [t.to_anytree() for t in self.trees]
+        object.__setattr__(self, "_anytree_cache", roots)
+        return roots
