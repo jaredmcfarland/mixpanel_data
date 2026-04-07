@@ -136,10 +136,12 @@ print("\n=== Most Important Events (PageRank) ===")
 for node, score in top_pr:
     print(f"  {node}: {score:.4f}")
 
-# Shortest path — optimal route between events
+# Shortest path — fewest steps between events (unweighted = minimum hops)
+# Note: weight="count" would find LEAST-trafficked path (minimizes sum).
+# For most-trafficked paths, use result.top_transitions() instead.
 try:
-    path = nx.shortest_path(g, "Browse@0", "Purchase@3", weight="count")
-    print(f"\n=== Optimal Path ===\n{' -> '.join(path)}")
+    path = nx.shortest_path(g, "Browse@0", "Purchase@3")
+    print(f"\n=== Shortest Path ({len(path)-1} steps) ===\n{' -> '.join(path)}")
 except nx.NetworkXNoPath:
     print("No path found between those events")
 

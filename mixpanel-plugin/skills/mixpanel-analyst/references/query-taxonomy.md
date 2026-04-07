@@ -9,7 +9,7 @@ Deep reference for mapping natural-language analytics questions to the correct `
 | **Insights** | `ws.query()` | Trends, aggregations, breakdowns, formulas | `QueryResult` |
 | **Funnels** | `ws.query_funnel()` | Step-by-step conversion, drop-off analysis | `FunnelQueryResult` |
 | **Retention** | `ws.query_retention()` | Cohort retention curves, return behavior | `RetentionQueryResult` |
-| **Flows** | `ws.query_flow()` | User path analysis, event sequences | `FlowsResult` |
+| **Flows** | `ws.query_flow()` | User path analysis, event sequences | `FlowQueryResult` |
 
 Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) remain available for specific cases, and discovery methods (`events`, `properties`, `property_values`, `top_events`) provide schema context.
 
@@ -29,7 +29,7 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | "average", "mean" + property | "Average order value?" | `math="average", math_property="revenue"` |
 | "median" + property | "Median session duration?" | `math="median", math_property="duration"` |
 | "sum", "total revenue" | "Total revenue this month?" | `math="total", math_property="revenue"` |
-| "p95", "p99", percentile | "P95 API latency?" | `math="p90"` or `math="percentile", percentile_value=95` |
+| "p95", "p99", percentile | "P95 API latency?" | `math="percentile", percentile_value=95, math_property="latency"` |
 | "min", "max" + property | "Max purchase amount?" | `math="max", math_property="amount"` |
 | "by", "breakdown", "segment" | "Signups by country?" | `group_by="country"` |
 | "trend", "over time" | "Login trend last 90 days?" | `last=90, unit="day"` |
@@ -79,9 +79,9 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 
 | Signal Pattern | Example Question | Key Parameters |
 |---|---|---|
-| "flow", "path", "journey" | "What paths do users take after signup?" | `steps=["Signup"], forward=5` |
-| "what happens after" | "What happens after checkout?" | `steps=["Checkout"], forward=3` |
-| "what happens before" | "What do users do before purchasing?" | `steps=["Purchase"], reverse=3` |
+| "flow", "path", "journey" | "What paths do users take after signup?" | `event="Signup", forward=5` |
+| "what happens after" | "What happens after checkout?" | `event="Checkout", forward=3` |
+| "what happens before" | "What do users do before purchasing?" | `event="Purchase", reverse=3` |
 | "sankey", "user flow" | "Show the user flow diagram" | `mode="sankey"` |
 | "top paths" | "Top 10 paths after onboarding?" | `mode="paths", cardinality=10` |
 | "drop-off paths" | "Where do users go after dropping?" | Forward flow from drop-off event |
@@ -152,7 +152,7 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | 2 | Funnel | `ws.query_funnel(["Signup", "Activate", "Core Action", "Purchase"])` | Full lifecycle funnel |
 | 3 | Retention | `ws.query_retention("Signup", "Login", retention_unit="week")` | Overall retention |
 | 4 | Retention | `ws.query_retention("Signup", "Core Action")` | Core action retention |
-| 5 | Flows | `ws.query_flow(steps=["Signup"], forward=5)` | Post-signup paths |
+| 5 | Flows | `ws.query_flow(["Signup"], forward=5)` | Post-signup paths |
 | 6 | Insights | `ws.query("Login", math="dau")` | Engagement trend |
 
 ### Pattern 5: Onboarding Optimization
@@ -164,7 +164,7 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | 1 | Funnel | `ws.query_funnel(onboarding_steps, mode="steps")` | Step-level drop-off |
 | 2 | Funnel | `ws.query_funnel(onboarding_steps, group_by="platform")` | Platform differences |
 | 3 | Funnel | `ws.query_funnel(onboarding_steps, mode="trends")` | Trend over time |
-| 4 | Flows | `ws.query_flow(steps=["Signup"], forward=5)` | What users actually do |
+| 4 | Flows | `ws.query_flow(["Signup"], forward=5)` | What users actually do |
 | 5 | Retention | `ws.query_retention("Signup", "Core Action", bucket_sizes=[1,3,7])` | Time to activate |
 
 ### Pattern 6: A/B Test Analysis
@@ -199,7 +199,7 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | 2 | Retention | `ws.query_retention("Signup", "Login", group_by="source")` | Retention by source |
 | 3 | Insights | `ws.query("Login", math="unique", last=90)` | Active user trend |
 | 4 | Funnel | `ws.query_funnel(["Login", "Core Action"])` | Activation rate |
-| 5 | Flows | `ws.query_flow(steps=["Last Login"], forward=3)` | Pre-churn behavior |
+| 5 | Flows | `ws.query_flow(["Last Login"], forward=3)` | Pre-churn behavior |
 
 ### Pattern 9: Growth Accounting
 
@@ -286,7 +286,7 @@ worst_step_idx = df["step_conv_ratio"].idxmin()
 drop_event = df.loc[worst_step_idx, "event"]
 
 # Step 2: See what users do instead of converting
-flow = ws.query_flow(steps=[drop_event], forward=5)
+flow = ws.query_flow([drop_event], forward=5)
 print(flow.df)  # Top paths after drop-off point
 ```
 

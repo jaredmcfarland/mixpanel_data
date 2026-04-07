@@ -26,7 +26,7 @@ This will:
 After installation, check auth status:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status
+uv run python ${CLAUDE_SKILL_DIR}/../mixpanel-analyst/scripts/auth_manager.py status
 ```
 
 Parse the JSON result. If `active_method` is not `"none"`, credentials are configured — proceed to verification.
@@ -57,7 +57,7 @@ export MP_REGION="us"  # or "eu", "in"
 ## Verify Everything Works
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py test
+uv run python ${CLAUDE_SKILL_DIR}/../mixpanel-analyst/scripts/auth_manager.py test
 ```
 
 If the result shows `"success": true`, setup is complete. The user can now ask questions about their Mixpanel data.

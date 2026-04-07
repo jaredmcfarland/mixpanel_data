@@ -283,17 +283,21 @@ for step in result.steps_data:
 
 ### FunnelMathType
 
-| Value | Meaning |
-|-------|---------|
-| `conversion_rate_unique` | Conversion rate by unique users (default) |
-| `conversion_rate_total` | Conversion rate by total events |
-| `conversion_rate_session` | Conversion rate by sessions |
-| `unique` | Unique user counts per step |
-| `total` | Total event counts per step |
-| `session` | Session counts per step |
-| `general` | General event counts |
-| `conversion_rate` | Overall conversion rate |
-| `average` | Average per user |
+| Value | Meaning | Requires `math_property`? |
+|-------|---------|--------------------------|
+| `conversion_rate_unique` | Conversion rate by unique users (default) | No |
+| `conversion_rate_total` | Conversion rate by total events | No |
+| `conversion_rate_session` | Conversion rate by sessions | No |
+| `unique` | Unique user counts per step | No |
+| `total` | Total event counts per step | No |
+| `average` | Average of a numeric property | Yes |
+| `median` | Median of a numeric property | Yes |
+| `min` | Minimum of a numeric property | Yes |
+| `max` | Maximum of a numeric property | Yes |
+| `p25` | 25th percentile | Yes |
+| `p75` | 75th percentile | Yes |
+| `p90` | 90th percentile | Yes |
+| `p99` | 99th percentile | Yes |
 
 ### build_funnel_params()
 
@@ -493,9 +497,18 @@ FlowTreeNode(
     time_percentiles_from_prev: dict = {},   # timing from previous node
 )
 
+# Computed properties
+node.conversion_rate -> float             # converted_count / total_count
+node.depth -> int                         # max depth of subtree
+node.node_count -> int                    # total nodes in subtree
+
 # Methods
-node.to_dict() -> dict                    # serialize to dict
-node.to_anytree() -> AnyNode              # convert to anytree node for rendering
+node.all_paths() -> list[list[FlowTreeNode]]  # all root-to-leaf paths
+node.flatten() -> list[FlowTreeNode]      # preorder traversal of all nodes
+node.find(event) -> list[FlowTreeNode]    # search subtree by event name
+node.render() -> str                      # ASCII box-drawing tree visualization
+node.to_dict() -> dict                    # serialize to JSON-compatible dict
+node.to_anytree() -> AnyNode              # convert to anytree node for rendering/export
 ```
 
 ### FlowNodeType
@@ -523,7 +536,7 @@ node.to_anytree() -> AnyNode              # convert to anytree node for renderin
 
 ### FlowChartType
 
-`Literal["sankey", "paths"]` — visualization mode for the flow chart.
+`Literal["sankey", "paths", "tree"]` — visualization mode for the flow chart.
 
 ### build_flow_params()
 

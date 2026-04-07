@@ -117,6 +117,19 @@ Task(subagent_type="mixpanel-data:narrator", prompt="...")
 | `python-api.md` | Complete method signatures for all Workspace methods |
 | `bookmark-params.md` | Bookmark params JSON for entity management |
 
+## Installation
+
+```bash
+# Option 1: Add as a local dev marketplace
+/plugin marketplace add /path/to/mixpanel_data/mixpanel-plugin
+/plugin install mixpanel-data@mixpanel-data
+
+# Option 2: Symlink into plugins directory
+ln -s /path/to/mixpanel_data/mixpanel-plugin ~/.claude/plugins/mixpanel-data
+```
+
+Then restart Claude Code.
+
 ## Prerequisites
 
 - Python 3.10+
