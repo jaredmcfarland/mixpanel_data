@@ -55,6 +55,7 @@ from mixpanel_data.types import (
     CustomPropertyRef,
     Exclusion,
     Filter,
+    FlowStep,
     Formula,
     FunnelStep,
     GroupBy,
@@ -63,6 +64,7 @@ from mixpanel_data.types import (
     MathType,
     Metric,
     PerUserAggregation,
+    RetentionEvent,
 )
 
 _CP_INPUT_KEY_RE = re.compile(r"^[A-Z]$")
@@ -165,6 +167,33 @@ def _validate_custom_property(
     return errors
 
 
+def _scan_filters_for_custom_properties(
+    filters: list[Filter],
+    base_path: str,
+) -> list[ValidationError]:
+    """Scan a list of Filter objects for custom property references.
+
+    Used by ``_scan_custom_properties()`` to validate custom properties
+    inside filter lists attached to metrics and steps, including
+    ``Metric.filters``, ``FunnelStep.filters``, ``FlowStep.filters``,
+    and ``RetentionEvent.filters``.
+
+    Args:
+        filters: Filter objects to scan.
+        base_path: JSONPath prefix for error reporting
+            (e.g. ``"events[0]"`` or ``"steps[1]"``).
+
+    Returns:
+        List of validation errors for any invalid custom properties.
+    """
+    errors: list[ValidationError] = []
+    for i, f in enumerate(filters):
+        if isinstance(f._property, (CustomPropertyRef, InlineCustomProperty)):
+            fpath = f"{base_path}.filters[{i}]"
+            errors.extend(_validate_custom_property(f._property, fpath))
+    return errors
+
+
 def _scan_custom_properties(
     *,
     group_by: str
@@ -174,24 +203,36 @@ def _scan_custom_properties(
     | None = None,
     where: Filter | list[Filter] | None = None,
     events: Sequence[str | Metric | CohortMetric] | None = None,
+    funnel_steps: Sequence[str | FunnelStep] | None = None,
+    flow_steps: Sequence[FlowStep] | None = None,
+    retention_events: Sequence[RetentionEvent] | None = None,
 ) -> list[ValidationError]:
-    """Scan group_by, where, and events for custom properties and validate.
+    """Scan all query positions for custom properties and validate.
 
     Collects all ``CustomPropertyRef`` and ``InlineCustomProperty`` values
-    from the three positions (group_by, filter, measurement) and runs
-    ``_validate_custom_property()`` on each.
+    from group_by, filter, measurement, per-metric filter, per-funnel-step
+    filter, per-flow-step filter, and per-retention-event filter positions
+    and runs ``_validate_custom_property()`` on each.
 
     Note:
-        ``where`` filters are validated separately at the workspace level
-        (``workspace.py`` calls ``_scan_custom_properties(where=where)``)
+        ``where`` filters and some step/event filters are scanned from
+        ``workspace.py`` rather than from the standalone validators
         because ``validate_query_args`` / ``validate_funnel_args`` /
-        ``validate_retention_args`` do not receive the ``where`` parameter.
+        ``validate_retention_args`` do not receive the ``where`` parameter
+        or the full step/event objects.  Flow step filters and retention
+        event filters are scanned from ``workspace.py`` for the same reason.
 
     Args:
         group_by: Breakdown specification (may contain custom properties).
         where: Filter specification (may contain custom properties).
-        events: Event specifications (Metric.property may contain
-            custom properties).
+        events: Event specifications (Metric.property and Metric.filters
+            may contain custom properties).
+        funnel_steps: Funnel step specifications (FunnelStep.filters
+            may contain custom properties).
+        flow_steps: Flow step specifications (FlowStep.filters
+            may contain custom properties).
+        retention_events: Retention event specifications
+            (RetentionEvent.filters may contain custom properties).
 
     Returns:
         List of validation errors. Empty list means all custom
@@ -217,19 +258,44 @@ def _scan_custom_properties(
                 fpath = f"where[{i}]" if len(filters) > 1 else "where"
                 errors.extend(_validate_custom_property(f._property, fpath))
 
-    # Scan events (Metric.property)
-    # TODO: Also scan Metric.filters and FunnelStep.filters for custom
-    # properties.  Currently only Metric.property is checked; custom
-    # properties inside per-metric or per-step filters bypass CP1-CP6
-    # validation (documented in tests/live/test_custom_property_queries_live.py
-    # TestValidationGaps).
+    # Scan events (Metric.property AND Metric.filters)
     if events is not None:
         for idx, item in enumerate(events):
-            if isinstance(item, Metric) and isinstance(
-                item.property, (CustomPropertyRef, InlineCustomProperty)
-            ):
-                epath = f"events[{idx}]"
-                errors.extend(_validate_custom_property(item.property, epath))
+            if isinstance(item, Metric):
+                if isinstance(item.property, (CustomPropertyRef, InlineCustomProperty)):
+                    errors.extend(
+                        _validate_custom_property(item.property, f"events[{idx}]")
+                    )
+                if item.filters:
+                    errors.extend(
+                        _scan_filters_for_custom_properties(
+                            item.filters, f"events[{idx}]"
+                        )
+                    )
+
+    # Scan funnel steps (FunnelStep.filters)
+    if funnel_steps is not None:
+        for idx, step in enumerate(funnel_steps):
+            if isinstance(step, FunnelStep) and step.filters:
+                errors.extend(
+                    _scan_filters_for_custom_properties(step.filters, f"steps[{idx}]")
+                )
+
+    # Scan flow steps (FlowStep.filters)
+    if flow_steps is not None:
+        for idx, fstep in enumerate(flow_steps):
+            if fstep.filters:
+                errors.extend(
+                    _scan_filters_for_custom_properties(fstep.filters, f"steps[{idx}]")
+                )
+
+    # Scan retention events (RetentionEvent.filters)
+    # retention_events is always [born_event, return_event] — see workspace.py
+    if retention_events is not None:
+        for idx, rev in enumerate(retention_events):
+            if rev.filters:
+                label = "born_event" if idx == 0 else "return_event"
+                errors.extend(_scan_filters_for_custom_properties(rev.filters, label))
 
     return errors
 
@@ -983,8 +1049,8 @@ def validate_funnel_args(
     # F6: GroupBy validation (delegated)
     errors.extend(validate_group_by_args(group_by=group_by))
 
-    # CP1-CP6: Custom property validation
-    errors.extend(_scan_custom_properties(group_by=group_by))
+    # CP1-CP6: Custom property validation (group_by and per-step filters)
+    errors.extend(_scan_custom_properties(group_by=group_by, funnel_steps=steps))
 
     return errors
 
@@ -2208,8 +2274,9 @@ def _validate_show_clause(
         )
         return errors
 
-    # Formula show clause — minimal validation
-    if "formula" in clause or clause.get("type") == "formula":
+    # Formula show clause — minimal validation (only for pure formula clauses)
+    is_formula = "formula" in clause or clause.get("type") == "formula"
+    if is_formula and "behavior" not in clause:
         return errors
 
     # Multi-metric show clause: requires behavior
@@ -2585,6 +2652,19 @@ def _validate_filter_clause(
             )
         )
 
+    # B18B: customPropertyId must be a positive integer (defense-in-depth)
+    cp_id = clause.get("customPropertyId")
+    if cp_id is not None and (
+        isinstance(cp_id, bool) or not isinstance(cp_id, int) or cp_id <= 0
+    ):
+        errors.append(
+            ValidationError(
+                path=f"{path}.customPropertyId",
+                message=(f"customPropertyId must be a positive integer (got {cp_id})"),
+                code="B18B_INVALID_CP_ID",
+            )
+        )
+
     # B16: Validate resourceType
     rt = clause.get("resourceType")
     if rt is not None and rt not in VALID_RESOURCE_TYPES:
@@ -2670,6 +2750,26 @@ def _validate_filter_clause(
                 code="B21_FILTER_VALUE_TOO_MANY",
             )
         )
+
+    # B20B: Numeric filter values must be finite (not NaN/Inf)
+    if isinstance(fv, float) and not _is_finite(fv):
+        errors.append(
+            ValidationError(
+                path=f"{path}.filterValue",
+                message=f"filterValue must be a finite number (got {fv})",
+                code="B20B_FILTER_VALUE_NOT_FINITE",
+            )
+        )
+    elif isinstance(fv, list):
+        for vi, v in enumerate(fv):
+            if isinstance(v, float) and not _is_finite(v):
+                errors.append(
+                    ValidationError(
+                        path=f"{path}.filterValue[{vi}]",
+                        message=(f"filterValue must be a finite number (got {v})"),
+                        code="B20B_FILTER_VALUE_NOT_FINITE",
+                    )
+                )
 
     return errors
 

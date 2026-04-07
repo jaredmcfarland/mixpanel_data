@@ -3259,6 +3259,8 @@ class Workspace:
             to_date=to_date,
             last=last,
         )
+        # CP1-CP6: Custom property validation for flow step filters
+        arg_errors.extend(_scan_custom_properties(flow_steps=steps))
         if any(e.severity == "error" for e in arg_errors):
             raise BookmarkValidationError(arg_errors)
 
@@ -3569,8 +3571,13 @@ class Workspace:
             last=last,
             group_by=group_by,
         )
-        # CP1-CP6: Custom property validation for where filters
-        arg_errors.extend(_scan_custom_properties(where=where))
+        # CP1-CP6: Custom property validation for where and event filters
+        arg_errors.extend(
+            _scan_custom_properties(
+                where=where,
+                retention_events=[norm_born, norm_return],
+            )
+        )
         if any(e.severity == "error" for e in arg_errors):
             raise BookmarkValidationError(arg_errors)
 
