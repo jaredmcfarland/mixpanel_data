@@ -2007,11 +2007,12 @@ class Workspace:
             params = ws.build_params("Login", math="unique", last=7)
             print(json.dumps(params, indent=2))
 
-            # Save as a bookmark
+            # Save as a bookmark (dashboard_id required)
             ws.create_bookmark(CreateBookmarkParams(
                 name="Daily Unique Logins",
                 bookmark_type="insights",
                 params=params,
+                dashboard_id=12345,
             ))
             ```
         """
@@ -2674,11 +2675,12 @@ class Workspace:
             params = ws.build_funnel_params(["Signup", "Purchase"])
             print(json.dumps(params, indent=2))
 
-            # Save as a report
+            # Save as a report (dashboard_id required)
             ws.create_bookmark(CreateBookmarkParams(
                 name="Signup → Purchase Funnel",
                 bookmark_type="funnels",
                 params=params,
+                dashboard_id=12345,
             ))
             ```
         """
@@ -3290,11 +3292,12 @@ class Workspace:
             params = ws.build_flow_params("Login")
             print(json.dumps(params, indent=2))
 
-            # Save as a report
+            # Save as a report (dashboard_id required)
             ws.create_bookmark(CreateBookmarkParams(
                 name="Login Flow",
                 bookmark_type="flows",
                 params=params,
+                dashboard_id=12345,
             ))
             ```
         """
@@ -3578,11 +3581,12 @@ class Workspace:
             params = ws.build_retention_params("Signup", "Login")
             print(json.dumps(params, indent=2))
 
-            # Save as a report
+            # Save as a report (dashboard_id required)
             ws.create_bookmark(CreateBookmarkParams(
                 name="Signup → Login Retention",
                 bookmark_type="retention",
                 params=params,
+                dashboard_id=12345,
             ))
             ```
         """
@@ -4299,12 +4303,15 @@ class Workspace:
         """Create a new bookmark (saved report).
 
         Args:
-            params: Bookmark creation parameters.
+            params: Bookmark creation parameters.  ``dashboard_id``
+                is required by the Mixpanel v2 API.
 
         Returns:
             The newly created ``Bookmark``.
 
         Raises:
+            MixpanelDataError: If ``params.dashboard_id`` is ``None``
+                (required by the Mixpanel v2 API).
             ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid parameters (400, 422).
@@ -4313,10 +4320,14 @@ class Workspace:
         Example:
             ```python
             ws = Workspace()
+            dashboard = ws.create_dashboard(
+                CreateDashboardParams(title="My Dashboard")
+            )
             report = ws.create_bookmark(CreateBookmarkParams(
                 name="Signup Funnel",
                 bookmark_type="funnels",
                 params={"events": [{"event": "Signup"}]},
+                dashboard_id=dashboard.id,
             ))
             ```
         """
@@ -4342,10 +4353,7 @@ class Workspace:
         # dashboard in the database, but does NOT add it to the
         # dashboard's visual layout — that requires a separate
         # PATCH call.
-        if bookmark.id is not None:
-            client.add_report_to_dashboard(
-                params.dashboard_id, bookmark.id
-            )
+        self.add_report_to_dashboard(params.dashboard_id, bookmark.id)
 
         return bookmark
 

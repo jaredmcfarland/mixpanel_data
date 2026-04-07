@@ -621,7 +621,7 @@ class TestWorkspaceBookmarkCRUD:
             """Return created bookmark or handle add-to-dashboard PATCH."""
             if request.method == "PATCH":
                 return httpx.Response(
-                    200, json={"status": "ok", "results": {"id": 99}}
+                    200, json={"status": "ok", "results": _dashboard_json(id=99)}
                 )
             return httpx.Response(
                 200,
@@ -651,7 +651,7 @@ class TestWorkspaceBookmarkCRUD:
             """Return created bookmark with description."""
             if request.method == "PATCH":
                 return httpx.Response(
-                    200, json={"status": "ok", "results": {"id": 99}}
+                    200, json={"status": "ok", "results": _dashboard_json(id=99)}
                 )
             data = _bookmark_json(11, "Described BM", "funnels")
             data["description"] = "A test bookmark"
@@ -676,7 +676,7 @@ class TestWorkspaceBookmarkCRUD:
             """Return created bookmark with dashboard_id or handle PATCH."""
             if request.method == "PATCH":
                 return httpx.Response(
-                    200, json={"status": "ok", "results": {"id": 99}}
+                    200, json={"status": "ok", "results": _dashboard_json(id=99)}
                 )
             data = _bookmark_json(12, "On Dashboard", "insights")
             data["dashboard_id"] = 99
@@ -692,6 +692,46 @@ class TestWorkspaceBookmarkCRUD:
         bookmark = ws.create_bookmark(params)
 
         assert bookmark.dashboard_id == 99
+
+    def test_create_bookmark_auto_adds_to_dashboard(self, temp_dir: Path) -> None:
+        """create_bookmark() issues a PATCH to add the report to dashboard layout."""
+        requests_made: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture requests and return appropriate responses."""
+            requests_made.append(request)
+            if request.method == "POST" and "bookmarks" in str(request.url):
+                data = _bookmark_json(42, "Auto Add", "insights")
+                data["dashboard_id"] = 99
+                return httpx.Response(
+                    200, json={"status": "ok", "results": data}
+                )
+            if request.method == "PATCH" and "dashboards" in str(request.url):
+                return httpx.Response(
+                    200,
+                    json={"status": "ok", "results": _dashboard_json(id=99)},
+                )
+            return httpx.Response(200, json={"status": "ok", "results": {}})
+
+        ws = _make_workspace(temp_dir, handler)
+        ws.create_bookmark(CreateBookmarkParams(
+            name="Auto Add",
+            bookmark_type="insights",
+            params={"events": []},
+            dashboard_id=99,
+        ))
+
+        patch_requests = [
+            r for r in requests_made
+            if r.method == "PATCH" and "dashboards" in str(r.url)
+        ]
+        assert len(patch_requests) == 1, (
+            f"Expected 1 PATCH to dashboards, got {len(patch_requests)}"
+        )
+        import json
+
+        patch_body = json.loads(patch_requests[0].content)
+        assert patch_body["content"]["content_params"]["source_bookmark_id"] == 42
 
     def test_create_bookmark_requires_dashboard_id(self, temp_dir: Path) -> None:
         """create_bookmark() raises MixpanelDataError when dashboard_id is missing."""
@@ -1034,7 +1074,7 @@ class TestWorkspaceBookmarkCRUD:
             """Return created funnel bookmark or handle PATCH."""
             if request.method == "PATCH":
                 return httpx.Response(
-                    200, json={"status": "ok", "results": {"id": 99}}
+                    200, json={"status": "ok", "results": _dashboard_json(id=99)}
                 )
             return httpx.Response(
                 200,

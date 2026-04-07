@@ -118,7 +118,7 @@ class TestRequestBodySerialization:
             # Handle PATCH for add_report_to_dashboard
             if request.method == "PATCH":
                 return httpx.Response(
-                    200, json={"status": "ok", "results": {"id": 99}}
+                    200, json={"status": "ok", "results": {"id": 99, "title": "T"}}
                 )
             return httpx.Response(200, json={"status": "ok", "results": []})
 

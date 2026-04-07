@@ -3114,7 +3114,9 @@ class CreateBookmarkParams(BaseModel):
         params: Query parameters (required).
         description: Bookmark description.
         icon: Bookmark icon.
-        dashboard_id: Dashboard to associate with.
+        dashboard_id: Dashboard to associate with.  Required by
+            ``Workspace.create_bookmark()`` — the Mixpanel v2 API
+            requires every bookmark to belong to a dashboard.
         is_visibility_restricted: Visibility restriction flag.
         is_modification_restricted: Modification restriction flag.
 
@@ -3124,6 +3126,7 @@ class CreateBookmarkParams(BaseModel):
             name="Signup Funnel",
             bookmark_type="funnels",
             params={"events": [{"event": "Signup"}]},
+            dashboard_id=12345,
         )
         data = params.model_dump(by_alias=True, exclude_none=True)
         ```
