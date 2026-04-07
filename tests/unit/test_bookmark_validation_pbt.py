@@ -24,7 +24,6 @@ from mixpanel_data._internal.bookmark_enums import (
 )
 from mixpanel_data._internal.validation import (
     validate_bookmark,
-    validate_flow_bookmark,
 )
 
 # =============================================================================
@@ -205,9 +204,7 @@ class TestMathTypeDispatch:
         Args:
             math: A valid retention math type.
         """
-        errors = validate_bookmark(
-            _bookmark_with_math(math), bookmark_type="retention"
-        )
+        errors = validate_bookmark(_bookmark_with_math(math), bookmark_type="retention")
         b9_errors = [e for e in errors if e.code == "B9_INVALID_MATH"]
         assert b9_errors == [], (
             f"Valid retention math {math!r} produced B9 error: "

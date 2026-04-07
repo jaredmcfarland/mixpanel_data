@@ -8,13 +8,10 @@ verifies event name validation consistency across all four query types.
 
 from __future__ import annotations
 
-import re
-
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from mixpanel_data._internal.bookmark_enums import (
-    MATH_NO_PER_USER,
     MATH_PROPERTY_OPTIONAL,
     MATH_REQUIRING_PROPERTY,
     VALID_MATH_FUNNELS,
@@ -249,14 +246,12 @@ class TestMathPropertyMatrix:
             )
         else:
             assert "V1_MATH_REQUIRES_PROPERTY" not in codes, (
-                f"V1 should not fire for math={math!r}, "
-                f"has_property={has_property}"
+                f"V1 should not fire for math={math!r}, has_property={has_property}"
             )
 
         # V2: non-property math with property
         rejects_property = (
-            math not in MATH_REQUIRING_PROPERTY
-            and math not in MATH_PROPERTY_OPTIONAL
+            math not in MATH_REQUIRING_PROPERTY and math not in MATH_PROPERTY_OPTIONAL
         )
         if rejects_property and has_property:
             assert "V2_MATH_REJECTS_PROPERTY" in codes, (
@@ -264,8 +259,7 @@ class TestMathPropertyMatrix:
             )
         else:
             assert "V2_MATH_REJECTS_PROPERTY" not in codes, (
-                f"V2 should not fire for math={math!r}, "
-                f"has_property={has_property}"
+                f"V2 should not fire for math={math!r}, has_property={has_property}"
             )
 
     @given(
@@ -312,14 +306,12 @@ class TestMathPropertyMatrix:
             )
         else:
             assert "F10_MATH_MISSING_PROPERTY" not in codes, (
-                f"F10 should not fire for math={math!r}, "
-                f"has_property={has_property}"
+                f"F10 should not fire for math={math!r}, has_property={has_property}"
             )
 
         # F11: non-property math with property
         rejects_property = (
-            math not in MATH_REQUIRING_PROPERTY
-            and math not in MATH_PROPERTY_OPTIONAL
+            math not in MATH_REQUIRING_PROPERTY and math not in MATH_PROPERTY_OPTIONAL
         )
         if rejects_property and has_property:
             assert "F11_MATH_REJECTS_PROPERTY" in codes, (
@@ -327,8 +319,7 @@ class TestMathPropertyMatrix:
             )
         else:
             assert "F11_MATH_REJECTS_PROPERTY" not in codes, (
-                f"F11 should not fire for math={math!r}, "
-                f"has_property={has_property}"
+                f"F11 should not fire for math={math!r}, has_property={has_property}"
             )
 
 

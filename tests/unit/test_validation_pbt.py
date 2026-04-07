@@ -11,7 +11,6 @@ Verifies invariants of core validation helpers using Hypothesis:
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -97,7 +96,9 @@ class TestSuggestInvariants:
                 f"Suggestions {result} not subset of valid {valid}"
             )
 
-    @given(value=query_strings, valid=valid_sets, n=st.integers(min_value=1, max_value=10))
+    @given(
+        value=query_strings, valid=valid_sets, n=st.integers(min_value=1, max_value=10)
+    )
     @settings(max_examples=100)
     def test_result_length_bounded_by_n(
         self,
@@ -114,9 +115,7 @@ class TestSuggestInvariants:
         """
         result = _suggest(value, valid, n=n)
         if result is not None:
-            assert len(result) <= n, (
-                f"Got {len(result)} suggestions but n={n}"
-            )
+            assert len(result) <= n, f"Got {len(result)} suggestions but n={n}"
 
     @given(valid=valid_sets)
     @settings(max_examples=100)
@@ -220,9 +219,7 @@ class TestValidateTimeArgsSoundness:
         to_date=valid_date_strs,
     )
     @settings(max_examples=100)
-    def test_valid_ordered_dates_no_errors(
-        self, from_date: str, to_date: str
-    ) -> None:
+    def test_valid_ordered_dates_no_errors(self, from_date: str, to_date: str) -> None:
         """Chronologically ordered valid dates with default last produce no errors.
 
         Args:
@@ -339,10 +336,7 @@ class TestInlineCustomPropertyValidation:
             keys: Unique single uppercase letter keys (A-Z).
             names: Non-empty property name strings for inputs.
         """
-        inputs = {
-            k: PropertyInput(name=names[i])
-            for i, k in enumerate(keys)
-        }
+        inputs = {k: PropertyInput(name=names[i]) for i, k in enumerate(keys)}
         prop = InlineCustomProperty(formula=formula, inputs=inputs)
         errors = _validate_custom_property(prop, "test")
         assert errors == [], (
@@ -366,10 +360,7 @@ class TestInlineCustomPropertyValidation:
             keys: Valid input keys.
             names: Valid property names.
         """
-        inputs = {
-            k: PropertyInput(name=names[i])
-            for i, k in enumerate(keys)
-        }
+        inputs = {k: PropertyInput(name=names[i]) for i, k in enumerate(keys)}
         prop = InlineCustomProperty(formula="   ", inputs=inputs)
         errors = _validate_custom_property(prop, "test")
         codes = {e.code for e in errors}

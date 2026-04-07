@@ -19,16 +19,9 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.bookmark_enums import (
-    MATH_NO_PER_USER,
-    MATH_PROPERTY_OPTIONAL,
-    MATH_REQUIRING_PROPERTY,
-)
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.types import (
-    FunnelMathType,
     Formula,
-    MathType,
     Metric,
     PerUserAggregation,
     RetentionMathType,
@@ -86,9 +79,7 @@ insights_math_args: st.SearchStrategy[dict[str, Any]] = st.one_of(
     st.tuples(
         property_names,
         st.sampled_from(list(get_args(PerUserAggregation))),
-    ).map(
-        lambda t: {"math": "total", "math_property": t[0], "per_user": t[1]}
-    ),
+    ).map(lambda t: {"math": "total", "math_property": t[0], "per_user": t[1]}),
 )
 
 # --- Funnel math strategies ---
@@ -295,7 +286,9 @@ class TestFunnelRoundTrip:
             conversion_window: Positive conversion window size.
         """
         ws = _make_workspace()
-        cw = 1 if math_args["conversion_window_unit"] == "session" else conversion_window
+        cw = (
+            1 if math_args["conversion_window_unit"] == "session" else conversion_window
+        )
         ws.build_funnel_params(
             steps=steps,
             last=last,
