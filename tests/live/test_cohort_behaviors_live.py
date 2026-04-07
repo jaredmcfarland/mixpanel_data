@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import uuid
+from collections.abc import Generator
 
 import pytest
 
@@ -115,7 +116,7 @@ def second_cohort(ws: Workspace) -> tuple[int, str]:
 
 
 @pytest.fixture(scope="module")
-def qa_cohort(ws: Workspace, real_event: str) -> tuple[int, str]:
+def qa_cohort(ws: Workspace, real_event: str) -> Generator[tuple[int, str]]:
     """Create a QA cohort for testing, cleaned up after.
 
     Uses a CohortDefinition based on a real event. The cohort may have
@@ -137,7 +138,7 @@ def qa_cohort(ws: Workspace, real_event: str) -> tuple[int, str]:
         CreateCohortParams(name=name, definition=definition.to_dict())
     )
     cohort_id = cohort.id
-    yield cohort_id, name  # type: ignore[misc]
+    yield cohort_id, name
     with contextlib.suppress(Exception):
         ws.delete_cohort(cohort_id)
 
