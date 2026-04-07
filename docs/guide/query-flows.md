@@ -180,7 +180,7 @@ result = ws.query_flow(
 ```
 
 !!! note
-    Flows only support cohort filters (`Filter.in_cohort` / `Filter.not_in_cohort`), not property filters. Cohort breakdowns (`CohortBreakdown`) are not supported in flows.
+    Flows only support cohort filters (`Filter.in_cohort` / `Filter.not_in_cohort`), not property filters. Cohort breakdowns (`CohortBreakdown`) and custom properties (`CustomPropertyRef`, `InlineCustomProperty`) are not supported in flows.
 
 See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full cohort filter reference.
 

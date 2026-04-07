@@ -274,6 +274,27 @@ result = ws.query_retention(
 
 See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full cohort filter reference.
 
+### Custom Property Filters
+
+Use saved or inline custom properties in retention filters:
+
+```python
+from mixpanel_data import Filter, CustomPropertyRef
+
+result = ws.query_retention(
+    "Signup",
+    "Login",
+    where=Filter.greater_than(property=CustomPropertyRef(42), value=100),
+    retention_unit="week",
+    last=90,
+)
+```
+
+!!! warning
+    Custom property filters in retention `where=` may cause server errors due to a known Mixpanel API bug. Custom property breakdowns work reliably.
+
+See [Insights Queries — Custom Properties in Queries](query.md#custom-properties-in-queries) for `InlineCustomProperty`, validation rules, and full options.
+
 ## Breakdowns
 
 Break down retention results by property values with `group_by`:
@@ -315,6 +336,24 @@ result = ws.query_retention(
     `query_retention()` does not support mixing `CohortBreakdown` with property `GroupBy` in the same `group_by` list. Use one or the other.
 
 See [Insights Queries — Cohort Breakdowns](query.md#cohort-breakdowns) for inline definitions and options.
+
+### Custom Property Breakdowns
+
+Break down retention results by a saved or inline custom property:
+
+```python
+from mixpanel_data import GroupBy, CustomPropertyRef
+
+result = ws.query_retention(
+    "Signup",
+    "Login",
+    group_by=GroupBy(property=CustomPropertyRef(42), property_type="number"),
+    retention_unit="week",
+    last=90,
+)
+```
+
+See [Insights Queries — Custom Properties in Queries](query.md#custom-properties-in-queries) for `InlineCustomProperty` and full options.
 
 See [Insights Queries — Breakdowns](query.md#breakdowns) for the full `GroupBy` reference.
 
