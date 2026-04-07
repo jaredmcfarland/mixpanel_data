@@ -1,7 +1,7 @@
 {
   "name": "mixpanel-data",
-  "version": "2.0.0",
-  "description": "Turn Claude into a senior data analyst and Mixpanel product analytics expert. CodeMode-first: Claude writes Python using mixpanel_data + pandas instead of calling tools or CLI commands.",
+  "version": "3.0.0",
+  "description": "Turn Claude into a senior data analyst and Mixpanel product analytics expert. CodeMode-first: Claude writes Python using mixpanel_data's 4 typed query engines (insights, funnels, retention, flows) plus pandas, networkx, and anytree for sophisticated multi-engine analysis.",
   "author": {
     "name": "Jared McFarland",
     "email": "jaredcolin@gmail.com",
@@ -18,6 +18,12 @@
     "codemode",
     "pandas",
     "python",
-    "data-science"
+    "data-science",
+    "networkx",
+    "anytree",
+    "funnels",
+    "retention",
+    "flows",
+    "graph-analysis"
   ]
 }
