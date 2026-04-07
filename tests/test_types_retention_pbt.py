@@ -118,7 +118,7 @@ class TestRetentionEventPBT:
     that should hold for all possible RetentionEvent instances.
     """
 
-    @given(event=st.text(min_size=1))
+    @given(event=event_names)
     def test_immutability(self, event: str) -> None:
         """Setting any attribute on a frozen RetentionEvent raises an error.
 
@@ -134,7 +134,7 @@ class TestRetentionEventPBT:
         with pytest.raises(dataclasses.FrozenInstanceError):
             re.filters_combinator = "any"  # type: ignore[misc]
 
-    @given(event=st.text(min_size=1))
+    @given(event=event_names)
     def test_equality(self, event: str) -> None:
         """Two RetentionEvent instances with the same arguments are equal.
 
@@ -145,7 +145,7 @@ class TestRetentionEventPBT:
         b = RetentionEvent(event=event)
         assert a == b
 
-    @given(event=st.text(min_size=1))
+    @given(event=event_names)
     def test_field_preservation(self, event: str) -> None:
         """The event field is preserved exactly as given across random strings.
 

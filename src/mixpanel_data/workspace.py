@@ -58,7 +58,17 @@ from mixpanel_data._internal.validation import (
     validate_query_args,
     validate_retention_args,
 )
-from mixpanel_data._literal_types import QueryTimeUnit, TimeUnit
+from mixpanel_data._literal_types import (
+    ConversionWindowUnit,
+    FlowChartType,
+    FlowConversionWindowUnit,
+    FlowCountType,
+    FunnelMode,
+    FunnelOrder,
+    InsightsMode,
+    QueryTimeUnit,
+    TimeUnit,
+)
 from mixpanel_data.exceptions import (
     BookmarkValidationError,
     ConfigError,
@@ -2160,7 +2170,7 @@ class Workspace:
         formula_label: str | None = None,
         rolling: int | None = None,
         cumulative: bool = False,
-        mode: str = "timeseries",
+        mode: InsightsMode = "timeseries",
     ) -> dict[str, Any]:
         """Normalize, validate, and build bookmark params.
 
@@ -2493,9 +2503,9 @@ class Workspace:
         *,
         steps: list[str | FunnelStep],
         conversion_window: int,
-        conversion_window_unit: str,
-        order: str,
-        math: str,
+        conversion_window_unit: ConversionWindowUnit,
+        order: FunnelOrder,
+        math: FunnelMathType,
         math_property: str | None,
         from_date: str | None,
         to_date: str | None,
@@ -2509,7 +2519,7 @@ class Workspace:
         where: Filter | list[Filter] | None,
         exclusions: list[str | Exclusion] | None,
         holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None,
-        mode: str,
+        mode: FunnelMode,
     ) -> dict[str, Any]:
         """Normalize, validate, and build funnel bookmark params.
 
@@ -3100,12 +3110,12 @@ class Workspace:
         to_date: str | None,
         last: int,
         conversion_window: int,
-        conversion_window_unit: str,
-        count_type: str,
+        conversion_window_unit: FlowConversionWindowUnit,
+        count_type: FlowCountType,
         cardinality: int,
         collapse_repeated: bool,
         hidden_events: list[str] | None,
-        mode: str,
+        mode: FlowChartType,
         where: Filter | list[Filter] | None = None,
     ) -> dict[str, Any]:
         """Normalize, validate, and build flow bookmark params.

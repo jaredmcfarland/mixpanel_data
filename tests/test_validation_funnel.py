@@ -131,12 +131,12 @@ class TestValidateFunnelArgsF2:
         errors = validate_funnel_args(**_valid_funnel_args(steps=["Signup", ""]))
         assert any(e.code == "F2_EMPTY_STEP_EVENT" for e in errors)
 
-    def test_empty_string_funnel_step_returns_f2_error(self) -> None:
-        """A FunnelStep with an empty event must produce an F2 error."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(steps=["Signup", FunnelStep("")])
-        )
-        assert any(e.code == "F2_EMPTY_STEP_EVENT" for e in errors)
+    def test_empty_string_funnel_step_raises_at_construction(self) -> None:
+        """A FunnelStep with an empty event must raise ValueError at construction."""
+        import pytest
+
+        with pytest.raises(ValueError, match="FunnelStep.event must be a non-empty string"):
+            FunnelStep("")
 
     def test_whitespace_only_step_returns_f2_error(self) -> None:
         """A whitespace-only step must produce an F2_EMPTY_STEP_EVENT error."""
@@ -252,10 +252,12 @@ class TestValidateFunnelArgsF3:
 class TestValidateFunnelArgsF4:
     """Tests for F4: non-empty exclusion event names."""
 
-    def test_empty_exclusion_event_returns_f4_error(self) -> None:
-        """An Exclusion with an empty event must produce an F4 error."""
-        errors = validate_funnel_args(**_valid_funnel_args(exclusions=[Exclusion("")]))
-        assert any(e.code == "F4_EMPTY_EXCLUSION_EVENT" for e in errors)
+    def test_empty_exclusion_event_raises_at_construction(self) -> None:
+        """An Exclusion with an empty event must raise ValueError at construction."""
+        import pytest
+
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("")
 
     def test_whitespace_exclusion_event_returns_f4_error(self) -> None:
         """An Exclusion with a whitespace-only event must produce an F4 error."""
@@ -282,30 +284,36 @@ class TestValidateFunnelArgsF4:
         assert "F4_EMPTY_EXCLUSION_EVENT" not in _codes(errors)
 
     def test_multiple_empty_exclusions_produce_multiple_f4_errors(self) -> None:
-        """Each empty exclusion must produce its own F4 error."""
+        """Empty exclusion raises at construction; whitespace passes to validation."""
+        import pytest
+
+        # Empty string is caught by __post_init__
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("")
+
+        # Whitespace-only passes __post_init__ but fails validation
         errors = validate_funnel_args(
             **_valid_funnel_args(
-                exclusions=[Exclusion(""), Exclusion("  "), Exclusion("Valid")]
+                exclusions=[Exclusion("  "), Exclusion("Valid")]
             )
         )
         f4_errors = [e for e in errors if e.code == "F4_EMPTY_EXCLUSION_EVENT"]
-        assert len(f4_errors) == 2
+        assert len(f4_errors) == 1
 
     def test_f4_error_path_contains_index(self) -> None:
-        """The F4 error path must reference the exclusion index."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(exclusions=[Exclusion("Valid"), Exclusion("")])
-        )
-        f4_errors = [e for e in errors if e.code == "F4_EMPTY_EXCLUSION_EVENT"]
-        assert len(f4_errors) == 1
-        assert f4_errors[0].path == "exclusions[1]"
+        """Empty exclusion event raises ValueError at construction."""
+        import pytest
+
+        # Exclusion("") now raises at construction before reaching validation
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("")
 
     def test_f4_error_path_for_first_exclusion(self) -> None:
-        """The F4 error path must be exclusions[0] for the first exclusion."""
-        errors = validate_funnel_args(**_valid_funnel_args(exclusions=[Exclusion("")]))
-        f4_errors = [e for e in errors if e.code == "F4_EMPTY_EXCLUSION_EVENT"]
-        assert len(f4_errors) == 1
-        assert f4_errors[0].path == "exclusions[0]"
+        """Empty exclusion event raises ValueError at construction."""
+        import pytest
+
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("")
 
     def test_exclusion_with_step_range_valid(self) -> None:
         """An Exclusion with from_step/to_step and valid event must pass."""
@@ -395,35 +403,31 @@ class TestValidateFunnelArgsF5:
 class TestValidateFunnelArgsF6:
     """Tests for F6: group-by validation delegated to validate_group_by_args."""
 
-    def test_negative_bucket_size_returns_v12_error(self) -> None:
-        """A negative bucket_size must produce a V12_BUCKET_SIZE_POSITIVE error."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                group_by=GroupBy(
-                    "revenue",
-                    property_type="number",
-                    bucket_size=-1,
-                    bucket_min=0,
-                    bucket_max=100,
-                )
-            )
-        )
-        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
+    def test_negative_bucket_size_raises_at_construction(self) -> None:
+        """A negative bucket_size must raise ValueError at construction."""
+        import pytest
 
-    def test_zero_bucket_size_returns_v12_error(self) -> None:
-        """A zero bucket_size must produce a V12_BUCKET_SIZE_POSITIVE error."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                group_by=GroupBy(
-                    "revenue",
-                    property_type="number",
-                    bucket_size=0,
-                    bucket_min=0,
-                    bucket_max=100,
-                )
+        with pytest.raises(ValueError, match="GroupBy.bucket_size must be positive"):
+            GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=-1,
+                bucket_min=0,
+                bucket_max=100,
             )
-        )
-        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
+
+    def test_zero_bucket_size_raises_at_construction(self) -> None:
+        """A zero bucket_size must raise ValueError at construction."""
+        import pytest
+
+        with pytest.raises(ValueError, match="GroupBy.bucket_size must be positive"):
+            GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=0,
+                bucket_min=0,
+                bucket_max=100,
+            )
 
     def test_string_group_by_no_errors(self) -> None:
         """A simple string group_by must not produce group-by errors."""
@@ -474,20 +478,18 @@ class TestValidateFunnelArgsF6:
         }
         assert not any(e.code in group_codes for e in errors)
 
-    def test_bucket_min_exceeds_max_returns_v18_error(self) -> None:
-        """bucket_min >= bucket_max must produce a V18_BUCKET_ORDER error."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                group_by=GroupBy(
-                    "revenue",
-                    property_type="number",
-                    bucket_size=10,
-                    bucket_min=100,
-                    bucket_max=50,
-                )
+    def test_bucket_min_exceeds_max_raises_at_construction(self) -> None:
+        """bucket_min >= bucket_max must raise ValueError at construction."""
+        import pytest
+
+        with pytest.raises(ValueError, match="GroupBy.bucket_min.*must be less than"):
+            GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=10,
+                bucket_min=100,
+                bucket_max=50,
             )
-        )
-        assert any(e.code == "V18_BUCKET_ORDER" for e in errors)
 
     def test_bucket_without_number_type_returns_v12b_error(self) -> None:
         """bucket_size on a non-number property must produce a V12B error."""
@@ -557,12 +559,19 @@ class TestValidateFunnelArgsMultipleErrors:
         assert "F3_CONVERSION_WINDOW_POSITIVE" in codes
 
     def test_f1_f2_f3_f4_errors_collected(self) -> None:
-        """F1, F2, F3, and F4 errors must all be returned together."""
+        """F1, F2, F3 collected together; Exclusion("") raises at construction."""
+        import pytest
+
+        # Exclusion("") now raises at construction
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("")
+
+        # F1, F2, F3 still collected together (use whitespace exclusion for F4)
         errors = validate_funnel_args(
             **_valid_funnel_args(
                 steps=[""],
                 conversion_window=-1,
-                exclusions=[Exclusion("")],
+                exclusions=[Exclusion("  ")],
             )
         )
         codes = _codes(errors)
@@ -584,39 +593,53 @@ class TestValidateFunnelArgsMultipleErrors:
         assert "V8_DATE_FORMAT" in codes
 
     def test_funnel_and_group_by_errors_collected(self) -> None:
-        """Funnel-specific and delegated group-by errors must all be returned."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                conversion_window=0,
-                group_by=GroupBy(
-                    "revenue",
-                    property_type="number",
-                    bucket_size=-1,
-                    bucket_min=0,
-                    bucket_max=100,
-                ),
-            )
-        )
-        codes = _codes(errors)
-        assert "F3_CONVERSION_WINDOW_POSITIVE" in codes
-        assert "V12_BUCKET_SIZE_POSITIVE" in codes
+        """GroupBy with negative bucket_size raises at construction; F3 tested separately."""
+        import pytest
 
-    def test_all_rules_violated_at_once(self) -> None:
-        """Violating F1-F4 plus time plus group-by must return errors for all."""
-        errors = validate_funnel_args(
-            steps=[""],
-            conversion_window=0,
-            exclusions=[Exclusion("")],
-            from_date="not-a-date",
-            to_date=None,
-            last=30,
-            group_by=GroupBy(
+        # GroupBy with negative bucket_size now raises at construction
+        with pytest.raises(ValueError, match="GroupBy.bucket_size must be positive"):
+            GroupBy(
                 "revenue",
                 property_type="number",
                 bucket_size=-1,
                 bucket_min=0,
                 bucket_max=100,
-            ),
+            )
+
+        # F3 still works independently
+        errors = validate_funnel_args(
+            **_valid_funnel_args(conversion_window=0)
+        )
+        codes = _codes(errors)
+        assert "F3_CONVERSION_WINDOW_POSITIVE" in codes
+
+    def test_all_rules_violated_at_once(self) -> None:
+        """Exclusion("") and GroupBy(bucket_size=-1) raise at construction; remaining rules collected."""
+        import pytest
+
+        # Exclusion("") raises at construction
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("")
+
+        # GroupBy with negative bucket_size raises at construction
+        with pytest.raises(ValueError, match="GroupBy.bucket_size must be positive"):
+            GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=-1,
+                bucket_min=0,
+                bucket_max=100,
+            )
+
+        # Remaining rules still collected (use whitespace exclusion for F4)
+        errors = validate_funnel_args(
+            steps=[""],
+            conversion_window=0,
+            exclusions=[Exclusion("  ")],
+            from_date="not-a-date",
+            to_date=None,
+            last=30,
+            group_by="revenue",
         )
         codes = _codes(errors)
         assert "F1_MIN_STEPS" in codes
@@ -624,7 +647,6 @@ class TestValidateFunnelArgsMultipleErrors:
         assert "F3_CONVERSION_WINDOW_POSITIVE" in codes
         assert "F4_EMPTY_EXCLUSION_EVENT" in codes
         assert "V8_DATE_FORMAT" in codes
-        assert "V12_BUCKET_SIZE_POSITIVE" in codes
 
     def test_valid_args_return_empty_error_list(self) -> None:
         """Valid default arguments must return an empty error list."""
@@ -684,16 +706,14 @@ class TestValidateFunnelArgsExclusionRanges:
 
     # -- F4b: to_step < from_step rejected --
 
-    def test_to_step_less_than_from_step_returns_step_order_error(
+    def test_to_step_less_than_from_step_raises_at_construction(
         self,
     ) -> None:
-        """An exclusion with to_step < from_step must produce F4_EXCLUSION_STEP_ORDER."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                exclusions=[Exclusion("Logout", from_step=2, to_step=1)],
-            )
-        )
-        assert any(e.code == "F4_EXCLUSION_STEP_ORDER" for e in errors)
+        """An exclusion with to_step < from_step must raise ValueError at construction."""
+        import pytest
+
+        with pytest.raises(ValueError, match="Exclusion.to_step.*must be >= from_step"):
+            Exclusion("Logout", from_step=2, to_step=1)
 
     # -- F4c: to_step exceeding step count rejected --
 
@@ -743,18 +763,16 @@ class TestValidateFunnelArgsExclusionRanges:
         assert not any(e.code in range_codes for e in errors)
 
     def test_mixed_valid_and_invalid_exclusions(self) -> None:
-        """Only the invalid exclusion must produce range errors, not the valid one."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                steps=["A", "B"],
-                exclusions=[
-                    Exclusion("Valid", from_step=0, to_step=1),
-                    Exclusion("Invalid", from_step=2, to_step=1),
-                ],
-            )
-        )
-        order_errors = [e for e in errors if e.code == "F4_EXCLUSION_STEP_ORDER"]
-        assert len(order_errors) == 1
+        """Invalid exclusion (to_step < from_step) raises at construction."""
+        import pytest
+
+        # Valid exclusion constructs fine
+        valid = Exclusion("Valid", from_step=0, to_step=1)
+        assert valid.event == "Valid"
+
+        # Invalid exclusion raises at construction
+        with pytest.raises(ValueError, match="Exclusion.to_step.*must be >= from_step"):
+            Exclusion("Invalid", from_step=2, to_step=1)
 
     # -- Edge cases --
 
@@ -941,19 +959,19 @@ class TestValidateFunnelArgsF3Max:
 class TestValidateFunnelArgsF4Negative:
     """Tests for F4_EXCLUSION_NEGATIVE_STEP: negative from_step validation."""
 
-    def test_negative_one_from_step_returns_error(self) -> None:
-        """Exclusion with from_step=-1 must produce F4_EXCLUSION_NEGATIVE_STEP."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(exclusions=[Exclusion("X", from_step=-1)])
-        )
-        assert "F4_EXCLUSION_NEGATIVE_STEP" in _codes(errors)
+    def test_negative_one_from_step_raises_at_construction(self) -> None:
+        """Exclusion with from_step=-1 must raise ValueError at construction."""
+        import pytest
 
-    def test_large_negative_from_step_returns_error(self) -> None:
-        """Exclusion with from_step=-100 must produce F4_EXCLUSION_NEGATIVE_STEP."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(exclusions=[Exclusion("X", from_step=-100)])
-        )
-        assert "F4_EXCLUSION_NEGATIVE_STEP" in _codes(errors)
+        with pytest.raises(ValueError, match="Exclusion.from_step must be >= 0"):
+            Exclusion("X", from_step=-1)
+
+    def test_large_negative_from_step_raises_at_construction(self) -> None:
+        """Exclusion with from_step=-100 must raise ValueError at construction."""
+        import pytest
+
+        with pytest.raises(ValueError, match="Exclusion.from_step must be >= 0"):
+            Exclusion("X", from_step=-100)
 
     def test_zero_from_step_no_negative_error(self) -> None:
         """Exclusion with from_step=0 must not produce F4_EXCLUSION_NEGATIVE_STEP."""
@@ -971,12 +989,12 @@ class TestValidateFunnelArgsF4Negative:
 class TestValidateFunnelArgsF4ControlChars:
     """Tests for F4_CONTROL_CHAR_EXCLUSION: control chars in exclusion event names."""
 
-    def test_null_byte_in_exclusion_returns_error(self) -> None:
-        """Exclusion event containing a null byte must produce F4_CONTROL_CHAR_EXCLUSION."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(exclusions=[Exclusion("X\x00Y")])
-        )
-        assert "F4_CONTROL_CHAR_EXCLUSION" in _codes(errors)
+    def test_null_byte_in_exclusion_raises_at_construction(self) -> None:
+        """Exclusion event containing a null byte must raise ValueError at construction."""
+        import pytest
+
+        with pytest.raises(ValueError, match="Exclusion.event contains control characters"):
+            Exclusion("X\x00Y")
 
     def test_valid_exclusion_no_control_char_error(self) -> None:
         """Exclusion with a valid event name must not produce F4_CONTROL_CHAR_EXCLUSION."""
@@ -1214,27 +1232,21 @@ class TestValidateFunnelArgsF11MathRejectsProperty:
 class TestF8bHoldingConstantPropertyValidation:
     """Tests for F8b: empty holding constant property names."""
 
-    def test_empty_string_property_produces_error(self) -> None:
-        """HoldingConstant with empty property name produces F8 error."""
+    def test_empty_string_property_raises_at_construction(self) -> None:
+        """HoldingConstant with empty property name raises ValueError at construction."""
+        import pytest
         from mixpanel_data.types import HoldingConstant
 
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                holding_constant=[HoldingConstant("")],
-            )
-        )
-        assert "F8_EMPTY_HOLDING_CONSTANT_PROPERTY" in _codes(errors)
+        with pytest.raises(ValueError, match="HoldingConstant.property must be a non-empty string"):
+            HoldingConstant("")
 
-    def test_whitespace_only_property_produces_error(self) -> None:
-        """HoldingConstant with whitespace-only property produces F8 error."""
+    def test_whitespace_only_property_raises_at_construction(self) -> None:
+        """HoldingConstant with whitespace-only property raises ValueError at construction."""
+        import pytest
         from mixpanel_data.types import HoldingConstant
 
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                holding_constant=[HoldingConstant("   ")],
-            )
-        )
-        assert "F8_EMPTY_HOLDING_CONSTANT_PROPERTY" in _codes(errors)
+        with pytest.raises(ValueError, match="HoldingConstant.property must be a non-empty string"):
+            HoldingConstant("   ")
 
     def test_valid_property_no_error(self) -> None:
         """HoldingConstant with valid property name produces no F8b error."""
@@ -1247,20 +1259,15 @@ class TestF8bHoldingConstantPropertyValidation:
         )
         assert "F8_EMPTY_HOLDING_CONSTANT_PROPERTY" not in _codes(errors)
 
-    def test_multiple_with_one_empty_produces_indexed_error(self) -> None:
-        """Multiple holding constants with one empty produces error with index."""
+    def test_multiple_with_one_empty_raises_at_construction(self) -> None:
+        """HoldingConstant("") raises ValueError at construction."""
+        import pytest
         from mixpanel_data.types import HoldingConstant
 
-        errors = validate_funnel_args(
-            **_valid_funnel_args(
-                holding_constant=[
-                    HoldingConstant("platform"),
-                    HoldingConstant(""),
-                ],
-            )
-        )
-        f8_errors = [
-            e for e in errors if e.code == "F8_EMPTY_HOLDING_CONSTANT_PROPERTY"
-        ]
-        assert len(f8_errors) == 1
-        assert "holding_constant[1]" in f8_errors[0].path
+        # Valid one constructs fine
+        valid = HoldingConstant("platform")
+        assert valid.property == "platform"
+
+        # Empty one raises at construction
+        with pytest.raises(ValueError, match="HoldingConstant.property must be a non-empty string"):
+            HoldingConstant("")
