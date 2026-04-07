@@ -35,9 +35,16 @@ bookmark = ws.create_bookmark(CreateBookmarkParams(
 ))
 ```
 
-## Preferred: Use `query()` for Insights
+## Preferred: Use Typed Query Methods
 
-For insights queries, use `Workspace.query()` which generates valid bookmark params automatically with two-layer validation (45 rules). Manual bookmark JSON construction is no longer needed for insights.
+For all report types, prefer the typed query methods which generate valid bookmark params automatically with full validation. Manual bookmark JSON construction is rarely needed.
+
+| Report Type | Preferred Method | Result Type |
+|-------------|-----------------|-------------|
+| Insights | `ws.query()` | `QueryResult` |
+| Funnels | `ws.query_funnel()` | `FunnelQueryResult` |
+| Retention | `ws.query_retention()` | `RetentionQueryResult` |
+| Flows | `ws.query_flow()` | `FlowQueryResult` |
 
 ```python
 import mixpanel_data as mp
@@ -45,22 +52,41 @@ from mixpanel_data import Metric, Filter, CreateBookmarkParams
 
 ws = mp.Workspace()
 
-# Run a query
+# Insights — run a query, then save as a report
 result = ws.query("Login", math="dau", group_by="platform", last=90)
-
-# Save as a report using the generated params
 ws.create_bookmark(CreateBookmarkParams(
     name="DAU by Platform (90d)",
     bookmark_type="insights",
     params=result.params,
 ))
+
+# Funnels — same pattern
+funnel = ws.query_funnel(["Sign Up", "Purchase"], conversion_window=7)
+ws.create_bookmark(CreateBookmarkParams(
+    name="Signup to Purchase (7d window)",
+    bookmark_type="funnels",
+    params=funnel.params,
+))
+
+# Retention — same pattern
+ret = ws.query_retention("Sign Up", "Login", retention_unit="week")
+ws.create_bookmark(CreateBookmarkParams(
+    name="Weekly Signup Retention",
+    bookmark_type="retention",
+    params=ret.params,
+))
+
+# Flows — same pattern
+flow = ws.query_flow("Purchase", reverse=3)
+ws.create_bookmark(CreateBookmarkParams(
+    name="Paths to Purchase",
+    bookmark_type="flows",
+    params=flow.params,
+))
 ```
 
 Use manual bookmark JSON (documented below) only for:
-- **Funnels** — `query()` does not cover funnel analysis yet
-- **Retention** — `query()` does not cover retention analysis yet
-- **Flows** — `query()` does not cover flows analysis yet
-- **Edge cases** where `query()` cannot express the exact bookmark structure needed
+- **Edge cases** where the typed query methods cannot express the exact bookmark structure needed
 
 ---
 
@@ -106,7 +132,7 @@ Not all SQL is expressible: no JOINs, no subqueries, no UNION. Formulas are the 
 
 ## Insights Params
 
-> **Note:** For new insights queries, prefer `ws.query()` which generates these params automatically. See "Preferred: Use `query()` for Insights" above. The raw JSON format below is documented for reference.
+> **Note:** For new queries, prefer the typed query methods (`ws.query()`, `ws.query_funnel()`, `ws.query_retention()`, `ws.query_flow()`) which generate these params automatically. See "Preferred: Use Typed Query Methods" above. The raw JSON format below is documented for reference.
 
 ### Skeleton
 

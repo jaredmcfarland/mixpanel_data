@@ -1,256 +1,460 @@
 ---
 name: mixpanel-analyst
-description: This skill should be used when the user asks about Mixpanel product analytics, event data, funnel analysis, retention curves, cohort analysis, segmentation queries, JQL, user behavior, conversion rates, churn, DAU/MAU, ARPU, revenue metrics, feature adoption, A/B test results, or any request to query, explore, visualize, or analyze Mixpanel data using Python.
+description: This skill should be used when the user asks about Mixpanel product analytics, event data, funnel analysis, retention curves, cohort analysis, segmentation queries, JQL, user behavior, conversion rates, churn, DAU/MAU, ARPU, revenue metrics, feature adoption, A/B test results, user paths, flow analysis, or any request to query, explore, visualize, or analyze Mixpanel data using Python.
 allowed-tools: Bash Read Write
 ---
 
-# Mixpanel Analyst — CodeMode
+# Mixpanel Analyst — CodeMode v3
 
-Analyze the user's Mixpanel data by **writing and executing Python code** that uses the `mixpanel_data` library and `pandas`. Act as a senior data analyst and product analytics expert.
+Analyze the user's Mixpanel data by **writing and executing Python code** that uses the `mixpanel_data` library, `pandas`, `networkx`, and `anytree`. Act as a senior data analyst and product analytics expert.
 
 ## Core Principle: Code Over Tools
 
 Write Python code. Never teach CLI commands. Never call MCP tools.
 
-- **Quick lookups** → `python3 -c "..."` one-liners
+- **Quick lookups** → `python3 -c "..."` one-liners (or `uv run python -c` if uv is available)
 - **Multi-step analysis** → write and execute `.py` files
 - **Data manipulation** → pandas DataFrames (every result type has a `.df` property)
+- **Graph analysis** → networkx on flow data (`.graph` property)
+- **Tree analysis** → anytree on flow tree data (`.anytree` property)
 - **Visualization** → matplotlib / seaborn, saved to files
 
 ```python
-# One-liner example
-python3 -c "
+uv run python -c "
 import mixpanel_data as mp; ws = mp.Workspace()
 r = ws.query('Login', last=30)
 print(f'Total logins (30d): {r.df[\"count\"].sum():,.0f}')
 "
 ```
 
+## The Four Query Engines
+
+Mixpanel has four fundamentally different query engines. Each answers a different *type* of question. Choosing the right engine is the most important decision in any analysis.
+
+| Engine | Method | Core Question | Result Type |
+|--------|--------|--------------|-------------|
+| **Insights** | `ws.query()` | How much? How many? | `QueryResult` |
+| **Funnels** | `ws.query_funnel()` | Do users convert through a sequence? | `FunnelQueryResult` |
+| **Retention** | `ws.query_retention()` | Do users come back? | `RetentionQueryResult` |
+| **Flows** | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
+
+### Mental Model
+
+- **Insights** — "I need to **measure a metric** over time." Counts, aggregations, DAU/WAU/MAU, property math, formulas, rolling averages. The workhorse for any "how much" or "how many" question.
+
+- **Funnels** — "I need to measure **conversion through a process**." Ordered sequences of events with conversion windows, exclusions, and per-step filters. The answer to "what percentage of users complete X?"
+
+- **Retention** — "I need to measure whether a **behavior repeats**." Born/return event pairs across cohorts with custom time buckets. The answer to "do users come back?"
+
+- **Flows** — "I need to **explore the routes** through my product." Forward and reverse step tracing from anchor events, producing graphs and trees. The answer to "what do users do after/before X?"
+
+### When in Doubt
+
+- If the question is about **a number changing over time** → Insights
+- If the question mentions **steps, conversion, drop-off** → Funnels
+- If the question mentions **coming back, retention, churn, cohort** → Retention
+- If the question mentions **paths, journeys, next steps, what leads to** → Flows
+- If the question asks **"why did X change?"** → Multiple engines (see Cross-Query Patterns)
+
+## Query Routing Decision Tree
+
+Map natural language to the right engine:
+
+```
+User says...                              → Use...
+─────────────────────────────────────────────────────
+"how many", "count", "total", "trend"     → Insights
+"DAU/WAU/MAU", "active users"             → Insights (math="dau")
+"average/median/p99", "distribution"      → Insights (math=...)
+"per user", "average per user"            → Insights (per_user=...)
+"compare events", "formula"               → Insights (formula=...)
+"rolling average", "cumulative"           → Insights (rolling/cumulative)
+─────────────────────────────────────────────────────
+"conversion", "funnel", "from X to Y"     → Funnels
+"drop-off", "where do users leave"        → Funnels
+"checkout/signup/onboarding completion"   → Funnels
+"time to convert", "conversion window"    → Funnels
+─────────────────────────────────────────────────────
+"retention", "come back", "return rate"   → Retention
+"D1/D7/D30", "churn", "stickiness"       → Retention
+"cohort", "do they keep using"            → Retention
+─────────────────────────────────────────────────────
+"path", "flow", "journey"                → Flows
+"what happens after X", "next steps"      → Flows (forward)
+"what led to X", "how did they get to"    → Flows (reverse)
+"user paths", "navigation patterns"       → Flows
+─────────────────────────────────────────────────────
+"why did X change/drop/spike"             → MULTI-ENGINE
+"how is feature X performing"             → MULTI-ENGINE
+"product health", "overview"              → MULTI-ENGINE
+"what's wrong with onboarding"            → MULTI-ENGINE
+```
+
+### Multi-Query Decomposition
+
+For complex questions, decompose into a query plan:
+
+| Question Pattern | Engines | Sub-queries |
+|---|---|---|
+| "Why did X drop?" | All 4 | Insights (magnitude) → Funnels (conversion check) → Retention (return check) → Flows (path changes) |
+| "Feature adoption?" | Ins+Fun+Ret | Insights (usage) + Funnels (discovery→use) + Retention (continued use) |
+| "Onboarding health?" | Fun+Flow+Ret | Funnels (completion) + Flows (user paths) + Retention (post-onboarding) |
+| "Product health?" | All 4 | DAU (Insights) + Key funnels + Retention curves + Top paths |
+
 ## On-Demand API Lookup
 
-Before writing any API call you're unsure about, look up the exact signature:
+Before any unfamiliar API call, look up the exact signature:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace          # list all methods
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types               # list all types
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions          # list all exceptions
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_funnel
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_retention
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_flow
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult       # result types
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py FlowTreeNode      # tree node
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py types              # list all types
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions         # all exceptions
 ```
 
-Use this before every unfamiliar method. It pulls live docstrings from the installed package — always accurate.
-
-## Bookmark Validation
-
-For insights queries, `query()` validates automatically (45 rules). Use `validate_bookmark.py` only for funnels, retention, and flows bookmarks.
-
-Before calling `create_bookmark()` or `update_bookmark()` with non-insights params, **validate the params dict**:
-
-```bash
-# Validate from a Python variable (pipe JSON to stdin)
-python3 -c "import json; print(json.dumps(params))" | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin
-
-# Validate with explicit type
-echo '{"sections": {...}}' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type insights
-
-# Validate from a file
-python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py params.json
-
-# Get errors as JSON (for programmatic use)
-echo '...' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --json
-```
-
-Exit 0 = valid. Exit 1 = errors (printed to stderr). The validator checks chart types, math types, filter operators, required fields, funnel step counts, retention event counts, and flows structure — catching mistakes before they hit the API.
+Use this before every unfamiliar method. It pulls live docstrings — always accurate.
 
 ## Workspace Construction
 
 ```python
 import mixpanel_data as mp
 
-# From configured account
 ws = mp.Workspace()                          # default account
 ws = mp.Workspace(account="production")      # named account
-
-# Environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION
-ws = mp.Workspace()
-
-# With workspace ID for App API (entity CRUD)
-ws = mp.Workspace(workspace_id=12345)
-
-# IMPORTANT: project_id must be a STRING, not int
-ws = mp.Workspace(project_id="8")           # correct
-# ws = mp.Workspace(project_id=8)           # WRONG — ValidationError
+ws = mp.Workspace(workspace_id=12345)        # with workspace ID for App API
+# project_id must be a STRING: ws = mp.Workspace(project_id="8")
 ```
 
-## Quick API Reference
+## Quick API Reference — All Engines
 
 ### Discovery — What Data Exists?
 
 ```python
 ws.events()                                    # → list[str]
 ws.properties("Login")                         # → list[str]
-ws.property_values("city", event="Login", limit=20)  # → list[str]
+ws.property_values("city", event="Login")      # → list[str]
 ws.top_events(limit=10)                        # → list[TopEvent]
 ws.funnels()                                   # → list[FunnelInfo]
 ws.cohorts()                                   # → list[SavedCohort]
 ws.list_bookmarks()                            # → list[BookmarkInfo]
 ws.lexicon_schemas()                           # → list[LexiconSchema]
+ws.lexicon_schema("event", "Purchase")         # → LexiconSchema (definitions, tags)
 ```
 
-### Typed Query API (Primary)
+### Insights — `ws.query()`
 
 ```python
-from mixpanel_data import Metric, Filter, GroupBy, Formula, CreateBookmarkParams
+from mixpanel_data import Metric, Filter, GroupBy, Formula
 
-# Simple query (last 30 days by default)
-result = ws.query("Login")
-df = result.df  # pandas DataFrame
-
-# DAU (previously impossible)
-result = ws.query("Login", math="dau", last=90)
-
-# Property aggregation (replaces segmentation_sum / segmentation_average)
-result = ws.query("Purchase", math="average", math_property="amount")
-
-# Typed filters + breakdown
 result = ws.query(
-    "Login", from_date="2025-01-01", to_date="2025-01-31",
-    where=Filter.equals("country", "US"),
-    group_by="platform",
-)
-
-# Multi-event formula
-result = ws.query(
-    [Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
-    formula="(B / A) * 100", formula_label="Conversion Rate",
-)
-
-# Save query as a Mixpanel report
-ws.create_bookmark(CreateBookmarkParams(
-    name="DAU by Platform", bookmark_type="insights", params=result.params,
-))
+    events,              # str | Metric | Formula | Sequence[str | Metric | Formula]
+    from_date=None,      # "YYYY-MM-DD" (overrides last)
+    to_date=None,        # "YYYY-MM-DD"
+    last=30,             # relative days (default)
+    unit="day",          # hour | day | week | month | quarter
+    math="total",        # see MathType table
+    math_property=None,  # required for property-based math
+    per_user=None,       # unique_values | total | average | min | max
+    percentile_value=None, # int for math="percentile"
+    group_by=None,       # str | GroupBy | list[str | GroupBy]
+    where=None,          # Filter | list[Filter]
+    formula=None,        # "(B / A) * 100" (requires 2+ events)
+    formula_label=None,
+    rolling=None,        # rolling window periods
+    cumulative=False,    # mutually exclusive with rolling
+    mode="timeseries",   # timeseries | total | table
+) # → QueryResult
 ```
 
-### Legacy Analytics
+**MathType** (14 values):
 
-The methods below pre-date `query()`. They still work and are needed for funnels, retention, JQL, and streaming. For insights queries, prefer `query()` above.
+| Math | What it measures | Requires math_property? |
+|------|-----------------|------------------------|
+| `total` | Event count (or sum if math_property set) | Optional |
+| `unique` | Unique users | No |
+| `dau` / `wau` / `mau` | Daily/Weekly/Monthly active users | No |
+| `average` / `median` / `min` / `max` | Property aggregation | Yes |
+| `p25` / `p75` / `p90` / `p99` | Property percentiles | Yes |
+| `percentile` | Custom percentile (set percentile_value) | Yes |
+| `histogram` | Property value distribution | Yes |
+
+**Result**: `result.df` (DataFrame) · `result.params` (bookmark JSON) · `result.series` (raw data) · `result.meta`
+
+**Examples**:
+```python
+ws.query("Login", math="dau", last=90)                              # DAU trend
+ws.query("Purchase", math="average", math_property="amount")        # avg purchase
+ws.query("Login", where=Filter.equals("platform", "iOS"), group_by="country")
+ws.query([Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
+         formula="(B/A)*100", formula_label="Conversion Rate")
+ws.query("Signup", rolling=7)                                       # 7-day rolling avg
+```
+
+### Funnels — `ws.query_funnel()`
 
 ```python
-# Funnel conversion
-result = ws.funnel(funnel_id=12345, from_date="2025-01-01", to_date="2025-01-31")
+from mixpanel_data import FunnelStep, Exclusion, HoldingConstant
 
-# Cohort retention
-result = ws.retention(
-    born_event="Sign Up", return_event="Login",
-    from_date="2025-01-01", to_date="2025-01-31",
-)
+result = ws.query_funnel(
+    steps,                    # list[str | FunnelStep] (min 2)
+    conversion_window=14,     # how long to complete
+    conversion_window_unit="day",  # second|minute|hour|day|week|month|session
+    order="loose",            # loose | any
+    from_date=None, to_date=None, last=30, unit="day",
+    math="conversion_rate_unique",  # see FunnelMathType
+    math_property=None,       # for property aggregation math types
+    group_by=None, where=None,
+    exclusions=None,          # list[str | Exclusion]
+    holding_constant=None,    # str | HoldingConstant | list
+    mode="steps",             # steps | trends | table
+) # → FunnelQueryResult
+```
 
-# JQL (JavaScript Query Language) for custom computation
-result = ws.jql("""function main() {
-  return Events({from_date: "2025-01-01", to_date: "2025-01-31"})
-    .groupByUser(mixpanel.reducer.count())
-    .map(u => ({user: u.key, count: u.value}))
-}""")
+**FunnelStep**: `FunnelStep(event, label=None, filters=None, filters_combinator="all", order=None)`
+**Exclusion**: `Exclusion(event, from_step=0, to_step=None)` — step ranges (0-indexed)
+**HoldingConstant**: `HoldingConstant(property, resource_type="events")` — max 3
 
-# Additional queries
-ws.event_counts(events=["Login", "Signup"], from_date=..., to_date=...)
-ws.frequency(event="Purchase", from_date=..., to_date=...)
-ws.activity_feed(distinct_ids=["user123"])
-ws.query_saved_report(bookmark_id=456)
-ws.query_saved_flows(bookmark_id=789)
-# segmentation_sum / segmentation_average: use query(event, math='average', math_property='...') instead.
+**FunnelMathType**: `conversion_rate_unique` (default) · `conversion_rate_total` · `conversion_rate_session` · `unique` · `total` · `average` · `median` · `min` · `max` · `p25` · `p75` · `p90` · `p99`
+
+**Result**: `result.overall_conversion_rate` · `result.df` (step, event, count, step_conv_ratio, overall_conv_ratio, avg_time) · `result.params`
+
+**Examples**:
+```python
+ws.query_funnel(["Signup", "Purchase"])                              # simple
+ws.query_funnel(["Signup", "Purchase"], conversion_window=7)         # 7-day window
+ws.query_funnel([FunnelStep("Signup"), FunnelStep("Purchase",
+    filters=[Filter.greater_than("amount", 50)], label="High-Value")])
+ws.query_funnel(["Browse", "Cart", "Purchase"], exclusions=["Logout"])
+ws.query_funnel(["Signup", "Purchase"], holding_constant="platform")
+```
+
+### Retention — `ws.query_retention()`
+
+```python
+from mixpanel_data import RetentionEvent
+
+result = ws.query_retention(
+    born_event,           # str | RetentionEvent
+    return_event,         # str | RetentionEvent
+    retention_unit="week",  # day | week | month
+    alignment="birth",    # birth | interval_start
+    bucket_sizes=None,    # list[int] ascending, max 730
+    from_date=None, to_date=None, last=30, unit="day",
+    math="retention_rate",  # retention_rate | unique
+    group_by=None, where=None,
+    mode="curve",         # curve | trends | table
+) # → RetentionQueryResult
+```
+
+**RetentionEvent**: `RetentionEvent(event, filters=None, filters_combinator="all")`
+
+**Alignment**: `"birth"` (user's clock starts at born event) vs `"interval_start"` (calendar boundaries)
+
+**Result**: `result.cohorts` (dict of cohort data) · `result.average` (synthetic average) · `result.df` (cohort_date, bucket, count, rate) · `result.params`
+
+**Examples**:
+```python
+ws.query_retention("Signup", "Login")                                # weekly retention
+ws.query_retention("Signup", "Login", retention_unit="day",
+                   bucket_sizes=[1, 3, 7, 14, 30])                   # milestone buckets
+ws.query_retention(
+    RetentionEvent("Signup", filters=[Filter.equals("source", "organic")]),
+    "Purchase", last=90)
+ws.query_retention("Signup", "Login", mode="trends", unit="week")    # retention trends
+```
+
+### Flows — `ws.query_flow()`
+
+```python
+from mixpanel_data import FlowStep
+
+result = ws.query_flow(
+    event,                # str | FlowStep | Sequence[str | FlowStep]
+    forward=3,            # 0-5 steps forward from anchor
+    reverse=0,            # 0-5 steps reverse (at least one must be nonzero)
+    from_date=None, to_date=None, last=30,
+    conversion_window=7,
+    conversion_window_unit="day",  # day | week | month | session
+    count_type="unique",  # unique | total | session
+    cardinality=3,        # 1-50 events per step position
+    collapse_repeated=False,
+    hidden_events=None,   # list[str]
+    mode="sankey",        # sankey | paths | tree
+) # → FlowQueryResult
+```
+
+**FlowStep**: `FlowStep(event, forward=None, reverse=None, label=None, filters=None, filters_combinator="all")`
+
+**Three modes produce different result structures**:
+
+| Mode | Key properties | Use for |
+|------|---------------|---------|
+| `sankey` | `.nodes_df`, `.edges_df`, `.graph` (NetworkX DiGraph), `.top_transitions(n)`, `.drop_off_summary()` | Graph analysis, bottleneck detection |
+| `paths` | `.df` (path_index, step, event, type, count) | Path ranking and comparison |
+| `tree` | `.trees` (list[FlowTreeNode]), `.anytree` (list[AnyNode]) | Branching analysis, Graphviz export |
+
+**Result**: `result.overall_conversion_rate` · `result.params` · mode-specific properties above
+
+**Examples**:
+```python
+ws.query_flow("Purchase")                                            # 3 steps forward
+ws.query_flow("Purchase", forward=0, reverse=5)                      # what led to purchase?
+ws.query_flow("Purchase", mode="tree")                               # tree traversal
+ws.query_flow(FlowStep("Purchase", filters=[Filter.greater_than("amount", 50)]))
+ws.query_flow("Purchase", hidden_events=["Page View", "Session Start"])
+
+# NetworkX graph analysis
+g = result.graph
+import networkx as nx
+bottleneck = max(nx.betweenness_centrality(g, weight="count"),
+                 key=nx.betweenness_centrality(g, weight="count").get)
+
+# Tree traversal
+for tree in result.trees:
+    print(tree.render())  # ASCII visualization
+    best_path = max(tree.all_paths(), key=lambda p: p[-1].converted_count)
+```
+
+### Filter Expression Syntax
+
+All 4 query engines share the same `Filter` class:
+
+```python
+from mixpanel_data import Filter
+
+# String
+Filter.equals("platform", "iOS")              # or multi-value: ["iOS", "Android"]
+Filter.not_equals("country", "US")
+Filter.contains("email", "@company.com")
+Filter.not_contains("page", "admin")
+
+# Numeric
+Filter.greater_than("revenue", 100)
+Filter.less_than("age", 18)
+Filter.between("age", 18, 65)              # inclusive range
+
+# Existence & Boolean
+Filter.is_set("email")
+Filter.is_not_set("utm_source")
+Filter.is_true("is_premium")
+Filter.is_false("opted_out")
+
+# Date
+Filter.on("created", "2025-01-15")
+Filter.before("created", "2025-01-01")
+Filter.since("created", "2025-01-01")
+Filter.in_the_last("created", 30, "day")
+Filter.date_between("created", "2025-01-01", "2025-06-30")
 ```
 
 ### Streaming — Raw Data Access
 
 ```python
-# Memory-efficient event iteration
 for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-02"):
     print(event["event_name"], event["event_time"], event["properties"])
 
-# Profile iteration
 for profile in ws.stream_profiles():
     print(profile["distinct_id"])
 ```
 
 ### Entity Management (App API)
 
-Full CRUD for dashboards, cohorts, feature flags, experiments, alerts, annotations, webhooks, Lexicon definitions, and more. Use `help.py` to look up exact signatures:
+Full CRUD for dashboards, cohorts, feature flags, experiments, alerts, annotations, webhooks, Lexicon. Use `help.py` to look up signatures:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_dashboards
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.create_cohort
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_feature_flags
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_dashboards
+uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.create_bookmark
 ```
 
-### Adding Reports to a Dashboard
+### Saving Queries as Mixpanel Reports
 
-Use `query()` to generate validated bookmark params, then save and add to a dashboard:
+Every typed query generates persistable bookmark params:
 
 ```python
-from mixpanel_data.types import CreateDashboardParams, CreateBookmarkParams
+from mixpanel_data import CreateBookmarkParams
 
-ws = mp.Workspace(account="myaccount")
+# query() → insights report
+result = ws.query("Login", math="dau", last=90)
+ws.create_bookmark(CreateBookmarkParams(
+    name="DAU (90d)", bookmark_type="insights", params=result.params))
 
-# Step 1: Create dashboard
-dashboard = ws.create_dashboard(CreateDashboardParams(title="My Dashboard"))
+# query_funnel() → funnel report
+result = ws.query_funnel(["Signup", "Purchase"])
+ws.create_bookmark(CreateBookmarkParams(
+    name="Signup→Purchase", bookmark_type="funnels", params=result.params))
 
-# Step 2: Create bookmark from query (params auto-validated)
-result = ws.query("Sign Up", last=180, unit="month", group_by="platform")
-bookmark = ws.create_bookmark(CreateBookmarkParams(
-    name="Signups by Platform (6mo)",
-    bookmark_type="insights",
-    params=result.params,
-))
+# query_retention() → retention report
+result = ws.query_retention("Signup", "Login")
+ws.create_bookmark(CreateBookmarkParams(
+    name="Signup Retention", bookmark_type="retention", params=result.params))
 
-# Step 3: Add bookmark to dashboard
-ws.add_report_to_dashboard(dashboard.id, bookmark.id)
+# query_flow() → flows report
+result = ws.query_flow("Purchase", forward=3, reverse=1)
+ws.create_bookmark(CreateBookmarkParams(
+    name="Purchase Flows", bookmark_type="flows", params=result.params))
+
+# build_*_params() generates params without executing the query
+params = ws.build_funnel_params(["Signup", "Purchase"])
+params = ws.build_retention_params("Signup", "Login")
+params = ws.build_flow_params("Purchase", forward=3)
 ```
 
-**Note**: `CreateBookmarkParams(dashboard_id=...)` does NOT add the report to the dashboard layout — always use `add_report_to_dashboard()` instead. For funnel/retention/flows bookmarks, see `references/bookmark-params.md`.
+## Cross-Query Patterns
 
-### DataFrame Conversion
+The engines complement each other. These patterns combine them for deeper analysis:
 
-Every query result has a `.df` property returning a pandas DataFrame:
+### Pattern 1: Funnel + Flow Complement
+
+Funnels show **that** conversion dropped; Flows show **where** users went instead.
 
 ```python
-result = ws.query("Login", from_date="2025-01-01", to_date="2025-01-31")
-df = result.df
-df.plot(title="Login Trend")
-df.to_csv("logins.csv")
-print(df.describe())
+# 1. Find the worst-converting step
+funnel = ws.query_funnel(["Browse", "Add to Cart", "Checkout", "Purchase"])
+worst = funnel.df.loc[funnel.df["step_conv_ratio"].idxmin()]
+
+# 2. Trace where non-converters go
+flow = ws.query_flow(worst["event"], forward=3)
+print(flow.top_transitions(10))  # where they go instead
+print(flow.drop_off_summary())   # per-step drop-off
 ```
 
-## Filter Expression Syntax
+### Pattern 2: Insights + Retention Correlation
+
+Does behavior X predict retention?
 
 ```python
-# Typed filters (preferred — validated at construction time)
-from mixpanel_data import Filter
-Filter.equals("platform", "iOS")
-Filter.equals("country", ["US", "UK"])      # multi-value (IN)
-Filter.greater_than("revenue", 100)
-Filter.between("age", 18, 65)
-Filter.is_set("email")
-Filter.contains("page_url", "/pricing")
-Filter.is_true("is_premium")
+# Compare retention for high vs low usage segments
+from mixpanel_data import RetentionEvent, Filter
+power = ws.query_retention(
+    RetentionEvent("Feature Used", filters=[Filter.greater_than("count", 5)]),
+    "Any Active Event", last=90)
+casual = ws.query_retention(
+    RetentionEvent("Feature Used", filters=[Filter.less_than("count", 3)]),
+    "Any Active Event", last=90)
+# Compare power.average["rates"] vs casual.average["rates"]
+```
 
-# Date filters
-Filter.on("created", "2025-01-15")             # exact date
-Filter.not_on("created", "2025-01-15")         # not on date
-Filter.before("created", "2025-01-01")         # before date
-Filter.since("created", "2025-01-01")          # on or after date
-Filter.in_the_last("created", 30, "day")       # last 30 days
-Filter.not_in_the_last("created", 90, "day")   # NOT in last 90 days
-Filter.date_between("created", "2025-01-01", "2025-06-30")  # date range
+### Pattern 3: Multi-Engine Investigation
 
-# Custom percentile and histogram
-ws.query("API Call", math="percentile", math_property="duration_ms", percentile_value=95)
-ws.query("Purchase", math="histogram", math_property="amount")
+For "why did X change?", query all engines in parallel:
 
-# Legacy string filters (still work with segmentation/retention/funnel)
-where='properties["platform"] == "iOS"'
-on='properties["platform"]'
-where='properties["platform"] == "iOS" AND properties["country"] == "US"'
+```python
+from concurrent.futures import ThreadPoolExecutor
+
+ws = mp.Workspace()
+queries = {
+    "metric": lambda: ws.query("Purchase", math="total", math_property="revenue", last=60),
+    "funnel": lambda: ws.query_funnel(["Browse", "Purchase"], last=60),
+    "retention": lambda: ws.query_retention("Purchase", "Purchase", last=60),
+    "flow": lambda: ws.query_flow("Purchase", reverse=3, last=60),
+}
+with ThreadPoolExecutor(max_workers=4) as pool:
+    results = {k: pool.submit(v) for k, v in queries.items()}
+    results = {k: v.result() for k, v in results.items()}
 ```
 
 ## How to Think About Analysis
@@ -260,136 +464,124 @@ where='properties["platform"] == "iOS" AND properties["country"] == "US"'
 Before answering any question, explore the schema:
 
 ```python
-import mixpanel_data as mp
-ws = mp.Workspace()
 events = ws.events()
 top = ws.top_events(limit=10)
-# Then drill into relevant events
 props = ws.properties("Sign Up")
 ```
 
 ### 2. Classify with AARRR
 
-Map every question to a pirate metric stage:
+Map every question to a pirate metric stage and choose the right engine:
 
-| Stage | Key Question | Primary Methods |
+| Stage | Key Question | Primary Engines |
 |-------|-------------|-----------------|
-| **Acquisition** | Where do users come from? | `query` with source/utm breakdown |
-| **Activation** | Do they reach the aha moment? | `funnel`, `activity_feed` |
-| **Retention** | Do they come back? | `retention`, `query` over time |
-| **Revenue** | Do they pay? | `query` with math_property on revenue, `funnel` to purchase |
-| **Referral** | Do they invite others? | `query` on invite/share events |
+| **Acquisition** | Where do users come from? | Insights (source breakdown), Flows (entry paths) |
+| **Activation** | Do they reach the aha moment? | Funnels (onboarding completion), Flows (activation paths) |
+| **Retention** | Do they come back? | Retention (cohort curves), Insights (usage trends) |
+| **Revenue** | Do they pay? | Insights (revenue metrics), Funnels (purchase conversion) |
+| **Referral** | Do they invite others? | Insights (invite events), Funnels (invite→accept) |
 
 ### 3. GQM for Vague Questions
 
-For open-ended questions ("why is retention down?"), decompose with Goal-Question-Metric:
+Decompose with Goal-Question-Metric, specifying the engine for each:
 
-1. **Goal**: What business outcome are we investigating?
-2. **Questions**: 3-5 specific, measurable sub-questions
-3. **Metrics**: For each question, which `mixpanel_data` method answers it?
-
-Then execute all queries and synthesize.
+1. **Goal**: What business outcome?
+2. **Questions**: 3-5 specific sub-questions
+3. **Metrics**: For each → which engine? which method? which params?
+4. **Join strategy**: How to combine results?
 
 ### 4. Provide Actionable Insights
 
 Never just show data. Always:
 - State the finding clearly
-- Quantify the impact
+- Quantify the impact with specific numbers
+- Compare to previous periods (WoW, MoM)
+- Note sample sizes — small numbers = low confidence
 - Suggest a concrete next step
-- Flag anything unexpected
 
-## Writing Effective Code
+## Advanced Libraries
 
-### One-Liners for Quick Answers
+Use these to extend Mixpanel's capabilities:
 
-```python
-python3 -c "
-import mixpanel_data as mp; ws = mp.Workspace()
-r = ws.query('Login', last=30)
-print(f'Total logins (30d): {r.df[\"count\"].sum():,.0f}')
-"
-```
+| Library | When to use | Access via |
+|---------|------------|------------|
+| **pandas** | Always — every result has `.df` | `result.df` |
+| **networkx** | Flow graph analysis (centrality, shortest paths, cycles, PageRank) | `flow_result.graph` |
+| **anytree** | Flow tree analysis (branching, parent traversal, Graphviz export) | `flow_result.anytree` or `tree.to_anytree()` |
+| **numpy/scipy** | Statistical testing (t-test, chi-squared, correlation) | Import directly |
+| **matplotlib/seaborn** | Visualization | Import directly |
 
-### Scripts for Multi-Step Analysis
-
-Write a `.py` file when you need:
-- Multiple queries combined
-- DataFrame transformations
-- Visualizations saved to files
-- Structured output (tables, reports)
+### NetworkX Quick Patterns
 
 ```python
-#!/usr/bin/env python3
-"""Analyze signup funnel conversion by platform."""
-import mixpanel_data as mp
-import pandas as pd
+import networkx as nx
+g = flow_result.graph
 
-ws = mp.Workspace()
-
-# Discovery
-funnels = ws.funnels()
-signup_funnel = next(f for f in funnels if "signup" in f.name.lower())
-
-# Query
-result = ws.funnel(
-    funnel_id=signup_funnel.funnel_id,
-    from_date="2025-01-01", to_date="2025-01-31",
-    on='properties["platform"]',
-)
-
-# Analyze
-df = result.df
-print("\n=== Signup Funnel by Platform ===")
-print(df.to_string())
+nx.shortest_path(g, "Signup@0", "Purchase@3")       # optimal path
+nx.betweenness_centrality(g, weight="count")         # bottleneck detection
+list(nx.simple_cycles(g))                            # loop detection
+nx.pagerank(g, weight="count")                       # event importance
 ```
 
-### Parallel Investigation
-
-When diagnosing a metric change, query multiple dimensions simultaneously. Since each query is independent, use `ThreadPoolExecutor` to run them in parallel — cutting wall-clock time proportionally:
+### anytree Quick Patterns
 
 ```python
-from mixpanel_data import Filter
-from concurrent.futures import ThreadPoolExecutor
-import mixpanel_data as mp
-
-ws = mp.Workspace()
-base = dict(from_date="2025-01-01", to_date="2025-01-31")
-
-def query_dim(dim):
-    return ws.query("Sign Up", **base, group_by=dim).df
-
-dims = ["platform", "country", "utm_source"]
-with ThreadPoolExecutor(max_workers=4) as pool:
-    results = dict(zip(dims, pool.map(query_dim, dims)))
-overall = ws.query("Sign Up", **base).df
-
-# Compare and find the driver
-for dim, df in results.items():
-    print(f"\n=== By {dim} ===")
-    print(df.sum().sort_values(ascending=False).head())
+from anytree import RenderTree
+for root in flow_result.anytree:
+    for pre, _, node in RenderTree(root):
+        print(f"{pre}{node.event} ({node.total_count})")
 ```
 
-Use this pattern whenever you have 3+ independent queries — the speedup is significant for multi-dimensional investigations.
+### FlowTreeNode Quick Patterns
+
+```python
+for tree in flow_result.trees:
+    tree.render()                                     # ASCII visualization
+    tree.all_paths()                                  # all root-to-leaf paths
+    tree.flatten()                                    # preorder traversal
+    tree.find("Purchase")                             # search by event name
+    tree.depth                                        # tree depth
+    tree.conversion_rate                              # converted / total
+    max(tree.flatten(), key=lambda n: n.drop_off_count)  # worst drop-off
+```
+
+## Bookmark Validation
+
+All typed query methods (`query()`, `query_funnel()`, `query_retention()`, `query_flow()`) validate automatically before API calls. Use `validate_bookmark.py` only for manually constructed bookmark params:
+
+```bash
+echo '<params_json>' | uv run python ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type insights
+```
 
 ## Error Handling
 
 ```python
 from mixpanel_data.exceptions import (
-    AuthenticationError,  # 401 — bad credentials
-    RateLimitError,       # 429 — back off and retry
-    QueryError,           # 400 — bad parameters
-    JQLSyntaxError,       # 412 — JQL script error
-    WorkspaceScopeError,  # workspace_id required
+    AuthenticationError,       # 401 — bad credentials
+    RateLimitError,            # 429 — back off and retry
+    QueryError,                # 400 — bad parameters
+    BookmarkValidationError,   # pre-flight validation failure
+    JQLSyntaxError,            # 412 — JQL script error
+    WorkspaceScopeError,       # workspace_id required for App API
+    ConfigError,               # credentials not configured
 )
 ```
 
-If you encounter `AuthenticationError`, check credentials are set. If `RateLimitError`, add a short delay and retry. If `QueryError`, verify parameters with `help.py`.
+If `AuthenticationError` or `ConfigError`: check credentials with auth_manager.py and suggest `/mp-auth`. If `RateLimitError`: wait briefly and retry. If `BookmarkValidationError`: inspect `e.errors` for structured diagnostics with fix suggestions.
 
-## Additional Resources
+## Additional References
 
-Load these references on demand when the quick reference above is insufficient:
+Load these on demand when the quick reference above is insufficient:
 
-- [python-api.md](references/python-api.md) — Read when you need the full method signature for App API CRUD operations (dashboards, cohorts, flags, alerts, webhooks, Lexicon, schema registry, etc.)
-- [pandas-patterns.md](references/pandas-patterns.md) — Read when building visualizations, doing statistical analysis, creating heatmaps, or working with streaming data as DataFrames
-- [analytical-frameworks.md](references/analytical-frameworks.md) — Read when the user asks an open-ended question requiring structured investigation (GQM decomposition, diagnosis methodology, retention benchmarks)
-- [code-patterns.md](references/code-patterns.md) — Read when you need a complete, copy-paste starting point for a common analysis scenario (funnel drop-off, retention curves, revenue analysis, feature adoption, executive dashboards)
+| Reference | When to load |
+|-----------|-------------|
+| [query-taxonomy.md](references/query-taxonomy.md) | Complex multi-engine question decomposition, 50+ NL→engine mappings, join strategies |
+| [insights-reference.md](references/insights-reference.md) | Deep insights API: all MathTypes, PerUserAggregation, Filter methods, GroupBy, Formula, gotchas |
+| [funnels-reference.md](references/funnels-reference.md) | Deep funnels API: FunnelStep, Exclusion, HoldingConstant, conversion windows, session math |
+| [retention-reference.md](references/retention-reference.md) | Deep retention API: RetentionEvent, alignment, custom buckets, cohort analysis patterns |
+| [flows-reference.md](references/flows-reference.md) | Deep flows API: FlowStep, NetworkX graph analysis, anytree traversal, FlowTreeNode methods |
+| [cross-query-synthesis.md](references/cross-query-synthesis.md) | Multi-engine join strategies, 10 investigation templates, synthesis patterns |
+| [advanced-analysis.md](references/advanced-analysis.md) | Statistical methods, trend analysis, graph algorithms, visualization gallery |
+| [analytical-frameworks.md](references/analytical-frameworks.md) | AARRR deep dive, GQM methodology, diagnosis protocol, retention benchmarks |
+| [python-api.md](references/python-api.md) | Complete method signatures for all Workspace methods including App API CRUD |
+| [bookmark-params.md](references/bookmark-params.md) | Manual bookmark JSON construction for entity management |

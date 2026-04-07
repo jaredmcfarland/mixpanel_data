@@ -30,7 +30,7 @@ ws.lexicon_schema(entity_type: EntityType, name: str) -> LexiconSchema
 ws.clear_discovery_cache() -> None
 ```
 
-## Typed Query API (Primary)
+## Typed Query API — Insights (Primary)
 
 `Workspace.query()` generates valid Mixpanel insights bookmark params from keyword arguments, with two-layer validation (45 rules). Prefer this over legacy segmentation/event_counts methods for all insights-style queries.
 
@@ -194,6 +194,364 @@ Useful for debugging, inspecting generated JSON, or passing to `create_bookmark(
 
 ---
 
+## Typed Query API — Funnels
+
+`Workspace.query_funnel()` generates valid funnel bookmark params from keyword arguments, posts them inline, and returns a structured `FunnelQueryResult`. Prefer this over the legacy `funnel()` method for all ad-hoc funnel queries.
+
+```python
+ws.query_funnel(
+    steps: list[str | FunnelStep],
+    *,
+    conversion_window: int = 14,           # max time between first and last step
+    conversion_window_unit: Literal[
+        "second", "minute", "hour", "day", "week", "month", "session"
+    ] = "day",
+    order: Literal["loose", "any"] = "loose",  # loose = steps in order, any = any order
+    from_date: str | None = None,          # "YYYY-MM-DD"; mutually exclusive with `last`
+    to_date: str | None = None,            # "YYYY-MM-DD"; defaults to today
+    last: int = 30,                        # relative window in `unit`s; ignored if from_date set
+    unit: QueryTimeUnit = "day",
+    math: FunnelMathType = "conversion_rate_unique",
+    math_property: str | None = None,
+    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    where: Filter | list[Filter] | None = None,
+    exclusions: list[str | Exclusion] | None = None,
+    holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None = None,
+    mode: Literal["steps", "trends", "table"] = "steps",
+) -> FunnelQueryResult
+```
+
+### FunnelStep
+
+```python
+from mixpanel_data import FunnelStep
+
+FunnelStep(
+    event: str,                            # event name for this step
+    label: str | None = None,              # display label (defaults to event name)
+    filters: list[Filter] | None = None,   # per-step filter conditions
+    filters_combinator: Literal["all", "any"] = "all",  # AND vs OR for per-step filters
+    order: Literal["loose", "any"] | None = None,  # per-step ordering override
+)
+```
+
+### Exclusion
+
+```python
+from mixpanel_data import Exclusion
+
+Exclusion(
+    event: str,                            # event name to exclude between steps
+    from_step: int | None = None,          # start of exclusion range (0-indexed, inclusive)
+    to_step: int | None = None,            # end of exclusion range (0-indexed, inclusive)
+)
+```
+
+Use plain strings for full-range exclusions; use `Exclusion` objects to target specific step ranges.
+
+### HoldingConstant
+
+```python
+from mixpanel_data import HoldingConstant
+
+HoldingConstant(
+    property: str,                         # property name to hold constant across steps
+    resource_type: Literal["events", "people"] = "events",
+)
+```
+
+When held constant, only users whose property value is the same at every funnel step are counted as converting.
+
+### FunnelQueryResult
+
+```python
+result = ws.query_funnel(["Sign Up", "Purchase"], conversion_window=7)
+
+result.df              # pandas DataFrame with step-level data
+result.steps_data      # list of step dicts: event, count, step_conv_ratio, overall_conv_ratio, avg_time, avg_time_from_start
+result.series          # raw series data from API
+result.params          # generated bookmark params (pass to create_bookmark)
+result.meta            # response metadata
+result.from_date       # resolved start date
+result.to_date         # resolved end date
+result.computed_at     # API computation timestamp
+
+# Access step-level data
+for step in result.steps_data:
+    print(f"{step['event']}: {step['count']} ({step['overall_conv_ratio']:.1%})")
+```
+
+### FunnelMathType
+
+| Value | Meaning | Requires `math_property`? |
+|-------|---------|--------------------------|
+| `conversion_rate_unique` | Conversion rate by unique users (default) | No |
+| `conversion_rate_total` | Conversion rate by total events | No |
+| `conversion_rate_session` | Conversion rate by sessions | No |
+| `unique` | Unique user counts per step | No |
+| `total` | Total event counts per step | No |
+| `average` | Average of a numeric property | Yes |
+| `median` | Median of a numeric property | Yes |
+| `min` | Minimum of a numeric property | Yes |
+| `max` | Maximum of a numeric property | Yes |
+| `p25` | 25th percentile | Yes |
+| `p75` | 75th percentile | Yes |
+| `p90` | 90th percentile | Yes |
+| `p99` | 99th percentile | Yes |
+
+### build_funnel_params()
+
+Same signature as `query_funnel()` but returns the bookmark params dict without making an API call:
+
+```python
+ws.build_funnel_params(
+    steps, *, conversion_window, conversion_window_unit, order,
+    from_date, to_date, last, unit, math, math_property,
+    group_by, where, exclusions, holding_constant, mode,
+) -> dict
+```
+
+---
+
+## Typed Query API — Retention
+
+`Workspace.query_retention()` generates valid retention bookmark params from keyword arguments, posts them inline, and returns a structured `RetentionQueryResult`. Prefer this over the legacy `retention()` method for all ad-hoc retention queries.
+
+```python
+ws.query_retention(
+    born_event: str | RetentionEvent,      # event that defines cohort membership
+    return_event: str | RetentionEvent,    # event that defines "coming back"
+    *,
+    retention_unit: TimeUnit = "week",     # cohort interval: day, week, month
+    alignment: RetentionAlignment = "birth",  # birth = align to first event
+    bucket_sizes: list[int] | None = None, # custom bucket sizes
+    from_date: str | None = None,          # "YYYY-MM-DD"; mutually exclusive with `last`
+    to_date: str | None = None,            # "YYYY-MM-DD"; defaults to today
+    last: int = 30,                        # relative window in `unit`s; ignored if from_date set
+    unit: QueryTimeUnit = "day",
+    math: RetentionMathType = "retention_rate",
+    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    where: Filter | list[Filter] | None = None,
+    mode: RetentionMode = "curve",
+) -> RetentionQueryResult
+```
+
+### RetentionEvent
+
+```python
+from mixpanel_data import RetentionEvent
+
+RetentionEvent(
+    event: str,                            # event name
+    filters: list[Filter] | None = None,   # per-event filter conditions
+    filters_combinator: Literal["all", "any"] = "all",  # AND vs OR
+)
+```
+
+Use plain event-name strings for simple queries; use `RetentionEvent` objects when you need per-event filters.
+
+### RetentionQueryResult
+
+```python
+result = ws.query_retention("Sign Up", "Login", retention_unit="week", last=90)
+
+result.df              # pandas DataFrame: cohort_date, bucket, count, rate
+result.cohorts         # dict: cohort_date -> {first, counts, rates}
+result.average         # synthetic $average cohort: {first, counts, rates}
+result.params          # generated bookmark params (pass to create_bookmark)
+result.meta            # response metadata
+result.from_date       # resolved start date
+result.to_date         # resolved end date
+result.computed_at     # API computation timestamp
+
+# Segmented queries (when group_by is used)
+result.segments        # dict: segment_name -> {cohort_date -> {first, counts, rates}}
+result.segment_averages  # dict: segment_name -> {first, counts, rates}
+
+# Access average retention curve
+avg = result.average
+print(f"Cohort size: {avg['first']}")
+for i, rate in enumerate(avg['rates']):
+    print(f"  Week {i}: {rate:.1%}")
+```
+
+### RetentionMathType
+
+| Value | Meaning |
+|-------|---------|
+| `retention_rate` | Retention rate (percentage, default) |
+| `unique` | Unique user counts per bucket |
+
+### RetentionAlignment
+
+| Value | Meaning |
+|-------|---------|
+| `birth` | Align cohorts to their born event date (default) |
+| `interval_start` | Align to calendar interval start |
+
+### RetentionMode
+
+| Value | Meaning |
+|-------|---------|
+| `curve` | Retention curve visualization (default) |
+| `trends` | Retention trend over time |
+| `table` | Tabular cohort data |
+
+### build_retention_params()
+
+Same signature as `query_retention()` but returns the bookmark params dict without making an API call:
+
+```python
+ws.build_retention_params(
+    born_event, return_event, *, retention_unit, alignment, bucket_sizes,
+    from_date, to_date, last, unit, math, group_by, where, mode,
+) -> dict
+```
+
+---
+
+## Typed Query API — Flows
+
+`Workspace.query_flow()` generates valid flow bookmark params from keyword arguments, posts them to `/arb_funnels`, and returns a structured `FlowQueryResult`. Prefer this over the legacy `query_saved_flows()` method for all ad-hoc flow queries.
+
+```python
+ws.query_flow(
+    event: str | FlowStep | Sequence[str | FlowStep],
+    *,
+    forward: int = 3,                      # hops to show AFTER anchor event (0-3)
+    reverse: int = 0,                      # hops to show BEFORE anchor event (0-3)
+    from_date: str | None = None,          # "YYYY-MM-DD"; mutually exclusive with `last`
+    to_date: str | None = None,            # "YYYY-MM-DD"; defaults to today
+    last: int = 30,                        # relative window in `unit`s; ignored if from_date set
+    conversion_window: int = 7,            # max time window for flow
+    conversion_window_unit: Literal["day", "week", "month", "session"] = "day",
+    count_type: Literal["unique", "total", "session"] = "unique",
+    cardinality: int = 3,                  # max distinct events per step
+    collapse_repeated: bool = False,       # merge consecutive same-event nodes
+    hidden_events: list[str] | None = None,  # events to exclude from visualization
+    mode: Literal["sankey", "paths", "tree"] = "sankey",
+) -> FlowQueryResult
+```
+
+### FlowStep
+
+```python
+from mixpanel_data import FlowStep
+
+FlowStep(
+    event: str,                            # event name to anchor on
+    forward: int | None = None,            # per-step forward hops (None = use query default)
+    reverse: int | None = None,            # per-step reverse hops (None = use query default)
+    label: str | None = None,              # display label (defaults to event name)
+    filters: list[Filter] | None = None,   # per-step filter conditions
+    filters_combinator: Literal["all", "any"] = "all",  # AND vs OR for per-step filters
+)
+```
+
+### FlowQueryResult
+
+```python
+result = ws.query_flow("Login", forward=3, last=30)
+
+result.computed_at              # ISO timestamp when computed
+result.steps                    # list of step-node dicts from API
+result.flows                    # list of flow-edge dicts
+result.breakdowns               # breakdown dicts (when breakdown used)
+result.overall_conversion_rate  # overall conversion (0.0 to 1.0)
+result.params                   # generated bookmark params
+result.meta                     # response metadata
+result.mode                     # "sankey", "paths", or "tree"
+result.trees                    # list[FlowTreeNode] (populated in tree mode)
+
+# DataFrames (lazy cached)
+result.df                       # alias for nodes_df (sankey) or trees_df (tree)
+result.nodes_df                 # DataFrame of nodes: step, event, type, count, anchor_type, ...
+result.edges_df                 # DataFrame of edges: source_step, source_event, target_step, target_event, count, ...
+
+# Graph analysis
+result.graph                    # networkx DiGraph — nodes keyed as "Event@step"
+result.top_transitions(n=10)    # list of (source, target, count) tuples, sorted by count desc
+result.drop_off_summary()       # dict with per-step drop-off counts and rates
+
+# Tree mode (mode="tree")
+result.trees                    # list[FlowTreeNode] — recursive prefix trees
+result.anytree                  # list[AnyNode] — anytree wrappers for rendering/traversal
+```
+
+### FlowTreeNode
+
+```python
+from mixpanel_data.types import FlowTreeNode
+
+FlowTreeNode(
+    event: str,                            # event name at this position
+    type: FlowNodeType,                    # "ANCHOR", "NORMAL", "DROPOFF", "PRUNED", "FORWARD", "REVERSE"
+    step_number: int,                      # zero-based step index
+    total_count: int,                      # users reaching this node
+    drop_off_count: int = 0,               # users who dropped off here
+    converted_count: int = 0,              # users who continued past here
+    anchor_type: FlowAnchorType = "NORMAL",  # "NORMAL", "RELATIVE_REVERSE", "RELATIVE_FORWARD"
+    is_computed: bool = False,             # whether this is a computed/custom event
+    children: tuple[FlowTreeNode, ...] = (),  # child nodes (subsequent events)
+    time_percentiles_from_start: dict = {},  # timing from flow start
+    time_percentiles_from_prev: dict = {},   # timing from previous node
+)
+
+# Computed properties
+node.conversion_rate -> float             # converted_count / total_count
+node.depth -> int                         # max depth of subtree
+node.node_count -> int                    # total nodes in subtree
+
+# Methods
+node.all_paths() -> list[list[FlowTreeNode]]  # all root-to-leaf paths
+node.flatten() -> list[FlowTreeNode]      # preorder traversal of all nodes
+node.find(event) -> list[FlowTreeNode]    # search subtree by event name
+node.render() -> str                      # ASCII box-drawing tree visualization
+node.to_dict() -> dict                    # serialize to JSON-compatible dict
+node.to_anytree() -> AnyNode              # convert to anytree node for rendering/export
+```
+
+### FlowNodeType
+
+| Value | Meaning |
+|-------|---------|
+| `ANCHOR` | The anchor event (starting point) |
+| `NORMAL` | A regular event in the flow |
+| `DROPOFF` | Users who dropped off at this point |
+| `PRUNED` | Events below cardinality threshold |
+| `FORWARD` | Forward-direction node |
+| `REVERSE` | Reverse-direction node |
+
+### FlowAnchorType
+
+| Value | Meaning |
+|-------|---------|
+| `NORMAL` | Standard anchor position |
+| `RELATIVE_REVERSE` | Anchor relative to reverse direction |
+| `RELATIVE_FORWARD` | Anchor relative to forward direction |
+
+### FlowCountType
+
+`Literal["unique", "total", "session"]` — how to count users/events in flows.
+
+### FlowChartType
+
+`Literal["sankey", "paths", "tree"]` — visualization mode for the flow chart.
+
+### build_flow_params()
+
+Same signature as `query_flow()` but returns the bookmark params dict without making an API call:
+
+```python
+ws.build_flow_params(
+    event, *, forward, reverse, from_date, to_date, last,
+    conversion_window, conversion_window_unit, count_type,
+    cardinality, collapse_repeated, hidden_events, mode,
+) -> dict
+```
+
+---
+
 ## Analytics — Legacy Core Queries
 
 ```python
@@ -203,12 +561,14 @@ ws.segmentation(
     unit: Literal["day","week","month"] = "day",
     where: str | None = None,
 ) -> SegmentationResult
+# Legacy — prefer: ws.query() for insights-style queries
 
 ws.funnel(
     funnel_id: int, from_date: str, to_date: str,
     unit: Literal["day","week","month"] | None = None,
     on: str | None = None,
 ) -> FunnelResult
+# Legacy — prefer: ws.query_funnel() for ad-hoc funnels
 
 ws.retention(
     *, born_event: str, return_event: str,
@@ -219,6 +579,7 @@ ws.retention(
     interval_count: int = 10,
     unit: Literal["day","week","month"] = "day",
 ) -> RetentionResult
+# Legacy — prefer: ws.query_retention() for ad-hoc retention queries
 
 ws.jql(script: str, params: dict | None = None) -> JQLResult
 
@@ -243,6 +604,7 @@ ws.property_counts(
 ws.activity_feed(distinct_ids: list[str], *, from_date: str | None = None, to_date: str | None = None) -> ActivityFeedResult
 
 ws.query_saved_flows(bookmark_id: int) -> FlowsResult
+# Legacy — prefer: ws.query_flow() for ad-hoc flow queries
 
 ws.frequency(
     *, from_date: str, to_date: str,
@@ -533,7 +895,7 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 | Type | From Method | Key Properties |
 |------|------------|----------------|
 | `SegmentationResult` | `segmentation()` | `.df`, `.data`, `.series` |
-| `FunnelResult` | `funnel()` | `.df`, `.steps`, `.conversion_rate` |
+| `FunnelResult` | `funnel()` | `.df`, `.steps` (list of `FunnelResultStep`), `.conversion_rate` |
 | `RetentionResult` | `retention()` | `.df`, `.data` |
 | `JQLResult` | `jql()` | `.df`, `.data` |
 | `EventCountsResult` | `event_counts()` | `.df`, `.data` |
@@ -541,6 +903,9 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 | `FlowsResult` | `query_saved_flows()` | `.df`, `.data` |
 | `FrequencyResult` | `frequency()` | `.df`, `.data` |
 | `QueryResult` | `query()` | `.df`, `.params`, `.series`, `.meta`, `.from_date`, `.to_date`, `.computed_at` |
+| `FunnelQueryResult` | `query_funnel()` | `.df`, `.steps_data`, `.params`, `.series`, `.meta`, `.from_date`, `.to_date`, `.computed_at` |
+| `RetentionQueryResult` | `query_retention()` | `.df`, `.cohorts`, `.average`, `.segments`, `.segment_averages`, `.params`, `.meta`, `.from_date`, `.to_date`, `.computed_at` |
+| `FlowQueryResult` | `query_flow()` | `.df`, `.nodes_df`, `.edges_df`, `.graph`, `.trees`, `.anytree`, `.top_transitions()`, `.drop_off_summary()`, `.params`, `.meta`, `.computed_at` |
 
 ## Exception Hierarchy
 
