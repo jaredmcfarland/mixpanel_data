@@ -108,7 +108,7 @@ class TestAuthCredential:
             AuthCredential(
                 name="demo",
                 type=CredentialType.service_account,
-                region="invalid",  # type: ignore[arg-type]
+                region="invalid",
                 username="user",
                 secret=SecretStr("secret"),
             )
@@ -164,7 +164,7 @@ class TestAuthCredential:
         cred = AuthCredential(
             name="demo",
             type=CredentialType.service_account,
-            region="US",  # type: ignore[arg-type]
+            region="US",
             username="user",
             secret=SecretStr("secret"),
         )
@@ -176,7 +176,7 @@ class TestAuthCredential:
             cred = AuthCredential(
                 name="demo",
                 type=CredentialType.service_account,
-                region=region,  # type: ignore[arg-type]
+                region=region,
                 username="user",
                 secret=SecretStr("secret"),
             )
