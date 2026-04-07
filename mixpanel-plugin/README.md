@@ -135,21 +135,20 @@ Two auth methods: service account (Basic Auth) or OAuth 2.0 PKCE. Run `/mixpanel
 
 ## Installation
 
-```bash
-# Add the plugin marketplace
-/plugin marketplace add /path/to/mixpanel_data/mixpanel-plugin
-
-# Install the plugin
-/plugin install mixpanel-data@mixpanel-data
-```
-
-For local plugin development, point the marketplace directly at your working copy:
+### From GitHub
 
 ```bash
-/plugin marketplace add /path/to/mixpanel_data/mixpanel-plugin
+/plugin marketplace add jaredmcfarland/mixpanel_data
+/plugin install mixpanel-data@mixpanel-data-marketplace
 ```
 
-Then restart Claude Code.
+### Local development
+
+```bash
+claude --plugin-dir /path/to/mixpanel_data/mixpanel-plugin
+```
+
+Use `/reload-plugins` to pick up changes without restarting.
 
 ## Prerequisites
 
