@@ -33,6 +33,8 @@ from mixpanel_data import (
 from mixpanel_data.exceptions import BookmarkValidationError, QueryError
 from mixpanel_data.types import FlowQueryResult, FunnelQueryResult, RetentionQueryResult
 
+pytestmark = pytest.mark.live
+
 # =============================================================================
 # Constants
 # =============================================================================
