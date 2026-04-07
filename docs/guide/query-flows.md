@@ -550,16 +550,87 @@ The tree is uniquely suited to *branching analysis* — understanding not just t
 
 #### anytree Integration
 
-Convert tree results to [`anytree`](https://anytree.readthedocs.io/) nodes for advanced rendering, Graphviz export, and traversal:
+`FlowTreeNode` is frozen and children-only — you can traverse downward, but you can't ask a node "how did I get here?" Converting to [`anytree`](https://anytree.readthedocs.io/) adds **parent references**, **root-to-node paths**, **tree-wide search**, and **Graphviz export**, unlocking questions that require upward or lateral navigation.
+
+Use `to_anytree()` on any single `FlowTreeNode`, or `result.anytree` for the full list of converted roots:
 
 ```python
-from anytree import RenderTree
+from anytree import RenderTree, findall
 
-result = ws.query_flow("Purchase", mode="tree")
-for root in result.anytree:
-    for pre, fill, node in RenderTree(root):
-        print(f"{pre}{node.event} ({node.total_count})")
+result = ws.query_flow("Purchase", mode="tree", forward=3)
+root = result.anytree[0]  # converted AnyNode root
+
+# Render the full tree with counts
+for pre, _, node in RenderTree(root):
+    print(f"{pre}{node.event} ({node.total_count})")
+# Purchase (5000)
+# ├── View Receipt (3200)
+# │   ├── Rate App (1100)
+# │   └── Browse More (2100)
+# └── Contact Support (800)
 ```
+
+##### Tracing backward from any node
+
+The killer feature: given a node deep in the tree, trace the exact path that led there — something `FlowTreeNode` alone can't do.
+
+```python
+from anytree import findall
+
+# Find all drop-off points and trace how users got there
+dropoffs = findall(root, filter_=lambda n: n.type == "DROPOFF")
+for node in dropoffs:
+    # .path gives the full root-to-node chain
+    journey = " → ".join(n.event for n in node.path)
+    print(f"{journey} ({node.drop_off_count} users lost)")
+
+# Parent references — "what came immediately before this event?"
+support = findall(root, filter_=lambda n: n.event == "Contact Support")[0]
+print(f"{support.event} ← {support.parent.event}")
+# Contact Support ← Purchase
+```
+
+##### Node introspection
+
+Every converted node exposes properties that make tree analysis concise:
+
+```python
+from anytree import findall
+
+checkout = findall(root, filter_=lambda n: n.event == "Checkout")[0]
+
+checkout.depth       # 2 — distance from anchor
+checkout.ancestors   # (Purchase, View Receipt) — full chain above
+checkout.siblings    # other events at the same branching point
+checkout.is_leaf     # True if no further steps follow
+root.leaves          # all terminal nodes — drop-offs and end-of-funnel
+root.height          # deepest path length in the tree
+```
+
+##### Graphviz export
+
+Export the flow tree as a visual diagram — especially useful for sharing with stakeholders or embedding in reports:
+
+```python
+from anytree.exporter import UniqueDotExporter
+
+# Basic export — renders to PNG via Graphviz
+UniqueDotExporter(root).to_picture("flow.png")
+
+# Custom formatting — size nodes by user count, highlight drop-offs
+UniqueDotExporter(
+    root,
+    nodenamefunc=lambda n: f"{n.event}\n({n.total_count:,})",
+    nodeattrfunc=lambda n: (
+        'shape=box, style=filled, fillcolor="#ff6b6b"'
+        if n.type == "DROPOFF"
+        else 'shape=box, style=filled, fillcolor="#4ecdc4"'
+    ),
+).to_picture("flow_colored.png")
+```
+
+!!! note
+    Graphviz must be installed on your system (`brew install graphviz` / `apt install graphviz`) for `to_picture()` to work. Alternatively, use `to_dotfile("flow.dot")` to generate the DOT source for rendering elsewhere.
 
 ### Persisting as a Saved Report
 
