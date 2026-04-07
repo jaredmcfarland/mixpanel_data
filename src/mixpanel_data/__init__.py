@@ -76,6 +76,8 @@ from mixpanel_data.types import (
     BulkUpdatePropertiesParams,
     Cohort,
     CohortCreator,
+    CohortCriteria,
+    CohortDefinition,
     CohortInfo,
     ComposedPropertyValue,
     CreateAlertParams,
@@ -315,6 +317,10 @@ __all__ = [
     "BulkUpdateBookmarkEntry",
     "BookmarkHistoryResponse",
     "BookmarkHistoryPagination",
+    # Cohort Definition Builder (Phase 035)
+    "CohortCriteria",
+    "CohortDefinition",
+    # Cohort CRUD (Phase 024)
     "Cohort",
     "CohortCreator",
     "CreateCohortParams",

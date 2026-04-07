@@ -16,6 +16,7 @@ without recomputation.
 
 from __future__ import annotations
 
+import copy
 import math
 import re
 import warnings
@@ -7634,6 +7635,630 @@ class GroupBy:
 
     bucket_max: int | float | None = None
     """Maximum value for numeric buckets."""
+
+
+# =============================================================================
+# Cohort Definition Builder Types
+# =============================================================================
+
+_PROPERTY_OPERATOR_MAP: dict[str, str] = {
+    "equals": "==",
+    "not_equals": "!=",
+    "contains": "in",
+    "not_contains": "not in",
+    "greater_than": ">",
+    "less_than": "<",
+    "is_set": "defined",
+    "is_not_set": "not defined",
+}
+"""Maps ``CohortCriteria.has_property()`` operator names to selector tree operators."""
+
+_FILTER_TO_SELECTOR_MAP: dict[str, str] = {
+    "equals": "==",
+    "does not equal": "!=",
+    "contains": "in",
+    "does not contain": "not in",
+    "is greater than": ">",
+    "is less than": "<",
+    "is set": "defined",
+    "is not set": "not defined",
+    "is between": "between",
+}
+"""Maps ``Filter._operator`` strings to event selector expression operators."""
+
+
+def _validate_cohort_date(date_str: str) -> None:
+    """Validate that a date string is in YYYY-MM-DD format.
+
+    Args:
+        date_str: Date string to validate.
+
+    Raises:
+        ValueError: If format is not YYYY-MM-DD or date is invalid.
+    """
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        raise ValueError("dates must be YYYY-MM-DD format")
+    try:
+        dt_date.fromisoformat(date_str)
+    except ValueError:
+        raise ValueError(
+            f"date '{date_str}' has correct format but is not a valid calendar date"
+        ) from None
+
+
+def _build_event_selector(
+    filters: Filter | list[Filter],
+) -> dict[str, Any]:
+    """Convert Filter objects to an event selector expression tree.
+
+    Reads internal fields from ``Filter`` instances and maps operators
+    via ``_FILTER_TO_SELECTOR_MAP`` to produce selector tree nodes.
+
+    Args:
+        filters: Single Filter or list of Filters to convert.
+
+    Returns:
+        Expression tree dict with ``operator`` and ``children`` keys.
+
+    Raises:
+        ValueError: If a filter uses an unsupported operator.
+    """
+    filter_list = [filters] if isinstance(filters, Filter) else filters
+    children: list[dict[str, Any]] = []
+    for f in filter_list:
+        mapped_op = _FILTER_TO_SELECTOR_MAP.get(f._operator)
+        if mapped_op is None:
+            supported = ", ".join(sorted(_FILTER_TO_SELECTOR_MAP.keys()))
+            msg = (
+                f"unsupported filter operator for cohort selector: {f._operator!r}. "
+                f"Supported operators: {supported}"
+            )
+            raise ValueError(msg)
+        node: dict[str, Any] = {
+            "property": "event",
+            "value": f._property,
+            "operator": mapped_op,
+        }
+        if f._value is not None:
+            node["operand"] = f._value
+        node["type"] = f._property_type
+        children.append(node)
+    return {"operator": "and", "children": children}
+
+
+@dataclass(frozen=True)
+class CohortCriteria:
+    """A single atomic condition for cohort membership.
+
+    Constructed exclusively via class methods — never instantiate directly.
+    Produces selector nodes and behavior entries for the Mixpanel cohort
+    definition format (legacy ``selector`` + ``behaviors`` JSON).
+
+    Example:
+        ```python
+        from mixpanel_data import CohortCriteria
+
+        # Behavioral criterion
+        c = CohortCriteria.did_event("Purchase", at_least=3, within_days=30)
+
+        # Property criterion
+        c = CohortCriteria.has_property("plan", "premium")
+
+        # Cohort reference
+        c = CohortCriteria.in_cohort(456)
+        ```
+    """
+
+    _selector_node: dict[str, Any]
+    """Expression tree leaf node (behavioral, property, or cohort reference)."""
+
+    _behavior_key: str | None
+    """Placeholder behavior key (e.g., ``"bhvr_0"``). ``None`` for non-behavioral."""
+
+    _behavior: dict[str, Any] | None
+    """Behavior dict entry (event selector + window/dates). ``None`` for non-behavioral."""
+
+    @classmethod
+    def did_event(
+        cls,
+        event: str,
+        *,
+        at_least: int | None = None,
+        at_most: int | None = None,
+        exactly: int | None = None,
+        within_days: int | None = None,
+        within_weeks: int | None = None,
+        within_months: int | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        where: Filter | list[Filter] | None = None,
+    ) -> CohortCriteria:
+        """Create a behavioral criterion based on event frequency.
+
+        Args:
+            event: Event name (must be non-empty).
+            at_least: Minimum event count (``>=``).
+            at_most: Maximum event count (``<=``).
+            exactly: Exact event count (``==``).
+            within_days: Rolling window in days.
+            within_weeks: Rolling window in weeks.
+            within_months: Rolling window in months.
+            from_date: Absolute start date (YYYY-MM-DD).
+            to_date: Absolute end date (YYYY-MM-DD).
+            where: Event property filter(s).
+
+        Returns:
+            CohortCriteria with behavioral selector node and behavior entry.
+
+        Raises:
+            ValueError: If no frequency param or multiple are set, frequency is
+                negative, event name is empty/whitespace, time constraints are
+                missing or conflicting, or dates are malformed/misordered.
+        """
+        # CD4: Event name must be non-empty
+        if not event or not event.strip():
+            raise ValueError("event name must be non-empty")
+
+        # CD1: Exactly one frequency param required
+        freq_params = {
+            "at_least": at_least,
+            "at_most": at_most,
+            "exactly": exactly,
+        }
+        set_freqs = {k: v for k, v in freq_params.items() if v is not None}
+        if len(set_freqs) != 1:
+            raise ValueError("exactly one of at_least, at_most, exactly must be set")
+
+        freq_name, freq_value = next(iter(set_freqs.items()))
+
+        # CD2: Frequency param must be non-negative
+        if freq_value < 0:
+            raise ValueError("frequency value must be >= 0")
+
+        # Map frequency param to selector operator
+        freq_operator_map = {
+            "at_least": ">=",
+            "at_most": "<=",
+            "exactly": "==",
+        }
+        selector_operator = freq_operator_map[freq_name]
+
+        # CD3: Exactly one time constraint required
+        rolling_params = {
+            "within_days": within_days,
+            "within_weeks": within_weeks,
+            "within_months": within_months,
+        }
+        set_rolling = {k: v for k, v in rolling_params.items() if v is not None}
+        has_date_range = from_date is not None or to_date is not None
+
+        if not set_rolling and not has_date_range:
+            raise ValueError(
+                "exactly one time constraint required "
+                "(within_days/weeks/months or from_date+to_date)"
+            )
+        if set_rolling and has_date_range:
+            raise ValueError(
+                "exactly one time constraint required "
+                "(within_days/weeks/months or from_date+to_date)"
+            )
+        if len(set_rolling) > 1:
+            raise ValueError(
+                "exactly one time constraint required "
+                "(within_days/weeks/months or from_date+to_date)"
+            )
+
+        # Build behavior entry
+        behavior_key = "bhvr_0"  # placeholder, re-indexed by to_dict()
+
+        event_selector: dict[str, Any] = {
+            "event": event,
+            "selector": None,
+        }
+        if where is not None:
+            where_list = [where] if isinstance(where, Filter) else where
+            if where_list:
+                event_selector["selector"] = _build_event_selector(where_list)
+
+        behavior: dict[str, Any] = {
+            "count": {
+                "event_selector": event_selector,
+                "type": "absolute",
+            },
+        }
+
+        if set_rolling:
+            rolling_name, rolling_value = next(iter(set_rolling.items()))
+            if rolling_value <= 0:
+                raise ValueError("time window value must be positive")
+            unit_map = {
+                "within_days": "day",
+                "within_weeks": "week",
+                "within_months": "month",
+            }
+            behavior["window"] = {
+                "unit": unit_map[rolling_name],
+                "value": rolling_value,
+            }
+        else:
+            # Absolute date range
+            # CD5: from_date requires to_date (and vice versa)
+            if from_date is not None and to_date is None:
+                raise ValueError("from_date requires to_date")
+            if to_date is not None and from_date is None:
+                raise ValueError("to_date requires from_date")
+
+            # CD6: Dates must be YYYY-MM-DD
+            # from_date and to_date are guaranteed non-None here:
+            # has_date_range is True and CD5 guards above reject mismatched pairs.
+            if from_date is None or to_date is None:  # pragma: no cover
+                raise ValueError(
+                    "exactly one time constraint required "
+                    "(within_days/weeks/months or from_date+to_date)"
+                )
+            _validate_cohort_date(from_date)
+            _validate_cohort_date(to_date)
+            if dt_date.fromisoformat(from_date) > dt_date.fromisoformat(to_date):
+                raise ValueError("from_date must be before or equal to to_date")
+
+            behavior["from_date"] = from_date
+            behavior["to_date"] = to_date
+
+        selector_node: dict[str, Any] = {
+            "property": "behaviors",
+            "value": behavior_key,
+            "operator": selector_operator,
+            "operand": freq_value,
+        }
+
+        return cls(
+            _selector_node=selector_node,
+            _behavior_key=behavior_key,
+            _behavior=behavior,
+        )
+
+    @classmethod
+    def did_not_do_event(
+        cls,
+        event: str,
+        *,
+        within_days: int | None = None,
+        within_weeks: int | None = None,
+        within_months: int | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> CohortCriteria:
+        """Create a criterion for users who did NOT perform an event.
+
+        Shorthand for ``did_event(event, exactly=0, ...)``.
+
+        Args:
+            event: Event name.
+            within_days: Rolling window in days.
+            within_weeks: Rolling window in weeks.
+            within_months: Rolling window in months.
+            from_date: Absolute start date (YYYY-MM-DD).
+            to_date: Absolute end date (YYYY-MM-DD).
+
+        Returns:
+            CohortCriteria equivalent to ``did_event(event, exactly=0, ...)``.
+
+        Raises:
+            ValueError: On constraint violations.
+        """
+        return cls.did_event(
+            event,
+            exactly=0,
+            within_days=within_days,
+            within_weeks=within_weeks,
+            within_months=within_months,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+    @classmethod
+    def has_property(
+        cls,
+        property: str,
+        value: str | int | float | bool | list[str],
+        *,
+        operator: Literal[
+            "equals",
+            "not_equals",
+            "contains",
+            "not_contains",
+            "greater_than",
+            "less_than",
+            "is_set",
+            "is_not_set",
+        ] = "equals",
+        property_type: Literal[
+            "string",
+            "number",
+            "boolean",
+            "datetime",
+            "list",
+        ] = "string",
+    ) -> CohortCriteria:
+        """Create a property-based criterion.
+
+        Args:
+            property: Property name (must be non-empty).
+            value: Value to compare against.
+            operator: Comparison operator. Default: ``"equals"``.
+            property_type: Data type of the property. Default: ``"string"``.
+
+        Returns:
+            CohortCriteria with property selector node.
+
+        Raises:
+            ValueError: If property name is empty (CD7).
+        """
+        # CD7: Property name must be non-empty
+        if not property or not property.strip():
+            raise ValueError("property name must be non-empty")
+
+        selector_operator = _PROPERTY_OPERATOR_MAP[operator]
+
+        selector_node: dict[str, Any] = {
+            "property": "user",
+            "value": property,
+            "operator": selector_operator,
+            "operand": value,
+            "type": property_type,
+        }
+
+        return cls(
+            _selector_node=selector_node,
+            _behavior_key=None,
+            _behavior=None,
+        )
+
+    @classmethod
+    def property_is_set(cls, property: str) -> CohortCriteria:
+        """Check if a user property exists.
+
+        Shorthand for ``has_property(property, "", operator="is_set")``.
+
+        Args:
+            property: Property name.
+
+        Returns:
+            CohortCriteria checking property existence.
+
+        Raises:
+            ValueError: If property name is empty (CD7).
+        """
+        return cls.has_property(property, "", operator="is_set")
+
+    @classmethod
+    def property_is_not_set(cls, property: str) -> CohortCriteria:
+        """Check if a user property does not exist.
+
+        Shorthand for ``has_property(property, "", operator="is_not_set")``.
+
+        Args:
+            property: Property name.
+
+        Returns:
+            CohortCriteria checking property non-existence.
+
+        Raises:
+            ValueError: If property name is empty (CD7).
+        """
+        return cls.has_property(property, "", operator="is_not_set")
+
+    @classmethod
+    def in_cohort(cls, cohort_id: int) -> CohortCriteria:
+        """Create a criterion for membership in a saved cohort.
+
+        Args:
+            cohort_id: Cohort ID (must be positive integer).
+
+        Returns:
+            CohortCriteria with cohort reference selector node.
+
+        Raises:
+            ValueError: If cohort_id is not a positive integer (CD8).
+        """
+        if cohort_id <= 0:
+            raise ValueError("cohort_id must be a positive integer")
+
+        selector_node: dict[str, Any] = {
+            "property": "cohort",
+            "value": cohort_id,
+            "operator": "in",
+        }
+
+        return cls(
+            _selector_node=selector_node,
+            _behavior_key=None,
+            _behavior=None,
+        )
+
+    @classmethod
+    def not_in_cohort(cls, cohort_id: int) -> CohortCriteria:
+        """Create a criterion for non-membership in a saved cohort.
+
+        Args:
+            cohort_id: Cohort ID (must be positive integer).
+
+        Returns:
+            CohortCriteria with cohort exclusion selector node.
+
+        Raises:
+            ValueError: If cohort_id is not a positive integer (CD8).
+        """
+        if cohort_id <= 0:
+            raise ValueError("cohort_id must be a positive integer")
+
+        selector_node: dict[str, Any] = {
+            "property": "cohort",
+            "value": cohort_id,
+            "operator": "not in",
+        }
+
+        return cls(
+            _selector_node=selector_node,
+            _behavior_key=None,
+            _behavior=None,
+        )
+
+
+@dataclass(frozen=True, init=False)
+class CohortDefinition:
+    """A composed set of criteria combined with AND/OR logic.
+
+    Produces valid Mixpanel cohort definition JSON (legacy ``selector`` +
+    ``behaviors`` format) via ``to_dict()``. Behavior keys are globally
+    re-indexed to ensure uniqueness across arbitrary nesting.
+
+    Example:
+        ```python
+        from mixpanel_data import CohortCriteria, CohortDefinition
+
+        cohort = CohortDefinition.all_of(
+            CohortCriteria.has_property("plan", "premium"),
+            CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
+        )
+        result = cohort.to_dict()
+        # {"selector": {...}, "behaviors": {"bhvr_0": {...}}}
+        ```
+    """
+
+    _criteria: tuple[CohortCriteria | CohortDefinition, ...]
+    """One or more criteria or nested definitions."""
+
+    _operator: Literal["and", "or"]
+    """Boolean combinator."""
+
+    def __init__(
+        self,
+        *criteria: CohortCriteria | CohortDefinition,
+    ) -> None:
+        """Create a definition combining criteria with AND logic.
+
+        Equivalent to ``CohortDefinition.all_of(*criteria)``.
+
+        Args:
+            *criteria: One or more criteria or nested definitions.
+
+        Raises:
+            ValueError: If no criteria are provided (CD9).
+        """
+        if not criteria:
+            raise ValueError("CohortDefinition requires at least one criterion")
+        object.__setattr__(self, "_criteria", criteria)
+        object.__setattr__(self, "_operator", "and")
+
+    @classmethod
+    def all_of(
+        cls,
+        *criteria: CohortCriteria | CohortDefinition,
+    ) -> CohortDefinition:
+        """Combine criteria and/or definitions with AND logic.
+
+        Args:
+            *criteria: One or more criteria or nested definitions.
+
+        Returns:
+            CohortDefinition with AND combinator.
+
+        Raises:
+            ValueError: If no criteria are provided (CD9).
+        """
+        if not criteria:
+            raise ValueError("CohortDefinition requires at least one criterion")
+        instance = cls.__new__(cls)
+        object.__setattr__(instance, "_criteria", criteria)
+        object.__setattr__(instance, "_operator", "and")
+        return instance
+
+    @classmethod
+    def any_of(
+        cls,
+        *criteria: CohortCriteria | CohortDefinition,
+    ) -> CohortDefinition:
+        """Combine criteria and/or definitions with OR logic.
+
+        Args:
+            *criteria: One or more criteria or nested definitions.
+
+        Returns:
+            CohortDefinition with OR combinator.
+
+        Raises:
+            ValueError: If no criteria are provided (CD9).
+        """
+        if not criteria:
+            raise ValueError("CohortDefinition requires at least one criterion")
+        instance = cls.__new__(cls)
+        object.__setattr__(instance, "_criteria", criteria)
+        object.__setattr__(instance, "_operator", "or")
+        return instance
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to Mixpanel cohort definition format.
+
+        Produces ``{"selector": {...}, "behaviors": {...}}`` with globally
+        re-indexed behavior keys (``bhvr_0``, ``bhvr_1``, ...) ensuring
+        uniqueness across arbitrary nesting depth.
+
+        Returns:
+            Dict with ``selector`` expression tree and ``behaviors`` map.
+
+        Example:
+            ```python
+            cohort = CohortDefinition.all_of(
+                CohortCriteria.has_property("plan", "premium"),
+                CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
+            )
+            data = cohort.to_dict()
+            # {"selector": {"operator": "and", "children": [...]},
+            #  "behaviors": {"bhvr_0": {...}}}
+
+            # Pass directly to cohort CRUD:
+            ws.create_cohort(CreateCohortParams(
+                name="Premium Purchasers",
+                definition=data,
+            ))
+            ```
+        """
+        # CD10: Behavior key uniqueness is enforced by sequential re-indexing
+        # (bhvr_0, bhvr_1, ...) during tree traversal below.
+        behaviors: dict[str, Any] = {}
+        counter = [0]  # mutable container for closure
+
+        def _collect_and_build(
+            item: CohortCriteria | CohortDefinition,
+        ) -> dict[str, Any]:
+            """Recursively build selector tree and collect behaviors.
+
+            Args:
+                item: Criterion or nested definition to process.
+
+            Returns:
+                Selector node dict (leaf or combinator).
+            """
+            if isinstance(item, CohortCriteria):
+                # Deep copy: operand may be a mutable list (e.g. has_property
+                # with list value), so shallow dict() is not sufficient.
+                node = copy.deepcopy(item._selector_node)
+                if item._behavior_key is not None and item._behavior is not None:
+                    new_key = f"bhvr_{counter[0]}"
+                    counter[0] += 1
+                    behaviors[new_key] = copy.deepcopy(item._behavior)
+                    node["value"] = new_key
+                return node
+            # CohortDefinition: recurse into children
+            children = [_collect_and_build(c) for c in item._criteria]
+            return {
+                "operator": item._operator,
+                "children": children,
+            }
+
+        selector = _collect_and_build(self)
+        return {"selector": selector, "behaviors": behaviors}
 
 
 @dataclass(frozen=True)

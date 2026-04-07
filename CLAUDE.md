@@ -301,6 +301,8 @@ Task(subagent_type="mixpanel-data:narrator", prompt="...")
 - N/A — live query only, no local persistence (029-insights-query-api)
 - Python 3.10+ (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), pandas (DataFrames) (031-shared-infra-extraction)
 - Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames) (033-retention-query)
+- Python 3.10+ (mypy --strict) + Pydantic v2 (for existing `CreateCohortParams`), pandas (existing), Hypothesis (PBT) (035-cohort-definition-builder)
+- N/A — pure types, no persistence (035-cohort-definition-builder)
 
 ## Recent Changes
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)
