@@ -110,30 +110,21 @@ No saved custom property required. No bookmark JSON. The agent just describes th
 
 ## Side-by-Side: "Why did purchase conversion drop last week?"
 
-<table>
-<tr><th width="50%">MCP Chatbot / Raw REST API</th><th width="50%">Unified Query System in Claude Code</th></tr>
-<tr>
-<td>
+### Today: MCP Chatbot / Raw REST API
 
-**Prompt 1**: "Why did purchase conversion drop?"
-*→ Returns a single funnel chart. No segmentation.*
-
-**Prompt 2**: "Break that down by platform"
-*→ New chart. User spots mobile is down.*
-
-**Prompt 3**: "Show me mobile retention"
-*→ Separate endpoint, separate response format.*
-
-**Prompt 4**: "What paths do mobile users take?"
-*→ Requires a saved Flows report in the UI.*
-
-**Prompt 5**: "Is this statistically significant?"
-*→ "I can't perform statistical tests."*
+> **Prompt 1**: "Why did purchase conversion drop?" → *Single funnel chart. No segmentation.*
+>
+> **Prompt 2**: "Break that down by platform" → *New chart. User spots mobile is down.*
+>
+> **Prompt 3**: "Show me mobile retention" → *Separate endpoint, separate response format.*
+>
+> **Prompt 4**: "What paths do mobile users take?" → *Requires a saved Flows report in the UI.*
+>
+> **Prompt 5**: "Is this statistically significant?" → *"I can't perform statistical tests."*
 
 5 round-trips. No cross-engine synthesis. No statistical validation. No persistable output.
 
-</td>
-<td>
+### With the Unified Query System: one autonomous investigation
 
 ```python
 from concurrent.futures import ThreadPoolExecutor
@@ -169,10 +160,6 @@ ws.create_bookmark(CreateBookmarkParams(
 ```
 
 One turn. Four engines. Statistical proof. Saved as a Mixpanel report.
-
-</td>
-</tr>
-</table>
 
 ---
 
