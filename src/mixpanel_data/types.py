@@ -6906,6 +6906,171 @@ class ProfilePageResult:
 
 
 # =============================================================================
+# Custom Property Query Types (Phase 037)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class PropertyInput:
+    """A raw property reference mapping a formula variable to a named property.
+
+    Used as an entry in :attr:`InlineCustomProperty.inputs` to bind a
+    formula variable (A-Z) to a concrete Mixpanel event or user property.
+
+    Attributes:
+        name: The raw property name (e.g., ``"price"``, ``"$browser"``).
+        type: Property data type. Default: ``"string"``.
+        resource_type: Property domain — ``"event"`` or ``"user"``.
+            Uses singular form to match Mixpanel's ``composedProperties``
+            schema. Default: ``"event"``.
+
+    Example:
+        ```python
+        from mixpanel_data import PropertyInput
+
+        pi = PropertyInput("price", type="number")
+        pi_user = PropertyInput("email", resource_type="user")
+        ```
+    """
+
+    name: str
+    """The raw property name."""
+
+    type: Literal["string", "number", "boolean", "datetime", "list"] = "string"
+    """Property data type."""
+
+    resource_type: Literal["event", "user"] = "event"
+    """Property domain (singular form for composedProperties schema)."""
+
+
+@dataclass(frozen=True)
+class InlineCustomProperty:
+    """An ephemeral computed property defined by a formula and input references.
+
+    Defines a custom property inline at query time without persisting it
+    to Mixpanel. The formula uses variables (A-Z) that map to concrete
+    properties via the ``inputs`` dict.
+
+    Can be used in ``GroupBy.property``, ``Filter`` class methods, and
+    ``Metric.property`` to compute derived values on the fly.
+
+    Attributes:
+        formula: Expression in Mixpanel's formula language (max 20,000 chars).
+        inputs: Mapping from single uppercase letters (A-Z) to property
+            references.
+        property_type: Result type of the formula. ``None`` defers to
+            the containing type (e.g., ``GroupBy.property_type``).
+            Default: ``None``.
+        resource_type: Data domain — ``"events"`` or ``"people"``.
+            Uses plural form to match Mixpanel's top-level
+            ``customProperty`` schema. Default: ``"events"``.
+
+    Example:
+        ```python
+        from mixpanel_data import InlineCustomProperty, PropertyInput
+
+        # Explicit construction
+        icp = InlineCustomProperty(
+            formula="A * B",
+            inputs={
+                "A": PropertyInput("price", type="number"),
+                "B": PropertyInput("quantity", type="number"),
+            },
+            property_type="number",
+        )
+
+        # Convenience constructor for all-numeric inputs
+        icp = InlineCustomProperty.numeric("A * B", A="price", B="quantity")
+        ```
+    """
+
+    formula: str
+    """Expression in Mixpanel's formula language."""
+
+    inputs: dict[str, PropertyInput]
+    """Mapping from single uppercase letters (A-Z) to property references."""
+
+    property_type: Literal["string", "number", "boolean", "datetime"] | None = None
+    """Result type of the formula; None defers to containing type."""
+
+    resource_type: Literal["events", "people"] = "events"
+    """Data domain (plural form for top-level customProperty schema)."""
+
+    @classmethod
+    def numeric(
+        cls,
+        formula: str,
+        /,
+        **properties: str,
+    ) -> InlineCustomProperty:
+        """Create an all-numeric-input inline custom property.
+
+        Convenience constructor that creates ``PropertyInput`` entries
+        with ``type="number"`` and ``resource_type="event"`` for each
+        keyword argument, and sets ``property_type="number"``.
+
+        Args:
+            formula: Expression in Mixpanel's formula language.
+            **properties: Mapping of variable letters to property names.
+                Each key becomes an input key, each value becomes the
+                property name.
+
+        Returns:
+            InlineCustomProperty with all-numeric inputs and
+            ``property_type="number"``.
+
+        Example:
+            ```python
+            # Revenue = price * quantity
+            icp = InlineCustomProperty.numeric("A * B", A="price", B="quantity")
+            assert icp.inputs["A"].type == "number"
+            assert icp.property_type == "number"
+            ```
+        """
+        inputs = {
+            key: PropertyInput(name=value, type="number")
+            for key, value in properties.items()
+        }
+        return cls(
+            formula=formula,
+            inputs=inputs,
+            property_type="number",
+        )
+
+
+@dataclass(frozen=True)
+class CustomPropertyRef:
+    """A reference to a persisted custom property by its integer ID.
+
+    Used in ``GroupBy.property``, ``Filter`` class methods, and
+    ``Metric.property`` to reference a custom property that was
+    previously created and saved in Mixpanel.
+
+    Attributes:
+        id: The custom property's server-assigned ID (must be positive).
+
+    Example:
+        ```python
+        from mixpanel_data import CustomPropertyRef, GroupBy
+
+        ref = CustomPropertyRef(42)
+        g = GroupBy(property=ref, property_type="number")
+        ```
+    """
+
+    id: int
+    """The custom property's server-assigned ID."""
+
+
+PropertySpec = str | CustomPropertyRef | InlineCustomProperty
+"""Union type for property specifications in query parameters.
+
+Accepted wherever a property can be specified: ``Metric.property``,
+``GroupBy.property``, and ``Filter`` class method ``property`` parameters.
+"""
+
+
+# =============================================================================
 # Query API Types (Phase 029)
 # =============================================================================
 
@@ -6948,8 +7113,8 @@ class Metric:
     math: MathType = "total"
     """Aggregation function."""
 
-    property: str | None = None
-    """Property name for property-based math types."""
+    property: str | CustomPropertyRef | InlineCustomProperty | None = None
+    """Property for property-based math types (name, ref, or inline)."""
 
     per_user: PerUserAggregation | None = None
     """Per-user pre-aggregation type."""
@@ -7030,8 +7195,8 @@ class Filter:
         ```
     """
 
-    _property: str
-    """Property name to filter on."""
+    _property: str | CustomPropertyRef | InlineCustomProperty
+    """Property to filter on (name, ref, or inline)."""
 
     _operator: str
     """Internal operator string."""
@@ -7064,7 +7229,7 @@ class Filter:
     @classmethod
     def equals(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         value: str | list[str],
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7091,7 +7256,7 @@ class Filter:
     @classmethod
     def not_equals(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         value: str | list[str],
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7118,7 +7283,7 @@ class Filter:
     @classmethod
     def contains(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         value: str,
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7144,7 +7309,7 @@ class Filter:
     @classmethod
     def not_contains(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         value: str,
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7170,7 +7335,7 @@ class Filter:
     @classmethod
     def greater_than(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         value: int | float,
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7196,7 +7361,7 @@ class Filter:
     @classmethod
     def less_than(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         value: int | float,
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7222,7 +7387,7 @@ class Filter:
     @classmethod
     def between(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         min_val: int | float,
         max_val: int | float,
         *,
@@ -7250,7 +7415,7 @@ class Filter:
     @classmethod
     def is_set(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         *,
         resource_type: Literal["events", "people"] = "events",
     ) -> Filter:
@@ -7274,7 +7439,7 @@ class Filter:
     @classmethod
     def is_not_set(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         *,
         resource_type: Literal["events", "people"] = "events",
     ) -> Filter:
@@ -7298,7 +7463,7 @@ class Filter:
     @classmethod
     def is_true(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         *,
         resource_type: Literal["events", "people"] = "events",
     ) -> Filter:
@@ -7322,7 +7487,7 @@ class Filter:
     @classmethod
     def is_false(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         *,
         resource_type: Literal["events", "people"] = "events",
     ) -> Filter:
@@ -7485,7 +7650,7 @@ class Filter:
     @classmethod
     def on(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         date: str,
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7515,7 +7680,7 @@ class Filter:
     @classmethod
     def not_on(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         date: str,
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7545,7 +7710,7 @@ class Filter:
     @classmethod
     def before(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         date: str,
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7575,7 +7740,7 @@ class Filter:
     @classmethod
     def since(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         date: str,
         *,
         resource_type: Literal["events", "people"] = "events",
@@ -7605,7 +7770,7 @@ class Filter:
     @classmethod
     def in_the_last(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         quantity: int,
         date_unit: FilterDateUnit,
         *,
@@ -7640,7 +7805,7 @@ class Filter:
     @classmethod
     def not_in_the_last(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         quantity: int,
         date_unit: FilterDateUnit,
         *,
@@ -7675,7 +7840,7 @@ class Filter:
     @classmethod
     def date_between(
         cls,
-        property: str,
+        property: str | CustomPropertyRef | InlineCustomProperty,
         from_date: str,
         to_date: str,
         *,
@@ -7744,8 +7909,8 @@ class GroupBy:
         ```
     """
 
-    property: str
-    """Property name to break down by."""
+    property: str | CustomPropertyRef | InlineCustomProperty
+    """Property to break down by (name, ref, or inline)."""
 
     property_type: Literal["string", "number", "boolean", "datetime"] = "string"
     """Data type of the property."""

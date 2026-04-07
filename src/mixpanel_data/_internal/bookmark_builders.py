@@ -15,10 +15,53 @@ from typing import Any
 from mixpanel_data._literal_types import QueryTimeUnit
 from mixpanel_data.types import (
     CohortBreakdown,
+    CustomPropertyRef,
     Filter,
     GroupBy,
+    InlineCustomProperty,
+    PropertyInput,
     _sanitize_raw_cohort,
 )
+
+
+def _build_composed_properties(
+    inputs: dict[str, PropertyInput],
+) -> dict[str, dict[str, str]]:
+    """Convert a PropertyInput mapping to bookmark composedProperties format.
+
+    Transforms the user-facing ``inputs`` dict (letter → PropertyInput)
+    into the JSON structure expected by Mixpanel's ``customProperty``
+    bookmark schema.
+
+    Args:
+        inputs: Mapping from single uppercase letters (A-Z) to
+            ``PropertyInput`` objects.
+
+    Returns:
+        Dict mapping each letter to a dict with ``value``, ``type``,
+        and ``resourceType`` keys.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.bookmark_builders import (
+            _build_composed_properties,
+        )
+        from mixpanel_data.types import PropertyInput
+
+        result = _build_composed_properties({
+            "A": PropertyInput("price", type="number"),
+        })
+        # {"A": {"value": "price", "type": "number", "resourceType": "event"}}
+        ```
+    """
+    return {
+        key: {
+            "value": prop.name,
+            "type": prop.type,
+            "resourceType": prop.resource_type,
+        }
+        for key, prop in inputs.items()
+    }
 
 
 def build_time_section(
@@ -203,13 +246,56 @@ def build_group_section(
                 }
             )
         elif isinstance(g, GroupBy):
-            group_entry: dict[str, Any] = {
-                "value": g.property,
-                "propertyName": g.property,
-                "resourceType": "events",
-                "propertyType": g.property_type,
-                "propertyDefaultType": g.property_type,
-            }
+            prop = g.property
+            if isinstance(prop, CustomPropertyRef):
+                group_entry: dict[str, Any] = {
+                    "customPropertyId": prop.id,
+                    "value": None,
+                    "resourceType": "events",
+                    "profileType": None,
+                    "search": "",
+                    "dataGroupId": None,
+                    "dataset": "$mixpanel",
+                    "propertyType": g.property_type,
+                    "typeCast": None,
+                    "unit": None,
+                    "isHidden": False,
+                }
+            elif isinstance(prop, InlineCustomProperty):
+                effective_type = (
+                    prop.property_type
+                    if prop.property_type is not None
+                    else g.property_type
+                )
+                composed = _build_composed_properties(prop.inputs)
+                group_entry = {
+                    "customProperty": {
+                        "displayFormula": prop.formula,
+                        "composedProperties": composed,
+                        "name": "",
+                        "description": "",
+                        "propertyType": effective_type,
+                        "resourceType": prop.resource_type,
+                    },
+                    "value": None,
+                    "resourceType": prop.resource_type,
+                    "profileType": None,
+                    "search": "",
+                    "dataGroupId": None,
+                    "dataset": "$mixpanel",
+                    "propertyType": effective_type,
+                    "typeCast": None,
+                    "unit": None,
+                    "isHidden": False,
+                }
+            else:
+                group_entry = {
+                    "value": prop,
+                    "propertyName": prop,
+                    "resourceType": "events",
+                    "propertyType": g.property_type,
+                    "propertyDefaultType": g.property_type,
+                }
             if g.bucket_size is not None:
                 group_entry["customBucket"] = {
                     "bucketSize": g.bucket_size,
@@ -308,14 +394,34 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
         #  "filterValue": ["US"], "filterOperator": "equals"}
         ```
     """
+    prop = f._property
     entry: dict[str, Any] = {
         "resourceType": f._resource_type,
         "filterType": f._property_type,
         "defaultType": f._property_type,
-        "value": f._property,
         "filterValue": f._value,
         "filterOperator": f._operator,
     }
+    if isinstance(prop, CustomPropertyRef):
+        entry["customPropertyId"] = prop.id
+        entry["dataset"] = "$mixpanel"
+    elif isinstance(prop, InlineCustomProperty):
+        effective_type = (
+            prop.property_type if prop.property_type is not None else f._property_type
+        )
+        entry["customProperty"] = {
+            "displayFormula": prop.formula,
+            "composedProperties": _build_composed_properties(prop.inputs),
+            "name": "",
+            "description": "",
+            "propertyType": effective_type,
+            "resourceType": prop.resource_type,
+        }
+        entry["filterType"] = effective_type
+        entry["defaultType"] = effective_type
+        entry["dataset"] = "$mixpanel"
+    else:
+        entry["value"] = prop
     if f._date_unit is not None:
         entry["filterDateUnit"] = f._date_unit
     return entry

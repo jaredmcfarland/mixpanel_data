@@ -306,6 +306,8 @@ Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
 - Python 3.10+ (mypy --strict) + Pydantic v2 (for existing `CreateCohortParams`), pandas (existing), Hypothesis (PBT) (035-cohort-definition-builder)
 - N/A — pure types, no persistence (035-cohort-definition-builder)
 - Python 3.10+ (mypy --strict) + Pydantic v2 (validation), httpx (HTTP), pandas (DataFrames), Hypothesis (PBT) (036-cohort-behaviors)
+- Python 3.10+ (mypy --strict compliant) + Pydantic v2 (validation), httpx (HTTP client), Hypothesis (PBT), mutmut (mutation testing) (037-custom-properties-queries)
+- N/A — pure query-building types, no persistence (037-custom-properties-queries)
 
 ## Recent Changes
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)

@@ -47,6 +47,7 @@ from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
 from mixpanel_data._internal.transforms import transform_event, transform_profile
 from mixpanel_data._internal.validation import (
+    _scan_custom_properties,
     contains_control_chars,
     validate_bookmark,
     validate_flow_args,
@@ -60,6 +61,7 @@ from mixpanel_data.exceptions import (
     BookmarkValidationError,
     ConfigError,
     MixpanelDataError,
+    QueryError,
     ValidationError,
 )
 from mixpanel_data.types import (
@@ -105,6 +107,7 @@ from mixpanel_data.types import (
     CreateWebhookParams,
     CustomAlert,
     CustomProperty,
+    CustomPropertyRef,
     DailyCountsResult,
     Dashboard,
     DataVolumeAnomaly,
@@ -138,6 +141,7 @@ from mixpanel_data.types import (
     GroupBy,
     HoldingConstant,
     InitSchemaEnforcementParams,
+    InlineCustomProperty,
     JQLResult,
     LexiconSchema,
     LexiconTag,
@@ -1768,10 +1772,40 @@ class Workspace:
 
             measurement: dict[str, Any] = {"math": bookmark_math}
             if item_prop is not None:
-                measurement["property"] = {
-                    "name": item_prop,
-                    "resourceType": "events",
-                }
+                if isinstance(item_prop, CustomPropertyRef):
+                    measurement["property"] = {
+                        "customPropertyId": item_prop.id,
+                        "name": "",
+                        "resourceType": "events",
+                    }
+                elif isinstance(item_prop, InlineCustomProperty):
+                    from mixpanel_data._internal.bookmark_builders import (
+                        _build_composed_properties,
+                    )
+
+                    cp_dict: dict[str, Any] = {
+                        "displayFormula": item_prop.formula,
+                        "composedProperties": _build_composed_properties(
+                            item_prop.inputs
+                        ),
+                        "name": "",
+                        "description": "",
+                        "resourceType": item_prop.resource_type,
+                    }
+                    if item_prop.property_type is not None:
+                        cp_dict["propertyType"] = item_prop.property_type
+                    measurement["property"] = {
+                        "customProperty": cp_dict,
+                        "name": "",
+                        "resourceType": item_prop.resource_type,
+                        "dataset": "$mixpanel",
+                        "dataGroupId": None,
+                    }
+                else:
+                    measurement["property"] = {
+                        "name": item_prop,
+                        "resourceType": "events",
+                    }
             if item_per_user is not None:
                 measurement["perUserAggregation"] = item_per_user
             if item_percentile is not None:
@@ -2258,6 +2292,8 @@ class Workspace:
             group_by=group_by,
             formulas=resolved_formulas,
         )
+        # CP1-CP6: Custom property validation for where filters
+        arg_errors.extend(_scan_custom_properties(where=where))
         if any(e.severity == "error" for e in arg_errors):
             raise BookmarkValidationError(arg_errors)
 
@@ -2542,6 +2578,8 @@ class Workspace:
             last=last,
             group_by=group_by,
         )
+        # CP1-CP6: Custom property validation for where filters
+        arg_errors.extend(_scan_custom_properties(where=where))
         if any(e.severity == "error" for e in arg_errors):
             raise BookmarkValidationError(arg_errors)
 
@@ -3164,7 +3202,9 @@ class Workspace:
         for i, s in enumerate(steps):
             if s.filters:
                 for fi, f in enumerate(s.filters):
-                    if contains_control_chars(f._property):
+                    if isinstance(f._property, str) and contains_control_chars(
+                        f._property
+                    ):
                         step_errors.append(
                             ValidationError(
                                 path=f"steps[{i}].filters[{fi}]",
@@ -3527,6 +3567,8 @@ class Workspace:
             last=last,
             group_by=group_by,
         )
+        # CP1-CP6: Custom property validation for where filters
+        arg_errors.extend(_scan_custom_properties(where=where))
         if any(e.severity == "error" for e in arg_errors):
             raise BookmarkValidationError(arg_errors)
 
@@ -6728,7 +6770,22 @@ class Workspace:
             ```
         """
         client = self._require_api_client()
-        raw_list = client.list_custom_properties()
+        try:
+            raw_list = client.list_custom_properties()
+        except QueryError as exc:
+            # Detect server-side data corruption: the API fails to serialize
+            # when a custom property has an invalid displayFormula.
+            details = exc.details if hasattr(exc, "details") else {}
+            body = details.get("response_body", {}) if isinstance(details, dict) else {}
+            if isinstance(body, dict) and body.get("field") == "displayFormula":
+                raise QueryError(
+                    "list_custom_properties() failed: the project contains a "
+                    "custom property with an invalid displayFormula "
+                    "(server-side data corruption). Use "
+                    "get_custom_property(id) to retrieve individual "
+                    "properties, or contact Mixpanel support."
+                ) from exc
+            raise
         return [CustomProperty.model_validate(x) for x in raw_list]
 
     def create_custom_property(

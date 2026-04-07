@@ -99,6 +99,7 @@ from mixpanel_data.types import (
     CursorPagination,
     CustomAlert,
     CustomProperty,
+    CustomPropertyRef,
     CustomPropertyResourceType,
     DailyCount,
     DailyCountsResult,
@@ -144,6 +145,7 @@ from mixpanel_data.types import (
     GroupBy,
     HoldingConstant,
     InitSchemaEnforcementParams,
+    InlineCustomProperty,
     JQLResult,
     LexiconDefinition,
     LexiconMetadata,
@@ -169,6 +171,7 @@ from mixpanel_data.types import (
     PropertyCoverageResult,
     PropertyDefinition,
     PropertyDistributionResult,
+    PropertyInput,
     PropertyResourceType,
     PropertyValueCount,
     PublicWorkspace,
@@ -325,6 +328,10 @@ __all__ = [
     # Cohort Behaviors (Phase 036)
     "CohortBreakdown",
     "CohortMetric",
+    # Custom Property Query Types (Phase 037)
+    "PropertyInput",
+    "InlineCustomProperty",
+    "CustomPropertyRef",
     # Cohort CRUD (Phase 024)
     "Cohort",
     "CohortCreator",
