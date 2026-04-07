@@ -535,12 +535,6 @@ class TestCustomPropertyFunnels:
         )
         assert isinstance(result, FunnelQueryResult)
 
-    @pytest.mark.xfail(
-        reason="Server bug: transform_insights_filters_to_funnels() crashes on f['value'] "
-        "(analytics/bookmark_parser/common/transforms/util.py:1459,1484) "
-        "when filter uses customProperty instead of value key",
-        raises=Exception,
-    )
     def test_funnel_where_inline_cp(
         self,
         ws: Workspace,
@@ -617,12 +611,6 @@ class TestCustomPropertyRetention:
         )
         assert isinstance(result, RetentionQueryResult)
 
-    @pytest.mark.xfail(
-        reason="Server bug: transform_insights_filters_to_funnels() crashes on f['value'] "
-        "(analytics/bookmark_parser/common/transforms/util.py:1459,1484) "
-        "when filter uses customProperty instead of value key",
-        raises=Exception,
-    )
     def test_retention_where_inline_cp(
         self,
         ws: Workspace,
@@ -659,11 +647,6 @@ class TestCustomPropertyRetention:
         )
         assert isinstance(result, RetentionQueryResult)
 
-    @pytest.mark.xfail(
-        reason="Server bug: transform_insights_filters_to_funnels() util.py:1459 "
-        "crashes on f['value'] for CustomPropertyRef filters too",
-        raises=Exception,
-    )
     def test_retention_where_ref(
         self,
         ws: Workspace,
@@ -1122,10 +1105,6 @@ class TestCrossEngine:
         )
         assert isinstance(result, QueryResult)
 
-    @pytest.mark.xfail(
-        reason="Server bug: transform_insights_filters_to_funnels() util.py:1459",
-        raises=Exception,
-    )
     def test_funnel_inline_cp_groupby_and_where(
         self,
         ws: Workspace,
@@ -1142,10 +1121,6 @@ class TestCrossEngine:
         )
         assert isinstance(result, FunnelQueryResult)
 
-    @pytest.mark.xfail(
-        reason="Server bug: transform_insights_filters_to_funnels() util.py:1459",
-        raises=Exception,
-    )
     def test_retention_inline_cp_groupby_and_where(
         self,
         ws: Workspace,

@@ -40,6 +40,7 @@ from mixpanel_data._internal.bookmark_builders import (
     build_flow_cohort_filter,
     build_group_section,
     build_time_section,
+    patch_custom_property_filters_for_transform,
 )
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.segfilter import build_segfilter_entry
@@ -2465,7 +2466,9 @@ class Workspace:
             last=last,
             unit=unit,
         )
-        filter_section = build_filter_section(where)
+        filter_section = patch_custom_property_filters_for_transform(
+            build_filter_section(where)
+        )
         group_section = build_group_section(group_by)
 
         # Chart type mapping
@@ -2931,7 +2934,9 @@ class Workspace:
             last=last,
             unit=unit,
         )
-        filter_section = build_filter_section(where)
+        filter_section = patch_custom_property_filters_for_transform(
+            build_filter_section(where)
+        )
         group_section = build_group_section(group_by)
 
         # Chart type mapping

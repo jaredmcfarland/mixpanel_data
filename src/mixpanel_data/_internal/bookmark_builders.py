@@ -193,6 +193,40 @@ def build_filter_section(
     return [build_filter_entry(f) for f in filters_list]
 
 
+def patch_custom_property_filters_for_transform(
+    filter_entries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Add ``value`` sentinel to custom property filters for server compat.
+
+    The server's ``transform_insights_filters_to_funnels()`` does a hard
+    ``f["value"]`` access on global ``sections.filter`` entries before
+    ``arb_selector`` processes them.  Custom property filters identify
+    the property via ``customPropertyId`` or ``customProperty`` instead
+    of ``value``, causing a ``KeyError`` and HTTP 500.
+
+    Injecting ``"value": None`` satisfies the hard access.  The
+    downstream ``arb_selector`` routes on ``is_custom_property()``, not
+    ``propertyName``, so the sentinel is harmless.
+
+    This must **not** be applied to per-step or per-metric filters —
+    the insights validator rejects ``value: None`` in those positions.
+
+    Args:
+        filter_entries: List of filter dicts from ``build_filter_section()``.
+
+    Returns:
+        The same list, mutated in-place, with ``"value": None`` added
+        to any entry that has ``customPropertyId`` or ``customProperty``
+        but no ``value`` key.
+    """
+    for entry in filter_entries:
+        if "value" not in entry and (
+            "customPropertyId" in entry or "customProperty" in entry
+        ):
+            entry["value"] = None
+    return filter_entries
+
+
 def build_group_section(
     group_by: str
     | GroupBy
