@@ -34,6 +34,7 @@ from typing import Any, Literal
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.bookmark_builders import (
+    _build_composed_properties,
     build_date_range,
     build_filter_entry,
     build_filter_section,
@@ -1780,10 +1781,6 @@ class Workspace:
                         "resourceType": "events",
                     }
                 elif isinstance(item_prop, InlineCustomProperty):
-                    from mixpanel_data._internal.bookmark_builders import (
-                        _build_composed_properties,
-                    )
-
                     cp_dict: dict[str, Any] = {
                         "displayFormula": item_prop.formula,
                         "composedProperties": _build_composed_properties(

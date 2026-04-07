@@ -157,10 +157,10 @@ Used as the accepted type for `property` fields in `Metric`, `GroupBy`, and `Fil
 
 **CustomPropertyRef**:
 ```json
-{"math": "average", "property": {"customPropertyId": 42, "resourceType": "events"}}
+{"math": "average", "property": {"customPropertyId": 42, "name": "", "resourceType": "events"}}
 ```
 
 **InlineCustomProperty**:
 ```json
-{"math": "average", "property": {"customProperty": {"displayFormula": "A * B", "composedProperties": {"A": {"value": "price", "type": "number", "resourceType": "event"}, "B": {"value": "quantity", "type": "number", "resourceType": "event"}}, "propertyType": "number"}, "resourceType": "events"}}
+{"math": "average", "property": {"customProperty": {"displayFormula": "A * B", "composedProperties": {"A": {"value": "price", "type": "number", "resourceType": "event"}, "B": {"value": "quantity", "type": "number", "resourceType": "event"}}, "name": "", "description": "", "propertyType": "number", "resourceType": "events"}, "name": "", "resourceType": "events", "dataset": "$mixpanel", "dataGroupId": null}}
 ```
