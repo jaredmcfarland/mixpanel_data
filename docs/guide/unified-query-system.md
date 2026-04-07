@@ -52,7 +52,7 @@ result = ws.query_flow(
 )
 ```
 
-Learn `Filter`, `GroupBy`, `where=`, `group_by=`, and `last=` once. Use them everywhere.
+Learn `Filter`, `GroupBy`, `where=`, `group_by=`, and `last=` once. Use them across engines (flows has some restrictions — see below).
 
 ---
 
@@ -114,6 +114,8 @@ ws.query_flow(
 
 Mix freely. Strings and objects can appear in the same query.
 
+**Note:** `FlowStep.filters` accepts any `Filter` type. The query-level `where=` parameter on `query_flow()` is more restricted — it only accepts cohort filters (`Filter.in_cohort` / `Filter.not_in_cohort`).
+
 ---
 
 ## Filters: typed methods, not operator strings
@@ -168,7 +170,7 @@ Filters work identically across `query()`, `query_funnel()`, `query_retention()`
 
 ## Results: DataFrames, params, and metadata
 
-Every result type shares the same structure:
+Insights, funnel, and retention results share a common structure:
 
 ```python
 result = ws.query("Login", math="dau", last=30)
@@ -180,6 +182,8 @@ result.to_date       # resolved end date
 result.computed_at   # when Mixpanel computed the result
 result.meta          # sampling factor, cache status
 ```
+
+Flow results have `computed_at`, `params`, and `meta` but not `from_date`/`to_date` — flow data is structured around nodes, edges, and trees instead.
 
 Engine-specific results add domain-relevant properties:
 
@@ -774,7 +778,7 @@ result = ws.query(
 
 ### Time ranges
 
-All four engines support the same time parameters:
+`last=` and absolute dates (`from_date`/`to_date`) work in all four engines. The `unit=` parameter applies to insights, funnels, and retention (flows has no `unit=`).
 
 ```python
 # Relative — last N days (default: 30)
@@ -827,7 +831,7 @@ Each error includes:
 | `suggestion` | Fuzzy-matched alternatives for invalid enum values |
 | `fix` | Suggested fix payload for programmatic correction |
 
-You can also validate arbitrary bookmark JSON directly:
+You can also validate insights, funnel, or retention bookmark JSON directly (flow params are validated internally by `query_flow()`):
 
 ```python
 from mixpanel_data import validate_bookmark
@@ -931,11 +935,11 @@ result = ws.query(
 )
 
 print(result.df)
-# Immediately usable DataFrame:
-#         date  plan   ARPU
-# 0 2025-01-06  Free  12.50
-# 1 2025-01-06  Pro   87.30
-# 2 2025-01-06  Ent  245.00
+# DataFrame with date, event, count columns:
+#         date          event   count
+# 0 2025-01-06  ARPU | Free   12.50
+# 1 2025-01-06  ARPU | Pro    87.30
+# 2 2025-01-06  ARPU | Ent   245.00
 # ...
 
 # Happy with it? Save as a Mixpanel report:
@@ -960,7 +964,7 @@ What each line proves:
 | `group_by="plan"` | Segment by the dimension that matters |
 | `rolling=4` | Smooth weekly noise into a trend |
 
-Change `"14 days"` to `"7 days"` and re-run. Swap `"plan"` for `"country"`. Change the formula to `A * B * (1 - C)` to add discounts. Each iteration is instant — no UI round-trips, no saved entities to update.
+Change `within_days=14` to `within_days=7` and re-run. Swap `"plan"` for `"country"`. Change the formula to `A * B * (1 - C)` to add discounts. Each iteration is instant — no UI round-trips, no saved entities to update.
 
 ---
 
@@ -971,7 +975,7 @@ A complete analysis combining multiple engines:
 ```python
 import mixpanel_data as mp
 from mixpanel_data import (
-    Workspace, Metric, Formula, Filter, GroupBy,
+    Metric, Formula, Filter, GroupBy,
     FunnelStep, Exclusion, RetentionEvent,
     CohortCriteria, CohortDefinition,
     CohortBreakdown, InlineCustomProperty,
@@ -1047,6 +1051,7 @@ print(checkout.df)
 
 # --- Retention: do organic signups retain better? ---
 
+bucket_sizes = [1, 3, 7, 14, 30]
 organic_retention = ws.query_retention(
     RetentionEvent(
         "Signup",
@@ -1054,13 +1059,12 @@ organic_retention = ws.query_retention(
     ),
     "Login",
     retention_unit="day",
-    bucket_sizes=[1, 3, 7, 14, 30],
+    bucket_sizes=bucket_sizes,
     last=90,
 )
 avg = organic_retention.average
-buckets = organic_retention.df["bucket"].unique()
-for i, rate in enumerate(avg["rates"]):
-    print(f"  Day {buckets[i]}: {rate:.1%}")
+for day, rate in zip(bucket_sizes, avg["rates"]):
+    print(f"  Day {day}: {rate:.1%}")
 
 
 # --- Flows: what do users do after failed checkout? ---
