@@ -418,7 +418,12 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
     Returns:
         Bookmark filter dict with keys: ``resourceType``, ``filterType``,
         ``defaultType``, ``value``, ``filterValue``, ``filterOperator``,
-        and optionally ``filterDateUnit``.
+        and optionally ``filterDateUnit``.  For ``CustomPropertyRef``
+        properties the dict also contains ``customPropertyId`` and
+        ``dataset``.  For ``InlineCustomProperty`` properties it contains
+        ``customProperty`` (nested definition) and ``dataset``, and the
+        ``filterType``/``defaultType`` are overridden from the inline
+        property's ``property_type``.
 
     Example:
         ```python
@@ -454,6 +459,7 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
         entry["filterType"] = effective_type
         entry["defaultType"] = effective_type
         entry["dataset"] = "$mixpanel"
+        entry["resourceType"] = prop.resource_type
     else:
         entry["value"] = prop
     if f._date_unit is not None:
