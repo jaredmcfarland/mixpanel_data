@@ -16,7 +16,7 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data.exceptions import BookmarkValidationError, ConfigError
+from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import RetentionQueryResult
 
 if TYPE_CHECKING:

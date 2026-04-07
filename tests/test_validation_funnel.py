@@ -1235,6 +1235,7 @@ class TestF8bHoldingConstantPropertyValidation:
     def test_empty_string_property_raises_at_construction(self) -> None:
         """HoldingConstant with empty property name raises ValueError at construction."""
         import pytest
+
         from mixpanel_data.types import HoldingConstant
 
         with pytest.raises(ValueError, match="HoldingConstant.property must be a non-empty string"):
@@ -1243,6 +1244,7 @@ class TestF8bHoldingConstantPropertyValidation:
     def test_whitespace_only_property_raises_at_construction(self) -> None:
         """HoldingConstant with whitespace-only property raises ValueError at construction."""
         import pytest
+
         from mixpanel_data.types import HoldingConstant
 
         with pytest.raises(ValueError, match="HoldingConstant.property must be a non-empty string"):
@@ -1262,6 +1264,7 @@ class TestF8bHoldingConstantPropertyValidation:
     def test_multiple_with_one_empty_raises_at_construction(self) -> None:
         """HoldingConstant("") raises ValueError at construction."""
         import pytest
+
         from mixpanel_data.types import HoldingConstant
 
         # Valid one constructs fine

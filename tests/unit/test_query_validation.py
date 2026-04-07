@@ -272,7 +272,7 @@ class TestAggregationValidation:
 class TestPerMetricValidation:
     """Tests for per-Metric validation rules V13-V14."""
 
-    def test_v13_metric_property_math_requires_property(self, ws: Workspace) -> None:
+    def test_v13_metric_property_math_requires_property(self) -> None:
         """V13: Metric with property math requires property (caught at construction)."""
         from mixpanel_data import Metric
 
@@ -408,14 +408,14 @@ class TestGroupByValidation:
         ):
             ws.query("Purchase", group_by=GroupBy("amount", bucket_max=100))
 
-    def test_v12_bucket_size_must_be_positive(self, ws: Workspace) -> None:
+    def test_v12_bucket_size_must_be_positive(self) -> None:
         """V12: bucket_size must be positive (caught at construction)."""
         from mixpanel_data import GroupBy
 
         with pytest.raises(ValueError, match="bucket_size must be positive"):
             GroupBy("amount", bucket_size=0)
 
-    def test_v12_bucket_size_negative(self, ws: Workspace) -> None:
+    def test_v12_bucket_size_negative(self) -> None:
         """V12: Negative bucket_size is caught at construction."""
         from mixpanel_data import GroupBy
 
@@ -581,7 +581,7 @@ class TestPercentileValidation:
         with pytest.raises(BookmarkValidationError, match="percentile_value"):
             ws.build_params("Login", math="percentile", math_property="duration")
 
-    def test_v26_metric_percentile_requires_value(self, ws: Workspace) -> None:
+    def test_v26_metric_percentile_requires_value(self) -> None:
         """V26: Metric with math='percentile' requires percentile_value (caught at construction)."""
         from mixpanel_data import Metric
 
