@@ -22,6 +22,7 @@ from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.types import (
     Formula,
+    FunnelStep,
     Metric,
     PerUserAggregation,
     RetentionMathType,
@@ -272,7 +273,7 @@ class TestFunnelRoundTrip:
     @settings(max_examples=100)
     def test_funnel_roundtrip(
         self,
-        steps: list[str],
+        steps: list[str | FunnelStep],
         last: int,
         math_args: dict[str, Any],
         conversion_window: int,
