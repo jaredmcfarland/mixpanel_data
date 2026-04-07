@@ -26,7 +26,21 @@
     let abortController = null;
 
     /**
+     * Returns the expected markdown path for the current page URL.
+     *
+     * @returns {string} Absolute path to the .md file (e.g. "/site/page/index.md")
+     */
+    function getCurrentMdPath() {
+        const currentPath = window.location.pathname;
+        return currentPath.endsWith('/')
+            ? currentPath + 'index.md'
+            : currentPath.replace(/\.html$/, '.md');
+    }
+
+    /**
      * Restores the copy button visibility (reverses any prior hideButton call).
+     *
+     * @returns {void}
      */
     function showButton() {
         const button = document.getElementById('llms-copy-button');
@@ -37,6 +51,8 @@
 
     /**
      * Hides the copy button when markdown content is unavailable.
+     *
+     * @returns {void}
      */
     function hideButton() {
         const button = document.getElementById('llms-copy-button');
@@ -47,11 +63,12 @@
 
     /**
      * Fetches markdown for the current page and caches it.
-     * Cancels any in-flight request to prevent stale content from a previous
-     * navigation overwriting the cache.
+     * Cancels any in-flight request via AbortController to prevent stale
+     * content from a previous navigation overwriting the cache.
+     *
+     * @returns {void}
      */
     function prefetchMarkdown() {
-        // Cancel any in-flight request from a previous navigation
         if (abortController) {
             abortController.abort();
         }
@@ -60,13 +77,7 @@
         cachedMarkdown = null;
         fetchError = null;
 
-        const currentPath = window.location.pathname;
-        const mdPath = currentPath.endsWith('/')
-            ? currentPath + 'index.md'
-            : currentPath.replace(/\.html$/, '.md');
-
-        // Capture the path so the resolution check is unambiguous
-        const requestedPath = mdPath;
+        const mdPath = getCurrentMdPath();
 
         fetch(mdPath, { signal: abortController.signal })
             .then(response => {
@@ -74,8 +85,6 @@
                 return response.text();
             })
             .then(text => {
-                // Only update cache if this is still the current request
-                if (requestedPath !== getCurrentMdPath()) return;
                 cachedMarkdown = text
                     .replace(/[\r\n]*Copy Markdown[\r\n\s]*$/i, '')
                     .replace(/\s+$/, '');
@@ -86,16 +95,6 @@
                 console.warn('Could not prefetch markdown:', err);
                 hideButton();
             });
-    }
-
-    /**
-     * Returns the expected markdown path for the current page.
-     */
-    function getCurrentMdPath() {
-        const currentPath = window.location.pathname;
-        return currentPath.endsWith('/')
-            ? currentPath + 'index.md'
-            : currentPath.replace(/\.html$/, '.md');
     }
 
     /**
@@ -119,7 +118,7 @@
         document.body.appendChild(textarea);
 
         if (/ipad|iphone/i.test(navigator.userAgent)) {
-            textarea.contentEditable = true;
+            textarea.contentEditable = 'true';
             textarea.readOnly = false;
 
             const range = document.createRange();
@@ -147,7 +146,9 @@
 
     /**
      * Shows success feedback on the button.
+     *
      * @param {HTMLElement} button - The button element
+     * @returns {void}
      */
     function showSuccess(button) {
         const originalHTML = button.innerHTML;
@@ -161,8 +162,10 @@
 
     /**
      * Shows error feedback on the button.
+     *
      * @param {HTMLElement} button - The button element
      * @param {string} message - Error message to log
+     * @returns {void}
      */
     function showError(button, message) {
         console.error('Copy failed:', message);
@@ -176,8 +179,10 @@
     }
 
     /**
-     * The synchronous copy handler. Assigned to window.copyMarkdownToClipboard
+     * Synchronous copy handler. Assigned to window.copyMarkdownToClipboard
      * to override the plugin's broken async version.
+     *
+     * @returns {void}
      */
     function handleCopy() {
         const button = document.querySelector('#llms-copy-button button');
@@ -205,6 +210,8 @@
      * - Restores button visibility (in case a prior page hid it)
      * - Cancels any in-flight fetch and pre-fetches current page's markdown
      * - Overrides the plugin's inline async function with our sync version
+     *
+     * @returns {void}
      */
     function initialize() {
         showButton();
