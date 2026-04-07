@@ -780,6 +780,14 @@ class TestToDictIsolation:
         result["behaviors"]["bhvr_0"]["window"]["value"] = 777
         assert result["behaviors"]["bhvr_1"]["window"]["value"] == 30
 
+    def test_mutable_operand_list_not_leaked(self) -> None:
+        """Mutating list operand in to_dict() output must not corrupt criterion."""
+        c = CohortCriteria.has_property("tags", ["premium", "active"])
+        d = CohortDefinition(c)
+        result = d.to_dict()
+        result["selector"]["children"][0]["operand"].append("CORRUPTED")
+        assert c._selector_node["operand"] == ["premium", "active"]
+
 
 class TestEmptyWhereList:
     """Tests for where=[] edge case."""

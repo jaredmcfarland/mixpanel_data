@@ -7681,7 +7681,7 @@ def _validate_cohort_date(date_str: str) -> None:
     try:
         dt_date.fromisoformat(date_str)
     except ValueError:
-        raise ValueError("dates must be YYYY-MM-DD format")  # noqa: B904
+        raise ValueError("dates must be YYYY-MM-DD format") from None
 
 
 def _build_event_selector(
@@ -7881,8 +7881,13 @@ class CohortCriteria:
                 raise ValueError("to_date requires from_date")
 
             # CD6: Dates must be YYYY-MM-DD
-            assert from_date is not None  # guaranteed by has_date_range check
-            assert to_date is not None
+            # from_date and to_date are guaranteed non-None here:
+            # has_date_range is True and CD5 guards above reject mismatched pairs.
+            if from_date is None or to_date is None:  # pragma: no cover
+                raise ValueError(
+                    "exactly one time constraint required "
+                    "(within_days/weeks/months or from_date+to_date)"
+                )
             _validate_cohort_date(from_date)
             _validate_cohort_date(to_date)
             if dt_date.fromisoformat(from_date) > dt_date.fromisoformat(to_date):
@@ -8121,12 +8126,14 @@ class CohortDefinition:
 
     def __init__(
         self,
-        *criteria: CohortCriteria,
+        *criteria: CohortCriteria | CohortDefinition,
     ) -> None:
         """Create a definition combining criteria with AND logic.
 
+        Equivalent to ``CohortDefinition.all_of(*criteria)``.
+
         Args:
-            *criteria: One or more CohortCriteria to combine.
+            *criteria: One or more criteria or nested definitions.
 
         Raises:
             ValueError: If no criteria are provided (CD9).
@@ -8191,7 +8198,26 @@ class CohortDefinition:
 
         Returns:
             Dict with ``selector`` expression tree and ``behaviors`` map.
+
+        Example:
+            ```python
+            cohort = CohortDefinition.all_of(
+                CohortCriteria.has_property("plan", "premium"),
+                CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
+            )
+            data = cohort.to_dict()
+            # {"selector": {"operator": "and", "children": [...]},
+            #  "behaviors": {"bhvr_0": {...}}}
+
+            # Pass directly to cohort CRUD:
+            ws.create_cohort(CreateCohortParams(
+                name="Premium Purchasers",
+                definition=data,
+            ))
+            ```
         """
+        # CD10: Behavior key uniqueness is enforced by sequential re-indexing
+        # (bhvr_0, bhvr_1, ...) during tree traversal below.
         behaviors: dict[str, Any] = {}
         counter = [0]  # mutable container for closure
 
@@ -8207,7 +8233,9 @@ class CohortDefinition:
                 Selector node dict (leaf or combinator).
             """
             if isinstance(item, CohortCriteria):
-                node = dict(item._selector_node)
+                # Deep copy: operand may be a mutable list (e.g. has_property
+                # with list value), so shallow dict() is not sufficient.
+                node = copy.deepcopy(item._selector_node)
                 if item._behavior_key is not None and item._behavior is not None:
                     new_key = f"bhvr_{counter[0]}"
                     counter[0] += 1
