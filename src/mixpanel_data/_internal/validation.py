@@ -81,6 +81,10 @@ def _validate_custom_property(
 
     Returns:
         List of validation errors. Empty list means the property is valid.
+
+    Raises:
+        This function does not raise exceptions. Validation failures are
+        returned as ``ValidationError`` objects in the result list.
     """
     errors: list[ValidationError] = []
 

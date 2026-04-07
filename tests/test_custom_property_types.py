@@ -11,9 +11,14 @@ Task IDs: T001-T005, T047-T056
 from __future__ import annotations
 
 import dataclasses
+from unittest.mock import MagicMock
 
 import pytest
+from pydantic import SecretStr
 
+from mixpanel_data import Workspace
+from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data.exceptions import BookmarkValidationError
 from mixpanel_data.types import (
     CustomPropertyRef,
     Filter,
@@ -272,49 +277,30 @@ class TestTypeWidening:
 # =============================================================================
 
 
+@pytest.fixture
+def ws() -> Workspace:
+    """Create a Workspace instance with mocked dependencies."""
+    creds = Credentials(
+        username="u", secret=SecretStr("s"), project_id="1", region="us"
+    )
+    mgr = MagicMock(spec=ConfigManager)
+    mgr.resolve_credentials.return_value = creds
+    return Workspace(_config_manager=mgr, _api_client=MagicMock())
+
+
 class TestCustomPropertyValidationCP1:
     """T047: CP1 — CustomPropertyRef.id must be positive."""
 
-    def test_zero_id_in_group_by(self) -> None:
+    def test_zero_id_in_group_by(self, ws: Workspace) -> None:
         """CustomPropertyRef(0) in group_by raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         with pytest.raises(BookmarkValidationError, match="positive integer"):
             ws.build_params(
                 "Purchase",
                 group_by=GroupBy(property=CustomPropertyRef(0), property_type="number"),
             )
 
-    def test_negative_id(self) -> None:
+    def test_negative_id(self, ws: Workspace) -> None:
         """CustomPropertyRef(-1) raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         with pytest.raises(BookmarkValidationError, match="positive integer"):
             ws.build_params(
                 "Purchase",
@@ -327,23 +313,8 @@ class TestCustomPropertyValidationCP1:
 class TestCustomPropertyValidationCP2:
     """T048: CP2 — InlineCustomProperty with empty formula."""
 
-    def test_empty_formula(self) -> None:
+    def test_empty_formula(self, ws: Workspace) -> None:
         """Empty formula raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         icp = InlineCustomProperty(
             formula="",
             inputs={"A": PropertyInput("price")},
@@ -355,23 +326,8 @@ class TestCustomPropertyValidationCP2:
                 group_by=GroupBy(property=icp, property_type="string"),
             )
 
-    def test_whitespace_only_formula(self) -> None:
+    def test_whitespace_only_formula(self, ws: Workspace) -> None:
         """Whitespace-only formula raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         icp = InlineCustomProperty(
             formula="   ",
             inputs={"A": PropertyInput("price")},
@@ -387,23 +343,8 @@ class TestCustomPropertyValidationCP2:
 class TestCustomPropertyValidationCP3:
     """T049: CP3 — InlineCustomProperty with empty inputs dict."""
 
-    def test_empty_inputs(self) -> None:
+    def test_empty_inputs(self, ws: Workspace) -> None:
         """Empty inputs dict raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         icp = InlineCustomProperty(formula="A", inputs={})
 
         with pytest.raises(BookmarkValidationError, match="at least one input"):
@@ -417,23 +358,8 @@ class TestCustomPropertyValidationCP4:
     """T050: CP4 — InlineCustomProperty input keys must be single uppercase A-Z."""
 
     @pytest.mark.parametrize("key", ["a", "AB", "1", "aa"])
-    def test_invalid_keys(self, key: str) -> None:
+    def test_invalid_keys(self, key: str, ws: Workspace) -> None:
         """Invalid input keys raise validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         icp = InlineCustomProperty(
             formula="A",
             inputs={key: PropertyInput("price")},
@@ -449,23 +375,8 @@ class TestCustomPropertyValidationCP4:
 class TestCustomPropertyValidationCP5:
     """T051: CP5 — Formula exceeds 20,000 chars."""
 
-    def test_formula_too_long(self) -> None:
+    def test_formula_too_long(self, ws: Workspace) -> None:
         """Formula > 20,000 chars raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         icp = InlineCustomProperty(
             formula="A" * 20_001,
             inputs={"A": PropertyInput("price")},
@@ -477,22 +388,8 @@ class TestCustomPropertyValidationCP5:
                 group_by=GroupBy(property=icp, property_type="string"),
             )
 
-    def test_formula_at_boundary_passes(self) -> None:
+    def test_formula_at_boundary_passes(self, ws: Workspace) -> None:
         """Formula at exactly 20,000 chars passes validation."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         icp = InlineCustomProperty(
             formula="A" * 20_000,
             inputs={"A": PropertyInput("price")},
@@ -509,23 +406,8 @@ class TestCustomPropertyValidationCP5:
 class TestCustomPropertyValidationCP6:
     """T052: CP6 — PropertyInput with empty name."""
 
-    def test_empty_property_name(self) -> None:
+    def test_empty_property_name(self, ws: Workspace) -> None:
         """Empty PropertyInput.name raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         icp = InlineCustomProperty(
             formula="A",
             inputs={"A": PropertyInput("")},
@@ -541,22 +423,8 @@ class TestCustomPropertyValidationCP6:
 class TestCustomPropertyValidationValid:
     """T053: Valid custom properties pass validation."""
 
-    def test_valid_inline_passes(self) -> None:
+    def test_valid_inline_passes(self, ws: Workspace) -> None:
         """Valid InlineCustomProperty passes validation without errors."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         icp = InlineCustomProperty.numeric("A * B", A="price", B="quantity")
         # Should not raise
         ws.build_params(
@@ -564,22 +432,8 @@ class TestCustomPropertyValidationValid:
             group_by=GroupBy(property=icp, property_type="number"),
         )
 
-    def test_valid_ref_passes(self) -> None:
+    def test_valid_ref_passes(self, ws: Workspace) -> None:
         """Valid CustomPropertyRef passes validation without errors."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         # Should not raise
         ws.build_params(
             "Purchase",
@@ -590,23 +444,8 @@ class TestCustomPropertyValidationValid:
 class TestCustomPropertyValidationFilterPosition:
     """T054: CP validation in filter (where) position."""
 
-    def test_invalid_ref_in_filter(self) -> None:
+    def test_invalid_ref_in_filter(self, ws: Workspace) -> None:
         """CustomPropertyRef(0) in filter raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         with pytest.raises(BookmarkValidationError, match="positive integer"):
             ws.build_params(
                 "Purchase",
@@ -617,23 +456,8 @@ class TestCustomPropertyValidationFilterPosition:
 class TestCustomPropertyValidationMeasurementPosition:
     """T055: CP validation in Metric.property position."""
 
-    def test_invalid_ref_in_metric(self) -> None:
+    def test_invalid_ref_in_metric(self, ws: Workspace) -> None:
         """CustomPropertyRef(0) in Metric.property raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         with pytest.raises(BookmarkValidationError, match="positive integer"):
             ws.build_params(
                 Metric("Purchase", math="average", property=CustomPropertyRef(0)),
@@ -643,49 +467,36 @@ class TestCustomPropertyValidationMeasurementPosition:
 class TestCustomPropertyValidationFunnelRetention:
     """T056: CP validation in funnel group_by and retention where."""
 
-    def test_invalid_ref_in_funnel_group_by(self) -> None:
+    def test_invalid_ref_in_funnel_group_by(self, ws: Workspace) -> None:
         """CustomPropertyRef(0) in funnel group_by raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         with pytest.raises(BookmarkValidationError, match="positive integer"):
             ws.build_funnel_params(
                 ["Signup", "Purchase"],
                 group_by=GroupBy(property=CustomPropertyRef(0), property_type="number"),
             )
 
-    def test_invalid_ref_in_retention_group_by(self) -> None:
+    def test_invalid_ref_in_retention_group_by(self, ws: Workspace) -> None:
         """CustomPropertyRef(0) in retention group_by raises validation error."""
-        from unittest.mock import MagicMock
-
-        from pydantic import SecretStr
-
-        from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import ConfigManager, Credentials
-        from mixpanel_data.exceptions import BookmarkValidationError
-
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
-        mgr = MagicMock(spec=ConfigManager)
-        mgr.resolve_credentials.return_value = creds
-        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
-
         with pytest.raises(BookmarkValidationError, match="positive integer"):
             ws.build_retention_params(
                 "Signup",
                 "Login",
                 group_by=GroupBy(property=CustomPropertyRef(0), property_type="number"),
+            )
+
+    def test_invalid_ref_in_funnel_where(self, ws: Workspace) -> None:
+        """CustomPropertyRef(0) in funnel where raises validation error."""
+        with pytest.raises(BookmarkValidationError, match="positive integer"):
+            ws.build_funnel_params(
+                ["Signup", "Purchase"],
+                where=Filter.greater_than(property=CustomPropertyRef(0), value=100),
+            )
+
+    def test_invalid_ref_in_retention_where(self, ws: Workspace) -> None:
+        """CustomPropertyRef(0) in retention where raises validation error."""
+        with pytest.raises(BookmarkValidationError, match="positive integer"):
+            ws.build_retention_params(
+                "Signup",
+                "Login",
+                where=Filter.greater_than(property=CustomPropertyRef(0), value=100),
             )
