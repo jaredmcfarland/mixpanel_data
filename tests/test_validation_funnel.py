@@ -143,12 +143,12 @@ class TestValidateFunnelArgsF2:
         errors = validate_funnel_args(**_valid_funnel_args(steps=["  ", "Purchase"]))
         assert any(e.code == "F2_EMPTY_STEP_EVENT" for e in errors)
 
-    def test_whitespace_only_funnel_step_returns_f2_error(self) -> None:
-        """A FunnelStep with whitespace-only event must produce an F2 error."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(steps=[FunnelStep("  \t  "), "Purchase"])
-        )
-        assert any(e.code == "F2_EMPTY_STEP_EVENT" for e in errors)
+    def test_whitespace_only_funnel_step_raises_at_construction(self) -> None:
+        """A FunnelStep with whitespace-only event raises ValueError."""
+        import pytest
+
+        with pytest.raises(ValueError, match="FunnelStep.event must be a non-empty string"):
+            FunnelStep("  \t  ")
 
     def test_f2_error_path_contains_index(self) -> None:
         """The F2 error path must reference the step index."""
@@ -259,12 +259,12 @@ class TestValidateFunnelArgsF4:
         with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
             Exclusion("")
 
-    def test_whitespace_exclusion_event_returns_f4_error(self) -> None:
-        """An Exclusion with a whitespace-only event must produce an F4 error."""
-        errors = validate_funnel_args(
-            **_valid_funnel_args(exclusions=[Exclusion("   ")])
-        )
-        assert any(e.code == "F4_EMPTY_EXCLUSION_EVENT" for e in errors)
+    def test_whitespace_exclusion_event_raises_at_construction(self) -> None:
+        """An Exclusion with a whitespace-only event raises ValueError."""
+        import pytest
+
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("   ")
 
     def test_valid_exclusion_no_f4_error(self) -> None:
         """A valid Exclusion event name must not produce an F4 error."""
@@ -283,22 +283,26 @@ class TestValidateFunnelArgsF4:
         errors = validate_funnel_args(**_valid_funnel_args(exclusions=[]))
         assert "F4_EMPTY_EXCLUSION_EVENT" not in _codes(errors)
 
-    def test_multiple_empty_exclusions_produce_multiple_f4_errors(self) -> None:
-        """Empty exclusion raises at construction; whitespace passes to validation."""
+    def test_multiple_empty_exclusions_produce_multiple_construction_errors(self) -> None:
+        """Empty and whitespace-only exclusions both raise at construction."""
         import pytest
 
         # Empty string is caught by __post_init__
         with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
             Exclusion("")
 
-        # Whitespace-only passes __post_init__ but fails validation
+        # Whitespace-only also caught by __post_init__
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("  ")
+
+        # Valid exclusion constructs fine and produces no F4 errors
         errors = validate_funnel_args(
             **_valid_funnel_args(
-                exclusions=[Exclusion("  "), Exclusion("Valid")]
+                exclusions=[Exclusion("Valid")]
             )
         )
         f4_errors = [e for e in errors if e.code == "F4_EMPTY_EXCLUSION_EVENT"]
-        assert len(f4_errors) == 1
+        assert len(f4_errors) == 0
 
     def test_f4_error_path_contains_index(self) -> None:
         """Empty exclusion event raises ValueError at construction."""
@@ -559,26 +563,28 @@ class TestValidateFunnelArgsMultipleErrors:
         assert "F3_CONVERSION_WINDOW_POSITIVE" in codes
 
     def test_f1_f2_f3_f4_errors_collected(self) -> None:
-        """F1, F2, F3 collected together; Exclusion("") raises at construction."""
+        """F1, F2, F3 collected; Exclusion("") and Exclusion("  ") raise at construction."""
         import pytest
 
-        # Exclusion("") now raises at construction
+        # Exclusion("") raises at construction
         with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
             Exclusion("")
 
-        # F1, F2, F3 still collected together (use whitespace exclusion for F4)
+        # Exclusion("  ") also raises at construction
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("  ")
+
+        # F1, F2, F3 still collected together (no F4 — exclusions caught at construction)
         errors = validate_funnel_args(
             **_valid_funnel_args(
                 steps=[""],
                 conversion_window=-1,
-                exclusions=[Exclusion("  ")],
             )
         )
         codes = _codes(errors)
         assert "F1_MIN_STEPS" in codes
         assert "F2_EMPTY_STEP_EVENT" in codes
         assert "F3_CONVERSION_WINDOW_POSITIVE" in codes
-        assert "F4_EMPTY_EXCLUSION_EVENT" in codes
 
     def test_funnel_and_time_errors_collected(self) -> None:
         """Funnel-specific and delegated time errors must all be returned."""
@@ -631,11 +637,15 @@ class TestValidateFunnelArgsMultipleErrors:
                 bucket_max=100,
             )
 
-        # Remaining rules still collected (use whitespace exclusion for F4)
+        # Exclusion("  ") also raises at construction
+        with pytest.raises(ValueError, match="Exclusion.event must be a non-empty string"):
+            Exclusion("  ")
+
+        # Remaining rules still collected (no exclusion — caught at construction)
         errors = validate_funnel_args(
             steps=[""],
             conversion_window=0,
-            exclusions=[Exclusion("  ")],
+            exclusions=None,
             from_date="not-a-date",
             to_date=None,
             last=30,
@@ -645,7 +655,6 @@ class TestValidateFunnelArgsMultipleErrors:
         assert "F1_MIN_STEPS" in codes
         assert "F2_EMPTY_STEP_EVENT" in codes
         assert "F3_CONVERSION_WINDOW_POSITIVE" in codes
-        assert "F4_EMPTY_EXCLUSION_EVENT" in codes
         assert "V8_DATE_FORMAT" in codes
 
     def test_valid_args_return_empty_error_list(self) -> None:

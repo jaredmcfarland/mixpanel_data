@@ -7089,11 +7089,7 @@ class Metric:
                 or math="percentile" but percentile_value is missing (M3).
         """
         _validate_event_name(self.event, "Metric")
-        if (
-            self.math in _MATH_REQUIRING_PROPERTY
-            and self.property is None
-            and self.math != "histogram"
-        ):
+        if self.math in _MATH_REQUIRING_PROPERTY and self.property is None:
             raise ValueError(
                 f"Metric math={self.math!r} requires a property "
                 f"to be set (e.g., Metric({self.event!r}, math={self.math!r}, "
@@ -8432,7 +8428,7 @@ def _validate_event_name(event: str, class_name: str) -> None:
     Raises:
         ValueError: If event is empty or contains control characters.
     """
-    if not event:
+    if not event or not event.strip():
         raise ValueError(f"{class_name}.event must be a non-empty string")
     if _CONTROL_CHAR_RE.search(event):
         raise ValueError(
@@ -8968,8 +8964,8 @@ class FlowStepNode(TypedDict, total=False):
 
     event: str
     totalCount: str
-    type: str
-    anchorType: str
+    type: FlowNodeType
+    anchorType: FlowAnchorType
     isCustomEvent: bool
     conversionRateChange: float | None
 
