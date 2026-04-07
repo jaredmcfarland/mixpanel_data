@@ -25,6 +25,12 @@ from mixpanel_data import (
     MathType, PerUserAggregation, FilterPropertyType,
 )
 
+# Cohort Query types (cross-engine)
+from mixpanel_data import (
+    CohortBreakdown, CohortMetric,
+    CohortDefinition, CohortCriteria,
+)
+
 # Retention Query types
 from mixpanel_data import RetentionEvent, RetentionQueryResult
 
@@ -111,6 +117,8 @@ Typed results for all operations:
 
 - **QueryResult** — Insights query results (from `query()`)
 - **Metric**, **Filter**, **Formula**, **GroupBy** — Query building blocks
+- **CohortBreakdown**, **CohortMetric** — Cohort-scoped query types (cross-engine)
+- **CohortDefinition**, **CohortCriteria** — Inline cohort definition builder
 - **FunnelQueryResult**, **FunnelStep**, **Exclusion** — Typed funnel results
 - **RetentionQueryResult**, **RetentionEvent**, **RetentionAlignment**, **RetentionMode**, **RetentionMathType** — Typed retention results
 - **FlowQueryResult**, **FlowStep**, **FlowTreeNode** — Typed flow analysis results

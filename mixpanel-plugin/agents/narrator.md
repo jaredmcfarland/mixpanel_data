@@ -216,6 +216,10 @@ One section per stage, each using the optimal engine:
 - Do feature users come back? [retention curve]
 - Feature users vs non-users retention comparison
 
+## Cohort Comparison
+- Power user adoption: [CohortBreakdown — in-cohort vs not-in-cohort adoption rate]
+- Cohort-specific conversion: [Filter.in_cohort on funnel query]
+
 ## Impact Summary
 [Concise assessment with evidence from all engines]
 ```

@@ -245,6 +245,35 @@ Global filters apply to the overall query. For event-specific filtering, use `Re
 
 See [Insights Queries — Available Filter Methods](query.md#available-filter-methods) for the complete filter reference.
 
+### Cohort Filters
+
+Restrict retention analysis to users in a cohort:
+
+```python
+from mixpanel_data import Filter, CohortCriteria, CohortDefinition
+
+# Do power users retain better?
+result = ws.query_retention(
+    "Signup",
+    "Login",
+    where=Filter.in_cohort(123, "Power Users"),
+    retention_unit="week",
+    last=90,
+)
+
+# Inline cohort — define the segment on the fly
+organic = CohortDefinition(
+    CohortCriteria.did_event("Signup", at_least=1, within_days=90,
+        where=Filter.equals("source", "organic"))
+)
+result = ws.query_retention(
+    "Signup", "Purchase",
+    where=Filter.in_cohort(organic, name="Organic Signups"),
+)
+```
+
+See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full cohort filter reference.
+
 ## Breakdowns
 
 Break down retention results by property values with `group_by`:
@@ -265,6 +294,27 @@ result = ws.query_retention(
     group_by=GroupBy("amount", property_type="number", bucket_size=50),
 )
 ```
+
+### Cohort Breakdowns
+
+Segment retention by cohort membership — compare how a cohort retains vs. everyone else:
+
+```python
+from mixpanel_data import CohortBreakdown
+
+result = ws.query_retention(
+    "Signup",
+    "Login",
+    group_by=CohortBreakdown(123, "Power Users"),
+    retention_unit="week",
+    last=90,
+)
+```
+
+!!! note
+    `query_retention()` does not support mixing `CohortBreakdown` with property `GroupBy` in the same `group_by` list. Use one or the other.
+
+See [Insights Queries — Cohort Breakdowns](query.md#cohort-breakdowns) for inline definitions and options.
 
 See [Insights Queries — Breakdowns](query.md#breakdowns) for the full `GroupBy` reference.
 

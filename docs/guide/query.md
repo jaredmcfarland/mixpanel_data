@@ -712,7 +712,102 @@ ws.create_bookmark(CreateBookmarkParams(
 - **[`query_funnel()`](query-funnels.md)** — Ad-hoc funnel conversion analysis with typed step definitions, exclusions, and conversion windows
 - **[`query_retention()`](query-retention.md)** — Ad-hoc retention curves with event pairs, custom buckets, and alignment modes
 - **[`query_flow()`](query-flows.md)** — Ad-hoc flow path analysis with step definitions, direction controls, and visualization modes
-- **Cohort behaviors** — Querying by cohort membership (coming soon)
+- **Cohort-scoped queries** — Filter, break down, or track cohort membership across all engines (see below)
+
+## Cohort-Scoped Queries
+
+Scope any query to a user segment — filter by cohort membership, break down by cohort, or track cohort size as a metric. Use saved cohort IDs or define cohorts inline with `CohortDefinition`.
+
+### Cohort Filters
+
+Restrict queries to users in (or not in) a cohort using `Filter.in_cohort()` and `Filter.not_in_cohort()`:
+
+```python
+from mixpanel_data import Filter, CohortCriteria, CohortDefinition
+
+# Saved cohort
+result = ws.query("Purchase", where=Filter.in_cohort(123, "Power Users"))
+
+# Inline cohort — define the segment right where you use it
+power_users = CohortDefinition(
+    CohortCriteria.did_event("Purchase", at_least=3, within_days=30)
+)
+result = ws.query("Login", where=Filter.in_cohort(power_users, name="Power Users"))
+
+# Exclude a cohort
+result = ws.query("Purchase", where=Filter.not_in_cohort(789, "Bots"))
+
+# Combine with property filters
+result = ws.query(
+    "Purchase",
+    where=[Filter.in_cohort(power_users, name="PU"), Filter.equals("platform", "iOS")],
+)
+```
+
+Cohort filters work with all four query methods: `query()`, `query_funnel()`, `query_retention()`, and `query_flow()`.
+
+### Cohort Breakdowns
+
+Segment results by cohort membership using `CohortBreakdown` in the `group_by=` parameter:
+
+```python
+from mixpanel_data import CohortBreakdown
+
+# Compare cohort vs. everyone else
+result = ws.query(
+    "Purchase",
+    group_by=CohortBreakdown(123, "Power Users"),
+)
+# Result segments: "Power Users" and "Not In Power Users"
+
+# Inline cohort breakdown
+result = ws.query(
+    "Purchase",
+    group_by=CohortBreakdown(power_users, name="Power Users"),
+)
+
+# Only the cohort segment (no "Not In" group)
+result = ws.query(
+    "Purchase",
+    group_by=CohortBreakdown(123, "PU", include_negated=False),
+)
+
+# Mix with property breakdowns
+result = ws.query(
+    "Purchase",
+    group_by=[CohortBreakdown(123, "Power Users"), "platform"],
+)
+```
+
+Cohort breakdowns work with `query()`, `query_funnel()`, and `query_retention()` (not flows).
+
+### Cohort Metrics
+
+Track cohort size over time as a metric — insights only:
+
+```python
+from mixpanel_data import CohortMetric, Metric
+
+# Track cohort growth
+result = ws.query(CohortMetric(123, "Power Users"), last=90, unit="week")
+
+# What % of active users are power users?
+result = ws.query(
+    [Metric("Login", math="unique"), CohortMetric(123, "Power Users")],
+    formula="(B / A) * 100",
+    formula_label="Power User %",
+)
+```
+
+`CohortMetric` is insights-only — it cannot be used with `query_funnel()`, `query_retention()`, or `query_flow()`.
+
+### Engine Compatibility
+
+| Capability | `query()` | `query_funnel()` | `query_retention()` | `query_flow()` |
+|---|:-:|:-:|:-:|:-:|
+| **Cohort Filters** (`where=`) | ✓ | ✓ | ✓ | ✓ |
+| **Cohort Breakdowns** (`group_by=`) | ✓ | ✓ | ✓ | — |
+| **Cohort Metrics** (`events=`) | ✓ | — | — | — |
 
 ## Next Steps
 
@@ -722,4 +817,4 @@ ws.create_bookmark(CreateBookmarkParams(
 - [Live Analytics](live-analytics.md) — Legacy query methods (segmentation, funnels, retention)
 - [Data Discovery](discovery.md) — Explore events and properties before querying
 - [API Reference — Workspace](../api/workspace.md) — Full method signature
-- [API Reference — Types](../api/types.md) — Metric, Filter, GroupBy, QueryResult details
+- [API Reference — Types](../api/types.md) — Metric, Filter, GroupBy, CohortBreakdown, CohortMetric, QueryResult details

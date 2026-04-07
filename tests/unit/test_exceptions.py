@@ -338,6 +338,7 @@ class TestExceptionHierarchy:
         }
 
         for exc_class, expected_code in expected_codes.items():
+            exc: MixpanelDataError
             if exc_class in (AccountNotFoundError, AccountExistsError):
                 exc = exc_class("test")
             elif exc_class is EventNotFoundError:

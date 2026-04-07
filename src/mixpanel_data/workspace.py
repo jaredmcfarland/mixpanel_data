@@ -37,6 +37,7 @@ from mixpanel_data._internal.bookmark_builders import (
     build_date_range,
     build_filter_entry,
     build_filter_section,
+    build_flow_cohort_filter,
     build_group_section,
     build_time_section,
 )
@@ -86,6 +87,8 @@ from mixpanel_data.types import (
     BulkUpdateEventsParams,
     BulkUpdatePropertiesParams,
     Cohort,
+    CohortBreakdown,
+    CohortMetric,
     CreateAlertParams,
     CreateAnnotationParams,
     CreateAnnotationTagParams,
@@ -194,6 +197,7 @@ from mixpanel_data.types import (
     WebhookMutationResult,
     WebhookTestParams,
     WebhookTestResult,
+    _sanitize_raw_cohort,
 )
 
 # Limit validation bounds (Mixpanel API restriction)
@@ -1659,7 +1663,7 @@ class Workspace:
     def _build_query_params(
         self,
         *,
-        events: Sequence[str | Metric],
+        events: Sequence[str | Metric | CohortMetric],
         math: MathType,
         math_property: str | None,
         per_user: PerUserAggregation | None,
@@ -1668,7 +1672,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         formulas: Sequence[Formula],
         rolling: int | None,
@@ -1702,6 +1710,40 @@ class Workspace:
         # --- Build sections.show[] ---
         show: list[dict[str, Any]] = []
         for item in events:
+            if isinstance(item, CohortMetric):
+                # CohortMetric: cohort size tracking (CM3: ignore top-level math)
+                cohort_behavior: dict[str, Any] = {
+                    "type": "cohort",
+                    "name": item.name or "",
+                    "resourceType": "cohorts",
+                    "dataGroupId": None,
+                    "dataset": "$mixpanel",
+                    "filtersDeterminer": "all",
+                    "filters": [],
+                }
+                if isinstance(item.cohort, int):
+                    cohort_behavior["id"] = item.cohort
+                else:
+                    raw = _sanitize_raw_cohort(item.cohort.to_dict())
+                    # Server-side cohort processing expects `name` in
+                    # the raw_cohort dict (matching get_raw_cohort_by_id
+                    # DB format). Without it, label generation crashes.
+                    raw["name"] = item.name or ""
+                    cohort_behavior["raw_cohort"] = raw
+
+                entry: dict[str, Any] = {
+                    "type": "metric",
+                    "behavior": cohort_behavior,
+                    "measurement": {
+                        "math": "unique",
+                        "property": None,
+                        "perUserAggregation": None,
+                    },
+                    "isHidden": bool(formulas),
+                }
+                show.append(entry)
+                continue
+
             if isinstance(item, Metric):
                 event_name = item.event
                 item_math = item.math
@@ -1740,7 +1782,7 @@ class Workspace:
             if item_filters:
                 behavior_filters = [build_filter_entry(f) for f in item_filters]
 
-            entry: dict[str, Any] = {
+            entry = {
                 "type": "metric",
                 "behavior": {
                     "type": "event",
@@ -1816,7 +1858,11 @@ class Workspace:
 
     def query(
         self,
-        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        events: str
+        | Metric
+        | CohortMetric
+        | Formula
+        | Sequence[str | Metric | CohortMetric | Formula],
         *,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -1826,7 +1872,11 @@ class Workspace:
         math_property: str | None = None,
         per_user: PerUserAggregation | None = None,
         percentile_value: int | float | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
@@ -1842,9 +1892,14 @@ class Workspace:
 
         Args:
             events: Event name(s) to query. Accepts a single string,
-                a Metric object, a Formula object, or a sequence mixing
-                strings, Metrics, and Formulas. Formula objects in the
+                a Metric object, a CohortMetric object, a Formula
+                object, or a sequence mixing strings, Metrics,
+                CohortMetrics, and Formulas. Formula objects in the
                 list are extracted and appended as formula show clauses.
+                When events includes a CohortMetric, ``math``,
+                ``math_property``, and ``per_user`` are silently
+                ignored for that entry — cohort size is always counted
+                as unique users (CM3).
             from_date: Start date (YYYY-MM-DD). If set, overrides ``last``.
             to_date: End date (YYYY-MM-DD). Requires ``from_date``.
             last: Relative time range in days. Default: 30.
@@ -1858,8 +1913,9 @@ class Workspace:
             percentile_value: Custom percentile value (e.g. 95 for p95).
                 Required when ``math="percentile"``. Maps to ``percentile``
                 in bookmark measurement. Ignored for other math types.
-            group_by: Break down results by property. Accepts a string,
-                GroupBy object, or list of strings/GroupBys.
+            group_by: Break down results by property or cohort membership.
+                Accepts a string, ``GroupBy``, ``CohortBreakdown``, or
+                list of any mix.
             where: Filter results by conditions. Accepts a Filter
                 or list of Filters.
             formula: Formula expression referencing events by position
@@ -1944,7 +2000,11 @@ class Workspace:
 
     def build_params(
         self,
-        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        events: str
+        | Metric
+        | CohortMetric
+        | Formula
+        | Sequence[str | Metric | CohortMetric | Formula],
         *,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -1954,7 +2014,11 @@ class Workspace:
         math_property: str | None = None,
         per_user: PerUserAggregation | None = None,
         percentile_value: int | float | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
@@ -1971,8 +2035,9 @@ class Workspace:
 
         Args:
             events: Event name(s) to query. Accepts a single string,
-                a Metric object, a Formula object, or a sequence mixing
-                strings, Metrics, and Formulas.
+                a ``Metric``, ``CohortMetric``, ``Formula``, or a
+                sequence mixing strings, ``Metric``s, ``CohortMetric``s,
+                and ``Formula``s.
             from_date: Start date (YYYY-MM-DD). If set, overrides ``last``.
             to_date: End date (YYYY-MM-DD). Requires ``from_date``.
             last: Relative time range in days. Default: 30.
@@ -1983,7 +2048,9 @@ class Workspace:
             per_user: Per-user pre-aggregation.
             percentile_value: Custom percentile value (e.g. 95).
                 Required when ``math="percentile"``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort membership.
+                Accepts a string, ``GroupBy``, ``CohortBreakdown``, or
+                list of any mix.
             where: Filter results by conditions.
             formula: Formula expression referencing events by position.
             formula_label: Display label for formula result.
@@ -2038,7 +2105,11 @@ class Workspace:
     def _resolve_and_build_params(
         self,
         *,
-        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        events: str
+        | Metric
+        | CohortMetric
+        | Formula
+        | Sequence[str | Metric | CohortMetric | Formula],
         from_date: str | None,
         to_date: str | None,
         last: int,
@@ -2047,7 +2118,11 @@ class Workspace:
         math_property: str | None,
         per_user: PerUserAggregation | None,
         percentile_value: int | float | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
@@ -2063,7 +2138,8 @@ class Workspace:
         structure validation (Layer 2).
 
         Args:
-            events: Raw events input (str, Metric, Formula, or sequence).
+            events: Raw events input (str, Metric, CohortMetric,
+                Formula, or sequence).
             from_date: Start date (YYYY-MM-DD) or None.
             to_date: End date (YYYY-MM-DD) or None.
             last: Relative time range in days.
@@ -2088,14 +2164,14 @@ class Workspace:
         Raises:
             BookmarkValidationError: If validation fails at any layer.
         """
-        # Type guard: events must be str, Metric, Formula, or sequence thereof
-        if not isinstance(events, (str, Metric, Formula, list, tuple)):
+        # Type guard: events must be str, Metric, CohortMetric, Formula, or sequence thereof
+        if not isinstance(events, (str, Metric, CohortMetric, Formula, list, tuple)):
             raise BookmarkValidationError(
                 [
                     ValidationError(
                         path="events",
                         message=(
-                            f"events must be a string, Metric, Formula, or "
+                            f"events must be a string, Metric, CohortMetric, Formula, or "
                             f"sequence, got {type(events).__name__}"
                         ),
                         code="V21_INVALID_EVENT_TYPE",
@@ -2120,9 +2196,9 @@ class Workspace:
 
         # Normalize events to sequence, separating Formula objects
         if isinstance(events, str):
-            events_list: list[str | Metric] = [events]
+            events_list: list[str | Metric | CohortMetric] = [events]
             formulas_from_list: list[Formula] = []
-        elif isinstance(events, Metric):
+        elif isinstance(events, (Metric, CohortMetric)):
             events_list = [events]
             formulas_from_list = []
         elif isinstance(events, Formula):
@@ -2228,7 +2304,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         exclusions: list[Exclusion],
         holding_constant: list[HoldingConstant],
@@ -2385,7 +2465,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         exclusions: list[str | Exclusion] | None,
         holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None,
@@ -2502,7 +2586,11 @@ class Workspace:
         unit: QueryTimeUnit = "day",
         math: FunnelMathType = "conversion_rate_unique",
         math_property: str | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         exclusions: list[str | Exclusion] | None = None,
         holding_constant: (
@@ -2539,7 +2627,9 @@ class Workspace:
                 ``"max"``, ``"p25"``, ``"p75"``, ``"p90"``, ``"p99"``).
                 Required when using those math types; must be ``None``
                 for count/rate math types. Default: ``None``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort
+                membership. Accepts a string, ``GroupBy``,
+                ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             exclusions: Events to exclude between steps. Accepts
                 event name strings or ``Exclusion`` objects.
@@ -2624,7 +2714,11 @@ class Workspace:
         unit: QueryTimeUnit = "day",
         math: FunnelMathType = "conversion_rate_unique",
         math_property: str | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         exclusions: list[str | Exclusion] | None = None,
         holding_constant: (
@@ -2653,7 +2747,9 @@ class Workspace:
             math_property: Numeric property name for property-aggregation
                 math types. Required for ``"average"``, ``"median"``,
                 etc. Default: ``None``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort
+                membership. Accepts a string, ``GroupBy``,
+                ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             exclusions: Events to exclude between steps.
             holding_constant: Properties to hold constant.
@@ -2719,7 +2815,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         mode: RetentionMode,
     ) -> dict[str, Any]:
@@ -2859,6 +2959,7 @@ class Workspace:
         collapse_repeated: bool,
         hidden_events: list[str] | None,
         mode: str,
+        where: Filter | list[Filter] | None = None,
     ) -> dict[str, Any]:
         """Build a flat flow bookmark params dict from typed arguments.
 
@@ -2882,6 +2983,9 @@ class Workspace:
                 events.
             hidden_events: Events to hide from the flow visualization.
             mode: Display mode (``"sankey"``, ``"paths"``, or ``"tree"``).
+            where: Filter results by cohort membership. Only
+                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
+                are accepted. Default: ``None``.
 
         Returns:
             Flat bookmark params dict ready for API submission.
@@ -2903,7 +3007,7 @@ class Workspace:
             )
             ```
         """
-        return {
+        params: dict[str, Any] = {
             "steps": [
                 {
                     "event": step.event,
@@ -2938,6 +3042,14 @@ class Workspace:
             "exclusions": [],
         }
 
+        # Add cohort filter if present
+        if where is not None:
+            cohort_filter = build_flow_cohort_filter(where)
+            if cohort_filter is not None:
+                params["filter_by_cohort"] = cohort_filter
+
+        return params
+
     def _resolve_and_build_flow_params(
         self,
         *,
@@ -2954,6 +3066,7 @@ class Workspace:
         collapse_repeated: bool,
         hidden_events: list[str] | None,
         mode: str,
+        where: Filter | list[Filter] | None = None,
     ) -> dict[str, Any]:
         """Normalize, validate, and build flow bookmark params.
 
@@ -2978,6 +3091,9 @@ class Workspace:
                 events.
             hidden_events: Events to hide from visualization.
             mode: Display mode.
+            where: Filter results by cohort membership. Only
+                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
+                are accepted. Default: ``None``.
 
         Returns:
             Validated flow bookmark params dict.
@@ -3117,6 +3233,7 @@ class Workspace:
             collapse_repeated=collapse_repeated,
             hidden_events=hidden_events,
             mode=mode,
+            where=where,
         )
 
         # Layer 2: Bookmark structure validation
@@ -3142,6 +3259,7 @@ class Workspace:
         collapse_repeated: bool = False,
         hidden_events: list[str] | None = None,
         mode: Literal["sankey", "paths", "tree"] = "sankey",
+        where: Filter | list[Filter] | None = None,
     ) -> FlowQueryResult:
         """Run a typed flow query against the Mixpanel API.
 
@@ -3176,6 +3294,11 @@ class Workspace:
             hidden_events: Events to hide from the flow visualization.
                 Default: ``None``.
             mode: Flow visualization mode. Default: ``"sankey"``.
+            where: Filter results by cohort membership. Only
+                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
+                are accepted; non-cohort filters raise ``ValueError``.
+                Flows support a single cohort filter (the first is
+                used if multiple are provided). Default: ``None``.
 
         Returns:
             FlowQueryResult with steps, flows, breakdowns, and
@@ -3184,6 +3307,7 @@ class Workspace:
         Raises:
             BookmarkValidationError: If arguments violate validation
                 rules (before API call).
+            ValueError: If ``where`` contains non-cohort filters.
             ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials.
             QueryError: Invalid query parameters.
@@ -3220,6 +3344,7 @@ class Workspace:
             collapse_repeated=collapse_repeated,
             hidden_events=hidden_events,
             mode=mode,
+            where=where,
         )
 
         credentials = self._credentials
@@ -3250,6 +3375,7 @@ class Workspace:
         collapse_repeated: bool = False,
         hidden_events: list[str] | None = None,
         mode: Literal["sankey", "paths", "tree"] = "sankey",
+        where: Filter | list[Filter] | None = None,
     ) -> dict[str, Any]:
         """Build validated flow bookmark params without executing.
 
@@ -3275,6 +3401,10 @@ class Workspace:
             collapse_repeated: Merge repeated events. Default: ``False``.
             hidden_events: Events to hide. Default: ``None``.
             mode: Display mode. Default: ``"sankey"``.
+            where: Filter results by cohort membership. Only
+                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
+                are accepted; non-cohort filters raise ``ValueError``.
+                Flows support a single cohort filter. Default: ``None``.
 
         Returns:
             Flat bookmark params dict with ``steps``, ``date_range``,
@@ -3315,6 +3445,7 @@ class Workspace:
             collapse_repeated=collapse_repeated,
             hidden_events=hidden_events,
             mode=mode,
+            where=where,
         )
 
     # =========================================================================
@@ -3334,7 +3465,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         mode: RetentionMode,
     ) -> dict[str, Any]:
@@ -3432,7 +3567,11 @@ class Workspace:
         last: int = 30,
         unit: QueryTimeUnit = "day",
         math: RetentionMathType = "retention_rate",
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         mode: RetentionMode = "curve",
     ) -> RetentionQueryResult:
@@ -3461,7 +3600,9 @@ class Workspace:
                 Default: ``"day"``.
             math: Retention aggregation function. Default:
                 ``"retention_rate"``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort
+                membership. Accepts a string, ``GroupBy``,
+                ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             mode: Result display mode. Default: ``"curve"``.
 
@@ -3535,7 +3676,11 @@ class Workspace:
         last: int = 30,
         unit: QueryTimeUnit = "day",
         math: RetentionMathType = "retention_rate",
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         mode: RetentionMode = "curve",
     ) -> dict[str, Any]:
@@ -3561,7 +3706,9 @@ class Workspace:
                 Default: ``"day"``.
             math: Aggregation function. Default:
                 ``"retention_rate"``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort
+                membership. Accepts a string, ``GroupBy``,
+                ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             mode: Display mode. Default: ``"curve"``.
 

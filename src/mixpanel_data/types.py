@@ -7036,12 +7036,15 @@ class Filter:
     _operator: str
     """Internal operator string."""
 
-    _value: str | int | float | list[str] | list[int | float] | None
+    _value: (
+        str | int | float | list[str] | list[int | float] | list[dict[str, Any]] | None
+    )
     """Value(s) to compare against.
 
     Shape varies by operator: list for equals/not_equals, str for
     contains/not_contains, numeric for greater_than/less_than,
-    two-element list for between, None for is_set/is_not_set/is_true/is_false.
+    two-element list for between, None for is_set/is_not_set/is_true/is_false,
+    list of dicts for cohort filters (in_cohort/not_in_cohort).
     """
 
     _property_type: FilterPropertyType = "string"
@@ -7338,6 +7341,123 @@ class Filter:
             _value=None,
             _property_type="boolean",
             _resource_type=resource_type,
+        )
+
+    # --- Cohort filters ---
+
+    @classmethod
+    def in_cohort(
+        cls,
+        cohort: int | CohortDefinition,
+        name: str | None = None,
+    ) -> Filter:
+        """Create a filter restricting to users in a cohort.
+
+        Accepts either a saved cohort ID (``int``) or an inline
+        ``CohortDefinition``. The filter can be passed to ``where=``
+        on any query method (``query``, ``query_funnel``,
+        ``query_retention``, ``query_flow``).
+
+        Args:
+            cohort: Saved cohort ID (positive integer) or inline
+                ``CohortDefinition``.
+            name: Display name for the cohort. Optional for saved
+                cohorts; recommended for inline definitions.
+
+        Returns:
+            Filter for cohort membership (contains).
+
+        Raises:
+            ValueError: If cohort ID is not positive (CF1) or name
+                is empty when provided (CF2).
+
+        Example:
+            ```python
+            from mixpanel_data import Filter
+
+            # Saved cohort
+            f = Filter.in_cohort(123, "Power Users")
+
+            # Inline cohort
+            f = Filter.in_cohort(cohort_def, name="Frequent Buyers")
+            ```
+        """
+        return cls._build_cohort_filter(cohort, name, negated=False)
+
+    @classmethod
+    def not_in_cohort(
+        cls,
+        cohort: int | CohortDefinition,
+        name: str | None = None,
+    ) -> Filter:
+        """Create a filter excluding users in a cohort.
+
+        Accepts either a saved cohort ID (``int``) or an inline
+        ``CohortDefinition``. The filter can be passed to ``where=``
+        on any query method.
+
+        Args:
+            cohort: Saved cohort ID (positive integer) or inline
+                ``CohortDefinition``.
+            name: Display name for the cohort. Optional for saved
+                cohorts; recommended for inline definitions.
+
+        Returns:
+            Filter for cohort exclusion (does not contain).
+
+        Raises:
+            ValueError: If cohort ID is not positive (CF1) or name
+                is empty when provided (CF2).
+
+        Example:
+            ```python
+            from mixpanel_data import Filter
+
+            f = Filter.not_in_cohort(789, "Bots")
+            ```
+        """
+        return cls._build_cohort_filter(cohort, name, negated=True)
+
+    @classmethod
+    def _build_cohort_filter(
+        cls,
+        cohort: int | CohortDefinition,
+        name: str | None,
+        *,
+        negated: bool,
+    ) -> Filter:
+        """Build a cohort filter (shared by in_cohort/not_in_cohort).
+
+        Args:
+            cohort: Saved cohort ID or inline definition.
+            name: Display name.
+            negated: Whether this is a "does not contain" filter.
+
+        Returns:
+            Constructed Filter with cohort-specific internal fields.
+
+        Raises:
+            ValueError: On CF1 or CF2 violations.
+        """
+        _validate_cohort_args(cohort, name)
+
+        operator = "does not contain" if negated else "contains"
+
+        # Build the cohort value structure
+        cohort_entry: dict[str, Any] = {"negated": negated, "name": name or ""}
+        if isinstance(cohort, int):
+            cohort_entry["id"] = cohort
+        else:
+            cohort_entry["raw_cohort"] = _sanitize_raw_cohort(cohort.to_dict())
+
+        value: list[dict[str, Any]] = [{"cohort": cohort_entry}]
+
+        return cls(
+            _property="$cohorts",
+            _operator=operator,
+            _value=value,
+            _property_type="list",
+            _resource_type="events",
         )
 
     # --- Date/datetime filters ---
@@ -8108,6 +8228,50 @@ class CohortCriteria:
         )
 
 
+def _validate_cohort_args(
+    cohort: int | CohortDefinition,
+    name: str | None,
+) -> None:
+    """Validate cohort ID and name shared by CohortBreakdown, CohortMetric, and Filter.
+
+    Args:
+        cohort: Saved cohort ID or inline definition.
+        name: Display name for the cohort.
+
+    Raises:
+        ValueError: If cohort ID is not positive or name is empty
+            when provided.
+    """
+    if isinstance(cohort, int) and cohort <= 0:
+        raise ValueError("cohort must be a positive integer")
+    if name is not None and not name.strip():
+        raise ValueError("cohort name must be non-empty when provided")
+
+
+def _sanitize_raw_cohort(raw: dict[str, Any]) -> dict[str, Any]:
+    """Remove null ``selector`` keys from behavioral event_selector entries.
+
+    The Mixpanel API calls ``postorder_traverse`` on nested ``selector``
+    fields within ``event_selector`` blocks. A ``None`` root causes a
+    crash. This function deep-copies the raw cohort dict and removes
+    any ``selector: None`` entries from behavioral event_selectors.
+
+    Args:
+        raw: Output of ``CohortDefinition.to_dict()``.
+
+    Returns:
+        Sanitized deep copy safe for API submission.
+    """
+    result = copy.deepcopy(raw)
+    for _bkey, bval in result.get("behaviors", {}).items():
+        count = bval.get("count")
+        if isinstance(count, dict):
+            es = count.get("event_selector")
+            if isinstance(es, dict) and es.get("selector") is None:
+                del es["selector"]
+    return result
+
+
 @dataclass(frozen=True, init=False)
 class CohortDefinition:
     """A composed set of criteria combined with AND/OR logic.
@@ -8262,6 +8426,119 @@ class CohortDefinition:
 
         selector = _collect_and_build(self)
         return {"selector": selector, "behaviors": behaviors}
+
+
+@dataclass(frozen=True)
+class CohortBreakdown:
+    """Break down query results by cohort membership.
+
+    Represents a cohort-based breakdown dimension for use in the
+    ``group_by=`` parameter of ``query()``, ``query_funnel()``,
+    and ``query_retention()``.
+
+    Accepts either a saved cohort ID (``int``) or an inline
+    ``CohortDefinition``. When ``include_negated=True`` (default),
+    both "In Cohort" and "Not In Cohort" segments are shown.
+
+    Attributes:
+        cohort: Saved cohort ID (positive integer) or inline
+            ``CohortDefinition``.
+        name: Display name. Optional for saved cohorts; recommended
+            for inline definitions.
+        include_negated: Whether to include a "Not In" segment.
+            Default: ``True``.
+
+    Example:
+        ```python
+        from mixpanel_data import CohortBreakdown
+
+        # Segment by saved cohort
+        result = ws.query("Purchase", group_by=CohortBreakdown(123, "Power Users"))
+
+        # Without "Not In" segment
+        result = ws.query(
+            "Purchase",
+            group_by=CohortBreakdown(123, "Power Users", include_negated=False),
+        )
+        ```
+    """
+
+    cohort: int | CohortDefinition
+    """Saved cohort ID or inline definition."""
+
+    name: str | None = None
+    """Display name for the cohort."""
+
+    include_negated: bool = True
+    """Whether to include a 'Not In' segment."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If cohort ID is not positive (CB1) or name
+                is empty when provided (CB2).
+        """
+        _validate_cohort_args(self.cohort, self.name)
+
+
+@dataclass(frozen=True)
+class CohortMetric:
+    """Track cohort size over time as an event metric.
+
+    Represents a cohort size metric for use in the ``events=``
+    parameter of ``query()`` (insights only). Produces a show clause
+    with ``behavior.type: "cohort"`` in the bookmark JSON.
+
+    Cannot be used with ``query_funnel()``, ``query_retention()``,
+    or ``query_flow()`` (CM4 — insights only).
+
+    Inline ``CohortDefinition`` is not supported (CM5 — server returns
+    500). Use a saved cohort ID instead. This is enforced at construction.
+
+    Attributes:
+        cohort: Saved cohort ID (positive integer) or inline
+            ``CohortDefinition``.
+        name: Display name / series label. Optional for saved
+            cohorts; recommended for inline definitions.
+
+    Example:
+        ```python
+        from mixpanel_data import CohortMetric, Metric, Formula
+
+        # Track cohort growth
+        result = ws.query(CohortMetric(123, "Power Users"), last=90, unit="week")
+
+        # Mix with event metrics and formulas
+        result = ws.query(
+            [Metric("Login", math="unique"), CohortMetric(123, "Power Users")],
+            formula="(B / A) * 100",
+            formula_label="Power User %",
+        )
+        ```
+    """
+
+    cohort: int | CohortDefinition
+    """Saved cohort ID or inline definition."""
+
+    name: str | None = None
+    """Display name / series label."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If cohort ID is not positive (CM1), name
+                is empty when provided (CM2), or cohort is an inline
+                ``CohortDefinition`` (CM5 — server returns 500).
+        """
+        _validate_cohort_args(self.cohort, self.name)
+        # CM5: Inline CohortDefinition causes server-side 500.
+        if isinstance(self.cohort, CohortDefinition):
+            raise ValueError(
+                "CohortMetric does not support inline CohortDefinition "
+                "(server returns 500). Use a saved cohort ID instead."
+            )
 
 
 @dataclass(frozen=True)

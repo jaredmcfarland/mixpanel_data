@@ -18,7 +18,7 @@ Workspace.query_funnel(
     unit: QueryTimeUnit = "day",
     math: FunnelMathType = "conversion_rate_unique",
     math_property: str | None = None,
-    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    group_by: str | GroupBy | CohortBreakdown | list[str | GroupBy | CohortBreakdown] | None = None,
     where: Filter | list[Filter] | None = None,
     exclusions: list[str | Exclusion] | None = None,
     holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None = None,
@@ -457,6 +457,40 @@ Each entry in `steps_data` is a dict:
     "avg_time": 86400.0,            # seconds from previous step
     "avg_time_from_start": 259200.0, # seconds from first step
 }
+```
+
+---
+
+## Cohort-Scoped Funnels
+
+### Cohort Filters
+
+Restrict funnel analysis to a specific user segment:
+
+```python
+from mixpanel_data import Filter
+
+# Funnel conversion for power users only
+result = ws.query_funnel(
+    ["Signup", "Activate", "Purchase"],
+    where=Filter.in_cohort(123, "Power Users"),
+    conversion_window=7,
+)
+print(f"Power user conversion: {result.overall_conversion_rate:.1%}")
+```
+
+### Cohort Breakdowns
+
+Compare funnel conversion inside vs outside a cohort:
+
+```python
+from mixpanel_data import CohortBreakdown
+
+result = ws.query_funnel(
+    ["Signup", "Activate", "Purchase"],
+    group_by=CohortBreakdown(123, "Power Users"),
+)
+# Compare "Power Users" vs "Not In Power Users" step-by-step conversion
 ```
 
 ---

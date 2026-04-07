@@ -87,6 +87,15 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | "drop-off paths" | "Where do users go after dropping?" | Forward flow from drop-off event |
 | "bidirectional" | "Activity around the purchase event?" | `forward=3, reverse=2` |
 
+### Cohort-Scoped Signals (Cross-Engine)
+
+| Signal Pattern | Example Question | Capability |
+|---|---|---|
+| "filter by cohort", "only [cohort]" | "Show DAU for power users only" | `where=Filter.in_cohort(...)` — any engine |
+| "compare cohort", "[cohort] vs rest" | "How do power users differ?" | `group_by=CohortBreakdown(...)` — Insights/Funnels/Retention |
+| "cohort size", "cohort growth" | "How is the power user cohort growing?" | `CohortMetric(...)` — Insights only |
+| "define cohort inline" | "Users who purchased 3+ times in 30 days" | `CohortDefinition.all_of(CohortCriteria.did_event(...))` |
+
 ### Discovery Signals (schema exploration)
 
 | Signal Pattern | Method |
@@ -488,3 +497,20 @@ Otherwise → query() (Insights)
     Combine metrics? → formula="..."
     Per-user metric? → per_user=...
 ```
+
+---
+
+### Pattern 11: Cohort Behavior Deep Dive
+
+**Question**: "How do power users differ from everyone else?"
+
+| Step | Engine | Query | Purpose |
+|------|--------|-------|---------|
+| 1 | Discovery | `ws.cohorts()` | Find relevant saved cohorts |
+| 2 | Insights | `ws.query("Login", math="dau", group_by=CohortBreakdown(ID, "Power Users"))` | Engagement comparison |
+| 3 | Funnels | `ws.query_funnel(steps, group_by=CohortBreakdown(ID, "Power Users"))` | Conversion comparison |
+| 4 | Retention | `ws.query_retention(born, ret, group_by=CohortBreakdown(ID, "Power Users"))` | Retention comparison |
+| 5 | Flows | `ws.query_flow(event, where=Filter.in_cohort(ID, "Power Users"))` | Path analysis for cohort |
+| 6 | Insights | `ws.query([Metric("Login", math="unique"), CohortMetric(ID, "Power Users")], formula="(B/A)*100")` | Cohort share trend |
+
+**Join strategy**: Segment-aligned — CohortBreakdown produces "in" vs "not in" segments across Insights, Funnels, and Retention. Flows uses Filter.in_cohort() since CohortBreakdown is not supported.

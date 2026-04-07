@@ -75,10 +75,12 @@ from mixpanel_data.types import (
     BulkUpdateEventsParams,
     BulkUpdatePropertiesParams,
     Cohort,
+    CohortBreakdown,
     CohortCreator,
     CohortCriteria,
     CohortDefinition,
     CohortInfo,
+    CohortMetric,
     ComposedPropertyValue,
     CreateAlertParams,
     CreateAnnotationParams,
@@ -320,6 +322,9 @@ __all__ = [
     # Cohort Definition Builder (Phase 035)
     "CohortCriteria",
     "CohortDefinition",
+    # Cohort Behaviors (Phase 036)
+    "CohortBreakdown",
+    "CohortMetric",
     # Cohort CRUD (Phase 024)
     "Cohort",
     "CohortCreator",

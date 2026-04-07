@@ -79,6 +79,9 @@ User says...                              → Engine
 "path", "flow", "journey"                → Flows
 "what happens after X", "what led to"     → Flows
 "why did X change/drop/spike"             → MULTI-ENGINE
+"filter by cohort", "only power users"    → ANY ENGINE + where=Filter.in_cohort()
+"compare cohort vs rest"                  → Insights/Funnels/Retention + CohortBreakdown
+"cohort size over time"                   → Insights + CohortMetric
 "product health", "overview"              → MULTI-ENGINE
 ```
 
@@ -110,6 +113,7 @@ For complex questions requiring multiple engines, decompose into a plan:
 ```python
 import mixpanel_data as mp
 from mixpanel_data import Metric, Filter, GroupBy, Formula
+from mixpanel_data import CohortBreakdown, CohortMetric
 from mixpanel_data import FunnelStep, RetentionEvent, FlowStep
 import pandas as pd
 
@@ -136,6 +140,21 @@ print(ret.df)
 flow = ws.query_flow("Purchase", forward=0, reverse=3, mode="sankey")
 print(flow.top_transitions(10))
 print(flow.drop_off_summary())
+```
+
+## Cohort-Scoped Queries
+
+```python
+from mixpanel_data import CohortBreakdown, CohortMetric
+
+# Filter any engine to a cohort
+result = ws.query("Login", math="dau", where=Filter.in_cohort(123, "Power Users"), last=30)
+
+# Compare cohort vs everyone else
+result = ws.query("Login", math="dau", group_by=CohortBreakdown(123, "Power Users"), last=30)
+
+# Track cohort growth over time
+result = ws.query(CohortMetric(123, "Power Users"), last=90)
 ```
 
 ## API Lookup

@@ -3,9 +3,10 @@
 Two validation layers:
 
 - ``validate_query_args()``: Validates Python-level arguments before
-  bookmark construction (Layer 1, rules V0-V27).
+  bookmark construction (Layer 1, rules V0-V27, CF1-CF2, CB1-CB3,
+  CM1-CM5).
 - ``validate_bookmark()``: Validates the bookmark JSON dict after
-  construction (Layer 2, rules B1-B19).
+  construction (Layer 2, rules B1-B26).
 
 Both return ``list[ValidationError]``. Callers decide whether to raise
 ``BookmarkValidationError``.
@@ -46,9 +47,11 @@ from mixpanel_data._internal.bookmark_enums import (
 )
 from mixpanel_data.exceptions import ValidationError
 
-# Avoid circular imports — these are only needed for isinstance checks
-# at runtime, so import the types module (not individual names from types.py)
+# Import specific types needed for isinstance checks at runtime.
 from mixpanel_data.types import (
+    CohortBreakdown,
+    CohortDefinition,
+    CohortMetric,
     Exclusion,
     Formula,
     FunnelStep,
@@ -334,7 +337,11 @@ def validate_time_args(
 
 def validate_group_by_args(
     *,
-    group_by: str | GroupBy | list[str | GroupBy] | None,
+    group_by: str
+    | GroupBy
+    | CohortBreakdown
+    | list[str | GroupBy | CohortBreakdown]
+    | None,
 ) -> list[ValidationError]:
     """Validate group-by arguments (rules V11-V12, V18, V24).
 
@@ -344,8 +351,9 @@ def validate_group_by_args(
 
     Args:
         group_by: Breakdown specification — a property name string,
-            a ``GroupBy`` object with optional bucket config, a list
-            of either, or ``None`` for no breakdown.
+            a ``GroupBy`` object with optional bucket config,
+            a ``CohortBreakdown`` object, a list of any mix,
+            or ``None`` for no breakdown.
 
     Returns:
         List of validation errors. Empty list means all group-by
@@ -467,7 +475,11 @@ def validate_funnel_args(
     from_date: str | None,
     to_date: str | None,
     last: int,
-    group_by: str | GroupBy | list[str | GroupBy] | None,
+    group_by: str
+    | GroupBy
+    | CohortBreakdown
+    | list[str | GroupBy | CohortBreakdown]
+    | None,
 ) -> list[ValidationError]:
     """Validate funnel query arguments before bookmark construction (Layer 1).
 
@@ -833,7 +845,11 @@ def validate_retention_args(
     from_date: str | None = None,
     to_date: str | None = None,
     last: int = 30,
-    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    group_by: str
+    | GroupBy
+    | CohortBreakdown
+    | list[str | GroupBy | CohortBreakdown]
+    | None = None,
 ) -> list[ValidationError]:
     """Validate retention query arguments before bookmark construction (Layer 1).
 
@@ -1055,6 +1071,7 @@ def validate_retention_args(
         )
 
     # R12: group_by strings must be non-empty
+    # CB3: CohortBreakdown and GroupBy are mutually exclusive in retention
     if group_by is not None:
         gb_list = group_by if isinstance(group_by, list) else [group_by]
         for i, g in enumerate(gb_list):
@@ -1067,6 +1084,20 @@ def validate_retention_args(
                         code="R12_EMPTY_GROUP_BY",
                     )
                 )
+
+        has_cohort = any(isinstance(g, CohortBreakdown) for g in gb_list)
+        has_property = any(isinstance(g, (str, GroupBy)) for g in gb_list)
+        if has_cohort and has_property:
+            errors.append(
+                ValidationError(
+                    path="group_by",
+                    message=(
+                        "query_retention does not support mixing "
+                        "CohortBreakdown with property GroupBy"
+                    ),
+                    code="CB3_RETENTION_MIXED_BREAKDOWN",
+                )
+            )
 
     return errors
 
@@ -1454,7 +1485,7 @@ def validate_flow_bookmark(
 
 def validate_query_args(
     *,
-    events: Sequence[str | Metric],
+    events: Sequence[str | Metric | CohortMetric],
     math: MathType,
     math_property: str | None,
     per_user: PerUserAggregation | None,
@@ -1465,7 +1496,11 @@ def validate_query_args(
     has_formula: bool,
     rolling: int | None,
     cumulative: bool,
-    group_by: str | GroupBy | list[str | GroupBy] | None,
+    group_by: str
+    | GroupBy
+    | CohortBreakdown
+    | list[str | GroupBy | CohortBreakdown]
+    | None,
     formulas: Sequence[Any] | None = None,
 ) -> list[ValidationError]:
     """Validate query arguments before bookmark construction (Layer 1).
@@ -1508,17 +1543,35 @@ def validate_query_args(
     for idx, item in enumerate(events):
         epath = f"events[{idx}]"
 
-        # V21: Type guard — must be str or Metric
-        if not isinstance(item, (str, Metric)):
+        # V21: Type guard — must be str, Metric, or CohortMetric
+        if not isinstance(item, (str, Metric, CohortMetric)):
             errors.append(
                 ValidationError(
                     path=epath,
                     message=(
-                        f"Event must be a string or Metric, got {type(item).__name__}"
+                        f"Event must be a string, Metric, or CohortMetric, "
+                        f"got {type(item).__name__}"
                     ),
                     code="V21_INVALID_EVENT_TYPE",
                 )
             )
+            continue
+
+        # CohortMetric: validate cohort type, then skip event-name validation
+        if isinstance(item, CohortMetric):
+            # CM5: Inline CohortDefinition in CohortMetric triggers a
+            # server-side 500. Only saved cohort IDs are supported.
+            if isinstance(item.cohort, CohortDefinition):
+                errors.append(
+                    ValidationError(
+                        path=epath,
+                        message=(
+                            "CohortMetric does not support inline CohortDefinition "
+                            "(server returns 500). Use a saved cohort ID instead."
+                        ),
+                        code="CM5_INLINE_COHORT_METRIC",
+                    )
+                )
             continue
 
         name = item.event if isinstance(item, Metric) else item
@@ -1557,8 +1610,13 @@ def validate_query_args(
                 )
             )
 
+    # CM3/FR-020: Top-level math/math_property/per_user only apply to plain
+    # string events.  When all events are CohortMetric (or Metric, which
+    # carries its own math), there are no consumers — skip V1/V2/V3/V26/V27.
+    has_plain_events = any(isinstance(item, str) for item in events)
+
     # V1: Property math requires property
-    if math in MATH_REQUIRING_PROPERTY and math_property is None:
+    if has_plain_events and math in MATH_REQUIRING_PROPERTY and math_property is None:
         errors.append(
             ValidationError(
                 path="math",
@@ -1568,7 +1626,7 @@ def validate_query_args(
         )
 
     # V2: Non-property math rejects property
-    if (
+    if has_plain_events and (
         math not in MATH_REQUIRING_PROPERTY
         and math not in MATH_PROPERTY_OPTIONAL
         and math_property is not None
@@ -1586,7 +1644,7 @@ def validate_query_args(
         )
 
     # V26: percentile math requires percentile_value
-    if math == "percentile" and percentile_value is None:
+    if has_plain_events and math == "percentile" and percentile_value is None:
         errors.append(
             ValidationError(
                 path="percentile_value",
@@ -1596,7 +1654,7 @@ def validate_query_args(
         )
 
     # V27: histogram math requires per_user
-    if math == "histogram" and per_user is None:
+    if has_plain_events and math == "histogram" and per_user is None:
         errors.append(
             ValidationError(
                 path="per_user",
@@ -1609,7 +1667,7 @@ def validate_query_args(
         )
 
     # V3: per_user incompatible with DAU/WAU/MAU/unique
-    if per_user is not None and math in MATH_NO_PER_USER:
+    if has_plain_events and per_user is not None and math in MATH_NO_PER_USER:
         errors.append(
             ValidationError(
                 path="per_user",
@@ -1619,7 +1677,7 @@ def validate_query_args(
         )
 
     # V3b: per_user requires a property
-    if per_user is not None and math_property is None:
+    if has_plain_events and per_user is not None and math_property is None:
         errors.append(
             ValidationError(
                 path="per_user",
@@ -2020,6 +2078,42 @@ def _validate_show_clause(
                 )
             )
 
+    # B22-B23: Cohort behavior validation
+    if btype == "cohort":
+        # B22: Cohort behavior requires positive int id (for saved cohorts)
+        cohort_id = behavior.get("id")
+        if cohort_id is not None and (not isinstance(cohort_id, int) or cohort_id <= 0):
+            errors.append(
+                ValidationError(
+                    path=f"{path}.behavior.id",
+                    message="Cohort behavior id must be a positive integer",
+                    code="B22_COHORT_BEHAVIOR_ID",
+                )
+            )
+        # B22b: Cohort behavior must have either id or raw_cohort
+        if cohort_id is None and behavior.get("raw_cohort") is None:
+            errors.append(
+                ValidationError(
+                    path=f"{path}.behavior",
+                    message="Cohort behavior must have either 'id' (saved cohort) "
+                    "or 'raw_cohort' (inline definition)",
+                    code="B22_COHORT_MISSING_IDENTIFIER",
+                )
+            )
+        # B23: Cohort behavior resourceType must be "cohorts"
+        cohort_rt = behavior.get("resourceType")
+        if cohort_rt is not None and cohort_rt != "cohorts":
+            errors.append(
+                ValidationError(
+                    path=f"{path}.behavior.resourceType",
+                    message=(
+                        f"Cohort behavior resourceType must be 'cohorts' "
+                        f"(got '{cohort_rt}')"
+                    ),
+                    code="B23_COHORT_RESOURCE_TYPE",
+                )
+            )
+
     # B19: Validate filtersDeterminer
     fd = behavior.get("filtersDeterminer")
     if fd is not None and fd not in VALID_FILTERS_DETERMINER:
@@ -2044,6 +2138,20 @@ def _validate_show_clause(
     measurement = clause.get("measurement")
     if isinstance(measurement, dict):
         errors.extend(_validate_measurement(measurement, path, bookmark_type))
+
+        # B24: Cohort behavior math must be "unique"
+        if btype == "cohort":
+            m_math = measurement.get("math")
+            if m_math is not None and m_math != "unique":
+                errors.append(
+                    ValidationError(
+                        path=f"{path}.measurement.math",
+                        message=(
+                            f"Cohort behavior math must be 'unique' (got '{m_math}')"
+                        ),
+                        code="B24_COHORT_MATH",
+                    )
+                )
 
     return errors
 
@@ -2321,6 +2429,27 @@ def _validate_filter_clause(
             )
         )
 
+    # B25: Cohort filter must have value == "$cohorts"
+    if clause.get("filterType") == "list" and clause.get("filterOperator") in (
+        "contains",
+        "does not contain",
+    ):
+        fv_cohort = clause.get("filterValue")
+        if isinstance(fv_cohort, list) and len(fv_cohort) > 0:
+            first = fv_cohort[0]
+            if (
+                isinstance(first, dict)
+                and "cohort" in first
+                and clause.get("value") != "$cohorts"
+            ):
+                errors.append(
+                    ValidationError(
+                        path=f"{path}.value",
+                        message=("Cohort filter value must be '$cohorts'"),
+                        code="B25_COHORT_FILTER_VALUE",
+                    )
+                )
+
     # B20: Validate filterValue is non-empty when present
     fv = clause.get("filterValue")
     if isinstance(fv, list) and len(fv) == 0:
@@ -2399,6 +2528,17 @@ def _validate_group_clause(
                 valid=VALID_RESOURCE_TYPES,
                 code="B16_INVALID_RESOURCE_TYPE",
                 severity="warning",
+            )
+        )
+
+    # B26: Cohort group entry must have non-empty cohorts array
+    cohorts = clause.get("cohorts")
+    if cohorts is not None and (not isinstance(cohorts, list) or len(cohorts) == 0):
+        errors.append(
+            ValidationError(
+                path=f"{path}.cohorts",
+                message="Cohort group entry must have non-empty cohorts array",
+                code="B26_EMPTY_COHORTS",
             )
         )
 
