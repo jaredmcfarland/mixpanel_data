@@ -259,7 +259,7 @@ Tracks cohort size over time. Math is always `unique`.
   "behavior": {
     "type": "cohort",
     "name": "Power Users",
-    "resourceType": "events",
+    "resourceType": "cohorts",
     "filtersDeterminer": "all",
     "filters": [],
     "id": 12345
@@ -396,19 +396,22 @@ Segments results by cohort membership (in vs not-in).
 
 ```json
 {
+  "value": ["Power Users", "Not In Power Users"],
   "resourceType": "events",
-  "propertyType": "list",
-  "propertyDefaultType": "list",
-  "propertyName": "$cohorts",
-  "value": "$cohorts",
+  "profileType": null,
+  "search": "",
+  "dataGroupId": null,
+  "propertyType": null,
+  "typeCast": null,
   "cohorts": [
-    {"id": 12345, "name": "Power Users"},
-    {"id": 12345, "name": "Power Users", "negated": true}
-  ]
+    {"name": "Power Users", "negated": false, "data_group_id": null, "id": 12345, "groups": []},
+    {"name": "Power Users", "negated": true, "data_group_id": null, "id": 12345, "groups": []}
+  ],
+  "isHidden": false
 }
 ```
 
-The `cohorts` array contains one entry per segment. When `include_negated=True` (default), a second entry with `"negated": true` creates the "Not In Power Users" segment. For inline definitions, replace `"id"` with `"raw_cohort": {"selector": {...}, "behaviors": {...}}`.
+The `value` array contains display labels for each segment. The `cohorts` array contains one entry per segment. When `include_negated=True` (default), a second entry with `"negated": true` creates the "Not In [name]" segment. For inline definitions, replace `"id"` with `"raw_cohort": {"selector": {...}, "behaviors": {...}}` and omit `"groups"`.
 
 ---
 

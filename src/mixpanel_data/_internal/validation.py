@@ -2073,6 +2073,16 @@ def _validate_show_clause(
                     code="B22_COHORT_BEHAVIOR_ID",
                 )
             )
+        # B22b: Cohort behavior must have either id or raw_cohort
+        if cohort_id is None and behavior.get("raw_cohort") is None:
+            errors.append(
+                ValidationError(
+                    path=f"{path}.behavior",
+                    message="Cohort behavior must have either 'id' (saved cohort) "
+                    "or 'raw_cohort' (inline definition)",
+                    code="B22_COHORT_MISSING_IDENTIFIER",
+                )
+            )
         # B23: Cohort behavior resourceType must be "cohorts"
         cohort_rt = behavior.get("resourceType")
         if cohort_rt is not None and cohort_rt != "cohorts":

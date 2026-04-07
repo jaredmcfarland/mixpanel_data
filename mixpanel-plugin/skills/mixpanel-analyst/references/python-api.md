@@ -154,7 +154,7 @@ CohortMetric(
 
 Used in `events=` for `query()` only (insights). Creates a `behavior.type: "cohort"` show clause tracking cohort size over time. Math is always `"unique"` (CM3). Cannot be used with `query_funnel()`, `query_retention()`, or `query_flow()` (CM4).
 
-**Known limitation**: `CohortMetric` with inline `CohortDefinition` triggers a server-side 500 error. Use saved cohort IDs for `CohortMetric`.
+Inline `CohortDefinition` is supported. Always provide a `name` for the series label.
 
 ```python
 # Track cohort size over time

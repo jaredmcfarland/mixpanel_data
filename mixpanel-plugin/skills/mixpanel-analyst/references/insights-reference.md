@@ -562,21 +562,22 @@ result = ws.query(
 )
 ```
 
-**Known limitation**: `CohortMetric` with inline `CohortDefinition` triggers a server-side 500 error. Use saved cohort IDs.
+Inline `CohortDefinition` is supported. Always provide a descriptive `name` for the series label.
 
 ### Cohort Validation Rules
 
-| Rule | Check | Error |
-|------|-------|-------|
-| CF1 | Cohort ID must be positive integer (when `int`) | `CF1_COHORT_ID_POSITIVE` |
-| CF2 | Cohort name must be non-empty when provided | `CF2_COHORT_NAME_EMPTY` |
-| CB1 | CohortBreakdown cohort ID must be positive | `CB1_BREAKDOWN_ID_POSITIVE` |
-| CB2 | CohortBreakdown name must be non-empty when provided | `CB2_BREAKDOWN_NAME_EMPTY` |
-| CB3 | CohortBreakdown and property GroupBy mutually exclusive in retention | `CB3_RETENTION_MUTUAL_EXCLUSION` |
-| CM1 | CohortMetric cohort ID must be positive | `CM1_METRIC_ID_POSITIVE` |
-| CM2 | CohortMetric name must be non-empty when provided | `CM2_METRIC_NAME_EMPTY` |
-| CM3 | CohortMetric math is always "unique" | `CM3_METRIC_MATH_UNIQUE` |
-| CM4 | CohortMetric is insights-only | `CM4_METRIC_INSIGHTS_ONLY` |
+| Area | Check | Error Surface |
+|------|-------|---------------|
+| Cohort filter | Cohort ID must be a positive integer | Raises `ValueError` at construction |
+| Cohort filter | Name must be non-empty when provided | Raises `ValueError` at construction |
+| CohortBreakdown | Cohort ID must be positive | Raises `ValueError` at construction |
+| CohortBreakdown | Name must be non-empty when provided | Raises `ValueError` at construction |
+| CohortBreakdown | Mutually exclusive with property GroupBy in retention | Raises `ValueError` during validation (CB3) |
+| CohortMetric | Math is always `"unique"` | Enforced by the type — not user-configurable |
+| CohortMetric | Insights-only (not funnels/retention/flows) | Raises `ValueError` during validation (CM4) |
+| Bookmark Layer 2 | Cohort behavior `id` must be positive int | `B22_COHORT_BEHAVIOR_ID` |
+| Bookmark Layer 2 | Cohort behavior must have `id` or `raw_cohort` | `B22_COHORT_MISSING_IDENTIFIER` |
+| Bookmark Layer 2 | Cohort `resourceType` must be `"cohorts"` | `B23_COHORT_RESOURCE_TYPE` |
 
 ---
 

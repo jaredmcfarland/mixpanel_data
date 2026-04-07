@@ -504,7 +504,7 @@ result = ws.query("Login", where=Filter.in_cohort(premium_active, "Premium Activ
 result = ws.query("Login", group_by=CohortBreakdown(premium_active, "Premium Active"))
 ```
 
-**Known limitation**: `CohortMetric` with inline `CohortDefinition` triggers a server-side 500 error. Use saved cohort IDs for `CohortMetric`.
+**Note**: When using inline `CohortDefinition` with `CohortMetric`, always provide a descriptive `name` parameter — it is required for server-side label generation.
 
 ## How to Think About Analysis
 

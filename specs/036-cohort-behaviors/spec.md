@@ -27,7 +27,7 @@ A developer or LLM agent wants to restrict any analytics query (insights, funnel
 
 5. **Given** a cohort filter, **When** used with `query_funnel()` or `query_retention()`, **Then** it produces the same `sections.filter[]` structure as with `query()`.
 
-6. **Given** a cohort filter, **When** used with `query_flow()`, **Then** it produces a top-level `filter_by_cohort` entry in the flat flow params (not inside `sections`), using the legacy tree format with `operator: "or"` and `children: [{cohort: {...}}]`.
+6. **Given** a cohort filter, **When** used with `query_flow()`, **Then** it produces a top-level `filter_by_cohort` entry in the flat flow params (not inside `sections`), as a flat dict with `name`, `negated`, and either `id` (saved) or `raw_cohort` (inline).
 
 7. **Given** a non-positive integer or non-integer value passed as `cohort` to `Filter.in_cohort()`, **When** the filter is constructed, **Then** a `ValueError` is raised immediately (fail-fast validation).
 
