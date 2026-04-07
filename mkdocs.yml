@@ -79,6 +79,7 @@ plugins:
           - getting-started/quickstart.md
           - getting-started/configuration.md
         User Guide:
+          - guide/unified-query-system.md
           - guide/discovery.md
           - guide/query.md
           - guide/query-funnels.md
@@ -131,6 +132,7 @@ plugins:
           - getting-started/quickstart.md: "First queries in 5 minutes"
           - getting-started/configuration.md: "Accounts, env vars, config files"
         User Guide:
+          - guide/unified-query-system.md: "Unified query system — one vocabulary, four analytics engines"
           - guide/discovery.md: "Explore schema, events, properties, cohorts"
           - guide/query.md: "Typed insights queries — DAU, formulas, filters, breakdowns"
           - guide/query-funnels.md: "Typed funnel queries — steps, exclusions, conversion windows"
@@ -174,6 +176,7 @@ nav:
       - Quick Start: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
   - User Guide:
+      - The Unified Query System: guide/unified-query-system.md
       - Data Discovery: guide/discovery.md
       - Insights Queries: guide/query.md
       - Funnel Queries: guide/query-funnels.md
