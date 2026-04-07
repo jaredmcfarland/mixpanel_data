@@ -1,9 +1,17 @@
 /**
  * Copy Markdown Button Handler
  *
- * Pre-fetches markdown content on page load so copy is synchronous.
- * This is necessary because Safari's Clipboard API requires the copy to happen
- * synchronously within the user gesture - any async operation breaks the gesture chain.
+ * Overrides the llmstxt-md plugin's inline async copyMarkdownToClipboard()
+ * with a synchronous version that works reliably across browsers.
+ *
+ * The plugin's async version breaks because await fetch() consumes the
+ * transient user activation, causing navigator.clipboard.writeText() to
+ * fail. This script pre-fetches markdown and copies synchronously via
+ * execCommand, preserving the user gesture chain.
+ *
+ * Subscribes to MkDocs Material's document$ observable (a ReplaySubject(1))
+ * so it re-initializes on every instant navigation, always overriding the
+ * plugin's inline script.
  */
 (function() {
     'use strict';
@@ -15,35 +23,36 @@
     // Module state
     let cachedMarkdown = null;
     let fetchError = null;
+    let abortController = null;
 
-    // Fetch markdown immediately when page loads
-    (function prefetchMarkdown() {
+    /**
+     * Returns the expected markdown path for the current page URL.
+     *
+     * @returns {string} Absolute path to the .md file (e.g. "/site/page/index.md")
+     */
+    function getCurrentMdPath() {
         const currentPath = window.location.pathname;
-        const mdPath = currentPath.endsWith('/')
+        return currentPath.endsWith('/')
             ? currentPath + 'index.md'
             : currentPath.replace(/\.html$/, '.md');
+    }
 
-        fetch(mdPath)
-            .then(response => {
-                if (!response.ok) throw new Error('Not found');
-                return response.text();
-            })
-            .then(text => {
-                // Strip any trailing "Copy Markdown" button text that the plugin may have added
-                cachedMarkdown = text
-                    .replace(/[\r\n]*Copy Markdown[\r\n\s]*$/i, '')
-                    .replace(/\s+$/, '');
-            })
-            .catch(err => {
-                fetchError = err;
-                console.warn('Could not prefetch markdown:', err);
-                // Hide the button if markdown is unavailable
-                hideButton();
-            });
-    })();
+    /**
+     * Restores the copy button visibility (reverses any prior hideButton call).
+     *
+     * @returns {void}
+     */
+    function showButton() {
+        const button = document.getElementById('llms-copy-button');
+        if (button) {
+            button.style.display = '';
+        }
+    }
 
     /**
      * Hides the copy button when markdown content is unavailable.
+     *
+     * @returns {void}
      */
     function hideButton() {
         const button = document.getElementById('llms-copy-button');
@@ -53,13 +62,49 @@
     }
 
     /**
+     * Fetches markdown for the current page and caches it.
+     * Cancels any in-flight request via AbortController to prevent stale
+     * content from a previous navigation overwriting the cache.
+     *
+     * @returns {void}
+     */
+    function prefetchMarkdown() {
+        if (abortController) {
+            abortController.abort();
+        }
+        abortController = new AbortController();
+
+        cachedMarkdown = null;
+        fetchError = null;
+
+        const mdPath = getCurrentMdPath();
+
+        fetch(mdPath, { signal: abortController.signal })
+            .then(response => {
+                if (!response.ok) throw new Error('Not found');
+                return response.text();
+            })
+            .then(text => {
+                cachedMarkdown = text
+                    .replace(/[\r\n]*Copy Markdown[\r\n\s]*$/i, '')
+                    .replace(/\s+$/, '');
+            })
+            .catch(err => {
+                if (err.name === 'AbortError') return;
+                fetchError = err;
+                console.warn('Could not prefetch markdown:', err);
+                hideButton();
+            });
+    }
+
+    /**
      * Copies text to clipboard using execCommand.
      *
-     * Note: We use execCommand instead of navigator.clipboard.writeText() because
-     * Safari's Clipboard API requires operations to be synchronous within the user
-     * gesture. Even with prefetched content, calling an async function (await) breaks
-     * the gesture chain. By using the synchronous execCommand, we ensure reliable
-     * cross-browser clipboard access including Safari/iOS.
+     * We use execCommand instead of navigator.clipboard.writeText() because
+     * the Clipboard API requires the operation to be within a live user
+     * gesture. Any preceding await (e.g. await fetch()) consumes the
+     * transient activation, causing writeText() to throw. execCommand is
+     * synchronous, so it works reliably when content is pre-fetched.
      *
      * @param {string} text - Text to copy to clipboard
      * @returns {boolean} Whether the copy succeeded
@@ -68,14 +113,12 @@
         const textarea = document.createElement('textarea');
         textarea.value = text;
 
-        // Style it to be invisible but present in the DOM
         textarea.style.cssText = 'position:fixed;top:0;left:0;width:2em;height:2em;padding:0;border:none;outline:none;box-shadow:none;background:transparent;';
 
         document.body.appendChild(textarea);
 
-        // Handle iOS Safari which requires special selection handling
         if (/ipad|iphone/i.test(navigator.userAgent)) {
-            textarea.contentEditable = true;
+            textarea.contentEditable = 'true';
             textarea.readOnly = false;
 
             const range = document.createRange();
@@ -103,7 +146,9 @@
 
     /**
      * Shows success feedback on the button.
+     *
      * @param {HTMLElement} button - The button element
+     * @returns {void}
      */
     function showSuccess(button) {
         const originalHTML = button.innerHTML;
@@ -117,8 +162,10 @@
 
     /**
      * Shows error feedback on the button.
+     *
      * @param {HTMLElement} button - The button element
      * @param {string} message - Error message to log
+     * @returns {void}
      */
     function showError(button, message) {
         console.error('Copy failed:', message);
@@ -131,8 +178,13 @@
         }, FEEDBACK_DURATION_MS);
     }
 
-    // Expose the copy function to window (called by plugin's onclick handler)
-    window.copyMarkdownToClipboard = function() {
+    /**
+     * Synchronous copy handler. Assigned to window.copyMarkdownToClipboard
+     * to override the plugin's broken async version.
+     *
+     * @returns {void}
+     */
+    function handleCopy() {
         const button = document.querySelector('#llms-copy-button button');
         if (!button) {
             console.warn('Copy button not found');
@@ -144,7 +196,6 @@
             return;
         }
 
-        // Synchronous copy - no async operations to preserve user gesture
         const success = copyToClipboard(cachedMarkdown);
 
         if (success) {
@@ -152,5 +203,30 @@
         } else {
             showError(button, 'Copy failed');
         }
-    };
+    }
+
+    /**
+     * Initializes the copy handler for the current page:
+     * - Restores button visibility (in case a prior page hid it)
+     * - Cancels any in-flight fetch and pre-fetches current page's markdown
+     * - Overrides the plugin's inline async function with our sync version
+     *
+     * @returns {void}
+     */
+    function initialize() {
+        showButton();
+        prefetchMarkdown();
+        window.copyMarkdownToClipboard = handleCopy;
+    }
+
+    // document$ is a ReplaySubject(1) — it emits the current document
+    // immediately on subscribe, so a single subscription handles both the
+    // initial page load and all subsequent instant navigations.
+    if (typeof document$ !== 'undefined') {
+        document$.subscribe(() => {
+            initialize();
+        });
+    } else {
+        initialize();
+    }
 })();
