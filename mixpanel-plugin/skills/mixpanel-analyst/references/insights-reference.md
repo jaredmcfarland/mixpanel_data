@@ -204,6 +204,25 @@ All filter methods accept `resource_type` keyword argument: `"events"` (default)
 Filter.equals("plan", "premium", resource_type="people")
 ```
 
+### Custom Property Filters
+
+All filter factory methods accept `CustomPropertyRef` or `InlineCustomProperty` in the `property` parameter:
+
+```python
+from mixpanel_data import CustomPropertyRef, InlineCustomProperty
+
+# Saved custom property
+Filter.greater_than(property=CustomPropertyRef(42), value=100)
+
+# Inline computed property
+Filter.between(
+    property=InlineCustomProperty.numeric("A * B", A="price", B="qty"),
+    value=[100, 1000],
+)
+```
+
+Custom property filters work in Insights `where=`. Funnel and retention `where=` filters may trigger a known server bug — use breakdowns instead.
+
 ### Combining Filters
 
 Pass a list to `where=` for AND logic (all must match):
@@ -275,6 +294,23 @@ ws.query("Purchase",
 ```python
 ws.query("Purchase", group_by=GroupBy("is_premium", property_type="boolean"))
 # Result: segments "true" and "false"
+```
+
+### Custom Property Breakdowns
+
+Pass a custom property to `GroupBy.property`. Bucketing works normally:
+
+```python
+from mixpanel_data import GroupBy, CustomPropertyRef, InlineCustomProperty
+
+# Saved custom property
+GroupBy(property=CustomPropertyRef(42), property_type="number", bucket_size=50)
+
+# Inline formula
+GroupBy(
+    property=InlineCustomProperty.numeric("A * B", A="price", B="quantity"),
+    property_type="number", bucket_size=100, bucket_min=0, bucket_max=1000,
+)
 ```
 
 ### Multiple Breakdowns
@@ -392,6 +428,23 @@ result = ws.query(
            percentile_value=95),
 )
 ```
+
+### Custom Property Measurement
+
+Use `Metric(property=...)` to aggregate a custom property:
+
+```python
+from mixpanel_data import Metric, CustomPropertyRef, InlineCustomProperty
+
+# Saved custom property
+Metric("Purchase", math="average", property=CustomPropertyRef(42))
+
+# Inline computed property
+Metric("Purchase", math="total",
+       property=InlineCustomProperty.numeric("A * B", A="price", B="quantity"))
+```
+
+**Important**: Top-level `math_property=` only accepts strings. Custom property measurement requires wrapping the event in a `Metric` object.
 
 ---
 
@@ -767,6 +820,12 @@ print(f"MoM change: {change:+.1f}%")
 | V24 | Bucket values must be finite (not NaN/Inf) | `V24_BUCKET_NOT_FINITE` |
 | V26 | `math="percentile"` requires `percentile_value` | `V26_PERCENTILE_REQUIRES_VALUE` |
 | V27 | `math="histogram"` requires `per_user` | `V27_HISTOGRAM_REQUIRES_PER_USER` |
+| CP1 | CustomPropertyRef ID must be positive | `CP1_INVALID_ID` |
+| CP2 | Inline formula must be non-empty | `CP2_EMPTY_FORMULA` |
+| CP3 | Inline must have at least one input | `CP3_EMPTY_INPUTS` |
+| CP4 | Input keys must be single A-Z | `CP4_INVALID_INPUT_KEY` |
+| CP5 | Formula max 20,000 chars | `CP5_FORMULA_TOO_LONG` |
+| CP6 | Input property name non-empty | `CP6_EMPTY_INPUT_NAME` |
 
 ### Layer 2: Bookmark Structure Validation (B-rules)
 

@@ -96,6 +96,15 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | "cohort size", "cohort growth" | "How is the power user cohort growing?" | `CohortMetric(...)` — Insights only |
 | "define cohort inline" | "Users who purchased 3+ times in 30 days" | `CohortDefinition.all_of(CohortCriteria.did_event(...))` |
 
+### Custom Property Signals (Cross-Engine)
+
+| Signal Pattern | Example Question | Capability |
+|---|---|---|
+| "custom property", "computed property" | "Break down by revenue per unit" | `GroupBy(property=InlineCustomProperty.numeric(...))` |
+| "saved custom property", "custom prop ID" | "Filter by our LTV custom property" | `Filter.*(property=CustomPropertyRef(ID))` |
+| "formula property", "calculated field" | "Average of price times quantity" | `Metric(property=InlineCustomProperty.numeric(...))` |
+| "list custom properties" | "What custom properties do we have?" | `ws.list_custom_properties()` |
+
 ### Discovery Signals (schema exploration)
 
 | Signal Pattern | Method |
@@ -514,3 +523,16 @@ Otherwise → query() (Insights)
 | 6 | Insights | `ws.query([Metric("Login", math="unique"), CohortMetric(ID, "Power Users")], formula="(B/A)*100")` | Cohort share trend |
 
 **Join strategy**: Segment-aligned — CohortBreakdown produces "in" vs "not in" segments across Insights, Funnels, and Retention. Flows uses Filter.in_cohort() since CohortBreakdown is not supported.
+
+### Pattern 12: Custom Property Analysis
+
+**Question**: "Analyze revenue per unit across segments"
+
+| Step | Engine | Query | Purpose |
+|------|--------|-------|---------|
+| 1 | Discovery | `ws.list_custom_properties()` | Find existing custom properties |
+| 2 | Insights | `ws.query("Purchase", group_by=GroupBy(property=InlineCustomProperty.numeric("A/B", A="revenue", B="units"), property_type="number", bucket_size=10))` | Distribution of computed metric |
+| 3 | Insights | `ws.query(Metric("Purchase", math="average", property=InlineCustomProperty.numeric("A/B", A="revenue", B="units")), group_by="country")` | Computed metric by segment |
+| 4 | Retention | `ws.query_retention("Purchase", "Purchase", group_by=GroupBy(property=CustomPropertyRef(42), property_type="number"))` | Repeat purchase by saved CP |
+
+**Join strategy**: Time-aligned — all queries share the same date range. Custom property breakdowns produce the same segment structure as regular GroupBy breakdowns.

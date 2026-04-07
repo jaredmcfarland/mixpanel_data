@@ -323,6 +323,24 @@ result = ws.query_funnel(
 
 See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full cohort filter reference.
 
+### Custom Property Filters
+
+Use saved or inline custom properties in funnel filters:
+
+```python
+from mixpanel_data import Filter, CustomPropertyRef
+
+result = ws.query_funnel(
+    ["Signup", "Purchase"],
+    where=Filter.greater_than(property=CustomPropertyRef(42), value=100),
+)
+```
+
+!!! warning
+    Custom property filters in funnel `where=` may cause server errors due to a known Mixpanel API bug. Custom property breakdowns and measurement work reliably.
+
+See [Insights Queries — Custom Properties in Queries](query.md#custom-properties-in-queries) for `InlineCustomProperty`, validation rules, and full options.
+
 ## Breakdowns
 
 Break down funnel results by property values with `group_by`:
@@ -358,6 +376,25 @@ result = ws.query_funnel(
 ```
 
 See [Insights Queries — Cohort Breakdowns](query.md#cohort-breakdowns) for inline definitions and options.
+
+### Custom Property Breakdowns
+
+Break down funnel results by a saved or inline custom property:
+
+```python
+from mixpanel_data import GroupBy, InlineCustomProperty
+
+result = ws.query_funnel(
+    ["Signup", "Purchase"],
+    group_by=GroupBy(
+        property=InlineCustomProperty.numeric("A * B", A="price", B="quantity"),
+        property_type="number",
+        bucket_size=50,
+    ),
+)
+```
+
+See [Insights Queries — Custom Properties in Queries](query.md#custom-properties-in-queries) for `CustomPropertyRef` and full options.
 
 See [Insights Queries — Breakdowns](query.md#breakdowns) for the full `GroupBy` reference.
 

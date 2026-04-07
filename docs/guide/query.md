@@ -809,6 +809,191 @@ result = ws.query(
 | **Cohort Breakdowns** (`group_by=`) | ✓ | ✓ | ✓ | — |
 | **Cohort Metrics** (`events=`) | ✓ | — | — | — |
 
+## Custom Properties in Queries
+
+Use saved custom properties or define computed properties inline — in breakdowns, filters, and metric measurement. Custom properties work everywhere a plain string property name does.
+
+To create and manage custom properties in Mixpanel, see [Data Governance — Custom Properties](data-governance.md#custom-properties).
+
+### Referencing a Saved Custom Property
+
+Use `CustomPropertyRef` to reference a custom property that already exists in your Mixpanel project by its numeric ID:
+
+```python
+from mixpanel_data import CustomPropertyRef, GroupBy, Filter, Metric
+
+ref = CustomPropertyRef(42)
+
+# Breakdown by saved custom property
+result = ws.query("Purchase", group_by=GroupBy(property=ref, property_type="number"))
+
+# Filter by saved custom property
+result = ws.query("Purchase", where=Filter.greater_than(property=ref, value=100))
+
+# Aggregate a saved custom property
+result = ws.query(Metric("Purchase", math="average", property=ref))
+```
+
+Find custom property IDs with `ws.list_custom_properties()` or `mp custom-properties list`.
+
+### Inline Custom Properties
+
+Use `InlineCustomProperty` to define a computed property at query time — no need to save it to your project first. Formulas reference raw properties through single-letter variables (A–Z), each mapped to a `PropertyInput`:
+
+```python
+from mixpanel_data import InlineCustomProperty, PropertyInput
+
+# Full constructor — explicit control over types
+revenue = InlineCustomProperty(
+    formula="A * B",
+    inputs={
+        "A": PropertyInput("price", type="number"),
+        "B": PropertyInput("quantity", type="number"),
+    },
+    property_type="number",
+)
+```
+
+For the common case of numeric formulas over event properties, use the `numeric()` convenience constructor:
+
+```python
+# Shorthand — auto-creates numeric PropertyInput objects
+revenue = InlineCustomProperty.numeric("A * B", A="price", B="quantity")
+```
+
+Both forms produce identical results. Use the full constructor when you need non-numeric types or user-profile properties (`resource_type="user"`).
+
+### Custom Property Breakdowns
+
+Pass a custom property to `GroupBy.property` for breakdowns. Numeric bucketing works the same as with regular properties:
+
+```python
+from mixpanel_data import GroupBy, CustomPropertyRef, InlineCustomProperty
+
+# Saved custom property with numeric buckets
+result = ws.query(
+    "Purchase",
+    group_by=GroupBy(
+        property=CustomPropertyRef(42),
+        property_type="number",
+        bucket_size=50,
+    ),
+)
+
+# Inline computed property
+result = ws.query(
+    "Purchase",
+    group_by=GroupBy(
+        property=InlineCustomProperty.numeric("A * B", A="price", B="quantity"),
+        property_type="number",
+        bucket_size=100,
+        bucket_min=0,
+        bucket_max=1000,
+    ),
+)
+
+# Mix with regular property breakdowns
+result = ws.query(
+    "Purchase",
+    group_by=["country", GroupBy(property=CustomPropertyRef(42), property_type="number")],
+)
+```
+
+### Custom Property Filters
+
+All 18 `Filter` factory methods accept custom properties in the `property` parameter:
+
+```python
+from mixpanel_data import Filter, CustomPropertyRef, InlineCustomProperty
+
+# Saved custom property
+result = ws.query(
+    "Purchase",
+    where=Filter.greater_than(property=CustomPropertyRef(42), value=100),
+)
+
+# Inline computed property
+result = ws.query(
+    "Purchase",
+    where=Filter.between(
+        property=InlineCustomProperty.numeric("A * B", A="price", B="quantity"),
+        value=[100, 1000],
+    ),
+)
+
+# Combine with regular filters
+result = ws.query(
+    "Purchase",
+    where=[
+        Filter.equals("country", "US"),
+        Filter.greater_than(property=CustomPropertyRef(42), value=50),
+    ],
+)
+```
+
+### Custom Property Measurement
+
+Aggregate a custom property as the metric value using `Metric(property=...)`:
+
+```python
+from mixpanel_data import Metric, CustomPropertyRef, InlineCustomProperty
+
+# Average of a saved custom property
+result = ws.query(
+    Metric("Purchase", math="average", property=CustomPropertyRef(42)),
+)
+
+# Sum of an inline computed property
+result = ws.query(
+    Metric("Purchase", math="total", property=InlineCustomProperty.numeric("A * B", A="price", B="quantity")),
+)
+
+# Per-metric custom properties in multi-metric queries
+result = ws.query([
+    Metric("Purchase", math="total", property=InlineCustomProperty.numeric("A * B", A="price", B="quantity")),
+    Metric("Purchase", math="unique"),
+])
+```
+
+!!! warning "Use `Metric(property=...)`, not `math_property=`"
+    The top-level `math_property` parameter only accepts plain string property names. To use a custom property for measurement, wrap the event in a `Metric` object and set `property=` on it.
+
+### Engine Compatibility
+
+| Capability | `query()` | `query_funnel()` | `query_retention()` | `query_flow()` |
+|---|:-:|:-:|:-:|:-:|
+| **CP Breakdowns** (`group_by=`) | ✓ | ✓ | ✓ | — |
+| **CP Filters** (`where=`) | ✓ | ⚠ | ⚠ | — |
+| **CP Measurement** (`Metric.property=`) | ✓ | — | — | — |
+
+⚠ = Supported, but a known Mixpanel server bug may cause errors when custom property filters are used in funnel and retention global `where=`. Custom property breakdowns and measurement work reliably in those engines.
+
+`query_flow()` does not support custom properties in any position (Mixpanel limitation).
+
+### Custom Property Validation
+
+Custom properties are validated **before** any API call. Invalid configurations raise `BookmarkValidationError`:
+
+| Rule | Error code | Error message |
+|---|---|---|
+| ID must be positive integer | `CP1_INVALID_ID` | custom property ID must be a positive integer (got {id}) |
+| Formula must be non-empty | `CP2_EMPTY_FORMULA` | inline custom property formula must be non-empty |
+| At least one input required | `CP3_EMPTY_INPUTS` | inline custom property must have at least one input |
+| Input keys must be single A–Z | `CP4_INVALID_INPUT_KEY` | input keys must be single uppercase letters (A-Z), got {key!r} |
+| Formula max 20,000 chars | `CP5_FORMULA_TOO_LONG` | formula exceeds maximum length of 20,000 characters (got {len}) |
+| Input property name non-empty | `CP6_EMPTY_INPUT_NAME` | input {key!r} has an empty property name |
+
+```python
+from mixpanel_data import BookmarkValidationError, CustomPropertyRef
+
+try:
+    ws.query("Purchase", group_by=GroupBy(property=CustomPropertyRef(0), property_type="number"))
+except BookmarkValidationError as e:
+    for error in e.errors:
+        print(f"[{error.code}] {error.path}: {error.message}")
+    # [CP1_INVALID_ID] group_by[0].property: custom property ID must be a positive integer (got 0)
+```
+
 ## Next Steps
 
 - [Funnel Queries](query-funnels.md) — Typed funnel conversion analysis
@@ -816,5 +1001,6 @@ result = ws.query(
 - [Flow Queries](query-flows.md) — Typed flow path analysis with steps, directions, and graph output
 - [Live Analytics](live-analytics.md) — Legacy query methods (segmentation, funnels, retention)
 - [Data Discovery](discovery.md) — Explore events and properties before querying
-- [API Reference — Workspace](../api/workspace.md) — Full method signature
-- [API Reference — Types](../api/types.md) — Metric, Filter, GroupBy, CohortBreakdown, CohortMetric, QueryResult details
+- [Data Governance — Custom Properties](data-governance.md#custom-properties) — Create and manage custom properties
+- [API Reference — Workspace](../api/workspace.md) — Full method signatures
+- [API Reference — Types](../api/types.md) — Metric, Filter, GroupBy, CustomPropertyRef, InlineCustomProperty, QueryResult details

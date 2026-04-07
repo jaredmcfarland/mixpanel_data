@@ -67,6 +67,8 @@ funnels = ws.funnels()                            # saved funnels
 cohorts = ws.cohorts()                            # saved cohorts
 # Cohort IDs work with Filter.in_cohort(), CohortBreakdown(), CohortMetric()
 bookmarks = ws.list_bookmarks()                   # saved reports
+custom_props = ws.list_custom_properties()        # saved custom properties (formula/behavior)
+# Custom property IDs work with CustomPropertyRef() in GroupBy, Filter, Metric
 
 # Lexicon definitions
 schemas = ws.lexicon_schemas()                    # all defined schemas

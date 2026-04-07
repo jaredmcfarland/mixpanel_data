@@ -15,10 +15,53 @@ from typing import Any
 from mixpanel_data._literal_types import QueryTimeUnit
 from mixpanel_data.types import (
     CohortBreakdown,
+    CustomPropertyRef,
     Filter,
     GroupBy,
+    InlineCustomProperty,
+    PropertyInput,
     _sanitize_raw_cohort,
 )
+
+
+def _build_composed_properties(
+    inputs: dict[str, PropertyInput],
+) -> dict[str, dict[str, str]]:
+    """Convert a PropertyInput mapping to bookmark composedProperties format.
+
+    Transforms the user-facing ``inputs`` dict (letter → PropertyInput)
+    into the JSON structure expected by Mixpanel's ``customProperty``
+    bookmark schema.
+
+    Args:
+        inputs: Mapping from single uppercase letters (A-Z) to
+            ``PropertyInput`` objects.
+
+    Returns:
+        Dict mapping each letter to a dict with ``value``, ``type``,
+        and ``resourceType`` keys.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.bookmark_builders import (
+            _build_composed_properties,
+        )
+        from mixpanel_data.types import PropertyInput
+
+        result = _build_composed_properties({
+            "A": PropertyInput("price", type="number"),
+        })
+        # {"A": {"value": "price", "type": "number", "resourceType": "event"}}
+        ```
+    """
+    return {
+        key: {
+            "value": prop.name,
+            "type": prop.type,
+            "resourceType": prop.resource_type,
+        }
+        for key, prop in inputs.items()
+    }
 
 
 def build_time_section(
@@ -150,6 +193,40 @@ def build_filter_section(
     return [build_filter_entry(f) for f in filters_list]
 
 
+def patch_custom_property_filters_for_transform(
+    filter_entries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Add ``value`` sentinel to custom property filters for server compat.
+
+    The server's ``transform_insights_filters_to_funnels()`` does a hard
+    ``f["value"]`` access on global ``sections.filter`` entries before
+    ``arb_selector`` processes them.  Custom property filters identify
+    the property via ``customPropertyId`` or ``customProperty`` instead
+    of ``value``, causing a ``KeyError`` and HTTP 500.
+
+    Injecting ``"value": None`` satisfies the hard access.  The
+    downstream ``arb_selector`` routes on ``is_custom_property()``, not
+    ``propertyName``, so the sentinel is harmless.
+
+    This must **not** be applied to per-step or per-metric filters —
+    the insights validator rejects ``value: None`` in those positions.
+
+    Args:
+        filter_entries: List of filter dicts from ``build_filter_section()``.
+
+    Returns:
+        The same list, mutated in-place, with ``"value": None`` added
+        to any entry that has ``customPropertyId`` or ``customProperty``
+        but no ``value`` key.
+    """
+    for entry in filter_entries:
+        if "value" not in entry and (
+            "customPropertyId" in entry or "customProperty" in entry
+        ):
+            entry["value"] = None
+    return filter_entries
+
+
 def build_group_section(
     group_by: str
     | GroupBy
@@ -203,13 +280,56 @@ def build_group_section(
                 }
             )
         elif isinstance(g, GroupBy):
-            group_entry: dict[str, Any] = {
-                "value": g.property,
-                "propertyName": g.property,
-                "resourceType": "events",
-                "propertyType": g.property_type,
-                "propertyDefaultType": g.property_type,
-            }
+            prop = g.property
+            if isinstance(prop, CustomPropertyRef):
+                group_entry: dict[str, Any] = {
+                    "customPropertyId": prop.id,
+                    "value": None,
+                    "resourceType": "events",
+                    "profileType": None,
+                    "search": "",
+                    "dataGroupId": None,
+                    "dataset": "$mixpanel",
+                    "propertyType": g.property_type,
+                    "typeCast": None,
+                    "unit": None,
+                    "isHidden": False,
+                }
+            elif isinstance(prop, InlineCustomProperty):
+                effective_type = (
+                    prop.property_type
+                    if prop.property_type is not None
+                    else g.property_type
+                )
+                composed = _build_composed_properties(prop.inputs)
+                group_entry = {
+                    "customProperty": {
+                        "displayFormula": prop.formula,
+                        "composedProperties": composed,
+                        "name": "",
+                        "description": "",
+                        "propertyType": effective_type,
+                        "resourceType": prop.resource_type,
+                    },
+                    "value": None,
+                    "resourceType": prop.resource_type,
+                    "profileType": None,
+                    "search": "",
+                    "dataGroupId": None,
+                    "dataset": "$mixpanel",
+                    "propertyType": effective_type,
+                    "typeCast": None,
+                    "unit": None,
+                    "isHidden": False,
+                }
+            else:
+                group_entry = {
+                    "value": prop,
+                    "propertyName": prop,
+                    "resourceType": "events",
+                    "propertyType": g.property_type,
+                    "propertyDefaultType": g.property_type,
+                }
             if g.bucket_size is not None:
                 group_entry["customBucket"] = {
                     "bucketSize": g.bucket_size,
@@ -298,7 +418,12 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
     Returns:
         Bookmark filter dict with keys: ``resourceType``, ``filterType``,
         ``defaultType``, ``value``, ``filterValue``, ``filterOperator``,
-        and optionally ``filterDateUnit``.
+        and optionally ``filterDateUnit``.  For ``CustomPropertyRef``
+        properties the dict also contains ``customPropertyId`` and
+        ``dataset``.  For ``InlineCustomProperty`` properties it contains
+        ``customProperty`` (nested definition) and ``dataset``, and the
+        ``filterType``/``defaultType`` are overridden from the inline
+        property's ``property_type``.
 
     Example:
         ```python
@@ -308,14 +433,35 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
         #  "filterValue": ["US"], "filterOperator": "equals"}
         ```
     """
+    prop = f._property
     entry: dict[str, Any] = {
         "resourceType": f._resource_type,
         "filterType": f._property_type,
         "defaultType": f._property_type,
-        "value": f._property,
         "filterValue": f._value,
         "filterOperator": f._operator,
     }
+    if isinstance(prop, CustomPropertyRef):
+        entry["customPropertyId"] = prop.id
+        entry["dataset"] = "$mixpanel"
+    elif isinstance(prop, InlineCustomProperty):
+        effective_type = (
+            prop.property_type if prop.property_type is not None else f._property_type
+        )
+        entry["customProperty"] = {
+            "displayFormula": prop.formula,
+            "composedProperties": _build_composed_properties(prop.inputs),
+            "name": "",
+            "description": "",
+            "propertyType": effective_type,
+            "resourceType": prop.resource_type,
+        }
+        entry["filterType"] = effective_type
+        entry["defaultType"] = effective_type
+        entry["dataset"] = "$mixpanel"
+        entry["resourceType"] = prop.resource_type
+    else:
+        entry["value"] = prop
     if f._date_unit is not None:
         entry["filterDateUnit"] = f._date_unit
     return entry

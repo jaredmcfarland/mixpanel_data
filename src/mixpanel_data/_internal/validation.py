@@ -52,15 +52,187 @@ from mixpanel_data.types import (
     CohortBreakdown,
     CohortDefinition,
     CohortMetric,
+    CustomPropertyRef,
     Exclusion,
+    Filter,
     Formula,
     FunnelStep,
     GroupBy,
     HoldingConstant,
+    InlineCustomProperty,
     MathType,
     Metric,
     PerUserAggregation,
 )
+
+_CP_INPUT_KEY_RE = re.compile(r"^[A-Z]$")
+_CP_MAX_FORMULA_LENGTH = 20_000
+
+
+def _validate_custom_property(
+    prop: CustomPropertyRef | InlineCustomProperty,
+    path: str,
+) -> list[ValidationError]:
+    """Validate a custom property specification (rules CP1-CP6).
+
+    Args:
+        prop: A ``CustomPropertyRef`` or ``InlineCustomProperty`` to validate.
+        path: JSONPath-like location for error reporting.
+
+    Returns:
+        List of validation errors. Empty list means the property is valid.
+
+    Raises:
+        This function does not raise exceptions. Validation failures are
+        returned as ``ValidationError`` objects in the result list.
+    """
+    errors: list[ValidationError] = []
+
+    if isinstance(prop, CustomPropertyRef):
+        # CP1: id must be a positive integer
+        if prop.id <= 0:
+            errors.append(
+                ValidationError(
+                    path=path,
+                    message=(
+                        f"custom property ID must be a positive integer (got {prop.id})"
+                    ),
+                    code="CP1_INVALID_ID",
+                )
+            )
+    elif isinstance(prop, InlineCustomProperty):
+        # CP2: formula must be non-empty
+        if not prop.formula.strip():
+            errors.append(
+                ValidationError(
+                    path=path,
+                    message="inline custom property formula must be non-empty",
+                    code="CP2_EMPTY_FORMULA",
+                )
+            )
+
+        # CP3: inputs must have at least one entry
+        if len(prop.inputs) == 0:
+            errors.append(
+                ValidationError(
+                    path=path,
+                    message=("inline custom property must have at least one input"),
+                    code="CP3_EMPTY_INPUTS",
+                )
+            )
+
+        # CP4: input keys must be single uppercase letters A-Z
+        for key in prop.inputs:
+            if not _CP_INPUT_KEY_RE.match(key):
+                errors.append(
+                    ValidationError(
+                        path=path,
+                        message=(
+                            f"inline custom property input keys must be "
+                            f"single uppercase letters (A-Z), got {key!r}"
+                        ),
+                        code="CP4_INVALID_INPUT_KEY",
+                    )
+                )
+
+        # CP5: formula must not exceed max length
+        if len(prop.formula) > _CP_MAX_FORMULA_LENGTH:
+            errors.append(
+                ValidationError(
+                    path=path,
+                    message=(
+                        f"inline custom property formula exceeds maximum "
+                        f"length of 20,000 characters (got {len(prop.formula)})"
+                    ),
+                    code="CP5_FORMULA_TOO_LONG",
+                )
+            )
+
+        # CP6: each PropertyInput.name must be non-empty
+        for key, pi in prop.inputs.items():
+            if not pi.name.strip():
+                errors.append(
+                    ValidationError(
+                        path=path,
+                        message=(
+                            f"inline custom property input {key!r} has an "
+                            f"empty property name"
+                        ),
+                        code="CP6_EMPTY_INPUT_NAME",
+                    )
+                )
+
+    return errors
+
+
+def _scan_custom_properties(
+    *,
+    group_by: str
+    | GroupBy
+    | CohortBreakdown
+    | list[str | GroupBy | CohortBreakdown]
+    | None = None,
+    where: Filter | list[Filter] | None = None,
+    events: Sequence[str | Metric | CohortMetric] | None = None,
+) -> list[ValidationError]:
+    """Scan group_by, where, and events for custom properties and validate.
+
+    Collects all ``CustomPropertyRef`` and ``InlineCustomProperty`` values
+    from the three positions (group_by, filter, measurement) and runs
+    ``_validate_custom_property()`` on each.
+
+    Note:
+        ``where`` filters are validated separately at the workspace level
+        (``workspace.py`` calls ``_scan_custom_properties(where=where)``)
+        because ``validate_query_args`` / ``validate_funnel_args`` /
+        ``validate_retention_args`` do not receive the ``where`` parameter.
+
+    Args:
+        group_by: Breakdown specification (may contain custom properties).
+        where: Filter specification (may contain custom properties).
+        events: Event specifications (Metric.property may contain
+            custom properties).
+
+    Returns:
+        List of validation errors. Empty list means all custom
+        properties are valid.
+    """
+    errors: list[ValidationError] = []
+
+    # Scan group_by
+    if group_by is not None:
+        groups = group_by if isinstance(group_by, list) else [group_by]
+        for i, g in enumerate(groups):
+            if isinstance(g, GroupBy) and isinstance(
+                g.property, (CustomPropertyRef, InlineCustomProperty)
+            ):
+                gpath = f"group_by[{i}]" if len(groups) > 1 else "group_by"
+                errors.extend(_validate_custom_property(g.property, gpath))
+
+    # Scan where (filters)
+    if where is not None:
+        filters = where if isinstance(where, list) else [where]
+        for i, f in enumerate(filters):
+            if isinstance(f._property, (CustomPropertyRef, InlineCustomProperty)):
+                fpath = f"where[{i}]" if len(filters) > 1 else "where"
+                errors.extend(_validate_custom_property(f._property, fpath))
+
+    # Scan events (Metric.property)
+    # TODO: Also scan Metric.filters and FunnelStep.filters for custom
+    # properties.  Currently only Metric.property is checked; custom
+    # properties inside per-metric or per-step filters bypass CP1-CP6
+    # validation (documented in tests/live/test_custom_property_queries_live.py
+    # TestValidationGaps).
+    if events is not None:
+        for idx, item in enumerate(events):
+            if isinstance(item, Metric) and isinstance(
+                item.property, (CustomPropertyRef, InlineCustomProperty)
+            ):
+                epath = f"events[{idx}]"
+                errors.extend(_validate_custom_property(item.property, epath))
+
+    return errors
+
 
 _SESSION_MATH: frozenset[str] = frozenset({"conversion_rate_session"})
 """Session-based math types requiring conversion_window_unit='session'."""
@@ -811,6 +983,9 @@ def validate_funnel_args(
     # F6: GroupBy validation (delegated)
     errors.extend(validate_group_by_args(group_by=group_by))
 
+    # CP1-CP6: Custom property validation
+    errors.extend(_scan_custom_properties(group_by=group_by))
+
     return errors
 
 
@@ -1098,6 +1273,9 @@ def validate_retention_args(
                     code="CB3_RETENTION_MIXED_BREAKDOWN",
                 )
             )
+
+    # CP1-CP6: Custom property validation
+    errors.extend(_scan_custom_properties(group_by=group_by))
 
     return errors
 
@@ -1773,6 +1951,15 @@ def validate_query_args(
     # V11-V12, V18, V24: GroupBy validation (delegated)
     errors.extend(validate_group_by_args(group_by=group_by))
 
+    # CP1-CP6: Custom property validation
+    errors.extend(
+        _scan_custom_properties(
+            group_by=group_by,
+            where=None,
+            events=events,
+        )
+    )
+
     # V13-V14: Per-Metric validation
     for idx, item in enumerate(events):
         if isinstance(item, Metric):
@@ -2378,12 +2565,22 @@ def _validate_filter_clause(
         )
         return errors
 
-    # B18: Must have property identification
-    if not clause.get("value") and not clause.get("propertyName"):
+    # B18: Must have property identification (value/propertyName or custom property)
+    has_property_id = (
+        clause.get("value")
+        or clause.get("propertyName")
+        or (clause.get("customPropertyId") is not None)
+        or (clause.get("customProperty") is not None)
+    )
+    if not has_property_id:
         errors.append(
             ValidationError(
                 path=path,
-                message="Filter missing property identifier ('value' or 'propertyName')",
+                message=(
+                    "Filter missing property identifier "
+                    "('value', 'propertyName', 'customPropertyId', "
+                    "or 'customProperty')"
+                ),
                 code="B18_MISSING_FILTER_PROPERTY",
             )
         )

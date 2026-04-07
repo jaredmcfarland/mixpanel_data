@@ -73,6 +73,25 @@ Types for cohort-scoped queries — filter by cohort, break down by cohort membe
       show_root_heading: true
       show_root_toc_entry: true
 
+## Custom Property Query Types
+
+Types for using saved or inline custom properties as property references in query breakdowns, filters, and metric measurement. See [Custom Properties in Queries](../guide/query.md#custom-properties-in-queries) for usage guide.
+
+::: mixpanel_data.CustomPropertyRef
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.InlineCustomProperty
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.PropertyInput
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Cohort Definition Types
 
 Types for building inline cohort definitions programmatically — used with `Filter.in_cohort()`, `CohortBreakdown`, and `CohortMetric`.

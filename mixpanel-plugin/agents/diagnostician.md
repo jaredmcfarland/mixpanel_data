@@ -96,6 +96,8 @@ Break down by 4-6 dimensions to find which segment drives the change. Run all qu
 from concurrent.futures import ThreadPoolExecutor
 
 dimensions = ["platform", "country", "utm_source", "browser", "device_type", "app_version"]
+# Also consider custom properties as segmentation dimensions:
+# GroupBy(property=CustomPropertyRef(ID), property_type="number") for saved CPs
 
 def query_segment(dim):
     return dim, ws.query("TARGET_EVENT", last=60, group_by=dim, unit="day").df

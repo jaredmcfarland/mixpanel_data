@@ -151,6 +151,7 @@ ws.lexicon_schema("event", "Purchase")         # → LexiconSchema (definitions,
 ```python
 from mixpanel_data import Metric, Filter, GroupBy, Formula
 from mixpanel_data import CohortBreakdown, CohortMetric, CohortDefinition, CohortCriteria
+from mixpanel_data import CustomPropertyRef, InlineCustomProperty
 
 result = ws.query(
     events,              # str | Metric | Formula | Sequence[str | Metric | Formula]
@@ -356,6 +357,10 @@ Filter.date_between("created", "2025-01-01", "2025-06-30")  # date range
 Filter.in_cohort(123, "Power Users")                 # users in saved cohort
 Filter.in_cohort(cohort_def, "Custom Segment")       # users matching inline definition
 Filter.not_in_cohort(123, "Churned Users")           # users NOT in cohort
+
+# Custom properties (saved or inline)
+Filter.greater_than(property=CustomPropertyRef(42), value=100)
+Filter.between(property=InlineCustomProperty.numeric("A*B", A="price", B="qty"), value=[10, 500])
 ```
 
 ### Streaming — Raw Data Access
@@ -505,6 +510,55 @@ result = ws.query("Login", group_by=CohortBreakdown(premium_active, "Premium Act
 ```
 
 **Note**: When using inline `CohortDefinition` with `CohortMetric`, always provide a descriptive `name` parameter — it is required for server-side label generation.
+
+## Custom Properties in Queries
+
+Use saved custom properties or define computed properties inline — in breakdowns, filters, and measurement. Custom properties work everywhere a plain string property name does.
+
+| Capability | Parameter | Engines | Type |
+|---|---|---|---|
+| **Breakdown by CP** | `group_by=` | Insights, Funnels, Retention | `GroupBy(property=...)` |
+| **Filter by CP** | `where=` | Insights, Funnels\*, Retention\* | `Filter.*(property=...)` |
+| **Measure a CP** | `Metric(property=...)` | Insights only | `Metric` |
+
+\*Known server bug may cause errors in funnel/retention `where=` filters. Breakdowns work reliably in all three engines. Flows do not support custom properties.
+
+### Saved Custom Properties
+
+Reference by ID (find IDs with `ws.list_custom_properties()`):
+
+```python
+from mixpanel_data import CustomPropertyRef, GroupBy, Filter, Metric
+
+ref = CustomPropertyRef(42)
+
+# Breakdown
+ws.query("Purchase", group_by=GroupBy(property=ref, property_type="number", bucket_size=50))
+
+# Filter
+ws.query("Purchase", where=Filter.greater_than(property=ref, value=100))
+
+# Measurement (insights only — must use Metric, not math_property)
+ws.query(Metric("Purchase", math="average", property=ref))
+```
+
+### Inline Custom Properties
+
+Define a computed property at query time — no need to save it first:
+
+```python
+from mixpanel_data import InlineCustomProperty
+
+# Convenience constructor for numeric formulas
+revenue = InlineCustomProperty.numeric("A * B", A="price", B="quantity")
+
+# Use anywhere a property name goes
+ws.query("Purchase", group_by=GroupBy(property=revenue, property_type="number", bucket_size=100))
+ws.query("Purchase", where=Filter.greater_than(property=revenue, value=1000))
+ws.query(Metric("Purchase", math="average", property=revenue))
+```
+
+**Note**: Top-level `math_property=` only accepts strings. Use `Metric(property=...)` for custom property measurement.
 
 ## How to Think About Analysis
 

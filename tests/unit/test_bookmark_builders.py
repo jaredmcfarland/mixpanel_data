@@ -8,6 +8,7 @@ date ranges, filter sections, group sections, and filter entries.
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -18,8 +19,16 @@ from mixpanel_data._internal.bookmark_builders import (
     build_filter_section,
     build_group_section,
     build_time_section,
+    patch_custom_property_filters_for_transform,
 )
-from mixpanel_data.types import CohortBreakdown, Filter, GroupBy
+from mixpanel_data.types import (
+    CohortBreakdown,
+    CustomPropertyRef,
+    Filter,
+    GroupBy,
+    InlineCustomProperty,
+    PropertyInput,
+)
 
 
 class TestBuildTimeSection:
@@ -327,3 +336,67 @@ class TestBuildFilterEntry:
         f = Filter.equals("plan", "premium", resource_type="people")
         entry = build_filter_entry(f)
         assert entry["resourceType"] == "people"
+
+    def test_custom_property_ref_omits_value(self) -> None:
+        """CustomPropertyRef filter does not include 'value' by default."""
+        ref = CustomPropertyRef(90553)
+        f = Filter.is_set(ref)
+        entry = build_filter_entry(f)
+        assert entry["customPropertyId"] == 90553
+        assert "value" not in entry
+        assert entry["dataset"] == "$mixpanel"
+
+    def test_inline_custom_property_omits_value(self) -> None:
+        """InlineCustomProperty filter does not include 'value' by default."""
+        icp = InlineCustomProperty(
+            formula="A",
+            inputs={"A": PropertyInput(name="price", type="number")},
+            property_type="number",
+        )
+        f = Filter.greater_than(icp, 1000)
+        entry = build_filter_entry(f)
+        assert "customProperty" in entry
+        assert "value" not in entry
+        assert entry["dataset"] == "$mixpanel"
+
+
+class TestPatchCustomPropertyFiltersForTransform:
+    """Tests for the server-compat sentinel injection.
+
+    The server's ``transform_insights_filters_to_funnels()`` crashes
+    with ``KeyError`` on custom property filters that lack ``"value"``.
+    ``patch_custom_property_filters_for_transform()`` adds
+    ``"value": None`` so the transform survives.
+    """
+
+    def test_adds_value_to_custom_property_ref(self) -> None:
+        """Adds 'value': None for customPropertyId entries."""
+        entries = [{"customPropertyId": 90553, "filterOperator": "is set"}]
+        result = patch_custom_property_filters_for_transform(entries)
+        assert result[0]["value"] is None
+
+    def test_adds_value_to_inline_custom_property(self) -> None:
+        """Adds 'value': None for customProperty entries."""
+        entries = [{"customProperty": {"formula": "A"}, "filterOperator": ">"}]
+        result = patch_custom_property_filters_for_transform(entries)
+        assert result[0]["value"] is None
+
+    def test_does_not_overwrite_existing_value(self) -> None:
+        """Does not touch entries that already have 'value'."""
+        entries = [{"value": "country", "filterOperator": "equals"}]
+        patch_custom_property_filters_for_transform(entries)
+        assert entries[0]["value"] == "country"
+
+    def test_leaves_regular_filters_alone(self) -> None:
+        """Regular property filters (with 'value') are untouched."""
+        entries: list[dict[str, Any]] = [
+            {"value": "country", "filterOperator": "equals"},
+            {"customPropertyId": 42, "filterOperator": "is set"},
+        ]
+        patch_custom_property_filters_for_transform(entries)
+        assert entries[0]["value"] == "country"
+        assert entries[1]["value"] is None
+
+    def test_empty_list(self) -> None:
+        """Empty list returns empty list."""
+        assert patch_custom_property_filters_for_transform([]) == []

@@ -554,6 +554,39 @@ class TestValidateBookmarkLayer2:
         errors = validate_bookmark(bm)
         assert any(e.code == "B18_MISSING_FILTER_PROPERTY" for e in errors)
 
+    def test_b18_custom_property_id_passes(self) -> None:
+        """B18: Filter with customPropertyId passes validation."""
+        bm = _minimal_bookmark()
+        bm["sections"]["filter"] = [
+            {
+                "filterType": "string",
+                "filterOperator": "equals",
+                "filterValue": ["US"],
+                "customPropertyId": 42,
+                "resourceType": "events",
+            }
+        ]
+        errors = validate_bookmark(bm)
+        assert not any(e.code == "B18_MISSING_FILTER_PROPERTY" for e in errors)
+
+    def test_b18_custom_property_dict_passes(self) -> None:
+        """B18: Filter with customProperty dict passes validation."""
+        bm = _minimal_bookmark()
+        bm["sections"]["filter"] = [
+            {
+                "filterType": "string",
+                "filterOperator": "equals",
+                "filterValue": ["US"],
+                "customProperty": {
+                    "displayFormula": "A",
+                    "composedProperties": {},
+                },
+                "resourceType": "events",
+            }
+        ]
+        errors = validate_bookmark(bm)
+        assert not any(e.code == "B18_MISSING_FILTER_PROPERTY" for e in errors)
+
     def test_formula_show_clause_valid(self) -> None:
         """Formula show clauses are accepted."""
         bm = _minimal_bookmark()

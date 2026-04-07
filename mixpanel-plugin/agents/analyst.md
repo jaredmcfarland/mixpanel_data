@@ -114,6 +114,7 @@ For complex questions requiring multiple engines, decompose into a plan:
 import mixpanel_data as mp
 from mixpanel_data import Metric, Filter, GroupBy, Formula
 from mixpanel_data import CohortBreakdown, CohortMetric
+from mixpanel_data import CustomPropertyRef, InlineCustomProperty
 from mixpanel_data import FunnelStep, RetentionEvent, FlowStep
 import pandas as pd
 
