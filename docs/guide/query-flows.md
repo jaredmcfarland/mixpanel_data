@@ -431,6 +431,37 @@ for u, v, data in sorted(g.edges(data=True), key=lambda x: x[2]["count"], revers
 
 Nodes are keyed as `"{event}@{step}"` with attributes `count`, `type`, and `step`. Edges have a `count` attribute.
 
+#### What the graph unlocks
+
+The DiGraph turns flow data into a structure that algorithms can reason about — answering questions no dashboard can:
+
+```python
+import networkx as nx
+
+g = result.graph
+
+# "What's the shortest path from Signup to Purchase?"
+path = nx.shortest_path(g, "Signup@0", "Purchase@3")
+# → ["Signup@0", "Browse@1", "Add to Cart@2", "Purchase@3"]
+
+# "Which event is the biggest bottleneck — the one most paths must pass through?"
+betweenness = nx.betweenness_centrality(g, weight="count")
+bottleneck = max(betweenness, key=betweenness.get)
+
+# "Are users looping back?"
+cycles = list(nx.simple_cycles(g))
+
+# "What fraction of Add to Cart users actually Purchase?"
+cart_out = sum(d["count"] for _, _, d in g.out_edges("Add to Cart@2", data=True))
+to_purchase = g.edges["Add to Cart@2", "Purchase@3"]["count"]
+micro_conversion = to_purchase / cart_out
+
+# "Which events are dead ends — reachable but leading nowhere?"
+dead_ends = [n for n in g.nodes() if g.out_degree(n) == 0 and g.in_degree(n) > 0]
+```
+
+Every graph theory algorithm in NetworkX — shortest paths, centrality, community detection, cycle detection, max-flow — works out of the box on flow data. This is particularly powerful for AI agents: they can programmatically explore path structure, identify optimization opportunities, and quantify the impact of removing or adding steps, without any visualization required.
+
 ### Tree Mode Results
 
 When `mode="tree"`, results include `FlowTreeNode` objects:
@@ -467,6 +498,68 @@ for tree in result.trees:
 | `conversion_rate` | `float` | Property: `converted_count / total_count` |
 | `depth` | `int` | Property: maximum depth of subtree |
 | `node_count` | `int` | Property: total nodes in subtree |
+
+`FlowTreeNode` methods:
+
+| Method | Returns | Description |
+|---|---|---|
+| `all_paths()` | `list[list[FlowTreeNode]]` | All root-to-leaf paths through the subtree |
+| `flatten()` | `list[FlowTreeNode]` | Preorder traversal of all nodes |
+| `find(event)` | `list[FlowTreeNode]` | All nodes matching an event name |
+| `render()` | `str` | Box-drawing ASCII visualization |
+| `to_dict()` | `dict` | JSON-serializable recursive dictionary |
+| `to_anytree()` | `AnyNode` | Convert to [`anytree`](https://anytree.readthedocs.io/) node for rendering and export |
+
+#### What the tree unlocks
+
+Tree mode gives each node its own `total_count`, `converted_count`, and `drop_off_count` — the full decision tree at every branching point. This lets you answer questions about *where exactly* users diverge:
+
+```python
+result = ws.query_flow("Signup", mode="tree", forward=4)
+
+for tree in result.trees:
+    # "At each step, what percentage of users take each branch?"
+    for node in tree.flatten():
+        if node.children:
+            print(f"\nAfter {node.event} ({node.total_count} users):")
+            for child in sorted(
+                node.children, key=lambda c: c.total_count, reverse=True
+            ):
+                pct = child.total_count / node.total_count * 100
+                print(f"  → {child.event}: {pct:.0f}% ({child.total_count})")
+
+    # "What's the highest-converting complete path?"
+    best_path = max(tree.all_paths(), key=lambda p: p[-1].converted_count)
+    print(" → ".join(f"{n.event}({n.conversion_rate:.0%})" for n in best_path))
+
+    # "Where is the single biggest drop-off?"
+    worst = max(tree.flatten(), key=lambda n: n.drop_off_count)
+    print(f"Biggest drop-off: {worst.event} — {worst.drop_off_count} users lost")
+
+    # Render the full decision tree as ASCII
+    print(tree.render())
+    # Purchase (5000)
+    # ├── View Receipt (3200)
+    # │   ├── Rate App (1100)
+    # │   └── Browse More (2100)
+    # └── Contact Support (800)
+    #     └── ⊘ Drop-off (800)
+```
+
+The tree is uniquely suited to *branching analysis* — understanding not just the top path, but what fraction of users chose each alternative at every fork.
+
+#### anytree Integration
+
+Convert tree results to [`anytree`](https://anytree.readthedocs.io/) nodes for advanced rendering, Graphviz export, and traversal:
+
+```python
+from anytree import RenderTree
+
+result = ws.query_flow("Purchase", mode="tree")
+for root in result.anytree:
+    for pre, fill, node in RenderTree(root):
+        print(f"{pre}{node.event} ({node.total_count})")
+```
 
 ### Persisting as a Saved Report
 
