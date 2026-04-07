@@ -215,10 +215,12 @@ def _scan_custom_properties(
     and runs ``_validate_custom_property()`` on each.
 
     Note:
-        ``where`` filters are validated separately at the workspace level
-        (``workspace.py`` calls ``_scan_custom_properties(where=where)``)
+        ``where`` filters and some step/event filters are scanned from
+        ``workspace.py`` rather than from the standalone validators
         because ``validate_query_args`` / ``validate_funnel_args`` /
-        ``validate_retention_args`` do not receive the ``where`` parameter.
+        ``validate_retention_args`` do not receive the ``where`` parameter
+        or the full step/event objects.  Flow step filters and retention
+        event filters are scanned from ``workspace.py`` for the same reason.
 
     Args:
         group_by: Breakdown specification (may contain custom properties).
@@ -259,16 +261,17 @@ def _scan_custom_properties(
     # Scan events (Metric.property AND Metric.filters)
     if events is not None:
         for idx, item in enumerate(events):
-            if isinstance(item, Metric) and isinstance(
-                item.property, (CustomPropertyRef, InlineCustomProperty)
-            ):
-                errors.extend(
-                    _validate_custom_property(item.property, f"events[{idx}]")
-                )
-            if isinstance(item, Metric) and item.filters:
-                errors.extend(
-                    _scan_filters_for_custom_properties(item.filters, f"events[{idx}]")
-                )
+            if isinstance(item, Metric):
+                if isinstance(item.property, (CustomPropertyRef, InlineCustomProperty)):
+                    errors.extend(
+                        _validate_custom_property(item.property, f"events[{idx}]")
+                    )
+                if item.filters:
+                    errors.extend(
+                        _scan_filters_for_custom_properties(
+                            item.filters, f"events[{idx}]"
+                        )
+                    )
 
     # Scan funnel steps (FunnelStep.filters)
     if funnel_steps is not None:
@@ -287,6 +290,7 @@ def _scan_custom_properties(
                 )
 
     # Scan retention events (RetentionEvent.filters)
+    # retention_events is always [born_event, return_event] — see workspace.py
     if retention_events is not None:
         for idx, rev in enumerate(retention_events):
             if rev.filters:
@@ -2648,7 +2652,7 @@ def _validate_filter_clause(
             )
         )
 
-    # B18b: customPropertyId must be a positive integer (defense-in-depth)
+    # B18B: customPropertyId must be a positive integer (defense-in-depth)
     cp_id = clause.get("customPropertyId")
     if cp_id is not None and (
         isinstance(cp_id, bool) or not isinstance(cp_id, int) or cp_id <= 0
@@ -2747,7 +2751,7 @@ def _validate_filter_clause(
             )
         )
 
-    # B20b: Numeric filter values must be finite (not NaN/Inf)
+    # B20B: Numeric filter values must be finite (not NaN/Inf)
     if isinstance(fv, float) and not _is_finite(fv):
         errors.append(
             ValidationError(

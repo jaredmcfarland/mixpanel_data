@@ -37,7 +37,7 @@ from mixpanel_data.types import (
 )
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures (local — matches existing codebase convention)
 # ---------------------------------------------------------------------------
 
 
@@ -331,10 +331,12 @@ class TestVector7FormulaShowClauseFixed:
     full behavior validation instead of being silently skipped.
     """
 
-    def test_pure_formula_clause_still_passes(self, ws: Workspace) -> None:
-        """A pure formula clause (no behavior) still gets the fast path."""
+    def test_hybrid_formula_behavior_clause_still_validates(
+        self, ws: Workspace
+    ) -> None:
+        """A hybrid clause (formula + behavior) still validates the behavior."""
         params = ws.build_params("AnyEvent", last=7)
-        # Inject formula key into a valid show clause
+        # Inject formula key into a valid show clause — creates hybrid
         params["sections"]["show"][0]["formula"] = ""
 
         errors = validate_bookmark(params)
@@ -352,9 +354,11 @@ class TestVector7FormulaShowClauseFixed:
         params["sections"]["show"][0]["formula"] = ""
 
         errors = validate_bookmark(params)
-        # B7 (invalid type) IS now reported
-        assert any("B7" in e.code for e in errors), (
-            "B7 should fire even when formula key is present"
+        # B7 (invalid type) IS now reported as a warning
+        b7_errors = [e for e in errors if "B7" in e.code]
+        assert len(b7_errors) > 0, "B7 should fire even when formula key is present"
+        assert all(e.severity == "warning" for e in b7_errors), (
+            "B7 is intentionally severity='warning' (forward compatibility)"
         )
 
 
