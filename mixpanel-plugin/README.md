@@ -1,35 +1,8 @@
-# mixpanel-data — CodeMode Analyst Plugin (v3.0.0)
+# mixpanel-data — CodeMode Analyst Plugin
 
-Turn Claude into a senior data analyst and Mixpanel product analytics expert. Instead of calling CLI commands or MCP tools, Claude writes Python code using `mixpanel_data`'s four typed query engines plus `pandas`, `networkx`, and `anytree` for sophisticated multi-engine analysis.
+Turn Claude into a senior data analyst and Mixpanel product analytics expert. Instead of calling CLI commands or MCP tools, Claude writes Python code using `mixpanel_data`'s four typed query engines plus `pandas`, `networkx`, and `anytree` for sophisticated multi-engine analysis. Ask questions in natural language — Claude autonomously writes and executes Python to answer them.
 
-## Query Taxonomy
-
-| Engine | Method | Core Question | Result Type |
-|--------|--------|---------------|-------------|
-| Insights | `ws.query()` | How much? How many? | `QueryResult` |
-| Funnels | `ws.query_funnel()` | Do users convert through a sequence? | `FunnelQueryResult` |
-| Retention | `ws.query_retention()` | Do users come back? | `RetentionQueryResult` |
-| Flows | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
-
-## Components
-
-| Type | Name | Invocation |
-|------|------|------------|
-| Command | auth | `/mp-auth` |
-| Skill | setup | `/mixpanel-data:setup` |
-| Skill | mixpanel-analyst | Auto-triggered on analytics questions |
-| Agent | analyst | Task tool — orchestrator |
-| Agent | explorer | Task tool — schema discovery |
-| Agent | diagnostician | Task tool — root cause |
-| Agent | synthesizer | Task tool — cross-query analysis |
-| Agent | narrator | Task tool — executive reports |
-| Script | help.py | API doc lookup |
-| Script | auth_manager.py | Auth management |
-| Script | validate_bookmark.py | Bookmark validation |
-
-## Usage
-
-### Quick Start
+## Quick Start
 
 ```
 1. /mixpanel-data:setup              # Install deps, verify auth
@@ -38,6 +11,17 @@ Turn Claude into a senior data analyst and Mixpanel product analytics expert. In
 4. "Do users retain after onboarding?"# Retention curve
 5. "What do users do after signup?"   # Flow analysis
 ```
+
+## Query Engines
+
+| Engine | Method | Core Question | Result Type |
+|--------|--------|---------------|-------------|
+| Insights | `ws.query()` | How much? How many? | `QueryResult` |
+| Funnels | `ws.query_funnel()` | Do users convert through a sequence? | `FunnelQueryResult` |
+| Retention | `ws.query_retention()` | Do users come back? | `RetentionQueryResult` |
+| Flows | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
+
+When you ask a question, Claude writes Python using the appropriate engine:
 
 ### Insights (trending metrics)
 
@@ -84,9 +68,17 @@ for tree in result.trees:
     print(tree.render())           # ASCII visualization
 ```
 
-## Agent Usage
+## Agents
 
-For complex investigations, Claude dispatches specialized agents via the Task tool:
+The plugin uses a specialist agent hierarchy. The **analyst** is the general-purpose entry point — it handles simple queries directly and delegates complex investigations to the appropriate specialist based on question type.
+
+| Agent | Role | When to use |
+|-------|------|-------------|
+| **analyst** | Orchestrator | General analytics, dashboards, entity management, multi-metric queries |
+| **explorer** | Schema discovery + GQM | Vague or open-ended questions, data landscape mapping, "what data do we have?" |
+| **diagnostician** | Root cause analysis | "Why did X drop/spike?", metric changes, 8-step cross-engine investigation |
+| **synthesizer** | Cross-engine analysis | Multi-engine joins, graph algorithms (NetworkX), statistical testing (scipy) |
+| **narrator** | Executive reporting | Stakeholder reports, executive summaries, audience-tailored narratives |
 
 ```
 Task(subagent_type="mixpanel-data:analyst", prompt="...")
@@ -96,36 +88,65 @@ Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
 Task(subagent_type="mixpanel-data:narrator", prompt="...")
 ```
 
-- **analyst** — General-purpose orchestrator; routes queries, coordinates investigations
-- **explorer** — Schema discovery, GQM decomposition, investigation planning
-- **diagnostician** — Root cause analysis using all 4 query engines
-- **synthesizer** — Cross-query analysis with pandas, networkx, anytree, scipy
-- **narrator** — Executive summaries and stakeholder reports
+## Components
 
-## Reference Files
+| Type | Name | Invocation |
+|------|------|------------|
+| Command | auth | `/mp-auth` — manage credentials, accounts, OAuth |
+| Skill | setup | `/mixpanel-data:setup` — install deps, verify auth |
+| Skill | mixpanel-analyst | Auto-triggered on analytics questions |
+
+| Script | Purpose |
+|--------|---------|
+| `help.py` | Live API documentation lookup from library docstrings |
+| `auth_manager.py` | Programmatic auth status and credential management (JSON output) |
+| `validate_bookmark.py` | Validate bookmark params JSON against canonical schema |
+
+## Authentication
+
+Two auth methods: service account (Basic Auth) or OAuth 2.0 PKCE. Run `/mixpanel-data:setup` for first-time configuration, or `/mp-auth` to manage credentials after initial setup.
+
+## Reference Library
+
+### Engine References
 
 | File | Content |
 |------|---------|
-| `query-taxonomy.md` | NL-to-engine routing, decomposition patterns, join strategies |
 | `insights-reference.md` | Deep insights API: MathTypes, filters, formulas, patterns |
 | `funnels-reference.md` | Deep funnels API: steps, exclusions, conversion windows |
 | `retention-reference.md` | Deep retention API: cohorts, buckets, alignment modes |
 | `flows-reference.md` | Deep flows API: NetworkX graph, anytree, tree traversal |
-| `cross-query-synthesis.md` | Multi-engine join strategies, 10 investigation templates |
+
+### Analysis & Methodology
+
+| File | Content |
+|------|---------|
+| `query-taxonomy.md` | NL-to-engine routing, decomposition patterns, join strategies |
+| `cross-query-synthesis.md` | Multi-engine join strategies, 11 investigation templates |
 | `advanced-analysis.md` | Statistical methods, graph algorithms, visualization |
 | `analytical-frameworks.md` | AARRR, GQM, North Star, diagnosis methodology |
+
+### API & Schema
+
+| File | Content |
+|------|---------|
 | `python-api.md` | Complete method signatures for all Workspace methods |
 | `bookmark-params.md` | Bookmark params JSON for entity management |
 
 ## Installation
 
 ```bash
-# Option 1: Add as a local dev marketplace
+# Add the plugin marketplace
 /plugin marketplace add /path/to/mixpanel_data/mixpanel-plugin
-/plugin install mixpanel-data@mixpanel-data
 
-# Option 2: Symlink into plugins directory
-ln -s /path/to/mixpanel_data/mixpanel-plugin ~/.claude/plugins/mixpanel-data
+# Install the plugin
+/plugin install mixpanel-data@mixpanel-data
+```
+
+For local plugin development, point the marketplace directly at your working copy:
+
+```bash
+/plugin marketplace add /path/to/mixpanel_data/mixpanel-plugin
 ```
 
 Then restart Claude Code.
@@ -141,7 +162,7 @@ Then restart Claude Code.
 ```
 mixpanel-plugin/
 ├── .claude-plugin/
-│   └── plugin.json                     # Plugin manifest (v3.0.0)
+│   └── plugin.json                     # Plugin manifest
 ├── skills/
 │   ├── setup/
 │   │   ├── SKILL.md                    # /mixpanel-data:setup
@@ -154,7 +175,8 @@ mixpanel-plugin/
 │       │   ├── auth_manager.py         # Auth status and management
 │       │   ├── validate_bookmark.py    # Bookmark params validation
 │       │   └── schemas/
-│       │       └── bookmark.json       # Canonical JSON schema
+│       │       ├── bookmark.json       # Canonical JSON schema
+│       │       └── README.md           # Schema provenance
 │       └── references/
 │           ├── query-taxonomy.md       # Query routing + decomposition
 │           ├── insights-reference.md   # Deep insights API
@@ -176,6 +198,11 @@ mixpanel-plugin/
 │   └── auth.md                         # /mp-auth command
 └── README.md
 ```
+
+## Links
+
+- [Library documentation](https://jaredmcfarland.github.io/mixpanel_data/)
+- [Source repository](https://github.com/jaredmcfarland/mixpanel_data)
 
 ## License
 
