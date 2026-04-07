@@ -26,52 +26,24 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypedDict, TypeVar
 
-from mixpanel_data._literal_types import (
-    ConversionWindowUnit as ConversionWindowUnit,
-)
-from mixpanel_data._literal_types import (
-    FilterDateUnit as FilterDateUnit,
-)
-from mixpanel_data._literal_types import (
-    FilterPropertyType as FilterPropertyType,
-)
-from mixpanel_data._literal_types import (
-    FiltersCombinator as FiltersCombinator,
-)
+from mixpanel_data._literal_types import ConversionWindowUnit as ConversionWindowUnit
+from mixpanel_data._literal_types import FilterDateUnit as FilterDateUnit
+from mixpanel_data._literal_types import FilterPropertyType as FilterPropertyType
+from mixpanel_data._literal_types import FiltersCombinator as FiltersCombinator
 from mixpanel_data._literal_types import FlowAnchorType, FlowNodeType
-from mixpanel_data._literal_types import (
-    FlowChartType as FlowChartType,
-)
+from mixpanel_data._literal_types import FlowChartType as FlowChartType
 from mixpanel_data._literal_types import (
     FlowConversionWindowUnit as FlowConversionWindowUnit,
 )
-from mixpanel_data._literal_types import (
-    FunnelMathType as FunnelMathType,
-)
-from mixpanel_data._literal_types import (
-    FunnelMode as FunnelMode,
-)
-from mixpanel_data._literal_types import (
-    FunnelOrder as FunnelOrder,
-)
-from mixpanel_data._literal_types import (
-    InsightsMode as InsightsMode,
-)
-from mixpanel_data._literal_types import (
-    MathType as MathType,
-)
-from mixpanel_data._literal_types import (
-    PerUserAggregation as PerUserAggregation,
-)
-from mixpanel_data._literal_types import (
-    RetentionAlignment as RetentionAlignment,
-)
-from mixpanel_data._literal_types import (
-    RetentionMathType as RetentionMathType,
-)
-from mixpanel_data._literal_types import (
-    RetentionMode as RetentionMode,
-)
+from mixpanel_data._literal_types import FunnelMathType as FunnelMathType
+from mixpanel_data._literal_types import FunnelMode as FunnelMode
+from mixpanel_data._literal_types import FunnelOrder as FunnelOrder
+from mixpanel_data._literal_types import InsightsMode as InsightsMode
+from mixpanel_data._literal_types import MathType as MathType
+from mixpanel_data._literal_types import PerUserAggregation as PerUserAggregation
+from mixpanel_data._literal_types import RetentionAlignment as RetentionAlignment
+from mixpanel_data._literal_types import RetentionMathType as RetentionMathType
+from mixpanel_data._literal_types import RetentionMode as RetentionMode
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -9047,7 +9019,7 @@ class FunnelStep:
     filters_combinator: FiltersCombinator = "all"
     """How per-step filters combine (AND/OR)."""
 
-    order: Literal["loose", "any"] | None = None
+    order: FunnelOrder | None = None
     """Per-step ordering override (only meaningful with top-level order='any')."""
 
     def __post_init__(self) -> None:
