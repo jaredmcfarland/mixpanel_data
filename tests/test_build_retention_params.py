@@ -117,6 +117,27 @@ class TestBuildRetentionParamsDefaults:
         result = ws.build_retention_params("Signup", "Login")
         assert result["displayOptions"]["chartType"] == "retention-curve"
 
+    def test_sorting_object_present(self, ws: Workspace) -> None:
+        """Verify sorting object is included with expected chart-type keys.
+
+        The Mixpanel UI requires a sorting object to render retention
+        reports on dashboards without crashing.
+        """
+        result = ws.build_retention_params("Signup", "Login")
+        sorting = result["sorting"]
+        assert "bar" in sorting
+        assert "line" in sorting
+        assert "table" in sorting
+        assert sorting["bar"]["sortBy"] == "column"
+
+    def test_column_widths_present(self, ws: Workspace) -> None:
+        """Verify columnWidths object is included.
+
+        Required by the Mixpanel UI for dashboard rendering.
+        """
+        result = ws.build_retention_params("Signup", "Login")
+        assert result["columnWidths"] == {"bar": {}}
+
     def test_custom_bucket_sizes_defaults_to_empty_list(self, ws: Workspace) -> None:
         """Verify retentionCustomBucketSizes defaults to empty list."""
         result = ws.build_retention_params("Signup", "Login")
