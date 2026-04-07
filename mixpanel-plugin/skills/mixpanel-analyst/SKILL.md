@@ -12,7 +12,7 @@ Analyze the user's Mixpanel data by **writing and executing Python code** that u
 
 Write Python code. Never teach CLI commands. Never call MCP tools.
 
-- **Quick lookups** → `uv run python -c "..."` one-liners
+- **Quick lookups** → `python3 -c "..."` one-liners (or `uv run python -c` if uv is available)
 - **Multi-step analysis** → write and execute `.py` files
 - **Data manipulation** → pandas DataFrames (every result type has a `.df` property)
 - **Graph analysis** → networkx on flow data (`.graph` property)
@@ -335,9 +335,7 @@ Filter.not_contains("page", "admin")
 # Numeric
 Filter.greater_than("revenue", 100)
 Filter.less_than("age", 18)
-Filter.greater_than_or_equal("score", 80)
-Filter.less_than_or_equal("attempts", 3)
-Filter.between("age", 18, 65)
+Filter.between("age", 18, 65)              # inclusive range
 
 # Existence & Boolean
 Filter.is_set("email")

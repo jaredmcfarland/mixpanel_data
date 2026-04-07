@@ -76,19 +76,19 @@ schema = ws.lexicon_schema("event", "Purchase")   # definition + tags for one ev
 
 ```python
 # Property distribution — what values does a property take?
-dist = ws.property_distribution("Purchase", "category", limit=20)
+dist = ws.property_distribution("Purchase", "category", from_date="2025-01-01", to_date="2025-03-31", limit=20)
 
 # Numeric summary — min, max, mean, median, percentiles
-summary = ws.numeric_summary("Purchase", "amount")
+summary = ws.numeric_summary("Purchase", "amount", from_date="2025-01-01", to_date="2025-03-31")
 
 # Daily event counts
-counts = ws.daily_counts("Login", "2025-01-01", "2025-03-31")
+counts = ws.daily_counts(from_date="2025-01-01", to_date="2025-03-31", events=["Login"])
 
 # Engagement distribution — how many times per user?
-engagement = ws.engagement_distribution("Feature Used", "2025-01-01", "2025-03-31")
+engagement = ws.engagement_distribution(from_date="2025-01-01", to_date="2025-03-31")
 
 # Property coverage — what % of events have this property set?
-coverage = ws.property_coverage("Purchase", "utm_source", "2025-01-01", "2025-03-31")
+coverage = ws.property_coverage("Purchase", properties=["utm_source"], from_date="2025-01-01", to_date="2025-03-31")
 ```
 
 ### Lexicon Integration

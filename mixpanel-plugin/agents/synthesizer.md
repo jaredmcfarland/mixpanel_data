@@ -99,21 +99,18 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 Merge results from different engines on shared keys:
 
 ```python
-# Merge Insights trend with Funnel conversion trend
+# Insights trend DataFrame has date + count columns
 insights_df = results["insights"].df.rename(columns={"count": "revenue"})
-funnel_df = results["funnel"].df
-
-# Align on date
 insights_df["date"] = pd.to_datetime(insights_df["date"])
-funnel_df["date"] = pd.to_datetime(funnel_df["date"])
 
-merged = pd.merge(
-    insights_df.groupby("date")["revenue"].sum().reset_index(),
-    funnel_df.groupby("date")["overall_conv_ratio"].mean().reset_index(),
-    on="date", how="inner",
-)
-merged["revenue_per_pct_conversion"] = merged["revenue"] / (merged["overall_conv_ratio"] * 100)
-print(merged)
+# Funnel step-level DataFrame has step, event, count, step_conv_ratio, overall_conv_ratio
+funnel_result = results["funnel"]
+print(f"Overall funnel conversion: {funnel_result.overall_conversion_rate:.1%}")
+
+# Compare revenue trend with funnel conversion
+revenue_trend = insights_df.groupby("date")["revenue"].sum().reset_index()
+revenue_trend["funnel_conversion"] = funnel_result.overall_conversion_rate
+print(revenue_trend)
 ```
 
 ### 2. Graph Analysis (NetworkX)
@@ -242,7 +239,7 @@ ax.set_title("Retention Heatmap")
 # Panel 4: Flow top transitions
 ax = axes[1, 1]
 edges = results["flow"].edges_df.nlargest(10, "count")
-ax.barh(edges["source"] + " -> " + edges["target"], edges["count"])
+ax.barh(edges["source_event"] + " -> " + edges["target_event"], edges["count"])
 ax.set_title("Top Flow Transitions")
 
 plt.tight_layout()
