@@ -7638,7 +7638,7 @@ class GroupBy:
 
 
 # =============================================================================
-# Cohort Definition Builder Types (Phase 035)
+# Cohort Definition Builder Types
 # =============================================================================
 
 _PROPERTY_OPERATOR_MAP: dict[str, str] = {
@@ -7681,7 +7681,9 @@ def _validate_cohort_date(date_str: str) -> None:
     try:
         dt_date.fromisoformat(date_str)
     except ValueError:
-        raise ValueError("dates must be YYYY-MM-DD format") from None
+        raise ValueError(
+            f"date '{date_str}' has correct format but is not a valid calendar date"
+        ) from None
 
 
 def _build_event_selector(
@@ -7706,7 +7708,11 @@ def _build_event_selector(
     for f in filter_list:
         mapped_op = _FILTER_TO_SELECTOR_MAP.get(f._operator)
         if mapped_op is None:
-            msg = f"unsupported filter operator for cohort selector: {f._operator}"
+            supported = ", ".join(sorted(_FILTER_TO_SELECTOR_MAP.keys()))
+            msg = (
+                f"unsupported filter operator for cohort selector: {f._operator!r}. "
+                f"Supported operators: {supported}"
+            )
             raise ValueError(msg)
         node: dict[str, Any] = {
             "property": "event",
@@ -7785,7 +7791,9 @@ class CohortCriteria:
             CohortCriteria with behavioral selector node and behavior entry.
 
         Raises:
-            ValueError: On constraint violations (CD1-CD6).
+            ValueError: If no frequency param or multiple are set, frequency is
+                negative, event name is empty/whitespace, time constraints are
+                missing or conflicting, or dates are malformed/misordered.
         """
         # CD4: Event name must be non-empty
         if not event or not event.strip():

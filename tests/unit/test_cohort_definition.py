@@ -1,4 +1,4 @@
-"""Tests for Cohort Definition Builder types (Phase 035).
+"""Tests for Cohort Definition Builder types.
 
 Tests CohortCriteria and CohortDefinition frozen dataclasses including
 behavioral criteria (did_event), property criteria (has_property),
@@ -9,6 +9,7 @@ serialization (to_dict), validation, and CRUD integration.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
@@ -22,7 +23,7 @@ from mixpanel_data.types import (
 )
 
 # =============================================================================
-# Phase 2: Foundational Tests
+# Operator Mapping Tests
 # =============================================================================
 
 
@@ -60,7 +61,7 @@ class TestOperatorMaps:
 
 
 # =============================================================================
-# Phase 3: US1 — Behavioral Cohort Criteria (did_event)
+# Behavioral Criteria (did_event)
 # =============================================================================
 
 
@@ -248,6 +249,26 @@ class TestCohortCriteriaDidEventValidation:
                 "Login", at_least=1, within_days=30, within_weeks=4
             )
 
+    def test_unsupported_filter_operator_raises(self) -> None:
+        """ValueError when Filter uses an operator not in _FILTER_TO_SELECTOR_MAP."""
+        with pytest.raises(ValueError, match="unsupported filter operator"):
+            CohortCriteria.did_event(
+                "Login",
+                at_least=1,
+                within_days=30,
+                where=Filter.is_true("flag"),
+            )
+
+    def test_cd6_invalid_calendar_date(self) -> None:
+        """ValueError for syntactically valid but calendrically invalid date."""
+        with pytest.raises(ValueError, match="not a valid calendar date"):
+            CohortCriteria.did_event(
+                "Login",
+                at_least=1,
+                from_date="2024-02-30",
+                to_date="2024-03-01",
+            )
+
 
 class TestCohortCriteriaImmutability:
     """Immutability tests for CohortCriteria (T013)."""
@@ -264,7 +285,7 @@ class TestCohortCriteriaImmutability:
 
 
 # =============================================================================
-# Phase 4: US2 — CohortDefinition Composition
+# Definition Composition (all_of / any_of)
 # =============================================================================
 
 
@@ -453,7 +474,7 @@ class TestCohortDefinitionImmutability:
 
 
 # =============================================================================
-# Phase 5: US3 — Property-Based Criteria
+# Property-Based Criteria
 # =============================================================================
 
 
@@ -545,7 +566,7 @@ class TestCohortCriteriaHasProperty:
 
 
 # =============================================================================
-# Phase 6: US4 — Cohort Reference Criteria
+# Cohort Reference Criteria
 # =============================================================================
 
 
@@ -598,7 +619,7 @@ class TestCohortCriteriaCohortRef:
 
 
 # =============================================================================
-# Phase 7: US5 — CRUD Integration
+# CRUD Integration
 # =============================================================================
 
 
@@ -664,44 +685,26 @@ class TestCohortDefinitionCRUDIntegration:
 
 
 # =============================================================================
-# Phase 8: US6 — did_not_do_event Shorthand
+# did_not_do_event Shorthand
 # =============================================================================
 
 
 class TestCohortCriteriaDidNotDoEvent:
-    """Tests for CohortCriteria.did_not_do_event() (T049-T050)."""
+    """Tests for CohortCriteria.did_not_do_event()."""
 
-    def test_equivalent_to_did_event_exactly_zero(self) -> None:
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"within_days": 30},
+            {"within_weeks": 4},
+            {"within_months": 3},
+            {"from_date": "2024-01-01", "to_date": "2024-03-31"},
+        ],
+    )
+    def test_equivalent_to_did_event_exactly_zero(self, kwargs: dict[str, Any]) -> None:
         """did_not_do_event is equivalent to did_event(exactly=0)."""
-        a = CohortCriteria.did_not_do_event("Login", within_days=30)
-        b = CohortCriteria.did_event("Login", exactly=0, within_days=30)
-
-        assert a._selector_node == b._selector_node
-        assert a._behavior_key == b._behavior_key
-        assert a._behavior == b._behavior
-
-    def test_within_weeks(self) -> None:
-        """did_not_do_event with within_weeks works correctly."""
-        a = CohortCriteria.did_not_do_event("Login", within_weeks=4)
-        b = CohortCriteria.did_event("Login", exactly=0, within_weeks=4)
-        assert a._selector_node == b._selector_node
-        assert a._behavior == b._behavior
-
-    def test_within_months(self) -> None:
-        """did_not_do_event with within_months works correctly."""
-        a = CohortCriteria.did_not_do_event("Login", within_months=3)
-        b = CohortCriteria.did_event("Login", exactly=0, within_months=3)
-        assert a._selector_node == b._selector_node
-        assert a._behavior == b._behavior
-
-    def test_with_date_range(self) -> None:
-        """did_not_do_event with from_date+to_date works correctly."""
-        a = CohortCriteria.did_not_do_event(
-            "Login", from_date="2024-01-01", to_date="2024-03-31"
-        )
-        b = CohortCriteria.did_event(
-            "Login", exactly=0, from_date="2024-01-01", to_date="2024-03-31"
-        )
+        a = CohortCriteria.did_not_do_event("Login", **kwargs)
+        b = CohortCriteria.did_event("Login", exactly=0, **kwargs)
         assert a._selector_node == b._selector_node
         assert a._behavior == b._behavior
 
@@ -807,25 +810,19 @@ class TestEmptyWhereList:
 class TestTimeWindowValidation:
     """Tests for rolling window value validation."""
 
-    def test_within_days_zero_raises(self) -> None:
-        """within_days=0 should raise ValueError."""
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"within_days": 0},
+            {"within_days": -5},
+            {"within_weeks": 0},
+            {"within_months": -1},
+        ],
+    )
+    def test_nonpositive_time_window_raises(self, kwargs: dict[str, Any]) -> None:
+        """Non-positive time window values raise ValueError."""
         with pytest.raises(ValueError, match="time window value must be positive"):
-            CohortCriteria.did_event("Login", at_least=1, within_days=0)
-
-    def test_within_days_negative_raises(self) -> None:
-        """within_days=-5 should raise ValueError."""
-        with pytest.raises(ValueError, match="time window value must be positive"):
-            CohortCriteria.did_event("Login", at_least=1, within_days=-5)
-
-    def test_within_weeks_zero_raises(self) -> None:
-        """within_weeks=0 should raise ValueError."""
-        with pytest.raises(ValueError, match="time window value must be positive"):
-            CohortCriteria.did_event("Login", at_least=1, within_weeks=0)
-
-    def test_within_months_negative_raises(self) -> None:
-        """within_months=-1 should raise ValueError."""
-        with pytest.raises(ValueError, match="time window value must be positive"):
-            CohortCriteria.did_event("Login", at_least=1, within_months=-1)
+            CohortCriteria.did_event("Login", at_least=1, **kwargs)
 
 
 class TestDateRangeOrdering:

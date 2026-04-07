@@ -69,15 +69,14 @@ property_operators = st.sampled_from(
     ["equals", "not_equals", "contains", "not_contains", "greater_than", "less_than"]
 )
 
-# Property type choices
-property_types = st.sampled_from(["string", "number", "boolean", "datetime", "list"])
-
 
 @st.composite
 def valid_did_event_params(
     draw: st.DrawFn,
 ) -> dict[str, Any]:
     """Generate valid parameters for CohortCriteria.did_event().
+
+    Generates either rolling-window or absolute date-range time constraints.
 
     Args:
         draw: Hypothesis draw function.
@@ -88,14 +87,28 @@ def valid_did_event_params(
     event = draw(event_names)
     freq_type = draw(freq_param_choice)
     freq_value = draw(frequencies)
-    time_type = draw(time_constraint_choice)
-    time_value = draw(time_values)
 
     params: dict[str, Any] = {
         "event": event,
         freq_type: freq_value,
-        time_type: time_value,
     }
+
+    use_date_range = draw(st.booleans())
+    if use_date_range:
+        # Generate valid date range (2020-01-01 to 2025-12-31)
+        start_ordinal = draw(st.integers(min_value=737425, max_value=739250))
+        end_ordinal = draw(
+            st.integers(min_value=start_ordinal, max_value=start_ordinal + 365)
+        )
+        from datetime import date as dt_date
+
+        params["from_date"] = dt_date.fromordinal(start_ordinal).isoformat()
+        params["to_date"] = dt_date.fromordinal(end_ordinal).isoformat()
+    else:
+        time_type = draw(time_constraint_choice)
+        time_value = draw(time_values)
+        params[time_type] = time_value
+
     return params
 
 
@@ -128,7 +141,17 @@ def property_criteria(
         Valid CohortCriteria instance.
     """
     name = draw(property_names)
-    value = draw(st.text(min_size=1, max_size=20))
+    value = draw(
+        st.one_of(
+            st.text(min_size=1, max_size=20),
+            st.integers(min_value=-1000, max_value=1000),
+            st.floats(
+                allow_nan=False, allow_infinity=False, min_value=-1e6, max_value=1e6
+            ),
+            st.booleans(),
+            st.lists(st.text(min_size=1, max_size=10), min_size=1, max_size=5),
+        )
+    )
     op = cast(
         Literal[
             "equals",
