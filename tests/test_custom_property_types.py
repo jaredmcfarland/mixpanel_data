@@ -477,6 +477,34 @@ class TestCustomPropertyValidationCP5:
                 group_by=GroupBy(property=icp, property_type="string"),
             )
 
+    def test_formula_at_boundary_passes(self) -> None:
+        """Formula at exactly 20,000 chars passes validation."""
+        from unittest.mock import MagicMock
+
+        from pydantic import SecretStr
+
+        from mixpanel_data import Workspace
+        from mixpanel_data._internal.config import ConfigManager, Credentials
+
+        creds = Credentials(
+            username="u", secret=SecretStr("s"), project_id="1", region="us"
+        )
+        mgr = MagicMock(spec=ConfigManager)
+        mgr.resolve_credentials.return_value = creds
+        ws = Workspace(_config_manager=mgr, _api_client=MagicMock())
+
+        icp = InlineCustomProperty(
+            formula="A" * 20_000,
+            inputs={"A": PropertyInput("price")},
+        )
+
+        # Should NOT raise — exactly at the limit
+        params = ws.build_params(
+            "Purchase",
+            group_by=GroupBy(property=icp, property_type="string"),
+        )
+        assert "sections" in params
+
 
 class TestCustomPropertyValidationCP6:
     """T052: CP6 — PropertyInput with empty name."""

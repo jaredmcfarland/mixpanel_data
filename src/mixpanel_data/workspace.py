@@ -6764,6 +6764,8 @@ class Workspace:
         Raises:
             ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials (401).
+            QueryError: Server-side data corruption (e.g. invalid
+                ``displayFormula`` on a custom property).
             ServerError: Server-side errors (5xx).
 
         Example:
@@ -6780,7 +6782,7 @@ class Workspace:
         except QueryError as exc:
             # Detect server-side data corruption: the API fails to serialize
             # when a custom property has an invalid displayFormula.
-            details = exc.details if hasattr(exc, "details") else {}
+            details = exc.details if isinstance(exc.details, dict) else {}
             body = details.get("response_body", {}) if isinstance(details, dict) else {}
             if isinstance(body, dict) and body.get("field") == "displayFormula":
                 raise QueryError(
@@ -6788,7 +6790,12 @@ class Workspace:
                     "custom property with an invalid displayFormula "
                     "(server-side data corruption). Use "
                     "get_custom_property(id) to retrieve individual "
-                    "properties, or contact Mixpanel support."
+                    "properties, or contact Mixpanel support.",
+                    status_code=exc.status_code,
+                    response_body=exc.response_body,
+                    request_method=exc.request_method,
+                    request_url=exc.request_url,
+                    request_params=exc.request_params,
                 ) from exc
             raise
         return [CustomProperty.model_validate(x) for x in raw_list]

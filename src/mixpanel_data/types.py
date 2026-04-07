@@ -7086,7 +7086,7 @@ class Metric:
     Attributes:
         event: Mixpanel event name.
         math: Aggregation function. Default: ``"total"``.
-        property: Property name for property-based math (average, sum, etc.).
+        property: Property for property-based math types (name, ref, or inline).
         per_user: Per-user pre-aggregation (average, total, min, max).
         filters: Per-metric filters (applied in addition to global ``where``).
         filters_combinator: How per-metric filters combine.
@@ -7237,7 +7237,7 @@ class Filter:
         """Create an equality filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             value: Value or list of values.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7264,7 +7264,7 @@ class Filter:
         """Create a not-equals filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             value: Value or list of values.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7291,7 +7291,7 @@ class Filter:
         """Create a contains (substring) filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             value: Substring to match.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7317,7 +7317,7 @@ class Filter:
         """Create a not-contains filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             value: Substring that must not match.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7343,7 +7343,7 @@ class Filter:
         """Create a greater-than filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             value: Numeric threshold.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7369,7 +7369,7 @@ class Filter:
         """Create a less-than filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             value: Numeric threshold.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7396,7 +7396,7 @@ class Filter:
         """Create a between (inclusive range) filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             min_val: Minimum value (inclusive).
             max_val: Maximum value (inclusive).
             resource_type: Resource type. Default: ``"events"``.
@@ -7422,7 +7422,7 @@ class Filter:
         """Create a property-existence filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             resource_type: Resource type. Default: ``"events"``.
 
         Returns:
@@ -7446,7 +7446,7 @@ class Filter:
         """Create a property-nonexistence filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             resource_type: Resource type. Default: ``"events"``.
 
         Returns:
@@ -7470,7 +7470,7 @@ class Filter:
         """Create a boolean true filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             resource_type: Resource type. Default: ``"events"``.
 
         Returns:
@@ -7494,7 +7494,7 @@ class Filter:
         """Create a boolean false filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             resource_type: Resource type. Default: ``"events"``.
 
         Returns:
@@ -7658,7 +7658,7 @@ class Filter:
         """Create a date equality filter (exact date match).
 
         Args:
-            property: Property name (e.g. ``"$time"``, ``"created"``).
+            property: Property name, CustomPropertyRef, or InlineCustomProperty (e.g. ``"$time"``, ``"created"``).
             date: Date in YYYY-MM-DD format.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7688,7 +7688,7 @@ class Filter:
         """Create a date inequality filter (not on date).
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             date: Date in YYYY-MM-DD format.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7718,7 +7718,7 @@ class Filter:
         """Create a date before filter.
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             date: Date in YYYY-MM-DD format.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7748,7 +7748,7 @@ class Filter:
         """Create a date since filter (from date onward).
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             date: Date in YYYY-MM-DD format.
             resource_type: Resource type. Default: ``"events"``.
 
@@ -7779,7 +7779,7 @@ class Filter:
         """Create a relative date filter (in the last N units).
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             quantity: Number of time units (must be positive).
             date_unit: Time unit (``"hour"``, ``"day"``, ``"week"``,
                 ``"month"``).
@@ -7814,7 +7814,7 @@ class Filter:
         """Create a relative date exclusion filter (not in the last N units).
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             quantity: Number of time units (must be positive).
             date_unit: Time unit (``"hour"``, ``"day"``, ``"week"``,
                 ``"month"``).
@@ -7849,7 +7849,7 @@ class Filter:
         """Create a date range filter (between two dates, inclusive).
 
         Args:
-            property: Property name.
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
             from_date: Start date in YYYY-MM-DD format.
             to_date: End date in YYYY-MM-DD format.
             resource_type: Resource type. Default: ``"events"``.
@@ -7885,7 +7885,7 @@ class GroupBy:
     can be bucketed into ranges.
 
     Attributes:
-        property: Property name to break down by.
+        property: Property to break down by (name, ref, or inline).
         property_type: Data type of the property. Default: ``"string"``.
         bucket_size: Bucket width for numeric properties.
         bucket_min: Minimum value for numeric buckets.

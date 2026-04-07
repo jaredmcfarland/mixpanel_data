@@ -173,6 +173,7 @@ from mixpanel_data.types import (
     PropertyDistributionResult,
     PropertyInput,
     PropertyResourceType,
+    PropertySpec,
     PropertyValueCount,
     PublicWorkspace,
     QueryResult,
@@ -332,6 +333,7 @@ __all__ = [
     "PropertyInput",
     "InlineCustomProperty",
     "CustomPropertyRef",
+    "PropertySpec",
     # Cohort CRUD (Phase 024)
     "Cohort",
     "CohortCreator",

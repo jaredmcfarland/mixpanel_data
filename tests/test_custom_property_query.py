@@ -16,6 +16,7 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data.exceptions import QueryError
 from mixpanel_data.types import (
     CustomPropertyRef,
     Filter,
@@ -236,3 +237,49 @@ class TestCombinedPositions:
         # Filter
         filters = params["sections"]["filter"]
         assert "customProperty" in filters[0]
+
+
+# =============================================================================
+# list_custom_properties error handling
+# =============================================================================
+
+
+class TestListCustomPropertiesErrorHandling:
+    """Tests for QueryError re-raise with HTTP context preservation."""
+
+    def test_display_formula_corruption_preserves_context(self, ws: Workspace) -> None:
+        """Re-raised QueryError for displayFormula corruption preserves HTTP context."""
+        original = QueryError(
+            "serialization failed",
+            status_code=500,
+            response_body={"field": "displayFormula"},
+            request_method="GET",
+            request_url="https://mixpanel.com/api/app/custom-properties",
+            request_params={"project_id": "1"},
+        )
+        ws._api_client.list_custom_properties.side_effect = original  # type: ignore[union-attr]
+
+        with pytest.raises(QueryError, match="displayFormula") as exc_info:
+            ws.list_custom_properties()
+
+        raised = exc_info.value
+        assert raised is not original
+        assert raised.status_code == 500
+        assert raised.response_body == {"field": "displayFormula"}
+        assert raised.request_method == "GET"
+        assert raised.request_url == "https://mixpanel.com/api/app/custom-properties"
+        assert raised.__cause__ is original
+
+    def test_non_matching_query_error_reraised_unchanged(self, ws: Workspace) -> None:
+        """QueryError without displayFormula field is re-raised unchanged."""
+        original = QueryError(
+            "some other error",
+            status_code=400,
+            response_body={"field": "somethingElse"},
+        )
+        ws._api_client.list_custom_properties.side_effect = original  # type: ignore[union-attr]
+
+        with pytest.raises(QueryError) as exc_info:
+            ws.list_custom_properties()
+
+        assert exc_info.value is original

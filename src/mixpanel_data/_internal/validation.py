@@ -177,6 +177,12 @@ def _scan_custom_properties(
     from the three positions (group_by, filter, measurement) and runs
     ``_validate_custom_property()`` on each.
 
+    Note:
+        ``where`` filters are validated separately at the workspace level
+        (``workspace.py`` calls ``_scan_custom_properties(where=where)``)
+        because ``validate_query_args`` / ``validate_funnel_args`` /
+        ``validate_retention_args`` do not receive the ``where`` parameter.
+
     Args:
         group_by: Breakdown specification (may contain custom properties).
         where: Filter specification (may contain custom properties).
@@ -208,6 +214,11 @@ def _scan_custom_properties(
                 errors.extend(_validate_custom_property(f._property, fpath))
 
     # Scan events (Metric.property)
+    # TODO: Also scan Metric.filters and FunnelStep.filters for custom
+    # properties.  Currently only Metric.property is checked; custom
+    # properties inside per-metric or per-step filters bypass CP1-CP6
+    # validation (documented in tests/live/test_custom_property_queries_live.py
+    # TestValidationGaps).
     if events is not None:
         for idx, item in enumerate(events):
             if isinstance(item, Metric) and isinstance(
@@ -2554,14 +2565,18 @@ def _validate_filter_clause(
     has_property_id = (
         clause.get("value")
         or clause.get("propertyName")
-        or clause.get("customPropertyId") is not None
-        or clause.get("customProperty") is not None
+        or (clause.get("customPropertyId") is not None)
+        or (clause.get("customProperty") is not None)
     )
     if not has_property_id:
         errors.append(
             ValidationError(
                 path=path,
-                message="Filter missing property identifier ('value' or 'propertyName')",
+                message=(
+                    "Filter missing property identifier "
+                    "('value', 'propertyName', 'customPropertyId', "
+                    "or 'customProperty')"
+                ),
                 code="B18_MISSING_FILTER_PROPERTY",
             )
         )

@@ -318,6 +318,22 @@ class TestBuildFilterEntryCustomProperties:
         entry = build_filter_entry(f)
 
         assert entry["customProperty"]["resourceType"] == "people"
+        assert entry["resourceType"] == "people"
+
+    def test_inline_property_type_none_uses_filter_default(self) -> None:
+        """InlineCustomProperty with property_type=None falls back to Filter's type."""
+        icp = InlineCustomProperty(
+            formula="A",
+            inputs={"A": PropertyInput("price", type="number")},
+            property_type=None,
+        )
+        f = Filter.greater_than(property=icp, value=100)
+
+        entry = build_filter_entry(f)
+
+        # greater_than sets _property_type="number"; None falls back to it
+        assert entry["filterType"] == "number"
+        assert entry["defaultType"] == "number"
 
 
 # =============================================================================
