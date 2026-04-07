@@ -968,6 +968,85 @@ class MixpanelAPIClient:
         pid = self._credentials.project_id
         return f"/projects/{pid}/workspaces/{ws_id}/{domain_path}"
 
+    def with_project(
+        self,
+        project_id: str,
+        workspace_id: int | None = None,
+    ) -> MixpanelAPIClient:
+        """Create a new client for a different project, sharing HTTP transport.
+
+        Builds new ``Credentials`` with the given ``project_id`` but keeps the
+        same authentication (username/secret/oauth) and region.  The underlying
+        ``httpx.Client`` instance is shared so no extra TCP connections are
+        created.
+
+        Args:
+            project_id: The project ID to target.
+            workspace_id: Optional workspace ID within the new project.
+
+        Returns:
+            A new ``MixpanelAPIClient`` bound to ``project_id``.
+
+        Example:
+            ```python
+            original = MixpanelAPIClient(credentials)
+            other = original.with_project("9999999", workspace_id=42)
+            other.me()  # still uses the same auth
+            ```
+        """
+        from pydantic import SecretStr as _SecretStr
+
+        new_creds = Credentials(
+            username=self._credentials.username,
+            secret=_SecretStr(self._credentials.secret.get_secret_value()),
+            project_id=project_id,
+            region=self._credentials.region,
+        )
+        # Share the existing HTTP transport when available
+        transport: httpx.BaseTransport | None
+        if self._client is not None:
+            transport = self._client._transport
+        else:
+            transport = self._transport
+        new_client = MixpanelAPIClient(
+            new_creds,
+            timeout=self._timeout,
+            export_timeout=self._export_timeout,
+            max_retries=self._max_retries,
+            _transport=transport,
+        )
+        if workspace_id is not None:
+            new_client.set_workspace_id(workspace_id)
+        return new_client
+
+    def me(self) -> dict[str, Any]:
+        """Call GET /api/app/me to retrieve the authenticated user's profile.
+
+        The ``/me`` endpoint is NOT project-scoped — it returns information
+        about the authenticated user, including all accessible organizations,
+        projects, and workspaces.
+
+        Returns:
+            Raw JSON response dict from ``/api/app/me``.
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Permission denied or API error (403, 400).
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network/connection errors.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(credentials) as client:
+                me_data = client.me()
+                print(me_data.get("user_email"))
+            ```
+        """
+        result = self.app_request("GET", "/me")
+        if not isinstance(result, dict):
+            return {"results": result}
+        return result
+
     def list_workspaces(self) -> list[PublicWorkspace]:
         """List all public workspaces for the current project.
 

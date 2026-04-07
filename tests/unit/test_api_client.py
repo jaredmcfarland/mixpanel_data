@@ -2755,3 +2755,81 @@ class TestIterJsonlLines:
             lines = list(_iter_jsonl_lines(response))
 
         assert lines == ['{"event":"a"}', '{"event":"b"}', '{"event":"c"}']
+
+
+# =============================================================================
+# Phase 7: with_project() factory (T073)
+# =============================================================================
+
+
+class TestWithProject:
+    """T073: Tests for MixpanelAPIClient.with_project()."""
+
+    def test_with_project_creates_new_client(
+        self, test_credentials: Credentials
+    ) -> None:
+        """with_project should return a new MixpanelAPIClient instance."""
+        original = MixpanelAPIClient(test_credentials)
+        new_client = original.with_project("9999999")
+        assert new_client is not original
+        assert new_client._credentials.project_id == "9999999"
+
+    def test_with_project_preserves_auth(self, test_credentials: Credentials) -> None:
+        """with_project should keep the same username and secret."""
+        original = MixpanelAPIClient(test_credentials)
+        new_client = original.with_project("9999999")
+        assert new_client._credentials.username == test_credentials.username
+        assert (
+            new_client._credentials.secret.get_secret_value()
+            == test_credentials.secret.get_secret_value()
+        )
+
+    def test_with_project_preserves_region(self, eu_credentials: Credentials) -> None:
+        """with_project should keep the same region."""
+        original = MixpanelAPIClient(eu_credentials)
+        new_client = original.with_project("9999999")
+        assert new_client._credentials.region == "eu"
+
+    def test_with_project_sets_workspace_id(
+        self, test_credentials: Credentials
+    ) -> None:
+        """with_project should set workspace_id when provided."""
+        original = MixpanelAPIClient(test_credentials)
+        new_client = original.with_project("9999999", workspace_id=42)
+        assert new_client.workspace_id == 42
+
+    def test_with_project_no_workspace_id(self, test_credentials: Credentials) -> None:
+        """with_project without workspace_id should leave it as None."""
+        original = MixpanelAPIClient(test_credentials)
+        new_client = original.with_project("9999999")
+        assert new_client.workspace_id is None
+
+    def test_with_project_preserves_timeouts(
+        self, test_credentials: Credentials
+    ) -> None:
+        """with_project should copy timeout and export_timeout."""
+        original = MixpanelAPIClient(
+            test_credentials, timeout=30.0, export_timeout=300.0
+        )
+        new_client = original.with_project("9999999")
+        assert new_client._timeout == 30.0
+        assert new_client._export_timeout == 300.0
+
+    def test_with_project_preserves_max_retries(
+        self, test_credentials: Credentials
+    ) -> None:
+        """with_project should copy max_retries."""
+        original = MixpanelAPIClient(test_credentials, max_retries=5)
+        new_client = original.with_project("9999999")
+        assert new_client._max_retries == 5
+
+    def test_with_project_shares_transport(self, test_credentials: Credentials) -> None:
+        """with_project should share the HTTP transport."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"ok": True})
+
+        transport = httpx.MockTransport(handler)
+        original = MixpanelAPIClient(test_credentials, _transport=transport)
+        new_client = original.with_project("9999999")
+        assert new_client._transport is transport

@@ -19,6 +19,12 @@ Example usage:
     creds = config.resolve_credentials()
 """
 
+from mixpanel_data._internal.auth_credential import (
+    AuthCredential,
+    CredentialType,
+    ProjectContext,
+    ResolvedSession,
+)
 from mixpanel_data._internal.config import (
     AccountInfo,
     AuthMethod,
@@ -27,8 +33,12 @@ from mixpanel_data._internal.config import (
 )
 
 __all__ = [
+    "AuthCredential",
     "AuthMethod",
     "ConfigManager",
     "Credentials",
+    "CredentialType",
     "AccountInfo",
+    "ProjectContext",
+    "ResolvedSession",
 ]

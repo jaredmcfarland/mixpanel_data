@@ -308,6 +308,7 @@ class Workspace:
         project_id: str | None = None,
         region: str | None = None,
         workspace_id: int | None = None,
+        credential: str | None = None,
         # Dependency injection for testing
         _config_manager: ConfigManager | None = None,
         _api_client: MixpanelAPIClient | None = None,
@@ -320,12 +321,18 @@ class Workspace:
         3. Named account from config file (if account parameter specified)
         4. Default account from config file
 
+        When ``credential`` is provided, uses the v2 ``resolve_session()``
+        path instead of the legacy ``resolve_credentials()`` path.
+
         Args:
-            account: Named account from config file to use.
+            account: Named account from config file to use (v1 path).
             project_id: Override project ID from credentials.
             region: Override region from credentials (us, eu, in).
             workspace_id: Optional workspace ID for scoped App API requests.
                 If provided, the API client will use workspace-scoped paths.
+            credential: Credential name to use (v2 config path). When
+                provided, uses ``ConfigManager.resolve_session()`` instead
+                of ``resolve_credentials()``.
             _config_manager: Injected ConfigManager for testing.
             _api_client: Injected MixpanelAPIClient for testing.
 
@@ -339,35 +346,86 @@ class Workspace:
         # Resolve credentials
         self._credentials: Credentials | None = None
         self._account_name: str | None = account
+        self._resolved_session: Any | None = None  # ResolvedSession
 
-        # Resolve credentials (may raise ConfigError or AccountNotFoundError)
-        self._credentials = self._config_manager.resolve_credentials(account)
-
-        # Apply overrides if provided
-        if project_id or region:
-            from typing import cast
-
-            from pydantic import SecretStr
-
-            from mixpanel_data._internal.config import RegionType
-
-            resolved_region = region or self._credentials.region
-            self._credentials = Credentials(
-                username=self._credentials.username,
-                secret=SecretStr(self._credentials.secret.get_secret_value()),
-                project_id=project_id or self._credentials.project_id,
-                region=cast(RegionType, resolved_region),
+        if credential is not None:
+            # v2 path: use resolve_session
+            session = self._config_manager.resolve_session(
+                credential=credential,
+                project_id=project_id,
+                workspace_id=workspace_id,
             )
+            self._resolved_session = session
+
+            # Build legacy Credentials from session for backward compat
+            self._credentials = self._session_to_credentials(session)
+        else:
+            # Legacy v1 path: use resolve_credentials
+            self._credentials = self._config_manager.resolve_credentials(account)
+
+            # Apply overrides if provided
+            if project_id or region:
+                from typing import cast
+
+                from pydantic import SecretStr
+
+                from mixpanel_data._internal.config import RegionType
+
+                resolved_region = region or self._credentials.region
+                self._credentials = Credentials(
+                    username=self._credentials.username,
+                    secret=SecretStr(self._credentials.secret.get_secret_value()),
+                    project_id=project_id or self._credentials.project_id,
+                    region=cast(RegionType, resolved_region),
+                )
 
         # Lazy-initialized services (None until first use)
         self._api_client: MixpanelAPIClient | None = _api_client
         self._discovery: DiscoveryService | None = None
         self._live_query: LiveQueryService | None = None
+        self._me_service: Any | None = None  # MeService, lazily created
 
         # Set workspace_id on the api_client if provided
         self._initial_workspace_id = workspace_id
         if workspace_id is not None and self._api_client is not None:
             self._api_client.set_workspace_id(workspace_id)
+
+    @staticmethod
+    def _session_to_credentials(session: Any) -> Credentials:
+        """Convert a ResolvedSession to legacy Credentials.
+
+        Bridges the v2 auth model to the v1 Credentials used by the
+        API client.
+
+        Args:
+            session: A ResolvedSession instance.
+
+        Returns:
+            Legacy Credentials instance.
+        """
+        from pydantic import SecretStr as _SecretStr
+
+        from mixpanel_data._internal.auth_credential import CredentialType
+        from mixpanel_data._internal.config import AuthMethod
+
+        auth = session.auth
+        if auth.type == CredentialType.oauth:
+            return Credentials(
+                username=auth.username or "",
+                secret=_SecretStr(
+                    auth.secret.get_secret_value() if auth.secret else ""
+                ),
+                project_id=session.project_id,
+                region=session.region,
+                auth_method=AuthMethod.oauth,
+                oauth_access_token=auth.oauth_access_token,
+            )
+        return Credentials(
+            username=auth.username or "",
+            secret=_SecretStr(auth.secret.get_secret_value() if auth.secret else ""),
+            project_id=session.project_id,
+            region=session.region,
+        )
 
     def __enter__(self) -> Workspace:
         """Enter context manager.
@@ -605,6 +663,251 @@ class Workspace:
         """
         client = self._require_api_client()
         return client.resolve_workspace_id()
+
+    # =========================================================================
+    # /ME & PROJECT DISCOVERY
+    # =========================================================================
+
+    @property
+    def _me_svc(self) -> Any:
+        """Get or create MeService (lazy initialization).
+
+        Returns:
+            MeService instance for /me API operations.
+        """
+        if self._me_service is None:
+            from mixpanel_data._internal.me import MeCache, MeService
+
+            cache = MeCache()
+            region = "us"
+            if self._credentials is not None:
+                region = self._credentials.region
+            self._me_service = MeService(self._require_api_client(), cache, region)
+        return self._me_service
+
+    def me(self, *, force_refresh: bool = False) -> Any:
+        """Get /me response for current credentials (cached 24h).
+
+        Returns the authenticated user's profile including all accessible
+        organizations, projects, and workspaces.
+
+        Args:
+            force_refresh: If True, bypass cache and call the API.
+
+        Returns:
+            MeResponse with user profile, projects, and workspaces.
+
+        Raises:
+            ConfigError: If credentials lack /me access.
+            AuthenticationError: Invalid credentials (401).
+
+        Example:
+            ```python
+            ws = Workspace()
+            me = ws.me()
+            print(me.user_email)
+            for pid, proj in me.projects.items():
+                print(f"  {pid}: {proj.name}")
+            ```
+        """
+        return self._me_svc.fetch(force_refresh=force_refresh)
+
+    def discover_projects(self) -> list[tuple[str, Any]]:
+        """List all accessible projects via the /me API.
+
+        Returns projects from the cached /me response, sorted by name.
+
+        Returns:
+            List of ``(project_id, MeProjectInfo)`` tuples.
+
+        Raises:
+            ConfigError: If credentials lack /me access.
+
+        Example:
+            ```python
+            ws = Workspace()
+            for pid, info in ws.discover_projects():
+                print(f"{pid}: {info.name} (org={info.organization_id})")
+            ```
+        """
+        result: list[tuple[str, Any]] = self._me_svc.list_projects()
+        return result
+
+    def discover_workspaces(self, project_id: str | None = None) -> list[Any]:
+        """List workspaces for a project via the /me API.
+
+        Returns workspaces from the cached /me response, sorted by name.
+        Defaults to the current project if ``project_id`` is not provided.
+
+        Args:
+            project_id: Project ID to list workspaces for. Defaults to
+                the current project.
+
+        Returns:
+            List of ``MeWorkspaceInfo`` objects sorted by name.
+
+        Raises:
+            ConfigError: If credentials lack /me access.
+
+        Example:
+            ```python
+            ws = Workspace()
+            for info in ws.discover_workspaces():
+                print(f"{info.id}: {info.name} (default={info.is_default})")
+            ```
+        """
+        pid = project_id
+        if pid is None and self._credentials is not None:
+            pid = self._credentials.project_id
+        result: list[Any] = self._me_svc.list_workspaces(project_id=pid)
+        return result
+
+    def switch_project(self, project_id: str, workspace_id: int | None = None) -> None:
+        """Switch to a different project in-session.
+
+        Creates a new API client targeting ``project_id`` while keeping the
+        same authentication credentials and HTTP transport. Clears the
+        discovery cache and /me service so subsequent calls use the new
+        project context.
+
+        Args:
+            project_id: The project ID to switch to.
+            workspace_id: Optional workspace ID within the new project.
+                If ``None`` and the project has workspaces, the default
+                workspace will be auto-discovered on demand.
+
+        Example:
+            ```python
+            ws = Workspace(credential="demo-sa", project_id="111")
+            ws.switch_project("222", workspace_id=42)
+            # Subsequent calls now target project 222
+            ```
+        """
+        old_client = self._require_api_client()
+        new_client = old_client.with_project(project_id, workspace_id=workspace_id)
+        self._api_client = new_client
+        self._credentials = new_client._credentials
+        self._initial_workspace_id = workspace_id
+
+        # Clear cached services so they rebuild against new project
+        self._discovery = None
+        self._live_query = None
+        self._me_service = None
+
+    def switch_workspace(self, workspace_id: int) -> None:
+        """Switch workspace within the current project.
+
+        Updates the workspace ID on the existing API client without
+        changing the project binding.
+
+        Args:
+            workspace_id: Workspace ID to switch to. Must be positive.
+
+        Example:
+            ```python
+            ws = Workspace(credential="demo-sa", project_id="111")
+            ws.switch_workspace(3448413)
+            assert ws.workspace_id == 3448413
+            ```
+        """
+        self.set_workspace_id(workspace_id)
+
+    @property
+    def current_project(self) -> Any:
+        """Return the current project context as a ``ProjectContext``.
+
+        Provides a structured snapshot of the active project ID, workspace
+        ID, and (when available) human-readable names from the /me cache.
+
+        Returns:
+            ``ProjectContext`` with the active project and workspace info.
+
+        Raises:
+            ConfigError: If no credentials are available.
+
+        Example:
+            ```python
+            ws = Workspace(credential="demo-sa", project_id="111")
+            ctx = ws.current_project
+            print(ctx.project_id, ctx.workspace_id)
+            ```
+        """
+        from mixpanel_data._internal.auth_credential import ProjectContext
+
+        creds = self._credentials
+        if creds is None:
+            raise ConfigError("No credentials available.")
+
+        pid = creds.project_id
+        wid = self.workspace_id
+
+        # Try to enrich with human-readable names from /me cache
+        project_name: str | None = None
+        workspace_name: str | None = None
+        try:
+            proj_info = self._me_svc.find_project(pid)
+            if proj_info is not None:
+                project_name = proj_info.name
+            if wid is not None:
+                for ws_info in self._me_svc.list_workspaces(project_id=pid):
+                    if ws_info.id == wid:
+                        workspace_name = ws_info.name
+                        break
+        except Exception:
+            # /me may not be available; names are best-effort
+            pass
+
+        return ProjectContext(
+            project_id=pid,
+            workspace_id=wid,
+            project_name=project_name,
+            workspace_name=workspace_name,
+        )
+
+    @property
+    def current_credential(self) -> Any:
+        """Return the current authentication credential as an ``AuthCredential``.
+
+        Provides a read-only view of the active credential identity. For
+        v2 sessions this returns the ``AuthCredential`` from the resolved
+        session. For legacy v1 sessions a synthetic ``AuthCredential`` is
+        built from the ``Credentials`` object.
+
+        Returns:
+            ``AuthCredential`` describing the active identity.
+
+        Raises:
+            ConfigError: If no credentials are available.
+
+        Example:
+            ```python
+            ws = Workspace(credential="demo-sa", project_id="111")
+            cred = ws.current_credential
+            print(cred.name, cred.type, cred.region)
+            ```
+        """
+        from mixpanel_data._internal.auth_credential import (
+            AuthCredential,
+            CredentialType,
+        )
+
+        # v2 path: return the stored AuthCredential
+        if self._resolved_session is not None:
+            auth: AuthCredential = self._resolved_session.auth
+            return auth
+
+        # Legacy path: synthesize from Credentials
+        creds = self._credentials
+        if creds is None:
+            raise ConfigError("No credentials available.")
+
+        return AuthCredential(
+            name=self._account_name or "default",
+            type=CredentialType.service_account,
+            region=creds.region,
+            username=creds.username,
+            secret=creds.secret,
+        )
 
     @property
     def _discovery_service(self) -> DiscoveryService:

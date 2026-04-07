@@ -271,8 +271,13 @@ def handle_errors(func: F) -> F:
 def get_workspace(ctx: typer.Context) -> Workspace:
     """Get or create workspace from context.
 
-    Lazily initializes a Workspace instance, respecting the --account
-    global option. The workspace is cached in the context for reuse.
+    Lazily initializes a Workspace instance, respecting the ``--account``,
+    ``--credential``, ``--project``, and ``--workspace-id`` global options.
+    The workspace is cached in the context for reuse.
+
+    When ``--credential`` or ``--project`` are provided, uses
+    ``ConfigManager.resolve_session()`` (v2 path) for credential resolution.
+    Otherwise falls back to the legacy ``account`` parameter.
 
     Args:
         ctx: Typer context with global options in obj dict.
@@ -288,8 +293,24 @@ def get_workspace(ctx: typer.Context) -> Workspace:
 
     if "workspace" not in ctx.obj or ctx.obj["workspace"] is None:
         account = ctx.obj.get("account")
+        credential = ctx.obj.get("credential")
+        project = ctx.obj.get("project")
         workspace_id: int | None = ctx.obj.get("workspace_id")
-        ctx.obj["workspace"] = Workspace(account=account, workspace_id=workspace_id)
+
+        if credential is not None:
+            # v2 path: use resolve_session via credential param
+            ctx.obj["workspace"] = Workspace(
+                credential=credential,
+                project_id=project,
+                workspace_id=workspace_id,
+            )
+        else:
+            # Legacy path: use account with optional project override
+            ctx.obj["workspace"] = Workspace(
+                account=account,
+                project_id=project,
+                workspace_id=workspace_id,
+            )
     workspace: Workspace = ctx.obj["workspace"]
     return workspace
 

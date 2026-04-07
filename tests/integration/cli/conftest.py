@@ -259,6 +259,9 @@ def mock_config_manager() -> MagicMock:
     """Create a mock ConfigManager for testing auth commands."""
     config = MagicMock()
 
+    # Default to v1 config for legacy auth command tests
+    config.config_version.return_value = 1
+
     config.list_accounts.return_value = [
         AccountInfo(
             name="production",

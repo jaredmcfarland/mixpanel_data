@@ -5,6 +5,12 @@ Complete programmable interface to Mixpanel analytics: discover your schema,
 run live analytics, stream data, and manage entities via the App API.
 """
 
+from mixpanel_data._internal.auth_credential import (
+    AuthCredential,
+    CredentialType,
+    ProjectContext,
+    ResolvedSession,
+)
 from mixpanel_data._internal.validation import validate_bookmark
 from mixpanel_data._literal_types import (
     CountType,
@@ -28,6 +34,7 @@ from mixpanel_data.exceptions import (
     JQLSyntaxError,
     MixpanelDataError,
     OAuthError,
+    ProjectNotFoundError,
     QueryError,
     RateLimitError,
     ServerError,
@@ -228,6 +235,11 @@ __version__ = "0.1.0"
 __all__ = [
     # Core
     "Workspace",
+    # Auth v2 types
+    "AuthCredential",
+    "CredentialType",
+    "ProjectContext",
+    "ResolvedSession",
     # Validation
     "validate_bookmark",
     # Type aliases
@@ -247,6 +259,7 @@ __all__ = [
     "ConfigError",
     "AccountNotFoundError",
     "AccountExistsError",
+    "ProjectNotFoundError",
     "AuthenticationError",
     "RateLimitError",
     "QueryError",

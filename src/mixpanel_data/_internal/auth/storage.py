@@ -398,3 +398,28 @@ class OAuthStorage:
             return
         for path in self._storage_dir.glob("*.json"):
             path.unlink()
+
+    def clear_me_cache(self) -> int:
+        """Clear cached /me API response files.
+
+        Removes all ``me_*.json`` files from the storage directory.
+        These files cache the ``/api/app/me`` response used for
+        project and workspace discovery.
+
+        Returns:
+            Number of cache files removed.
+
+        Example:
+            ```python
+            storage = OAuthStorage()
+            removed = storage.clear_me_cache()
+            print(f"Cleared {removed} cached /me responses")
+            ```
+        """
+        if not self._storage_dir.exists():
+            return 0
+        count = 0
+        for path in self._storage_dir.glob("me_*.json"):
+            path.unlink()
+            count += 1
+        return count

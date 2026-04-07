@@ -261,6 +261,64 @@ class AccountNotFoundError(ConfigError):
         return accounts if isinstance(accounts, list) else []
 
 
+class ProjectNotFoundError(ConfigError):
+    """Raised when a specified project is not accessible.
+
+    Includes the requested project ID and optionally a list of
+    accessible project IDs to help the user correct their selection.
+
+    Example:
+        ```python
+        try:
+            ws.switch_project("nonexistent-id")
+        except ProjectNotFoundError as e:
+            print(f"Project '{e.project_id}' not found.")
+            if e.available_projects:
+                print(f"Available: {', '.join(e.available_projects)}")
+        ```
+    """
+
+    def __init__(
+        self,
+        project_id: str,
+        available_projects: list[str] | None = None,
+    ) -> None:
+        """Initialize ProjectNotFoundError.
+
+        Args:
+            project_id: The requested project ID that wasn't found.
+            available_projects: List of accessible project IDs for suggestions.
+        """
+        available = available_projects or []
+        if available:
+            available_str = ", ".join(f"'{p}'" for p in available)
+            message = (
+                f"Project '{project_id}' not found. Available projects: {available_str}"
+            )
+        else:
+            message = (
+                f"Project '{project_id}' not found. No accessible projects discovered."
+            )
+
+        details: dict[str, Any] = {
+            "project_id": project_id,
+            "available_projects": available,
+        }
+        super().__init__(message, details=details)
+        self._code = "PROJECT_NOT_FOUND"
+
+    @property
+    def project_id(self) -> str:
+        """The requested project ID that wasn't found."""
+        return str(self._details.get("project_id", ""))
+
+    @property
+    def available_projects(self) -> list[str]:
+        """List of accessible project IDs."""
+        projects = self._details.get("available_projects")
+        return projects if isinstance(projects, list) else []
+
+
 class AccountExistsError(ConfigError):
     """Account name already exists in configuration.
 

@@ -464,3 +464,128 @@ class TestCliAuthExtended:
         assert result.exit_code == 0
         mock_storage.delete_tokens.assert_called_once_with("us")
         mock_storage.delete_all.assert_not_called()
+
+
+class TestAuthMigrateCommand:
+    """Tests for mp auth migrate command."""
+
+    @patch("mixpanel_data.cli.commands.auth.get_config")
+    def test_migrate_success(
+        self, mock_get_config: MagicMock, cli_runner: CliRunner
+    ) -> None:
+        """Test that mp auth migrate calls migrate_v1_to_v2 and outputs result."""
+        from pathlib import Path
+
+        from mixpanel_data._internal.config import MigrationResult
+
+        mock_cm = MagicMock()
+        mock_cm.migrate_v1_to_v2.return_value = MigrationResult(
+            credentials_created=2,
+            aliases_created=3,
+            active_credential="prod",
+            active_project_id="12345",
+            backup_path=Path("/tmp/config.toml.v1.bak"),
+        )
+        mock_get_config.return_value = mock_cm
+
+        result = cli_runner.invoke(app, ["auth", "migrate"])
+
+        assert result.exit_code == 0
+        mock_cm.migrate_v1_to_v2.assert_called_once_with(dry_run=False)
+        assert "credentials_created" in result.stdout
+        assert "2" in result.stdout
+
+    @patch("mixpanel_data.cli.commands.auth.get_config")
+    def test_migrate_dry_run(
+        self, mock_get_config: MagicMock, cli_runner: CliRunner
+    ) -> None:
+        """Test that mp auth migrate --dry-run passes dry_run=True."""
+        from mixpanel_data._internal.config import MigrationResult
+
+        mock_cm = MagicMock()
+        mock_cm.migrate_v1_to_v2.return_value = MigrationResult(
+            credentials_created=1,
+            aliases_created=1,
+            active_credential="demo",
+            active_project_id="999",
+            backup_path=None,
+        )
+        mock_get_config.return_value = mock_cm
+
+        result = cli_runner.invoke(app, ["auth", "migrate", "--dry-run"])
+
+        assert result.exit_code == 0
+        mock_cm.migrate_v1_to_v2.assert_called_once_with(dry_run=True)
+        assert "dry_run" in result.stdout
+
+    @patch("mixpanel_data.cli.commands.auth.get_config")
+    def test_migrate_already_v2_exits_error(
+        self, mock_get_config: MagicMock, cli_runner: CliRunner
+    ) -> None:
+        """Test that migrating an already-v2 config exits with error."""
+        from mixpanel_data.exceptions import ConfigError
+
+        mock_cm = MagicMock()
+        mock_cm.migrate_v1_to_v2.side_effect = ConfigError(
+            "Config is already v2 format."
+        )
+        mock_get_config.return_value = mock_cm
+
+        result = cli_runner.invoke(app, ["auth", "migrate"])
+
+        assert result.exit_code == ExitCode.GENERAL_ERROR
+
+    def test_migrate_help(self, cli_runner: CliRunner) -> None:
+        """Verify mp auth migrate --help exits 0 and shows --dry-run option."""
+        result = cli_runner.invoke(app, ["auth", "migrate", "--help"])
+
+        assert result.exit_code == 0
+        assert "--dry-run" in result.stdout
+
+
+class TestAuthLoginCacheInvalidation:
+    """Tests for /me cache invalidation after OAuth login."""
+
+    @patch("mixpanel_data._internal.me.MeCache")
+    @patch("mixpanel_data.cli.commands.auth.OAuthFlow")
+    def test_login_invalidates_me_cache(
+        self,
+        mock_flow_cls: MagicMock,
+        mock_cache_cls: MagicMock,
+        cli_runner: CliRunner,
+        mock_tokens: OAuthTokens,
+    ) -> None:
+        """Test that successful login invalidates /me cache for the region."""
+        mock_flow = MagicMock()
+        mock_flow.login.return_value = mock_tokens
+        mock_flow_cls.return_value = mock_flow
+
+        mock_cache = MagicMock()
+        mock_cache_cls.return_value = mock_cache
+
+        result = cli_runner.invoke(app, ["auth", "login"])
+
+        assert result.exit_code == 0
+        mock_cache.invalidate.assert_called_once_with("us")
+
+    @patch("mixpanel_data._internal.me.MeCache")
+    @patch("mixpanel_data.cli.commands.auth.OAuthFlow")
+    def test_login_invalidates_cache_for_correct_region(
+        self,
+        mock_flow_cls: MagicMock,
+        mock_cache_cls: MagicMock,
+        cli_runner: CliRunner,
+        mock_tokens: OAuthTokens,
+    ) -> None:
+        """Test that login --region eu invalidates /me cache for eu."""
+        mock_flow = MagicMock()
+        mock_flow.login.return_value = mock_tokens
+        mock_flow_cls.return_value = mock_flow
+
+        mock_cache = MagicMock()
+        mock_cache_cls.return_value = mock_cache
+
+        result = cli_runner.invoke(app, ["auth", "login", "--region", "eu"])
+
+        assert result.exit_code == 0
+        mock_cache.invalidate.assert_called_once_with("eu")
