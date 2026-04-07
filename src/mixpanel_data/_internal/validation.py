@@ -3,9 +3,10 @@
 Two validation layers:
 
 - ``validate_query_args()``: Validates Python-level arguments before
-  bookmark construction (Layer 1, rules V0-V27).
+  bookmark construction (Layer 1, rules V0-V27, CF1-CF2, CB1-CB3,
+  CM1-CM5).
 - ``validate_bookmark()``: Validates the bookmark JSON dict after
-  construction (Layer 2, rules B1-B19).
+  construction (Layer 2, rules B1-B26).
 
 Both return ``list[ValidationError]``. Callers decide whether to raise
 ``BookmarkValidationError``.
@@ -46,8 +47,7 @@ from mixpanel_data._internal.bookmark_enums import (
 )
 from mixpanel_data.exceptions import ValidationError
 
-# Avoid circular imports — these are only needed for isinstance checks
-# at runtime, so import the types module (not individual names from types.py)
+# Import specific types needed for isinstance checks at runtime.
 from mixpanel_data.types import (
     CohortBreakdown,
     CohortDefinition,
@@ -1071,6 +1071,7 @@ def validate_retention_args(
         )
 
     # R12: group_by strings must be non-empty
+    # CB3: CohortBreakdown and GroupBy are mutually exclusive in retention
     if group_by is not None:
         gb_list = group_by if isinstance(group_by, list) else [group_by]
         for i, g in enumerate(gb_list):
@@ -1084,11 +1085,8 @@ def validate_retention_args(
                     )
                 )
 
-    # CB3: CohortBreakdown and GroupBy are mutually exclusive in retention
-    if group_by is not None:
-        gb_list_cb3 = group_by if isinstance(group_by, list) else [group_by]
-        has_cohort = any(isinstance(g, CohortBreakdown) for g in gb_list_cb3)
-        has_property = any(isinstance(g, (str, GroupBy)) for g in gb_list_cb3)
+        has_cohort = any(isinstance(g, CohortBreakdown) for g in gb_list)
+        has_property = any(isinstance(g, (str, GroupBy)) for g in gb_list)
         if has_cohort and has_property:
             errors.append(
                 ValidationError(

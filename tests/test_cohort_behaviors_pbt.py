@@ -335,8 +335,8 @@ class TestCohortDefinitionIntegrationPBT:
         assert "id" not in cohorts[0]
 
     @given(name=non_empty_names)
-    def test_cohort_metric_with_inline_def(self, name: str) -> None:
-        """CohortMetric with inline CohortDefinition constructs without error.
+    def test_cohort_metric_with_inline_def_rejected_cm5(self, name: str) -> None:
+        """CM5: CohortMetric rejects inline CohortDefinition at construction.
 
         Args:
             name: Non-empty display name.
@@ -344,6 +344,5 @@ class TestCohortDefinitionIntegrationPBT:
         cd = CohortDefinition(
             CohortCriteria.did_event("Purchase", at_least=1, within_days=30)
         )
-        cm = CohortMetric(cd, name=name)
-        assert cm.name == name
-        assert isinstance(cm.cohort, CohortDefinition)
+        with pytest.raises(ValueError, match="does not support inline"):
+            CohortMetric(cd, name=name)

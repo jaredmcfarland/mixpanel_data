@@ -19,7 +19,6 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data.exceptions import BookmarkValidationError
 from mixpanel_data.types import (
     CohortBreakdown,
     CohortCriteria,
@@ -363,21 +362,14 @@ class TestResolveAndBuildParamsCohortMetric:
         finally:
             ws.close()
 
-    def test_inline_cohort_metric_rejected_cm5(
-        self,
-        workspace_factory: Callable[..., Workspace],
-    ) -> None:
-        """CM5: Inline CohortDefinition in CohortMetric raises validation error."""
-        ws = workspace_factory()
-        try:
-            cohort_def = _simple_cohort_def()
-            with pytest.raises(
-                BookmarkValidationError,
-                match="CohortMetric does not support inline CohortDefinition",
-            ):
-                ws.build_params(CohortMetric(cohort_def, "Active"))
-        finally:
-            ws.close()
+    def test_inline_cohort_metric_rejected_cm5(self) -> None:
+        """CM5: Inline CohortDefinition in CohortMetric raises at construction."""
+        cohort_def = _simple_cohort_def()
+        with pytest.raises(
+            ValueError,
+            match="CohortMetric does not support inline CohortDefinition",
+        ):
+            CohortMetric(cohort_def, "Active")
 
     def test_cohort_metric_with_group_by_accepted(
         self,

@@ -1913,8 +1913,9 @@ class Workspace:
             percentile_value: Custom percentile value (e.g. 95 for p95).
                 Required when ``math="percentile"``. Maps to ``percentile``
                 in bookmark measurement. Ignored for other math types.
-            group_by: Break down results by property. Accepts a string,
-                GroupBy object, or list of strings/GroupBys.
+            group_by: Break down results by property or cohort membership.
+                Accepts a string, ``GroupBy``, ``CohortBreakdown``, or
+                list of any mix.
             where: Filter results by conditions. Accepts a Filter
                 or list of Filters.
             formula: Formula expression referencing events by position
@@ -2034,8 +2035,9 @@ class Workspace:
 
         Args:
             events: Event name(s) to query. Accepts a single string,
-                a Metric object, a Formula object, or a sequence mixing
-                strings, Metrics, and Formulas.
+                a ``Metric``, ``CohortMetric``, ``Formula``, or a
+                sequence mixing strings, ``Metric``s, ``CohortMetric``s,
+                and ``Formula``s.
             from_date: Start date (YYYY-MM-DD). If set, overrides ``last``.
             to_date: End date (YYYY-MM-DD). Requires ``from_date``.
             last: Relative time range in days. Default: 30.
@@ -2046,7 +2048,9 @@ class Workspace:
             per_user: Per-user pre-aggregation.
             percentile_value: Custom percentile value (e.g. 95).
                 Required when ``math="percentile"``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort membership.
+                Accepts a string, ``GroupBy``, ``CohortBreakdown``, or
+                list of any mix.
             where: Filter results by conditions.
             formula: Formula expression referencing events by position.
             formula_label: Display label for formula result.
@@ -2133,7 +2137,8 @@ class Workspace:
         structure validation (Layer 2).
 
         Args:
-            events: Raw events input (str, Metric, Formula, or sequence).
+            events: Raw events input (str, Metric, CohortMetric,
+                Formula, or sequence).
             from_date: Start date (YYYY-MM-DD) or None.
             to_date: End date (YYYY-MM-DD) or None.
             last: Relative time range in days.
@@ -2621,7 +2626,9 @@ class Workspace:
                 ``"max"``, ``"p25"``, ``"p75"``, ``"p90"``, ``"p99"``).
                 Required when using those math types; must be ``None``
                 for count/rate math types. Default: ``None``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort
+                membership. Accepts a string, ``GroupBy``,
+                ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             exclusions: Events to exclude between steps. Accepts
                 event name strings or ``Exclusion`` objects.
@@ -2739,7 +2746,9 @@ class Workspace:
             math_property: Numeric property name for property-aggregation
                 math types. Required for ``"average"``, ``"median"``,
                 etc. Default: ``None``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort
+                membership. Accepts a string, ``GroupBy``,
+                ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             exclusions: Events to exclude between steps.
             holding_constant: Properties to hold constant.
@@ -2947,6 +2956,9 @@ class Workspace:
                 events.
             hidden_events: Events to hide from the flow visualization.
             mode: Display mode (``"sankey"``, ``"paths"``, or ``"tree"``).
+            where: Filter results by cohort membership. Only
+                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
+                are accepted. Default: ``None``.
 
         Returns:
             Flat bookmark params dict ready for API submission.
@@ -3052,6 +3064,9 @@ class Workspace:
                 events.
             hidden_events: Events to hide from visualization.
             mode: Display mode.
+            where: Filter results by cohort membership. Only
+                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
+                are accepted. Default: ``None``.
 
         Returns:
             Validated flow bookmark params dict.
@@ -3359,6 +3374,10 @@ class Workspace:
             collapse_repeated: Merge repeated events. Default: ``False``.
             hidden_events: Events to hide. Default: ``None``.
             mode: Display mode. Default: ``"sankey"``.
+            where: Filter results by cohort membership. Only
+                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
+                are accepted; non-cohort filters raise ``ValueError``.
+                Flows support a single cohort filter. Default: ``None``.
 
         Returns:
             Flat bookmark params dict with ``steps``, ``date_range``,
@@ -3553,7 +3572,9 @@ class Workspace:
                 Default: ``"day"``.
             math: Retention aggregation function. Default:
                 ``"retention_rate"``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort
+                membership. Accepts a string, ``GroupBy``,
+                ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             mode: Result display mode. Default: ``"curve"``.
 
@@ -3657,7 +3678,9 @@ class Workspace:
                 Default: ``"day"``.
             math: Aggregation function. Default:
                 ``"retention_rate"``.
-            group_by: Break down results by property.
+            group_by: Break down results by property or cohort
+                membership. Accepts a string, ``GroupBy``,
+                ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             mode: Display mode. Default: ``"curve"``.
 

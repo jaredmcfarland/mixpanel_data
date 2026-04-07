@@ -370,12 +370,14 @@ class TestCohortMetric:
         cm = CohortMetric(cohort=123)
         assert cm.name is None
 
-    def test_inline_cohort_definition(self) -> None:
-        """Verify CohortMetric accepts inline CohortDefinition."""
+    def test_inline_cohort_definition_rejected_cm5(self) -> None:
+        """CM5: CohortMetric rejects inline CohortDefinition at construction."""
         cohort_def = _simple_cohort_def()
-        cm = CohortMetric(cohort=cohort_def, name="Active")
-        assert cm.cohort is cohort_def
-        assert cm.name == "Active"
+        with pytest.raises(
+            ValueError,
+            match="CohortMetric does not support inline CohortDefinition",
+        ):
+            CohortMetric(cohort=cohort_def, name="Active")
 
     def test_frozen_dataclass(self) -> None:
         """Verify CohortMetric is frozen (immutable)."""
@@ -426,8 +428,113 @@ class TestCohortMetricValidation:
         cm = CohortMetric(cohort=123)
         assert cm.name is None
 
-    def test_cm1_inline_definition_no_id_check(self) -> None:
-        """CM1: CohortDefinition argument skips positive-int check."""
+    def test_cm1_inline_definition_rejected_cm5(self) -> None:
+        """CM5: CohortDefinition rejected at construction (before CM1 applies)."""
         cohort_def = _simple_cohort_def()
-        cm = CohortMetric(cohort=cohort_def)
-        assert cm.cohort is cohort_def
+        with pytest.raises(
+            ValueError,
+            match="CohortMetric does not support inline CohortDefinition",
+        ):
+            CohortMetric(cohort=cohort_def)
+
+
+# =============================================================================
+# _sanitize_raw_cohort — direct unit tests
+# =============================================================================
+
+
+class TestSanitizeRawCohort:
+    """Tests for the _sanitize_raw_cohort helper function."""
+
+    def test_removes_null_selector(self) -> None:
+        """Null selector in event_selector is removed."""
+        from mixpanel_data.types import _sanitize_raw_cohort
+
+        raw: dict[str, Any] = {
+            "behaviors": {
+                "b1": {
+                    "count": {
+                        "event_selector": {"selector": None, "event": "Login"},
+                    }
+                }
+            }
+        }
+        result = _sanitize_raw_cohort(raw)
+        es = result["behaviors"]["b1"]["count"]["event_selector"]
+        assert "selector" not in es
+        assert es["event"] == "Login"
+
+    def test_preserves_valid_selector(self) -> None:
+        """Non-null selector is preserved."""
+        from mixpanel_data.types import _sanitize_raw_cohort
+
+        raw: dict[str, Any] = {
+            "behaviors": {
+                "b1": {
+                    "count": {
+                        "event_selector": {
+                            "selector": {"type": "and", "children": []},
+                            "event": "Login",
+                        },
+                    }
+                }
+            }
+        }
+        result = _sanitize_raw_cohort(raw)
+        assert result["behaviors"]["b1"]["count"]["event_selector"]["selector"] == {
+            "type": "and",
+            "children": [],
+        }
+
+    def test_no_behaviors_key(self) -> None:
+        """Dict without behaviors key returns copy without error."""
+        from mixpanel_data.types import _sanitize_raw_cohort
+
+        raw: dict[str, Any] = {"name": "Test", "version": 1}
+        result = _sanitize_raw_cohort(raw)
+        assert result == raw
+        assert result is not raw
+
+    def test_multiple_behaviors_mixed_selectors(self) -> None:
+        """Mixed null/valid selectors — only nulls are removed."""
+        from mixpanel_data.types import _sanitize_raw_cohort
+
+        raw: dict[str, Any] = {
+            "behaviors": {
+                "b1": {
+                    "count": {
+                        "event_selector": {"selector": None, "event": "A"},
+                    }
+                },
+                "b2": {
+                    "count": {
+                        "event_selector": {
+                            "selector": {"type": "or"},
+                            "event": "B",
+                        },
+                    }
+                },
+            }
+        }
+        result = _sanitize_raw_cohort(raw)
+        assert "selector" not in result["behaviors"]["b1"]["count"]["event_selector"]
+        assert result["behaviors"]["b2"]["count"]["event_selector"]["selector"] == {
+            "type": "or",
+        }
+
+    def test_deep_copy_semantics(self) -> None:
+        """Original dict is not mutated."""
+        from mixpanel_data.types import _sanitize_raw_cohort
+
+        raw: dict[str, Any] = {
+            "behaviors": {
+                "b1": {
+                    "count": {
+                        "event_selector": {"selector": None, "event": "X"},
+                    }
+                }
+            }
+        }
+        _sanitize_raw_cohort(raw)
+        # Original should still have selector: None
+        assert raw["behaviors"]["b1"]["count"]["event_selector"]["selector"] is None

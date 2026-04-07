@@ -7436,24 +7436,16 @@ class Filter:
         Raises:
             ValueError: On CF1 or CF2 violations.
         """
-        # CF1: cohort (int) must be positive
-        if isinstance(cohort, int) and cohort <= 0:
-            raise ValueError("cohort must be a positive integer")
-
-        # CF2: name must be non-empty when provided
-        if name is not None and not name.strip():
-            raise ValueError("cohort name must be non-empty when provided")
+        _validate_cohort_args(cohort, name)
 
         operator = "does not contain" if negated else "contains"
 
         # Build the cohort value structure
-        cohort_entry: dict[str, Any] = {"negated": negated}
+        cohort_entry: dict[str, Any] = {"negated": negated, "name": name or ""}
         if isinstance(cohort, int):
             cohort_entry["id"] = cohort
-            cohort_entry["name"] = name or ""
         else:
             cohort_entry["raw_cohort"] = _sanitize_raw_cohort(cohort.to_dict())
-            cohort_entry["name"] = name or ""
 
         value: list[dict[str, Any]] = [{"cohort": cohort_entry}]
 
@@ -8233,6 +8225,26 @@ class CohortCriteria:
         )
 
 
+def _validate_cohort_args(
+    cohort: int | CohortDefinition,
+    name: str | None,
+) -> None:
+    """Validate cohort ID and name shared by CohortBreakdown, CohortMetric, and Filter.
+
+    Args:
+        cohort: Saved cohort ID or inline definition.
+        name: Display name for the cohort.
+
+    Raises:
+        ValueError: If cohort ID is not positive or name is empty
+            when provided.
+    """
+    if isinstance(cohort, int) and cohort <= 0:
+        raise ValueError("cohort must be a positive integer")
+    if name is not None and not name.strip():
+        raise ValueError("cohort name must be non-empty when provided")
+
+
 def _sanitize_raw_cohort(raw: dict[str, Any]) -> dict[str, Any]:
     """Remove null ``selector`` keys from behavioral event_selector entries.
 
@@ -8464,13 +8476,7 @@ class CohortBreakdown:
             ValueError: If cohort ID is not positive (CB1) or name
                 is empty when provided (CB2).
         """
-        # CB1: cohort (int) must be positive
-        if isinstance(self.cohort, int) and self.cohort <= 0:
-            raise ValueError("cohort must be a positive integer")
-
-        # CB2: name must be non-empty when provided
-        if self.name is not None and not self.name.strip():
-            raise ValueError("cohort name must be non-empty when provided")
+        _validate_cohort_args(self.cohort, self.name)
 
 
 @dataclass(frozen=True)
@@ -8483,6 +8489,9 @@ class CohortMetric:
 
     Cannot be used with ``query_funnel()``, ``query_retention()``,
     or ``query_flow()`` (CM4 — insights only).
+
+    Inline ``CohortDefinition`` is not supported (CM5 — server returns
+    500). Use a saved cohort ID instead. This is enforced at construction.
 
     Attributes:
         cohort: Saved cohort ID (positive integer) or inline
@@ -8516,16 +8525,17 @@ class CohortMetric:
         """Validate construction arguments.
 
         Raises:
-            ValueError: If cohort ID is not positive (CM1) or name
-                is empty when provided (CM2).
+            ValueError: If cohort ID is not positive (CM1), name
+                is empty when provided (CM2), or cohort is an inline
+                ``CohortDefinition`` (CM5 — server returns 500).
         """
-        # CM1: cohort (int) must be positive
-        if isinstance(self.cohort, int) and self.cohort <= 0:
-            raise ValueError("cohort must be a positive integer")
-
-        # CM2: name must be non-empty when provided
-        if self.name is not None and not self.name.strip():
-            raise ValueError("cohort name must be non-empty when provided")
+        _validate_cohort_args(self.cohort, self.name)
+        # CM5: Inline CohortDefinition causes server-side 500.
+        if isinstance(self.cohort, CohortDefinition):
+            raise ValueError(
+                "CohortMetric does not support inline CohortDefinition "
+                "(server returns 500). Use a saved cohort ID instead."
+            )
 
 
 @dataclass(frozen=True)

@@ -667,17 +667,16 @@ class TestCohortMetricInsights:
         assert isinstance(result, QueryResult)
         assert len(result.series) > 0
 
-    def test_cohort_metric_inline_definition(
+    def test_cohort_metric_inline_definition_rejected_cm5(
         self,
-        ws: Workspace,
         inline_definition: CohortDefinition,
     ) -> None:
-        """CohortMetric with inline CohortDefinition."""
-        result = ws.query(
-            CohortMetric(inline_definition, name="Inline QA"),
-            last=30,
-        )
-        assert isinstance(result, QueryResult)
+        """CM5: CohortMetric rejects inline CohortDefinition at construction."""
+        with pytest.raises(
+            ValueError,
+            match="CohortMetric does not support inline CohortDefinition",
+        ):
+            CohortMetric(inline_definition, name="Inline QA")
 
     def test_cohort_metric_mixed_with_event_metric(
         self,

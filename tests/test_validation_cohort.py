@@ -447,3 +447,58 @@ class TestRetentionCohortMixValidation:
             group_by=None,
         )
         assert "CB3_RETENTION_MIXED_BREAKDOWN" not in _codes(errors)
+
+
+# =============================================================================
+# B22: Cohort behavior missing identifier
+# =============================================================================
+
+
+class TestCohortBehaviorMissingIdentifier:
+    """Test B22_COHORT_MISSING_IDENTIFIER — neither id nor raw_cohort."""
+
+    def test_missing_both_id_and_raw_cohort(self) -> None:
+        """Cohort behavior with neither id nor raw_cohort triggers B22."""
+        bookmark: dict[str, Any] = {
+            "sections": {
+                "show": [
+                    {
+                        "dataset": "$mixpanel",
+                        "value": "Login",
+                        "resourceType": "events",
+                        "profileType": None,
+                        "search": "",
+                        "dataGroupId": None,
+                        "math": "total",
+                        "property": None,
+                        "perUserAggregation": None,
+                        "type": "number",
+                        "measurement": {"property": None},
+                    },
+                    {
+                        "dataset": "$mixpanel",
+                        "resourceType": "cohorts",
+                        "math": "unique",
+                        "type": "number",
+                        "behavior": {
+                            "type": "cohort",
+                            "resourceType": "cohorts",
+                            # Missing both "id" and "raw_cohort"
+                        },
+                        "value": "Test Cohort",
+                        "measurement": {"property": None},
+                    },
+                ],
+                "filter": [],
+                "group": [],
+                "formula": [],
+                "time": {"dateRange": "30d", "unit": "day"},
+            },
+            "displayOptions": {
+                "chartType": "line",
+                "plotStyle": "standard",
+                "analysis": "linear",
+            },
+        }
+        errors = validate_bookmark(bookmark)
+        assert "B22_COHORT_MISSING_IDENTIFIER" in _codes(errors)

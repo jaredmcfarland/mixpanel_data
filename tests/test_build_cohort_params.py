@@ -610,14 +610,14 @@ class TestBuildParamsCohortMetric:
         measurement = result["sections"]["show"][0]["measurement"]
         assert measurement["property"] is None
 
-    def test_cohort_metric_inline_rejected_cm5(self, ws: Workspace) -> None:
-        """CM5: Inline CohortDefinition in CohortMetric raises validation error."""
+    def test_cohort_metric_inline_rejected_cm5(self) -> None:
+        """CM5: Inline CohortDefinition in CohortMetric raises at construction."""
         cohort_def = _simple_cohort_def()
         with pytest.raises(
-            BookmarkValidationError,
+            ValueError,
             match="CohortMetric does not support inline CohortDefinition",
         ):
-            ws.build_params(CohortMetric(cohort_def, "Active"))
+            CohortMetric(cohort_def, "Active")
 
 
 # =============================================================================
@@ -823,3 +823,83 @@ class TestQueryFlowCohortFilter:
             match="query_flow where= only accepts cohort filters",
         ):
             ws.build_flow_params("Login", where=Filter.equals("country", "US"))
+
+    def test_flow_multiple_cohort_filters_raises_value_error(
+        self, ws: Workspace
+    ) -> None:
+        """Verify multiple cohort filters in flow where= raises ValueError."""
+        with pytest.raises(
+            ValueError,
+            match="query_flow supports a single cohort filter, but 2",
+        ):
+            ws.build_flow_params(
+                "Login",
+                where=[
+                    Filter.in_cohort(123, "A"),
+                    Filter.in_cohort(456, "B"),
+                ],
+            )
+
+
+# =============================================================================
+# build_flow_cohort_filter — direct unit tests
+# =============================================================================
+
+
+class TestBuildFlowCohortFilterDirect:
+    """Direct tests for build_flow_cohort_filter()."""
+
+    def test_saved_cohort_filter(self) -> None:
+        """Saved cohort filter produces dict with id."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_cohort_filter,
+        )
+
+        result = build_flow_cohort_filter(Filter.in_cohort(123, "PU"))
+        assert result is not None
+        assert result["id"] == 123
+        assert result["name"] == "PU"
+        assert result["negated"] is False
+
+    def test_inline_cohort_filter(self) -> None:
+        """Inline cohort filter produces dict with raw_cohort."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_cohort_filter,
+        )
+
+        cohort_def = _simple_cohort_def()
+        result = build_flow_cohort_filter(Filter.in_cohort(cohort_def, name="Active"))
+        assert result is not None
+        assert "raw_cohort" in result
+        assert result["name"] == "Active"
+        assert result["negated"] is False
+
+    def test_not_in_cohort_negated(self) -> None:
+        """not_in_cohort filter produces negated=True."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_cohort_filter,
+        )
+
+        result = build_flow_cohort_filter(Filter.not_in_cohort(123, "Bots"))
+        assert result is not None
+        assert result["negated"] is True
+
+    def test_non_cohort_filter_raises(self) -> None:
+        """Non-cohort filter raises ValueError."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_cohort_filter,
+        )
+
+        with pytest.raises(ValueError, match="only accepts cohort filters"):
+            build_flow_cohort_filter(Filter.equals("country", "US"))
+
+    def test_multiple_filters_raises(self) -> None:
+        """Multiple cohort filters raises ValueError."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_cohort_filter,
+        )
+
+        with pytest.raises(ValueError, match="single cohort filter, but 2"):
+            build_flow_cohort_filter(
+                [Filter.in_cohort(1, "A"), Filter.in_cohort(2, "B")]
+            )

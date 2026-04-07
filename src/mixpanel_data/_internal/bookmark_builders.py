@@ -9,7 +9,6 @@ These are internal helpers — import from ``mixpanel_data._internal.bookmark_bu
 
 from __future__ import annotations
 
-import copy
 from datetime import date
 from typing import Any
 
@@ -267,14 +266,10 @@ def _build_cohort_group_entry(cb: CohortBreakdown) -> dict[str, Any]:
         base_cohort["raw_cohort"] = _sanitize_raw_cohort(cb.cohort.to_dict())
 
     cohorts: list[dict[str, Any]] = [base_cohort]
-
-    # Value labels
     value_labels: list[str] = [name]
 
     if cb.include_negated:
-        negated_cohort = copy.deepcopy(base_cohort)
-        negated_cohort["negated"] = True
-        cohorts.append(negated_cohort)
+        cohorts.append({**base_cohort, "negated": True})
         value_labels.append(f"Not In {name}")
 
     return {
@@ -366,27 +361,41 @@ def build_flow_cohort_filter(
                 "(Filter.in_cohort/not_in_cohort)"
             )
 
-    # Use the first cohort filter
+    if len(filters) > 1:
+        raise ValueError(
+            f"query_flow supports a single cohort filter, but {len(filters)} "
+            "were provided. Pass only one Filter.in_cohort/not_in_cohort."
+        )
+
     f = filters[0]
     # Extract from the _value structure: [{"cohort": {...}}]
     cohort_value = f._value
-    if isinstance(cohort_value, list) and len(cohort_value) > 0:
-        first_item = cohort_value[0]
-        if not isinstance(first_item, dict):
-            raise ValueError(
-                "Internal error: cohort filter _value[0] is not a dict; "
-                f"got {type(first_item).__name__}. This indicates a bug in "
-                "Filter._build_cohort_filter."
-            )
-        cohort_data: dict[str, Any] = first_item.get("cohort", {})
-        result: dict[str, Any] = {
-            "name": cohort_data.get("name", ""),
-            "negated": f._operator == "does not contain",
-        }
-        if "id" in cohort_data:
-            result["id"] = cohort_data["id"]
-        if "raw_cohort" in cohort_data:
-            result["raw_cohort"] = cohort_data["raw_cohort"]
-        return result
-
-    return None
+    if not isinstance(cohort_value, list) or len(cohort_value) == 0:
+        raise ValueError(
+            "Internal error: cohort filter _value must be a non-empty list; "
+            f"got {type(cohort_value).__name__}. This indicates a bug in "
+            "Filter._build_cohort_filter."
+        )
+    first_item = cohort_value[0]
+    if not isinstance(first_item, dict):
+        raise ValueError(
+            "Internal error: cohort filter _value[0] is not a dict; "
+            f"got {type(first_item).__name__}. This indicates a bug in "
+            "Filter._build_cohort_filter."
+        )
+    cohort_data = first_item.get("cohort")
+    if not isinstance(cohort_data, dict):
+        raise ValueError(
+            "Internal error: cohort filter _value[0] is missing 'cohort' key; "
+            f"got keys {list(first_item.keys())}. This indicates a bug in "
+            "Filter._build_cohort_filter."
+        )
+    result: dict[str, Any] = {
+        "name": cohort_data.get("name", ""),
+        "negated": f._operator == "does not contain",
+    }
+    if "id" in cohort_data:
+        result["id"] = cohort_data["id"]
+    if "raw_cohort" in cohort_data:
+        result["raw_cohort"] = cohort_data["raw_cohort"]
+    return result
