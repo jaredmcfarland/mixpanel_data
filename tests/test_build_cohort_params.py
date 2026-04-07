@@ -610,13 +610,14 @@ class TestBuildParamsCohortMetric:
         measurement = result["sections"]["show"][0]["measurement"]
         assert measurement["property"] is None
 
-    def test_cohort_metric_inline_has_raw_cohort(self, ws: Workspace) -> None:
-        """Verify inline CohortDefinition uses raw_cohort in behavior."""
+    def test_cohort_metric_inline_rejected_cm5(self, ws: Workspace) -> None:
+        """CM5: Inline CohortDefinition in CohortMetric raises validation error."""
         cohort_def = _simple_cohort_def()
-        result = ws.build_params(CohortMetric(cohort_def, "Active"))
-        behavior = result["sections"]["show"][0]["behavior"]
-        assert "raw_cohort" in behavior
-        assert "id" not in behavior
+        with pytest.raises(
+            BookmarkValidationError,
+            match="CohortMetric does not support inline CohortDefinition",
+        ):
+            ws.build_params(CohortMetric(cohort_def, "Active"))
 
 
 # =============================================================================
@@ -692,6 +693,82 @@ class TestBuildParamsCohortMetricMathIgnored:
         )
         measurement = result["sections"]["show"][0]["measurement"]
         assert measurement["property"] is None
+
+    def test_property_math_without_property_ignored_for_cohort_only(
+        self, ws: Workspace
+    ) -> None:
+        """Verify CohortMetric-only query with property-math and no math_property succeeds.
+
+        Top-level math is only consumed by plain string events.  When all
+        events are CohortMetric, math/math_property/per_user are irrelevant
+        and must not trigger V1/V2/V3/V26/V27 validation errors (FR-020).
+        """
+        # math="average" normally requires math_property — but should be
+        # ignored when the only consumer is CohortMetric.
+        result = ws.build_params(
+            CohortMetric(123, "PU"),
+            math="average",
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["math"] == "unique"
+
+    def test_percentile_math_without_value_ignored_for_cohort_only(
+        self, ws: Workspace
+    ) -> None:
+        """Verify CohortMetric-only query with math='percentile' succeeds.
+
+        V26 (percentile requires percentile_value) must not fire when
+        there are no plain string events to consume the parameter.
+        """
+        result = ws.build_params(
+            CohortMetric(123, "PU"),
+            math="percentile",
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["math"] == "unique"
+
+    def test_histogram_math_without_per_user_ignored_for_cohort_only(
+        self, ws: Workspace
+    ) -> None:
+        """Verify CohortMetric-only query with math='histogram' succeeds.
+
+        V27 (histogram requires per_user) must not fire when there are
+        no plain string events to consume the parameter.
+        """
+        result = ws.build_params(
+            CohortMetric(123, "PU"),
+            math="histogram",
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["math"] == "unique"
+
+    def test_per_user_incompatible_math_ignored_for_cohort_only(
+        self, ws: Workspace
+    ) -> None:
+        """Verify CohortMetric-only query with per_user + math='unique' succeeds.
+
+        V3 (per_user incompatible with unique/DAU/WAU/MAU) must not fire
+        when there are no plain string events to consume the parameter.
+        """
+        result = ws.build_params(
+            CohortMetric(123, "PU"),
+            math="unique",
+            per_user="average",
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["math"] == "unique"
+
+    def test_mixed_events_still_validate_math(self, ws: Workspace) -> None:
+        """Verify mixed CohortMetric + plain event still validates top-level math.
+
+        When a plain string event is present, it consumes top-level math,
+        so V1 must still fire for math='average' without math_property.
+        """
+        with pytest.raises(BookmarkValidationError, match="requires math_property"):
+            ws.build_params(
+                [CohortMetric(123, "PU"), "Login"],
+                math="average",
+            )
 
     def test_per_user_does_not_apply(self, ws: Workspace) -> None:
         """Verify per_user does not appear in cohort metric measurement.

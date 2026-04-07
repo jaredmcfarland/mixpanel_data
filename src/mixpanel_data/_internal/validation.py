@@ -50,6 +50,7 @@ from mixpanel_data.exceptions import ValidationError
 # at runtime, so import the types module (not individual names from types.py)
 from mixpanel_data.types import (
     CohortBreakdown,
+    CohortDefinition,
     CohortMetric,
     Exclusion,
     Formula,
@@ -1558,8 +1559,21 @@ def validate_query_args(
             )
             continue
 
-        # CohortMetric: skip event-name validation (no event name)
+        # CohortMetric: validate cohort type, then skip event-name validation
         if isinstance(item, CohortMetric):
+            # CM5: Inline CohortDefinition in CohortMetric triggers a
+            # server-side 500. Only saved cohort IDs are supported.
+            if isinstance(item.cohort, CohortDefinition):
+                errors.append(
+                    ValidationError(
+                        path=epath,
+                        message=(
+                            "CohortMetric does not support inline CohortDefinition "
+                            "(server returns 500). Use a saved cohort ID instead."
+                        ),
+                        code="CM5_INLINE_COHORT_METRIC",
+                    )
+                )
             continue
 
         name = item.event if isinstance(item, Metric) else item
@@ -1598,8 +1612,13 @@ def validate_query_args(
                 )
             )
 
+    # CM3/FR-020: Top-level math/math_property/per_user only apply to plain
+    # string events.  When all events are CohortMetric (or Metric, which
+    # carries its own math), there are no consumers — skip V1/V2/V3/V26/V27.
+    has_plain_events = any(isinstance(item, str) for item in events)
+
     # V1: Property math requires property
-    if math in MATH_REQUIRING_PROPERTY and math_property is None:
+    if has_plain_events and math in MATH_REQUIRING_PROPERTY and math_property is None:
         errors.append(
             ValidationError(
                 path="math",
@@ -1609,7 +1628,7 @@ def validate_query_args(
         )
 
     # V2: Non-property math rejects property
-    if (
+    if has_plain_events and (
         math not in MATH_REQUIRING_PROPERTY
         and math not in MATH_PROPERTY_OPTIONAL
         and math_property is not None
@@ -1627,7 +1646,7 @@ def validate_query_args(
         )
 
     # V26: percentile math requires percentile_value
-    if math == "percentile" and percentile_value is None:
+    if has_plain_events and math == "percentile" and percentile_value is None:
         errors.append(
             ValidationError(
                 path="percentile_value",
@@ -1637,7 +1656,7 @@ def validate_query_args(
         )
 
     # V27: histogram math requires per_user
-    if math == "histogram" and per_user is None:
+    if has_plain_events and math == "histogram" and per_user is None:
         errors.append(
             ValidationError(
                 path="per_user",
@@ -1650,7 +1669,7 @@ def validate_query_args(
         )
 
     # V3: per_user incompatible with DAU/WAU/MAU/unique
-    if per_user is not None and math in MATH_NO_PER_USER:
+    if has_plain_events and per_user is not None and math in MATH_NO_PER_USER:
         errors.append(
             ValidationError(
                 path="per_user",
@@ -1660,7 +1679,7 @@ def validate_query_args(
         )
 
     # V3b: per_user requires a property
-    if per_user is not None and math_property is None:
+    if has_plain_events and per_user is not None and math_property is None:
         errors.append(
             ValidationError(
                 path="per_user",

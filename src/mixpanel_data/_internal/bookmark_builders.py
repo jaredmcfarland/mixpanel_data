@@ -14,31 +14,12 @@ from datetime import date
 from typing import Any
 
 from mixpanel_data._literal_types import QueryTimeUnit
-from mixpanel_data.types import CohortBreakdown, Filter, GroupBy
-
-
-def _sanitize_raw_cohort(raw: dict[str, Any]) -> dict[str, Any]:
-    """Remove null ``selector`` keys from behavioral event_selector entries.
-
-    The Mixpanel API calls ``postorder_traverse`` on nested ``selector``
-    fields within ``event_selector`` blocks. A ``None`` root causes a
-    crash. This function deep-copies the raw cohort dict and removes
-    any ``selector: None`` entries from behavioral event_selectors.
-
-    Args:
-        raw: Output of ``CohortDefinition.to_dict()``.
-
-    Returns:
-        Sanitized copy safe for API submission.
-    """
-    result = copy.deepcopy(raw)
-    for _bkey, bval in result.get("behaviors", {}).items():
-        count = bval.get("count")
-        if isinstance(count, dict):
-            es = count.get("event_selector")
-            if isinstance(es, dict) and es.get("selector") is None:
-                del es["selector"]
-    return result
+from mixpanel_data.types import (
+    CohortBreakdown,
+    Filter,
+    GroupBy,
+    _sanitize_raw_cohort,
+)
 
 
 def build_time_section(
@@ -291,7 +272,7 @@ def _build_cohort_group_entry(cb: CohortBreakdown) -> dict[str, Any]:
     value_labels: list[str] = [name]
 
     if cb.include_negated:
-        negated_cohort = dict(base_cohort)
+        negated_cohort = copy.deepcopy(base_cohort)
         negated_cohort["negated"] = True
         cohorts.append(negated_cohort)
         value_labels.append(f"Not In {name}")
@@ -392,7 +373,11 @@ def build_flow_cohort_filter(
     if isinstance(cohort_value, list) and len(cohort_value) > 0:
         first_item = cohort_value[0]
         if not isinstance(first_item, dict):
-            return None
+            raise ValueError(
+                "Internal error: cohort filter _value[0] is not a dict; "
+                f"got {type(first_item).__name__}. This indicates a bug in "
+                "Filter._build_cohort_filter."
+            )
         cohort_data: dict[str, Any] = first_item.get("cohort", {})
         result: dict[str, Any] = {
             "name": cohort_data.get("name", ""),

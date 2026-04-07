@@ -59,6 +59,34 @@ Types for `Workspace.query()` — typed Insights engine queries with composable 
       show_root_heading: true
       show_root_toc_entry: true
 
+## Cohort Query Types
+
+Types for cohort-scoped queries — filter by cohort, break down by cohort membership, or track cohort size as a metric across all query engines.
+
+::: mixpanel_data.CohortBreakdown
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CohortMetric
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## Cohort Definition Types
+
+Types for building inline cohort definitions programmatically — used with `Filter.in_cohort()`, `CohortBreakdown`, and `CohortMetric`.
+
+::: mixpanel_data.CohortDefinition
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.CohortCriteria
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Funnel Query Types
 
 Types for `Workspace.query_funnel()` — typed funnel conversion analysis with step definitions, exclusions, and conversion windows.

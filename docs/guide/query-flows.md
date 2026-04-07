@@ -155,6 +155,35 @@ result = ws.query_flow(
 
 See [Insights Queries — Filters](query.md#filters) for the full list of `Filter` factory methods.
 
+### Cohort Filters
+
+Restrict flow analysis to users in a cohort using the `where=` parameter:
+
+```python
+from mixpanel_data import Filter, CohortCriteria, CohortDefinition
+
+# What do power users do after purchasing?
+result = ws.query_flow(
+    "Purchase",
+    forward=3,
+    where=Filter.in_cohort(123, "Power Users"),
+)
+
+# Inline cohort — what paths do frequent buyers take?
+frequent_buyers = CohortDefinition(
+    CohortCriteria.did_event("Purchase", at_least=5, within_days=30)
+)
+result = ws.query_flow(
+    "Purchase",
+    where=Filter.in_cohort(frequent_buyers, name="Frequent Buyers"),
+)
+```
+
+!!! note
+    Flows only support cohort filters (`Filter.in_cohort` / `Filter.not_in_cohort`), not property filters. Cohort breakdowns (`CohortBreakdown`) are not supported in flows.
+
+See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full cohort filter reference.
+
 ## Direction
 
 Control how many steps forward and backward from the anchor Mixpanel traces:

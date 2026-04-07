@@ -108,6 +108,17 @@ flow_result = ws.query_flow("Purchase", forward=3, reverse=1)
 print(flow_result.nodes_df.head())   # step | event | type | count
 print(flow_result.top_transitions(5))
 
+# Cohort-scoped queries — filter, break down, or track cohorts
+from mixpanel_data import CohortCriteria, CohortDefinition, CohortBreakdown, CohortMetric
+
+# Define a cohort inline and use it immediately
+power_users = CohortDefinition(
+    CohortCriteria.did_event("Purchase", at_least=3, within_days=30)
+)
+result = ws.query("Login", where=Filter.in_cohort(power_users, name="Power Users"))
+result = ws.query("Login", group_by=CohortBreakdown(power_users, name="Power Users"))
+result = ws.query(CohortMetric(123, "Power Users"), last=90, unit="week")
+
 # Legacy live queries
 segmentation = ws.segmentation(
     event=events[0].name,
@@ -204,6 +215,7 @@ Discovery commands let you survey what exists before writing queries—no guessi
 - Rolling and cumulative analysis modes
 - Percentiles (p25, p75, p90, p99, custom percentiles, histogram distributions)
 - Typed filters (`Filter.equals()`, `Filter.greater_than()`, date filters like `Filter.in_the_last()`, etc.)
+- Cohort-scoped queries — filter by cohort, break down by cohort membership, or track cohort size over time, using saved cohort IDs or inline `CohortDefinition` objects
 - Property breakdowns with numeric bucketing
 - Results as DataFrames, persistable as saved reports
 

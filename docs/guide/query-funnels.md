@@ -298,6 +298,31 @@ Global filters apply to all steps in the funnel. For step-specific filtering, us
 
 See [Insights Queries — Available Filter Methods](query.md#available-filter-methods) for the complete filter reference.
 
+### Cohort Filters
+
+Restrict the funnel to users in a cohort — saved or inline:
+
+```python
+from mixpanel_data import Filter, CohortCriteria, CohortDefinition
+
+# Saved cohort
+result = ws.query_funnel(
+    ["Signup", "Purchase"],
+    where=Filter.in_cohort(123, "Power Users"),
+)
+
+# Inline cohort — no pre-saved cohort needed
+active_users = CohortDefinition(
+    CohortCriteria.did_event("Login", at_least=5, within_days=7)
+)
+result = ws.query_funnel(
+    ["Signup", "Purchase"],
+    where=Filter.in_cohort(active_users, name="Active Users"),
+)
+```
+
+See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full cohort filter reference.
+
 ## Breakdowns
 
 Break down funnel results by property values with `group_by`:
@@ -317,6 +342,22 @@ result = ws.query_funnel(
     group_by=GroupBy("amount", property_type="number", bucket_size=50),
 )
 ```
+
+### Cohort Breakdowns
+
+Segment funnel results by cohort membership:
+
+```python
+from mixpanel_data import CohortBreakdown
+
+# Compare power users vs. everyone else through the funnel
+result = ws.query_funnel(
+    ["Signup", "Purchase"],
+    group_by=CohortBreakdown(123, "Power Users"),
+)
+```
+
+See [Insights Queries — Cohort Breakdowns](query.md#cohort-breakdowns) for inline definitions and options.
 
 See [Insights Queries — Breakdowns](query.md#breakdowns) for the full `GroupBy` reference.
 

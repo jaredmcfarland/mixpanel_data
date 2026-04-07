@@ -143,6 +143,7 @@ See the [Data Governance guide](../guide/data-governance.md) for complete covera
         - stream_events
         - stream_profiles
         - query
+        - build_params
         - query_funnel
         - build_funnel_params
         - query_retention

@@ -262,7 +262,7 @@ Design documents in `context/`:
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
 
-## mixpanel-data Plugin (v2 — CodeMode)
+## mixpanel-data Plugin (v3.0 — 4-Engine Query Taxonomy)
 
 This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin teaches Claude to be a senior data analyst by writing Python code using `mixpanel_data` + `pandas` — no CLI commands, no MCP tools.
 
@@ -277,6 +277,7 @@ This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin tea
 | **Agent** | `explorer` | Task tool — schema discovery, GQM decomposition |
 | **Agent** | `diagnostician` | Task tool — root cause analysis |
 | **Agent** | `narrator` | Task tool — executive summaries and reports |
+| **Agent** | `synthesizer` | Task tool — multi-engine joins, graph analysis, statistical testing |
 | **Script** | `help.py` | `python help.py Workspace.segmentation` — live API docs |
 | **Script** | `auth_manager.py` | `python auth_manager.py status` — auth status JSON |
 
@@ -291,6 +292,7 @@ Task(subagent_type="mixpanel-data:analyst", prompt="...")
 Task(subagent_type="mixpanel-data:explorer", prompt="...")
 Task(subagent_type="mixpanel-data:diagnostician", prompt="...")
 Task(subagent_type="mixpanel-data:narrator", prompt="...")
+Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
 ```
 
 ## Active Technologies

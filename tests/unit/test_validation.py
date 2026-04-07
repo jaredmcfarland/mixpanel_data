@@ -371,15 +371,16 @@ class TestValidateQueryArgsLayer1:
 
     def test_collects_all_errors(self) -> None:
         """Multiple violations produce multiple errors."""
+        # Use a plain string event so top-level math validation (V1) fires;
+        # events=[] would skip V1 because no plain events consume top-level math.
         errors = validate_query_args(
             **_valid_args(
-                events=[],
+                events=["Login"],
                 math="average",
                 last=-1,
             )
         )
         codes = {e.code for e in errors}
-        assert "V0_NO_EVENTS" in codes
         assert "V1_MATH_REQUIRES_PROPERTY" in codes
         assert "V7_LAST_POSITIVE" in codes
 

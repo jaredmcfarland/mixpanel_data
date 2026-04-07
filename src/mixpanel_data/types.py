@@ -7452,16 +7452,7 @@ class Filter:
             cohort_entry["id"] = cohort
             cohort_entry["name"] = name or ""
         else:
-            raw = copy.deepcopy(cohort.to_dict())
-            # Remove null selector keys — the API's postorder_traverse
-            # crashes on None roots in event_selector.selector fields.
-            for _bkey, bval in raw.get("behaviors", {}).items():
-                count = bval.get("count")
-                if isinstance(count, dict):
-                    es = count.get("event_selector")
-                    if isinstance(es, dict) and es.get("selector") is None:
-                        del es["selector"]
-            cohort_entry["raw_cohort"] = raw
+            cohort_entry["raw_cohort"] = _sanitize_raw_cohort(cohort.to_dict())
             cohort_entry["name"] = name or ""
 
         value: list[dict[str, Any]] = [{"cohort": cohort_entry}]
@@ -8240,6 +8231,30 @@ class CohortCriteria:
             _behavior_key=None,
             _behavior=None,
         )
+
+
+def _sanitize_raw_cohort(raw: dict[str, Any]) -> dict[str, Any]:
+    """Remove null ``selector`` keys from behavioral event_selector entries.
+
+    The Mixpanel API calls ``postorder_traverse`` on nested ``selector``
+    fields within ``event_selector`` blocks. A ``None`` root causes a
+    crash. This function deep-copies the raw cohort dict and removes
+    any ``selector: None`` entries from behavioral event_selectors.
+
+    Args:
+        raw: Output of ``CohortDefinition.to_dict()``.
+
+    Returns:
+        Sanitized deep copy safe for API submission.
+    """
+    result = copy.deepcopy(raw)
+    for _bkey, bval in result.get("behaviors", {}).items():
+        count = bval.get("count")
+        if isinstance(count, dict):
+            es = count.get("event_selector")
+            if isinstance(es, dict) and es.get("selector") is None:
+                del es["selector"]
+    return result
 
 
 @dataclass(frozen=True, init=False)

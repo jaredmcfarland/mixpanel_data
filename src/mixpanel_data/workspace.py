@@ -25,7 +25,6 @@ Example:
 
 from __future__ import annotations
 
-import copy
 import logging
 import time
 from collections.abc import Iterator, Sequence
@@ -198,6 +197,7 @@ from mixpanel_data.types import (
     WebhookMutationResult,
     WebhookTestParams,
     WebhookTestResult,
+    _sanitize_raw_cohort,
 )
 
 # Limit validation bounds (Mixpanel API restriction)
@@ -1724,13 +1724,7 @@ class Workspace:
                 if isinstance(item.cohort, int):
                     cohort_behavior["id"] = item.cohort
                 else:
-                    raw = copy.deepcopy(item.cohort.to_dict())
-                    for _bkey, bval in raw.get("behaviors", {}).items():
-                        count = bval.get("count")
-                        if isinstance(count, dict):
-                            es = count.get("event_selector")
-                            if isinstance(es, dict) and es.get("selector") is None:
-                                del es["selector"]
+                    raw = _sanitize_raw_cohort(item.cohort.to_dict())
                     # Server-side cohort processing expects `name` in
                     # the raw_cohort dict (matching get_raw_cohort_by_id
                     # DB format). Without it, label generation crashes.
@@ -1898,9 +1892,14 @@ class Workspace:
 
         Args:
             events: Event name(s) to query. Accepts a single string,
-                a Metric object, a Formula object, or a sequence mixing
-                strings, Metrics, and Formulas. Formula objects in the
+                a Metric object, a CohortMetric object, a Formula
+                object, or a sequence mixing strings, Metrics,
+                CohortMetrics, and Formulas. Formula objects in the
                 list are extracted and appended as formula show clauses.
+                When events includes a CohortMetric, ``math``,
+                ``math_property``, and ``per_user`` are silently
+                ignored for that entry — cohort size is always counted
+                as unique users (CM3).
             from_date: Start date (YYYY-MM-DD). If set, overrides ``last``.
             to_date: End date (YYYY-MM-DD). Requires ``from_date``.
             last: Relative time range in days. Default: 30.
@@ -3253,6 +3252,11 @@ class Workspace:
             hidden_events: Events to hide from the flow visualization.
                 Default: ``None``.
             mode: Flow visualization mode. Default: ``"sankey"``.
+            where: Filter results by cohort membership. Only
+                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
+                are accepted; non-cohort filters raise ``ValueError``.
+                Flows support a single cohort filter (the first is
+                used if multiple are provided). Default: ``None``.
 
         Returns:
             FlowQueryResult with steps, flows, breakdowns, and
@@ -3261,6 +3265,7 @@ class Workspace:
         Raises:
             BookmarkValidationError: If arguments violate validation
                 rules (before API call).
+            ValueError: If ``where`` contains non-cohort filters.
             ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials.
             QueryError: Invalid query parameters.
