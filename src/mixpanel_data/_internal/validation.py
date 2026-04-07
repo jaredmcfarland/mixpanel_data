@@ -174,8 +174,9 @@ def _scan_filters_for_custom_properties(
     """Scan a list of Filter objects for custom property references.
 
     Used by ``_scan_custom_properties()`` to validate custom properties
-    inside per-metric (``Metric.filters``) and per-step
-    (``FunnelStep.filters``) filter lists that were previously unscanned.
+    inside filter lists attached to metrics and steps, including
+    ``Metric.filters``, ``FunnelStep.filters``, ``FlowStep.filters``,
+    and ``RetentionEvent.filters``.
 
     Args:
         filters: Filter objects to scan.
@@ -258,16 +259,16 @@ def _scan_custom_properties(
     # Scan events (Metric.property AND Metric.filters)
     if events is not None:
         for idx, item in enumerate(events):
-            if isinstance(item, Metric):
-                if isinstance(item.property, (CustomPropertyRef, InlineCustomProperty)):
-                    epath = f"events[{idx}]"
-                    errors.extend(_validate_custom_property(item.property, epath))
-                if item.filters:
-                    errors.extend(
-                        _scan_filters_for_custom_properties(
-                            item.filters, f"events[{idx}]"
-                        )
-                    )
+            if isinstance(item, Metric) and isinstance(
+                item.property, (CustomPropertyRef, InlineCustomProperty)
+            ):
+                errors.extend(
+                    _validate_custom_property(item.property, f"events[{idx}]")
+                )
+            if isinstance(item, Metric) and item.filters:
+                errors.extend(
+                    _scan_filters_for_custom_properties(item.filters, f"events[{idx}]")
+                )
 
     # Scan funnel steps (FunnelStep.filters)
     if funnel_steps is not None:
@@ -2649,7 +2650,9 @@ def _validate_filter_clause(
 
     # B18b: customPropertyId must be a positive integer (defense-in-depth)
     cp_id = clause.get("customPropertyId")
-    if cp_id is not None and (not isinstance(cp_id, int) or cp_id <= 0):
+    if cp_id is not None and (
+        isinstance(cp_id, bool) or not isinstance(cp_id, int) or cp_id <= 0
+    ):
         errors.append(
             ValidationError(
                 path=f"{path}.customPropertyId",
