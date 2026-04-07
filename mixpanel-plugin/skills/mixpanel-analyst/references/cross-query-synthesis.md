@@ -286,6 +286,63 @@ print("=" * 50)
 
 ---
 
+## Join Strategy 6: Cohort-Aligned Cross-Engine Analysis
+
+**Use when**: You want to understand how a specific user cohort behaves differently across all four engines.
+
+**Principle**: Define the cohort filter once, pass it to all engines via `where=Filter.in_cohort()`, then compare cohort behavior to the overall population. For engines that support it, use `CohortBreakdown` to get in-vs-out segmentation in a single query.
+
+```python
+import mixpanel_data as mp
+from mixpanel_data import Filter, CohortBreakdown, CohortMetric, Metric
+from concurrent.futures import ThreadPoolExecutor
+
+ws = mp.Workspace()
+cohort_id = 123
+cohort_name = "Power Users"
+cohort_filter = Filter.in_cohort(cohort_id, cohort_name)
+
+queries = {
+    # Insights: engagement breakdown (in vs out)
+    "engagement": lambda: ws.query(
+        "Login", math="dau",
+        group_by=CohortBreakdown(cohort_id, cohort_name),
+        last=30,
+    ),
+    # Funnels: conversion comparison (in vs out)
+    "funnel": lambda: ws.query_funnel(
+        ["Signup", "Activate", "Purchase"],
+        group_by=CohortBreakdown(cohort_id, cohort_name),
+        last=30,
+    ),
+    # Retention: retention comparison (in vs out)
+    "retention": lambda: ws.query_retention(
+        "Signup", "Login",
+        group_by=CohortBreakdown(cohort_id, cohort_name),
+        retention_unit="week", last=90,
+    ),
+    # Flows: path analysis (filter only — CohortBreakdown not supported)
+    "flow": lambda: ws.query_flow(
+        "Purchase", forward=0, reverse=3,
+        where=cohort_filter, last=30,
+    ),
+    # Cohort size trend
+    "size": lambda: ws.query(
+        [Metric("Login", math="unique"), CohortMetric(cohort_id, cohort_name)],
+        formula="(B / A) * 100", formula_label="Power User %",
+        last=90,
+    ),
+}
+
+with ThreadPoolExecutor(max_workers=5) as pool:
+    futures = {name: pool.submit(fn) for name, fn in queries.items()}
+    results = {name: future.result() for name, future in futures.items()}
+```
+
+**Unique insight**: CohortBreakdown produces in-vs-out comparison in a single query for 3 engines. Flows requires a separate cohort-filtered query. CohortMetric tracks the cohort's share of total users over time.
+
+---
+
 ## Synthesis Patterns with pandas/numpy
 
 ### Correlation Analysis Across Query Results
@@ -580,6 +637,22 @@ print(f"\nTrend: {daily_change:+.1f}/day ({weekly_change:+.1f}/week)")
 **Join strategy**: AARRR framework alignment -- each engine maps to a lifecycle stage. The stage with the worst metric is the bottleneck.
 
 **Unique insight**: Quantify each AARRR stage (insights), identify conversion gaps (funnels), validate retention (retention), and map specific friction points (flows). The bottleneck is where the compounding loss is greatest.
+
+### Template 11: Cohort Behavior Deep Dive (4-engine)
+
+**Question**: "How do power users differ from everyone else?"
+
+| # | Sub-Question | Engine | Method | Key Params |
+|---|-------------|--------|--------|------------|
+| 1 | How does engagement differ? | Insights | `query()` | `group_by=CohortBreakdown(ID, "Power Users")` |
+| 2 | Do they convert better? | Funnels | `query_funnel()` | `group_by=CohortBreakdown(ID, "Power Users")` |
+| 3 | Do they retain better? | Retention | `query_retention()` | `group_by=CohortBreakdown(ID, "Power Users")` |
+| 4 | What paths do they take? | Flows | `query_flow()` | `where=Filter.in_cohort(ID, "Power Users")` |
+| 5 | Is the cohort growing? | Insights | `query()` | `CohortMetric(ID, "Power Users")` + formula |
+
+**Join strategy**: Segment-aligned — CohortBreakdown gives in-vs-out comparison across 3 engines. Flows uses Filter.in_cohort() since CohortBreakdown is not supported.
+
+**Unique insight**: A single cohort definition drives consistent segmentation across all engines. Insights + CohortMetric shows whether the cohort is growing, while the other engines reveal why members behave differently.
 
 ---
 

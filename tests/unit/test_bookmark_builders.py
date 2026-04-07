@@ -19,7 +19,7 @@ from mixpanel_data._internal.bookmark_builders import (
     build_group_section,
     build_time_section,
 )
-from mixpanel_data.types import Filter, GroupBy
+from mixpanel_data.types import CohortBreakdown, Filter, GroupBy
 
 
 class TestBuildTimeSection:
@@ -238,7 +238,7 @@ class TestBuildGroupSection:
 
     def test_multiple_groups_mixed(self) -> None:
         """List of mixed strings and GroupBy produces correct entries."""
-        groups: list[str | GroupBy] = [
+        groups: list[str | GroupBy | CohortBreakdown] = [
             "country",
             GroupBy("revenue", property_type="number"),
         ]
@@ -251,12 +251,18 @@ class TestBuildGroupSection:
 
     def test_invalid_type_raises_typeerror(self) -> None:
         """Invalid group_by element type raises TypeError."""
-        with pytest.raises(TypeError, match="group_by elements must be str or GroupBy"):
+        with pytest.raises(
+            TypeError,
+            match="group_by elements must be str, GroupBy, or CohortBreakdown",
+        ):
             build_group_section(123)  # type: ignore[arg-type]
 
     def test_invalid_element_in_list_raises_typeerror(self) -> None:
         """Invalid element inside list raises TypeError."""
-        with pytest.raises(TypeError, match="group_by elements must be str or GroupBy"):
+        with pytest.raises(
+            TypeError,
+            match="group_by elements must be str, GroupBy, or CohortBreakdown",
+        ):
             build_group_section(["country", 42])  # type: ignore[list-item]
 
 

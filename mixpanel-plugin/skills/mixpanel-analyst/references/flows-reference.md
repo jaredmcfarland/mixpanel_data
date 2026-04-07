@@ -870,6 +870,25 @@ ws.create_bookmark(CreateBookmarkParams(
 
 ---
 
+## Cohort Filters in Flows
+
+Flows support cohort filters via the `where=` parameter, restricting path analysis to users in a specific cohort:
+
+```python
+from mixpanel_data import Filter
+
+# Paths taken by power users after purchase
+result = ws.query_flow(
+    "Purchase", forward=3,
+    where=Filter.in_cohort(123, "Power Users"),
+    last=30,
+)
+```
+
+**Note**: `CohortBreakdown` and `CohortMetric` are NOT supported for flows. Use cohort filters (`where=`) only.
+
+---
+
 ## Validation Rules
 
 ### Query-Level Rules (FL*)

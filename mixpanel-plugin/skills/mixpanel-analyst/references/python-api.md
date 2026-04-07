@@ -36,7 +36,7 @@ ws.clear_discovery_cache() -> None
 
 ```python
 ws.query(
-    events: str | Metric | Formula | Sequence[str | Metric | Formula],
+    events: str | Metric | CohortMetric | Formula | Sequence[str | Metric | CohortMetric | Formula],
     *,
     from_date: str | None = None,          # "YYYY-MM-DD"; mutually exclusive with `last`
     to_date: str | None = None,            # "YYYY-MM-DD"; defaults to today
@@ -46,7 +46,7 @@ ws.query(
     math_property: str | None = None,      # required for average/median/min/max/p25/p75/p90/p99/percentile/histogram
     percentile_value: int | float | None = None,  # required when math="percentile" (e.g. 95)
     per_user: PerUserAggregation | None = None,  # nest per-user then aggregate
-    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    group_by: str | GroupBy | CohortBreakdown | list[str | GroupBy | CohortBreakdown] | None = None,
     where: Filter | list[Filter] | None = None,
     formula: str | None = None,            # e.g. "(A / B) * 100"
     formula_label: str | None = None,
@@ -97,6 +97,10 @@ Filter.since(property, date, *, resource_type="events")                 # on or 
 Filter.in_the_last(property, quantity, date_unit, *, resource_type="events")      # last N units
 Filter.not_in_the_last(property, quantity, date_unit, *, resource_type="events")  # NOT in last N
 Filter.date_between(property, from_date, to_date, *, resource_type="events")     # date range
+
+# Cohort membership
+Filter.in_cohort(cohort, name=None)       # cohort: int | CohortDefinition; works with all 4 engines via where=
+Filter.not_in_cohort(cohort, name=None)   # excludes users in the cohort
 ```
 
 `FilterDateUnit = Literal["hour", "day", "week", "month"]` — used by `in_the_last()` and `not_in_the_last()`.
@@ -113,6 +117,88 @@ GroupBy(
     bucket_min: int | None = None,
     bucket_max: int | None = None,
 )
+```
+
+### CohortBreakdown
+
+```python
+from mixpanel_data import CohortBreakdown
+
+CohortBreakdown(
+    cohort: int | CohortDefinition,      # saved cohort ID or inline definition
+    name: str | None = None,             # display name (used as series label)
+    include_negated: bool = True,         # include "Not In [name]" segment
+)
+```
+
+Used in `group_by=` for `query()`, `query_funnel()`, and `query_retention()`. Not supported for `query_flow()`. Mixable with property `GroupBy` in insights and funnels. In retention, `CohortBreakdown` and property `GroupBy` are mutually exclusive (CB3).
+
+```python
+# Segment DAU by cohort membership
+result = ws.query("Login", math="dau", group_by=CohortBreakdown(123, "Power Users"), last=30)
+
+# Mix cohort + property breakdowns
+result = ws.query("Login", group_by=[CohortBreakdown(123, "Power Users"), "platform"])
+```
+
+### CohortMetric
+
+```python
+from mixpanel_data import CohortMetric
+
+CohortMetric(
+    cohort: int | CohortDefinition,      # saved cohort ID or inline definition
+    name: str | None = None,             # display name / series label
+)
+```
+
+Used in `events=` for `query()` only (insights). Creates a `behavior.type: "cohort"` show clause tracking cohort size over time. Math is always `"unique"` (CM3). Cannot be used with `query_funnel()`, `query_retention()`, or `query_flow()` (CM4).
+
+**Known limitation**: `CohortMetric` with inline `CohortDefinition` triggers a server-side 500 error. Use saved cohort IDs for `CohortMetric`.
+
+```python
+# Track cohort size over time
+result = ws.query(CohortMetric(123, "Power Users"), last=90)
+
+# Power user percentage formula
+result = ws.query(
+    [Metric("Login", math="unique"), CohortMetric(123, "Power Users")],
+    formula="(B / A) * 100", formula_label="Power User %",
+)
+```
+
+### CohortDefinition and CohortCriteria
+
+Build inline cohort definitions for use with `Filter.in_cohort()`, `CohortBreakdown`, and `CohortMetric`.
+
+```python
+from mixpanel_data import CohortDefinition, CohortCriteria
+
+# Atomic criteria (factory methods)
+CohortCriteria.did_event(event, *, at_least=None, within_days=None)
+CohortCriteria.has_property(property, value, *, operator="equals")
+CohortCriteria.in_cohort(cohort_id)
+CohortCriteria.not_in_cohort(cohort_id)
+
+# Combining with logic
+CohortDefinition.all_of(*criteria)    # AND
+CohortDefinition.any_of(*criteria)    # OR
+CohortDefinition(*criteria)           # shorthand for all_of
+
+# Serialization
+definition.to_dict()  # -> {"selector": {...}, "behaviors": {...}}
+```
+
+```python
+# Compose an inline definition
+premium_active = CohortDefinition.all_of(
+    CohortCriteria.has_property("plan", "premium"),
+    CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
+)
+
+# Use in any cohort capability
+result = ws.query("Login", where=Filter.in_cohort(premium_active, "Premium Active"), last=30)
+result = ws.query("Login", group_by=CohortBreakdown(premium_active, "Premium Active"))
 ```
 
 ### Formula
@@ -213,7 +299,7 @@ ws.query_funnel(
     unit: QueryTimeUnit = "day",
     math: FunnelMathType = "conversion_rate_unique",
     math_property: str | None = None,
-    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    group_by: str | GroupBy | CohortBreakdown | list[str | GroupBy | CohortBreakdown] | None = None,
     where: Filter | list[Filter] | None = None,
     exclusions: list[str | Exclusion] | None = None,
     holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None = None,
@@ -330,11 +416,13 @@ ws.query_retention(
     last: int = 30,                        # relative window in `unit`s; ignored if from_date set
     unit: QueryTimeUnit = "day",
     math: RetentionMathType = "retention_rate",
-    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    group_by: str | GroupBy | CohortBreakdown | list[str | GroupBy | CohortBreakdown] | None = None,
     where: Filter | list[Filter] | None = None,
     mode: RetentionMode = "curve",
 ) -> RetentionQueryResult
 ```
+
+**Constraint**: `CohortBreakdown` and property `GroupBy` are mutually exclusive in retention queries (CB3).
 
 ### RetentionEvent
 
@@ -549,6 +637,8 @@ ws.build_flow_params(
     cardinality, collapse_repeated, hidden_events, mode,
 ) -> dict
 ```
+
+**Cohort support**: `query_flow()` supports cohort filters via `where=Filter.in_cohort(...)` but does NOT support `CohortBreakdown` or `CohortMetric`.
 
 ---
 

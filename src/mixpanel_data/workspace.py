@@ -25,6 +25,7 @@ Example:
 
 from __future__ import annotations
 
+import copy
 import logging
 import time
 from collections.abc import Iterator, Sequence
@@ -37,6 +38,7 @@ from mixpanel_data._internal.bookmark_builders import (
     build_date_range,
     build_filter_entry,
     build_filter_section,
+    build_flow_cohort_filter,
     build_group_section,
     build_time_section,
 )
@@ -86,6 +88,8 @@ from mixpanel_data.types import (
     BulkUpdateEventsParams,
     BulkUpdatePropertiesParams,
     Cohort,
+    CohortBreakdown,
+    CohortMetric,
     CreateAlertParams,
     CreateAnnotationParams,
     CreateAnnotationTagParams,
@@ -1659,7 +1663,7 @@ class Workspace:
     def _build_query_params(
         self,
         *,
-        events: Sequence[str | Metric],
+        events: Sequence[str | Metric | CohortMetric],
         math: MathType,
         math_property: str | None,
         per_user: PerUserAggregation | None,
@@ -1668,7 +1672,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         formulas: Sequence[Formula],
         rolling: int | None,
@@ -1702,6 +1710,46 @@ class Workspace:
         # --- Build sections.show[] ---
         show: list[dict[str, Any]] = []
         for item in events:
+            if isinstance(item, CohortMetric):
+                # CohortMetric: cohort size tracking (CM3: ignore top-level math)
+                cohort_behavior: dict[str, Any] = {
+                    "type": "cohort",
+                    "name": item.name or "",
+                    "resourceType": "cohorts",
+                    "dataGroupId": None,
+                    "dataset": "$mixpanel",
+                    "filtersDeterminer": "all",
+                    "filters": [],
+                }
+                if isinstance(item.cohort, int):
+                    cohort_behavior["id"] = item.cohort
+                else:
+                    raw = copy.deepcopy(item.cohort.to_dict())
+                    for _bkey, bval in raw.get("behaviors", {}).items():
+                        count = bval.get("count")
+                        if isinstance(count, dict):
+                            es = count.get("event_selector")
+                            if isinstance(es, dict) and es.get("selector") is None:
+                                del es["selector"]
+                    # Server-side cohort processing expects `name` in
+                    # the raw_cohort dict (matching get_raw_cohort_by_id
+                    # DB format). Without it, label generation crashes.
+                    raw["name"] = item.name or ""
+                    cohort_behavior["raw_cohort"] = raw
+
+                entry: dict[str, Any] = {
+                    "type": "metric",
+                    "behavior": cohort_behavior,
+                    "measurement": {
+                        "math": "unique",
+                        "property": None,
+                        "perUserAggregation": None,
+                    },
+                    "isHidden": bool(formulas),
+                }
+                show.append(entry)
+                continue
+
             if isinstance(item, Metric):
                 event_name = item.event
                 item_math = item.math
@@ -1740,7 +1788,7 @@ class Workspace:
             if item_filters:
                 behavior_filters = [build_filter_entry(f) for f in item_filters]
 
-            entry: dict[str, Any] = {
+            entry = {
                 "type": "metric",
                 "behavior": {
                     "type": "event",
@@ -1816,7 +1864,11 @@ class Workspace:
 
     def query(
         self,
-        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        events: str
+        | Metric
+        | CohortMetric
+        | Formula
+        | Sequence[str | Metric | CohortMetric | Formula],
         *,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -1826,7 +1878,11 @@ class Workspace:
         math_property: str | None = None,
         per_user: PerUserAggregation | None = None,
         percentile_value: int | float | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
@@ -1944,7 +2000,11 @@ class Workspace:
 
     def build_params(
         self,
-        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        events: str
+        | Metric
+        | CohortMetric
+        | Formula
+        | Sequence[str | Metric | CohortMetric | Formula],
         *,
         from_date: str | None = None,
         to_date: str | None = None,
@@ -1954,7 +2014,11 @@ class Workspace:
         math_property: str | None = None,
         per_user: PerUserAggregation | None = None,
         percentile_value: int | float | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
@@ -2037,7 +2101,11 @@ class Workspace:
     def _resolve_and_build_params(
         self,
         *,
-        events: str | Metric | Formula | Sequence[str | Metric | Formula],
+        events: str
+        | Metric
+        | CohortMetric
+        | Formula
+        | Sequence[str | Metric | CohortMetric | Formula],
         from_date: str | None,
         to_date: str | None,
         last: int,
@@ -2046,7 +2114,11 @@ class Workspace:
         math_property: str | None,
         per_user: PerUserAggregation | None,
         percentile_value: int | float | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
@@ -2087,14 +2159,14 @@ class Workspace:
         Raises:
             BookmarkValidationError: If validation fails at any layer.
         """
-        # Type guard: events must be str, Metric, Formula, or sequence thereof
-        if not isinstance(events, (str, Metric, Formula, list, tuple)):
+        # Type guard: events must be str, Metric, CohortMetric, Formula, or sequence thereof
+        if not isinstance(events, (str, Metric, CohortMetric, Formula, list, tuple)):
             raise BookmarkValidationError(
                 [
                     ValidationError(
                         path="events",
                         message=(
-                            f"events must be a string, Metric, Formula, or "
+                            f"events must be a string, Metric, CohortMetric, Formula, or "
                             f"sequence, got {type(events).__name__}"
                         ),
                         code="V21_INVALID_EVENT_TYPE",
@@ -2119,9 +2191,9 @@ class Workspace:
 
         # Normalize events to sequence, separating Formula objects
         if isinstance(events, str):
-            events_list: list[str | Metric] = [events]
+            events_list: list[str | Metric | CohortMetric] = [events]
             formulas_from_list: list[Formula] = []
-        elif isinstance(events, Metric):
+        elif isinstance(events, (Metric, CohortMetric)):
             events_list = [events]
             formulas_from_list = []
         elif isinstance(events, Formula):
@@ -2227,7 +2299,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         exclusions: list[Exclusion],
         holding_constant: list[HoldingConstant],
@@ -2384,7 +2460,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         exclusions: list[str | Exclusion] | None,
         holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None,
@@ -2501,7 +2581,11 @@ class Workspace:
         unit: QueryTimeUnit = "day",
         math: FunnelMathType = "conversion_rate_unique",
         math_property: str | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         exclusions: list[str | Exclusion] | None = None,
         holding_constant: (
@@ -2623,7 +2707,11 @@ class Workspace:
         unit: QueryTimeUnit = "day",
         math: FunnelMathType = "conversion_rate_unique",
         math_property: str | None = None,
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         exclusions: list[str | Exclusion] | None = None,
         holding_constant: (
@@ -2717,7 +2805,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         mode: RetentionMode,
     ) -> dict[str, Any]:
@@ -2832,6 +2924,7 @@ class Workspace:
         collapse_repeated: bool,
         hidden_events: list[str] | None,
         mode: str,
+        where: Filter | list[Filter] | None = None,
     ) -> dict[str, Any]:
         """Build a flat flow bookmark params dict from typed arguments.
 
@@ -2876,7 +2969,7 @@ class Workspace:
             )
             ```
         """
-        return {
+        params: dict[str, Any] = {
             "steps": [
                 {
                     "event": step.event,
@@ -2911,6 +3004,14 @@ class Workspace:
             "exclusions": [],
         }
 
+        # Add cohort filter if present
+        if where is not None:
+            cohort_filter = build_flow_cohort_filter(where)
+            if cohort_filter is not None:
+                params["filter_by_cohort"] = cohort_filter
+
+        return params
+
     def _resolve_and_build_flow_params(
         self,
         *,
@@ -2927,6 +3028,7 @@ class Workspace:
         collapse_repeated: bool,
         hidden_events: list[str] | None,
         mode: str,
+        where: Filter | list[Filter] | None = None,
     ) -> dict[str, Any]:
         """Normalize, validate, and build flow bookmark params.
 
@@ -3090,6 +3192,7 @@ class Workspace:
             collapse_repeated=collapse_repeated,
             hidden_events=hidden_events,
             mode=mode,
+            where=where,
         )
 
         # Layer 2: Bookmark structure validation
@@ -3115,6 +3218,7 @@ class Workspace:
         collapse_repeated: bool = False,
         hidden_events: list[str] | None = None,
         mode: Literal["sankey", "paths", "tree"] = "sankey",
+        where: Filter | list[Filter] | None = None,
     ) -> FlowQueryResult:
         """Run a typed flow query against the Mixpanel API.
 
@@ -3193,6 +3297,7 @@ class Workspace:
             collapse_repeated=collapse_repeated,
             hidden_events=hidden_events,
             mode=mode,
+            where=where,
         )
 
         credentials = self._credentials
@@ -3223,6 +3328,7 @@ class Workspace:
         collapse_repeated: bool = False,
         hidden_events: list[str] | None = None,
         mode: Literal["sankey", "paths", "tree"] = "sankey",
+        where: Filter | list[Filter] | None = None,
     ) -> dict[str, Any]:
         """Build validated flow bookmark params without executing.
 
@@ -3287,6 +3393,7 @@ class Workspace:
             collapse_repeated=collapse_repeated,
             hidden_events=hidden_events,
             mode=mode,
+            where=where,
         )
 
     # =========================================================================
@@ -3306,7 +3413,11 @@ class Workspace:
         to_date: str | None,
         last: int,
         unit: QueryTimeUnit,
-        group_by: str | GroupBy | list[str | GroupBy] | None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None,
         where: Filter | list[Filter] | None,
         mode: RetentionMode,
     ) -> dict[str, Any]:
@@ -3404,7 +3515,11 @@ class Workspace:
         last: int = 30,
         unit: QueryTimeUnit = "day",
         math: RetentionMathType = "retention_rate",
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         mode: RetentionMode = "curve",
     ) -> RetentionQueryResult:
@@ -3507,7 +3622,11 @@ class Workspace:
         last: int = 30,
         unit: QueryTimeUnit = "day",
         math: RetentionMathType = "retention_rate",
-        group_by: str | GroupBy | list[str | GroupBy] | None = None,
+        group_by: str
+        | GroupBy
+        | CohortBreakdown
+        | list[str | GroupBy | CohortBreakdown]
+        | None = None,
         where: Filter | list[Filter] | None = None,
         mode: RetentionMode = "curve",
     ) -> dict[str, Any]:

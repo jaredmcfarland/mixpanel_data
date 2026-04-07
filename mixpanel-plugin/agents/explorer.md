@@ -65,6 +65,7 @@ vals = ws.property_values("prop", event="Event")  # sample values
 # Saved entities
 funnels = ws.funnels()                            # saved funnels
 cohorts = ws.cohorts()                            # saved cohorts
+# Cohort IDs work with Filter.in_cohort(), CohortBreakdown(), CohortMetric()
 bookmarks = ws.list_bookmarks()                   # saved reports
 
 # Lexicon definitions
@@ -165,6 +166,7 @@ For each sub-question, specify the engine, method, and parameters:
 | 3 | Do they come back after week 1? | Retention | `ws.query_retention()` | `retention_unit="week"` |
 | 4 | What paths lead to activation? | Flows | `ws.query_flow()` | `forward=3, mode="sankey"` |
 | 5 | How do results connect? | pandas | merge/correlate | Join on date or cohort |
+| 6 | Does behavior differ for [cohort]? | Any | `ws.query()` | `where=Filter.in_cohort(...)` or `group_by=CohortBreakdown(...)` |
 
 ### Step 5: Define the Join Strategy
 

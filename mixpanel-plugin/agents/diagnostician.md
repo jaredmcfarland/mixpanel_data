@@ -118,6 +118,17 @@ for dim, sdf in segment_results.items():
     print(combined.sort_values("change").head(5))
 ```
 
+If relevant saved cohorts exist, also segment by cohort membership:
+
+```python
+from mixpanel_data import CohortBreakdown
+
+# Compare behavior inside vs outside a cohort
+cohort_result = ws.query("TARGET_EVENT", last=60,
+    group_by=CohortBreakdown(COHORT_ID, "Power Users"), unit="day")
+# Reveals whether the change is isolated to a specific user segment
+```
+
 ### Step 4: CHECK CONVERSION (Funnels)
 
 Did conversion through related steps change?
@@ -213,6 +224,14 @@ deeper = ws.query(
 )
 print("=== Hypothesis Test: iOS 3.2 by Screen ===")
 print(deeper.df)
+```
+
+```python
+# Hypothesis: change is isolated to a specific user cohort
+cohort_check = ws.query(
+    "TARGET_EVENT", last=30, unit="day",
+    where=Filter.in_cohort(COHORT_ID, "Suspected Segment"),
+)
 ```
 
 ## Parallel Execution Pattern

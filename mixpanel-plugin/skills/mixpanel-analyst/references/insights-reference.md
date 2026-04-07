@@ -6,7 +6,7 @@ Complete reference for `Workspace.query()`, the primary typed query engine for M
 
 ```python
 Workspace.query(
-    events: str | Metric | Formula | Sequence[str | Metric | Formula],
+    events: str | Metric | CohortMetric | Formula | Sequence[str | Metric | CohortMetric | Formula],
     *,
     from_date: str | None = None,          # "YYYY-MM-DD"; mutually exclusive with last
     to_date: str | None = None,            # "YYYY-MM-DD"; defaults to today
@@ -16,7 +16,7 @@ Workspace.query(
     math_property: str | None = None,      # required for property-based math
     per_user: PerUserAggregation | None = None,  # per-user pre-aggregation
     percentile_value: int | float | None = None,  # required when math="percentile"
-    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    group_by: str | GroupBy | CohortBreakdown | list[str | GroupBy | CohortBreakdown] | None = None,
     where: Filter | list[Filter] | None = None,
     formula: str | None = None,            # e.g. "(A / B) * 100"
     formula_label: str | None = None,
@@ -498,6 +498,85 @@ Returns data in tabular format. Column structure depends on API response — typ
 ```python
 result = ws.query("Login", last=30, group_by="country", mode="table")
 ```
+
+---
+
+## Cohort Capabilities
+
+Three cohort-specific features enhance insights queries. Each accepts saved cohort IDs (`int`) or inline `CohortDefinition` objects.
+
+### Cohort Filters (where=)
+
+Restrict any query to users in (or not in) a cohort:
+
+```python
+from mixpanel_data import Filter, CohortDefinition, CohortCriteria
+
+# Saved cohort
+result = ws.query("Login", math="dau", where=Filter.in_cohort(123, "Power Users"), last=30)
+
+# Inline definition
+premium = CohortDefinition.all_of(
+    CohortCriteria.has_property("plan", "premium"),
+    CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
+)
+result = ws.query("Login", where=Filter.in_cohort(premium, "Premium Users"), last=30)
+
+# Exclude a cohort
+result = ws.query("Login", where=Filter.not_in_cohort(123, "Churned"), last=30)
+```
+
+### Cohort Breakdowns (group_by=)
+
+Segment results by cohort membership — "in cohort" vs "not in cohort":
+
+```python
+from mixpanel_data import CohortBreakdown
+
+# Basic cohort breakdown
+result = ws.query("Login", math="dau", group_by=CohortBreakdown(123, "Power Users"), last=30)
+# Result segments: "Power Users" and "Not In Power Users"
+
+# Mix with property breakdowns
+result = ws.query("Login", group_by=[CohortBreakdown(123, "Power Users"), "platform"])
+
+# Without negated segment
+result = ws.query("Login", group_by=CohortBreakdown(123, "Power Users", include_negated=False))
+```
+
+### Cohort Metrics (events=)
+
+Track cohort size over time as a metric series:
+
+```python
+from mixpanel_data import CohortMetric, Metric, Formula
+
+# Standalone — cohort size trend
+result = ws.query(CohortMetric(123, "Power Users"), last=90)
+
+# Mixed with event metrics + formula
+result = ws.query(
+    [Metric("Login", math="unique"), CohortMetric(123, "Power Users")],
+    formula="(B / A) * 100", formula_label="Power User %",
+    last=90,
+)
+```
+
+**Known limitation**: `CohortMetric` with inline `CohortDefinition` triggers a server-side 500 error. Use saved cohort IDs.
+
+### Cohort Validation Rules
+
+| Rule | Check | Error |
+|------|-------|-------|
+| CF1 | Cohort ID must be positive integer (when `int`) | `CF1_COHORT_ID_POSITIVE` |
+| CF2 | Cohort name must be non-empty when provided | `CF2_COHORT_NAME_EMPTY` |
+| CB1 | CohortBreakdown cohort ID must be positive | `CB1_BREAKDOWN_ID_POSITIVE` |
+| CB2 | CohortBreakdown name must be non-empty when provided | `CB2_BREAKDOWN_NAME_EMPTY` |
+| CB3 | CohortBreakdown and property GroupBy mutually exclusive in retention | `CB3_RETENTION_MUTUAL_EXCLUSION` |
+| CM1 | CohortMetric cohort ID must be positive | `CM1_METRIC_ID_POSITIVE` |
+| CM2 | CohortMetric name must be non-empty when provided | `CM2_METRIC_NAME_EMPTY` |
+| CM3 | CohortMetric math is always "unique" | `CM3_METRIC_MATH_UNIQUE` |
+| CM4 | CohortMetric is insights-only | `CM4_METRIC_INSIGHTS_ONLY` |
 
 ---
 

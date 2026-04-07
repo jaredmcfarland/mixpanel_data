@@ -9,11 +9,36 @@ These are internal helpers — import from ``mixpanel_data._internal.bookmark_bu
 
 from __future__ import annotations
 
+import copy
 from datetime import date
 from typing import Any
 
 from mixpanel_data._literal_types import QueryTimeUnit
-from mixpanel_data.types import Filter, GroupBy
+from mixpanel_data.types import CohortBreakdown, Filter, GroupBy
+
+
+def _sanitize_raw_cohort(raw: dict[str, Any]) -> dict[str, Any]:
+    """Remove null ``selector`` keys from behavioral event_selector entries.
+
+    The Mixpanel API calls ``postorder_traverse`` on nested ``selector``
+    fields within ``event_selector`` blocks. A ``None`` root causes a
+    crash. This function deep-copies the raw cohort dict and removes
+    any ``selector: None`` entries from behavioral event_selectors.
+
+    Args:
+        raw: Output of ``CohortDefinition.to_dict()``.
+
+    Returns:
+        Sanitized copy safe for API submission.
+    """
+    result = copy.deepcopy(raw)
+    for _bkey, bval in result.get("behaviors", {}).items():
+        count = bval.get("count")
+        if isinstance(count, dict):
+            es = count.get("event_selector")
+            if isinstance(es, dict) and es.get("selector") is None:
+                del es["selector"]
+    return result
 
 
 def build_time_section(
@@ -146,32 +171,38 @@ def build_filter_section(
 
 
 def build_group_section(
-    group_by: str | GroupBy | list[str | GroupBy] | None,
+    group_by: str
+    | GroupBy
+    | CohortBreakdown
+    | list[str | GroupBy | CohortBreakdown]
+    | None,
 ) -> list[dict[str, Any]]:
     """Build the ``sections.group`` array for bookmark params.
 
     Converts group-by specifications into the list-of-dicts format
     expected by the Mixpanel bookmark API. Supports strings (simple
     property name), ``GroupBy`` objects (with optional bucketing),
-    and lists mixing both.
+    ``CohortBreakdown`` objects (cohort-based segmentation), and
+    lists mixing all three.
 
     Args:
         group_by: Group-by specification. ``None`` means no grouping.
             Strings produce default string-typed entries. ``GroupBy``
             objects allow custom property types and numeric bucketing.
+            ``CohortBreakdown`` objects produce cohort group entries.
 
     Returns:
         List of group entry dicts (may be empty).
 
     Raises:
-        TypeError: If any element is not ``str`` or ``GroupBy``.
+        TypeError: If any element is not ``str``, ``GroupBy``, or
+            ``CohortBreakdown``.
 
     Example:
         ```python
-        groups = build_group_section("country")
-        # [{"value": "country", "propertyName": "country",
-        #   "resourceType": "events", "propertyType": "string",
-        #   "propertyDefaultType": "string"}]
+        groups = build_group_section(CohortBreakdown(123, "Power Users"))
+        # [{"value": ["Power Users", "Not In Power Users"],
+        #   "resourceType": "events", ...}]
         ```
     """
     if group_by is None:
@@ -208,13 +239,74 @@ def build_group_section(
                 if g.bucket_max is not None:
                     group_entry["customBucket"]["max"] = g.bucket_max
             group_section.append(group_entry)
+        elif isinstance(g, CohortBreakdown):
+            group_section.append(_build_cohort_group_entry(g))
         else:
             raise TypeError(
-                f"group_by elements must be str or GroupBy, "
+                f"group_by elements must be str, GroupBy, or CohortBreakdown, "
                 f"got {type(g).__name__}: {g!r}"
             )
 
     return group_section
+
+
+def _build_cohort_group_entry(cb: CohortBreakdown) -> dict[str, Any]:
+    """Build a single cohort group entry for sections.group[].
+
+    Produces the cohort-specific group dict with ``cohorts`` array
+    containing one or two entries (with/without negated) depending
+    on ``include_negated``.
+
+    Args:
+        cb: CohortBreakdown specification.
+
+    Returns:
+        Group entry dict with ``cohorts`` array.
+
+    Example:
+        ```python
+        entry = _build_cohort_group_entry(CohortBreakdown(123, "PU"))
+        # {"value": ["PU", "Not In PU"], "cohorts": [...], ...}
+        ```
+    """
+    name = cb.name or ""
+
+    # Build cohort entries — saved vs inline use different API schemas:
+    # Schema 1 (saved): allows groups, count, description, etc.
+    # Schema 2 (inline): allows raw_cohort, dataset, but NOT groups
+    base_cohort: dict[str, Any] = {
+        "name": name,
+        "negated": False,
+        "data_group_id": None,
+    }
+    if isinstance(cb.cohort, int):
+        base_cohort["id"] = cb.cohort
+        base_cohort["groups"] = []
+    else:
+        base_cohort["raw_cohort"] = _sanitize_raw_cohort(cb.cohort.to_dict())
+
+    cohorts: list[dict[str, Any]] = [base_cohort]
+
+    # Value labels
+    value_labels: list[str] = [name]
+
+    if cb.include_negated:
+        negated_cohort = dict(base_cohort)
+        negated_cohort["negated"] = True
+        cohorts.append(negated_cohort)
+        value_labels.append(f"Not In {name}")
+
+    return {
+        "value": value_labels,
+        "resourceType": "events",
+        "profileType": None,
+        "search": "",
+        "dataGroupId": None,
+        "propertyType": None,
+        "typeCast": None,
+        "cohorts": cohorts,
+        "isHidden": False,
+    }
 
 
 def build_filter_entry(f: Filter) -> dict[str, Any]:
@@ -251,3 +343,65 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
     if f._date_unit is not None:
         entry["filterDateUnit"] = f._date_unit
     return entry
+
+
+def build_flow_cohort_filter(
+    where: Filter | list[Filter],
+) -> dict[str, Any] | None:
+    """Build the ``filter_by_cohort`` dict for flow bookmark params.
+
+    Flows use a legacy ``filter_by_cohort`` top-level key rather than
+    the ``sections.filter`` array used by insights/funnels/retention.
+    Only cohort filters (``Filter.in_cohort`` / ``Filter.not_in_cohort``)
+    are accepted; non-cohort filters raise ``ValueError``.
+
+    Args:
+        where: A single cohort ``Filter`` or list of cohort ``Filter``
+            objects. Only the first cohort filter is used (flows
+            support a single cohort filter).
+
+    Returns:
+        Dict with cohort filter structure for the ``filter_by_cohort``
+        key, or ``None`` if ``where`` is empty.
+
+    Raises:
+        ValueError: If any filter is not a cohort filter
+            (``_property != "$cohorts"``).
+
+    Example:
+        ```python
+        fbc = build_flow_cohort_filter(Filter.in_cohort(123, "PU"))
+        # {"id": 123, "name": "PU", "negated": False}
+        ```
+    """
+    filters = where if isinstance(where, list) else [where]
+    if not filters:
+        return None
+
+    for f in filters:
+        if f._property != "$cohorts":
+            raise ValueError(
+                "query_flow where= only accepts cohort filters "
+                "(Filter.in_cohort/not_in_cohort)"
+            )
+
+    # Use the first cohort filter
+    f = filters[0]
+    # Extract from the _value structure: [{"cohort": {...}}]
+    cohort_value = f._value
+    if isinstance(cohort_value, list) and len(cohort_value) > 0:
+        first_item = cohort_value[0]
+        if not isinstance(first_item, dict):
+            return None
+        cohort_data: dict[str, Any] = first_item.get("cohort", {})
+        result: dict[str, Any] = {
+            "name": cohort_data.get("name", ""),
+            "negated": f._operator == "does not contain",
+        }
+        if "id" in cohort_data:
+            result["id"] = cohort_data["id"]
+        if "raw_cohort" in cohort_data:
+            result["raw_cohort"] = cohort_data["raw_cohort"]
+        return result
+
+    return None

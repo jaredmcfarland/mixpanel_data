@@ -907,7 +907,10 @@ class TestGroupByTypeError:
 
     def test_invalid_group_by_type_raises(self, ws: Workspace) -> None:
         """Non-str, non-GroupBy group_by element raises TypeError."""
-        with pytest.raises(TypeError, match="group_by elements must be str or GroupBy"):
+        with pytest.raises(
+            TypeError,
+            match="group_by elements must be str, GroupBy, or CohortBreakdown",
+        ):
             ws._build_query_params(
                 events=["Login"],
                 math="total",

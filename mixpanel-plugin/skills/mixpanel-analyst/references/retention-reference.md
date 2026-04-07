@@ -17,7 +17,7 @@ Workspace.query_retention(
     last: int = 30,
     unit: QueryTimeUnit = "day",
     math: RetentionMathType = "retention_rate",  # "retention_rate", "unique"
-    group_by: str | GroupBy | list[str | GroupBy] | None = None,
+    group_by: str | GroupBy | CohortBreakdown | list[str | GroupBy | CohortBreakdown] | None = None,
     where: Filter | list[Filter] | None = None,
     mode: RetentionMode = "curve",              # "curve", "trends", "table"
 ) -> RetentionQueryResult
@@ -347,6 +347,42 @@ for segment_name, segment_cohorts in result.segments.items():
 for name, avg in result.segment_averages.items():
     print(f"{name} avg W1: {avg['rates'][1]:.1%}")
 ```
+
+---
+
+## Cohort-Scoped Retention
+
+### Cohort Filters
+
+Measure retention for a specific user segment:
+
+```python
+from mixpanel_data import Filter
+
+# Retention for power users only
+result = ws.query_retention(
+    "Signup", "Login",
+    where=Filter.in_cohort(123, "Power Users"),
+    retention_unit="week", last=90,
+)
+```
+
+### Cohort Breakdowns
+
+Compare retention curves inside vs outside a cohort:
+
+```python
+from mixpanel_data import CohortBreakdown
+
+result = ws.query_retention(
+    "Signup", "Login",
+    group_by=CohortBreakdown(123, "Power Users"),
+    retention_unit="week", last=90,
+)
+# Compares "Power Users" vs "Not In Power Users" retention curves
+```
+
+**Constraint**: `CohortBreakdown` and property `GroupBy` are mutually exclusive in retention (CB3). You cannot combine `CohortBreakdown(123, "Power Users")` with `"platform"` in the same `group_by` list. Use separate queries instead.
 
 ---
 

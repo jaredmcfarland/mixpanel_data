@@ -61,6 +61,8 @@ for src, tgt, count in flow.top_transitions(5):
     print(f"  {src} -> {tgt}: {count}")
 ```
 
+**Cohort-scoped**: Compare activation funnels across cohorts: `ws.query_funnel(steps, group_by=CohortBreakdown(ID, "Power Users"))`
+
 ### Retention — "Do they come back?"
 
 **Questions**: Return rates, cohort behavior, churn patterns, sticky features
@@ -88,6 +90,8 @@ stickiness = ws.query(
 print(f"DAU trend for Feature X:")
 print(stickiness.df)
 ```
+
+**Cohort-scoped**: Compare retention curves across cohorts: `ws.query_retention(born, ret, group_by=CohortBreakdown(ID, "Power Users"))`
 
 **Benchmarks**:
 | Industry | D1 | D7 | D30 |
@@ -124,6 +128,8 @@ purchase_funnel = ws.query_funnel(
 )
 print(f"View -> Purchase: {purchase_funnel.steps_data[-1]['overall_conv_ratio']:.1%}")
 ```
+
+**Cohort-scoped**: Track cohort revenue contribution: `ws.query(CohortMetric(ID, "Paying Users"), last=90)` alongside revenue metrics.
 
 ### Referral — "Do they invite others?"
 
@@ -177,6 +183,16 @@ Use GQM to decompose vague questions into actionable queries. This is your prima
 | 3 | Do adopters retain better? | Retention of feature users vs non-users | Retention | `query_retention("Sign Up", "Feature X")` |
 | 4 | Is there a conversion impact? | Funnel rates with/without feature use | Funnels | `query_funnel(["Feature X", "Purchase"])` |
 | 5 | How do users discover it? | Paths leading to feature | Flows | `query_flow("Feature X", reverse=3)` |
+
+### Example: "How do power users differ from everyone else?"
+
+| # | Question | Metric | Engine | Method |
+|---|----------|--------|--------|--------|
+| 1 | How does engagement differ? | DAU in vs out of cohort | Insights | `query("Login", math="dau", group_by=CohortBreakdown(ID, "Power Users"))` |
+| 2 | Do they convert better? | Funnel conversion by cohort | Funnels | `query_funnel(steps, group_by=CohortBreakdown(ID, "Power Users"))` |
+| 3 | Do they retain better? | Retention by cohort | Retention | `query_retention(born, ret, group_by=CohortBreakdown(ID, "Power Users"))` |
+| 4 | What paths do they take? | Flow analysis for cohort | Flows | `query_flow(event, where=Filter.in_cohort(ID, "Power Users"))` |
+| 5 | Is the cohort growing? | Cohort size over time | Insights | `query(CohortMetric(ID, "Power Users"), last=90)` |
 
 ## Feature Adoption Framework
 

@@ -249,6 +249,35 @@ Letters A-Z reference metrics by position in the `show` array (A = first, B = se
 
 When formulas are present, set `isHidden: true` on the raw metric show clauses to hide them from visualization.
 
+### Show Clause — Cohort Metric
+
+Tracks cohort size over time. Math is always `unique`.
+
+```json
+{
+  "type": "metric",
+  "behavior": {
+    "type": "cohort",
+    "name": "Power Users",
+    "resourceType": "events",
+    "filtersDeterminer": "all",
+    "filters": [],
+    "id": 12345
+  },
+  "measurement": {"math": "unique"}
+}
+```
+
+For inline definitions, replace `"id"` with `"raw_cohort"`:
+```json
+"behavior": {
+  "type": "cohort",
+  "name": "Custom Cohort",
+  "resourceType": "events",
+  "raw_cohort": {"selector": {...}, "behaviors": {...}}
+}
+```
+
 ### Time Clause
 
 Relative (last N days):
@@ -302,6 +331,36 @@ The `unit` field controls time granularity for line charts: `hour`, `day`, `week
 - `"events"` — event properties (`$browser`, `$city`, custom event props)
 - `"people"` — user profile properties (`$name`, `$email`, custom user props)
 
+### Cohort Filter Clause
+
+Filters by cohort membership. Uses `filterType: "list"` with `value: "$cohorts"`.
+
+Saved cohort:
+```json
+{
+  "resourceType": "events",
+  "filterType": "list",
+  "defaultType": "list",
+  "value": "$cohorts",
+  "filterOperator": "contains",
+  "filterValue": [{"cohort": {"id": 12345, "name": "Power Users", "negated": false}}]
+}
+```
+
+Inline cohort definition:
+```json
+{
+  "resourceType": "events",
+  "filterType": "list",
+  "defaultType": "list",
+  "value": "$cohorts",
+  "filterOperator": "contains",
+  "filterValue": [{"cohort": {"raw_cohort": {"selector": {...}, "behaviors": {...}}, "name": "Custom Cohort", "negated": false}}]
+}
+```
+
+For `Filter.not_in_cohort()`, set `"filterOperator": "does not contain"` and `"negated": true`.
+
 ### Group (Breakdown) Clause
 
 Event property breakdown:
@@ -330,6 +389,26 @@ Numeric bucketing:
   "customBucket": {"bucketSize": 10, "min": 0, "max": 100}
 }
 ```
+
+### Cohort Breakdown Clause
+
+Segments results by cohort membership (in vs not-in).
+
+```json
+{
+  "resourceType": "events",
+  "propertyType": "list",
+  "propertyDefaultType": "list",
+  "propertyName": "$cohorts",
+  "value": "$cohorts",
+  "cohorts": [
+    {"id": 12345, "name": "Power Users"},
+    {"id": 12345, "name": "Power Users", "negated": true}
+  ]
+}
+```
+
+The `cohorts` array contains one entry per segment. When `include_negated=True` (default), a second entry with `"negated": true` creates the "Not In Power Users" segment. For inline definitions, replace `"id"` with `"raw_cohort": {"selector": {...}, "behaviors": {...}}`.
 
 ---
 

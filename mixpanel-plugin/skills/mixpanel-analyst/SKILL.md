@@ -140,6 +140,7 @@ ws.property_values("city", event="Login")      # → list[str]
 ws.top_events(limit=10)                        # → list[TopEvent]
 ws.funnels()                                   # → list[FunnelInfo]
 ws.cohorts()                                   # → list[SavedCohort]
+# Cohort IDs from cohorts() work with Filter.in_cohort(), CohortBreakdown(), CohortMetric()
 ws.list_bookmarks()                            # → list[BookmarkInfo]
 ws.lexicon_schemas()                           # → list[LexiconSchema]
 ws.lexicon_schema("event", "Purchase")         # → LexiconSchema (definitions, tags)
@@ -149,6 +150,7 @@ ws.lexicon_schema("event", "Purchase")         # → LexiconSchema (definitions,
 
 ```python
 from mixpanel_data import Metric, Filter, GroupBy, Formula
+from mixpanel_data import CohortBreakdown, CohortMetric, CohortDefinition, CohortCriteria
 
 result = ws.query(
     events,              # str | Metric | Formula | Sequence[str | Metric | Formula]
@@ -348,7 +350,12 @@ Filter.on("created", "2025-01-15")
 Filter.before("created", "2025-01-01")
 Filter.since("created", "2025-01-01")
 Filter.in_the_last("created", 30, "day")
-Filter.date_between("created", "2025-01-01", "2025-06-30")
+Filter.date_between("created", "2025-01-01", "2025-06-30")  # date range
+
+# Cohort membership
+Filter.in_cohort(123, "Power Users")                 # users in saved cohort
+Filter.in_cohort(cohort_def, "Custom Segment")       # users matching inline definition
+Filter.not_in_cohort(123, "Churned Users")           # users NOT in cohort
 ```
 
 ### Streaming — Raw Data Access
@@ -456,6 +463,48 @@ with ThreadPoolExecutor(max_workers=4) as pool:
     results = {k: pool.submit(v) for k, v in queries.items()}
     results = {k: v.result() for k, v in results.items()}
 ```
+
+## Cohort-Scoped Queries
+
+Cohorts cut across all four query engines. Three capabilities let you scope any analysis to a user segment:
+
+| Capability | Parameter | Engines | Type |
+|---|---|---|---|
+| **Filter by cohort** | `where=` | All 4 | `Filter.in_cohort()` / `Filter.not_in_cohort()` |
+| **Break down by cohort** | `group_by=` | Insights, Funnels, Retention | `CohortBreakdown` |
+| **Track cohort size** | `events=` | Insights only | `CohortMetric` |
+
+```python
+from mixpanel_data import Filter, CohortBreakdown, CohortMetric
+
+# 1. Filter: restrict any query to a cohort
+result = ws.query("Login", math="dau", where=Filter.in_cohort(123, "Power Users"), last=30)
+
+# 2. Breakdown: segment results by cohort membership (in vs not-in)
+result = ws.query("Login", math="dau", group_by=CohortBreakdown(123, "Power Users"), last=30)
+
+# 3. Metric: track cohort size over time (insights only)
+result = ws.query(CohortMetric(123, "Power Users"), last=90)
+```
+
+### Inline Cohort Definitions
+
+Build ad-hoc cohorts without saving them to Mixpanel:
+
+```python
+from mixpanel_data import CohortDefinition, CohortCriteria
+
+premium_active = CohortDefinition.all_of(
+    CohortCriteria.has_property("plan", "premium"),
+    CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
+)
+
+# Use anywhere a cohort ID is accepted
+result = ws.query("Login", where=Filter.in_cohort(premium_active, "Premium Active"), last=30)
+result = ws.query("Login", group_by=CohortBreakdown(premium_active, "Premium Active"))
+```
+
+**Known limitation**: `CohortMetric` with inline `CohortDefinition` triggers a server-side 500 error. Use saved cohort IDs for `CohortMetric`.
 
 ## How to Think About Analysis
 

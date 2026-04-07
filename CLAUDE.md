@@ -303,6 +303,7 @@ Task(subagent_type="mixpanel-data:narrator", prompt="...")
 - Python 3.10+ (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames) (033-retention-query)
 - Python 3.10+ (mypy --strict) + Pydantic v2 (for existing `CreateCohortParams`), pandas (existing), Hypothesis (PBT) (035-cohort-definition-builder)
 - N/A — pure types, no persistence (035-cohort-definition-builder)
+- Python 3.10+ (mypy --strict) + Pydantic v2 (validation), httpx (HTTP), pandas (DataFrames), Hypothesis (PBT) (036-cohort-behaviors)
 
 ## Recent Changes
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)
