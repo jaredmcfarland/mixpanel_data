@@ -2812,6 +2812,31 @@ class Workspace:
             "displayOptions": {
                 "chartType": chart_type_map.get(mode, "retention-curve"),
             },
+            "sorting": {
+                "bar": {"colSortAttrs": [], "sortBy": "column"},
+                "line": {
+                    "sortBy": "column",
+                    "colSortAttrs": [
+                        {
+                            "sortBy": "value",
+                            "sortOrder": "desc",
+                            "valueField": "averageValue",
+                        }
+                    ],
+                },
+                "table": {
+                    "sortBy": "column",
+                    "colSortAttrs": [
+                        {
+                            "sortBy": "value",
+                            "sortOrder": "desc",
+                            "valueField": "size",
+                            "viewNLimit": 12,
+                        }
+                    ],
+                },
+            },
+            "columnWidths": {"bar": {}},
         }
 
     # =========================================================================
@@ -4295,6 +4320,14 @@ class Workspace:
             ))
             ```
         """
+        if params.dashboard_id is None:
+            raise MixpanelDataError(
+                "dashboard_id is required when creating a bookmark. "
+                "The Mixpanel v2 API requires every bookmark to be "
+                "associated with a dashboard. Create a dashboard first "
+                "with create_dashboard(), then pass its ID here.",
+            )
+
         client = self._require_api_client()
         raw = client.create_bookmark(
             params.model_dump(by_alias=True, exclude_none=True)
@@ -4303,7 +4336,18 @@ class Workspace:
             raise MixpanelDataError(
                 "API returned empty response for create_bookmark",
             )
-        return Bookmark.model_validate(raw)
+        bookmark = Bookmark.model_validate(raw)
+
+        # The v2 create endpoint associates the bookmark with the
+        # dashboard in the database, but does NOT add it to the
+        # dashboard's visual layout — that requires a separate
+        # PATCH call.
+        if bookmark.id is not None:
+            client.add_report_to_dashboard(
+                params.dashboard_id, bookmark.id
+            )
+
+        return bookmark
 
     def get_bookmark(self, bookmark_id: int) -> Bookmark:
         """Get a single bookmark by ID.

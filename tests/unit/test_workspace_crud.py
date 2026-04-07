@@ -618,7 +618,11 @@ class TestWorkspaceBookmarkCRUD:
         """create_bookmark() returns the created Bookmark."""
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Return created bookmark."""
+            """Return created bookmark or handle add-to-dashboard PATCH."""
+            if request.method == "PATCH":
+                return httpx.Response(
+                    200, json={"status": "ok", "results": {"id": 99}}
+                )
             return httpx.Response(
                 200,
                 json={
@@ -632,6 +636,7 @@ class TestWorkspaceBookmarkCRUD:
             name="New Bookmark",
             bookmark_type="insights",
             params={"events": [{"event": "Signup"}]},
+            dashboard_id=99,
         )
         bookmark = ws.create_bookmark(params)
 
@@ -644,6 +649,10 @@ class TestWorkspaceBookmarkCRUD:
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return created bookmark with description."""
+            if request.method == "PATCH":
+                return httpx.Response(
+                    200, json={"status": "ok", "results": {"id": 99}}
+                )
             data = _bookmark_json(11, "Described BM", "funnels")
             data["description"] = "A test bookmark"
             return httpx.Response(200, json={"status": "ok", "results": data})
@@ -654,6 +663,7 @@ class TestWorkspaceBookmarkCRUD:
             bookmark_type="funnels",
             params={"events": []},
             description="A test bookmark",
+            dashboard_id=99,
         )
         bookmark = ws.create_bookmark(params)
 
@@ -663,7 +673,11 @@ class TestWorkspaceBookmarkCRUD:
         """create_bookmark() can associate with a dashboard."""
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Return created bookmark with dashboard_id."""
+            """Return created bookmark with dashboard_id or handle PATCH."""
+            if request.method == "PATCH":
+                return httpx.Response(
+                    200, json={"status": "ok", "results": {"id": 99}}
+                )
             data = _bookmark_json(12, "On Dashboard", "insights")
             data["dashboard_id"] = 99
             return httpx.Response(200, json={"status": "ok", "results": data})
@@ -678,6 +692,22 @@ class TestWorkspaceBookmarkCRUD:
         bookmark = ws.create_bookmark(params)
 
         assert bookmark.dashboard_id == 99
+
+    def test_create_bookmark_requires_dashboard_id(self, temp_dir: Path) -> None:
+        """create_bookmark() raises MixpanelDataError when dashboard_id is missing."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Should not be called."""
+            return httpx.Response(200, json={"status": "ok", "results": {}})
+
+        ws = _make_workspace(temp_dir, handler)
+        params = CreateBookmarkParams(
+            name="No Dashboard",
+            bookmark_type="insights",
+            params={"events": []},
+        )
+        with pytest.raises(MixpanelDataError, match="dashboard_id is required"):
+            ws.create_bookmark(params)
 
     def test_get_bookmark(self, temp_dir: Path) -> None:
         """get_bookmark() returns a single Bookmark by ID."""
@@ -1001,7 +1031,11 @@ class TestWorkspaceBookmarkCRUD:
         """create_bookmark() works with funnel bookmark type."""
 
         def handler(request: httpx.Request) -> httpx.Response:
-            """Return created funnel bookmark."""
+            """Return created funnel bookmark or handle PATCH."""
+            if request.method == "PATCH":
+                return httpx.Response(
+                    200, json={"status": "ok", "results": {"id": 99}}
+                )
             return httpx.Response(
                 200,
                 json={
@@ -1015,6 +1049,7 @@ class TestWorkspaceBookmarkCRUD:
             name="Funnel BM",
             bookmark_type="funnels",
             params={"steps": []},
+            dashboard_id=99,
         )
         bookmark = ws.create_bookmark(params)
 

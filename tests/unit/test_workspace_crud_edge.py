@@ -115,11 +115,18 @@ class TestRequestBodySerialization:
                         },
                     },
                 )
+            # Handle PATCH for add_report_to_dashboard
+            if request.method == "PATCH":
+                return httpx.Response(
+                    200, json={"status": "ok", "results": {"id": 99}}
+                )
             return httpx.Response(200, json={"status": "ok", "results": []})
 
         ws = _make_workspace(temp_dir, handler)
         ws.create_bookmark(
-            CreateBookmarkParams(name="X", bookmark_type="funnels", params={})
+            CreateBookmarkParams(
+                name="X", bookmark_type="funnels", params={}, dashboard_id=99
+            )
         )
 
         body = captured["body"]
