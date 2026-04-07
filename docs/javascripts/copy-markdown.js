@@ -9,8 +9,9 @@
  * fail. This script pre-fetches markdown and copies synchronously via
  * execCommand, preserving the user gesture chain.
  *
- * Subscribes to MkDocs Material's document$ observable so it re-initializes
- * on every instant navigation, always overriding the plugin's inline script.
+ * Subscribes to MkDocs Material's document$ observable (a ReplaySubject(1))
+ * so it re-initializes on every instant navigation, always overriding the
+ * plugin's inline script.
  */
 (function() {
     'use strict';
@@ -22,11 +23,40 @@
     // Module state
     let cachedMarkdown = null;
     let fetchError = null;
+    let abortController = null;
+
+    /**
+     * Restores the copy button visibility (reverses any prior hideButton call).
+     */
+    function showButton() {
+        const button = document.getElementById('llms-copy-button');
+        if (button) {
+            button.style.display = '';
+        }
+    }
+
+    /**
+     * Hides the copy button when markdown content is unavailable.
+     */
+    function hideButton() {
+        const button = document.getElementById('llms-copy-button');
+        if (button) {
+            button.style.display = 'none';
+        }
+    }
 
     /**
      * Fetches markdown for the current page and caches it.
+     * Cancels any in-flight request to prevent stale content from a previous
+     * navigation overwriting the cache.
      */
     function prefetchMarkdown() {
+        // Cancel any in-flight request from a previous navigation
+        if (abortController) {
+            abortController.abort();
+        }
+        abortController = new AbortController();
+
         cachedMarkdown = null;
         fetchError = null;
 
@@ -35,17 +65,23 @@
             ? currentPath + 'index.md'
             : currentPath.replace(/\.html$/, '.md');
 
-        fetch(mdPath)
-            .then(function(response) {
+        // Capture the path so the resolution check is unambiguous
+        const requestedPath = mdPath;
+
+        fetch(mdPath, { signal: abortController.signal })
+            .then(response => {
                 if (!response.ok) throw new Error('Not found');
                 return response.text();
             })
-            .then(function(text) {
+            .then(text => {
+                // Only update cache if this is still the current request
+                if (requestedPath !== getCurrentMdPath()) return;
                 cachedMarkdown = text
                     .replace(/[\r\n]*Copy Markdown[\r\n\s]*$/i, '')
                     .replace(/\s+$/, '');
             })
-            .catch(function(err) {
+            .catch(err => {
+                if (err.name === 'AbortError') return;
                 fetchError = err;
                 console.warn('Could not prefetch markdown:', err);
                 hideButton();
@@ -53,13 +89,13 @@
     }
 
     /**
-     * Hides the copy button when markdown content is unavailable.
+     * Returns the expected markdown path for the current page.
      */
-    function hideButton() {
-        var button = document.getElementById('llms-copy-button');
-        if (button) {
-            button.style.display = 'none';
-        }
+    function getCurrentMdPath() {
+        const currentPath = window.location.pathname;
+        return currentPath.endsWith('/')
+            ? currentPath + 'index.md'
+            : currentPath.replace(/\.html$/, '.md');
     }
 
     /**
@@ -75,7 +111,7 @@
      * @returns {boolean} Whether the copy succeeded
      */
     function copyToClipboard(text) {
-        var textarea = document.createElement('textarea');
+        const textarea = document.createElement('textarea');
         textarea.value = text;
 
         textarea.style.cssText = 'position:fixed;top:0;left:0;width:2em;height:2em;padding:0;border:none;outline:none;box-shadow:none;background:transparent;';
@@ -86,10 +122,10 @@
             textarea.contentEditable = true;
             textarea.readOnly = false;
 
-            var range = document.createRange();
+            const range = document.createRange();
             range.selectNodeContents(textarea);
 
-            var selection = window.getSelection();
+            const selection = window.getSelection();
             selection.removeAllRanges();
             selection.addRange(range);
             textarea.setSelectionRange(0, IOS_MAX_SELECTION);
@@ -98,7 +134,7 @@
             textarea.select();
         }
 
-        var success = false;
+        let success = false;
         try {
             success = document.execCommand('copy');
         } catch (err) {
@@ -114,10 +150,10 @@
      * @param {HTMLElement} button - The button element
      */
     function showSuccess(button) {
-        var originalHTML = button.innerHTML;
+        const originalHTML = button.innerHTML;
         button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><polyline points="20 6 9 17 4 12"></polyline></svg>Copied!';
         button.classList.add('success');
-        setTimeout(function() {
+        setTimeout(() => {
             button.innerHTML = originalHTML;
             button.classList.remove('success');
         }, FEEDBACK_DURATION_MS);
@@ -130,10 +166,10 @@
      */
     function showError(button, message) {
         console.error('Copy failed:', message);
-        var originalHTML = button.innerHTML;
+        const originalHTML = button.innerHTML;
         button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>Failed';
         button.classList.add('error');
-        setTimeout(function() {
+        setTimeout(() => {
             button.innerHTML = originalHTML;
             button.classList.remove('error');
         }, FEEDBACK_DURATION_MS);
@@ -144,7 +180,7 @@
      * to override the plugin's broken async version.
      */
     function handleCopy() {
-        var button = document.querySelector('#llms-copy-button button');
+        const button = document.querySelector('#llms-copy-button button');
         if (!button) {
             console.warn('Copy button not found');
             return;
@@ -155,7 +191,7 @@
             return;
         }
 
-        var success = copyToClipboard(cachedMarkdown);
+        const success = copyToClipboard(cachedMarkdown);
 
         if (success) {
             showSuccess(button);
@@ -166,21 +202,24 @@
 
     /**
      * Initializes the copy handler for the current page:
-     * - Pre-fetches markdown content
+     * - Restores button visibility (in case a prior page hid it)
+     * - Cancels any in-flight fetch and pre-fetches current page's markdown
      * - Overrides the plugin's inline async function with our sync version
      */
     function initialize() {
+        showButton();
         prefetchMarkdown();
         window.copyMarkdownToClipboard = handleCopy;
     }
 
-    // Initialize on first load
-    initialize();
-
-    // Re-initialize on every instant navigation (MkDocs Material)
+    // document$ is a ReplaySubject(1) — it emits the current document
+    // immediately on subscribe, so a single subscription handles both the
+    // initial page load and all subsequent instant navigations.
     if (typeof document$ !== 'undefined') {
-        document$.subscribe(function() {
+        document$.subscribe(() => {
             initialize();
         });
+    } else {
+        initialize();
     }
 })();
