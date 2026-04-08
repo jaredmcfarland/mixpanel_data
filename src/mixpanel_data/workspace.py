@@ -6912,7 +6912,14 @@ class Workspace:
         """
         client = self._require_api_client()
         raw_list = client.list_lexicon_tags()
-        return [LexiconTag.model_validate(x) for x in raw_list]
+        result: list[LexiconTag] = []
+        for x in raw_list:
+            if isinstance(x, str):
+                # List endpoint returns plain tag name strings (no id)
+                result.append(LexiconTag(id=0, name=x))
+            else:
+                result.append(LexiconTag.model_validate(x))
+        return result
 
     def create_lexicon_tag(self, params: CreateTagParams) -> LexiconTag:
         """Create a new Lexicon tag.
@@ -7437,6 +7444,10 @@ class Workspace:
                 client, upload_id, poll_interval, max_poll_seconds
             )
 
+        # Upload response may only contain {'id': '...'} without 'name';
+        # inject the name from params so LookupTable validation succeeds.
+        if isinstance(raw, dict) and "name" not in raw:
+            raw["name"] = params.name
         return LookupTable.model_validate(raw)
 
     def _poll_lookup_upload(

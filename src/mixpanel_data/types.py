@@ -6641,8 +6641,8 @@ class EventDeletionRequest(BaseModel):
     to_date: str
     """End date."""
 
-    filters: dict[str, Any] | None = None
-    """Deletion filters."""
+    filters: dict[str, Any] | list[Any] | None = None
+    """Deletion filters (dict when populated, empty list when none)."""
 
     status: str
     """Request status: "Submitted", "Processing", "Completed", "Failed"."""

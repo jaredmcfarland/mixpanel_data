@@ -161,7 +161,7 @@ class TestTagsCRUD:
     """Tag create / list / update / delete — happy path."""
 
     def test_list_tags(self, ws: Workspace) -> None:
-        """Listing tags returns a list of tag name strings.
+        """Listing tags returns a list of LexiconTag objects.
 
         Args:
             ws: Workspace fixture.
@@ -169,7 +169,8 @@ class TestTagsCRUD:
         tags = ws.list_lexicon_tags()
         assert isinstance(tags, list)
         for t in tags:
-            assert isinstance(t, str)
+            assert isinstance(t, LexiconTag)
+            assert isinstance(t.name, str)
 
     def test_create_update_delete_tag(self, ws: Workspace) -> None:
         """Full lifecycle: create -> update -> delete a tag.
@@ -370,7 +371,8 @@ class TestPropertyDefinitions:
         """Getting property definitions by name returns matching results.
 
         The API may return multiple properties; we verify that at least
-        one of them has the requested name.
+        one result is a PropertyDefinition. The Lexicon API may strip
+        the ``$`` prefix (e.g. ``$browser`` -> ``browser``).
 
         Args:
             ws: Workspace fixture.
@@ -378,10 +380,11 @@ class TestPropertyDefinitions:
         result = ws.get_property_definitions(names=["$browser"])
         assert isinstance(result, list)
         assert len(result) >= 1
-        prop_names = [p.name for p in result]
-        assert "$browser" in prop_names
         # Verify at least one is a PropertyDefinition
         assert isinstance(result[0], PropertyDefinition)
+        # The returned name may or may not have the $ prefix
+        prop_names = [p.name for p in result]
+        assert "$browser" in prop_names or "browser" in prop_names
 
     def test_get_with_resource_type(self, ws: Workspace) -> None:
         """Filtering by resource_type narrows the results.
@@ -1480,9 +1483,8 @@ class TestLookupTablesCRUD:
                     file_path=str(csv_path),
                 )
             )
-            assert isinstance(result, dict)
-            assert "id" in result
-            table_id = int(result["id"])
+            assert isinstance(result, LookupTable)
+            table_id = result.id
 
             # Verify in list
             tables = ws.list_lookup_tables()
