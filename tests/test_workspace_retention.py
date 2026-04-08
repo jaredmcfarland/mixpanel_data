@@ -43,6 +43,7 @@ def mock_credentials() -> Credentials:
 def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
     """Create mock ConfigManager that returns credentials."""
     manager = MagicMock(spec=ConfigManager)
+    manager.config_version.return_value = 1
     manager.resolve_credentials.return_value = mock_credentials
     return manager
 
@@ -224,6 +225,7 @@ class TestQueryRetentionConfigError:
     ) -> None:
         """query_retention raises ConfigError when credentials are None."""
         no_creds_manager = MagicMock(spec=ConfigManager)
+        no_creds_manager.config_version.return_value = 1
         no_creds_manager.resolve_credentials.return_value = None
 
         ws = Workspace(
@@ -351,7 +353,9 @@ class TestQueryRetentionValidationIntegration:
         """Empty born_event must be caught by RetentionEvent.__post_init__ without calling the API."""
         ws = workspace_factory()
         try:
-            with pytest.raises(ValueError, match="RetentionEvent.event must be a non-empty"):
+            with pytest.raises(
+                ValueError, match="RetentionEvent.event must be a non-empty"
+            ):
                 ws.query_retention("", "Login")
             mock_api_client.insights_query.assert_not_called()
         finally:
