@@ -662,15 +662,16 @@ result = ws.query_saved_flows(bookmark_id)
 
 **Always validate params before calling `create_bookmark()` or `update_bookmark()`.**
 
-```bash
-# Validate from stdin (auto-detects type)
-echo '<json>' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin
+Use the built-in `validate_bookmark()` function from `mixpanel_data`:
+
+```python
+from mixpanel_data import validate_bookmark
 
 # Validate with explicit type
-echo '<json>' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type funnels
-
-# Get structured errors as JSON
-echo '<json>' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --json
+errors = validate_bookmark(params, bookmark_type="insights")  # or "funnels", "retention", "flows"
+if errors:
+    for e in errors:
+        print(f"{e.code}: {e.message} (path: {e.path})")
 ```
 
 The validator checks:
@@ -682,24 +683,7 @@ The validator checks:
 - Retention event count (exactly 2)
 - Flows structure (`steps[]`, `date_range`)
 
-Exit 0 = valid, exit 1 = errors. Errors print to stderr; use `--json` for structured output.
-
-For insights queries created via `query()`, validation is automatic (45 rules, two layers). Use `validate_bookmark.py` for manually-constructed funnel, retention, and flows params.
-
-In Python scripts, validate inline:
-
-```python
-import json, subprocess
-
-result = subprocess.run(
-    ["python3", "${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py", "--stdin", "--json"],
-    input=json.dumps(params), capture_output=True, text=True,
-)
-if result.returncode != 0:
-    errors = json.loads(result.stdout)
-    for e in errors:
-        print(f"[{e['severity'].upper()}] {e['path']}: {e['message']}")
-```
+For queries created via `query()`, `query_funnel()`, `query_retention()`, and `query_flow()`, validation is automatic (45 rules, two layers). Use `validate_bookmark()` directly for manually-constructed params.
 
 ---
 

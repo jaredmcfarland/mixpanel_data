@@ -373,18 +373,15 @@ def _maybe_show_bookmark_hint(query: str) -> None:
     ref = Path(__file__).resolve().parent.parent / "references" / "bookmark-params.md"
     if not ref.is_file():
         return
-    validator = Path(__file__).resolve().parent / "validate_bookmark.py"
     print(
         "\n---\n"
         "Tip: For bookmark params JSON schema, "
         "read references/bookmark-params.md "
-        "(SQL-to-JSON query translation guide)"
+        "(SQL-to-JSON query translation guide)\n"
+        "     To validate params before API calls: "
+        "from mixpanel_data import validate_bookmark; "
+        "errors = validate_bookmark(params, bookmark_type='insights')"
     )
-    if validator.is_file():
-        print(
-            "     To validate params before API calls: "
-            "echo '<json>' | python3 scripts/validate_bookmark.py --stdin"
-        )
 
 
 def show_detail(obj: Any, path: str) -> None:

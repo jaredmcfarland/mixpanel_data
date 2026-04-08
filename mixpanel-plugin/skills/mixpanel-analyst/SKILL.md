@@ -658,10 +658,15 @@ for tree in flow_result.trees:
 
 ## Bookmark Validation
 
-All typed query methods (`query()`, `query_funnel()`, `query_retention()`, `query_flow()`) validate automatically before API calls. Use `validate_bookmark.py` only for manually constructed bookmark params:
+All typed query methods (`query()`, `query_funnel()`, `query_retention()`, `query_flow()`) validate automatically before API calls. For manually constructed bookmark params, use the built-in `validate_bookmark()` function:
 
-```bash
-echo '<params_json>' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type insights
+```python
+from mixpanel_data import validate_bookmark
+
+errors = validate_bookmark(params, bookmark_type="insights")  # or "funnels", "retention", "flows"
+if errors:
+    for e in errors:
+        print(f"{e.code}: {e.message} (path: {e.path})")
 ```
 
 ## Error Handling

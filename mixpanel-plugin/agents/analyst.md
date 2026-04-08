@@ -190,8 +190,13 @@ Manage Mixpanel entities (dashboards, cohorts, bookmarks, feature flags, experim
 
 When creating or updating bookmarks, validate params before calling the API:
 
-```bash
-echo '<params_json>' | python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/validate_bookmark.py --stdin --type insights
+```python
+from mixpanel_data import validate_bookmark
+
+errors = validate_bookmark(params, bookmark_type="insights")  # or "funnels", "retention", "flows"
+if errors:
+    for e in errors:
+        print(f"{e.code}: {e.message} (path: {e.path})")
 ```
 
 ## Quality Standards
