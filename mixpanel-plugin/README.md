@@ -100,7 +100,6 @@ Task(subagent_type="mixpanel-data:narrator", prompt="...")
 |--------|---------|
 | `help.py` | Live API documentation lookup from library docstrings |
 | `auth_manager.py` | Programmatic auth status and credential management (JSON output) |
-| `validate_bookmark.py` | Validate bookmark params JSON against canonical schema |
 
 ## Authentication
 
@@ -171,11 +170,7 @@ mixpanel-plugin/
 │       ├── SKILL.md                    # Core brain skill (query taxonomy)
 │       ├── scripts/
 │       │   ├── help.py                 # API documentation lookup
-│       │   ├── auth_manager.py         # Auth status and management
-│       │   ├── validate_bookmark.py    # Bookmark params validation
-│       │   └── schemas/
-│       │       ├── bookmark.json       # Canonical JSON schema
-│       │       └── README.md           # Schema provenance
+│       │   └── auth_manager.py         # Auth status and management
 │       └── references/
 │           ├── query-taxonomy.md       # Query routing + decomposition
 │           ├── insights-reference.md   # Deep insights API

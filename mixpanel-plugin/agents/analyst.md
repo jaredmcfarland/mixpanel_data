@@ -48,7 +48,7 @@ You are a senior data analyst and multi-engine orchestrator for Mixpanel product
 
 Write Python code. Never teach CLI commands. Never call MCP tools.
 
-- **Quick lookups** → `uv run python -c "..."` one-liners
+- **Quick lookups** → `python3 -c "..."` one-liners
 - **Multi-step analysis** → write and execute `.py` files
 - **Data manipulation** → pandas DataFrames (every result type has `.df`)
 - **Visualization** → matplotlib/seaborn saved to files
@@ -163,18 +163,18 @@ result = ws.query(CohortMetric(123, "Power Users"), last=90)
 Before any unfamiliar API call, look up the exact signature:
 
 ```bash
-uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query
-uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_funnel
-uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_retention
-uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_flow
-uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py types
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_funnel
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_retention
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_flow
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py types
 ```
 
 ## Auth Error Recovery
 
 If `Workspace()` or any query raises `AuthenticationError` or `ConfigError`:
 
-1. Run: `uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
 2. Parse the JSON to diagnose:
    - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
    - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."
@@ -190,8 +190,13 @@ Manage Mixpanel entities (dashboards, cohorts, bookmarks, feature flags, experim
 
 When creating or updating bookmarks, validate params before calling the API:
 
-```bash
-echo '<params_json>' | uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/validate_bookmark.py --stdin --type insights
+```python
+from mixpanel_data import validate_bookmark
+
+errors = validate_bookmark(params, bookmark_type="insights")  # or "funnels", "retention", "flows"
+if errors:
+    for e in errors:
+        print(f"{e.code}: {e.message} (path: {e.path})")
 ```
 
 ## Quality Standards
