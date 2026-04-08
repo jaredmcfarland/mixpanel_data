@@ -19,7 +19,7 @@ Write Python code. Never teach CLI commands. Never call MCP tools.
 - **Tree analysis** → anytree on flow tree data (`.anytree` property)
 - **Visualization** → matplotlib / seaborn, saved to files
 
-```python
+```bash
 python3 -c "
 import mixpanel_data as mp; ws = mp.Workspace()
 r = ws.query('Login', last=30)
