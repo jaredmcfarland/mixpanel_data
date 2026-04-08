@@ -12,7 +12,6 @@ or service layer instead of accessing this module directly.
 
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import random
@@ -160,15 +159,19 @@ class MixpanelAPIClient:
         self._cached_workspace_id: int | None = None
 
     def _get_auth_header(self) -> str:
-        """Generate HTTP Basic auth header value.
+        """Generate the Authorization header value.
+
+        Delegates to ``Credentials.auth_header()`` which returns
+        ``"Bearer <token>"`` for OAuth or ``"Basic <encoded>"`` for
+        service accounts.
 
         Returns:
-            Base64-encoded "username:secret" prefixed with "Basic ".
+            Authorization header value appropriate for the auth method.
+
+        Raises:
+            ValueError: If OAuth credentials are missing an access token.
         """
-        secret = self._credentials.secret.get_secret_value()
-        auth_string = f"{self._credentials.username}:{secret}"
-        encoded = base64.b64encode(auth_string.encode()).decode()
-        return f"Basic {encoded}"
+        return self._credentials.auth_header()
 
     def _build_url(self, api_type: str, path: str) -> str:
         """Build full URL for the given API type and path.
