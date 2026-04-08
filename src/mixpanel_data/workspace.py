@@ -389,7 +389,7 @@ class Workspace:
 
                 from pydantic import SecretStr
 
-                from mixpanel_data._internal.config import RegionType
+                from mixpanel_data._internal.auth_credential import RegionType
 
                 resolved_region = region or self._credentials.region
                 self._credentials = Credentials(
