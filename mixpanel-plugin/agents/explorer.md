@@ -52,6 +52,8 @@ Write Python code. Never teach CLI commands. Never call MCP tools.
 
 ### Schema Discovery
 
+_(→ [python-api.md](../skills/mixpanel-analyst/references/python-api.md) §Discovery for complete method signatures)_
+
 ```python
 import mixpanel_data as mp
 ws = mp.Workspace()
@@ -113,6 +115,8 @@ print(f"Status: {schema.status}")
 
 ## GQM Decomposition Workflow (Four-Engine)
 
+_Implements the GQM methodology from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §GQM with a four-engine twist._
+
 ### Step 1: Parse the Implicit Goal
 
 Interpret what the user actually wants to know, even if they stated it vaguely. Write it as a concrete business outcome.
@@ -147,6 +151,8 @@ for event_name in [t.event for t in top[:5]]:
 
 ### Step 3: Classify with AARRR
 
+_(→ [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §AARRR for the complete framework with industry benchmarks and engine mappings)_
+
 Map the question to pirate metric stages:
 
 | Stage | Key Question | Primary Engines |
@@ -171,6 +177,8 @@ For each sub-question, specify the engine, method, and parameters:
 | 6 | Does behavior differ for [cohort]? | Any | `ws.query()` | `where=Filter.in_cohort(...)` or `group_by=CohortBreakdown(...)` |
 
 ### Step 5: Define the Join Strategy
+
+_(→ [cross-query-synthesis.md](../skills/mixpanel-analyst/references/cross-query-synthesis.md) for 6 detailed join strategies with full pandas merge code)_
 
 How will results from different engines be combined?
 

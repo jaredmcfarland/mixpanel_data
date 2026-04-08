@@ -85,3 +85,5 @@ ws = mp.Workspace(account="production")           # named account (v1)
 ws = mp.Workspace(credential="production")        # named credential (v2)
 ws = mp.Workspace(project_id="67890", region="eu") # explicit project
 ```
+
+_The mixpanel-analyst skill auto-triggers on analytics questions. For the analytical frameworks that guide investigations, see [analytical-frameworks.md](../mixpanel-analyst/references/analytical-frameworks.md). For the complete Python API, see [python-api.md](../mixpanel-analyst/references/python-api.md)._

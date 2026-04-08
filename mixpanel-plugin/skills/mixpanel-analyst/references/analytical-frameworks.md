@@ -15,6 +15,8 @@ The library provides four typed query engines. Choose the right engine for each 
 | **Retention** | `ws.query_retention()` | Cohort curves, return rates over time |
 | **Flows** | `ws.query_flow()` | User path analysis, entry/exit patterns |
 
+_For engine-specific AARRR mappings (which engine for which stage), see the explorer agent's §Classify with AARRR step. For a complete AARRR-structured report template, see the narrator agent's §Product Health Report._
+
 ### Acquisition — "Where do users come from?"
 
 **Questions**: Traffic sources, campaign effectiveness, channel attribution, entry paths
@@ -101,6 +103,8 @@ print(stickiness.df)
 | E-commerce | — | 20-30% | 20-30% |
 | Social/Community | 40-60% | 25-40% | 20-30% |
 
+_For detailed retention API parameters (alignment, custom buckets, retention_unit), see [retention-reference.md](retention-reference.md)._
+
 ### Revenue — "Do they pay?"
 
 **Questions**: Conversion to paid, ARPU, LTV indicators, upgrade triggers
@@ -157,6 +161,8 @@ for step in invite_funnel.steps_data:
 ## GQM (Goal-Question-Metric)
 
 Use GQM to decompose vague questions into actionable queries. This is your primary tool for open-ended requests like "why is X happening?"
+
+_The explorer agent implements a 5-step GQM workflow (Parse→Discover→Classify→Decompose→Join). For the NL signal mappings that connect questions to engines, see [query-taxonomy.md](query-taxonomy.md) §NL-to-Engine Signal Mapping._
 
 ### Process
 
@@ -260,6 +266,8 @@ result = ws.query(
 print(result.df)
 ```
 
+_For a ready-to-run implementation of this framework, see [cross-query-synthesis.md](cross-query-synthesis.md) §Template 2: Feature Adoption Analysis._
+
 ## North Star Metric Framework
 
 A North Star metric captures the core value your product delivers. All analysis should connect back to it.
@@ -308,6 +316,8 @@ print(f"Drop-off summary: {flow.drop_off_summary()}")
 ## Diagnosis Methodology
 
 When a metric changes unexpectedly, follow this structured investigation using all four query engines.
+
+_The diagnostician agent expands this to an 8-step protocol with parallel execution. For ready-to-run diagnostic templates, see [cross-query-synthesis.md](cross-query-synthesis.md) §Template 1: Revenue Drop Diagnosis and [query-taxonomy.md](query-taxonomy.md) §Pattern 1: Diagnostic._
 
 ### Step 1: Quantify the Change (Insights)
 
@@ -418,6 +428,8 @@ Structure findings as:
 8. **Next steps**: Monitor [metric] daily, set up alert at [threshold]
 
 ## Delivering Insights
+
+_The narrator agent implements these principles with audience-specific templates — see its §Audience Awareness and §Narrative Principles sections._
 
 ### Always Provide Context
 

@@ -85,6 +85,8 @@ User says...                              → Engine
 "product health", "overview"              → MULTI-ENGINE
 ```
 
+_For 50+ NL→engine signal patterns and 12 decomposition templates, see [query-taxonomy.md](../skills/mixpanel-analyst/references/query-taxonomy.md)._
+
 ### Multi-Query Planning
 
 For complex questions requiring multiple engines, decompose into a plan:
@@ -107,6 +109,8 @@ For complex questions requiring multiple engines, decompose into a plan:
 | Executive summary, stakeholder report | **Narrator** | Business-ready formatting |
 | Flow/path analysis | **Handle directly** | Use `ws.query_flow()` |
 | Entity CRUD (dashboards, cohorts, flags) | **Handle directly** | App API calls |
+
+_Each specialist agent has dedicated methodology: Explorer uses [GQM decomposition](../skills/mixpanel-analyst/references/analytical-frameworks.md), Diagnostician follows an [8-step diagnostic protocol](../skills/mixpanel-analyst/references/analytical-frameworks.md), Synthesizer applies [cross-query synthesis patterns](../skills/mixpanel-analyst/references/cross-query-synthesis.md), Narrator uses [AARRR-structured report templates](../skills/mixpanel-analyst/references/analytical-frameworks.md)._
 
 ## Code Pattern — All Four Engines
 
@@ -144,6 +148,8 @@ print(flow.drop_off_summary())
 ```
 
 ## Cohort-Scoped Queries
+
+_(→ [insights-reference.md](../skills/mixpanel-analyst/references/insights-reference.md) §Cohort Capabilities for the complete cohort API including inline CohortDefinition)_
 
 ```python
 from mixpanel_data import CohortBreakdown, CohortMetric
@@ -187,6 +193,8 @@ If `Workspace()` or any query raises `AuthenticationError` or `ConfigError`:
 Manage Mixpanel entities (dashboards, cohorts, bookmarks, feature flags, experiments, alerts, annotations, webhooks) via the App API. Use `help.py` to look up the exact CRUD method signatures.
 
 ### Bookmark Validation
+
+_(→ [bookmark-params.md](../skills/mixpanel-analyst/references/bookmark-params.md) for the full bookmark JSON structure and per-engine validation rules)_
 
 When creating or updating bookmarks, validate params before calling the API:
 

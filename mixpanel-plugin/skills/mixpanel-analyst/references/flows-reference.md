@@ -2,6 +2,8 @@
 
 Deep reference for flow queries in `mixpanel_data`. Flows show user paths before and after anchor events -- graph traversal of sequential behavior across the user base.
 
+_Flows use Filter for per-step filtering (see [insights-reference.md](insights-reference.md) §Filter Deep Reference) but do not support GroupBy, CohortBreakdown, or CohortMetric._
+
 ## Complete Signature
 
 ```python
@@ -469,6 +471,8 @@ for tree in result.trees:
 
 ## NetworkX Integration Patterns
 
+_For advanced NetworkX patterns beyond these basics (subgraph extraction, graph comparison, weighted metrics), see [advanced-analysis.md](advanced-analysis.md) §Graph Analysis with NetworkX._
+
 The `.graph` property returns a `networkx.DiGraph` built from sankey mode data. Node keys follow the format `"{event}@{step}"`.
 
 ### Basic Graph Inspection
@@ -653,6 +657,8 @@ edge_df = pd.DataFrame(edges, columns=["source", "target", "count"])
 ---
 
 ## anytree Integration Patterns
+
+_For advanced tree patterns (multi-tree comparison, pruning strategies, Graphviz customization), see [advanced-analysis.md](advanced-analysis.md) §Tree Analysis with anytree._
 
 The `.anytree` property (on FlowQueryResult) and `.to_anytree()` method (on FlowTreeNode) convert flow trees into anytree nodes, gaining parent references and rich rendering.
 
@@ -867,6 +873,8 @@ ws.create_bookmark(CreateBookmarkParams(
     params=params,
 ))
 ```
+
+_For cross-engine workflows that combine flows with funnels/retention/insights, see [cross-query-synthesis.md](cross-query-synthesis.md) §Funnel-Flow Complement and §Multi-Engine Health Dashboard._
 
 ---
 

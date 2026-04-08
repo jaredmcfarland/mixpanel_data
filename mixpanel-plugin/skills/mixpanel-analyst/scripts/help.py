@@ -350,38 +350,138 @@ def show_related(type_name: str) -> None:
             print(m)
 
 
-_BOOKMARK_RELATED = frozenset(
-    {
-        "query_saved_report",
-        "query_saved_flows",
-        "SavedReportResult",
-        "SavedReportType",
-        "FlowsResult",
-    }
-)
+# Reference hints: ordered most-specific-first so e.g. "query_funnel" matches
+# funnels before "query" matches insights.  Each entry is
+# (trigger_keywords, reference_filename, one-line description).
+_REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
+    (
+        frozenset(
+            {
+                "query_flow",
+                "build_flow_params",
+                "query_saved_flows",
+                "FlowQueryResult",
+                "FlowStep",
+                "FlowTreeNode",
+                "FlowNodeType",
+                "FlowAnchorType",
+                "FlowCountType",
+                "FlowChartType",
+            }
+        ),
+        "flows-reference.md",
+        "FlowStep, NetworkX graph, anytree trees, modes, pitfalls",
+    ),
+    (
+        frozenset(
+            {
+                "query_retention",
+                "build_retention_params",
+                "RetentionQueryResult",
+                "RetentionEvent",
+                "RetentionMathType",
+                "RetentionAlignment",
+                "RetentionMode",
+            }
+        ),
+        "retention-reference.md",
+        "RetentionEvent, alignment, custom buckets, pitfalls",
+    ),
+    (
+        frozenset(
+            {
+                "query_funnel",
+                "build_funnel_params",
+                "FunnelQueryResult",
+                "FunnelStep",
+                "Exclusion",
+                "HoldingConstant",
+                "FunnelMathType",
+            }
+        ),
+        "funnels-reference.md",
+        "FunnelStep, Exclusion, HoldingConstant, conversion windows, pitfalls",
+    ),
+    (
+        frozenset(
+            {
+                "query",
+                "build_params",
+                "QueryResult",
+                "MathType",
+                "PerUserAggregation",
+                "Filter",
+                "GroupBy",
+                "Formula",
+                "Metric",
+                "CohortBreakdown",
+                "CohortMetric",
+                "CohortDefinition",
+                "CustomPropertyRef",
+                "InlineCustomProperty",
+            }
+        ),
+        "insights-reference.md",
+        "MathType, Filter, GroupBy, Formula, validation rules, pitfalls",
+    ),
+    (
+        frozenset(
+            {
+                "create_bookmark",
+                "update_bookmark",
+                "get_bookmark",
+                "validate_bookmark",
+                "query_saved_report",
+                "CreateBookmarkParams",
+                "UpdateBookmarkParams",
+                "BookmarkInfo",
+                "SavedReportResult",
+                "SavedReportType",
+            }
+        ),
+        "bookmark-params.md",
+        "bookmark JSON structure, validation rules",
+    ),
+]
 
 
-def _maybe_show_bookmark_hint(query: str) -> None:
-    """Print a reference hint if the query relates to bookmarks.
+def _show_reference_hints(query: str) -> None:
+    """Print a contextual reference hint based on the help query.
+
+    Checks each hint rule in priority order (most specific first).
+    Prints the first matching hint, pointing the reader to the
+    relevant deep-dive reference document.
 
     Args:
         query: The user's help query string.
     """
+    refs_dir = Path(__file__).resolve().parent.parent / "references"
     parts = query.replace(".", " ").split()
-    if "bookmark" not in query.lower() and not (set(parts) & _BOOKMARK_RELATED):
+    query_lower = query.lower()
+    part_set = set(parts)
+
+    # Special case: standalone "Workspace" (no dot) → python-api.md
+    if query == "Workspace":
+        ref = refs_dir / "python-api.md"
+        if ref.is_file():
+            print(
+                "\n---\n"
+                "Tip: For complete method signatures organized by domain,\n"
+                "     read references/python-api.md"
+            )
         return
-    ref = Path(__file__).resolve().parent.parent / "references" / "bookmark-params.md"
-    if not ref.is_file():
-        return
-    print(
-        "\n---\n"
-        "Tip: For bookmark params JSON schema, "
-        "read references/bookmark-params.md "
-        "(SQL-to-JSON query translation guide)\n"
-        "     To validate params before API calls: "
-        "from mixpanel_data import validate_bookmark; "
-        "errors = validate_bookmark(params, bookmark_type='insights')"
-    )
+
+    for triggers, filename, description in _REFERENCE_HINTS:
+        # Match if any trigger appears as a keyword or as a substring
+        if part_set & triggers or any(t.lower() in query_lower for t in triggers):
+            ref = refs_dir / filename
+            if ref.is_file():
+                print(
+                    f"\n---\n"
+                    f"Tip: For complete parameter docs ({description}),\n"
+                    f"     read references/{filename}"
+                )
+            return
 
 
 def show_detail(obj: Any, path: str) -> None:
@@ -471,7 +571,7 @@ def main() -> None:
             sys.exit(1)
 
     if query not in ("types", "exceptions"):
-        _maybe_show_bookmark_hint(query)
+        _show_reference_hints(query)
 
 
 if __name__ == "__main__":

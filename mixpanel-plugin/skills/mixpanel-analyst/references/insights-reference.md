@@ -32,6 +32,8 @@ Workspace.query(
 
 ## MathType Deep Reference
 
+_Funnels use a subset of these types — see [funnels-reference.md](funnels-reference.md) §FunnelMathType for funnel-specific math._
+
 `MathType = Literal["total", "unique", "dau", "wau", "mau", "average", "median", "min", "max", "p25", "p75", "p90", "p99", "percentile", "histogram"]`
 
 ### Counting Types (no math_property required)
@@ -247,6 +249,8 @@ Metric("Purchase",
     filters_combinator="any",  # OR logic — US or UK
 )
 ```
+
+_Filters apply across all engines. For per-step filters in funnels, see [funnels-reference.md](funnels-reference.md) §Per-Step Filters. For per-event filters in retention, see [retention-reference.md](retention-reference.md) §Filtered Retention. For inline filters in flows, see [flows-reference.md](flows-reference.md) §FlowStep Fields._
 
 ---
 
@@ -632,6 +636,8 @@ Inline `CohortDefinition` is supported. Always provide a descriptive `name` for 
 | Bookmark Layer 2 | Cohort behavior must have `id` or `raw_cohort` | `B22_COHORT_MISSING_IDENTIFIER` |
 | Bookmark Layer 2 | Cohort `resourceType` must be `"cohorts"` | `B23_COHORT_RESOURCE_TYPE` |
 
+_Cohort filters and breakdowns work across all engines — for engine-specific details, see [funnels-reference.md](funnels-reference.md) §Cohort-Scoped Funnels | [retention-reference.md](retention-reference.md) §Cohort-Scoped Retention | [flows-reference.md](flows-reference.md) §Cohort Filters in Flows._
+
 ---
 
 ## QueryResult Structure
@@ -671,6 +677,8 @@ bm = ws.create_bookmark(CreateBookmarkParams(
 ))
 print(f"Report created: {bm.id}")
 ```
+
+_(→ [bookmark-params.md](bookmark-params.md) for manual bookmark JSON construction and the full validation rule set)_
 
 ---
 
@@ -782,6 +790,8 @@ change = (c_total - p_total) / p_total * 100
 print(f"MoM change: {change:+.1f}%")
 ```
 
+> **Related:** [advanced-analysis.md](advanced-analysis.md) for statistical testing, trend analysis, and visualization patterns on query results
+
 ---
 
 ## Validation Rules Summary
@@ -843,6 +853,8 @@ print(f"MoM change: {change:+.1f}%")
 | B18 | Filter has property identifier |
 | B19 | Valid filtersDeterminer (any/all) |
 | B20-B21 | filterValue non-empty and within size limits |
+
+_For bookmark-level validation (Layer 2) across all report types, see [bookmark-params.md](bookmark-params.md) §Validation._
 
 ---
 

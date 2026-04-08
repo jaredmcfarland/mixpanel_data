@@ -2,6 +2,8 @@
 
 Complete reference for `Workspace.query_retention()`, the typed retention query engine. Covers every parameter, type, validation rule, and analysis pattern.
 
+_Retention inherits Filter, GroupBy, and time range handling from Insights — see [insights-reference.md](insights-reference.md) for the authoritative reference. Note: retention_unit is separate from the query time unit._
+
 ## Complete Signature
 
 ```python
@@ -352,6 +354,8 @@ for name, avg in result.segment_averages.items():
 
 ## Cohort-Scoped Retention
 
+_(→ [insights-reference.md](insights-reference.md) §Cohort Capabilities for the full cohort API)_
+
 ### Cohort Filters
 
 Measure retention for a specific user segment:
@@ -587,6 +591,8 @@ import json
 print(json.dumps(params, indent=2))
 ```
 
+_For retention benchmarks by industry (Consumer Mobile, SaaS, E-commerce), see [analytical-frameworks.md](analytical-frameworks.md) §Retention. For Insights-Retention correlation patterns, see [cross-query-synthesis.md](cross-query-synthesis.md) §Insights-Retention Correlation._
+
 ---
 
 ## Validation Rules Summary
@@ -642,3 +648,5 @@ print(json.dumps(params, indent=2))
 8. **Bucket 0 is always 100%** — The first bucket represents the born event itself, so its retention rate is always 1.0.
 9. **alignment affects interpretation** — With `"birth"` alignment, each user's W1 starts from their signup date. With `"interval_start"`, W1 is the same calendar week for all users in that cohort.
 10. **QueryTimeUnit differs from retention TimeUnit** — `unit` (the date range unit) supports `"hour"` and `"quarter"` in addition to day/week/month, but `retention_unit` only supports day/week/month.
+
+_For retention heatmaps, cohort pivot tables, and LTV estimation from retention data, see [advanced-analysis.md](advanced-analysis.md) §Cohort Analysis with pandas._
