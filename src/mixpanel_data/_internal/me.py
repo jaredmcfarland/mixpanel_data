@@ -9,7 +9,6 @@ Types use ``extra="allow"`` for forward compatibility with API changes.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import os
@@ -18,6 +17,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import pydantic
 from pydantic import BaseModel, ConfigDict
 
 from mixpanel_data._internal.auth_credential import VALID_REGIONS
@@ -47,7 +47,7 @@ class MeOrgInfo(BaseModel):
         ```
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", frozen=True)
 
     id: int
     """Organization ID."""
@@ -85,7 +85,7 @@ class MeProjectInfo(BaseModel):
         ```
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", frozen=True)
 
     name: str
     """Project display name."""
@@ -130,7 +130,7 @@ class MeWorkspaceInfo(BaseModel):
         ```
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", frozen=True)
 
     id: int
     """Workspace ID."""
@@ -161,7 +161,7 @@ class MeWorkspaceInfo(BaseModel):
 
 
 class MeResponse(BaseModel):
-    """Cached response from the Mixpanel /me API.
+    """Model for the Mixpanel /me API response.
 
     All fields are optional for forward-compatible deserialization.
     Unknown fields are preserved via ``extra="allow"``.
@@ -186,7 +186,7 @@ class MeResponse(BaseModel):
         ```
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", frozen=True)
 
     user_id: int | None = None
     """Authenticated user's ID."""
@@ -323,7 +323,7 @@ class MeCache:
 
         try:
             return MeResponse.model_validate(data)
-        except Exception as e:
+        except pydantic.ValidationError as e:
             logger.debug("Failed to parse cached /me response: %s", e)
             return None
 
@@ -345,8 +345,14 @@ class MeCache:
             ```
         """
         self._storage_dir.mkdir(parents=True, exist_ok=True)
-        with contextlib.suppress(OSError):
+        try:
             os.chmod(self._storage_dir, stat.S_IRWXU)  # 0o700
+        except OSError as e:
+            logger.warning(
+                "Could not set permissions on cache directory %s: %s",
+                self._storage_dir,
+                e,
+            )
 
         # Add cache metadata
         data = response.model_dump(mode="json")
@@ -440,8 +446,8 @@ class MeService:
         Checks the in-memory cache first, then disk cache, then calls
         the API. Results are stored in both memory and disk caches.
 
-        If the API returns 401 or 403, raises ``ConfigError`` with a
-        clear message directing the user to specify ``--project`` explicitly.
+        If the API returns 401 or 403, raises ``ConfigError`` indicating
+        the credentials lack permission for /me discovery.
 
         Args:
             force_refresh: If True, bypass all caches and call the API.
@@ -474,23 +480,18 @@ class MeService:
                 return cached
 
         # Call API
+        _NO_ME_ACCESS = (
+            "Credentials lack permission for /me discovery. "
+            "Specify --project explicitly or use credentials with "
+            "/me access."
+        )
         try:
             raw = self._api_client.me()
         except AuthenticationError as exc:
-            raise ConfigError(
-                "Credentials lack permission for /me discovery. "
-                "Specify --project explicitly or use credentials with "
-                "/me access.",
-                details={"status_code": 401},
-            ) from exc
+            raise ConfigError(_NO_ME_ACCESS, details={"status_code": 401}) from exc
         except QueryError as exc:
             if exc.status_code == 403:
-                raise ConfigError(
-                    "Credentials lack permission for /me discovery. "
-                    "Specify --project explicitly or use credentials with "
-                    "/me access.",
-                    details={"status_code": 403},
-                ) from exc
+                raise ConfigError(_NO_ME_ACCESS, details={"status_code": 403}) from exc
             raise
 
         response = MeResponse.model_validate(raw)
@@ -567,7 +568,13 @@ class MeService:
         workspaces = list(me.workspaces.values())
 
         if project_id is not None:
-            pid_int = int(project_id)
+            try:
+                pid_int = int(project_id)
+            except ValueError:
+                raise ConfigError(
+                    f"Project ID must be numeric, got: '{project_id}'",
+                    details={"project_id": project_id},
+                ) from None
             workspaces = [ws for ws in workspaces if ws.project_id == pid_int]
 
         workspaces.sort(key=lambda ws: ws.name.lower())

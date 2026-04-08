@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import stat
 import sys
 from dataclasses import dataclass
 from enum import Enum
@@ -340,10 +341,18 @@ class MigrationResult:
 class ConfigManager:
     """Manages Mixpanel project credentials and configuration.
 
+    Supports both legacy account-based config (v1) and the newer
+    credential + project alias format (v2).
+
     Handles:
-    - Adding, removing, and listing project accounts
-    - Setting the default account
+    - Adding, removing, and listing project accounts (v1)
+    - Credential CRUD: add, remove, list credentials (v2)
+    - Active context management: credential, project, workspace (v2)
+    - Project aliases for quick context switching (v2)
+    - Session resolution: env vars → active context → fallback (v2)
+    - Setting the default account (v1)
     - Resolving credentials from environment variables or config file
+    - v1 → v2 config migration with backup
 
     Config file location (in priority order):
     1. Explicit config_path parameter
@@ -399,6 +408,13 @@ class ConfigManager:
         self._config_path.parent.mkdir(parents=True, exist_ok=True)
         with self._config_path.open("wb") as f:
             tomli_w.dump(config, f)
+        try:
+            os.chmod(self._config_path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+        except OSError:
+            logger.warning(
+                "Could not set permissions on config file %s",
+                self._config_path,
+            )
 
     def _get_available_account_names(self) -> list[str]:
         """Get list of configured account names."""
@@ -414,11 +430,16 @@ class ConfigManager:
     ) -> Credentials:
         """Resolve credentials using priority order.
 
-        Resolution order:
+        Resolution order when ``account`` is None:
+
         1. Environment variables (MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION)
-        2. OAuth tokens from local storage (if no explicit account requested)
-        3. Named account from config file (if account parameter provided)
-        4. Default account from config file
+        2. OAuth tokens from local storage (if valid and not expired)
+        3. Default account from config file
+
+        Resolution order when ``account`` is provided:
+
+        1. Environment variables (all four must be set)
+        2. Named account from config file (OAuth is skipped)
 
         For OAuth resolution, the region and project_id are determined from:
         - ``MP_PROJECT_ID`` / ``MP_REGION`` env vars (partial env mode), or
@@ -782,6 +803,13 @@ class ConfigManager:
             with tmp_path.open("wb") as f:
                 tomli_w.dump(config, f)
             os.replace(tmp_path, self._config_path)
+            try:
+                os.chmod(self._config_path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+            except OSError:
+                logger.warning(
+                    "Could not set permissions on config file %s",
+                    self._config_path,
+                )
         except OSError:
             tmp_path.unlink(missing_ok=True)
             raise
@@ -844,10 +872,12 @@ class ConfigManager:
 
         entry: dict[str, str] = {"type": type, "region": region_lower}
         if type == "service_account":
-            if username:
-                entry["username"] = username
-            if secret:
-                entry["secret"] = secret
+            if not username:
+                raise ValueError("username is required for service_account credentials")
+            if not secret:
+                raise ValueError("secret is required for service_account credentials")
+            entry["username"] = username
+            entry["secret"] = secret
 
         credentials[name] = entry
 
@@ -877,11 +907,26 @@ class ConfigManager:
 
         result: list[CredentialInfo] = []
         for name, data in credentials.items():
+            cred_type = data.get("type")
+            if cred_type is None:
+                logger.warning(
+                    "Credential '%s' missing 'type' field, defaulting to "
+                    "service_account",
+                    name,
+                )
+                cred_type = "service_account"
+            cred_region = data.get("region")
+            if cred_region is None:
+                logger.warning(
+                    "Credential '%s' missing 'region' field, defaulting to us",
+                    name,
+                )
+                cred_region = "us"
             result.append(
                 CredentialInfo(
                     name=name,
-                    type=data.get("type", "service_account"),
-                    region=data.get("region", "us"),
+                    type=cred_type,
+                    region=cred_region,
                     is_active=(name == active_name),
                 )
             )
@@ -1043,7 +1088,9 @@ class ConfigManager:
             project_id: Project ID to set as active. If ``None``, the
                 active project is left unchanged.
             workspace_id: Workspace ID to set. If ``None``, the active
-                workspace is cleared.
+                workspace is cleared. Note: unlike ``credential`` and
+                ``project_id``, passing ``None`` here *clears* the workspace
+                rather than leaving it unchanged.
 
         Example:
             ```python
@@ -1300,16 +1347,16 @@ class ConfigManager:
         if project_id or workspace_id:
             from mixpanel_data._internal.auth_credential import (
                 ProjectContext,
-            )
-            from mixpanel_data._internal.auth_credential import (
-                ResolvedSession as RS,
+                ResolvedSession,
             )
 
-            session = RS(
+            session = ResolvedSession(
                 auth=session.auth,
                 project=ProjectContext(
                     project_id=project_id or session.project_id,
-                    workspace_id=workspace_id,
+                    workspace_id=workspace_id
+                    if workspace_id is not None
+                    else session.project.workspace_id,
                 ),
             )
         return session
@@ -1342,9 +1389,7 @@ class ConfigManager:
             AuthCredential,
             CredentialType,
             ProjectContext,
-        )
-        from mixpanel_data._internal.auth_credential import (
-            ResolvedSession as RS,
+            ResolvedSession,
         )
 
         credentials = config.get("credentials", {})
@@ -1383,12 +1428,20 @@ class ConfigManager:
                 oauth_access_token=SecretStr(tokens.access_token.get_secret_value()),
             )
         else:
+            sa_username = cred_data.get("username", "")
+            sa_secret = cred_data.get("secret", "")
+            if not sa_username or not sa_secret:
+                raise ConfigError(
+                    f"Credential '{cred_name}' is missing username or secret. "
+                    f"Re-add it with add_credential() or edit {self._config_path}.",
+                    details={"credential_name": cred_name},
+                )
             auth = AuthCredential(
                 name=cred_name,
                 type=CredentialType.service_account,
                 region=cred_data.get("region", "us"),
-                username=cred_data.get("username", ""),
-                secret=SecretStr(cred_data.get("secret", "")),
+                username=sa_username,
+                secret=SecretStr(sa_secret),
             )
 
         # Resolve project
@@ -1409,7 +1462,7 @@ class ConfigManager:
             workspace_id=resolved_workspace_id,
         )
 
-        return RS(auth=auth, project=project)
+        return ResolvedSession(auth=auth, project=project)
 
     # ── Migration (v1 → v2) ──────────────────────────────────────────
 
@@ -1472,11 +1525,10 @@ class ConfigManager:
                 cred_name = cred_map[key]
 
             # Every account becomes a project alias
-            alias_entry: dict[str, Any] = {"project_id": project_id}
-            if cred_name != acct_name:
-                alias_entry["credential"] = cred_name
-            else:
-                alias_entry["credential"] = cred_name
+            alias_entry: dict[str, Any] = {
+                "project_id": project_id,
+                "credential": cred_name,
+            }
             new_projects[acct_name] = alias_entry
 
         # Determine active context

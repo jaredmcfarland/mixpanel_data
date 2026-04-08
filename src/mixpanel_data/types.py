@@ -8403,9 +8403,7 @@ def _validate_event_name(event: str, class_name: str) -> None:
     if not event or not event.strip():
         raise ValueError(f"{class_name}.event must be a non-empty string")
     if _CONTROL_CHAR_RE.search(event):
-        raise ValueError(
-            f"{class_name}.event contains control characters: {event!r}"
-        )
+        raise ValueError(f"{class_name}.event contains control characters: {event!r}")
 
 
 def _validate_cohort_args(
@@ -9082,9 +9080,7 @@ class Exclusion:
         """
         _validate_event_name(self.event, "Exclusion")
         if self.from_step < 0:
-            raise ValueError(
-                f"Exclusion.from_step must be >= 0, got {self.from_step}"
-            )
+            raise ValueError(f"Exclusion.from_step must be >= 0, got {self.from_step}")
         if self.to_step is not None and self.to_step < self.from_step:
             raise ValueError(
                 f"Exclusion.to_step ({self.to_step}) must be >= "
@@ -9136,9 +9132,7 @@ class HoldingConstant:
             ValueError: If property is empty (HC1).
         """
         if not self.property or not self.property.strip():
-            raise ValueError(
-                "HoldingConstant.property must be a non-empty string"
-            )
+            raise ValueError("HoldingConstant.property must be a non-empty string")
 
 
 @dataclass(frozen=True)

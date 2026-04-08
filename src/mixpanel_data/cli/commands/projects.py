@@ -39,6 +39,37 @@ projects_app = typer.Typer(
     no_args_is_help=True,
 )
 
+_PROJECT_COLUMNS = [
+    "project_id",
+    "name",
+    "organization_id",
+    "timezone",
+    "has_workspaces",
+]
+
+
+def _projects_to_dicts(
+    projects: list[tuple[str, Any]],
+) -> list[dict[str, Any]]:
+    """Convert project tuples to serializable dicts.
+
+    Args:
+        projects: List of ``(project_id, MeProjectInfo)`` tuples.
+
+    Returns:
+        List of dicts with project fields.
+    """
+    return [
+        {
+            "project_id": pid,
+            "name": info.name,
+            "organization_id": info.organization_id,
+            "timezone": info.timezone,
+            "has_workspaces": info.has_workspaces,
+        }
+        for pid, info in projects
+    ]
+
 
 # =============================================================================
 # Discovery
@@ -76,23 +107,8 @@ def projects_list(
             workspace.me(force_refresh=True)
         projects = workspace.discover_projects()
 
-    data: list[dict[str, Any]] = [
-        {
-            "project_id": pid,
-            "name": info.name,
-            "organization_id": info.organization_id,
-            "timezone": info.timezone,
-            "has_workspaces": info.has_workspaces,
-        }
-        for pid, info in projects
-    ]
-
-    output_result(
-        ctx,
-        data,
-        columns=["project_id", "name", "organization_id", "timezone", "has_workspaces"],
-        format=format,
-    )
+    data = _projects_to_dicts(projects)
+    output_result(ctx, data, columns=_PROJECT_COLUMNS, format=format)
 
 
 @projects_app.command("refresh")
@@ -116,28 +132,13 @@ def projects_refresh(
         workspace.me(force_refresh=True)
         projects = workspace.discover_projects()
 
-    data: list[dict[str, Any]] = [
-        {
-            "project_id": pid,
-            "name": info.name,
-            "organization_id": info.organization_id,
-            "timezone": info.timezone,
-            "has_workspaces": info.has_workspaces,
-        }
-        for pid, info in projects
-    ]
-
+    data = _projects_to_dicts(projects)
     err_console.print(f"[green]Refreshed.[/green] Found {len(data)} projects.")
-    output_result(
-        ctx,
-        data,
-        columns=["project_id", "name", "organization_id", "timezone", "has_workspaces"],
-        format=format,
-    )
+    output_result(ctx, data, columns=_PROJECT_COLUMNS, format=format)
 
 
 # =============================================================================
-# Context Switching (Phase 5)
+# Context Switching
 # =============================================================================
 
 
@@ -212,7 +213,7 @@ def projects_show(
 
 
 # =============================================================================
-# Project Aliases (Phase 10)
+# Project Aliases
 # =============================================================================
 
 alias_app = typer.Typer(

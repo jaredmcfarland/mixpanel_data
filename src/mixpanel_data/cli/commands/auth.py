@@ -379,14 +379,16 @@ def _resolve_region(ctx: typer.Context, region: str | None) -> str:
             return default_account.region
     except (ConfigError, AccountNotFoundError) as exc:
         err_console.print(
-            f"[yellow]Warning:[/yellow] Could not determine region from config: {exc}. "
-            "Defaulting to 'us'."
+            f"[red]Error:[/red] Could not determine region from config: {exc}. "
+            "Use --region to specify explicitly."
         )
+        raise typer.Exit(code=1) from None
     except OSError as exc:
         err_console.print(
-            f"[yellow]Warning:[/yellow] Could not read config file: {exc}. "
-            "Defaulting to region 'us'."
+            f"[red]Error:[/red] Could not read config file: {exc}. "
+            "Use --region to specify explicitly."
         )
+        raise typer.Exit(code=1) from None
     return "us"
 
 
@@ -512,8 +514,12 @@ def auth_status(
             active_context["credential"] = active.credential
             active_context["project_id"] = active.project_id
             active_context["workspace_id"] = active.workspace_id
-    except (ConfigError, OSError):
-        pass  # Config not available; show OAuth status only
+    except ConfigError as exc:
+        err_console.print(f"[yellow]Warning:[/yellow] Could not read config: {exc}")
+    except OSError as exc:
+        err_console.print(
+            f"[yellow]Warning:[/yellow] Could not read config file: {exc}"
+        )
 
     # Build OAuth token statuses
     oauth_statuses: list[dict[str, object]] = []

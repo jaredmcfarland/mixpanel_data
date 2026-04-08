@@ -19,7 +19,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, SecretStr, field_validator, model_validator
 
-# Re-use the same RegionType from config.py for consistency
+# Canonical RegionType definition — imported by config.py and other modules
 RegionType = Literal["us", "eu", "in"]
 VALID_REGIONS = ("us", "eu", "in")
 
@@ -29,6 +29,9 @@ class CredentialType(str, Enum):
 
     Distinguishes between service account (Basic Auth) and OAuth 2.0
     Bearer token authentication.
+
+    Note: ``service_account`` corresponds to ``AuthMethod.basic`` in the
+    legacy v1 config system.
 
     Example:
         ```python
@@ -139,10 +142,9 @@ class AuthCredential(BaseModel):
                     "Secret cannot be empty for service account credentials"
                 )
         elif self.type == CredentialType.oauth:
-            if (
-                self.oauth_access_token is not None
-                and not self.oauth_access_token.get_secret_value()
-            ):
+            if self.oauth_access_token is None:
+                raise ValueError("oauth_access_token is required for OAuth credentials")
+            if not self.oauth_access_token.get_secret_value():
                 raise ValueError("OAuth access token cannot be empty when provided")
         return self
 
@@ -272,6 +274,15 @@ class ResolvedSession(BaseModel):
             The region from the auth credential.
         """
         return self.auth.region
+
+    @property
+    def workspace_id(self) -> int | None:
+        """Shortcut to project.workspace_id.
+
+        Returns:
+            The workspace ID from the project context, or None.
+        """
+        return self.project.workspace_id
 
     def auth_header(self) -> str:
         """Delegate to auth.auth_header().

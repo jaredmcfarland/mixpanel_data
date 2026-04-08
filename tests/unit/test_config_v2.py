@@ -273,6 +273,131 @@ class TestListRemoveCredentials:
         assert ctx.credential != "sa1"
 
 
+# ── add_credential validation ────────────────────────────────────────
+
+
+class TestAddCredentialValidation:
+    """Tests for add_credential required field validation."""
+
+    @pytest.fixture()
+    def cm(self, tmp_path: Path) -> ConfigManager:
+        """Create a ConfigManager with a temp config path."""
+        return ConfigManager(config_path=tmp_path / "config.toml")
+
+    def test_sa_requires_username(self, cm: ConfigManager) -> None:
+        """Service account without username raises ValueError."""
+        with pytest.raises(ValueError, match="username is required"):
+            cm.add_credential(name="bad-sa", type="service_account", secret="s")
+
+    def test_sa_requires_secret(self, cm: ConfigManager) -> None:
+        """Service account without secret raises ValueError."""
+        with pytest.raises(ValueError, match="secret is required"):
+            cm.add_credential(name="bad-sa", type="service_account", username="u")
+
+    def test_sa_empty_username_rejected(self, cm: ConfigManager) -> None:
+        """Service account with empty username raises ValueError."""
+        with pytest.raises(ValueError, match="username is required"):
+            cm.add_credential(
+                name="bad-sa",
+                type="service_account",
+                username="",
+                secret="s",
+            )
+
+    def test_sa_with_valid_fields_succeeds(self, cm: ConfigManager) -> None:
+        """Service account with all fields succeeds."""
+        cm.add_credential(
+            name="good-sa",
+            type="service_account",
+            username="user",
+            secret="secret",
+        )
+        creds = cm.list_credentials()
+        assert len(creds) == 1
+        assert creds[0].name == "good-sa"
+
+    def test_resolve_v2_missing_sa_fields_raises_config_error(
+        self, cm: ConfigManager
+    ) -> None:
+        """Corrupted SA credential (missing fields) raises ConfigError."""
+        import tomli_w
+
+        config: dict[str, object] = {
+            "config_version": 2,
+            "active": {"credential": "broken", "project_id": "123"},
+            "credentials": {"broken": {"type": "service_account", "region": "us"}},
+        }
+        cm._config_path.parent.mkdir(parents=True, exist_ok=True)
+        with cm._config_path.open("wb") as f:
+            tomli_w.dump(config, f)
+
+        with pytest.raises(ConfigError, match="missing username or secret"):
+            cm.resolve_session()
+
+
+# ── _session_to_credentials bridge ──────────────────────────────────
+
+
+class TestSessionToCredentials:
+    """Tests for Workspace._session_to_credentials static method."""
+
+    def test_sa_bridge(self) -> None:
+        """Service account ResolvedSession converts to Credentials."""
+        from mixpanel_data._internal.auth_credential import (
+            AuthCredential,
+            CredentialType,
+            ProjectContext,
+            ResolvedSession,
+        )
+        from mixpanel_data._internal.config import AuthMethod
+        from mixpanel_data.workspace import Workspace
+
+        session = ResolvedSession(
+            auth=AuthCredential(
+                name="sa1",
+                type=CredentialType.service_account,
+                region="us",
+                username="user1",
+                secret=SecretStr("secret1"),
+            ),
+            project=ProjectContext(project_id="111", workspace_id=42),
+        )
+        creds = Workspace._session_to_credentials(session)
+        assert creds.project_id == "111"
+        assert creds.region == "us"
+        assert creds.username == "user1"
+        assert creds.auth_method == AuthMethod.basic
+
+    def test_oauth_bridge(self) -> None:
+        """OAuth ResolvedSession converts to Credentials."""
+        from mixpanel_data._internal.auth_credential import (
+            AuthCredential,
+            CredentialType,
+            ProjectContext,
+            ResolvedSession,
+        )
+        from mixpanel_data._internal.config import AuthMethod
+        from mixpanel_data.workspace import Workspace
+
+        session = ResolvedSession(
+            auth=AuthCredential(
+                name="oauth1",
+                type=CredentialType.oauth,
+                region="eu",
+                oauth_access_token=SecretStr("bearer-tok"),
+            ),
+            project=ProjectContext(project_id="222"),
+        )
+        creds = Workspace._session_to_credentials(session)
+        assert creds.project_id == "222"
+        assert creds.region == "eu"
+        assert creds.auth_method == AuthMethod.oauth
+        assert (
+            creds.oauth_access_token is not None
+            and creds.oauth_access_token.get_secret_value() == "bearer-tok"
+        )
+
+
 # ── T027: config_version() ───────────────────────────────────────────
 
 

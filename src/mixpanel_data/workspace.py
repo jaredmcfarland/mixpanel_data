@@ -226,6 +226,8 @@ from mixpanel_data.types import (
     _sanitize_raw_cohort,
 )
 
+logger = logging.getLogger(__name__)
+
 # Limit validation bounds (Mixpanel API restriction)
 _MIN_LIMIT = 1
 _MAX_LIMIT = 100_000
@@ -423,18 +425,17 @@ class Workspace:
         Returns:
             Legacy Credentials instance.
         """
-        from pydantic import SecretStr as _SecretStr
+        from pydantic import SecretStr
 
         from mixpanel_data._internal.auth_credential import CredentialType
         from mixpanel_data._internal.config import AuthMethod
 
         auth = session.auth
+        secret = SecretStr(auth.secret.get_secret_value() if auth.secret else "")
         if auth.type == CredentialType.oauth:
             return Credentials(
                 username=auth.username or "",
-                secret=_SecretStr(
-                    auth.secret.get_secret_value() if auth.secret else ""
-                ),
+                secret=secret,
                 project_id=session.project_id,
                 region=session.region,
                 auth_method=AuthMethod.oauth,
@@ -442,7 +443,7 @@ class Workspace:
             )
         return Credentials(
             username=auth.username or "",
-            secret=_SecretStr(auth.secret.get_secret_value() if auth.secret else ""),
+            secret=secret,
             project_id=session.project_id,
             region=session.region,
         )
@@ -721,8 +722,8 @@ class Workspace:
             MeResponse with user profile, projects, and workspaces.
 
         Raises:
-            ConfigError: If credentials lack /me access.
-            AuthenticationError: Invalid credentials (401).
+            ConfigError: If credentials lack /me access (401 or 403).
+            QueryError: If the API returns a non-403 error.
 
         Example:
             ```python
@@ -814,6 +815,21 @@ class Workspace:
         self._credentials = new_client._credentials
         self._initial_workspace_id = workspace_id
 
+        # Rebuild resolved session with updated project context
+        if self._resolved_session is not None:
+            from mixpanel_data._internal.auth_credential import (
+                ProjectContext,
+                ResolvedSession,
+            )
+
+            self._resolved_session = ResolvedSession(
+                auth=self._resolved_session.auth,
+                project=ProjectContext(
+                    project_id=project_id,
+                    workspace_id=workspace_id,
+                ),
+            )
+
         # Clear cached services so they rebuild against new project
         self._discovery = None
         self._live_query = None
@@ -878,11 +894,11 @@ class Workspace:
                     if ws_info.id == wid:
                         workspace_name = ws_info.name
                         break
-        except (ConfigError, MixpanelDataError, pydantic.ValidationError):
-            # /me may not be available; names are best-effort.
-            # pydantic.ValidationError covers unexpected /me response
-            # shapes that fail model_validate.
+        except ConfigError:
+            # /me not available for this credential type; names are best-effort.
             pass
+        except (MixpanelDataError, pydantic.ValidationError) as e:
+            logger.debug("Could not enrich project context with /me names: %s", e)
 
         return ProjectContext(
             project_id=pid,

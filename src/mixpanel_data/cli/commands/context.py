@@ -68,6 +68,8 @@ def switch_context(
     and workspace ID from the alias definition. All three active
     fields are updated in a single config write.
 
+    If the alias has no workspace_id, the active workspace is cleared.
+
     Args:
         ctx: Typer context with global options.
         alias: Project alias name to switch to.
@@ -78,12 +80,7 @@ def switch_context(
     config = get_config(ctx)
     aliases = config.list_project_aliases()
 
-    # Find the alias by name
-    match = None
-    for a in aliases:
-        if a.name == alias:
-            match = a
-            break
+    match = next((a for a in aliases if a.name == alias), None)
 
     if match is None:
         available = [a.name for a in aliases]

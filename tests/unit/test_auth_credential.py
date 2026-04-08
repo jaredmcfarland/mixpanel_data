@@ -301,3 +301,62 @@ class TestResolvedSession:
         session = ResolvedSession(auth=oauth_cred, project=project_context)
         assert session.auth_header() == "Bearer oauth-token"
         assert session.region == "eu"
+
+    def test_workspace_id_property(self, sa_credential: AuthCredential) -> None:
+        """Test workspace_id convenience property on ResolvedSession."""
+        ctx_with_ws = ProjectContext(project_id="111", workspace_id=42)
+        session = ResolvedSession(auth=sa_credential, project=ctx_with_ws)
+        assert session.workspace_id == 42
+
+        ctx_no_ws = ProjectContext(project_id="111")
+        session2 = ResolvedSession(auth=sa_credential, project=ctx_no_ws)
+        assert session2.workspace_id is None
+
+
+class TestAuthCredentialOAuthValidation:
+    """Tests for OAuth credential validation requiring token at construction."""
+
+    def test_oauth_without_token_rejected(self) -> None:
+        """OAuth credential with None token should raise ValueError."""
+        with pytest.raises(ValueError, match="oauth_access_token is required"):
+            AuthCredential(
+                name="no-token",
+                type=CredentialType.oauth,
+                region="us",
+            )
+
+    def test_oauth_with_empty_token_rejected(self) -> None:
+        """OAuth credential with empty string token should raise ValueError."""
+        with pytest.raises(ValueError, match="cannot be empty"):
+            AuthCredential(
+                name="empty-token",
+                type=CredentialType.oauth,
+                region="us",
+                oauth_access_token=SecretStr(""),
+            )
+
+    def test_oauth_with_valid_token_accepted(self) -> None:
+        """OAuth credential with a valid token should succeed."""
+        cred = AuthCredential(
+            name="good-oauth",
+            type=CredentialType.oauth,
+            region="us",
+            oauth_access_token=SecretStr("my-token"),
+        )
+        assert cred.auth_header() == "Bearer my-token"
+
+    def test_basic_auth_header_error_via_model_construct(self) -> None:
+        """Test auth_header ValueError for Basic auth with missing fields.
+
+        Uses model_construct to bypass validation and create an invalid state.
+        """
+        cred = AuthCredential.model_construct(
+            name="broken",
+            type=CredentialType.service_account,
+            region="us",
+            username=None,
+            secret=None,
+            oauth_access_token=None,
+        )
+        with pytest.raises(ValueError, match="Username and secret required"):
+            cred.auth_header()

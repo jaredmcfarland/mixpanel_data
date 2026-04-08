@@ -270,7 +270,13 @@ class ProjectNotFoundError(ConfigError):
     Example:
         ```python
         try:
-            ws.switch_project("nonexistent-id")
+            projects = ws.discover_projects()
+            match = [p for pid, p in projects if pid == target_id]
+            if not match:
+                raise ProjectNotFoundError(
+                    target_id,
+                    available_projects=[pid for pid, _ in projects],
+                )
         except ProjectNotFoundError as e:
             print(f"Project '{e.project_id}' not found.")
             if e.available_projects:
