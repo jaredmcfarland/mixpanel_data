@@ -53,6 +53,7 @@ def _make_workspace() -> Workspace:
         region="us",
     )
     mgr = MagicMock(spec=ConfigManager)
+    mgr.config_version.return_value = 1
     mgr.resolve_credentials.return_value = creds
     return Workspace(_config_manager=mgr)
 

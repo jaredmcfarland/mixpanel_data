@@ -8,9 +8,13 @@ Re-exported classes:
     Credentials: Immutable credential container with SecretStr for secrets.
     AccountInfo: Named account metadata (name, username, project_id, region).
     AuthMethod: Enum for authentication method selection (basic, oauth).
+    AuthCredential: Standalone auth identity for v2 config (decoupled from project).
+    CredentialType: Enum distinguishing service_account from oauth.
+    ProjectContext: Project and optional workspace selection.
+    ResolvedSession: Composition of AuthCredential + ProjectContext.
 
 For full documentation of these classes, see:
-    mixpanel_data._internal.config
+    mixpanel_data._internal.config, mixpanel_data._internal.auth_credential
 
 Example usage:
     from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
@@ -19,6 +23,12 @@ Example usage:
     creds = config.resolve_credentials()
 """
 
+from mixpanel_data._internal.auth_credential import (
+    AuthCredential,
+    CredentialType,
+    ProjectContext,
+    ResolvedSession,
+)
 from mixpanel_data._internal.config import (
     AccountInfo,
     AuthMethod,
@@ -27,8 +37,12 @@ from mixpanel_data._internal.config import (
 )
 
 __all__ = [
+    "AuthCredential",
     "AuthMethod",
     "ConfigManager",
     "Credentials",
+    "CredentialType",
     "AccountInfo",
+    "ProjectContext",
+    "ResolvedSession",
 ]

@@ -85,6 +85,24 @@ def main(
             envvar="MP_ACCOUNT",
         ),
     ] = None,
+    credential: Annotated[
+        str | None,
+        typer.Option(
+            "--credential",
+            "-c",
+            help="Credential name to use (v2 config).",
+            envvar="MP_CREDENTIAL",
+        ),
+    ] = None,
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project",
+            "-p",
+            help="Project ID to use (overrides active context).",
+            envvar="MP_PROJECT_ID",
+        ),
+    ] = None,
     workspace_id: Annotated[
         int | None,
         typer.Option(
@@ -125,7 +143,16 @@ def main(
     and manage Mixpanel entities programmatically.
     """
     ctx.ensure_object(dict)
+
+    if account is not None and credential is not None:
+        err_console.print(
+            "[red]--account and --credential are mutually exclusive.[/red]"
+        )
+        raise typer.Exit(3)
+
     ctx.obj["account"] = account
+    ctx.obj["credential"] = credential
+    ctx.obj["project"] = project
     ctx.obj["workspace_id"] = workspace_id
     ctx.obj["quiet"] = quiet
     ctx.obj["verbose"] = verbose
@@ -141,6 +168,7 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.annotations import annotations_app
     from mixpanel_data.cli.commands.auth import auth_app
     from mixpanel_data.cli.commands.cohorts import cohorts_app
+    from mixpanel_data.cli.commands.context import context_app
     from mixpanel_data.cli.commands.custom_events import custom_events_app
     from mixpanel_data.cli.commands.custom_properties import custom_properties_app
     from mixpanel_data.cli.commands.dashboards import dashboards_app
@@ -150,10 +178,12 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.inspect import inspect_app
     from mixpanel_data.cli.commands.lexicon import lexicon_app
     from mixpanel_data.cli.commands.lookup_tables import lookup_tables_app
+    from mixpanel_data.cli.commands.projects import projects_app
     from mixpanel_data.cli.commands.query import query_app
     from mixpanel_data.cli.commands.reports import reports_app
     from mixpanel_data.cli.commands.schemas import schemas_app
     from mixpanel_data.cli.commands.webhooks import webhooks_app
+    from mixpanel_data.cli.commands.workspaces_cmd import workspaces_app
 
     app.add_typer(auth_app, name="auth", help="Manage authentication and accounts.")
     app.add_typer(query_app, name="query", help="Query Mixpanel data.")
@@ -189,6 +219,21 @@ def _register_commands() -> None:
         lookup_tables_app,
         name="lookup-tables",
         help="Manage lookup tables.",
+    )
+    app.add_typer(
+        projects_app,
+        name="projects",
+        help="Discover and switch Mixpanel projects.",
+    )
+    app.add_typer(
+        workspaces_app,
+        name="workspaces",
+        help="Discover and switch Mixpanel workspaces.",
+    )
+    app.add_typer(
+        context_app,
+        name="context",
+        help="View and switch the active session context.",
     )
 
 

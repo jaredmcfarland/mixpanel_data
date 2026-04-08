@@ -47,9 +47,11 @@ def list_accounts(
     ctx: typer.Context,
     format: FormatOption = "json",
 ) -> None:
-    """List all configured accounts.
+    """List configured credentials (v2) or accounts (v1).
 
-    Shows account name, username, project ID, region, and default status.
+    Shows credentials with name, type, region, and active status
+    when using v2 config. Falls back to showing legacy accounts
+    (name, username, project_id, region, is_default) for v1 config.
 
     Examples:
 
@@ -57,25 +59,44 @@ def list_accounts(
         mp auth list --format table
     """
     config = get_config(ctx)
-    accounts = config.list_accounts()
 
-    data = [
-        {
-            "name": acc.name,
-            "username": acc.username,
-            "project_id": acc.project_id,
-            "region": acc.region,
-            "is_default": acc.is_default,
-        }
-        for acc in accounts
-    ]
-
-    output_result(
-        ctx,
-        data,
-        columns=["name", "username", "project_id", "region", "is_default"],
-        format=format,
-    )
+    if config.config_version() >= 2:
+        # v2 path: show credentials
+        creds = config.list_credentials()
+        data = [
+            {
+                "name": c.name,
+                "type": c.type,
+                "region": c.region,
+                "is_active": c.is_active,
+            }
+            for c in creds
+        ]
+        output_result(
+            ctx,
+            data,
+            columns=["name", "type", "region", "is_active"],
+            format=format,
+        )
+    else:
+        # v1 path: show legacy accounts
+        accounts = config.list_accounts()
+        data = [
+            {
+                "name": acc.name,
+                "username": acc.username,
+                "project_id": acc.project_id,
+                "region": acc.region,
+                "is_default": acc.is_default,
+            }
+            for acc in accounts
+        ]
+        output_result(
+            ctx,
+            data,
+            columns=["name", "username", "project_id", "region", "is_default"],
+            format=format,
+        )
 
 
 @auth_app.command("add")
@@ -358,14 +379,16 @@ def _resolve_region(ctx: typer.Context, region: str | None) -> str:
             return default_account.region
     except (ConfigError, AccountNotFoundError) as exc:
         err_console.print(
-            f"[yellow]Warning:[/yellow] Could not determine region from config: {exc}. "
-            "Defaulting to 'us'."
+            f"[red]Error:[/red] Could not determine region from config: {exc}. "
+            "Use --region to specify explicitly."
         )
+        raise typer.Exit(code=1) from None
     except OSError as exc:
         err_console.print(
-            f"[yellow]Warning:[/yellow] Could not read config file: {exc}. "
-            "Defaulting to region 'us'."
+            f"[red]Error:[/red] Could not read config file: {exc}. "
+            "Use --region to specify explicitly."
         )
+        raise typer.Exit(code=1) from None
     return "us"
 
 
@@ -388,7 +411,8 @@ def login(
     """Log in via OAuth 2.0 PKCE flow.
 
     Opens a browser for Mixpanel authorization. After approving,
-    tokens are saved locally for subsequent API calls.
+    tokens are saved locally for subsequent API calls. Invalidates
+    the /me cache for the region after successful login.
 
     Examples:
 
@@ -399,6 +423,12 @@ def login(
     resolved_region = _resolve_region(ctx, region)
     flow = OAuthFlow(region=resolved_region)
     tokens = flow.login(project_id=project_id)
+
+    # Invalidate /me cache after successful login so stale user/project
+    # data doesn't persist from a previous session.
+    from mixpanel_data._internal.me import MeCache
+
+    MeCache().invalidate(resolved_region)
 
     output_result(
         ctx,
@@ -455,10 +485,10 @@ def auth_status(
     ctx: typer.Context,
     format: FormatOption = "json",
 ) -> None:
-    """Show OAuth authentication state per region.
+    """Show authentication state including active context.
 
-    Checks for stored tokens across all regions (us, eu, in) and
-    displays authentication status, token expiry, and project ID.
+    Displays the active credential/project/workspace context and
+    OAuth token status across all regions (us, eu, in).
 
     Examples:
 
@@ -467,13 +497,37 @@ def auth_status(
     """
     storage = OAuthStorage()
     regions: list[str] = ["us", "eu", "in"]
-    statuses: list[dict[str, object]] = []
 
+    # Build active context section (gracefully handle missing config)
+    active_context: dict[str, object] = {
+        "config_version": None,
+        "credential": None,
+        "project_id": None,
+        "workspace_id": None,
+    }
+    try:
+        config = get_config(ctx)
+        version = config.config_version()
+        active_context["config_version"] = version
+        if version >= 2:
+            active = config.get_active_context()
+            active_context["credential"] = active.credential
+            active_context["project_id"] = active.project_id
+            active_context["workspace_id"] = active.workspace_id
+    except ConfigError as exc:
+        err_console.print(f"[yellow]Warning:[/yellow] Could not read config: {exc}")
+    except OSError as exc:
+        err_console.print(
+            f"[yellow]Warning:[/yellow] Could not read config file: {exc}"
+        )
+
+    # Build OAuth token statuses
+    oauth_statuses: list[dict[str, object]] = []
     for rgn in regions:
         tokens = storage.load_tokens(region=rgn)
         if tokens is not None:
             is_expired = tokens.is_expired()
-            statuses.append(
+            oauth_statuses.append(
                 {
                     "region": rgn,
                     "authenticated": True,
@@ -485,7 +539,7 @@ def auth_status(
                 }
             )
         else:
-            statuses.append(
+            oauth_statuses.append(
                 {
                     "region": rgn,
                     "authenticated": False,
@@ -497,19 +551,12 @@ def auth_status(
                 }
             )
 
-    output_result(
-        ctx,
-        statuses,
-        columns=[
-            "region",
-            "authenticated",
-            "token_type",
-            "expires_at",
-            "is_expired",
-            "project_id",
-        ],
-        format=format,
-    )
+    result: dict[str, object] = {
+        "active_context": active_context,
+        "oauth": oauth_statuses,
+    }
+
+    output_result(ctx, result, format=format)
 
 
 @auth_app.command("token")
@@ -538,3 +585,47 @@ def auth_token(
     flow = OAuthFlow(region=resolved_region)
     token = flow.get_valid_token(region=resolved_region)
     print(token)
+
+
+@auth_app.command("migrate")
+@handle_errors
+def migrate_config(
+    ctx: typer.Context,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview migration without writing."),
+    ] = False,
+    format: FormatOption = "json",
+) -> None:
+    """Migrate v1 config to v2 format.
+
+    Converts the legacy account-based config (v1) to the new
+    credential + project alias format (v2). Accounts with identical
+    service account credentials are deduplicated into a single
+    credential entry. Each account becomes a project alias.
+
+    A backup of the original config is created at
+    ``~/.mp/config.toml.v1.bak``.
+
+    Use ``--dry-run`` to preview what would change without writing.
+
+    Examples:
+
+        mp auth migrate
+        mp auth migrate --dry-run
+        mp auth migrate --format table
+    """
+    config = get_config(ctx)
+    result = config.migrate_v1_to_v2(dry_run=dry_run)
+
+    data: dict[str, object] = {
+        "credentials_created": result.credentials_created,
+        "aliases_created": result.aliases_created,
+        "active_credential": result.active_credential,
+        "active_project_id": result.active_project_id,
+        "dry_run": dry_run,
+    }
+    if result.backup_path is not None:
+        data["backup_path"] = str(result.backup_path)
+
+    output_result(ctx, data, format=format)

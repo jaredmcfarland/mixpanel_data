@@ -53,6 +53,7 @@ def mock_credentials() -> Credentials:
 def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
     """Create mock ConfigManager that returns credentials."""
     manager = MagicMock(spec=ConfigManager)
+    manager.config_version.return_value = 1
     manager.resolve_credentials.return_value = mock_credentials
     return manager
 

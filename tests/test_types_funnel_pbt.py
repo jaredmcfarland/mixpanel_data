@@ -96,6 +96,7 @@ def _make_workspace() -> Workspace:
         region="us",
     )
     manager = MagicMock(spec=ConfigManager)
+    manager.config_version.return_value = 1
     manager.resolve_credentials.return_value = creds
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()

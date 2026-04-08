@@ -38,6 +38,7 @@ def mock_credentials() -> Credentials:
 def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
     """Create mock ConfigManager that returns credentials."""
     manager = MagicMock(spec=ConfigManager)
+    manager.config_version.return_value = 1
     manager.resolve_credentials.return_value = mock_credentials
     return manager
 
@@ -545,6 +546,7 @@ class TestWorkspaceFlowPublicMethods:
     ) -> None:
         """query_flow() raises ConfigError when no credentials available."""
         mock_mgr = MagicMock(spec=ConfigManager)
+        mock_mgr.config_version.return_value = 1
         mock_mgr.resolve_credentials.return_value = None
 
         ws = Workspace(_config_manager=mock_mgr)

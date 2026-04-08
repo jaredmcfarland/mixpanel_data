@@ -47,6 +47,7 @@ def mock_credentials() -> Credentials:
 def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
     """Create mock ConfigManager that returns credentials."""
     manager = MagicMock(spec=ConfigManager)
+    manager.config_version.return_value = 1
     manager.resolve_credentials.return_value = mock_credentials
     return manager
 
@@ -132,6 +133,7 @@ class TestQueryFunnelConfigError:
         from mixpanel_data.exceptions import ConfigError
 
         no_creds_manager = MagicMock(spec=ConfigManager)
+        no_creds_manager.config_version.return_value = 1
         no_creds_manager.resolve_credentials.return_value = None
 
         ws = Workspace(
@@ -175,7 +177,9 @@ class TestQueryFunnelValidation:
         """T021-F2: An empty event name is caught by FunnelStep.__post_init__."""
         ws = workspace_factory()
         try:
-            with pytest.raises(ValueError, match="FunnelStep.event must be a non-empty"):
+            with pytest.raises(
+                ValueError, match="FunnelStep.event must be a non-empty"
+            ):
                 ws.query_funnel(steps=["Signup", ""])
 
             mock_api_client.insights_query.assert_not_called()
@@ -227,7 +231,9 @@ class TestQueryFunnelValidation:
         """T021-multi: Empty event name is caught by FunnelStep.__post_init__ before validation."""
         ws = workspace_factory()
         try:
-            with pytest.raises(ValueError, match="FunnelStep.event must be a non-empty"):
+            with pytest.raises(
+                ValueError, match="FunnelStep.event must be a non-empty"
+            ):
                 ws.query_funnel(steps=[""], conversion_window=0)
 
             mock_api_client.insights_query.assert_not_called()

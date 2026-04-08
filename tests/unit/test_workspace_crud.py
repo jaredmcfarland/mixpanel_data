@@ -703,9 +703,7 @@ class TestWorkspaceBookmarkCRUD:
             if request.method == "POST" and "bookmarks" in str(request.url):
                 data = _bookmark_json(42, "Auto Add", "insights")
                 data["dashboard_id"] = 99
-                return httpx.Response(
-                    200, json={"status": "ok", "results": data}
-                )
+                return httpx.Response(200, json={"status": "ok", "results": data})
             if request.method == "PATCH" and "dashboards" in str(request.url):
                 return httpx.Response(
                     200,
@@ -714,15 +712,18 @@ class TestWorkspaceBookmarkCRUD:
             return httpx.Response(200, json={"status": "ok", "results": {}})
 
         ws = _make_workspace(temp_dir, handler)
-        ws.create_bookmark(CreateBookmarkParams(
-            name="Auto Add",
-            bookmark_type="insights",
-            params={"events": []},
-            dashboard_id=99,
-        ))
+        ws.create_bookmark(
+            CreateBookmarkParams(
+                name="Auto Add",
+                bookmark_type="insights",
+                params={"events": []},
+                dashboard_id=99,
+            )
+        )
 
         patch_requests = [
-            r for r in requests_made
+            r
+            for r in requests_made
             if r.method == "PATCH" and "dashboards" in str(r.url)
         ]
         assert len(patch_requests) == 1, (

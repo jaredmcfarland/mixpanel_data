@@ -384,7 +384,13 @@ class TestGetWorkspace:
     def test_creates_workspace_on_first_call(self) -> None:
         """Test that workspace is created on first call."""
         ctx = MagicMock(spec=typer.Context)
-        ctx.obj = {"account": None, "workspace": None}
+        ctx.obj = {
+            "account": None,
+            "credential": None,
+            "project": None,
+            "workspace_id": None,
+            "workspace": None,
+        }
 
         with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
             mock_ws = MagicMock()
@@ -392,7 +398,9 @@ class TestGetWorkspace:
 
             result = get_workspace(ctx)
 
-            MockWorkspace.assert_called_once_with(account=None, workspace_id=None)
+            MockWorkspace.assert_called_once_with(
+                account=None, project_id=None, workspace_id=None
+            )
             assert result == mock_ws
             assert ctx.obj["workspace"] == mock_ws
 
@@ -400,7 +408,13 @@ class TestGetWorkspace:
         """Test that workspace is reused on subsequent calls."""
         ctx = MagicMock(spec=typer.Context)
         existing_ws = MagicMock()
-        ctx.obj = {"account": None, "workspace": existing_ws}
+        ctx.obj = {
+            "account": None,
+            "credential": None,
+            "project": None,
+            "workspace_id": None,
+            "workspace": existing_ws,
+        }
 
         with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
             result = get_workspace(ctx)
@@ -411,12 +425,20 @@ class TestGetWorkspace:
     def test_respects_account_option(self) -> None:
         """Test that --account option is passed to Workspace."""
         ctx = MagicMock(spec=typer.Context)
-        ctx.obj = {"account": "staging", "workspace": None}
+        ctx.obj = {
+            "account": "staging",
+            "credential": None,
+            "project": None,
+            "workspace_id": None,
+            "workspace": None,
+        }
 
         with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
             get_workspace(ctx)
 
-            MockWorkspace.assert_called_once_with(account="staging", workspace_id=None)
+            MockWorkspace.assert_called_once_with(
+                account="staging", project_id=None, workspace_id=None
+            )
 
 
 class TestGetConfig:

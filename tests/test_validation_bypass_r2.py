@@ -37,6 +37,7 @@ def ws() -> Workspace:
         username="u", secret=SecretStr("s"), project_id="1", region="us"
     )
     mgr = MagicMock(spec=ConfigManager)
+    mgr.config_version.return_value = 1
     mgr.resolve_credentials.return_value = creds
     return Workspace(_config_manager=mgr, _api_client=MagicMock())
 
