@@ -172,14 +172,12 @@ class TestQueryFunnelValidation:
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """T021-F2: An empty event name raises BookmarkValidationError with F2 code."""
+        """T021-F2: An empty event name is caught by FunnelStep.__post_init__."""
         ws = workspace_factory()
         try:
-            with pytest.raises(BookmarkValidationError) as exc_info:
+            with pytest.raises(ValueError, match="FunnelStep.event must be a non-empty"):
                 ws.query_funnel(steps=["Signup", ""])
 
-            error_codes = [e.code for e in exc_info.value.errors]
-            assert "F2_EMPTY_STEP_EVENT" in error_codes
             mock_api_client.insights_query.assert_not_called()
         finally:
             ws.close()
@@ -221,24 +219,41 @@ class TestQueryFunnelValidation:
         finally:
             ws.close()
 
-    def test_multiple_errors_collected(
+    def test_empty_event_caught_at_construction(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """T021-multi: Multiple validation errors are collected in one exception."""
+        """T021-multi: Empty event name is caught by FunnelStep.__post_init__ before validation."""
+        ws = workspace_factory()
+        try:
+            with pytest.raises(ValueError, match="FunnelStep.event must be a non-empty"):
+                ws.query_funnel(steps=[""], conversion_window=0)
+
+            mock_api_client.insights_query.assert_not_called()
+        finally:
+            ws.close()
+
+    def test_multiple_validation_errors_collected(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """T021-multi: Multiple validation errors still collected in single BookmarkValidationError."""
         ws = workspace_factory()
         try:
             with pytest.raises(BookmarkValidationError) as exc_info:
-                ws.query_funnel(steps=[""], conversion_window=0)
+                ws.query_funnel(
+                    steps=["ValidEvent"],  # passes __post_init__
+                    conversion_window=0,  # F3: must be positive
+                    from_date="bad-date",  # V8: invalid format
+                )
 
             err = exc_info.value
-            # Should have at least F1 (only 1 step), F2 (empty event), F3 (window <= 0)
-            error_codes = [e.code for e in err.errors]
-            assert "F1_MIN_STEPS" in error_codes
-            assert "F2_EMPTY_STEP_EVENT" in error_codes
+            error_codes = {e.code for e in err.errors}
+            assert "F1_MIN_STEPS" in error_codes  # only 1 step
             assert "F3_CONVERSION_WINDOW_POSITIVE" in error_codes
-            assert err.error_count >= 3
+            assert err.error_count >= 2
             mock_api_client.insights_query.assert_not_called()
         finally:
             ws.close()

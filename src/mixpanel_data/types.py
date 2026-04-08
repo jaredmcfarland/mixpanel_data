@@ -24,9 +24,26 @@ from dataclasses import dataclass, field
 from datetime import date as dt_date
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypedDict, TypeVar
 
+from mixpanel_data._literal_types import ConversionWindowUnit as ConversionWindowUnit
+from mixpanel_data._literal_types import FilterDateUnit as FilterDateUnit
+from mixpanel_data._literal_types import FilterPropertyType as FilterPropertyType
+from mixpanel_data._literal_types import FiltersCombinator as FiltersCombinator
 from mixpanel_data._literal_types import FlowAnchorType, FlowNodeType
+from mixpanel_data._literal_types import FlowChartType as FlowChartType
+from mixpanel_data._literal_types import (
+    FlowConversionWindowUnit as FlowConversionWindowUnit,
+)
+from mixpanel_data._literal_types import FunnelMathType as FunnelMathType
+from mixpanel_data._literal_types import FunnelMode as FunnelMode
+from mixpanel_data._literal_types import FunnelOrder as FunnelOrder
+from mixpanel_data._literal_types import InsightsMode as InsightsMode
+from mixpanel_data._literal_types import MathType as MathType
+from mixpanel_data._literal_types import PerUserAggregation as PerUserAggregation
+from mixpanel_data._literal_types import RetentionAlignment as RetentionAlignment
+from mixpanel_data._literal_types import RetentionMathType as RetentionMathType
+from mixpanel_data._literal_types import RetentionMode as RetentionMode
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -40,107 +57,8 @@ T = TypeVar("T")
 # Query API Type Aliases and Constants (Phase 029)
 # =============================================================================
 
-MathType = Literal[
-    "total",
-    "unique",
-    "dau",
-    "wau",
-    "mau",
-    "average",
-    "median",
-    "min",
-    "max",
-    "p25",
-    "p75",
-    "p90",
-    "p99",
-    "percentile",
-    "histogram",
-]
-"""Aggregation function for query metrics.
-
-+-----------+------------------------------------------------------------------+--------------------+
-| Value     | Meaning                                                          | Requires property? |
-+===========+==================================================================+====================+
-| total     | Count events, or sum a numeric property if ``property`` is set   | Optional           |
-+-----------+------------------------------------------------------------------+--------------------+
-| unique    | Count distinct users                                             | No                 |
-+-----------+------------------------------------------------------------------+--------------------+
-| dau       | Daily Active Users (unique users per day)                        | No                 |
-+-----------+------------------------------------------------------------------+--------------------+
-| wau       | Weekly Active Users (unique users per 7-day window)              | No                 |
-+-----------+------------------------------------------------------------------+--------------------+
-| mau       | Monthly Active Users (unique users per 28-day window)            | No                 |
-+-----------+------------------------------------------------------------------+--------------------+
-| average   | Mean of a numeric property's values                              | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| median    | Median (50th percentile) of a numeric property                   | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| min       | Minimum value of a numeric property                              | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| max       | Maximum value of a numeric property                              | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| p25       | 25th percentile of a numeric property                            | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| p75       | 75th percentile of a numeric property                            | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| p90       | 90th percentile of a numeric property                            | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| p99       | 99th percentile of a numeric property                            | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| percentile| Custom percentile (requires ``percentile_value``)                | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| histogram | Distribution of a numeric property's values                      | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-
-Note: Mixpanel has no ``"sum"`` math type. Use ``math="total"`` with
-a ``property`` to sum a numeric property's values.
-
-``dau``, ``wau``, ``mau``, and ``unique`` are incompatible with ``per_user``.
-
-``percentile`` maps to ``custom_percentile`` in bookmark JSON and requires
-``percentile_value`` on Metric (or as a top-level param on ``query()``/``build_params()``).
-``histogram`` maps directly to ``histogram`` in bookmark JSON.
-"""
-
-PerUserAggregation = Literal["unique_values", "total", "average", "min", "max"]
-"""Per-user pre-aggregation type.
-
-Requires ``math_property`` to be set. The query first computes the
-per-user aggregate, then applies the top-level ``math`` across users.
-
-+-----------------+---------------------------------------------------------------+
-| Value           | Meaning                                                       |
-+=================+===============================================================+
-| total           | Sum of the property value per user (then aggregate)           |
-+-----------------+---------------------------------------------------------------+
-| average         | Mean of the property value per user (then aggregate)          |
-+-----------------+---------------------------------------------------------------+
-| min             | Minimum property value per user (then aggregate)              |
-+-----------------+---------------------------------------------------------------+
-| max             | Maximum property value per user (then aggregate)              |
-+-----------------+---------------------------------------------------------------+
-| unique_values   | Count of distinct property values per user (then aggregate)   |
-+-----------------+---------------------------------------------------------------+
-
-Maps to ``perUserAggregation`` in the bookmark measurement block.
-"""
-
-FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
-"""Property data type for filter conditions.
-
-Includes ``"datetime"`` and ``"list"`` for API compatibility.
-Datetime factory methods (``Filter.on``, ``Filter.before``, etc.)
-produce filters with ``filterType="datetime"``.
-"""
-
-FilterDateUnit = Literal["hour", "day", "week", "month"]
-"""Time unit for relative date filters.
-
-Used by ``Filter.in_the_last()`` and ``Filter.not_in_the_last()``
-to specify the granularity of the relative time window.
-Maps to ``filterDateUnit`` in bookmark JSON.
-"""
+# MathType, PerUserAggregation, FilterPropertyType, FilterDateUnit are
+# re-exported from _literal_types (imported above) for backward compatibility.
 
 # =============================================================================
 # Base Class for Result Types with DataFrame Conversion
@@ -5720,7 +5638,9 @@ class ComposedPropertyValue(BaseModel):
     """Type cast instruction."""
 
     resource_type: str
-    """Resource type."""
+    """Resource type. Uses singular form (event, user, groupprofile) from the
+    Mixpanel API composed property schema — distinct from
+    ``CustomPropertyResourceType`` which uses plural form."""
 
     behavior: Any | None = (
         None  # Any justified: API behavior spec varies by resource type
@@ -5770,7 +5690,7 @@ class CustomProperty(BaseModel):
     description: str | None = None
     """Property description."""
 
-    resource_type: str
+    resource_type: CustomPropertyResourceType
     """Resource type (events, people, group_profiles)."""
 
     property_type: str | None = None
@@ -5837,7 +5757,7 @@ class CreateCustomPropertyParams(BaseModel):
     name: str
     """Property name."""
 
-    resource_type: str
+    resource_type: CustomPropertyResourceType
     """Resource type (events, people, group_profiles)."""
 
     description: str | None = None
@@ -7129,8 +7049,29 @@ class Metric:
     filters: list[Filter] | None = None
     """Per-metric filters (list of Filter objects)."""
 
-    filters_combinator: Literal["all", "any"] = "all"
+    filters_combinator: FiltersCombinator = "all"
     """How per-metric filters combine (``"all"`` = AND, ``"any"`` = OR)."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If event is empty or contains control characters
+                (M1), math requires a property but none is set (M2),
+                or math="percentile" but percentile_value is missing (M3).
+        """
+        _validate_event_name(self.event, "Metric")
+        if self.math in _MATH_REQUIRING_PROPERTY and self.property is None:
+            raise ValueError(
+                f"Metric math={self.math!r} requires a property "
+                f"to be set (e.g., Metric({self.event!r}, math={self.math!r}, "
+                f'property="your_property"))'
+            )
+        if self.math == "percentile" and self.percentile_value is None:
+            raise ValueError(
+                'Metric math="percentile" requires percentile_value '
+                "(e.g., Metric(event, math='percentile', percentile_value=95))"
+            )
 
 
 @dataclass(frozen=True)
@@ -7174,6 +7115,15 @@ class Formula:
 
     label: str | None = None
     """Optional display label for the formula result."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If expression is empty (FM1).
+        """
+        if not self.expression or not self.expression.strip():
+            raise ValueError("Formula.expression must be a non-empty string")
 
 
 @dataclass(frozen=True)
@@ -7924,6 +7874,30 @@ class GroupBy:
     bucket_max: int | float | None = None
     """Maximum value for numeric buckets."""
 
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If property is an empty string (GB1),
+                bucket_size is not positive (GB2), or
+                bucket_min >= bucket_max (GB3).
+        """
+        if isinstance(self.property, str) and not self.property.strip():
+            raise ValueError("GroupBy.property must be a non-empty string")
+        if self.bucket_size is not None and self.bucket_size <= 0:
+            raise ValueError(
+                f"GroupBy.bucket_size must be positive, got {self.bucket_size}"
+            )
+        if (
+            self.bucket_min is not None
+            and self.bucket_max is not None
+            and self.bucket_min >= self.bucket_max
+        ):
+            raise ValueError(
+                f"GroupBy.bucket_min ({self.bucket_min}) must be less than "
+                f"bucket_max ({self.bucket_max})"
+            )
+
 
 # =============================================================================
 # Cohort Definition Builder Types
@@ -8393,6 +8367,47 @@ class CohortCriteria:
         )
 
 
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+"""Control character regex for __post_init__ validation.
+
+Duplicated from validation.py to avoid circular imports.
+"""
+
+_MATH_REQUIRING_PROPERTY: frozenset[str] = frozenset(
+    {
+        "average",
+        "median",
+        "min",
+        "max",
+        "p25",
+        "p75",
+        "p90",
+        "p99",
+        "percentile",
+        "histogram",
+    }
+)
+"""Math types that require a measurement property (for Metric.__post_init__)."""
+
+
+def _validate_event_name(event: str, class_name: str) -> None:
+    """Validate that an event name is non-empty and has no control chars.
+
+    Args:
+        event: The event name to validate.
+        class_name: Name of the containing class (for error messages).
+
+    Raises:
+        ValueError: If event is empty or contains control characters.
+    """
+    if not event or not event.strip():
+        raise ValueError(f"{class_name}.event must be a non-empty string")
+    if _CONTROL_CHAR_RE.search(event):
+        raise ValueError(
+            f"{class_name}.event contains control characters: {event!r}"
+        )
+
+
 def _validate_cohort_args(
     cohort: int | CohortDefinition,
     name: str | None,
@@ -8767,7 +8782,8 @@ class QueryResult(ResultWithDataFrame):
     """Generated bookmark params sent to API (for debugging/persistence)."""
 
     meta: dict[str, Any] = field(default_factory=dict)
-    """Response metadata (sampling factor, limits hit, etc.)."""
+    """Response metadata. Conforms to :class:`QueryMeta`
+    (sampling_factor, is_cached, computation_time, query_id)."""
 
     @property
     def df(self) -> pd.DataFrame:
@@ -8834,60 +8850,123 @@ class QueryResult(ResultWithDataFrame):
 
 
 # =============================================================================
+# Typed Result Structures (TypedDicts for agent-friendly result access)
+# =============================================================================
+
+
+class QueryMeta(TypedDict, total=False):
+    """Response metadata shared across all query result types.
+
+    All fields are optional since the API may omit them depending on
+    the query type and server-side configuration.
+
+    Attributes:
+        sampling_factor: Fraction of data sampled (1.0 = no sampling).
+        is_cached: Whether the result was served from cache.
+        computation_time: Server-side computation time in milliseconds.
+        query_id: Unique identifier for this query execution.
+    """
+
+    sampling_factor: float
+    is_cached: bool
+    computation_time: float
+    query_id: str
+
+
+class FunnelStepData(TypedDict):
+    """Step-level data in a funnel query result.
+
+    Each element in ``FunnelQueryResult.steps_data`` conforms to this
+    structure. Provides per-step conversion metrics and timing data.
+
+    Attributes:
+        event: Event name for this funnel step.
+        count: Number of users/events that reached this step.
+        step_conv_ratio: Conversion rate from the previous step (0.0-1.0).
+        overall_conv_ratio: Conversion rate from the first step (0.0-1.0).
+        avg_time: Average time from the previous step (seconds).
+        avg_time_from_start: Average time from the first step (seconds).
+    """
+
+    event: str
+    count: int
+    step_conv_ratio: float
+    overall_conv_ratio: float
+    avg_time: float
+    avg_time_from_start: float
+
+
+class RetentionCohortData(TypedDict):
+    """Cohort-level data in a retention query result.
+
+    Each value in ``RetentionQueryResult.cohorts`` and related segment
+    dicts conforms to this structure. Contains the cohort size and
+    per-bucket retention counts and rates.
+
+    Attributes:
+        first: Size of the cohort (number of users who performed the
+            born event in this period).
+        counts: List of retained user counts per retention bucket.
+            Index 0 is the born bucket (always equals ``first``).
+        rates: List of retention rates per bucket (0.0-1.0).
+            Index 0 is always 1.0 (100% retention at birth).
+    """
+
+    first: int
+    counts: list[int]
+    rates: list[float]
+
+
+class FlowStepNode(TypedDict, total=False):
+    """Node data in a flow query result.
+
+    Each element in ``FlowQueryResult.steps`` conforms to this
+    structure. Represents a single node in the flow graph.
+
+    Attributes:
+        event: Event name for this flow node.
+        totalCount: Total count as a string (API returns string,
+            parsed to int by ``nodes_df``).
+        type: Node type (ANCHOR, NORMAL, DROPOFF, PRUNED, etc.).
+        anchorType: Anchor classification (NORMAL, RELATIVE_REVERSE,
+            RELATIVE_FORWARD).
+        isCustomEvent: Whether this is a custom event.
+        conversionRateChange: Change in conversion rate at this node.
+    """
+
+    event: str
+    totalCount: str
+    type: FlowNodeType
+    anchorType: FlowAnchorType
+    isCustomEvent: bool
+    conversionRateChange: float | None
+
+
+class FlowEdge(TypedDict, total=False):
+    """Edge data in a flow query result.
+
+    Each element in ``FlowQueryResult.flows`` conforms to this
+    structure. Represents a transition between nodes in the flow.
+
+    Attributes:
+        source: Source event name.
+        target: Target event name.
+        count: Number of users/events traversing this edge.
+        step: Step index in the flow.
+    """
+
+    source: str
+    target: str
+    count: int
+    step: int
+
+
+# =============================================================================
 # Funnel Query Types (Phase 032)
 # =============================================================================
 
-FunnelMathType = Literal[
-    "conversion_rate_unique",
-    "conversion_rate_total",
-    "conversion_rate_session",
-    "unique",
-    "total",
-    "average",
-    "median",
-    "min",
-    "max",
-    "p25",
-    "p75",
-    "p90",
-    "p99",
-]
-"""Aggregation function for funnel query metrics.
-
-+---------------------------+------------------------------------------------------+
-| Value                     | Meaning                                              |
-+===========================+======================================================+
-| conversion_rate_unique    | Unique-user conversion rate (default)                |
-+---------------------------+------------------------------------------------------+
-| conversion_rate_total     | Total-event conversion rate                          |
-+---------------------------+------------------------------------------------------+
-| conversion_rate_session   | Session-based conversion rate                        |
-+---------------------------+------------------------------------------------------+
-| unique                    | Raw count of unique users per step                   |
-+---------------------------+------------------------------------------------------+
-| total                     | Raw total event count per step                       |
-+---------------------------+------------------------------------------------------+
-| average                   | Mean of a numeric property per step                  |
-+---------------------------+------------------------------------------------------+
-| median                    | Median of a numeric property per step                |
-+---------------------------+------------------------------------------------------+
-| min                       | Minimum of a numeric property per step               |
-+---------------------------+------------------------------------------------------+
-| max                       | Maximum of a numeric property per step               |
-+---------------------------+------------------------------------------------------+
-| p25                       | 25th percentile of a numeric property per step       |
-+---------------------------+------------------------------------------------------+
-| p75                       | 75th percentile of a numeric property per step       |
-+---------------------------+------------------------------------------------------+
-| p90                       | 90th percentile of a numeric property per step       |
-+---------------------------+------------------------------------------------------+
-| p99                       | 99th percentile of a numeric property per step       |
-+---------------------------+------------------------------------------------------+
-
-These 13 values are the public-facing funnel math types. The Mixpanel API
-also accepts internal aliases (``"general"``, ``"session"``,
-``"conversion_rate"``) but those are not exposed in the public API.
-"""
+# FunnelMathType is re-exported from _literal_types (imported above)
+# for backward compatibility.
 
 
 @dataclass(frozen=True)
@@ -8937,11 +9016,19 @@ class FunnelStep:
     filters: list[Filter] | None = None
     """Per-step filter conditions."""
 
-    filters_combinator: Literal["all", "any"] = "all"
+    filters_combinator: FiltersCombinator = "all"
     """How per-step filters combine (AND/OR)."""
 
-    order: Literal["loose", "any"] | None = None
+    order: FunnelOrder | None = None
     """Per-step ordering override (only meaningful with top-level order='any')."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If event is empty or contains control characters (FS1).
+        """
+        _validate_event_name(self.event, "FunnelStep")
 
 
 @dataclass(frozen=True)
@@ -8986,6 +9073,24 @@ class Exclusion:
     to_step: int | None = None
     """End of exclusion range (0-indexed, inclusive). None = last step."""
 
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If event is empty (EX1), from_step is negative
+                (EX2), or to_step < from_step (EX3).
+        """
+        _validate_event_name(self.event, "Exclusion")
+        if self.from_step < 0:
+            raise ValueError(
+                f"Exclusion.from_step must be >= 0, got {self.from_step}"
+            )
+        if self.to_step is not None and self.to_step < self.from_step:
+            raise ValueError(
+                f"Exclusion.to_step ({self.to_step}) must be >= "
+                f"from_step ({self.from_step})"
+            )
+
 
 @dataclass(frozen=True)
 class HoldingConstant:
@@ -9023,6 +9128,17 @@ class HoldingConstant:
 
     resource_type: Literal["events", "people"] = "events"
     """Whether this is an event property or user-profile property."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If property is empty (HC1).
+        """
+        if not self.property or not self.property.strip():
+            raise ValueError(
+                "HoldingConstant.property must be a non-empty string"
+            )
 
 
 @dataclass(frozen=True)
@@ -9082,7 +9198,9 @@ class FunnelQueryResult(ResultWithDataFrame):
     """Effective end date from the response."""
 
     steps_data: list[dict[str, Any]] = field(default_factory=list)
-    """Step-level results (count, ratios, timing per step)."""
+    """Step-level results. Each dict conforms to :class:`FunnelStepData`
+    (event, count, step_conv_ratio, overall_conv_ratio, avg_time,
+    avg_time_from_start)."""
 
     series: dict[str, Any] = field(default_factory=dict)
     """Raw series data from the API."""
@@ -9091,7 +9209,8 @@ class FunnelQueryResult(ResultWithDataFrame):
     """Generated bookmark params sent to API."""
 
     meta: dict[str, Any] = field(default_factory=dict)
-    """Response metadata (sampling_factor, is_cached, etc.)."""
+    """Response metadata. Conforms to :class:`QueryMeta`
+    (sampling_factor, is_cached, computation_time, query_id)."""
 
     @property
     def overall_conversion_rate(self) -> float:
@@ -9172,45 +9291,8 @@ class FunnelQueryResult(ResultWithDataFrame):
 # Retention Query Types (Phase 033)
 # =============================================================================
 
-RetentionAlignment = Literal["birth", "interval_start"]
-"""Retention alignment mode.
-
-+------------------+----------------------------------------------+
-| Value            | Meaning                                      |
-+==================+==============================================+
-| birth            | Align to each cohort's born date (default)   |
-+------------------+----------------------------------------------+
-| interval_start   | Align all cohorts to the same start date     |
-+------------------+----------------------------------------------+
-"""
-
-RetentionMode = Literal["curve", "trends", "table"]
-"""Display mode for retention query results.
-
-+--------+----------------------------------------------+
-| Value  | Meaning                                      |
-+========+==============================================+
-| curve  | Retention curve (default)                    |
-+--------+----------------------------------------------+
-| trends | Trend lines over time                        |
-+--------+----------------------------------------------+
-| table  | Tabular cohort × bucket grid                 |
-+--------+----------------------------------------------+
-"""
-
-RetentionMathType = Literal["retention_rate", "unique"]
-"""Aggregation function for retention query metrics.
-
-+----------------+----------------------------------------------+
-| Value          | Meaning                                      |
-+================+==============================================+
-| retention_rate | Percentage of cohort retained (default)      |
-+----------------+----------------------------------------------+
-| unique         | Raw unique user count per bucket              |
-+----------------+----------------------------------------------+
-
-Maps directly to the ``measurement.math`` field in bookmark JSON.
-"""
+# RetentionAlignment, RetentionMode, RetentionMathType are re-exported
+# from _literal_types (imported above) for backward compatibility.
 
 
 @dataclass(frozen=True)
@@ -9252,8 +9334,16 @@ class RetentionEvent:
     filters: list[Filter] | None = None
     """Per-event filter conditions."""
 
-    filters_combinator: Literal["all", "any"] = "all"
+    filters_combinator: FiltersCombinator = "all"
     """How per-event filters combine (AND/OR)."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If event is empty or contains control characters (RE1).
+        """
+        _validate_event_name(self.event, "RetentionEvent")
 
 
 @dataclass(frozen=True)
@@ -9316,29 +9406,32 @@ class RetentionQueryResult(ResultWithDataFrame):
     """Effective end date from the response."""
 
     cohorts: dict[str, dict[str, Any]] = field(default_factory=dict)
-    """Cohort-level retention data (cohort_date → {first, counts, rates}).
+    """Cohort-level retention data. Each value conforms to
+    :class:`RetentionCohortData` (first, counts, rates).
 
     For segmented queries, this contains the ``$overall`` aggregate.
     """
 
     average: dict[str, Any] = field(default_factory=dict)
-    """Synthetic $average cohort data (aggregate across all cohorts)."""
+    """Synthetic $average cohort data. Conforms to :class:`RetentionCohortData`."""
 
     params: dict[str, Any] = field(default_factory=dict)
     """Generated bookmark params sent to API."""
 
     meta: dict[str, Any] = field(default_factory=dict)
-    """Response metadata (sampling_factor, is_cached, etc.)."""
+    """Response metadata. Conforms to :class:`QueryMeta`."""
 
     segments: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
-    """Per-segment cohort data (segment_name → cohort_date → {first, counts, rates}).
+    """Per-segment cohort data. Each inner value conforms to
+    :class:`RetentionCohortData` (first, counts, rates).
 
     Empty for unsegmented queries. Populated when ``group_by`` is used
     and the API returns breakdown segments alongside ``$overall``.
     """
 
     segment_averages: dict[str, dict[str, Any]] = field(default_factory=dict)
-    """Per-segment $average cohort data (segment_name → {first, counts, rates}).
+    """Per-segment $average cohort data. Each value conforms to
+    :class:`RetentionCohortData`.
 
     Empty for unsegmented queries.
     """
@@ -9510,7 +9603,24 @@ class FlowStep:
     reverse: int | None = None
     label: str | None = None
     filters: list[Filter] | None = None
-    filters_combinator: Literal["all", "any"] = "all"
+    filters_combinator: FiltersCombinator = "all"
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments.
+
+        Raises:
+            ValueError: If event is empty or contains control characters
+                (FL1), or forward/reverse is outside 0-5 range (FL2).
+        """
+        _validate_event_name(self.event, "FlowStep")
+        if self.forward is not None and not 0 <= self.forward <= 5:
+            raise ValueError(
+                f"FlowStep.forward must be in range 0-5, got {self.forward}"
+            )
+        if self.reverse is not None and not 0 <= self.reverse <= 5:
+            raise ValueError(
+                f"FlowStep.reverse must be in range 0-5, got {self.reverse}"
+            )
 
 
 @dataclass(frozen=True)
@@ -9909,18 +10019,23 @@ class FlowQueryResult(ResultWithDataFrame):
 
     computed_at: str
     steps: list[dict[str, Any]] = field(default_factory=list)
+    """Step-node dicts. Each conforms to :class:`FlowStepNode`."""
     flows: list[dict[str, Any]] = field(default_factory=list)
+    """Flow-edge dicts. Each conforms to :class:`FlowEdge`."""
     breakdowns: list[dict[str, Any]] = field(default_factory=list)
     overall_conversion_rate: float = 0.0
     params: dict[str, Any] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
+    """Response metadata. Conforms to :class:`QueryMeta`."""
     mode: Literal["sankey", "paths", "tree"] = "sankey"
     trees: list[FlowTreeNode] = field(default_factory=list)
     _nodes_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
     _edges_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
-    _graph_cache: Any = field(default=None, repr=False, kw_only=True)
+    _graph_cache: nx.DiGraph[str] | None = field(default=None, repr=False, kw_only=True)
+    """Internal cache for networkx graph (optional dependency)."""
     _trees_df_cache: pd.DataFrame | None = field(default=None, repr=False, kw_only=True)
-    _anytree_cache: list[Any] | None = field(default=None, repr=False, kw_only=True)
+    _anytree_cache: list[object] | None = field(default=None, repr=False, kw_only=True)
+    """Internal cache for anytree nodes (optional dependency)."""
 
     @property
     def nodes_df(self) -> pd.DataFrame:

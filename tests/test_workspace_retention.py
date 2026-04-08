@@ -16,7 +16,7 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data.exceptions import BookmarkValidationError, ConfigError
+from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import RetentionQueryResult
 
 if TYPE_CHECKING:
@@ -348,10 +348,10 @@ class TestQueryRetentionValidationIntegration:
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Empty born_event must raise BookmarkValidationError without calling the API."""
+        """Empty born_event must be caught by RetentionEvent.__post_init__ without calling the API."""
         ws = workspace_factory()
         try:
-            with pytest.raises(BookmarkValidationError):
+            with pytest.raises(ValueError, match="RetentionEvent.event must be a non-empty"):
                 ws.query_retention("", "Login")
             mock_api_client.insights_query.assert_not_called()
         finally:

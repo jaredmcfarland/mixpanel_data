@@ -324,19 +324,15 @@ class TestValidateQueryArgsLayer1:
         assert any(e.code == "V11_BUCKET_REQUIRES_SIZE" for e in errors)
 
     def test_v12_bucket_size_positive(self) -> None:
-        """V12: Non-positive bucket_size produces error."""
-        errors = validate_query_args(
-            **_valid_args(
-                group_by=GroupBy(
-                    property="revenue",
-                    property_type="number",
-                    bucket_size=0,
-                    bucket_min=0,
-                    bucket_max=100,
-                )
+        """V12: Non-positive bucket_size is rejected by GroupBy.__post_init__."""
+        with pytest.raises(ValueError, match="bucket_size must be positive"):
+            GroupBy(
+                property="revenue",
+                property_type="number",
+                bucket_size=0,
+                bucket_min=0,
+                bucket_max=100,
             )
-        )
-        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
 
     def test_v12b_bucket_requires_number(self) -> None:
         """V12b: bucket_size with non-number type produces error."""
@@ -354,11 +350,9 @@ class TestValidateQueryArgsLayer1:
         assert any(e.code == "V12B_BUCKET_REQUIRES_NUMBER" for e in errors)
 
     def test_v13_metric_math_property(self) -> None:
-        """V13: Metric with property math and no property produces error."""
-        errors = validate_query_args(
-            **_valid_args(events=[Metric("Purchase", math="average")])
-        )
-        assert any(e.code == "V13_METRIC_MATH_PROPERTY" for e in errors)
+        """V13: Metric with property math and no property is rejected by __post_init__."""
+        with pytest.raises(ValueError, match="requires a property"):
+            Metric("Purchase", math="average")
 
     def test_v13_valid_metric(self) -> None:
         """V13: Metric with property math and property is valid."""

@@ -272,12 +272,12 @@ class TestAggregationValidation:
 class TestPerMetricValidation:
     """Tests for per-Metric validation rules V13-V14."""
 
-    def test_v13_metric_property_math_requires_property(self, ws: Workspace) -> None:
-        """V13: Metric with property math requires property."""
+    def test_v13_metric_property_math_requires_property(self) -> None:
+        """V13: Metric with property math requires property (caught at construction)."""
         from mixpanel_data import Metric
 
-        with pytest.raises(BookmarkValidationError, match="requires property"):
-            ws.query(Metric("Purchase", math="average"))
+        with pytest.raises(ValueError, match="requires a property"):
+            Metric("Purchase", math="average")
 
     def test_v14_metric_non_property_math_rejects_property(self, ws: Workspace) -> None:
         """V14: Metric with non-property math rejects property."""
@@ -408,23 +408,19 @@ class TestGroupByValidation:
         ):
             ws.query("Purchase", group_by=GroupBy("amount", bucket_max=100))
 
-    def test_v12_bucket_size_must_be_positive(self, ws: Workspace) -> None:
-        """V12: bucket_size must be positive."""
+    def test_v12_bucket_size_must_be_positive(self) -> None:
+        """V12: bucket_size must be positive (caught at construction)."""
         from mixpanel_data import GroupBy
 
-        with pytest.raises(
-            BookmarkValidationError, match="bucket_size must be positive"
-        ):
-            ws.query("Purchase", group_by=GroupBy("amount", bucket_size=0))
+        with pytest.raises(ValueError, match="bucket_size must be positive"):
+            GroupBy("amount", bucket_size=0)
 
-    def test_v12_bucket_size_negative(self, ws: Workspace) -> None:
-        """V12: Negative bucket_size returns validation error."""
+    def test_v12_bucket_size_negative(self) -> None:
+        """V12: Negative bucket_size is caught at construction."""
         from mixpanel_data import GroupBy
 
-        with pytest.raises(
-            BookmarkValidationError, match="bucket_size must be positive"
-        ):
-            ws.query("Purchase", group_by=GroupBy("amount", bucket_size=-10))
+        with pytest.raises(ValueError, match="bucket_size must be positive"):
+            GroupBy("amount", bucket_size=-10)
 
     def test_bucket_size_requires_numeric_type(self, ws: Workspace) -> None:
         """bucket_size with default string property_type returns validation error."""
@@ -585,12 +581,12 @@ class TestPercentileValidation:
         with pytest.raises(BookmarkValidationError, match="percentile_value"):
             ws.build_params("Login", math="percentile", math_property="duration")
 
-    def test_v26_metric_percentile_requires_value(self, ws: Workspace) -> None:
-        """V26: Metric with math='percentile' requires percentile_value."""
+    def test_v26_metric_percentile_requires_value(self) -> None:
+        """V26: Metric with math='percentile' requires percentile_value (caught at construction)."""
         from mixpanel_data import Metric
 
-        with pytest.raises(BookmarkValidationError, match="percentile_value"):
-            ws.build_params(Metric("Login", math="percentile", property="duration"))
+        with pytest.raises(ValueError, match="percentile_value"):
+            Metric("Login", math="percentile", property="duration")
 
     def test_valid_percentile_passes(self, ws: Workspace) -> None:
         """Percentile with property and value passes validation."""
@@ -744,18 +740,14 @@ class TestValidateGroupByArgs:
         assert any(e.code == "V11_BUCKET_REQUIRES_SIZE" for e in errors)
 
     def test_v12_bucket_size_zero(self) -> None:
-        """V12: bucket_size=0 returns error with code V12_BUCKET_SIZE_POSITIVE."""
-        errors = validate_group_by_args(
-            group_by=GroupBy("amount", bucket_size=0),
-        )
-        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
+        """V12: bucket_size=0 is rejected by GroupBy.__post_init__."""
+        with pytest.raises(ValueError, match="bucket_size must be positive"):
+            GroupBy("amount", bucket_size=0)
 
     def test_v12_bucket_size_negative(self) -> None:
-        """V12: bucket_size=-5 returns error with code V12_BUCKET_SIZE_POSITIVE."""
-        errors = validate_group_by_args(
-            group_by=GroupBy("amount", bucket_size=-5),
-        )
-        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
+        """V12: bucket_size=-5 is rejected by GroupBy.__post_init__."""
+        with pytest.raises(ValueError, match="bucket_size must be positive"):
+            GroupBy("amount", bucket_size=-5)
 
     def test_v12b_bucket_size_wrong_property_type(self) -> None:
         """V12B: bucket_size with property_type='string' returns V12B_BUCKET_REQUIRES_NUMBER."""
@@ -772,17 +764,15 @@ class TestValidateGroupByArgs:
         assert any(e.code == "V12C_BUCKET_REQUIRES_BOUNDS" for e in errors)
 
     def test_v18_bucket_min_gte_bucket_max(self) -> None:
-        """V18: bucket_min >= bucket_max returns error with code V18_BUCKET_ORDER."""
-        errors = validate_group_by_args(
-            group_by=GroupBy(
+        """V18: bucket_min >= bucket_max is rejected by GroupBy.__post_init__."""
+        with pytest.raises(ValueError, match="bucket_min.*must be less than"):
+            GroupBy(
                 "amount",
                 property_type="number",
                 bucket_size=10,
                 bucket_min=100,
                 bucket_max=50,
-            ),
-        )
-        assert any(e.code == "V18_BUCKET_ORDER" for e in errors)
+            )
 
     def test_v24_bucket_size_nan(self) -> None:
         """V24: bucket_size=float('nan') returns V24_BUCKET_NOT_FINITE."""

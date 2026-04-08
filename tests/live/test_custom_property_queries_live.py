@@ -698,21 +698,18 @@ class TestPerMetricFilterCustomProperty:
         )
         assert isinstance(result, QueryResult)
 
-    def test_metric_per_metric_filter_invalid_ref_no_client_error(
+    def test_metric_per_metric_filter_invalid_ref_caught(
         self, ws: Workspace, real_event: str
     ) -> None:
-        """VALIDATION GAP: CustomPropertyRef(0) in Metric.filters NOT caught at L1."""
-        # This documents the gap: build_params succeeds because
-        # _scan_custom_properties does not scan Metric.filters
-        params = ws.build_params(
-            Metric(
-                real_event,
-                filters=[Filter.is_set(property=CustomPropertyRef(0))],
-            ),
-            last=7,
-        )
-        # No BookmarkValidationError raised — gap confirmed
-        assert "sections" in params
+        """CustomPropertyRef(0) in Metric.filters IS caught at L1 (gap closed)."""
+        with pytest.raises(BookmarkValidationError, match="positive integer"):
+            ws.build_params(
+                Metric(
+                    real_event,
+                    filters=[Filter.is_set(property=CustomPropertyRef(0))],
+                ),
+                last=7,
+            )
 
 
 # =============================================================================
@@ -1043,34 +1040,35 @@ class TestValidationInMetricPosition:
 
 
 class TestValidationGaps:
-    """Document known validation gaps — these tests assert CURRENT behavior."""
+    """Validation gaps that have been CLOSED — these confirm the fix."""
 
-    def test_per_metric_filter_cp_bypasses_validation(
+    def test_per_metric_filter_cp_now_validated(
         self, ws: Workspace, real_event: str
     ) -> None:
-        """GAP: CustomPropertyRef(0) in Metric.filters NOT caught at L1."""
-        # This should catch CP1 but doesn't because _scan_custom_properties
-        # does not scan Metric.filters
-        params = ws.build_params(
-            Metric(
-                real_event,
-                filters=[Filter.is_set(property=CustomPropertyRef(0))],
-            ),
-        )
-        assert "sections" in params  # No error raised — gap confirmed
+        """CLOSED: CustomPropertyRef(0) in Metric.filters IS caught at L1."""
+        with pytest.raises(BookmarkValidationError, match="positive integer"):
+            ws.build_params(
+                Metric(
+                    real_event,
+                    filters=[Filter.is_set(property=CustomPropertyRef(0))],
+                ),
+            )
 
-    def test_funnel_step_filter_cp_bypasses_validation(
+    def test_funnel_step_filter_cp_now_validated(
         self, ws: Workspace, real_events_pair: tuple[str, str]
     ) -> None:
-        """GAP: CustomPropertyRef(0) in FunnelStep.filters NOT caught at L1."""
+        """CLOSED: CustomPropertyRef(0) in FunnelStep.filters IS caught at L1."""
         e1, e2 = real_events_pair
-        params = ws.build_funnel_params(
-            [
-                FunnelStep(e1, filters=[Filter.is_set(property=CustomPropertyRef(0))]),
-                e2,
-            ],
-        )
-        assert "sections" in params  # No error raised — gap confirmed
+        with pytest.raises(BookmarkValidationError, match="positive integer"):
+            ws.build_funnel_params(
+                [
+                    FunnelStep(
+                        e1,
+                        filters=[Filter.is_set(property=CustomPropertyRef(0))],
+                    ),
+                    e2,
+                ],
+            )
 
     def test_retention_where_cp_validated_by_workspace(
         self, ws: Workspace, real_events_pair: tuple[str, str]
