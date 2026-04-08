@@ -8,12 +8,15 @@ Full method signatures for `mixpanel_data.Workspace`, organized by domain. Every
 import mixpanel_data as mp
 
 ws = mp.Workspace()                              # default account
-ws = mp.Workspace(account="prod")                # named account
+ws = mp.Workspace(account="prod")                # named account (v1 config)
+ws = mp.Workspace(credential="prod")             # named credential (v2 config)
 ws = mp.Workspace(workspace_id=12345)            # with workspace for App API
 ws = mp.Workspace(project_id="67890", region="eu") # explicit project — project_id is a STRING
 ```
 
 **Gotcha**: `project_id` must be a **string**, not an int. `Workspace(project_id=8)` raises `ValidationError`.
+
+**v1 vs v2 config**: `account=` uses v1 account-based config. `credential=` uses v2 credential-based config (decoupled auth identity from project context). Both work — v2 enables project switching without reconfiguring auth. Migrate with `ConfigManager().migrate_v1_to_v2()`.
 
 ## Discovery
 
@@ -978,6 +981,64 @@ ws.test_credentials() -> bool
 ws.api -> MixpanelAPIClient                     # escape hatch for custom requests
 ```
 
+## Session & Project Management (v2 Config)
+
+These methods require the v2 config schema (credential + project context). Migrate with `ConfigManager().migrate_v1_to_v2()` or `mp auth migrate`.
+
+```python
+# Identity & discovery via /me API
+ws.me(*, force_refresh: bool = False) -> MeResponse
+ws.discover_projects() -> list[tuple[str, MeProjectInfo]]   # (org_name, project_info) pairs
+ws.discover_workspaces(project_id: str | None = None) -> list[MeWorkspaceInfo]
+
+# In-session switching (changes the live Workspace without re-constructing)
+ws.switch_project(project_id: str, workspace_id: int | None = None) -> None
+ws.switch_workspace(workspace_id: int) -> None
+
+# Current session info (properties)
+ws.current_project -> ProjectContext          # active project_id, workspace_id
+ws.current_credential -> AuthCredential       # active auth identity (name, type, region)
+```
+
+### MeResponse / MeProjectInfo / MeWorkspaceInfo
+
+```python
+from mixpanel_data._internal.me import MeResponse, MeProjectInfo, MeWorkspaceInfo
+
+# MeProjectInfo fields
+proj.id          # int — project ID
+proj.name        # str — project display name
+proj.timezone    # str — project timezone
+
+# MeWorkspaceInfo fields
+wsi.id           # int — workspace ID
+wsi.name         # str — workspace display name
+
+# MeResponse fields
+me.organizations  # list[MeOrgInfo] — orgs with nested projects
+```
+
+### Auth v2 Types
+
+```python
+from mixpanel_data import AuthCredential, CredentialType, ProjectContext, ResolvedSession
+
+# AuthCredential — standalone auth identity
+cred.name         # str — credential name
+cred.type         # CredentialType — "service_account" or "oauth"
+cred.region       # str — "us", "eu", "in"
+cred.auth_header() # str — "Bearer <token>" or "Basic <encoded>"
+
+# ProjectContext — project + optional workspace selection
+ctx.project_id    # str
+ctx.workspace_id  # int | None
+
+# ResolvedSession — credential + project context composition
+session.credential   # AuthCredential
+session.project      # ProjectContext
+session.workspace_id # int | None (convenience property)
+```
+
 ## Key Result Types
 
 All query results have a `.df` property returning a pandas DataFrame. Key types:
@@ -1010,6 +1071,7 @@ MixpanelDataError (base)
 │   ├── QueryError (400)
 │   │   └── JQLSyntaxError (412)
 │   └── ServerError (5xx)
+├── ProjectNotFoundError
 ├── OAuthError
 └── WorkspaceScopeError
 ```

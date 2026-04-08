@@ -124,9 +124,17 @@ Use this before every unfamiliar method. It pulls live docstrings — always acc
 import mixpanel_data as mp
 
 ws = mp.Workspace()                          # default account
-ws = mp.Workspace(account="production")      # named account
+ws = mp.Workspace(account="production")      # named account (v1 config)
+ws = mp.Workspace(credential="production")   # named credential (v2 config)
 ws = mp.Workspace(workspace_id=12345)        # with workspace ID for App API
 # project_id must be a STRING: ws = mp.Workspace(project_id="8")
+
+# v2 config: discover and switch projects without re-constructing
+projects = ws.discover_projects()            # list accessible projects via /me API
+ws.switch_project("67890")                   # switch active project in-session
+ws.switch_workspace(12345)                   # switch active workspace in-session
+print(ws.current_project)                    # active ProjectContext
+print(ws.current_credential)                 # active AuthCredential
 ```
 
 ## Quick API Reference — All Engines
@@ -667,6 +675,7 @@ from mixpanel_data.exceptions import (
     JQLSyntaxError,            # 412 — JQL script error
     WorkspaceScopeError,       # workspace_id required for App API
     ConfigError,               # credentials not configured
+    ProjectNotFoundError,      # project ID not found in /me response
 )
 ```
 

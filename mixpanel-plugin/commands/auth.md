@@ -1,7 +1,7 @@
 ---
 name: auth
-description: Manage Mixpanel authentication — check status, add/switch/test accounts, OAuth login. Use with no arguments for a quick status check.
-argument-hint: [status|add|list|switch|test|login|remove|logout]
+description: Manage Mixpanel authentication — check status, add/switch/test accounts, OAuth login, migrate config, discover projects. Use with no arguments for a quick status check.
+argument-hint: [status|add|list|switch|test|login|remove|logout|migrate|projects|context|switch-project]
 ---
 
 # Mixpanel Authentication Management
@@ -25,15 +25,21 @@ Parse `$ARGUMENTS` and route to the appropriate operation:
 Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
 
 Present the result conversationally:
-- If `active_method` is not `"none"`: Show a brief confirmation with the active method, account name, project ID, and region. If multiple accounts exist, mention `/mp-auth list`.
+- If `active_method` is not `"none"`: Show a brief confirmation with the active method, account name, project ID, and region. If multiple accounts/credentials exist, mention `/mp-auth list`.
 - If `active_method` is `"none"`: Diagnose what's missing. Suggest `/mp-auth add` (service account) or `/mp-auth login` (OAuth).
 - If `env_vars.partial` is true: Show which variables are set and which are missing.
+- If `config_version` is `1`: Mention that `/mp-auth migrate` can upgrade to v2 for project switching.
+- If `config_version` is `2`: Show active context (credential + project + workspace) and mention project aliases if any exist.
 
 ### "list"
 
 Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py list`
 
-Present accounts as a clean table. Mark the default account with a star or indicator. Show account name, project ID, and region.
+For **v1 config**: Present accounts as a clean table. Mark the default account with a star. Show account name, project ID, and region.
+
+For **v2 config**: Present two sections:
+1. **Credentials** — name, type (service_account/oauth), region, active status
+2. **Project aliases** — alias name, project ID, credential, workspace ID
 
 ### "add"
 
@@ -63,8 +69,8 @@ If a name is provided:
 - Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py switch <name>`
 
 If no name:
-- First run `list` to show available accounts
-- Ask which account to switch to
+- First run `list` to show available accounts/credentials
+- Ask which one to switch to
 - Then run `switch` with the chosen name
 
 ### "test" or "test <name>"
@@ -90,12 +96,14 @@ On failure: Show the error and suggest retrying.
 
 ### "remove" or "remove <name>"
 
-If no name: run `list` first, then ask which account to remove.
+If no name: run `list` first, then ask which account/credential to remove.
 
 **Always confirm before removing**: "Remove account '<name>'? This cannot be undone."
 
 After confirmation:
 Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py remove <name>`
+
+For v2 config, if the response includes `orphaned_aliases`, warn the user about project aliases that referenced the removed credential.
 
 ### "logout" or "logout --region <R>"
 
@@ -103,9 +111,43 @@ Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager
 
 If no region specified, removes all OAuth tokens. Confirm first: "This will remove all OAuth tokens. Continue?"
 
+### "migrate"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py migrate --dry-run`
+
+Show the user what will change (credentials created, aliases created). Ask for confirmation.
+
+If confirmed:
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py migrate`
+
+On success: Report migration results. Explain that accounts are now split into credentials (auth identity) and project aliases (project selection), enabling project switching without reconfiguring auth.
+
+If already v2: Tell the user no migration is needed.
+
+### "projects"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py projects`
+
+Present accessible projects as a table: organization, project name, project ID, timezone. Suggest `/mp-auth switch-project <ID>` to switch.
+
+### "context"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py context`
+
+Show the active credential, project ID, and workspace ID. For v1 config, suggest migrating.
+
+### "switch-project" or "switch-project <project_id>"
+
+If no project_id: run `projects` first, then ask which to switch to.
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py switch-project <PROJECT_ID> [--workspace-id <WS_ID>]`
+
+On success: Confirm the active project was changed.
+If v1 config: Error suggests running `/mp-auth migrate` first.
+
 ## Presentation Style
 
 - Be concise — show status in 2-3 lines, not a wall of JSON
-- Use tables for lists of accounts
+- Use tables for lists of accounts, credentials, or projects
 - Always suggest a next action when something is missing
 - On errors, be specific about what went wrong and how to fix it

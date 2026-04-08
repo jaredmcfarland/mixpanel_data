@@ -6907,12 +6907,27 @@ class Workspace:
             ws = Workspace()
             tags = ws.list_lexicon_tags()
             for tag in tags:
-                print(f"{tag.id}: {tag.name}")
+                print(tag.name)
             ```
+
+        Note:
+            The list endpoint may return plain tag name strings without IDs.
+            In that case, ``id`` is set to ``0`` as a sentinel value. Do not
+            pass this sentinel to ``update_lexicon_tag()`` — use name-based
+            operations (e.g. ``delete_lexicon_tag(tag.name)``) for tags
+            obtained from this method.
         """
         client = self._require_api_client()
         raw_list = client.list_lexicon_tags()
-        return [LexiconTag.model_validate(x) for x in raw_list]
+        result: list[LexiconTag] = []
+        for x in raw_list:
+            if isinstance(x, str):
+                # List endpoint returns plain tag name strings (no id);
+                # id=0 is a sentinel — see docstring Note.
+                result.append(LexiconTag(id=0, name=x))
+            else:
+                result.append(LexiconTag.model_validate(x))
+        return result
 
     def create_lexicon_tag(self, params: CreateTagParams) -> LexiconTag:
         """Create a new Lexicon tag.
@@ -7437,6 +7452,10 @@ class Workspace:
                 client, upload_id, poll_interval, max_poll_seconds
             )
 
+        # Upload response may only contain {'id': '...'} without 'name';
+        # inject the name from params so LookupTable validation succeeds.
+        if isinstance(raw, dict) and "name" not in raw:
+            raw = {**raw, "name": params.name}
         return LookupTable.model_validate(raw)
 
     def _poll_lookup_upload(

@@ -48,7 +48,7 @@ from mixpanel_data._literal_types import RetentionMode as RetentionMode
 if TYPE_CHECKING:
     import networkx as nx
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 T = TypeVar("T")
@@ -6642,7 +6642,22 @@ class EventDeletionRequest(BaseModel):
     """End date."""
 
     filters: dict[str, Any] | None = None
-    """Deletion filters."""
+    """Deletion filters (dict when populated, None when absent)."""
+
+    @field_validator("filters", mode="before")
+    @classmethod
+    def _normalize_filters(
+        cls,
+        v: dict[str, Any] | list[Any] | None,
+    ) -> dict[str, Any] | None:
+        """Coerce empty list from API to None."""
+        if isinstance(v, list) and len(v) == 0:
+            return None
+        if isinstance(v, list):
+            # Non-empty list is unexpected; preserve as-is would fail type.
+            # Wrap in dict for forward compatibility.
+            return {"items": v}
+        return v
 
     status: str
     """Request status: "Submitted", "Processing", "Completed", "Failed"."""

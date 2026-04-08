@@ -752,19 +752,21 @@ class TestResolveSessionPriorityChain:
         assert session.project.workspace_id == 9999
 
     def test_v1_config_fallback_through_resolve_session(
-        self, v1_config_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, v1_config_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """v1 config falls back through resolve_session correctly.
 
         Args:
             v1_config_path: Path to the v1 config file.
+            tmp_path: Pytest-provided temp directory.
             monkeypatch: Pytest monkeypatch fixture.
         """
         for var in ("MP_USERNAME", "MP_SECRET", "MP_PROJECT_ID", "MP_REGION"):
             monkeypatch.delenv(var, raising=False)
 
         cm = ConfigManager(config_path=v1_config_path)
-        session = cm.resolve_session()
+        # Use empty OAuth dir to prevent real tokens on disk from winning
+        session = cm.resolve_session(_oauth_storage_dir=tmp_path / "no-oauth")
         assert session.project_id == "12345"
         assert session.auth.username == "sa-user"
 

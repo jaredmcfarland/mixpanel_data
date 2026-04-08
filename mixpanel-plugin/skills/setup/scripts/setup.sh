@@ -84,17 +84,35 @@ elif env_set:
 try:
     from mixpanel_data.auth import ConfigManager
     cm = ConfigManager()
-    accounts = cm.list_accounts()
-    if accounts:
-        names = [a.name for a in accounts]
-        print(f'✓ {len(accounts)} configured account(s): {\", \".join(names)}')
-        default = next((a.name for a in accounts if a.is_default), None)
-        if default:
-            print(f'  Default: {default}')
+    version = cm.config_version()
+
+    if version >= 2:
+        # v2 config: credential + project context
+        credentials = cm.list_credentials()
+        if credentials:
+            active = [c for c in credentials if c.is_active]
+            print(f'✓ Config v2: {len(credentials)} credential(s)')
+            if active:
+                print(f'  Active: {active[0].name} ({active[0].type}, {active[0].region})')
+            aliases = cm.list_project_aliases()
+            if aliases:
+                print(f'  {len(aliases)} project alias(es) configured')
+        else:
+            print('⚠ Config v2 but no credentials configured.')
+            print('  Run /mp-auth add (service account) or /mp-auth login (OAuth)')
     else:
-        print('⚠ No accounts configured yet.')
-        print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')
-        print('  Or configure an account programmatically (see setup instructions)')
+        # v1 config: account-based
+        accounts = cm.list_accounts()
+        if accounts:
+            names = [a.name for a in accounts]
+            print(f'✓ Config v1: {len(accounts)} account(s): {\", \".join(names)}')
+            default = next((a.name for a in accounts if a.is_default), None)
+            if default:
+                print(f'  Default: {default}')
+            print(f'  Tip: Run /mp-auth migrate to upgrade to v2 for project switching')
+        else:
+            print('⚠ No accounts configured yet.')
+            print('  Run /mp-auth add (service account) or /mp-auth login (OAuth)')
 except Exception as e:
     print(f'⚠ Could not check config file credentials: {e}')
     print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')
