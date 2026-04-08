@@ -61,6 +61,8 @@ The analyst delegates to you when:
 
 ## Multi-Engine Synthesis Workflow
 
+_For the decomposition patterns that generate these plans, see [query-taxonomy.md](../skills/mixpanel-analyst/references/query-taxonomy.md) §Complex Question Decomposition. For ready-to-run implementation templates, see [cross-query-synthesis.md](../skills/mixpanel-analyst/references/cross-query-synthesis.md) §Multi-Engine Investigation Templates._
+
 1. **Receive or create the query plan** — which engines, which parameters, which join keys
 2. **Execute queries** — parallel when independent
 3. **Transform results** to compatible DataFrames (align date formats, column names)
@@ -115,6 +117,8 @@ print(revenue_trend)
 
 ### 2. Graph Analysis (NetworkX)
 
+_Basics here. For the full NetworkX API on flow data (8 patterns), see [flows-reference.md](../skills/mixpanel-analyst/references/flows-reference.md) §NetworkX Integration Patterns. For advanced patterns (subgraph extraction, graph comparison, weighted metrics), see [advanced-analysis.md](../skills/mixpanel-analyst/references/advanced-analysis.md) §Graph Analysis._
+
 Apply graph algorithms to flow data:
 
 ```python
@@ -154,6 +158,8 @@ for cycle in cycles[:5]:
 
 ### 3. Tree Analysis (anytree)
 
+_Basics here. For the full anytree API (4 patterns + FlowTreeNode reference), see [flows-reference.md](../skills/mixpanel-analyst/references/flows-reference.md) §anytree Integration Patterns. For multi-tree comparison and pruning strategies, see [advanced-analysis.md](../skills/mixpanel-analyst/references/advanced-analysis.md) §Tree Analysis._
+
 Traverse and compare flow trees:
 
 ```python
@@ -181,6 +187,8 @@ for root in tree_result.anytree:
 ```
 
 ### 4. Statistical Testing
+
+_(→ [advanced-analysis.md](../skills/mixpanel-analyst/references/advanced-analysis.md) §Statistical Methods for the complete treatment: t-test, chi-squared, Mann-Whitney U, confidence intervals, Cohen's d, sample size validation)_
 
 Apply scipy.stats for significance:
 
@@ -251,7 +259,11 @@ print("Saved: synthesis_dashboard.png")
 
 ## Key Synthesis Patterns
 
+_These patterns correspond to templates in [cross-query-synthesis.md](../skills/mixpanel-analyst/references/cross-query-synthesis.md). See that reference for 6 additional templates and the reusable multi-engine runner._
+
 ### Pattern 1: Funnel-Flow Complement
+
+_(→ [cross-query-synthesis.md](../skills/mixpanel-analyst/references/cross-query-synthesis.md) §Funnel-Flow Complement for full implementation | [funnels-reference.md](../skills/mixpanel-analyst/references/funnels-reference.md) + [flows-reference.md](../skills/mixpanel-analyst/references/flows-reference.md) for parameter details)_
 
 **Question**: Where do funnel drop-offs actually go?
 

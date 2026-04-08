@@ -6,6 +6,8 @@ Advanced analytical methods using `mixpanel_data` results with pandas, numpy, sc
 
 ## Statistical Methods
 
+_These methods operate on DataFrames from any query engine. For applying them in multi-engine investigations, see [cross-query-synthesis.md](cross-query-synthesis.md) §Synthesis Patterns with pandas/numpy._
+
 ### t-test for Comparing Means Across Periods
 
 Use when comparing a continuous metric (DAU, revenue, session duration) between two time periods.
@@ -318,6 +320,8 @@ print(f"\nWoW change (smoothed): {wow.iloc[-1]:+.1f}%")
 
 ## Cohort Analysis with pandas
 
+_For the retention API that produces these cohorts, see [retention-reference.md](retention-reference.md). For industry retention benchmarks to contextualize results, see [analytical-frameworks.md](analytical-frameworks.md) §Retention._
+
 ### Cohort Pivot Table from RetentionQueryResult
 
 ```python
@@ -455,6 +459,8 @@ print(comparison.map(lambda x: f"{x:.0%}" if pd.notna(x) else "").to_string())
 ---
 
 ## Graph Analysis with NetworkX (Beyond Basics)
+
+_These patterns extend the basic NetworkX integration in [flows-reference.md](flows-reference.md) §NetworkX Integration Patterns. The flow result's `.graph` property is the entry point._
 
 These patterns build on the flow graph from `result.graph` (see flows-reference.md for fundamentals).
 
@@ -597,6 +603,8 @@ for n, flow in sorted(net_flow.items(), key=lambda x: x[1])[:5]:
 ---
 
 ## Tree Analysis with anytree
+
+_These patterns extend the basic anytree integration in [flows-reference.md](flows-reference.md) §anytree Integration Patterns. Use `result.anytree` to get converted trees._
 
 These patterns build on the anytree integration in flows-reference.md.
 
@@ -1020,6 +1028,8 @@ with PdfPages("report.pdf") as pdf:
         plt.close(fig)
 print("Saved: report.pdf")
 ```
+
+_For multi-panel dashboards combining all four engines, see [cross-query-synthesis.md](cross-query-synthesis.md) §Multi-Engine Health Dashboard._
 
 ---
 

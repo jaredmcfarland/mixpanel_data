@@ -38,6 +38,8 @@ Mixpanel has four fundamentally different query engines. Each answers a differen
 | **Retention** | `ws.query_retention()` | Do users come back? | `RetentionQueryResult` |
 | **Flows** | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
 
+_Each engine has a dedicated deep reference — load on demand when the quick reference below is insufficient. For NL→engine routing with 50+ signal patterns, see [query-taxonomy.md](references/query-taxonomy.md)._
+
 ### Mental Model
 
 - **Insights** — "I need to **measure a metric** over time." Counts, aggregations, DAU/WAU/MAU, property math, formulas, rolling averages. The workhorse for any "how much" or "how many" question.
@@ -100,6 +102,8 @@ For complex questions, decompose into a query plan:
 | "Feature adoption?" | Ins+Fun+Ret | Insights (usage) + Funnels (discovery→use) + Retention (continued use) |
 | "Onboarding health?" | Fun+Flow+Ret | Funnels (completion) + Flows (user paths) + Retention (post-onboarding) |
 | "Product health?" | All 4 | DAU (Insights) + Key funnels + Retention curves + Top paths |
+
+_(→ [query-taxonomy.md](references/query-taxonomy.md) §Complex Question Decomposition for 12 detailed decomposition patterns with code | [cross-query-synthesis.md](references/cross-query-synthesis.md) for implementation templates)_
 
 ## On-Demand API Lookup
 
@@ -193,6 +197,8 @@ result = ws.query(
 | `percentile` | Custom percentile (set percentile_value) | Yes |
 | `histogram` | Property value distribution | Yes |
 
+_Complete parameter reference → [insights-reference.md](references/insights-reference.md)_
+
 **Result**: `result.df` (DataFrame) · `result.params` (bookmark JSON) · `result.series` (raw data) · `result.meta`
 
 **Examples**:
@@ -229,6 +235,8 @@ result = ws.query_funnel(
 **Exclusion**: `Exclusion(event, from_step=0, to_step=None)` — step ranges (0-indexed)
 **HoldingConstant**: `HoldingConstant(property, resource_type="events")` — max 3
 
+_Complete parameter reference → [funnels-reference.md](references/funnels-reference.md)_
+
 **FunnelMathType**: `conversion_rate_unique` (default) · `conversion_rate_total` · `conversion_rate_session` · `unique` · `total` · `average` · `median` · `min` · `max` · `p25` · `p75` · `p90` · `p99`
 
 **Result**: `result.overall_conversion_rate` · `result.df` (step, event, count, step_conv_ratio, overall_conv_ratio, avg_time) · `result.params`
@@ -262,6 +270,8 @@ result = ws.query_retention(
 ```
 
 **RetentionEvent**: `RetentionEvent(event, filters=None, filters_combinator="all")`
+
+_Complete parameter reference → [retention-reference.md](references/retention-reference.md)_
 
 **Alignment**: `"birth"` (user's clock starts at born event) vs `"interval_start"` (calendar boundaries)
 
@@ -300,6 +310,8 @@ result = ws.query_flow(
 
 **FlowStep**: `FlowStep(event, forward=None, reverse=None, label=None, filters=None, filters_combinator="all")`
 
+_Complete parameter reference → [flows-reference.md](references/flows-reference.md)_
+
 **Three modes produce different result structures**:
 
 | Mode | Key properties | Use for |
@@ -331,6 +343,8 @@ for tree in result.trees:
 ```
 
 ### Filter Expression Syntax
+
+_Summary of key filters. For the full Filter API (20+ methods, 7 categories, combining logic), see [insights-reference.md](references/insights-reference.md) §Filter Deep Reference._
 
 All 4 query engines share the same `Filter` class:
 
@@ -424,6 +438,8 @@ params = ws.build_flow_params("Purchase", forward=3)
 ```
 
 ## Cross-Query Patterns
+
+_Three common patterns below. For 6 join strategies and 11 investigation templates with full code, see [cross-query-synthesis.md](references/cross-query-synthesis.md)._
 
 The engines complement each other. These patterns combine them for deeper analysis:
 
@@ -592,6 +608,8 @@ Map every question to a pirate metric stage and choose the right engine:
 | **Revenue** | Do they pay? | Insights (revenue metrics), Funnels (purchase conversion) |
 | **Referral** | Do they invite others? | Insights (invite events), Funnels (invite→accept) |
 
+_(→ [analytical-frameworks.md](references/analytical-frameworks.md) §AARRR for the complete framework with engine mappings and industry benchmarks)_
+
 ### 3. GQM for Vague Questions
 
 Decompose with Goal-Question-Metric, specifying the engine for each:
@@ -600,6 +618,8 @@ Decompose with Goal-Question-Metric, specifying the engine for each:
 2. **Questions**: 3-5 specific sub-questions
 3. **Metrics**: For each → which engine? which method? which params?
 4. **Join strategy**: How to combine results?
+
+_(→ [analytical-frameworks.md](references/analytical-frameworks.md) §GQM for 3 worked examples | the explorer agent implements a full 5-step GQM workflow)_
 
 ### 4. Provide Actionable Insights
 
@@ -634,6 +654,8 @@ list(nx.simple_cycles(g))                            # loop detection
 nx.pagerank(g, weight="count")                       # event importance
 ```
 
+_Quick patterns here. For comprehensive graph analysis (subgraphs, centrality, comparison, path enumeration), see [flows-reference.md](references/flows-reference.md) §NetworkX Integration Patterns and [advanced-analysis.md](references/advanced-analysis.md) §Graph Analysis._
+
 ### anytree Quick Patterns
 
 ```python
@@ -656,7 +678,11 @@ for tree in flow_result.trees:
     max(tree.flatten(), key=lambda n: n.drop_off_count)  # worst drop-off
 ```
 
+_Quick patterns here. For tree traversal, pruning, multi-tree comparison, and Graphviz export, see [flows-reference.md](references/flows-reference.md) §anytree Integration Patterns and [advanced-analysis.md](references/advanced-analysis.md) §Tree Analysis._
+
 ## Bookmark Validation
+
+_(→ [bookmark-params.md](references/bookmark-params.md) for the complete bookmark JSON structure and all validation rules across report types)_
 
 All typed query methods (`query()`, `query_funnel()`, `query_retention()`, `query_flow()`) validate automatically before API calls. For manually constructed bookmark params, use the built-in `validate_bookmark()` function:
 

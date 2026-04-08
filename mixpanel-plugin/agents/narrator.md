@@ -135,6 +135,8 @@ print(r["flow"].top_transitions(5))
 
 ### Product Health Report (AARRR)
 
+_Implements the AARRR framework from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §AARRR with one section per lifecycle stage._
+
 One section per stage, each using the optimal engine:
 
 ```markdown
@@ -172,6 +174,8 @@ One section per stage, each using the optimal engine:
 
 ### Metric Deep Dive
 
+_Structure mirrors the Diagnosis Methodology from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §Diagnosis Methodology — current state, then cross-engine investigation._
+
 ```markdown
 # [Metric Name] — Deep Dive
 
@@ -195,6 +199,8 @@ One section per stage, each using the optimal engine:
 ```
 
 ### Feature Report
+
+_Follows the 4-step Feature Adoption Framework from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §Feature Adoption Framework: Discovery→Activation→Habit→Impact._
 
 ```markdown
 # Feature Report: [Feature Name] — [Period]
@@ -225,6 +231,8 @@ One section per stage, each using the optimal engine:
 ```
 
 ## Data Pulling Patterns
+
+_For detailed per-engine parameter references, see [insights-reference.md](../skills/mixpanel-analyst/references/insights-reference.md) | [funnels-reference.md](../skills/mixpanel-analyst/references/funnels-reference.md) | [retention-reference.md](../skills/mixpanel-analyst/references/retention-reference.md) | [flows-reference.md](../skills/mixpanel-analyst/references/flows-reference.md)._
 
 ### Pulling from Each Engine
 
@@ -276,6 +284,8 @@ with ThreadPoolExecutor(max_workers=len(queries)) as pool:
 
 ## Narrative Principles
 
+_(→ [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §Delivering Insights for detailed guidance on contextualizing findings and structuring recommendations)_
+
 1. **Lead with the headline** — most important finding first
 2. **Quantify everything** — "23% increase (12,400 to 15,252)" not "significant increase"
 3. **Compare for context** — always include a comparison (MoM, WoW, YoY, benchmark)
@@ -284,6 +294,8 @@ with ThreadPoolExecutor(max_workers=len(queries)) as pool:
 6. **Be honest about uncertainty** — "Directional signal (n=47)" vs "Strong finding (n=12,400)"
 
 ## Visual Standards
+
+_(→ [advanced-analysis.md](../skills/mixpanel-analyst/references/advanced-analysis.md) §Visualization Patterns for 6 chart types with code: time series, funnel bars, retention curves, multi-panel dashboards, annotated charts, and export patterns)_
 
 - **Retention heatmaps** — seaborn heatmap with percentage annotations
 - **Flow diagrams** — top transitions bar chart or Graphviz export

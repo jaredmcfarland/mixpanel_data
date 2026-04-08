@@ -2,6 +2,8 @@
 
 Complete reference for `Workspace.query_funnel()`, the typed funnel query engine. Covers every parameter, type, validation rule, and analysis pattern.
 
+_Funnels inherit Filter, GroupBy, and time range handling from Insights — see [insights-reference.md](insights-reference.md) for the authoritative reference on these shared concepts._
+
 ## Complete Signature
 
 ```python
@@ -300,6 +302,8 @@ ws.query_funnel(steps, conversion_window=2, conversion_window_unit="second")
 
 ## FunnelMathType
 
+_Counting and property aggregation types are shared with Insights — see [insights-reference.md](insights-reference.md) §MathType Deep Reference. Funnels add three conversion rate types: conversion_rate_unique, conversion_rate_total, conversion_rate_session._
+
 ```python
 FunnelMathType = Literal[
     "conversion_rate_unique",   # Unique-user conversion rate (default)
@@ -463,6 +467,8 @@ Each entry in `steps_data` is a dict:
 
 ## Cohort-Scoped Funnels
 
+_(→ [insights-reference.md](insights-reference.md) §Cohort Capabilities for the full cohort API including CohortDefinition inline syntax)_
+
 ### Cohort Filters
 
 Restrict funnel analysis to a specific user segment:
@@ -621,6 +627,8 @@ params = ws.build_funnel_params(
 import json
 print(json.dumps(params, indent=2))
 ```
+
+_For multi-engine patterns combining funnels with other engines (e.g., Funnel-Flow Complement), see [cross-query-synthesis.md](cross-query-synthesis.md) §Funnel-Flow Complement._
 
 ---
 

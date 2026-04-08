@@ -2,6 +2,8 @@
 
 How to combine results from `query()`, `query_funnel()`, `query_retention()`, and `query_flow()` to answer questions no single engine can. Each engine reveals one facet of user behavior; joining them produces compound insights.
 
+_This playbook implements the decomposition patterns from [query-taxonomy.md](query-taxonomy.md) using the strategic frameworks from [analytical-frameworks.md](analytical-frameworks.md). For per-engine parameter details, see the individual engine references._
+
 ## Engine Quick Reference
 
 | Engine | Method | Returns | Best for |
@@ -96,6 +98,8 @@ print(f"\nCorrelation (purchases vs retention): {combined['purchases'].corr(comb
 
 ## Join Strategy 3: Funnel-Flow Complement
 
+_(→ [funnels-reference.md](funnels-reference.md) for FunnelStep/Exclusion details | [flows-reference.md](flows-reference.md) for FlowStep/NetworkX/anytree)_
+
 **Use when**: Funnels tell you THAT users drop off; flows tell you WHERE they go instead.
 
 **Principle**: Funnels quantify the conversion rate at each step. Flows reveal the specific events users do instead of converting.
@@ -143,6 +147,8 @@ for step, info in flow.drop_off_summary().items():
 ---
 
 ## Join Strategy 4: Insights-Retention Correlation
+
+_(→ [retention-reference.md](retention-reference.md) §Analysis Patterns for retention-specific patterns | [analytical-frameworks.md](analytical-frameworks.md) §Retention for industry benchmarks)_
 
 **Use when**: You want to test whether a specific behavior predicts better retention.
 
@@ -380,6 +386,8 @@ for a, b in sorted(pairs, key=lambda p: abs(corr.loc[p[0], p[1]]), reverse=True)
 
 ### Statistical Significance Testing
 
+_(→ [advanced-analysis.md](advanced-analysis.md) §Statistical Methods for complete treatment: t-tests, chi-squared, Mann-Whitney U, confidence intervals, effect sizes, sample size validation)_
+
 ```python
 from scipy.stats import ttest_ind, chi2_contingency
 import numpy as np
@@ -486,6 +494,8 @@ print(f"\nTrend: {daily_change:+.1f}/day ({weekly_change:+.1f}/week)")
 
 ### Template 1: Revenue Drop Diagnosis (4-engine)
 
+_(→ [analytical-frameworks.md](analytical-frameworks.md) §Diagnosis Methodology for the systematic diagnostic framework)_
+
 **Question**: "Revenue dropped 20% this month. Why?"
 
 | # | Sub-Question | Engine | Method | Key Params |
@@ -501,6 +511,8 @@ print(f"\nTrend: {daily_change:+.1f}/day ({weekly_change:+.1f}/week)")
 **Unique insight**: Combine funnel step-conv with flow transitions to pinpoint exactly WHERE in the purchase path users diverge AND what they do instead.
 
 ### Template 2: Feature Adoption Analysis (4-engine)
+
+_(→ [analytical-frameworks.md](analytical-frameworks.md) §Feature Adoption Framework for the 4-step methodology this template implements)_
 
 **Question**: "How is the new Search feature performing?"
 
@@ -624,6 +636,8 @@ print(f"\nTrend: {daily_change:+.1f}/day ({weekly_change:+.1f}/week)")
 
 ### Template 10: Growth Bottleneck Identification (4-engine)
 
+_(→ [analytical-frameworks.md](analytical-frameworks.md) §AARRR for the pirate metrics framework used in growth analysis)_
+
 **Question**: "Where is the biggest bottleneck in our growth?"
 
 | # | Sub-Question | Engine | Method | Key Params |
@@ -711,6 +725,8 @@ for name, result in results.items():
 ---
 
 ## Tips and Gotchas
+
+_For per-engine pitfalls, see the Common Pitfalls sections in each engine reference: [insights-reference.md](insights-reference.md) | [funnels-reference.md](funnels-reference.md) | [retention-reference.md](retention-reference.md) | [flows-reference.md](flows-reference.md)._
 
 - **Thread safety**: `Workspace` uses `httpx` which is thread-safe. A single `ws` instance can be shared across threads in `ThreadPoolExecutor`.
 - **Date alignment**: Always use the same `from_date`/`to_date` or `last` when comparing across engines. Misaligned dates produce misleading correlations.

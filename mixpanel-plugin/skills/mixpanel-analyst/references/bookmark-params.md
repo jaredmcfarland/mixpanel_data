@@ -85,6 +85,8 @@ ws.create_bookmark(CreateBookmarkParams(
 ))
 ```
 
+_Each typed query method has a dedicated reference: [insights-reference.md](insights-reference.md) | [funnels-reference.md](funnels-reference.md) | [retention-reference.md](retention-reference.md) | [flows-reference.md](flows-reference.md). Use this document only when you need to construct or modify bookmark JSON directly._
+
 Use manual bookmark JSON (documented below) only for:
 - **Edge cases** where the typed query methods cannot express the exact bookmark structure needed
 
@@ -659,6 +661,8 @@ result = ws.query_saved_flows(bookmark_id)
 ```
 
 ## Validation
+
+_Per-engine validation rules (V-rules, F-rules, R-rules, FL-rules) are documented in each engine reference's §Validation Rules Summary section._
 
 **Always validate params before calling `create_bookmark()` or `update_bookmark()`.**
 

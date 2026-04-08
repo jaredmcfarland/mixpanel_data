@@ -120,6 +120,8 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 
 ## Complex Question Decomposition
 
+_Each pattern below decomposes into engine-specific queries. For ready-to-run code implementing these patterns, see [cross-query-synthesis.md](cross-query-synthesis.md) §Multi-Engine Investigation Templates. For the strategic frameworks behind these patterns, see [analytical-frameworks.md](analytical-frameworks.md)._
+
 ### Pattern 1: Diagnostic ("Why is X changing?")
 
 **Question**: "Why are signups dropping?"
@@ -133,6 +135,8 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | 5 | Funnel | `ws.query_funnel(["Visit", "Signup"], last=60, group_by="platform")` | Conversion by segment |
 | 6 | Insights | Correlate with `ws.query("Error", ...)` | Root cause candidates |
 
+_(→ [analytical-frameworks.md](analytical-frameworks.md) §Diagnosis Methodology for the complete 7-step protocol | the diagnostician agent expands this to 8 steps)_
+
 ### Pattern 2: Feature Impact Assessment
 
 **Question**: "How is the new feature performing?"
@@ -145,6 +149,8 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | 4 | Retention | `ws.query_retention("Signup", "Login")` | Baseline retention |
 | 5 | Funnel | `ws.query_funnel(["Signup", "Purchase"], where=Filter.is_set("used_feature"))` | Feature users funnel |
 | 6 | Funnel | `ws.query_funnel(["Signup", "Purchase"], where=Filter.is_not_set("used_feature"))` | Non-feature funnel |
+
+_(→ [analytical-frameworks.md](analytical-frameworks.md) §Feature Adoption Framework for the 4-step Discovery→Activation→Habit→Impact methodology)_
 
 ### Pattern 3: Revenue Deep Dive
 
@@ -219,6 +225,8 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 | 4 | Funnel | `ws.query_funnel(["Login", "Core Action"])` | Activation rate |
 | 5 | Flows | `ws.query_flow(["Last Login"], forward=3)` | Pre-churn behavior |
 
+_(→ [analytical-frameworks.md](analytical-frameworks.md) §Retention for industry retention benchmarks to contextualize churn rates)_
+
 ### Pattern 9: Growth Accounting
 
 **Question**: "Break down our growth"
@@ -244,6 +252,8 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) rema
 ---
 
 ## Join Strategies
+
+_For full code implementations of each join strategy with pandas merge patterns, see [cross-query-synthesis.md](cross-query-synthesis.md) §Join Strategy 1-6._
 
 ### Time-Aligned Join
 
@@ -480,6 +490,8 @@ volume = ws.query(drop_step["event"], math="unique", last=30)
 ---
 
 ## Engine Selection Decision Tree
+
+_For the complete NL signal mapping (50+ patterns) that feeds this tree, see §NL-to-Engine Signal Mapping above. For parameter details once you've selected an engine, see the per-engine references: [insights-reference.md](insights-reference.md) | [funnels-reference.md](funnels-reference.md) | [retention-reference.md](retention-reference.md) | [flows-reference.md](flows-reference.md)._
 
 ```
 Is the question about sequential steps/conversion?

@@ -37,6 +37,8 @@ ws.clear_discovery_cache() -> None
 
 `Workspace.query()` generates valid Mixpanel insights bookmark params from keyword arguments, with two-layer validation (45 rules). Prefer this over legacy segmentation/event_counts methods for all insights-style queries.
 
+_For complete parameter documentation with examples and pitfalls, see [insights-reference.md](insights-reference.md)._
+
 ```python
 ws.query(
     events: str | Metric | CohortMetric | Formula | Sequence[str | Metric | CohortMetric | Formula],
@@ -285,6 +287,8 @@ Useful for debugging, inspecting generated JSON, or passing to `create_bookmark(
 
 ## Typed Query API — Funnels
 
+_Complete reference → [funnels-reference.md](funnels-reference.md)_
+
 `Workspace.query_funnel()` generates valid funnel bookmark params from keyword arguments, posts them inline, and returns a structured `FunnelQueryResult`. Prefer this over the legacy `funnel()` method for all ad-hoc funnel queries.
 
 ```python
@@ -404,6 +408,8 @@ ws.build_funnel_params(
 
 ## Typed Query API — Retention
 
+_Complete reference → [retention-reference.md](retention-reference.md)_
+
 `Workspace.query_retention()` generates valid retention bookmark params from keyword arguments, posts them inline, and returns a structured `RetentionQueryResult`. Prefer this over the legacy `retention()` method for all ad-hoc retention queries.
 
 ```python
@@ -502,6 +508,8 @@ ws.build_retention_params(
 ---
 
 ## Typed Query API — Flows
+
+_Complete reference → [flows-reference.md](flows-reference.md)_
 
 `Workspace.query_flow()` generates valid flow bookmark params from keyword arguments, posts them to `/arb_funnels`, and returns a structured `FlowQueryResult`. Prefer this over the legacy `query_saved_flows()` method for all ad-hoc flow queries.
 
@@ -1059,6 +1067,8 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 | `FlowQueryResult` | `query_flow()` | `.df`, `.nodes_df`, `.edges_df`, `.graph`, `.trees`, `.anytree`, `.top_transitions()`, `.drop_off_summary()`, `.params`, `.meta`, `.computed_at` |
 
 ## Exception Hierarchy
+
+_For error handling patterns and recovery strategies, see [Auth Error Recovery](../../../agents/analyst.md#auth-error-recovery) in the analyst agent._
 
 ```
 MixpanelDataError (base)

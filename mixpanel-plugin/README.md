@@ -68,6 +68,8 @@ for tree in result.trees:
     print(tree.render())           # ASCII visualization
 ```
 
+_Each engine has a comprehensive reference: [insights](skills/mixpanel-analyst/references/insights-reference.md) | [funnels](skills/mixpanel-analyst/references/funnels-reference.md) | [retention](skills/mixpanel-analyst/references/retention-reference.md) | [flows](skills/mixpanel-analyst/references/flows-reference.md). For routing questions to the right engine, see [query-taxonomy.md](skills/mixpanel-analyst/references/query-taxonomy.md)._
+
 ## Agents
 
 The plugin uses a specialist agent hierarchy. The **analyst** is the general-purpose entry point — it handles simple queries directly and delegates complex investigations to the appropriate specialist based on question type.
@@ -87,6 +89,8 @@ Task(subagent_type="mixpanel-data:diagnostician", prompt="...")
 Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
 Task(subagent_type="mixpanel-data:narrator", prompt="...")
 ```
+
+_Agents draw on shared analytical frameworks ([AARRR, GQM, Diagnosis](skills/mixpanel-analyst/references/analytical-frameworks.md)) and [cross-query synthesis patterns](skills/mixpanel-analyst/references/cross-query-synthesis.md)._
 
 ## Components
 
