@@ -457,7 +457,6 @@ def _show_reference_hints(query: str) -> None:
     """
     refs_dir = Path(__file__).resolve().parent.parent / "references"
     parts = query.replace(".", " ").split()
-    query_lower = query.lower()
     part_set = set(parts)
 
     # Special case: standalone "Workspace" (no dot) → python-api.md
@@ -472,8 +471,10 @@ def _show_reference_hints(query: str) -> None:
         return
 
     for triggers, filename, description in _REFERENCE_HINTS:
-        # Match if any trigger appears as a keyword or as a substring
-        if part_set & triggers or any(t.lower() in query_lower for t in triggers):
+        # Match if any trigger appears as a token (substring matching avoided
+        # because generic triggers like "query" false-positive on compound
+        # names like "query_saved_report")
+        if part_set & triggers:
             ref = refs_dir / filename
             if ref.is_file():
                 print(

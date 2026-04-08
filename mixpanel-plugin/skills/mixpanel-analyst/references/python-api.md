@@ -1068,7 +1068,7 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 
 ## Exception Hierarchy
 
-_For error handling patterns and recovery strategies, see the Auth Error Recovery section in any agent file._
+_For error handling patterns and recovery strategies, see [Auth Error Recovery](../../../agents/analyst.md#auth-error-recovery) in the analyst agent._
 
 ```
 MixpanelDataError (base)
