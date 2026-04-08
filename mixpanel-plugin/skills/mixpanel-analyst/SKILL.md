@@ -12,7 +12,7 @@ Analyze the user's Mixpanel data by **writing and executing Python code** that u
 
 Write Python code. Never teach CLI commands. Never call MCP tools.
 
-- **Quick lookups** → `python3 -c "..."` one-liners (or `uv run python -c` if uv is available)
+- **Quick lookups** → `python3 -c "..."` one-liners
 - **Multi-step analysis** → write and execute `.py` files
 - **Data manipulation** → pandas DataFrames (every result type has a `.df` property)
 - **Graph analysis** → networkx on flow data (`.graph` property)
@@ -20,7 +20,7 @@ Write Python code. Never teach CLI commands. Never call MCP tools.
 - **Visualization** → matplotlib / seaborn, saved to files
 
 ```python
-uv run python -c "
+python3 -c "
 import mixpanel_data as mp; ws = mp.Workspace()
 r = ws.query('Login', last=30)
 print(f'Total logins (30d): {r.df[\"count\"].sum():,.0f}')
@@ -106,14 +106,14 @@ For complex questions, decompose into a query plan:
 Before any unfamiliar API call, look up the exact signature:
 
 ```bash
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_funnel
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_retention
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_flow
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult       # result types
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py FlowTreeNode      # tree node
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py types              # list all types
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions         # all exceptions
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_funnel
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_retention
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_flow
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult       # result types
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py FlowTreeNode      # tree node
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types              # list all types
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions         # all exceptions
 ```
 
 Use this before every unfamiliar method. It pulls live docstrings — always accurate.
@@ -386,8 +386,8 @@ for profile in ws.stream_profiles():
 Full CRUD for dashboards, cohorts, feature flags, experiments, alerts, annotations, webhooks, Lexicon. Use `help.py` to look up signatures:
 
 ```bash
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_dashboards
-uv run python ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.create_bookmark
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.list_dashboards
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.create_bookmark
 ```
 
 ### Saving Queries as Mixpanel Reports
@@ -661,7 +661,7 @@ for tree in flow_result.trees:
 All typed query methods (`query()`, `query_funnel()`, `query_retention()`, `query_flow()`) validate automatically before API calls. Use `validate_bookmark.py` only for manually constructed bookmark params:
 
 ```bash
-echo '<params_json>' | uv run python ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type insights
+echo '<params_json>' | python3 ${CLAUDE_SKILL_DIR}/scripts/validate_bookmark.py --stdin --type insights
 ```
 
 ## Error Handling

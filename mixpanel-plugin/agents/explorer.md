@@ -219,15 +219,15 @@ How will results from different engines be combined?
 Before any unfamiliar API call:
 
 ```bash
-uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query
-uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.events
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.events
 ```
 
 ## Auth Error Recovery
 
 If `Workspace()` or any query raises `AuthenticationError` or `ConfigError`:
 
-1. Run: `uv run python ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
 2. Parse the JSON to diagnose:
    - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
    - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."

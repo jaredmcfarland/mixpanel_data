@@ -26,7 +26,7 @@ This will:
 After installation, check auth status:
 
 ```bash
-uv run python ${CLAUDE_SKILL_DIR}/../mixpanel-analyst/scripts/auth_manager.py status
+python3 ${CLAUDE_SKILL_DIR}/../mixpanel-analyst/scripts/auth_manager.py status
 ```
 
 Parse the JSON result:
@@ -60,7 +60,7 @@ export MP_REGION="us"  # or "eu", "in"
 ## Verify Everything Works
 
 ```bash
-uv run python ${CLAUDE_SKILL_DIR}/../mixpanel-analyst/scripts/auth_manager.py test
+python3 ${CLAUDE_SKILL_DIR}/../mixpanel-analyst/scripts/auth_manager.py test
 ```
 
 If the result shows `"success": true`, setup is complete. The user can now ask questions about their Mixpanel data.
