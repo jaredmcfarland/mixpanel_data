@@ -589,6 +589,7 @@ class TestWorkspaceCredentialParam:
         from unittest.mock import MagicMock
 
         mock_cm = MagicMock()
+        mock_cm.config_version.return_value = 1
         mock_cm.resolve_credentials.return_value = Credentials(
             username="user",
             secret=SecretStr("secret"),
