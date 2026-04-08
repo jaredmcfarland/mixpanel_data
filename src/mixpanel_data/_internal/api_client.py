@@ -1001,13 +1001,11 @@ class MixpanelAPIClient:
             secret=_SecretStr(self._credentials.secret.get_secret_value()),
             project_id=project_id,
             region=self._credentials.region,
+            auth_method=self._credentials.auth_method,
+            oauth_access_token=self._credentials.oauth_access_token,
         )
         # Share the existing HTTP transport when available
-        transport: httpx.BaseTransport | None
-        if self._client is not None:
-            transport = self._client._transport
-        else:
-            transport = self._transport
+        transport: httpx.BaseTransport | None = self._transport
         new_client = MixpanelAPIClient(
             new_creds,
             timeout=self._timeout,

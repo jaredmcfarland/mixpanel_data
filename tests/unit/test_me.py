@@ -310,6 +310,38 @@ class TestMeCache:
         result = cache.get("us")
         assert result is None
 
+    def test_credential_name_isolates_cache(
+        self, cache_dir: Path, sample_response: MeResponse
+    ) -> None:
+        """Test that different credential names get separate cache files."""
+        cache_a = MeCache(storage_dir=cache_dir, credential_name="sa-a")
+        cache_b = MeCache(storage_dir=cache_dir, credential_name="sa-b")
+
+        response_b = MeResponse(user_id=99, user_email="other@example.com")
+
+        cache_a.put("us", sample_response)
+        cache_b.put("us", response_b)
+
+        result_a = cache_a.get("us")
+        result_b = cache_b.get("us")
+
+        assert result_a is not None
+        assert result_a.user_id == 42
+        assert result_b is not None
+        assert result_b.user_id == 99
+
+    def test_credential_name_in_cache_path(self, cache_dir: Path) -> None:
+        """Test cache file path includes credential_name when set."""
+        cache = MeCache(storage_dir=cache_dir, credential_name="demo-sa")
+        path = cache._cache_path("us")
+        assert path.name == "me_us_demo-sa.json"
+
+    def test_empty_credential_name_backward_compat(self, cache_dir: Path) -> None:
+        """Test empty credential_name uses backward-compatible path."""
+        cache = MeCache(storage_dir=cache_dir, credential_name="")
+        path = cache._cache_path("us")
+        assert path.name == "me_us.json"
+
 
 # ── MeService Tests ─────────────────────────────────────────────────
 

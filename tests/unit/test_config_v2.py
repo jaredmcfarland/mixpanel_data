@@ -941,3 +941,134 @@ class TestOrphanedAliasWarning:
         orphaned = cm.remove_credential("demo-sa")
 
         assert orphaned == []
+
+
+# ── set_active_context() ─────────────────────────────────────────────
+
+
+class TestSetActiveContext:
+    """Tests for ConfigManager.set_active_context()."""
+
+    def test_set_active_context_all_fields(self, cm: ConfigManager) -> None:
+        """Test setting credential, project, and workspace in one write."""
+        cm.add_credential(
+            name="demo-sa",
+            type="service_account",
+            username="user",
+            secret="secret",
+            region="us",
+        )
+        cm.set_active_context(
+            credential="demo-sa",
+            project_id="3713224",
+            workspace_id=3448413,
+        )
+        ctx = cm.get_active_context()
+        assert ctx.credential == "demo-sa"
+        assert ctx.project_id == "3713224"
+        assert ctx.workspace_id == 3448413
+
+    def test_set_active_context_partial_update(self, cm: ConfigManager) -> None:
+        """Test partial update leaves other fields unchanged."""
+        cm.add_credential(
+            name="sa1",
+            type="service_account",
+            username="user1",
+            secret="secret1",
+            region="us",
+        )
+        cm.set_active_context(credential="sa1", project_id="111")
+        cm.set_active_context(project_id="222")
+
+        ctx = cm.get_active_context()
+        assert ctx.credential == "sa1"
+        assert ctx.project_id == "222"
+
+    def test_set_active_context_clears_workspace_when_none(
+        self, cm: ConfigManager
+    ) -> None:
+        """Test workspace_id is cleared when not provided."""
+        cm.add_credential(
+            name="sa1",
+            type="service_account",
+            username="user",
+            secret="secret",
+            region="us",
+        )
+        cm.set_active_context(credential="sa1", project_id="111", workspace_id=42)
+        assert cm.get_active_context().workspace_id == 42
+
+        cm.set_active_context(project_id="222")
+        assert cm.get_active_context().workspace_id is None
+
+    def test_set_active_context_invalid_credential_raises(
+        self, cm: ConfigManager
+    ) -> None:
+        """Test setting a non-existent credential raises ConfigError."""
+        with pytest.raises(ConfigError, match="not found"):
+            cm.set_active_context(credential="nonexistent", project_id="111")
+
+
+# ── add_credential type validation ───────────────────────────────────
+
+
+class TestAddCredentialTypeValidation:
+    """Tests for credential type validation in add_credential()."""
+
+    def test_invalid_type_raises_value_error(self, cm: ConfigManager) -> None:
+        """Test that an invalid credential type raises ValueError."""
+        with pytest.raises(ValueError, match="Credential type must be one of"):
+            cm.add_credential(
+                name="bad",
+                type="invalid_type",
+                username="user",
+                secret="secret",
+                region="us",
+            )
+
+    def test_valid_types_accepted(self, cm: ConfigManager) -> None:
+        """Test that valid credential types are accepted."""
+        cm.add_credential(
+            name="sa",
+            type="service_account",
+            username="user",
+            secret="secret",
+            region="us",
+        )
+        cm.add_credential(
+            name="oauth",
+            type="oauth",
+            region="eu",
+        )
+        creds = cm.list_credentials()
+        types = {c.type for c in creds}
+        assert types == {"service_account", "oauth"}
+
+
+# ── to_resolved_session workspace_id ─────────────────────────────────
+
+
+class TestToResolvedSessionWorkspaceId:
+    """Tests for workspace_id in Credentials.to_resolved_session()."""
+
+    def test_workspace_id_passed_through(self) -> None:
+        """Test workspace_id is included in the ProjectContext."""
+        creds = Credentials(
+            username="user",
+            secret=SecretStr("secret"),
+            project_id="12345",
+            region="us",
+        )
+        session = creds.to_resolved_session(workspace_id=42)
+        assert session.project.workspace_id == 42
+
+    def test_workspace_id_default_none(self) -> None:
+        """Test workspace_id defaults to None when not provided."""
+        creds = Credentials(
+            username="user",
+            secret=SecretStr("secret"),
+            project_id="12345",
+            region="us",
+        )
+        session = creds.to_resolved_session()
+        assert session.project.workspace_id is None

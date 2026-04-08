@@ -166,18 +166,18 @@ class TestWorkspacesSwitch:
         assert data["active_project_id"] == "3713224"
 
     @patch("mixpanel_data.cli.commands.workspaces_cmd.get_config")
-    def test_switch_no_active_project(
+    def test_switch_no_active_project_exits_with_error(
         self, mock_get_cfg: MagicMock, cli_runner: CliRunner
     ) -> None:
-        """Test mp workspaces switch with no active project uses empty string."""
+        """Test mp workspaces switch with no active project exits with error."""
         mock_cm = MagicMock()
         mock_cm.get_active_context.return_value = ActiveContext()
         mock_get_cfg.return_value = mock_cm
 
         result = cli_runner.invoke(app, ["workspaces", "switch", "3448413"])
 
-        assert result.exit_code == 0
-        mock_cm.set_active_project.assert_called_once_with("", workspace_id=3448413)
+        assert result.exit_code == 1
+        mock_cm.set_active_project.assert_not_called()
 
 
 class TestWorkspacesShow:

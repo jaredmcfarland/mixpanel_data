@@ -143,6 +143,13 @@ def main(
     and manage Mixpanel entities programmatically.
     """
     ctx.ensure_object(dict)
+
+    if account is not None and credential is not None:
+        err_console.print(
+            "[red]--account and --credential are mutually exclusive.[/red]"
+        )
+        raise typer.Exit(3)
+
     ctx.obj["account"] = account
     ctx.obj["credential"] = credential
     ctx.obj["project"] = project

@@ -30,7 +30,17 @@ import time
 from collections.abc import Iterator, Sequence
 from datetime import date as _date
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+import pydantic
+
+if TYPE_CHECKING:
+    from mixpanel_data._internal.auth_credential import (
+        AuthCredential,
+        ProjectContext,
+        ResolvedSession,
+    )
+    from mixpanel_data._internal.me import MeProjectInfo, MeService, MeWorkspaceInfo
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.bookmark_builders import (
@@ -356,7 +366,7 @@ class Workspace:
         # Resolve credentials
         self._credentials: Credentials | None = None
         self._account_name: str | None = account
-        self._resolved_session: Any | None = None  # ResolvedSession
+        self._resolved_session: ResolvedSession | None = None
 
         if credential is not None:
             # v2 path: use resolve_session
@@ -393,7 +403,7 @@ class Workspace:
         self._api_client: MixpanelAPIClient | None = _api_client
         self._discovery: DiscoveryService | None = None
         self._live_query: LiveQueryService | None = None
-        self._me_service: Any | None = None  # MeService, lazily created
+        self._me_service: MeService | None = None
 
         # Set workspace_id on the api_client if provided
         self._initial_workspace_id = workspace_id
@@ -401,7 +411,7 @@ class Workspace:
             self._api_client.set_workspace_id(workspace_id)
 
     @staticmethod
-    def _session_to_credentials(session: Any) -> Credentials:
+    def _session_to_credentials(session: ResolvedSession) -> Credentials:
         """Convert a ResolvedSession to legacy Credentials.
 
         Bridges the v2 auth model to the v1 Credentials used by the
@@ -679,20 +689,23 @@ class Workspace:
     # =========================================================================
 
     @property
-    def _me_svc(self) -> Any:
+    def _me_svc(self) -> MeService:
         """Get or create MeService (lazy initialization).
 
         Returns:
             MeService instance for /me API operations.
         """
         if self._me_service is None:
-            from mixpanel_data._internal.me import MeCache, MeService
+            from mixpanel_data._internal.me import MeCache
+            from mixpanel_data._internal.me import MeService as _MeService
 
-            cache = MeCache()
+            credential_name = ""
             region = "us"
             if self._credentials is not None:
                 region = self._credentials.region
-            self._me_service = MeService(self._require_api_client(), cache, region)
+                credential_name = self._credentials.username or ""
+            cache = MeCache(credential_name=credential_name)
+            self._me_service = _MeService(self._require_api_client(), cache, region)
         return self._me_service
 
     def me(self, *, force_refresh: bool = False) -> Any:
@@ -722,7 +735,7 @@ class Workspace:
         """
         return self._me_svc.fetch(force_refresh=force_refresh)
 
-    def discover_projects(self) -> list[tuple[str, Any]]:
+    def discover_projects(self) -> list[tuple[str, MeProjectInfo]]:
         """List all accessible projects via the /me API.
 
         Returns projects from the cached /me response, sorted by name.
@@ -740,10 +753,12 @@ class Workspace:
                 print(f"{pid}: {info.name} (org={info.organization_id})")
             ```
         """
-        result: list[tuple[str, Any]] = self._me_svc.list_projects()
+        result: list[tuple[str, MeProjectInfo]] = self._me_svc.list_projects()
         return result
 
-    def discover_workspaces(self, project_id: str | None = None) -> list[Any]:
+    def discover_workspaces(
+        self, project_id: str | None = None
+    ) -> list[MeWorkspaceInfo]:
         """List workspaces for a project via the /me API.
 
         Returns workspaces from the cached /me response, sorted by name.
@@ -769,7 +784,7 @@ class Workspace:
         pid = project_id
         if pid is None and self._credentials is not None:
             pid = self._credentials.project_id
-        result: list[Any] = self._me_svc.list_workspaces(project_id=pid)
+        result: list[MeWorkspaceInfo] = self._me_svc.list_workspaces(project_id=pid)
         return result
 
     def switch_project(self, project_id: str, workspace_id: int | None = None) -> None:
@@ -823,7 +838,7 @@ class Workspace:
         self.set_workspace_id(workspace_id)
 
     @property
-    def current_project(self) -> Any:
+    def current_project(self) -> ProjectContext:
         """Return the current project context as a ``ProjectContext``.
 
         Provides a structured snapshot of the active project ID, workspace
@@ -863,8 +878,10 @@ class Workspace:
                     if ws_info.id == wid:
                         workspace_name = ws_info.name
                         break
-        except Exception:
-            # /me may not be available; names are best-effort
+        except (ConfigError, MixpanelDataError, pydantic.ValidationError):
+            # /me may not be available; names are best-effort.
+            # pydantic.ValidationError covers unexpected /me response
+            # shapes that fail model_validate.
             pass
 
         return ProjectContext(
@@ -875,7 +892,7 @@ class Workspace:
         )
 
     @property
-    def current_credential(self) -> Any:
+    def current_credential(self) -> AuthCredential:
         """Return the current authentication credential as an ``AuthCredential``.
 
         Provides a read-only view of the active credential identity. For

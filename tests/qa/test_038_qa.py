@@ -1713,7 +1713,7 @@ class TestCLIExitCodes:
         cli_runner: CliRunner,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """'mp workspaces switch' with no active project still runs.
+        """'mp workspaces switch' with no active project exits with error.
 
         Args:
             config_path: Path to the temp config file.
@@ -1728,8 +1728,8 @@ class TestCLIExitCodes:
             monkeypatch.delenv(var, raising=False)
 
         result = cli_runner.invoke(app, ["workspaces", "switch", "123"])
-        # It will set workspace on an empty project -- that's fine, no crash
-        assert result.exit_code == 0
+        # No active project should produce an error exit
+        assert result.exit_code == 1
 
     def test_invalid_format_option_exit_code(
         self,

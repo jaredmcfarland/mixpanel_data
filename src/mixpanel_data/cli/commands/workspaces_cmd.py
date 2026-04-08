@@ -116,14 +116,19 @@ def workspaces_switch(
     active = config.get_active_context()
 
     project_id = active.project_id
-    config.set_active_project(project_id or "", workspace_id=workspace_id)
+    if project_id is None:
+        err_console.print(
+            "[red]No active project. Run 'mp projects switch <id>' first.[/red]"
+        )
+        raise typer.Exit(1)
+
+    config.set_active_project(project_id, workspace_id=workspace_id)
 
     result: dict[str, Any] = {
         "status": "ok",
         "active_workspace_id": workspace_id,
+        "active_project_id": project_id,
     }
-    if project_id is not None:
-        result["active_project_id"] = project_id
 
     err_console.print(f"[green]Switched to workspace {workspace_id}.[/green]")
     output_result(ctx, result, format=format)

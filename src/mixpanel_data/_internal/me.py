@@ -9,6 +9,7 @@ Types use ``extra="allow"`` for forward compatibility with API changes.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -19,7 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
-from mixpanel_data.exceptions import ConfigError
+from mixpanel_data._internal.auth_credential import VALID_REGIONS
+from mixpanel_data.exceptions import AuthenticationError, ConfigError, QueryError
 
 if TYPE_CHECKING:
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -219,11 +221,15 @@ class MeCache:
     """Disk-based cache for /me API responses.
 
     Stores responses as JSON files at ``{storage_dir}/me_{region}.json``
-    with configurable TTL. Files are created with ``0o600`` permissions.
+    (or ``me_{region}_{credential_name}.json`` when scoped) with
+    configurable TTL. Files are created with ``0o600`` permissions.
 
     Args:
         storage_dir: Directory for cache files. Defaults to ``~/.mp/oauth/``.
         ttl_seconds: Cache time-to-live in seconds. Default: 86400 (24h).
+        credential_name: Credential identity for cache isolation. When
+            non-empty, cache files include this name so different
+            credentials in the same region do not share a cache.
 
     Example:
         ```python
@@ -238,21 +244,32 @@ class MeCache:
         self,
         storage_dir: Path | None = None,
         ttl_seconds: int = _DEFAULT_TTL_SECONDS,
+        credential_name: str = "",
     ) -> None:
         """Initialize MeCache.
 
         Args:
             storage_dir: Override cache directory. Defaults to ``~/.mp/oauth/``.
             ttl_seconds: Cache TTL in seconds. Default: 86400 (24 hours).
+            credential_name: Credential identity for cache isolation. When
+                provided, cache files are scoped to this name so that
+                different credentials in the same region do not share a
+                cache file. Defaults to ``""`` (backward-compatible, no
+                scoping).
         """
         if storage_dir is not None:
             self._storage_dir = storage_dir
         else:
             self._storage_dir = Path.home() / ".mp" / "oauth"
         self._ttl_seconds = ttl_seconds
+        self._credential_name = credential_name
 
     def _cache_path(self, region: str) -> Path:
         """Return the cache file path for a region.
+
+        When ``credential_name`` is set, the file is scoped to that
+        credential so that two service accounts in the same region get
+        separate cache files (e.g. ``me_us_demo-sa.json``).
 
         Args:
             region: Data residency region (us, eu, in).
@@ -260,6 +277,8 @@ class MeCache:
         Returns:
             Path to the cache file.
         """
+        if self._credential_name:
+            return self._storage_dir / f"me_{region}_{self._credential_name}.json"
         return self._storage_dir / f"me_{region}.json"
 
     def get(self, region: str) -> MeResponse | None:
@@ -326,6 +345,8 @@ class MeCache:
             ```
         """
         self._storage_dir.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(OSError):
+            os.chmod(self._storage_dir, stat.S_IRWXU)  # 0o700
 
         # Add cache metadata
         data = response.model_dump(mode="json")
@@ -372,7 +393,7 @@ class MeCache:
             cache.invalidate_all()
             ```
         """
-        for region in ("us", "eu", "in"):
+        for region in VALID_REGIONS:
             self.invalidate(region)
 
 
@@ -455,18 +476,15 @@ class MeService:
         # Call API
         try:
             raw = self._api_client.me()
-        except Exception as exc:
-            # Handle 401/403 from the API
-            from mixpanel_data.exceptions import AuthenticationError, QueryError
-
-            if isinstance(exc, AuthenticationError):
-                raise ConfigError(
-                    "Credentials lack permission for /me discovery. "
-                    "Specify --project explicitly or use credentials with "
-                    "/me access.",
-                    details={"status_code": 401},
-                ) from exc
-            if isinstance(exc, QueryError) and exc.status_code == 403:
+        except AuthenticationError as exc:
+            raise ConfigError(
+                "Credentials lack permission for /me discovery. "
+                "Specify --project explicitly or use credentials with "
+                "/me access.",
+                details={"status_code": 401},
+            ) from exc
+        except QueryError as exc:
+            if exc.status_code == 403:
                 raise ConfigError(
                     "Credentials lack permission for /me discovery. "
                     "Specify --project explicitly or use credentials with "

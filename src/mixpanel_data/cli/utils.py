@@ -275,7 +275,7 @@ def get_workspace(ctx: typer.Context) -> Workspace:
     ``--credential``, ``--project``, and ``--workspace-id`` global options.
     The workspace is cached in the context for reuse.
 
-    When ``--credential`` or ``--project`` are provided, uses
+    When ``--credential`` is provided, uses
     ``ConfigManager.resolve_session()`` (v2 path) for credential resolution.
     Otherwise falls back to the legacy ``account`` parameter.
 

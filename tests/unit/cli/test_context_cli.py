@@ -105,8 +105,11 @@ class TestContextSwitch:
         result = cli_runner.invoke(app, ["context", "switch", "ecom"])
 
         assert result.exit_code == 0
-        mock_cm.set_active_credential.assert_called_once_with("demo-sa")
-        mock_cm.set_active_project.assert_called_once_with("3018488", workspace_id=9999)
+        mock_cm.set_active_context.assert_called_once_with(
+            credential="demo-sa",
+            project_id="3018488",
+            workspace_id=9999,
+        )
         data = json.loads(result.stdout)
         assert data["alias"] == "ecom"
         assert data["project_id"] == "3018488"
@@ -132,8 +135,11 @@ class TestContextSwitch:
         result = cli_runner.invoke(app, ["context", "switch", "staging"])
 
         assert result.exit_code == 0
-        mock_cm.set_active_credential.assert_not_called()
-        mock_cm.set_active_project.assert_called_once_with("5555", workspace_id=None)
+        mock_cm.set_active_context.assert_called_once_with(
+            credential=None,
+            project_id="5555",
+            workspace_id=None,
+        )
 
     @patch("mixpanel_data.cli.commands.context.get_config")
     def test_switch_unknown_alias_exits_with_error(

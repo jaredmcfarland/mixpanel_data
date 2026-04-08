@@ -22,11 +22,12 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib  # type: ignore[import-not-found,unused-ignore]
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import tomli_w
 from pydantic import BaseModel, ConfigDict, SecretStr, field_validator, model_validator
 
+from mixpanel_data._internal.auth_credential import VALID_REGIONS, RegionType
 from mixpanel_data.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
@@ -34,10 +35,6 @@ from mixpanel_data.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Valid regions for Mixpanel data residency
-VALID_REGIONS = ("us", "eu", "in")
-RegionType = Literal["us", "eu", "in"]
 
 
 class AuthMethod(str, Enum):
@@ -177,11 +174,15 @@ class Credentials(BaseModel):
         encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
         return f"Basic {encoded}"
 
-    def to_resolved_session(self) -> ResolvedSession:
+    def to_resolved_session(self, workspace_id: int | None = None) -> ResolvedSession:
         """Convert legacy Credentials to a ResolvedSession.
 
         Creates an ``AuthCredential`` and ``ProjectContext`` from this
         ``Credentials`` instance, bridging the v1 and v2 auth systems.
+
+        Args:
+            workspace_id: Optional workspace ID to include in the
+                ``ProjectContext``. Defaults to ``None``.
 
         Returns:
             A ``ResolvedSession`` wrapping this credential's auth and project.
@@ -217,7 +218,7 @@ class Credentials(BaseModel):
                 secret=self.secret,
             )
 
-        project = ProjectContext(project_id=self.project_id)
+        project = ProjectContext(project_id=self.project_id, workspace_id=workspace_id)
         return ResolvedSession(auth=auth, project=project)
 
     def __repr__(self) -> str:
@@ -817,6 +818,15 @@ class ConfigManager:
             )
             ```
         """
+        from mixpanel_data._internal.auth_credential import CredentialType
+
+        valid_types = {ct.value for ct in CredentialType}
+        if type not in valid_types:
+            raise ValueError(
+                f"Credential type must be one of: "
+                f"{', '.join(sorted(valid_types))}. Got: {type}"
+            )
+
         region_lower = region.lower()
         if region_lower not in VALID_REGIONS:
             valid = ", ".join(VALID_REGIONS)
@@ -1014,6 +1024,59 @@ class ConfigManager:
             active["workspace_id"] = workspace_id
         elif "workspace_id" in active:
             del active["workspace_id"]
+        self._write_config_atomic(config)
+
+    def set_active_context(
+        self,
+        credential: str | None = None,
+        project_id: str | None = None,
+        workspace_id: int | None = None,
+    ) -> None:
+        """Set the active credential, project, and workspace in one write.
+
+        Performs a single read-modify-write cycle so that all three active
+        fields are updated together, avoiding partial-update windows.
+
+        Args:
+            credential: Credential name to set as active. If ``None``,
+                the active credential is left unchanged.
+            project_id: Project ID to set as active. If ``None``, the
+                active project is left unchanged.
+            workspace_id: Workspace ID to set. If ``None``, the active
+                workspace is cleared.
+
+        Example:
+            ```python
+            cm = ConfigManager()
+            cm.set_active_context(
+                credential="demo-sa",
+                project_id="3713224",
+                workspace_id=3448413,
+            )
+            ```
+        """
+        config = self._read_config()
+        active = config.setdefault("active", {})
+
+        if credential is not None:
+            # Validate credential exists
+            credentials = config.get("credentials", {})
+            if credential not in credentials:
+                available = list(credentials.keys())
+                raise ConfigError(
+                    f"Credential '{credential}' not found.",
+                    details={"credential_name": credential, "available": available},
+                )
+            active["credential"] = credential
+
+        if project_id is not None:
+            active["project_id"] = project_id
+
+        if workspace_id is not None:
+            active["workspace_id"] = workspace_id
+        elif "workspace_id" in active:
+            del active["workspace_id"]
+
         self._write_config_atomic(config)
 
     def set_active_workspace(self, workspace_id: int) -> None:

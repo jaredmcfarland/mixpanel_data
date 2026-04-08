@@ -66,7 +66,7 @@ def switch_context(
 
     Looks up the alias and sets the active credential, project ID,
     and workspace ID from the alias definition. All three active
-    fields are updated atomically.
+    fields are updated in a single config write.
 
     Args:
         ctx: Typer context with global options.
@@ -93,10 +93,12 @@ def switch_context(
             details={"alias_name": alias, "available": available},
         )
 
-    # Update active context from alias
-    if match.credential is not None:
-        config.set_active_credential(match.credential)
-    config.set_active_project(match.project_id, workspace_id=match.workspace_id)
+    # Update active context from alias in a single write
+    config.set_active_context(
+        credential=match.credential,
+        project_id=match.project_id,
+        workspace_id=match.workspace_id,
+    )
 
     result: dict[str, Any] = {
         "status": "ok",

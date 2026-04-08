@@ -2833,3 +2833,24 @@ class TestWithProject:
         original = MixpanelAPIClient(test_credentials, _transport=transport)
         new_client = original.with_project("9999999")
         assert new_client._transport is transport
+
+    def test_with_project_preserves_oauth_credentials(self) -> None:
+        """with_project should copy auth_method and oauth_access_token."""
+        from mixpanel_data._internal.config import AuthMethod
+
+        oauth_creds = Credentials(
+            username="",
+            secret=SecretStr(""),
+            project_id="12345",
+            region="us",
+            auth_method=AuthMethod.oauth,
+            oauth_access_token=SecretStr("my-oauth-token"),
+        )
+        original = MixpanelAPIClient(oauth_creds)
+        new_client = original.with_project("9999999")
+        assert new_client._credentials.auth_method == AuthMethod.oauth
+        assert new_client._credentials.oauth_access_token is not None
+        assert (
+            new_client._credentials.oauth_access_token.get_secret_value()
+            == "my-oauth-token"
+        )
