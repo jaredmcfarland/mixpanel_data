@@ -382,24 +382,36 @@ class Workspace:
             # Build legacy Credentials from session for backward compat
             self._credentials = self._session_to_credentials(session)
         else:
-            # Legacy v1 path: use resolve_credentials
-            self._credentials = self._config_manager.resolve_credentials(account)
-
-            # Apply overrides if provided
-            if project_id or region:
-                from typing import cast
-
-                from pydantic import SecretStr
-
-                from mixpanel_data._internal.auth_credential import RegionType
-
-                resolved_region = region or self._credentials.region
-                self._credentials = Credentials(
-                    username=self._credentials.username,
-                    secret=SecretStr(self._credentials.secret.get_secret_value()),
-                    project_id=project_id or self._credentials.project_id,
-                    region=cast(RegionType, resolved_region),
+            if self._config_manager.config_version() >= 2:
+                # v2 config detected — use resolve_session with defaults
+                session = self._config_manager.resolve_session(
+                    credential=None,
+                    project_id=project_id,
+                    workspace_id=workspace_id,
                 )
+                self._resolved_session = session
+                self._credentials = self._session_to_credentials(session)
+            else:
+                # Legacy v1 path: use resolve_credentials
+                self._credentials = self._config_manager.resolve_credentials(account)
+
+                # Apply overrides if provided
+                if project_id or region:
+                    from typing import cast
+
+                    from pydantic import SecretStr
+
+                    from mixpanel_data._internal.auth_credential import RegionType
+
+                    resolved_region = region or self._credentials.region
+                    self._credentials = Credentials(
+                        username=self._credentials.username,
+                        secret=SecretStr(self._credentials.secret.get_secret_value()),
+                        project_id=project_id or self._credentials.project_id,
+                        region=cast(RegionType, resolved_region),
+                        auth_method=self._credentials.auth_method,
+                        oauth_access_token=self._credentials.oauth_access_token,
+                    )
 
         # Lazy-initialized services (None until first use)
         self._api_client: MixpanelAPIClient | None = _api_client
@@ -407,10 +419,14 @@ class Workspace:
         self._live_query: LiveQueryService | None = None
         self._me_service: MeService | None = None
 
-        # Set workspace_id on the api_client if provided
-        self._initial_workspace_id = workspace_id
-        if workspace_id is not None and self._api_client is not None:
-            self._api_client.set_workspace_id(workspace_id)
+        # Resolve effective workspace_id: explicit param > session > None
+        effective_workspace_id = workspace_id
+        if effective_workspace_id is None and self._resolved_session is not None:
+            effective_workspace_id = self._resolved_session.workspace_id
+
+        self._initial_workspace_id = effective_workspace_id
+        if effective_workspace_id is not None and self._api_client is not None:
+            self._api_client.set_workspace_id(effective_workspace_id)
 
     @staticmethod
     def _session_to_credentials(session: ResolvedSession) -> Credentials:
@@ -944,6 +960,15 @@ class Workspace:
         if creds is None:
             raise ConfigError("No credentials available.")
 
+        from mixpanel_data._internal.config import AuthMethod
+
+        if creds.auth_method == AuthMethod.oauth:
+            return AuthCredential(
+                name=self._account_name or "default",
+                type=CredentialType.oauth,
+                region=creds.region,
+                oauth_access_token=creds.oauth_access_token,
+            )
         return AuthCredential(
             name=self._account_name or "default",
             type=CredentialType.service_account,
