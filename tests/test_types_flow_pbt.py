@@ -49,8 +49,8 @@ def flow_steps(draw: st.DrawFn) -> FlowStep:
 
     Draws an event name, optional forward/reverse step counts,
     and an optional display label to construct a valid ``FlowStep``.
-    Uses the full text alphabet including control characters, suitable
-    for testing the dataclass itself (not API validation).
+    Uses visible characters only (letters, numbers, punctuation, symbols)
+    since ``FlowStep.__post_init__`` rejects control characters.
 
     Args:
         draw: Hypothesis draw function for composing strategies.
@@ -58,7 +58,7 @@ def flow_steps(draw: st.DrawFn) -> FlowStep:
     Returns:
         A randomly generated FlowStep instance.
     """
-    event = draw(st.text(min_size=1, max_size=50).filter(lambda s: s.strip()))
+    event = draw(event_names)
     forward = draw(st.one_of(st.none(), st.integers(min_value=0, max_value=5)))
     reverse = draw(st.one_of(st.none(), st.integers(min_value=0, max_value=5)))
     label = draw(st.one_of(st.none(), st.text(min_size=1, max_size=50)))

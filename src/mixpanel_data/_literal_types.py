@@ -16,6 +16,10 @@ from __future__ import annotations
 
 from typing import Literal
 
+# =============================================================================
+# Time Units
+# =============================================================================
+
 # Time units for segmentation, retention, event_counts, property_counts, frequency
 TimeUnit = Literal["day", "week", "month"]
 
@@ -25,14 +29,282 @@ HourDayUnit = Literal["hour", "day"]
 # Time units for bookmark query API (query, build_params, build_time_section)
 QueryTimeUnit = Literal["hour", "day", "week", "month", "quarter"]
 
+# =============================================================================
+# Count / Aggregation Types
+# =============================================================================
+
 # Count/aggregation methods
 CountType = Literal["general", "unique", "average"]
 
 # Counting methods for flows analysis
 FlowCountType = Literal["unique", "total", "session"]
 
+# =============================================================================
+# Insights Math Types
+# =============================================================================
+
+MathType = Literal[
+    "total",
+    "unique",
+    "dau",
+    "wau",
+    "mau",
+    "average",
+    "median",
+    "min",
+    "max",
+    "p25",
+    "p75",
+    "p90",
+    "p99",
+    "percentile",
+    "histogram",
+]
+"""Aggregation function for query metrics.
+
++-----------+------------------------------------------------------------------+--------------------+
+| Value     | Meaning                                                          | Requires property? |
++===========+==================================================================+====================+
+| total     | Count events, or sum a numeric property if ``property`` is set   | Optional           |
++-----------+------------------------------------------------------------------+--------------------+
+| unique    | Count distinct users                                             | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| dau       | Daily Active Users (unique users per day)                        | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| wau       | Weekly Active Users (unique users per 7-day window)              | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| mau       | Monthly Active Users (unique users per 28-day window)            | No                 |
++-----------+------------------------------------------------------------------+--------------------+
+| average   | Mean of a numeric property's values                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| median    | Median (50th percentile) of a numeric property                   | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| min       | Minimum value of a numeric property                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| max       | Maximum value of a numeric property                              | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p25       | 25th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p75       | 75th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p90       | 90th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| p99       | 99th percentile of a numeric property                            | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| percentile| Custom percentile (requires ``percentile_value``)                | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+| histogram | Distribution of a numeric property's values                      | Yes                |
++-----------+------------------------------------------------------------------+--------------------+
+
+Note: Mixpanel has no ``"sum"`` math type. Use ``math="total"`` with
+a ``property`` to sum a numeric property's values.
+
+``dau``, ``wau``, ``mau``, and ``unique`` are incompatible with ``per_user``.
+
+``percentile`` maps to ``custom_percentile`` in bookmark JSON and requires
+``percentile_value`` on Metric (or as a top-level param on ``query()``/``build_params()``).
+``histogram`` maps directly to ``histogram`` in bookmark JSON.
+"""
+
+PerUserAggregation = Literal["unique_values", "total", "average", "min", "max"]
+"""Per-user pre-aggregation type.
+
+Requires ``math_property`` to be set. The query first computes the
+per-user aggregate, then applies the top-level ``math`` across users.
+
++-----------------+---------------------------------------------------------------+
+| Value           | Meaning                                                       |
++=================+===============================================================+
+| total           | Sum of the property value per user (then aggregate)           |
++-----------------+---------------------------------------------------------------+
+| average         | Mean of the property value per user (then aggregate)          |
++-----------------+---------------------------------------------------------------+
+| min             | Minimum property value per user (then aggregate)              |
++-----------------+---------------------------------------------------------------+
+| max             | Maximum property value per user (then aggregate)              |
++-----------------+---------------------------------------------------------------+
+| unique_values   | Count of distinct property values per user (then aggregate)   |
++-----------------+---------------------------------------------------------------+
+
+Maps to ``perUserAggregation`` in the bookmark measurement block.
+"""
+
+# =============================================================================
+# Funnel Types
+# =============================================================================
+
+FunnelMathType = Literal[
+    "conversion_rate_unique",
+    "conversion_rate_total",
+    "conversion_rate_session",
+    "unique",
+    "total",
+    "average",
+    "median",
+    "min",
+    "max",
+    "p25",
+    "p75",
+    "p90",
+    "p99",
+]
+"""Aggregation function for funnel query metrics.
+
++---------------------------+------------------------------------------------------+
+| Value                     | Meaning                                              |
++===========================+======================================================+
+| conversion_rate_unique    | Unique-user conversion rate (default)                |
++---------------------------+------------------------------------------------------+
+| conversion_rate_total     | Total-event conversion rate                          |
++---------------------------+------------------------------------------------------+
+| conversion_rate_session   | Session-based conversion rate                        |
++---------------------------+------------------------------------------------------+
+| unique                    | Raw count of unique users per step                   |
++---------------------------+------------------------------------------------------+
+| total                     | Raw total event count per step                       |
++---------------------------+------------------------------------------------------+
+| average                   | Mean of a numeric property per step                  |
++---------------------------+------------------------------------------------------+
+| median                    | Median of a numeric property per step                |
++---------------------------+------------------------------------------------------+
+| min                       | Minimum of a numeric property per step               |
++---------------------------+------------------------------------------------------+
+| max                       | Maximum of a numeric property per step               |
++---------------------------+------------------------------------------------------+
+| p25                       | 25th percentile of a numeric property per step       |
++---------------------------+------------------------------------------------------+
+| p75                       | 75th percentile of a numeric property per step       |
++---------------------------+------------------------------------------------------+
+| p90                       | 90th percentile of a numeric property per step       |
++---------------------------+------------------------------------------------------+
+| p99                       | 99th percentile of a numeric property per step       |
++---------------------------+------------------------------------------------------+
+
+These 13 values are the public-facing funnel math types. The Mixpanel API
+also accepts internal aliases (``"general"``, ``"session"``,
+``"conversion_rate"``) but those are not exposed in the public API.
+"""
+
+ConversionWindowUnit = Literal[
+    "second", "minute", "hour", "day", "week", "month", "session"
+]
+"""Time unit for funnel conversion window.
+
++----------+----------------------------------------------+
+| Value    | Meaning                                      |
++==========+==============================================+
+| second   | Conversion window in seconds (max 31708800)  |
++----------+----------------------------------------------+
+| minute   | Conversion window in minutes (max 528480)    |
++----------+----------------------------------------------+
+| hour     | Conversion window in hours (max 8808)        |
++----------+----------------------------------------------+
+| day      | Conversion window in days (max 367)          |
++----------+----------------------------------------------+
+| week     | Conversion window in weeks (max 52)          |
++----------+----------------------------------------------+
+| month    | Conversion window in months (max 12)         |
++----------+----------------------------------------------+
+| session  | Conversion window in sessions (max 12)       |
++----------+----------------------------------------------+
+"""
+
+FunnelOrder = Literal["loose", "any"]
+"""Funnel step ordering mode.
+
++--------+----------------------------------------------+
+| Value  | Meaning                                      |
++========+==============================================+
+| loose  | Steps must occur in order but other events   |
+|        | may happen between them (default)            |
++--------+----------------------------------------------+
+| any    | Steps may occur in any order                 |
++--------+----------------------------------------------+
+"""
+
+FunnelMode = Literal["steps", "trends", "table"]
+"""Display mode for funnel query results.
+
++--------+----------------------------------------------+
+| Value  | Meaning                                      |
++========+==============================================+
+| steps  | Step-by-step conversion view (default)       |
++--------+----------------------------------------------+
+| trends | Conversion trend over time                   |
++--------+----------------------------------------------+
+| table  | Tabular conversion data                      |
++--------+----------------------------------------------+
+"""
+
+# =============================================================================
+# Retention Types
+# =============================================================================
+
+RetentionAlignment = Literal["birth", "interval_start"]
+"""Retention alignment mode.
+
++------------------+----------------------------------------------+
+| Value            | Meaning                                      |
++==================+==============================================+
+| birth            | Align to each cohort's born date (default)   |
++------------------+----------------------------------------------+
+| interval_start   | Align all cohorts to the same start date     |
++------------------+----------------------------------------------+
+"""
+
+RetentionMode = Literal["curve", "trends", "table"]
+"""Display mode for retention query results.
+
++--------+----------------------------------------------+
+| Value  | Meaning                                      |
++========+==============================================+
+| curve  | Retention curve (default)                    |
++--------+----------------------------------------------+
+| trends | Trend lines over time                        |
++--------+----------------------------------------------+
+| table  | Tabular cohort x bucket grid                 |
++--------+----------------------------------------------+
+"""
+
+RetentionMathType = Literal["retention_rate", "unique"]
+"""Aggregation function for retention query metrics.
+
++----------------+----------------------------------------------+
+| Value          | Meaning                                      |
++================+==============================================+
+| retention_rate | Percentage of users retained (default)       |
++----------------+----------------------------------------------+
+| unique         | Raw count of retained users                  |
++----------------+----------------------------------------------+
+
+Maps directly to the ``measurement.math`` field in bookmark JSON.
+"""
+
+# =============================================================================
+# Flow Types
+# =============================================================================
+
 # Chart types for flows visualization
 FlowChartType = Literal["sankey", "paths", "tree"]
+
+FlowConversionWindowUnit = Literal["day", "week", "month", "session"]
+"""Time unit for flow conversion window.
+
+Subset of ``ConversionWindowUnit`` — flows do not support
+second, minute, or hour granularity.
+
++----------+----------------------------------------------+
+| Value    | Meaning                                      |
++==========+==============================================+
+| day      | Conversion window in days (default)          |
++----------+----------------------------------------------+
+| week     | Conversion window in weeks                   |
++----------+----------------------------------------------+
+| month    | Conversion window in months                  |
++----------+----------------------------------------------+
+| session  | Conversion window in sessions                |
++----------+----------------------------------------------+
+"""
 
 # Node types in a flow tree response
 FlowNodeType = Literal["ANCHOR", "NORMAL", "DROPOFF", "PRUNED", "FORWARD", "REVERSE"]
@@ -40,13 +312,86 @@ FlowNodeType = Literal["ANCHOR", "NORMAL", "DROPOFF", "PRUNED", "FORWARD", "REVE
 # Anchor types in a flow tree response
 FlowAnchorType = Literal["NORMAL", "RELATIVE_REVERSE", "RELATIVE_FORWARD"]
 
+# =============================================================================
+# Insights Display Mode
+# =============================================================================
+
+InsightsMode = Literal["timeseries", "total", "table"]
+"""Display mode for insights query results.
+
++------------+----------------------------------------------+
+| Value      | Meaning                                      |
++============+==============================================+
+| timeseries | Time-series data with date-indexed values     |
+|            | (default)                                    |
++------------+----------------------------------------------+
+| total      | Single aggregate value per metric             |
++------------+----------------------------------------------+
+| table      | Tabular data view                            |
++------------+----------------------------------------------+
+"""
+
+# =============================================================================
+# Filter Types
+# =============================================================================
+
+FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
+"""Property data type for filter conditions.
+
+Includes ``"datetime"`` and ``"list"`` for API compatibility.
+Datetime factory methods (``Filter.on``, ``Filter.before``, etc.)
+produce filters with ``filterType="datetime"``.
+"""
+
+FilterDateUnit = Literal["hour", "day", "week", "month"]
+"""Time unit for relative date filters.
+
+Used by ``Filter.in_the_last()`` and ``Filter.not_in_the_last()``
+to specify the granularity of the relative time window.
+Maps to ``filterDateUnit`` in bookmark JSON.
+"""
+
+FiltersCombinator = Literal["all", "any"]
+"""How multiple filters combine.
+
++-------+----------------------------------------------+
+| Value | Meaning                                      |
++=======+==============================================+
+| all   | All filters must match (AND logic, default)  |
++-------+----------------------------------------------+
+| any   | Any filter may match (OR logic)              |
++-------+----------------------------------------------+
+"""
+
 __all__ = [
+    # Time units
     "TimeUnit",
     "HourDayUnit",
     "QueryTimeUnit",
+    # Count types
     "CountType",
     "FlowCountType",
+    # Insights math
+    "MathType",
+    "PerUserAggregation",
+    # Funnel types
+    "FunnelMathType",
+    "ConversionWindowUnit",
+    "FunnelOrder",
+    "FunnelMode",
+    # Retention types
+    "RetentionAlignment",
+    "RetentionMode",
+    "RetentionMathType",
+    # Flow types
     "FlowChartType",
+    "FlowConversionWindowUnit",
     "FlowNodeType",
     "FlowAnchorType",
+    # Insights mode
+    "InsightsMode",
+    # Filter types
+    "FilterPropertyType",
+    "FilterDateUnit",
+    "FiltersCombinator",
 ]

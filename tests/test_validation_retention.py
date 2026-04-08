@@ -25,6 +25,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from mixpanel_data._internal.validation import validate_retention_args
 from mixpanel_data.exceptions import ValidationError
 from mixpanel_data.types import GroupBy
@@ -445,34 +447,26 @@ class TestValidateRetentionDelegation:
     # -- R4: group-by validation delegated to validate_group_by_args --
 
     def test_negative_bucket_size_returns_v12_error(self) -> None:
-        """A negative bucket_size must produce a V12_BUCKET_SIZE_POSITIVE error (delegated)."""
-        errors = validate_retention_args(
-            **_valid_retention_args(
-                group_by=GroupBy(
-                    "revenue",
-                    property_type="number",
-                    bucket_size=-1,
-                    bucket_min=0,
-                    bucket_max=100,
-                )
+        """A negative bucket_size must be rejected by GroupBy.__post_init__."""
+        with pytest.raises(ValueError, match="bucket_size must be positive"):
+            GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=-1,
+                bucket_min=0,
+                bucket_max=100,
             )
-        )
-        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
 
     def test_zero_bucket_size_returns_v12_error(self) -> None:
-        """A zero bucket_size must produce a V12_BUCKET_SIZE_POSITIVE error (delegated)."""
-        errors = validate_retention_args(
-            **_valid_retention_args(
-                group_by=GroupBy(
-                    "revenue",
-                    property_type="number",
-                    bucket_size=0,
-                    bucket_min=0,
-                    bucket_max=100,
-                )
+        """A zero bucket_size must be rejected by GroupBy.__post_init__."""
+        with pytest.raises(ValueError, match="bucket_size must be positive"):
+            GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=0,
+                bucket_min=0,
+                bucket_max=100,
             )
-        )
-        assert any(e.code == "V12_BUCKET_SIZE_POSITIVE" for e in errors)
 
     def test_string_group_by_no_errors(self) -> None:
         """A simple string group_by must not produce group-by errors."""
@@ -524,19 +518,15 @@ class TestValidateRetentionDelegation:
         assert not any(e.code in group_codes for e in errors)
 
     def test_bucket_min_exceeds_max_returns_v18_error(self) -> None:
-        """bucket_min >= bucket_max must produce a V18_BUCKET_ORDER error (delegated)."""
-        errors = validate_retention_args(
-            **_valid_retention_args(
-                group_by=GroupBy(
-                    "revenue",
-                    property_type="number",
-                    bucket_size=10,
-                    bucket_min=100,
-                    bucket_max=50,
-                )
+        """bucket_min >= bucket_max must be rejected by GroupBy.__post_init__."""
+        with pytest.raises(ValueError, match="bucket_min.*must be less than"):
+            GroupBy(
+                "revenue",
+                property_type="number",
+                bucket_size=10,
+                bucket_min=100,
+                bucket_max=50,
             )
-        )
-        assert any(e.code == "V18_BUCKET_ORDER" for e in errors)
 
     def test_list_group_by_valid(self) -> None:
         """A list of valid group-by specs must not produce errors."""

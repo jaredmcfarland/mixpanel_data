@@ -172,6 +172,10 @@ class TestGroupByValidationEquivalence:
     ) -> None:
         """GroupBy error codes from standalone function match monolithic function.
 
+        Inputs that violate __post_init__ constraints (bucket_size <= 0,
+        bucket_min >= bucket_max) are expected to raise ValueError at
+        construction time and are verified separately.
+
         Args:
             prop: Property name.
             prop_type: Property type.
@@ -179,13 +183,19 @@ class TestGroupByValidationEquivalence:
             bucket_min: Bucket minimum (may be invalid).
             bucket_max: Bucket maximum (may be invalid).
         """
-        g = GroupBy(
-            prop,
-            property_type=prop_type,  # type: ignore[arg-type]
-            bucket_size=bucket_size,
-            bucket_min=bucket_min,
-            bucket_max=bucket_max,
-        )
+        try:
+            g = GroupBy(
+                prop,
+                property_type=prop_type,  # type: ignore[arg-type]
+                bucket_size=bucket_size,
+                bucket_min=bucket_min,
+                bucket_max=bucket_max,
+            )
+        except ValueError:
+            # __post_init__ rejected this combination (bucket_size <= 0,
+            # bucket_min >= bucket_max, or empty property). These are
+            # now caught at construction time, not by the validator.
+            return
 
         # Get errors from standalone function
         standalone_errors = validate_group_by_args(group_by=g)

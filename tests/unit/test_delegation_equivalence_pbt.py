@@ -8,6 +8,8 @@ verifies event name validation consistency across all four query types.
 
 from __future__ import annotations
 
+from typing import cast
+
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -24,6 +26,7 @@ from mixpanel_data._internal.validation import (
     validate_retention_args,
     validate_time_args,
 )
+from mixpanel_data._literal_types import ConversionWindowUnit, FunnelMathType
 
 # =============================================================================
 # Strategies (reused from test_query_validation_pbt.py)
@@ -280,15 +283,18 @@ class TestMathPropertyMatrix:
         """
         math_property = "revenue" if has_property else None
 
-        # Handle session math coupling
-        cw_unit = "session" if math == "conversion_rate_session" else "day"
+        # Handle session math coupling — cast to Literal types for mypy
+        cw_unit: ConversionWindowUnit = (
+            "session" if math == "conversion_rate_session" else "day"
+        )
+        funnel_math = cast(FunnelMathType, math)
         cw = 1 if cw_unit == "session" else 14
 
         errors = validate_funnel_args(
             steps=["Signup", "Purchase"],
             conversion_window=cw,
             conversion_window_unit=cw_unit,
-            math=math,
+            math=funnel_math,
             math_property=math_property,
             exclusions=None,
             holding_constant=None,
