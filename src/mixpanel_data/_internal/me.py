@@ -73,7 +73,7 @@ class MeProjectInfo(BaseModel):
         timezone: Project timezone (optional).
         has_workspaces: Whether project uses workspaces (optional).
         domain: Mixpanel domain for the project's cluster (optional).
-        type: Project type, e.g. "PROJECT" or "ROLLUP" (optional).
+        type: Project type — string (e.g. "PROJECT", "ROLLUP") or integer code (optional).
 
     Example:
         ```python
@@ -102,8 +102,8 @@ class MeProjectInfo(BaseModel):
     domain: str | None = None
     """Mixpanel domain for the project's cluster."""
 
-    type: str | None = None
-    """Project type (e.g., 'PROJECT', 'ROLLUP')."""
+    type: str | int | None = None
+    """Project type (e.g., 'PROJECT', 'ROLLUP', or integer type code)."""
 
 
 class MeWorkspaceInfo(BaseModel):
