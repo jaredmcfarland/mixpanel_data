@@ -167,6 +167,9 @@ class MixpanelAPIClient:
 
         Returns:
             Authorization header value appropriate for the auth method.
+
+        Raises:
+            ValueError: If OAuth credentials are missing an access token.
         """
         return self._credentials.auth_header()
 
