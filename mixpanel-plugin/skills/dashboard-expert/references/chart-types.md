@@ -6,41 +6,57 @@ Quick-lookup reference for choosing the right chart type per report type, with w
 
 ## 1. Decision Tree
 
-| Question | Chart Type | Slug |
-|---|---|---|
-| Need a single headline number? | Metric | `insights-metric` |
-| Tracking something over time? | Line | `line` |
-| Comparing categories? | Bar | `bar` |
-| Showing composition? | Pie (max 6 segments) or Stacked Bar | `pie` / `bar-stacked` |
-| Need detailed data? | Table | `table` |
-| Measuring conversion? | Funnel Steps | `funnel-steps` |
-| Measuring retention? | Retention Curve | `retention-curve` |
-| Exploring user paths? | Sankey | `sankey` |
+| Question | Chart Type | `chartType` | `plotStyle` |
+|---|---|---|---|
+| Need a single headline number? | Metric | `insights-metric` | |
+| Tracking something over time? | Line | `line` | |
+| Comparing categories? | Bar | `bar` | |
+| Showing composition over time? | Stacked Line | `line` | `stacked` |
+| Showing composition across categories? | Stacked Bar | `bar` | `stacked` |
+| Need detailed data? | Table | `table` | |
+| Measuring conversion? | Funnel Steps | `funnel-steps` | |
+| Measuring retention? | Retention Curve | `retention-curve` | |
+| Exploring user paths? | Sankey | `sankey` | |
 
 ---
 
 ## 2. Insights Chart Types
 
-| Chart Type | Slug | Best For | Width |
-|---|---|---|---|
-| Line | `line` | Trends over time | 6 or 12 |
-| Bar | `bar` | Categorical comparisons, rankings | 6 or 12 |
-| Stacked Bar | `bar-stacked` | Composition across categories | 12 |
-| Column | `column` | Vertical bar, fewer categories | 6 or 12 |
-| Stacked Line | `stacked-line` | Composition trends over time | 12 |
-| Stacked Column | `stacked-column` | Composition across categories (vertical) | 12 |
-| Pie | `pie` | Share/proportion (max 6 segments) | 6 |
-| Table | `table` | Multi-dimensional detailed data | 12 |
-| Metric | `insights-metric` | Single KPI headline number | 3 or 4 |
+| Chart Type | `chartType` | `plotStyle` | Best For | Width |
+|---|---|---|---|---|
+| Line | `line` | `standard` | Trends over time | 6 or 12 |
+| Stacked Line | `line` | `stacked` | Composition trends over time | 12 |
+| Bar | `bar` | `standard` | Categorical comparisons, rankings | 6 or 12 |
+| Stacked Bar | `bar` | `stacked` | Composition across categories | 12 |
+| Column | `column` | `standard` | Vertical bar, fewer categories | 6 or 12 |
+| Stacked Column | `column` | `stacked` | Composition across categories (vertical) | 12 |
+| Pie | `pie` | | Share/proportion (max 6 segments) | 6 |
+| Table | `table` | | Multi-dimensional detailed data | 12 |
+| Metric | `insights-metric` | | Single KPI headline number | 3 or 4 |
+
+### How Stacking Works
+
+Stacked charts are NOT separate chart types. They use the base `chartType` (`line`, `bar`, or `column`) with `plotStyle` set to `"stacked"` in `displayOptions`:
+
+```json
+"displayOptions": {
+  "chartType": "bar",
+  "plotStyle": "stacked"
+}
+```
+
+**NEVER use** `bar-stacked`, `stacked-line`, or `stacked-column` as `chartType` values — these are display-layer labels used by the Mixpanel frontend, not valid API values. The API will reject them.
+
+Valid `chartType` values: `line`, `bar`, `column`, `pie`, `table`, `insights-metric`, `funnel-steps`, `funnel-top-paths`, `retention-curve`, `frequency-curve`
+
+Valid `plotStyle` values: `standard` (default), `stacked`
 
 ### When to Use / When NOT to Use
 
 - **Line** -- Use for time series with continuous data. Not for categorical comparisons or single data points.
 - **Bar** -- Use for ranking or comparing discrete categories. Not for time series (use line instead).
-- **Stacked Bar** -- Use to show part-to-whole across categories. Not when individual values matter more than composition.
+- **Stacked Bar/Line/Column** -- Use to show part-to-whole composition. Set `chartType` to the base type and `plotStyle` to `"stacked"`. Not when individual values matter more than composition.
 - **Column** -- Use like bar but vertical; better with fewer categories. Not for many categories (labels overlap).
-- **Stacked Line** -- Use for composition trends over time. Not when individual series values matter more than totals.
-- **Stacked Column** -- Use for composition at specific time points. Not for continuous time series.
 - **Pie** -- Use for simple share breakdowns with 2-6 segments. Not for more than 6 segments or precise comparisons.
 - **Table** -- Use when exact values or multiple dimensions are needed. Not for quick visual scanning.
 - **Metric** -- Use for a single KPI number (DAU, revenue, conversion rate). Not for trends or comparisons.
@@ -120,11 +136,11 @@ Quick-lookup reference for choosing the right chart type per report type, with w
 |---|---|---|
 | `insights-metric` | 3 or 4 | Pack 3-4 KPIs per row |
 | `line` | 6 or 12 | 6 for paired comparison, 12 for detail |
+| `line` + stacked | 12 | Composition needs space |
 | `bar` | 6 or 12 | 6 for paired, 12 for many categories |
-| `bar-stacked` | 12 | Needs full width for stacked segments |
+| `bar` + stacked | 12 | Needs full width for stacked segments |
 | `column` | 6 or 12 | Same as bar |
-| `stacked-line` | 12 | Composition needs space |
-| `stacked-column` | 12 | Composition needs space |
+| `column` + stacked | 12 | Composition needs space |
 | `pie` | 6 | Pair with related chart |
 | `table` | 12 | Always full width |
 | `funnel-steps` | 12 | Complex funnels need space |

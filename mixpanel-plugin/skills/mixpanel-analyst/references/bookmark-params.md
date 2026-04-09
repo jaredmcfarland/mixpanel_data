@@ -152,7 +152,7 @@ Not all SQL is expressible: no JOINs, no subqueries, no UNION. Formulas are the 
 
 ### Chart Types
 
-| chartType | Use case |
+| `chartType` | Use case |
 |---|---|
 | `bar` | Aggregate totals (single number per segment, deduplicated across date range) |
 | `line` | Time series (per-period values; NOT additive for unique counts) |
@@ -160,7 +160,12 @@ Not all SQL is expressible: no JOINs, no subqueries, no UNION. Formulas are the 
 | `pie` | Part-of-whole composition |
 | `column` | Vertical bar |
 | `insights-metric` | Single KPI number |
-| `bar-stacked` / `stacked-line` / `stacked-column` | Composition; plotStyle is set to `"stacked"` automatically |
+| `funnel-steps` | Standard funnel visualization |
+| `funnel-top-paths` | Alternative paths through funnel |
+| `retention-curve` | Classic retention decay curve |
+| `frequency-curve` | Frequency distribution |
+
+**Stacking:** To show composition, use a base chart type (`bar`, `line`, or `column`) with `"plotStyle": "stacked"` in `displayOptions`. Do NOT use `bar-stacked`, `stacked-line`, or `stacked-column` as `chartType` values — the API rejects them.
 
 ### Measurement Math
 

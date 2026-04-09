@@ -118,5 +118,42 @@ except Exception as e:
     print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')
 "
 
+# Cowork detection: check for bridge file
+if [ -d "/sessions" ] || [ -n "${CLAUDE_COWORK:-}" ]; then
+  echo ""
+  echo "Cowork environment detected."
+  BRIDGE_FOUND=""
+  for f in "$HOME/.claude/mixpanel/auth.json"; do
+    if [ -f "$f" ]; then
+      echo "✓ Auth bridge file found: $f"
+      "$python_cmd" -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as fh:
+        bridge = json.load(fh)
+    print(f'  Auth method: {bridge.get(\"auth_method\", \"unknown\")}')
+    print(f'  Region: {bridge.get(\"region\", \"unknown\")}')
+    print(f'  Project: {bridge.get(\"project_id\", \"unknown\")}')
+    ch = bridge.get('custom_header')
+    if ch:
+        print(f'  Custom header: {ch.get(\"name\", \"?\")} ✓')
+    oauth = bridge.get('oauth')
+    if oauth and oauth.get('expires_at'):
+        print(f'  Token expires: {oauth[\"expires_at\"]}')
+except Exception as e:
+    print(f'  Error reading bridge file: {e}')
+" "$f"
+      BRIDGE_FOUND=1
+      break
+    fi
+  done
+  if [ -z "$BRIDGE_FOUND" ]; then
+    echo "⚠ No auth bridge file found."
+    echo "  On your HOST machine, run:"
+    echo "    mp auth cowork-setup"
+    echo "  Then start a new Cowork session."
+  fi
+fi
+
 echo ""
 echo "=== Setup complete ==="

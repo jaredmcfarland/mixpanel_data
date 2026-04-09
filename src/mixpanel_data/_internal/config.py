@@ -16,6 +16,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from mixpanel_data._internal.auth.bridge import AuthBridgeFile
     from mixpanel_data._internal.auth_credential import ResolvedSession
 
 if sys.version_info >= (3, 11):
@@ -433,13 +434,14 @@ class ConfigManager:
         Resolution order when ``account`` is None:
 
         1. Environment variables (MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION)
-        2. OAuth tokens from local storage (if valid and not expired)
-        3. Default account from config file
+        2. Auth bridge file (MP_AUTH_FILE or ~/.claude/mixpanel/auth.json)
+        3. OAuth tokens from local storage (if valid and not expired)
+        4. Default account from config file
 
         Resolution order when ``account`` is provided:
 
         1. Environment variables (all four must be set)
-        2. Named account from config file (OAuth is skipped)
+        2. Named account from config file (bridge and OAuth are skipped)
 
         For OAuth resolution, the region and project_id are determined from:
         - ``MP_PROJECT_ID`` / ``MP_REGION`` env vars (partial env mode), or
@@ -468,12 +470,22 @@ class ConfigManager:
             print(creds.auth_method)  # AuthMethod.basic or AuthMethod.oauth
             ```
         """
+        # Apply custom headers from config [settings] section early —
+        # they should be available regardless of which resolution path succeeds.
+        self.apply_config_custom_header()
+
         # Priority 1: Environment variables (all four must be set)
         env_creds = self._resolve_from_env()
         if env_creds is not None:
             return env_creds
 
-        # Priority 2: OAuth tokens (only when no explicit account requested)
+        # Priority 2: Auth bridge file (only when no explicit account requested)
+        if account is None:
+            bridge_creds = self._resolve_from_bridge()
+            if bridge_creds is not None:
+                return bridge_creds
+
+        # Priority 3: OAuth tokens (only when no explicit account requested)
         if account is None:
             oauth_creds = self._resolve_from_oauth(
                 _oauth_storage_dir=_oauth_storage_dir,
@@ -481,7 +493,8 @@ class ConfigManager:
             if oauth_creds is not None:
                 return oauth_creds
 
-        # Priority 3 & 4: Config file (named account or default)
+        # Priority 4: Config file (named account or default)
+
         config = self._read_config()
         accounts = config.get("accounts", {})
 
@@ -605,6 +618,108 @@ class ConfigManager:
         # Use first account as fallback
         first_account = next(iter(accounts.values()))
         return first_account.get("region"), first_account.get("project_id")
+
+    def _load_and_refresh_bridge(self) -> AuthBridgeFile | None:
+        """Load, refresh, and apply custom headers from a bridge file.
+
+        Finds the bridge file, loads it, applies custom headers to env
+        vars, and refreshes expired OAuth tokens. Returns the ready-to-use
+        bridge model, or ``None`` if no valid bridge is found.
+
+        Bridge resolution is only attempted when:
+        - ``MP_AUTH_FILE`` environment variable is explicitly set, OR
+        - Running inside a Cowork VM (detected via ``detect_cowork()``)
+
+        This prevents host-side auth lockout after running
+        ``mp auth cowork-setup``, which writes a bridge file that would
+        otherwise shadow normal credential resolution.
+
+        Returns:
+            An ``AuthBridgeFile`` instance if a valid bridge file is found
+            and ready, ``None`` otherwise.
+        """
+        from mixpanel_data._internal.auth.bridge import (
+            apply_bridge_custom_header,
+            detect_cowork,
+            find_bridge_file,
+            load_bridge_file,
+            refresh_bridge_token,
+        )
+
+        # Only consult bridge files when explicitly requested (MP_AUTH_FILE)
+        # or when running inside a Cowork VM.  On the host, bridge files
+        # written by cowork-setup must not shadow normal auth resolution.
+        if not os.environ.get("MP_AUTH_FILE") and not detect_cowork():
+            return None
+
+        path = find_bridge_file()
+        if path is None:
+            return None
+
+        bridge = load_bridge_file(path)
+        if bridge is None:
+            return None
+
+        # Apply custom headers to env vars
+        apply_bridge_custom_header(bridge)
+
+        # Refresh expired OAuth tokens
+        if (
+            bridge.auth_method == "oauth"
+            and bridge.oauth is not None
+            and bridge.oauth.is_expired()
+        ):
+            try:
+                bridge = refresh_bridge_token(bridge, path)
+            except Exception as exc:
+                if type(exc).__name__ == "OAuthError":
+                    logger.warning("Bridge token refresh failed: %s", exc)
+                else:
+                    logger.warning(
+                        "Bridge token refresh failed (%s): %s. "
+                        "Falling back to other auth methods.",
+                        type(exc).__name__,
+                        exc,
+                    )
+                return None
+
+        return bridge
+
+    def _resolve_from_bridge(self) -> Credentials | None:
+        """Attempt to resolve credentials from an auth bridge file.
+
+        Loads the bridge file from ``MP_AUTH_FILE`` env var or the
+        default location (``~/.claude/mixpanel/auth.json``). If the
+        bridge contains an expired OAuth token, attempts to refresh it.
+
+        Also applies custom headers from the bridge file to env vars.
+
+        Returns:
+            Credentials if a valid bridge file is found, None otherwise.
+        """
+        bridge = self._load_and_refresh_bridge()
+        if bridge is None:
+            return None
+        from mixpanel_data._internal.auth.bridge import bridge_to_credentials
+
+        return bridge_to_credentials(bridge)
+
+    def _resolve_session_from_bridge(self) -> ResolvedSession | None:
+        """Attempt to resolve a session from an auth bridge file.
+
+        Loads the bridge file and converts it to a ``ResolvedSession``.
+        If the bridge contains an expired OAuth token, attempts to
+        refresh it. Also applies custom headers.
+
+        Returns:
+            ResolvedSession if a valid bridge file is found, None otherwise.
+        """
+        bridge = self._load_and_refresh_bridge()
+        if bridge is None:
+            return None
+        from mixpanel_data._internal.auth.bridge import bridge_to_resolved_session
+
+        return bridge_to_resolved_session(bridge)
 
     def _resolve_from_env(self) -> Credentials | None:
         """Attempt to resolve credentials from environment variables.
@@ -790,6 +905,59 @@ class ConfigManager:
         """
         config = self._read_config()
         return int(config.get("config_version", 1))
+
+    def get_custom_header(self) -> tuple[str, str] | None:
+        """Return custom header from config ``[settings]`` section.
+
+        Looks for ``custom_header_name`` and ``custom_header_value``
+        keys in the ``[settings]`` table. Both must be present and
+        non-empty to return a result.
+
+        Returns:
+            Tuple of ``(name, value)`` if both are configured,
+            ``None`` otherwise.
+
+        Example:
+            ```python
+            cm = ConfigManager()
+            header = cm.get_custom_header()
+            if header:
+                name, value = header
+            ```
+        """
+        config = self._read_config()
+        settings = config.get("settings", {})
+        if not isinstance(settings, dict):
+            return None
+        name = settings.get("custom_header_name")
+        value = settings.get("custom_header_value")
+        if name and value and isinstance(name, str) and isinstance(value, str):
+            return (name, value)
+        return None
+
+    def apply_config_custom_header(self) -> None:
+        """Apply custom header from config to env vars.
+
+        Sets ``MP_CUSTOM_HEADER_NAME`` and ``MP_CUSTOM_HEADER_VALUE``
+        if the config ``[settings]`` section has both values and the
+        env vars are not already set.
+
+        This allows the existing ``MixpanelAPIClient._ensure_client()``
+        to pick up custom headers from config.toml.
+        """
+        if os.environ.get("MP_CUSTOM_HEADER_NAME") and os.environ.get(
+            "MP_CUSTOM_HEADER_VALUE"
+        ):
+            return
+
+        header = self.get_custom_header()
+        if header is None:
+            return
+
+        name, value = header
+        os.environ["MP_CUSTOM_HEADER_NAME"] = name
+        os.environ["MP_CUSTOM_HEADER_VALUE"] = value
+        logger.debug("Applied custom header from config: %s", name)
 
     def _write_config_atomic(self, config: dict[str, Any]) -> None:
         """Write config atomically via temp file + os.replace().
@@ -1259,10 +1427,11 @@ class ConfigManager:
 
         Priority order:
         1. ENV VARS (MP_USERNAME + MP_SECRET + MP_PROJECT_ID + MP_REGION)
-        2. EXPLICIT PARAMS (credential + project_id + workspace_id)
-        3. ACTIVE CONTEXT (config [active] section)
-        4. OAUTH FALLBACK (valid token + active.project_id)
-        5. FIRST AVAILABLE (first credential + first known project)
+        2. AUTH BRIDGE FILE (MP_AUTH_FILE or ~/.claude/mixpanel/auth.json)
+        3. EXPLICIT PARAMS (credential + project_id + workspace_id)
+        4. ACTIVE CONTEXT (config [active] section)
+        5. OAUTH FALLBACK (valid token + active.project_id)
+        6. FIRST AVAILABLE (first credential + first known project)
 
         Works with both v1 and v2 configs.
 
@@ -1285,10 +1454,36 @@ class ConfigManager:
             # session.project_id, session.auth_header(), session.region
             ```
         """
+        # Apply custom headers from config [settings] section early —
+        # they should be available regardless of which resolution path succeeds.
+        self.apply_config_custom_header()
+
         # Priority 1: Environment variables
         env_creds = self._resolve_from_env()
         if env_creds is not None:
             return env_creds.to_resolved_session()
+
+        # Priority 2: Auth bridge file (only when no explicit credential requested)
+        if credential is None:
+            bridge_session = self._resolve_session_from_bridge()
+            if bridge_session is not None:
+                # Apply overrides if provided
+                if project_id is not None or workspace_id is not None:
+                    from mixpanel_data._internal.auth_credential import (
+                        ProjectContext,
+                        ResolvedSession,
+                    )
+
+                    bridge_session = ResolvedSession(
+                        auth=bridge_session.auth,
+                        project=ProjectContext(
+                            project_id=project_id or bridge_session.project_id,
+                            workspace_id=workspace_id
+                            if workspace_id is not None
+                            else bridge_session.workspace_id,
+                        ),
+                    )
+                return bridge_session
 
         config = self._read_config()
         version = int(config.get("config_version", 1))
@@ -1344,7 +1539,7 @@ class ConfigManager:
         session = creds.to_resolved_session()
 
         # Apply overrides
-        if project_id or workspace_id:
+        if project_id is not None or workspace_id is not None:
             from mixpanel_data._internal.auth_credential import (
                 ProjectContext,
                 ResolvedSession,

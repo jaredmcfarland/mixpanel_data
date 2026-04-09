@@ -25,7 +25,7 @@
 | `line` | Time-series line chart. |
 | `bar` | Categorical bar chart. |
 | `table` | Data table with sortable columns. |
-| `stacked-line` | Stacked area/line chart for composition over time. |
+| `line` + `plotStyle: stacked` | Stacked area/line chart for composition over time. |
 | `funnel-steps` | Funnel visualization showing step-by-step conversion. |
 | `retention-curve` | Retention curve or cohort grid. |
 | `sankey` | Sankey/flow diagram showing user paths. |
@@ -574,7 +574,7 @@ Templates use curly-brace placeholders for event names. The agent replaces these
 | 2 | KPI: Best Channel | w=3 | h=336 | insights-metric |
 | 2 | KPI: Avg Conversion Rate | w=3 | h=336 | insights-metric |
 | 3 | Section header: Channel Trends | w=12 | h=0 | text |
-| 4 | Signups by channel over time | w=12 | h=500 | stacked-line |
+| 4 | Signups by channel over time | w=12 | h=500 | line (plotStyle: stacked) |
 | 5 | Section header: Channel Quality | w=12 | h=0 | text |
 | 6 | Channel conversion funnel | w=12 | h=588 | funnel-steps |
 | 7 | Section header: Channel Retention | w=12 | h=0 | text |

@@ -1,6 +1,6 @@
 {
   "name": "mixpanel-data",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Turn Claude into a senior data analyst and Mixpanel product analytics expert. CodeMode-first: Claude writes Python using mixpanel_data's 4 typed query engines (insights, funnels, retention, flows) plus pandas, networkx, and anytree for sophisticated multi-engine analysis.",
   "author": {
     "name": "Jared McFarland",

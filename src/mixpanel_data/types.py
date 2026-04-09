@@ -6770,13 +6770,12 @@ class EventDeletionRequest(BaseModel):
         v: dict[str, Any] | list[Any] | None,
     ) -> dict[str, Any] | None:
         """Coerce empty list from API to None."""
-        if isinstance(v, list) and len(v) == 0:
+        if not isinstance(v, list):
+            return v
+        if len(v) == 0:
             return None
-        if isinstance(v, list):
-            # Non-empty list is unexpected; preserve as-is would fail type.
-            # Wrap in dict for forward compatibility.
-            return {"items": v}
-        return v
+        # Non-empty list is unexpected; wrap in dict for forward compatibility.
+        return {"items": v}
 
     status: str
     """Request status: "Submitted", "Processing", "Completed", "Failed"."""
