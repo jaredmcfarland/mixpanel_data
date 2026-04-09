@@ -774,6 +774,13 @@ def cowork_setup(
     )
     write_bridge_file(bridge, bridge_path)
 
+    # Also write flat file at ~/.claude/mixpanel_auth.json
+    # In Cowork, subdirectories created after mount may not be visible,
+    # but files in the root of ~/.claude/ are.
+    flat_path = bridge_path.parent.parent / "mixpanel_auth.json"
+    with contextlib.suppress(OSError):
+        write_bridge_file(bridge, flat_path)
+
     # Test credentials with a lightweight API call
     test_ok = False
     try:
