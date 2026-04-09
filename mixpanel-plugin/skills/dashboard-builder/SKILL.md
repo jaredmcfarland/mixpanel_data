@@ -89,23 +89,88 @@ Present a proposed structure to the user before building. Choose a template from
 
 A plan should include:
 
-1. **Dashboard title and description** (title max 255 chars, description max 400 chars)
-2. **Sections** with header text cards describing each group of reports
-3. **Reports per section** with chart type, events, breakdowns, and time range
-4. **Grid layout** — which items share a row (items in the same `DashboardRow` are side-by-side)
+1. **Dashboard title and description**
+2. **Sections** with header text cards
+3. **Reports per section** with chart type and events
+4. **Grid layout** — which items share a row
 
-Example plan:
+#### Dashboard Title and Description
+
+- **Title** (max 255 chars): Concise, descriptive. State what the dashboard monitors.
+  - Good: "AARRR Product Health Dashboard", "Q1 Signup Funnel Analysis", "Feature Launch: AI Chat"
+  - Bad: "Dashboard", "Metrics", "My Board"
+- **Description** (max 400 chars): One sentence explaining the dashboard's purpose and time scope.
+  - Good: "Full-funnel product health metrics across Acquisition, Activation, Retention, Revenue, and Engagement. Last 90 days."
+  - Bad: "Some metrics" or left empty
+
+#### Report Titles and Descriptions
+
+- **Report title** (max 255 chars): 3-8 words, Title Case. Describe what the chart measures.
+  - Good: "Daily Active Users (90d)", "Signup Conversion Funnel", "New User Weekly Retention"
+  - Bad: "Login Event Count", "Funnel", "Untitled Report"
+- **Report description** (optional): One sentence explaining what to look for in this chart.
+  - Good: "DAU segmented by platform. Watch for weekend dips and platform-specific trends."
+
+#### The 12-Column Grid Layout
+
+Mixpanel dashboards use a **12-column grid**. Items in the same `DashboardRow` share the row and have their widths auto-distributed:
+
+| Items in row | Auto width each | Layout |
+|---|---|---|
+| 1 item | 12 (full width) | Single chart or text card spanning the row |
+| 2 items | 6 + 6 | Side-by-side comparison |
+| 3 items | 4 + 4 + 4 | Three KPIs or related metrics |
+| 4 items | 3 + 3 + 3 + 3 | Four KPI cards |
+
+**Constraints:** Max 4 items per row. Max 30 rows per dashboard.
+
+**What goes full width (1 per row):** Funnels with 3+ steps, retention curves, Sankey flows, data tables, text card section headers.
+
+**What goes side-by-side (2 per row):** Paired comparisons (trend vs trend, control vs variant), related line/bar charts.
+
+**What packs 3-4 per row:** KPI metric cards (`insights-metric` chart type).
+
+#### Text Cards: Section Structure
+
+Text cards use **HTML** (not markdown). They provide narrative structure.
+
+**Every dashboard MUST have:**
+- **Row 1: Intro text card** — explains the dashboard's purpose, data scope, and key definitions
+- **Section headers** before each group of reports — 2-4 word title + one sentence description
+
+**Allowed HTML tags:** `<h1>`, `<h2>`, `<h3>`, `<p>`, `<strong>`, `<em>`, `<u>`, `<s>`, `<mark>`, `<code>`, `<blockquote>`, `<hr>`, `<br>`, `<ul>`, `<ol>`, `<li>`, `<a href="...">`
+
+**Forbidden tags (stripped by server):** `<div>`, `<span>`, `<b>` (use `<strong>`), `<i>` (use `<em>`), `<img>`, `<table>`
+
+**Critical:** Strip all `\n` newlines from HTML before sending. Each HTML element renders as its own line. Newlines cause Mixpanel's TipTap editor to mangle the content.
+
+**Patterns:**
+```
+Intro:        <h2>Dashboard Title</h2><p>What this dashboard shows and why. Time period: last 90 days.</p>
+Section:      <h2>Acquisition</h2><p>How users discover and sign up for the product.</p>
+Explainer:    <p>^ Signup conversion is <strong>23.4%</strong>, up 2.1pp from last month.</p>
+Methodology:  <p><em>Methodology:</em> DAU = unique users with any event per day.</p>
+Takeaway:     <h3>Key Takeaway</h3><p>Retention stabilizes at <strong>Day 7</strong> (~18%).</p>
+```
+
+**Prefer `<h2>` over `<h1>` for section headers. Use `<br>` sparingly — prefer separate `<p>` elements.**
+
+#### Example Plan
 
 ```
-"Product Health Dashboard"
-  Row 1:  [Intro text card]                              → 1 item, full width
-  Row 2:  [KPI: DAU] [KPI: WAU] [KPI: Signups]          → 3 items, auto w=4 each
-  Row 3:  [Text: "Growth Trends"]                        → 1 item, full width
-  Row 4:  [DAU Trend line] [Signup Trend line]            → 2 items, auto w=6 each
-  Row 5:  [Text: "Conversion"]                           → 1 item, full width
-  Row 6:  [Signup Funnel]                                → 1 item, full width
-  Row 7:  [Text: "Retention"]                            → 1 item, full width
-  Row 8:  [Retention Curve]                              → 1 item, full width
+"AARRR Product Health Dashboard"
+"Full-funnel metrics across Acquisition, Activation, Retention, Revenue, and Engagement. Last 90 days."
+
+  Row 1:  [Intro text card]                                    → full width
+  Row 2:  [KPI: DAU] [KPI: Signups] [KPI: Purchases]          → 3 KPIs, w=4 each
+  Row 3:  [Text: "Acquisition"]                                → section header
+  Row 4:  [Signup Trend line] [Signups by Source bar]           → paired, w=6 each
+  Row 5:  [Text: "Activation"]                                 → section header
+  Row 6:  [Activation Funnel]                                  → full width (3+ steps)
+  Row 7:  [Text: "Retention"]                                  → section header
+  Row 8:  [Retention Curve]                                    → full width
+  Row 9:  [Text: "Revenue"]                                    → section header
+  Row 10: [Purchase Trend] [Purchase Funnel]                    → paired, w=6 each
 ```
 
 ### Phase 3: Query Reports
@@ -276,27 +341,6 @@ ws.update_dashboard(dashboard.id, UpdateDashboardParams(
 - Pin if it should appear at the top for all users: `ws.pin_dashboard(dashboard.id)`
 - Favorite if it is a personal reference: `ws.favorite_dashboard(dashboard.id)`
 - Verify: open the dashboard and confirm all reports render with data, text cards display correctly, and layout matches the plan
-
-## Text Card Quick Reference
-
-Text cards use a restricted subset of HTML. Full reference in `references/dashboard-reference.md`.
-
-**Allowed tags:** `<h1>`, `<h2>`, `<h3>`, `<p>`, `<strong>`, `<em>`, `<u>`, `<s>`, `<mark>`, `<code>`, `<blockquote>`, `<hr>`, `<br>`, `<ul>`, `<ol>`, `<li>`, `<a>`
-
-**Allowed but discouraged:** `<h1>` — prefer `<h2>` for section headers. `<br>` — prefer separate `<p>` elements.
-
-**Forbidden tags:** `<div>`, `<span>`, `<b>`, `<i>`, `<img>`, `<table>`
-
-**Critical rule:** Strip all `\n` newlines from markdown strings before sending. Each HTML element renders as its own line. Newlines in the string cause Mixpanel's TipTap editor to mangle the HTML.
-
-**Common patterns:**
-
-```html
-Section header:   <h2>Section Title</h2><p>One sentence description.</p>
-Explainer:        <p>^ Brief data-driven insight about chart above.</p>
-Methodology:      <p><em>Methodology:</em> How this metric is calculated.</p>
-Key takeaway:     <h3>Key Takeaway</h3><p>One-sentence finding with <strong>bold numbers</strong>.</p>
-```
 
 ## Critical Gotchas
 

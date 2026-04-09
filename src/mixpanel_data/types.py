@@ -2547,11 +2547,16 @@ class DashboardRowContent(BaseModel):
     """A single content item within a dashboard row.
 
     Attributes:
-        content_type: Type of content (``"text"`` or ``"report"``).
-        content_params: Parameters for the content. For text cards, a dict
-            with ``"markdown"`` key. For reports, a dict with ``"bookmark"``
-            key containing ``name``, ``type``, ``params`` (JSON string), and
-            optional ``description``.
+        content_type: Type of content — ``"text"``, ``"report"``, or
+            ``"media"``.
+        content_params: Parameters for the content. Shape depends on
+            ``content_type``:
+
+            - **text**: ``{"markdown": "<h2>Title</h2><p>Description</p>"}``
+            - **report**: ``{"bookmark": {"name": "...", "type": "insights",
+              "params": json.dumps(result.params)}}``
+            - **media**: ``{"media_type": "image", "path": "https://...",
+              "service": "url"}``
 
     Example:
         ```python
@@ -2572,11 +2577,21 @@ class DashboardRowContent(BaseModel):
                 }
             },
         )
+
+        # Media card (image or video)
+        DashboardRowContent(
+            content_type="media",
+            content_params={
+                "media_type": "image",
+                "path": "https://example.com/chart.png",
+                "service": "url",
+            },
+        )
         ```
     """
 
-    content_type: Literal["text", "report"]
-    """Type of content: ``"text"`` for text cards, ``"report"`` for reports."""
+    content_type: Literal["text", "report", "media"]
+    """Type of content: ``"text"``, ``"report"``, or ``"media"``."""
 
     content_params: dict[str, Any]
     """Content parameters. Shape depends on ``content_type``."""
