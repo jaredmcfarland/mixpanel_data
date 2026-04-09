@@ -309,6 +309,25 @@ class TestFindBridgeFile:
             result = find_bridge_file()
             assert result == auth_file
 
+    def test_cowork_mount_path(self, tmp_path: Path) -> None:
+        """Test finding bridge file at ~/mnt/.claude/mixpanel/auth.json."""
+        mnt_dir = tmp_path / "mnt" / ".claude" / "mixpanel"
+        mnt_dir.mkdir(parents=True)
+        auth_file = mnt_dir / "auth.json"
+        auth_file.write_text("{}")
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch(
+                "mixpanel_data._internal.auth.bridge._default_bridge_path",
+                return_value=tmp_path / "nonexistent" / "auth.json",
+            ),
+            patch("pathlib.Path.home", return_value=tmp_path),
+        ):
+            os.environ.pop("MP_AUTH_FILE", None)
+            result = find_bridge_file()
+            assert result == auth_file
+
     def test_no_bridge_file_returns_none(self) -> None:
         """Test returns None when no bridge file exists."""
         with (
@@ -367,10 +386,18 @@ class TestLoadBridgeFile:
         result = load_bridge_file(Path("/nonexistent/auth.json"))
         assert result is None
 
-    def test_load_none_path_returns_none(self) -> None:
-        """Test loading with None path returns None."""
-        result = load_bridge_file(None)
-        assert result is None
+    def test_load_none_path_returns_none(self, tmp_path: Path) -> None:
+        """Test loading with None path and no bridge file returns None."""
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch(
+                "mixpanel_data._internal.auth.bridge._default_bridge_path",
+                return_value=tmp_path / "nonexistent" / "auth.json",
+            ),
+            patch("pathlib.Path.home", return_value=tmp_path),
+        ):
+            result = load_bridge_file(None)
+            assert result is None
 
     def test_load_invalid_json_returns_none(self, tmp_path: Path) -> None:
         """Test loading invalid JSON returns None."""
