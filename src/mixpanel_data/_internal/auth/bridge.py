@@ -390,11 +390,13 @@ def write_bridge_file(bridge: AuthBridgeFile, path: Path) -> None:
         write_bridge_file(bridge, Path.home() / ".claude/mixpanel/auth.json")
         ```
     """
+    dir_existed = path.parent.exists()
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(path.parent, stat.S_IRWXU)  # 0o700
-    except OSError:
-        logger.debug("Could not set directory permissions on %s", path.parent)
+    if not dir_existed:
+        try:
+            os.chmod(path.parent, stat.S_IRWXU)  # 0o700
+        except OSError:
+            logger.warning("Could not set directory permissions on %s", path.parent)
 
     data = bridge_to_json_dict(bridge)
     raw = json.dumps(data, indent=2, default=str)
@@ -402,7 +404,7 @@ def write_bridge_file(bridge: AuthBridgeFile, path: Path) -> None:
     try:
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
     except OSError:
-        logger.debug("Could not set file permissions on %s", path)
+        logger.warning("Could not set file permissions on %s", path)
 
 
 def bridge_to_json_dict(bridge: AuthBridgeFile) -> dict[str, Any]:
@@ -510,6 +512,10 @@ def bridge_to_resolved_session(bridge: AuthBridgeFile) -> ResolvedSession:
     Returns:
         ResolvedSession with auth and project context.
 
+    Raises:
+        ValueError: If auth_method is ``"oauth"`` but no OAuth data
+            is present, or ``"service_account"`` but no SA data.
+
     Example:
         ```python
         bridge = load_bridge_file()
@@ -571,9 +577,7 @@ def apply_bridge_custom_header(bridge: AuthBridgeFile) -> None:
     if os.environ.get("MP_CUSTOM_HEADER_NAME") and os.environ.get(
         "MP_CUSTOM_HEADER_VALUE"
     ):
-        logger.debug(
-            "MP_CUSTOM_HEADER_* env vars already set, skipping bridge custom header"
-        )
+        logger.debug("MP_CUSTOM_HEADER_* already set, skipping bridge custom header")
         return
 
     os.environ["MP_CUSTOM_HEADER_NAME"] = bridge.custom_header.name

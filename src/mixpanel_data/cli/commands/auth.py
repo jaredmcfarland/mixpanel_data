@@ -11,13 +11,17 @@ This module provides commands for managing Mixpanel accounts:
 - logout: Remove OAuth tokens
 - status: Show OAuth auth state
 - token: Output raw access token
+- migrate: Migrate v1 config to v2 format
+- cowork-setup: Export credentials for Cowork VMs
+- cowork-teardown: Remove Cowork bridge files
+- cowork-status: Show Cowork bridge status
 """
 
 from __future__ import annotations
 
 import os
 import sys
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 
@@ -682,6 +686,7 @@ def cowork_setup(
         mp auth cowork-setup --credential demo-sa --project-id 12345
         mp auth cowork-setup --workspace-id 3448413
     """
+    import contextlib
     from pathlib import Path as _Path
 
     from pydantic import SecretStr
@@ -696,7 +701,9 @@ def cowork_setup(
         write_bridge_file,
     )
     from mixpanel_data._internal.auth.storage import OAuthStorage
-    from mixpanel_data._internal.config import AuthMethod as _AuthMethod
+    from mixpanel_data._internal.auth_credential import (
+        CredentialType as _CredentialType,
+    )
 
     config = get_config(ctx)
     if dir is not None:
@@ -704,21 +711,26 @@ def cowork_setup(
     else:
         bridge_path = default_bridge_path()
 
-    # Resolve credentials via the standard priority chain
-    creds = config.resolve_credentials(account=credential)
-
-    # Determine workspace_id from env or config if not explicitly provided
+    # Determine workspace_id override: explicit flag > MP_WORKSPACE_ID env var
     resolved_workspace_id = workspace_id
     if resolved_workspace_id is None:
         env_ws = os.environ.get("MP_WORKSPACE_ID")
         if env_ws:
-            import contextlib
-
             with contextlib.suppress(ValueError):
                 resolved_workspace_id = int(env_ws)
 
-    # Override project_id if explicitly provided
-    resolved_project_id = project_id or creds.project_id
+    # Resolve a full session via the v2 priority chain.
+    # This picks up workspace_id from the active context when no
+    # explicit override is provided, fixing the gap where
+    # resolve_credentials() couldn't carry workspace_id.
+    session = config.resolve_session(
+        credential=credential,
+        project_id=project_id,
+        workspace_id=resolved_workspace_id,
+    )
+
+    resolved_project_id = session.project_id
+    resolved_workspace_id = session.workspace_id
 
     # Gather custom header from env vars or config [settings]
     custom_header: BridgeCustomHeader | None = None
@@ -741,13 +753,13 @@ def cowork_setup(
     # Build auth-method-specific sections
     oauth_section: BridgeOAuth | None = None
     sa_section: BridgeServiceAccount | None = None
-    auth_method_str: str
+    auth_method_str: Literal["oauth", "service_account"]
 
-    if creds.auth_method == _AuthMethod.oauth:
+    if session.auth.type == _CredentialType.oauth:
         auth_method_str = "oauth"
         # Load full token data from OAuthStorage for refresh capability
         storage = OAuthStorage()
-        region = creds.region
+        region = session.region
         tokens = storage.load_tokens(region)
         if tokens is None:
             err_console.print(
@@ -778,16 +790,18 @@ def cowork_setup(
         )
     else:
         auth_method_str = "service_account"
+        assert session.auth.username is not None
+        assert session.auth.secret is not None
         sa_section = BridgeServiceAccount(
-            username=creds.username,
-            secret=SecretStr(creds.secret.get_secret_value()),
+            username=session.auth.username,
+            secret=SecretStr(session.auth.secret.get_secret_value()),
         )
 
     # Build and write the bridge file
     bridge = AuthBridgeFile(
         version=1,
         auth_method=auth_method_str,
-        region=creds.region,
+        region=session.region,
         project_id=resolved_project_id,
         workspace_id=resolved_workspace_id,
         custom_header=custom_header,
@@ -798,31 +812,31 @@ def cowork_setup(
 
     # When using default path, also write flat file at ~/.claude/mixpanel_auth.json
     if dir is None:
-        import contextlib as _contextlib
-
         flat_path = bridge_path.parent.parent / FLAT_BRIDGE_FILENAME
-        with _contextlib.suppress(OSError):
+        with contextlib.suppress(OSError):
             write_bridge_file(bridge, flat_path)
 
     # Test credentials with a lightweight API call
     test_ok = False
+    test_error: str | None = None
     try:
         from mixpanel_data.workspace import Workspace
 
         test_result = Workspace.test_credentials(credential)
         test_ok = bool(test_result.get("success", False))
-    except Exception:
-        pass
+    except Exception as exc:
+        test_error = f"{type(exc).__name__}: {exc}"
 
     data: dict[str, object] = {
         "status": "cowork_setup_complete",
         "bridge_path": str(bridge_path),
         "auth_method": auth_method_str,
-        "region": creds.region,
+        "region": session.region,
         "project_id": resolved_project_id,
         "workspace_id": resolved_workspace_id,
         "has_custom_header": custom_header is not None,
         "credentials_valid": test_ok,
+        "test_error": test_error,
     }
     output_result(ctx, data, format=format)
 
@@ -831,19 +845,31 @@ def cowork_setup(
 @handle_errors
 def cowork_teardown(
     ctx: typer.Context,
+    dir: Annotated[
+        str | None,
+        typer.Option(
+            "--dir",
+            help="Also remove bridge file from this directory (matching cowork-setup --dir).",
+        ),
+    ] = None,
     format: FormatOption = "json",
 ) -> None:
     """Remove the Cowork auth bridge file(s).
 
     Deletes ``~/.claude/mixpanel/auth.json`` and the flat alternative
-    ``~/.claude/mixpanel_auth.json`` if they exist. This revokes
+    ``~/.claude/mixpanel_auth.json`` if they exist. If ``--dir`` is
+    provided, also removes the bridge file from that directory
+    (matching the ``--dir`` used in ``cowork-setup``). This revokes
     Cowork VM access to Mixpanel credentials exported by
     ``cowork-setup``.
 
     Examples:
 
         mp auth cowork-teardown
+        mp auth cowork-teardown --dir /path/to/workspace
     """
+    from pathlib import Path as _Path
+
     from mixpanel_data._internal.auth.bridge import (
         FLAT_BRIDGE_FILENAME,
         default_bridge_path,
@@ -852,11 +878,20 @@ def cowork_teardown(
     bridge_path = default_bridge_path()
     flat_path = bridge_path.parent.parent / FLAT_BRIDGE_FILENAME
 
+    paths_to_check: list[_Path] = [bridge_path, flat_path]
+    if dir is not None:
+        paths_to_check.append(_Path(dir) / FLAT_BRIDGE_FILENAME)
+
     removed_paths: list[str] = []
-    for p in [bridge_path, flat_path]:
+    for p in paths_to_check:
         if p.is_file():
-            p.unlink()
-            removed_paths.append(str(p))
+            try:
+                p.unlink()
+                removed_paths.append(str(p))
+            except OSError as exc:
+                err_console.print(
+                    f"[yellow]Warning:[/yellow] Could not remove {p}: {exc}"
+                )
 
     if removed_paths:
         output_result(

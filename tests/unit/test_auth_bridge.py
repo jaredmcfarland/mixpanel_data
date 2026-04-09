@@ -410,8 +410,8 @@ class TestWriteBridgeFile:
         assert loaded["auth_method"] == "oauth"
         assert loaded["project_id"] == "12345"
 
-    def test_write_sets_directory_permissions(self, tmp_path: Path) -> None:
-        """Test that directory permissions are set to 0o700."""
+    def test_write_sets_directory_permissions_on_new_dir(self, tmp_path: Path) -> None:
+        """Test that directory permissions are set to 0o700 for newly created dirs."""
         bridge = _make_oauth_bridge()
         bridge_dir = tmp_path / "mixpanel"
         bridge_file = bridge_dir / "auth.json"
@@ -420,6 +420,21 @@ class TestWriteBridgeFile:
 
         dir_mode = bridge_dir.stat().st_mode & 0o777
         assert dir_mode == 0o700
+
+    def test_write_preserves_existing_directory_permissions(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that existing directory permissions are not changed."""
+        bridge = _make_oauth_bridge()
+        # Create directory with broader permissions before writing
+        existing_dir = tmp_path / "workspace"
+        existing_dir.mkdir(mode=0o755)
+        bridge_file = existing_dir / "mixpanel_auth.json"
+
+        write_bridge_file(bridge, bridge_file)
+
+        dir_mode = existing_dir.stat().st_mode & 0o777
+        assert dir_mode == 0o755  # Permissions unchanged
 
     def test_write_sets_file_permissions(self, tmp_path: Path) -> None:
         """Test that file permissions are set to 0o600."""

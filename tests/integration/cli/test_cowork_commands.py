@@ -17,8 +17,15 @@ from mixpanel_data._internal.auth.bridge import (
     BridgeServiceAccount,
 )
 from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth_credential import (
+    AuthCredential,
+    CredentialType,
+    ProjectContext,
+    ResolvedSession,
+)
 from mixpanel_data.cli.main import app
+
+# ruff: noqa: ARG001
 
 # Patch targets — lazy imports inside function bodies resolve from source module
 _BRIDGE_MOD = "mixpanel_data._internal.auth.bridge"
@@ -45,35 +52,39 @@ def mock_config_manager() -> MagicMock:
 
 
 @pytest.fixture
-def sa_credentials() -> Credentials:
-    """Create service account credentials for testing.
+def sa_session() -> ResolvedSession:
+    """Create a resolved session with service account auth for testing.
 
     Returns:
-        Credentials configured with basic auth method.
+        ResolvedSession with service account credentials.
     """
-    return Credentials(
-        username="sa-user",
-        secret=SecretStr("sa-secret"),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.basic,
+    return ResolvedSession(
+        auth=AuthCredential(
+            name="sa-user",
+            type=CredentialType.service_account,
+            region="us",
+            username="sa-user",
+            secret=SecretStr("sa-secret"),
+        ),
+        project=ProjectContext(project_id="12345"),
     )
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
-    """Create OAuth credentials for testing.
+def oauth_session() -> ResolvedSession:
+    """Create a resolved session with OAuth auth for testing.
 
     Returns:
-        Credentials configured with OAuth auth method.
+        ResolvedSession with OAuth credentials.
     """
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-access-token"),
+    return ResolvedSession(
+        auth=AuthCredential(
+            name="oauth-user",
+            type=CredentialType.oauth,
+            region="us",
+            oauth_access_token=SecretStr("test-access-token"),
+        ),
+        project=ProjectContext(project_id="12345"),
     )
 
 
@@ -130,11 +141,11 @@ class TestCoworkSetup:
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        sa_credentials: Credentials,
+        sa_session: ResolvedSession,
         bridge_path: Path,
     ) -> None:
         """Test cowork-setup with service account credentials."""
-        mock_config_manager.resolve_credentials.return_value = sa_credentials
+        mock_config_manager.resolve_session.return_value = sa_session
 
         with (
             patch(
@@ -165,13 +176,13 @@ class TestCoworkSetup:
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        oauth_credentials: Credentials,
+        oauth_session: ResolvedSession,
         mock_oauth_tokens: OAuthTokens,
         mock_client_info: OAuthClientInfo,
         bridge_path: Path,
     ) -> None:
         """Test cowork-setup with OAuth credentials."""
-        mock_config_manager.resolve_credentials.return_value = oauth_credentials
+        mock_config_manager.resolve_session.return_value = oauth_session
 
         mock_storage = MagicMock()
         mock_storage.load_tokens.return_value = mock_oauth_tokens
@@ -209,11 +220,16 @@ class TestCoworkSetup:
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        sa_credentials: Credentials,
+        sa_session: ResolvedSession,
         bridge_path: Path,
     ) -> None:
         """Test cowork-setup with explicit --project-id override."""
-        mock_config_manager.resolve_credentials.return_value = sa_credentials
+        # resolve_session receives project_id and returns session with it
+        overridden = ResolvedSession(
+            auth=sa_session.auth,
+            project=ProjectContext(project_id="99999"),
+        )
+        mock_config_manager.resolve_session.return_value = overridden
 
         with (
             patch(
@@ -241,11 +257,15 @@ class TestCoworkSetup:
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        sa_credentials: Credentials,
+        sa_session: ResolvedSession,
         bridge_path: Path,
     ) -> None:
         """Test cowork-setup with explicit --workspace-id."""
-        mock_config_manager.resolve_credentials.return_value = sa_credentials
+        overridden = ResolvedSession(
+            auth=sa_session.auth,
+            project=ProjectContext(project_id="12345", workspace_id=3448413),
+        )
+        mock_config_manager.resolve_session.return_value = overridden
 
         with (
             patch(
@@ -269,16 +289,56 @@ class TestCoworkSetup:
         data = json.loads(result.stdout)
         assert data["workspace_id"] == 3448413
 
+    def test_setup_workspace_id_from_active_context(
+        self,
+        cli_runner: CliRunner,
+        mock_config_manager: MagicMock,
+        bridge_path: Path,
+    ) -> None:
+        """Test cowork-setup picks up workspace_id from active context via resolve_session."""
+        session_with_ws = ResolvedSession(
+            auth=AuthCredential(
+                name="sa-user",
+                type=CredentialType.service_account,
+                region="us",
+                username="sa-user",
+                secret=SecretStr("sa-secret"),
+            ),
+            project=ProjectContext(project_id="12345", workspace_id=7777),
+        )
+        mock_config_manager.resolve_session.return_value = session_with_ws
+
+        with (
+            patch(
+                f"{_AUTH_CMD_MOD}.get_config",
+                return_value=mock_config_manager,
+            ),
+            patch(
+                f"{_BRIDGE_MOD}.default_bridge_path",
+                return_value=bridge_path,
+            ),
+            patch(
+                "mixpanel_data.workspace.Workspace.test_credentials",
+                return_value={"success": True},
+            ),
+        ):
+            # No --workspace-id flag — should come from session
+            result = cli_runner.invoke(app, ["auth", "cowork-setup"])
+
+        assert result.exit_code == 0, f"stderr: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["workspace_id"] == 7777
+
     def test_setup_with_custom_header_from_env(
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        sa_credentials: Credentials,
+        sa_session: ResolvedSession,
         bridge_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test cowork-setup picks up custom headers from env vars."""
-        mock_config_manager.resolve_credentials.return_value = sa_credentials
+        mock_config_manager.resolve_session.return_value = sa_session
         monkeypatch.setenv("MP_CUSTOM_HEADER_NAME", "X-Custom")
         monkeypatch.setenv("MP_CUSTOM_HEADER_VALUE", "secret-value")
 
@@ -306,12 +366,12 @@ class TestCoworkSetup:
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        sa_credentials: Credentials,
+        sa_session: ResolvedSession,
         bridge_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Test cowork-setup picks up custom headers from config [settings]."""
-        mock_config_manager.resolve_credentials.return_value = sa_credentials
+        mock_config_manager.resolve_session.return_value = sa_session
         mock_config_manager.get_custom_header.return_value = ("X-Config", "config-val")
         monkeypatch.delenv("MP_CUSTOM_HEADER_NAME", raising=False)
         monkeypatch.delenv("MP_CUSTOM_HEADER_VALUE", raising=False)
@@ -340,11 +400,11 @@ class TestCoworkSetup:
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        oauth_credentials: Credentials,
+        oauth_session: ResolvedSession,
         bridge_path: Path,
     ) -> None:
         """Test cowork-setup fails when OAuth tokens are not in storage."""
-        mock_config_manager.resolve_credentials.return_value = oauth_credentials
+        mock_config_manager.resolve_session.return_value = oauth_session
 
         mock_storage = MagicMock()
         mock_storage.load_tokens.return_value = None
@@ -372,11 +432,11 @@ class TestCoworkSetup:
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        sa_credentials: Credentials,
+        sa_session: ResolvedSession,
         bridge_path: Path,
     ) -> None:
         """Test cowork-setup succeeds even when credential test fails."""
-        mock_config_manager.resolve_credentials.return_value = sa_credentials
+        mock_config_manager.resolve_session.return_value = sa_session
 
         with (
             patch(
@@ -397,17 +457,91 @@ class TestCoworkSetup:
         assert result.exit_code == 0, f"stderr: {result.stderr}"
         data = json.loads(result.stdout)
         assert data["credentials_valid"] is False
+        assert data["test_error"] is not None
+        assert "network error" in data["test_error"]
         assert bridge_path.exists()
+
+    def test_setup_with_dir_option(
+        self,
+        cli_runner: CliRunner,
+        mock_config_manager: MagicMock,
+        sa_session: ResolvedSession,
+        tmp_path: Path,
+    ) -> None:
+        """Test cowork-setup --dir writes bridge file to custom directory."""
+        mock_config_manager.resolve_session.return_value = sa_session
+        custom_dir = tmp_path / "my-workspace"
+        custom_dir.mkdir()
+
+        with (
+            patch(
+                f"{_AUTH_CMD_MOD}.get_config",
+                return_value=mock_config_manager,
+            ),
+            patch(
+                "mixpanel_data.workspace.Workspace.test_credentials",
+                return_value={"success": True},
+            ),
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["auth", "cowork-setup", "--dir", str(custom_dir)],
+            )
+
+        assert result.exit_code == 0, f"stderr: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert data["status"] == "cowork_setup_complete"
+        # Bridge file should be in the custom directory
+        bridge_file = custom_dir / "mixpanel_auth.json"
+        assert bridge_file.exists()
+        # Verify the bridge file is valid JSON with expected content
+        bridge_data = json.loads(bridge_file.read_text())
+        assert bridge_data["auth_method"] == "service_account"
+        assert bridge_data["project_id"] == "12345"
+
+    def test_setup_oauth_no_client_info_fails(
+        self,
+        cli_runner: CliRunner,
+        mock_config_manager: MagicMock,
+        oauth_session: ResolvedSession,
+        mock_oauth_tokens: OAuthTokens,
+        bridge_path: Path,
+    ) -> None:
+        """Test cowork-setup fails when OAuth client info is missing."""
+        mock_config_manager.resolve_session.return_value = oauth_session
+
+        mock_storage = MagicMock()
+        mock_storage.load_tokens.return_value = mock_oauth_tokens
+        mock_storage.load_client_info.return_value = None  # client info missing
+
+        with (
+            patch(
+                f"{_AUTH_CMD_MOD}.get_config",
+                return_value=mock_config_manager,
+            ),
+            patch(
+                f"{_BRIDGE_MOD}.default_bridge_path",
+                return_value=bridge_path,
+            ),
+            patch(
+                "mixpanel_data._internal.auth.storage.OAuthStorage",
+                return_value=mock_storage,
+            ),
+        ):
+            result = cli_runner.invoke(app, ["auth", "cowork-setup"])
+
+        assert result.exit_code == 1
+        assert "client registration info not found" in result.stderr
 
     def test_setup_with_named_credential(
         self,
         cli_runner: CliRunner,
         mock_config_manager: MagicMock,
-        sa_credentials: Credentials,
+        sa_session: ResolvedSession,
         bridge_path: Path,
     ) -> None:
-        """Test cowork-setup passes credential name to resolve_credentials."""
-        mock_config_manager.resolve_credentials.return_value = sa_credentials
+        """Test cowork-setup passes credential name to resolve_session."""
+        mock_config_manager.resolve_session.return_value = sa_session
 
         with (
             patch(
@@ -428,8 +562,10 @@ class TestCoworkSetup:
             )
 
         assert result.exit_code == 0, f"stderr: {result.stderr}"
-        mock_config_manager.resolve_credentials.assert_called_once_with(
-            account="demo-sa"
+        mock_config_manager.resolve_session.assert_called_once_with(
+            credential="demo-sa",
+            project_id=None,
+            workspace_id=None,
         )
 
 
@@ -478,6 +614,36 @@ class TestCoworkTeardown:
         assert data["status"] == "cowork_teardown_complete"
         assert data["removed"] is False
         assert "did not exist" in data["message"]
+
+    def test_teardown_with_dir_option(
+        self,
+        cli_runner: CliRunner,
+        bridge_path: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Test cowork-teardown --dir removes workspace bridge file."""
+        # Create bridge in custom directory
+        custom_dir = tmp_path / "my-workspace"
+        custom_dir.mkdir()
+        workspace_bridge = custom_dir / "mixpanel_auth.json"
+        workspace_bridge.write_text('{"version": 1}', encoding="utf-8")
+        assert workspace_bridge.exists()
+
+        with patch(
+            f"{_BRIDGE_MOD}.default_bridge_path",
+            return_value=bridge_path,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["auth", "cowork-teardown", "--dir", str(custom_dir)],
+            )
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data["status"] == "cowork_teardown_complete"
+        assert data["removed"] is True
+        assert str(workspace_bridge) in data["removed_paths"]
+        assert not workspace_bridge.exists()
 
 
 class TestCoworkStatus:

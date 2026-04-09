@@ -316,6 +316,195 @@ class TestBridgeInResolveSession:
         assert session.project_id == "config-project"  # config wins
 
 
+class TestBridgeExpiredOAuthRefresh:
+    """Tests for expired OAuth bridge token refresh in _load_and_refresh_bridge."""
+
+    def test_bridge_expired_oauth_refreshes_successfully(self, tmp_path: Path) -> None:
+        """Test that an expired bridge token is refreshed and used."""
+        from pydantic import SecretStr
+
+        from mixpanel_data._internal.auth.bridge import AuthBridgeFile, BridgeOAuth
+
+        config_path = tmp_path / "config.toml"
+        _write_v1_config(config_path)
+
+        bridge_dir = tmp_path / "bridge"
+        bridge_file = _write_bridge_file(bridge_dir, expired=True)
+
+        refreshed_bridge = AuthBridgeFile(
+            version=1,
+            auth_method="oauth",
+            region="us",
+            project_id="bridge-project",
+            workspace_id=99999,
+            oauth=BridgeOAuth(
+                access_token=SecretStr("refreshed-access-token"),
+                refresh_token=SecretStr("bridge-refresh-token"),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                scope="projects analysis",
+                token_type="Bearer",
+                client_id="bridge-client-id",
+            ),
+        )
+
+        cm = ConfigManager(config_path=config_path)
+        with (
+            patch.dict(
+                os.environ,
+                {"MP_AUTH_FILE": str(bridge_file)},
+                clear=True,
+            ),
+            patch(
+                "mixpanel_data._internal.auth.bridge.refresh_bridge_token",
+                return_value=refreshed_bridge,
+            ) as mock_refresh,
+        ):
+            session = cm.resolve_session()
+
+        mock_refresh.assert_called_once()
+        assert session.auth_header() == "Bearer refreshed-access-token"
+        assert session.project_id == "bridge-project"
+
+    def test_bridge_expired_oauth_refresh_fails_falls_through(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that refresh failure causes fallthrough to config."""
+        config_path = tmp_path / "config.toml"
+        _write_v1_config(config_path)
+
+        bridge_dir = tmp_path / "bridge"
+        bridge_file = _write_bridge_file(bridge_dir, expired=True)
+
+        empty_oauth = tmp_path / "empty_oauth"
+        empty_oauth.mkdir()
+
+        cm = ConfigManager(config_path=config_path)
+        with (
+            patch.dict(
+                os.environ,
+                {"MP_AUTH_FILE": str(bridge_file)},
+                clear=True,
+            ),
+            patch(
+                "mixpanel_data._internal.auth.bridge.refresh_bridge_token",
+                side_effect=RuntimeError("network error"),
+            ),
+        ):
+            session = cm.resolve_session(_oauth_storage_dir=empty_oauth)
+
+        # Falls through to config
+        assert session.project_id == "config-project"
+
+    def test_bridge_expired_oauth_no_refresh_token_falls_through(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that OAuthError from missing refresh token causes fallthrough."""
+        from mixpanel_data.exceptions import OAuthError
+
+        config_path = tmp_path / "config.toml"
+        _write_v1_config(config_path)
+
+        bridge_dir = tmp_path / "bridge"
+        bridge_file = _write_bridge_file(bridge_dir, expired=True)
+
+        empty_oauth = tmp_path / "empty_oauth"
+        empty_oauth.mkdir()
+
+        cm = ConfigManager(config_path=config_path)
+        with (
+            patch.dict(
+                os.environ,
+                {"MP_AUTH_FILE": str(bridge_file)},
+                clear=True,
+            ),
+            patch(
+                "mixpanel_data._internal.auth.bridge.refresh_bridge_token",
+                side_effect=OAuthError("No refresh token", code="OAUTH_REFRESH_ERROR"),
+            ),
+        ):
+            session = cm.resolve_session(_oauth_storage_dir=empty_oauth)
+
+        # Falls through to config
+        assert session.project_id == "config-project"
+
+
+class TestBridgeGating:
+    """Tests that bridge resolution is gated to Cowork/MP_AUTH_FILE."""
+
+    def test_bridge_skipped_on_host_without_mp_auth_file(self, tmp_path: Path) -> None:
+        """Test that bridge file on host is ignored without MP_AUTH_FILE or Cowork."""
+        config_path = tmp_path / "config.toml"
+        _write_v1_config(config_path)
+
+        # Create a bridge file at the default location
+        bridge_dir = tmp_path / ".claude" / "mixpanel"
+        _write_bridge_file(bridge_dir)
+
+        empty_oauth = tmp_path / "empty_oauth"
+        empty_oauth.mkdir()
+
+        cm = ConfigManager(config_path=config_path)
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch(
+                "mixpanel_data._internal.auth.bridge.default_bridge_path",
+                return_value=bridge_dir / "auth.json",
+            ),
+            # Not in Cowork — detect_cowork() returns False
+            patch(
+                "mixpanel_data._internal.auth.bridge._COWORK_SESSIONS_PATH",
+                Path("/nonexistent/sessions"),
+            ),
+        ):
+            # Bridge file exists but should be skipped on host
+            session = cm.resolve_session(_oauth_storage_dir=empty_oauth)
+
+        # Should fall through to config, not bridge
+        assert session.project_id == "config-project"
+
+    def test_bridge_used_when_mp_auth_file_set(self, tmp_path: Path) -> None:
+        """Test that bridge file IS used when MP_AUTH_FILE is explicitly set."""
+        config_path = tmp_path / "config.toml"
+        _write_v1_config(config_path)
+
+        bridge_dir = tmp_path / "bridge"
+        bridge_file = _write_bridge_file(bridge_dir)
+
+        cm = ConfigManager(config_path=config_path)
+        with patch.dict(
+            os.environ,
+            {"MP_AUTH_FILE": str(bridge_file)},
+            clear=True,
+        ):
+            session = cm.resolve_session()
+
+        assert session.project_id == "bridge-project"
+
+    def test_bridge_used_when_in_cowork(self, tmp_path: Path) -> None:
+        """Test that bridge file IS used when running inside Cowork VM."""
+        config_path = tmp_path / "config.toml"
+        _write_v1_config(config_path)
+
+        # Create bridge at default location
+        bridge_dir = tmp_path / ".claude" / "mixpanel"
+        _write_bridge_file(bridge_dir)
+
+        empty_oauth = tmp_path / "empty_oauth"
+        empty_oauth.mkdir()
+
+        cm = ConfigManager(config_path=config_path)
+        with (
+            patch.dict(os.environ, {"CLAUDE_COWORK": "1"}, clear=True),
+            patch(
+                "mixpanel_data._internal.auth.bridge.default_bridge_path",
+                return_value=bridge_dir / "auth.json",
+            ),
+        ):
+            session = cm.resolve_session(_oauth_storage_dir=empty_oauth)
+
+        assert session.project_id == "bridge-project"
+
+
 class TestBridgeNoFile:
     """Tests that resolution falls through when no bridge file exists."""
 

@@ -16,6 +16,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from mixpanel_data._internal.auth.bridge import AuthBridgeFile
     from mixpanel_data._internal.auth_credential import ResolvedSession
 
 if sys.version_info >= (3, 11):
@@ -618,24 +619,38 @@ class ConfigManager:
         first_account = next(iter(accounts.values()))
         return first_account.get("region"), first_account.get("project_id")
 
-    def _load_and_refresh_bridge(self) -> Any | None:
+    def _load_and_refresh_bridge(self) -> AuthBridgeFile | None:
         """Load, refresh, and apply custom headers from a bridge file.
 
         Finds the bridge file, loads it, applies custom headers to env
         vars, and refreshes expired OAuth tokens. Returns the ready-to-use
         bridge model, or ``None`` if no valid bridge is found.
 
+        Bridge resolution is only attempted when:
+        - ``MP_AUTH_FILE`` environment variable is explicitly set, OR
+        - Running inside a Cowork VM (detected via ``detect_cowork()``)
+
+        This prevents host-side auth lockout after running
+        ``mp auth cowork-setup``, which writes a bridge file that would
+        otherwise shadow normal credential resolution.
+
         Returns:
             An ``AuthBridgeFile`` instance if a valid bridge file is found
-            and ready, ``None`` otherwise. Typed as ``Any`` to avoid
-            importing bridge types at module level (lazy import).
+            and ready, ``None`` otherwise.
         """
         from mixpanel_data._internal.auth.bridge import (
             apply_bridge_custom_header,
+            detect_cowork,
             find_bridge_file,
             load_bridge_file,
             refresh_bridge_token,
         )
+
+        # Only consult bridge files when explicitly requested (MP_AUTH_FILE)
+        # or when running inside a Cowork VM.  On the host, bridge files
+        # written by cowork-setup must not shadow normal auth resolution.
+        if not os.environ.get("MP_AUTH_FILE") and not detect_cowork():
+            return None
 
         path = find_bridge_file()
         if path is None:
@@ -656,8 +671,16 @@ class ConfigManager:
         ):
             try:
                 bridge = refresh_bridge_token(bridge, path)
-            except Exception:
-                logger.debug("Bridge token refresh failed, skipping bridge")
+            except Exception as exc:
+                if type(exc).__name__ == "OAuthError":
+                    logger.warning("Bridge token refresh failed: %s", exc)
+                else:
+                    logger.warning(
+                        "Bridge token refresh failed (%s): %s. "
+                        "Falling back to other auth methods.",
+                        type(exc).__name__,
+                        exc,
+                    )
                 return None
 
         return bridge
@@ -928,11 +951,13 @@ class ConfigManager:
             return
 
         header = self.get_custom_header()
-        if header is not None:
-            name, value = header
-            os.environ["MP_CUSTOM_HEADER_NAME"] = name
-            os.environ["MP_CUSTOM_HEADER_VALUE"] = value
-            logger.debug("Applied custom header from config: %s", name)
+        if header is None:
+            return
+
+        name, value = header
+        os.environ["MP_CUSTOM_HEADER_NAME"] = name
+        os.environ["MP_CUSTOM_HEADER_VALUE"] = value
+        logger.debug("Applied custom header from config: %s", name)
 
     def _write_config_atomic(self, config: dict[str, Any]) -> None:
         """Write config atomically via temp file + os.replace().
@@ -1443,17 +1468,15 @@ class ConfigManager:
             bridge_session = self._resolve_session_from_bridge()
             if bridge_session is not None:
                 # Apply overrides if provided
-                if project_id or workspace_id is not None:
+                if project_id is not None or workspace_id is not None:
                     from mixpanel_data._internal.auth_credential import (
-                        ProjectContext as PC,
-                    )
-                    from mixpanel_data._internal.auth_credential import (
-                        ResolvedSession as RS,
+                        ProjectContext,
+                        ResolvedSession,
                     )
 
-                    bridge_session = RS(
+                    bridge_session = ResolvedSession(
                         auth=bridge_session.auth,
-                        project=PC(
+                        project=ProjectContext(
                             project_id=project_id or bridge_session.project_id,
                             workspace_id=workspace_id
                             if workspace_id is not None
@@ -1516,7 +1539,7 @@ class ConfigManager:
         session = creds.to_resolved_session()
 
         # Apply overrides
-        if project_id or workspace_id:
+        if project_id is not None or workspace_id is not None:
             from mixpanel_data._internal.auth_credential import (
                 ProjectContext,
                 ResolvedSession,

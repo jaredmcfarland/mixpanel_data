@@ -188,6 +188,8 @@ just mutate-check        # Check score meets 80% threshold
 | `MP_PROJECT_ID` | Project ID |
 | `MP_REGION` | Data residency (us, eu, in) |
 | `MP_WORKSPACE_ID` | Workspace ID for App API operations |
+| `MP_CUSTOM_HEADER_NAME` | Custom HTTP header name (both NAME and VALUE must be set) |
+| `MP_CUSTOM_HEADER_VALUE` | Custom HTTP header value (both NAME and VALUE must be set) |
 | `MP_CONFIG_PATH` | Override config file location |
 
 Config file: `~/.mp/config.toml`
