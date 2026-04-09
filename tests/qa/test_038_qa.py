@@ -1693,6 +1693,9 @@ class TestCLIExitCodes:
     ) -> None:
         """'mp projects list' with no credentials exits non-zero.
 
+        Also patches the OAuth fallback to return None so that locally
+        cached OAuth tokens don't make the command succeed.
+
         Args:
             tmp_path: Pytest-provided temp directory.
             cli_runner: CLI test runner.
@@ -1705,6 +1708,12 @@ class TestCLIExitCodes:
         monkeypatch.setenv("MP_CONFIG_PATH", str(empty_config))
         for var in ("MP_USERNAME", "MP_SECRET", "MP_PROJECT_ID", "MP_REGION"):
             monkeypatch.delenv(var, raising=False)
+
+        # Prevent the OAuth fallback from finding tokens on disk
+        monkeypatch.setattr(
+            "mixpanel_data.cli.commands.projects._discover_projects_via_oauth",
+            lambda: None,
+        )
 
         result = cli_runner.invoke(app, ["projects", "list"])
         assert result.exit_code != 0

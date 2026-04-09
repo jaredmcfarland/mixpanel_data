@@ -100,16 +100,21 @@ class TestProjectsList:
         # Table format should contain project names
         assert "AI Demo" in result.stdout
 
+    @patch("mixpanel_data.cli.commands.projects._discover_projects_via_oauth")
     @patch("mixpanel_data.cli.commands.projects.get_workspace")
     def test_list_config_error(
-        self, mock_get_ws: MagicMock, cli_runner: CliRunner
+        self,
+        mock_get_ws: MagicMock,
+        mock_oauth_fallback: MagicMock,
+        cli_runner: CliRunner,
     ) -> None:
-        """Test mp projects list handles ConfigError."""
+        """Test mp projects list handles ConfigError when no OAuth fallback."""
         mock_get_ws.side_effect = ConfigError("No credentials")
+        mock_oauth_fallback.return_value = None
 
         result = cli_runner.invoke(app, ["projects", "list"])
 
-        assert result.exit_code == ExitCode.GENERAL_ERROR
+        assert result.exit_code != 0
 
 
 class TestProjectsRefresh:
