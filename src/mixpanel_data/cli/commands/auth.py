@@ -647,14 +647,24 @@ def cowork_setup(
         int | None,
         typer.Option("--workspace-id", help="Workspace ID for App API scoping."),
     ] = None,
+    dir: Annotated[
+        str | None,
+        typer.Option(
+            "--dir",
+            help="Write bridge file to this directory (e.g. your Cowork workspace folder).",
+        ),
+    ] = None,
     format: FormatOption = "json",
 ) -> None:
     """Export credentials to a bridge file for Claude Cowork VMs.
 
-    Resolves the current credentials (from env vars, config, or OAuth
-    tokens) and writes them to ``~/.claude/mixpanel/auth.json`` so that
-    ``mixpanel_data`` running inside a Cowork VM can authenticate
+    Resolves the current credentials and writes them to a bridge file
+    so that ``mixpanel_data`` running inside a Cowork VM can authenticate
     without browser access.
+
+    By default writes to ``~/.claude/mixpanel/auth.json``. Use ``--dir``
+    to write to your Cowork workspace folder instead (recommended, since
+    the workspace folder is always mounted into Cowork).
 
     For OAuth credentials, includes the refresh token so the VM can
     silently renew expired access tokens.
@@ -672,9 +682,12 @@ def cowork_setup(
         mp auth cowork-setup --credential demo-sa --project-id 12345
         mp auth cowork-setup --workspace-id 3448413
     """
+    from pathlib import Path as _Path
+
     from pydantic import SecretStr
 
     from mixpanel_data._internal.auth.bridge import (
+        _FLAT_BRIDGE_FILENAME,
         AuthBridgeFile,
         BridgeCustomHeader,
         BridgeOAuth,
@@ -686,7 +699,10 @@ def cowork_setup(
     from mixpanel_data._internal.config import AuthMethod as _AuthMethod
 
     config = get_config(ctx)
-    bridge_path = _default_bridge_path()
+    if dir is not None:
+        bridge_path = _Path(dir) / _FLAT_BRIDGE_FILENAME
+    else:
+        bridge_path = _default_bridge_path()
 
     # Resolve credentials via the standard priority chain
     creds = config.resolve_credentials(account=credential)
@@ -774,12 +790,13 @@ def cowork_setup(
     )
     write_bridge_file(bridge, bridge_path)
 
-    # Also write flat file at ~/.claude/mixpanel_auth.json
-    # In Cowork, subdirectories created after mount may not be visible,
-    # but files in the root of ~/.claude/ are.
-    flat_path = bridge_path.parent.parent / "mixpanel_auth.json"
-    with contextlib.suppress(OSError):
-        write_bridge_file(bridge, flat_path)
+    # When using default path, also write flat file at ~/.claude/mixpanel_auth.json
+    if dir is None:
+        import contextlib as _contextlib
+
+        flat_path = bridge_path.parent.parent / _FLAT_BRIDGE_FILENAME
+        with _contextlib.suppress(OSError):
+            write_bridge_file(bridge, flat_path)
 
     # Test credentials with a lightweight API call
     test_ok = False

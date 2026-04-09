@@ -273,29 +273,35 @@ def find_bridge_file() -> Path | None:
         logger.debug("MP_AUTH_FILE set but file not found: %s", env_path)
         return None
 
-    # Priority 2: Default location (~/.claude/mixpanel/auth.json)
+    # Priority 2: Bridge file in CWD (workspace root)
+    # In Cowork, the workspace IS mounted — this is the primary Cowork path
+    cwd_bridge = Path.cwd() / _FLAT_BRIDGE_FILENAME
+    if cwd_bridge.is_file():
+        logger.debug("Found bridge file in workspace: %s", cwd_bridge)
+        return cwd_bridge
+
+    # Priority 3: Default location (~/.claude/mixpanel/auth.json)
     default = _default_bridge_path()
     if default.is_file():
         return default
 
-    # Priority 3: Flat file (~/.claude/mixpanel_auth.json)
-    # For Cowork where subdirectories created after mount may not be visible
+    # Priority 4: Flat file (~/.claude/mixpanel_auth.json)
     flat = Path.home() / _CLAUDE_DIR_NAME / _FLAT_BRIDGE_FILENAME
     if flat.is_file():
         logger.debug("Found flat bridge file: %s", flat)
         return flat
 
-    # Priority 4: Cowork bindfs mount (~/mnt/.claude/...)
-    # In Cowork, the host's ~/.claude/ is mounted at $HOME/mnt/.claude/
-    mnt_base = Path.home() / "mnt" / _CLAUDE_DIR_NAME
-    for name in [
-        Path(_BRIDGE_DIR_NAME) / _BRIDGE_FILENAME,  # mnt/.claude/mixpanel/auth.json
-        Path(_FLAT_BRIDGE_FILENAME),  # mnt/.claude/mixpanel_auth.json
-    ]:
-        cowork_path = mnt_base / name
-        if cowork_path.is_file():
-            logger.debug("Found bridge file at Cowork mount: %s", cowork_path)
-            return cowork_path
+    # Priority 5: Cowork workspace mount (~/mnt/{folder}/mixpanel_auth.json)
+    # In Cowork, the workspace is at $HOME/mnt/{folder}/
+    mnt_base = Path.home() / "mnt"
+    if mnt_base.is_dir():
+        for child in mnt_base.iterdir():
+            if not child.is_dir():
+                continue
+            cowork_path = child / _FLAT_BRIDGE_FILENAME
+            if cowork_path.is_file():
+                logger.debug("Found bridge file at Cowork mount: %s", cowork_path)
+                return cowork_path
 
     return None
 

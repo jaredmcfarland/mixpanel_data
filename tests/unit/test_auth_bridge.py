@@ -310,10 +310,11 @@ class TestFindBridgeFile:
             assert result == auth_file
 
     def test_cowork_mount_path(self, tmp_path: Path) -> None:
-        """Test finding bridge file at ~/mnt/.claude/mixpanel/auth.json."""
-        mnt_dir = tmp_path / "mnt" / ".claude" / "mixpanel"
-        mnt_dir.mkdir(parents=True)
-        auth_file = mnt_dir / "auth.json"
+        """Test finding bridge file at ~/mnt/{folder}/mixpanel_auth.json."""
+        # Simulate Cowork mount: ~/mnt/workspace/mixpanel_auth.json
+        workspace_dir = tmp_path / "mnt" / "my-project"
+        workspace_dir.mkdir(parents=True)
+        auth_file = workspace_dir / "mixpanel_auth.json"
         auth_file.write_text("{}")
 
         with (
@@ -323,19 +324,22 @@ class TestFindBridgeFile:
                 return_value=tmp_path / "nonexistent" / "auth.json",
             ),
             patch("pathlib.Path.home", return_value=tmp_path),
+            patch("pathlib.Path.cwd", return_value=tmp_path / "fakecwd"),
         ):
             os.environ.pop("MP_AUTH_FILE", None)
             result = find_bridge_file()
             assert result == auth_file
 
-    def test_no_bridge_file_returns_none(self) -> None:
+    def test_no_bridge_file_returns_none(self, tmp_path: Path) -> None:
         """Test returns None when no bridge file exists."""
         with (
             patch.dict(os.environ, {}, clear=True),
             patch(
                 "mixpanel_data._internal.auth.bridge._default_bridge_path",
-                return_value=Path("/nonexistent/.claude/mixpanel/auth.json"),
+                return_value=tmp_path / "nonexistent" / "auth.json",
             ),
+            patch("pathlib.Path.home", return_value=tmp_path / "fakehome"),
+            patch("pathlib.Path.cwd", return_value=tmp_path / "fakecwd"),
         ):
             os.environ.pop("MP_AUTH_FILE", None)
             result = find_bridge_file()
