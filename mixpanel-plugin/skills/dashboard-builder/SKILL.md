@@ -6,15 +6,17 @@ allowed-tools: Bash Read Write
 
 # Dashboard Builder
 
-Build production-quality Mixpanel dashboards through an 8-phase workflow: investigate data, plan structure, build reports, create dashboard, arrange layout, add explainers, polish, and verify.
+Build production-quality Mixpanel dashboards through a 6-phase workflow: investigate data, plan structure, build reports, create dashboard with layout, add explainers, then polish and verify.
 
 ## Quick Start Example
 
-A minimal 3-report dashboard in ~20 lines:
+A minimal 3-report dashboard with proper layout:
 
 ```python
 import mixpanel_data as mp
-from mixpanel_data.types import CreateDashboardParams, UpdateDashboardParams, CreateBookmarkParams
+from mixpanel_data.types import (
+    CreateDashboardParams, DashboardRow, DashboardRowContent,
+)
 import json
 
 ws = mp.Workspace()
@@ -24,27 +26,29 @@ dau = ws.query("Login", math="dau", last=90)
 funnel = ws.query_funnel(["Signup", "Purchase"], last=90)
 ret = ws.query_retention("Signup", "Login", last=90)
 
-# 2. Create dashboard
-dashboard = ws.create_dashboard(CreateDashboardParams(title="Product Health"))
+# 2. Helper functions
+def text(html):
+    return DashboardRowContent(content_type="text", content_params={"markdown": html})
 
-# 3. Add intro text card
-ws.update_dashboard(dashboard.id, UpdateDashboardParams(
-    content={"action": "create", "content_type": "text",
-             "content_params": {"markdown": "<h2>Product Health</h2><p>Core metrics updated daily.</p>"}}))
+def report(name, btype, result):
+    return DashboardRowContent(content_type="report", content_params={
+        "bookmark": {"name": name, "type": btype, "params": json.dumps(result.params)}})
 
-# 4. Add reports inline (no separate bookmarks needed)
-for name, btype, params in [
-    ("Daily Active Users", "insights", dau.params),
-    ("Signup Conversion", "funnels", funnel.params),
-    ("New User Retention", "retention", ret.params),
-]:
-    ws.update_dashboard(dashboard.id, UpdateDashboardParams(
-        content={"action": "create", "content_type": "report",
-                 "content_params": {"bookmark": {"name": name, "type": btype,
-                                                 "params": json.dumps(params)}}}))
+# 3. Create dashboard with layout in one call
+dashboard = ws.create_dashboard(CreateDashboardParams(
+    title="Product Health",
+    rows=[
+        DashboardRow(contents=[text("<h2>Product Health</h2><p>Core metrics.</p>")]),
+        DashboardRow(contents=[
+            report("Daily Active Users", "insights", dau),
+            report("Signup Conversion", "funnels", funnel),
+            report("New User Retention", "retention", ret),
+        ]),
+    ],
+))
 ```
 
-## The 8-Phase Workflow
+## The 6-Phase Workflow
 
 ### Phase 1: Investigate
 
@@ -85,39 +89,30 @@ A plan should include:
 1. **Dashboard title and description** (title max 255 chars, description max 400 chars)
 2. **Sections** with header text cards describing each group of reports
 3. **Reports per section** with chart type, events, breakdowns, and time range
-4. **Grid width assignments** using the 12-column grid (see width table in Phase 5)
+4. **Grid layout** — which items share a row (items in the same `DashboardRow` are side-by-side)
 
 Example plan:
 
 ```
 "Product Health Dashboard"
-  Row 1:  [Intro text card (w=12)]
-  Row 2:  [KPI: DAU (w=4)] [KPI: WAU (w=4)] [KPI: Signups (w=4)]
-  Row 3:  [Text: "Growth Trends" (w=12)]
-  Row 4:  [DAU Trend line (w=6)] [Signup Trend line (w=6)]
-  Row 5:  [Text: "Conversion" (w=12)]
-  Row 6:  [Signup Funnel (w=12)]
-  Row 7:  [Text: "Retention" (w=12)]
-  Row 8:  [Retention Curve (w=12)]
+  Row 1:  [Intro text card]                              → 1 item, full width
+  Row 2:  [KPI: DAU] [KPI: WAU] [KPI: Signups]          → 3 items, auto w=4 each
+  Row 3:  [Text: "Growth Trends"]                        → 1 item, full width
+  Row 4:  [DAU Trend line] [Signup Trend line]            → 2 items, auto w=6 each
+  Row 5:  [Text: "Conversion"]                           → 1 item, full width
+  Row 6:  [Signup Funnel]                                → 1 item, full width
+  Row 7:  [Text: "Retention"]                            → 1 item, full width
+  Row 8:  [Retention Curve]                              → 1 item, full width
 ```
 
-### Phase 3: Build Reports
+### Phase 3: Query Reports
 
-Query each metric, inspect results to verify meaningful data, then prepare for dashboard creation.
+Query each metric and inspect results to verify meaningful data.
 
 ```python
-from mixpanel_data.types import CreateBookmarkParams
-
 # Query and inspect
 result = ws.query("Login", math="dau", group_by="platform", last=90)
 print(result.df.describe())  # Verify meaningful data exists
-
-# Save as standalone bookmark (Method A)
-bookmark = ws.create_bookmark(CreateBookmarkParams(
-    name="DAU by Platform (90d)",
-    bookmark_type="insights",
-    params=result.params,
-))
 ```
 
 **Report naming rules:**
@@ -138,124 +133,117 @@ bookmark = ws.create_bookmark(CreateBookmarkParams(
 | Retention analysis | `retention-curve` |
 | User flow visualization | `sankey` |
 
-### Phase 4: Create Dashboard
+**`per_user` note:** When using `per_user` aggregation (e.g., `per_user="average"`), you must also set `math_property` to a numeric property. `per_user` without `math_property` raises a validation error.
 
-Create the dashboard, then add content. There are two methods for adding reports.
+### Phase 4: Create Dashboard with Layout
+
+Create the dashboard with all content and layout in a single call using `rows`. Each `DashboardRow` contains 1-4 content items. Items in the same row are placed side-by-side with auto-distributed widths (12-column grid).
 
 ```python
-from mixpanel_data.types import CreateDashboardParams, UpdateDashboardParams
+from mixpanel_data.types import (
+    CreateDashboardParams, DashboardRow, DashboardRowContent,
+)
 import json
 
-# Create the dashboard
+# Helper functions for building row content
+def text(html):
+    """Create a text card content item."""
+    return DashboardRowContent(content_type="text", content_params={"markdown": html})
+
+def report(name, btype, result, description=None):
+    """Create a report content item from a typed query result."""
+    params = {"bookmark": {"name": name, "type": btype,
+                            "params": json.dumps(result.params)}}
+    if description:
+        params["bookmark"]["description"] = description
+    return DashboardRowContent(content_type="report", content_params=params)
+
+# Create dashboard with layout
 dashboard = ws.create_dashboard(CreateDashboardParams(
     title="Product Health Dashboard",
     description="Key metrics for product health monitoring.",
+    rows=[
+        # Row 1: Intro text card (full width)
+        DashboardRow(contents=[
+            text("<h2>Product Health Dashboard</h2><p>Key metrics updated daily.</p>"),
+        ]),
+        # Row 2: 3 KPI cards (auto w=4 each)
+        DashboardRow(contents=[
+            report("DAU (90d)", "insights", dau_result),
+            report("Signups (90d)", "insights", signups_result),
+            report("Purchases (90d)", "insights", purchases_result),
+        ]),
+        # Row 3: Section header
+        DashboardRow(contents=[
+            text("<h2>Conversion</h2><p>Key conversion funnels.</p>"),
+        ]),
+        # Row 4: Full-width funnel
+        DashboardRow(contents=[
+            report("Signup Funnel", "funnels", funnel_result),
+        ]),
+        # Row 5: Section header
+        DashboardRow(contents=[
+            text("<h2>Retention</h2><p>Do users come back?</p>"),
+        ]),
+        # Row 6: Side-by-side comparison (auto w=6 each)
+        DashboardRow(contents=[
+            report("Weekly Retention", "retention", retention_result),
+            report("User Journeys", "flows", flow_result),
+        ]),
+    ],
 ))
+```
 
-# Add intro text card (always first)
+**Why `rows` matters:** Layout structure (which items share a row) is set at creation time. Items added later via `update_dashboard()` each get their own full-width row, and the API does not support merging items across rows after creation.
+
+**Width auto-distribution:** Items in a row automatically share the 12-column grid equally. 1 item = w12, 2 items = w6+w6, 3 items = w4+w4+w4, 4 items = w3+w3+w3+w3.
+
+**Adding content after creation:** You can still add items via `update_dashboard()` — they appear as new full-width rows at the bottom. This is fine for explainer cards (Phase 5) but not ideal for reports that should share a row.
+
+```python
+# Add a text card after creation (gets its own row)
 ws.update_dashboard(dashboard.id, UpdateDashboardParams(
-    content={
-        "action": "create",
-        "content_type": "text",
-        "content_params": {
-            "markdown": "<h2>Product Health Dashboard</h2><p>Key metrics for monitoring product health. Updated daily.</p>"
-        },
-    }
+    content={"action": "create", "content_type": "text",
+             "content_params": {"markdown": "<p>^ DAU is <strong>12,450</strong>.</p>"}}
 ))
 ```
 
-**Method A: From existing bookmark (clones it onto dashboard)**
+**Height adjustment:** Row heights default to 0 (auto). To set explicit heights, PATCH the layout after creation:
 
 ```python
-ws.add_report_to_dashboard(dashboard.id, bookmark.id)
-```
-
-**Method B: Inline report creation (preferred -- no separate bookmark needed)**
-
-```python
-ws.update_dashboard(dashboard.id, UpdateDashboardParams(
-    content={
-        "action": "create",
-        "content_type": "report",
-        "content_params": {
-            "bookmark": {
-                "name": "Daily Active Users",
-                "type": "insights",
-                "params": json.dumps(result.params),
-                "description": "DAU over the last 90 days.",
-            }
-        },
-    }
-))
-```
-
-Method B is preferred because it creates the report directly on the dashboard without cloning or creating a separate bookmark entity.
-
-### Phase 5: Arrange Layout
-
-After adding all content, rearrange the 12-column grid.
-
-```python
-# Get current layout to discover row/cell IDs
 dash = ws.get_dashboard(dashboard.id)
-# dash.layout has: version, order (list of row IDs), rows (dict of row_id -> {height, cells})
+layout = dash.layout
+# Modify heights within existing rows (don't restructure which cells are in which row)
+for row_id in layout["order"]:
+    row = layout["rows"][row_id]
+    n_cells = len(row["cells"])
+    if n_cells >= 3:
+        row["height"] = 336   # KPI row
+    elif n_cells == 2:
+        row["height"] = 418   # side-by-side
+    elif row["cells"][0]["content_type"] == "report":
+        row["height"] = 500   # single report
 
-# Update layout: set cell widths and row order
 ws.update_dashboard(dashboard.id, UpdateDashboardParams(
-    layout={
-        "rows": {
-            "row-id-1": {
-                "height": 0,
-                "cells": [
-                    {"id": "cell-id-1", "width": 12,
-                     "content_id": text_card_id, "content_type": "text"}
-                ]
-            },
-            "row-id-2": {
-                "height": 336,
-                "cells": [
-                    {"id": "cell-id-2", "width": 4,
-                     "content_id": kpi1_id, "content_type": "report"},
-                    {"id": "cell-id-3", "width": 4,
-                     "content_id": kpi2_id, "content_type": "report"},
-                    {"id": "cell-id-4", "width": 4,
-                     "content_id": kpi3_id, "content_type": "report"},
-                ]
-            },
-        },
-        "rows_order": ["row-id-1", "row-id-2"],
-    }
+    layout={"rows": layout["rows"], "rows_order": layout["order"]}
 ))
 ```
 
-**Width assignment rules:**
+**Width and height reference:**
 
-| Content | Width | Rationale |
-|---|---|---|
-| Text card (section header) | 12 | Always full width |
-| KPI metric card | 3 or 4 | Pack 3-4 per row |
-| Line/bar chart (paired) | 6 | Side-by-side comparison |
-| Line/bar chart (solo) | 12 | Full width for detail |
-| Table | 12 | Needs full width |
-| Funnel (3+ steps) | 12 | Complex funnels need space |
-| Retention curve | 12 | Full width |
-| Sankey/flow | 12 | Always full width |
+| Content | Items/Row | Auto Width | Recommended Height |
+|---|---|---|---|
+| Text card (section header) | 1 | 12 | 0 (auto) |
+| KPI metric cards | 3-4 | 4 or 3 | 336 |
+| Paired charts | 2 | 6 | 418 |
+| Single chart | 1 | 12 | 500 |
+| Full-width funnel/table | 1 | 12 | 588 |
 
-Cell widths in a row must sum to 12. Max 4 items per row. Max 30 rows per dashboard.
+Max 4 items per row. Max 30 rows per dashboard.
 
-**Height guidelines:**
+### Phase 5: Add Explainer Cards (Optional)
 
-| Configuration | Height |
-|---|---|
-| Text-only row | 0 (auto) |
-| KPI row (3-4 cards) | 336 |
-| 6+6 side-by-side | 418 |
-| Single full-width chart | 500 |
-| Full-width funnel/table | 588 |
-
-### Phase 6: Add Explainer Cards (Optional)
-
-Data-aware text cards beneath reports add context and insight.
+Data-aware text cards beneath reports add context and insight. These are added after creation and get their own rows.
 
 ```python
 # Query current values for the explainer
@@ -279,20 +267,12 @@ ws.update_dashboard(dashboard.id, UpdateDashboardParams(
 ))
 ```
 
-### Phase 7: Polish and Share
+### Phase 6: Polish, Share, and Verify
 
 - Review report names and descriptions for clarity
 - Pin if it should appear at the top for all users: `ws.pin_dashboard(dashboard.id)`
 - Favorite if it is a personal reference: `ws.favorite_dashboard(dashboard.id)`
-
-### Phase 8: Verify
-
-Open the dashboard and confirm:
-
-1. All reports render with data (no empty charts)
-2. Text cards are properly formatted (no raw HTML showing)
-3. Layout is correct (correct widths, no overlapping)
-4. Report order follows a logical narrative flow (overview first, then detail)
+- Verify: open the dashboard and confirm all reports render with data, text cards display correctly, and layout matches the plan
 
 ## Text Card Quick Reference
 
@@ -317,23 +297,25 @@ Key takeaway:     <h3>Key Takeaway</h3><p>One-sentence finding with <strong>bold
 
 ## Critical Gotchas
 
-1. **`CreateBookmarkParams(dashboard_id=X)` does NOT add the report to the dashboard layout.** Use `add_report_to_dashboard()` or the inline content action instead.
+1. **Layout structure is set at creation time via `rows`.** The API does not support merging items across rows after creation. Always plan your layout and pass `rows` to `CreateDashboardParams`. Items added later via `update_dashboard()` each get their own full-width row.
 
-2. **`add_report_to_dashboard()` CLONES the bookmark.** It creates a "Duplicate of ..." copy. The original bookmark is unchanged.
+2. **Layout PATCH can only adjust widths and heights within existing rows.** You can change cell widths and row heights, but you cannot move a cell from one row to another. If the layout is wrong, delete and recreate the dashboard.
 
-3. **Inline report creation via content action is preferred.** No clone, no separate bookmark entity. Use the `content_params.bookmark` pattern from Phase 4 Method B.
+3. **`per_user` requires `math_property`.** Using `per_user="average"` (or any per-user aggregation) without setting `math_property` to a numeric property raises `BookmarkValidationError`.
 
-4. **GET returns layout `order`, PATCH expects `rows_order`.** When reading a dashboard, the row ordering key is `order`. When patching layout, the key must be `rows_order`.
+4. **`CreateBookmarkParams(dashboard_id=X)` does NOT add the report to the dashboard layout.** Use `add_report_to_dashboard()` or the inline content action instead.
 
-5. **Never include `version` key in layout PATCH payloads.** The API rejects it.
+5. **`add_report_to_dashboard()` CLONES the bookmark.** It creates a "Duplicate of ..." copy. The original bookmark is unchanged. Use `rows` in `CreateDashboardParams` or the inline content action to avoid cloning.
 
-6. **Strip `\n` from text card markdown before sending.** Mixpanel's TipTap editor mangles HTML when newlines are present in the markdown string. Always call `.replace("\n", "")` on the markdown before sending.
+6. **GET returns layout `order`, PATCH expects `rows_order`.** When reading a dashboard, the row ordering key is `order`. When patching layout, the key must be `rows_order`.
 
-7. **Dashboard description max 400 chars, title max 255 chars.** Exceeding these limits causes API errors.
+7. **Never include `version` key in layout PATCH payloads.** The API rejects it.
 
-8. **Max 4 items per row, max 30 rows per dashboard.** Plan sections to fit within these limits.
+8. **Strip `\n` from text card markdown before sending.** Mixpanel's TipTap editor mangles HTML when newlines are present. Always call `.replace("\n", "")` on the markdown before sending.
 
-9. **Cell widths in a row must sum to 12.** Standard widths are 3, 4, 6, and 12.
+9. **Dashboard description max 400 chars, title max 255 chars.** Exceeding these limits causes API errors.
+
+10. **Max 4 items per row, max 30 rows per dashboard.** Plan sections to fit within these limits. Cell widths in a row must sum to 12. Standard widths are 3, 4, 6, and 12.
 
 ## See Also
 
