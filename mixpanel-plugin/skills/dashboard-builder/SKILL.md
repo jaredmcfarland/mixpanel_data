@@ -59,7 +59,7 @@ events = ws.events()
 
 # Check volumes for candidate events
 for event in candidate_events:
-    result = ws.segmentation(event=event, from_date="2025-01-01", to_date="2025-03-31")
+    result = ws.query(event, from_date="2025-01-01", to_date="2025-03-31")
     print(f"{event}: {result.df['count'].sum():,.0f} total")
 
 # Explore properties for breakdowns
@@ -298,9 +298,11 @@ Open the dashboard and confirm:
 
 Text cards use a restricted subset of HTML. Full reference in `references/dashboard-reference.md`.
 
-**Allowed tags:** `<h2>`, `<h3>`, `<p>`, `<strong>`, `<em>`, `<u>`, `<s>`, `<mark>`, `<code>`, `<blockquote>`, `<hr>`, `<ul>`, `<ol>`, `<li>`, `<a>`
+**Allowed tags:** `<h1>`, `<h2>`, `<h3>`, `<p>`, `<strong>`, `<em>`, `<u>`, `<s>`, `<mark>`, `<code>`, `<blockquote>`, `<hr>`, `<br>`, `<ul>`, `<ol>`, `<li>`, `<a>`
 
-**Forbidden tags:** `<h1>`, `<div>`, `<span>`, `<br>`, `<b>`, `<i>`, `<img>`, `<table>`
+**Allowed but discouraged:** `<h1>` — prefer `<h2>` for section headers. `<br>` — prefer separate `<p>` elements.
+
+**Forbidden tags:** `<div>`, `<span>`, `<b>`, `<i>`, `<img>`, `<table>`
 
 **Critical rule:** Strip all `\n` newlines from markdown strings before sending. Each HTML element renders as its own line. Newlines in the string cause Mixpanel's TipTap editor to mangle the HTML.
 

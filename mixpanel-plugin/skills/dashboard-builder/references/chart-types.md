@@ -101,7 +101,6 @@ Quick-lookup reference for choosing the right chart type per report type, with w
 | P75 | `p75` | Yes (numeric) | 75th percentile |
 | P90 | `p90` | Yes (numeric) | 90th percentile |
 | P99 | `p99` | Yes (numeric) | 99th percentile |
-| Sessions | `session` | No | Count of sessions |
 
 ### Common Invalid Aliases
 
@@ -148,11 +147,11 @@ Chart type is set in `displayOptions.chartType` within the bookmark params JSON.
 import json
 
 # Typed queries set chartType automatically -- no override needed
-result = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-03-31")
+result = ws.query("Login", from_date="2025-01-01", to_date="2025-03-31")
 
 # The chart type lives at params["displayOptions"]["chartType"]
 # To inspect:
-params = json.loads(result.params) if isinstance(result.params, str) else result.params
+params = result.params
 chart_type = params.get("displayOptions", {}).get("chartType")
 
 # When creating inline reports, the params carry the chart type through:

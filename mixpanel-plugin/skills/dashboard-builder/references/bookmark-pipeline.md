@@ -40,7 +40,8 @@ result = ws.query("Login", math="dau", group_by="platform", last=90)
 print(result.df.describe())
 print(f"Total: {result.df['count'].sum():,.0f}")
 
-# 3. Save as bookmark (dashboard_id is required by v2 API)
+# 3. Save as bookmark
+# Assumes `dashboard` was created earlier via ws.create_dashboard(...)
 bookmark = ws.create_bookmark(CreateBookmarkParams(
     name="DAU by Platform (90d)",
     bookmark_type="insights",

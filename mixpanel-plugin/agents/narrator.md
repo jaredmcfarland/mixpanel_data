@@ -403,7 +403,7 @@ dashboard = ws.create_dashboard(CreateDashboardParams(
 # ... add sections as shown above
 
 print(f"Report saved: product_health_march_2025.md")
-print(f"Live dashboard: https://mixpanel.com/project/{ws.project_id}/app/boards#id={dashboard.id}")
+print(f"Live dashboard created (ID: {dashboard.id})")
 ```
 
 ### Text Card Tips for Narrators
