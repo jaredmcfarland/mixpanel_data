@@ -396,6 +396,184 @@ def _resolve_region(ctx: typer.Context, region: str | None) -> str:
     return "us"
 
 
+def _post_login_setup(
+    ctx: typer.Context,
+    region: str,
+    access_token: str,
+    project_id: str | None,
+) -> dict[str, object]:
+    """Set up v2 config and auto-discover projects after OAuth login.
+
+    Ensures the config file has a v2 OAuth credential entry, then
+    calls ``/me`` directly to discover accessible projects. If the
+    user has exactly one project, it is auto-selected. If multiple,
+    the user is informed to pick one.
+
+    Args:
+        ctx: Typer context for accessing ConfigManager.
+        region: Resolved OAuth region (us, eu, in).
+        access_token: The raw access token string from login.
+        project_id: Explicit project ID from ``--project-id`` flag,
+            or ``None`` if not provided.
+
+    Returns:
+        Dict with setup results for inclusion in login output.
+    """
+    import httpx
+
+    from mixpanel_data._internal.api_client import ENDPOINTS
+    from mixpanel_data._internal.me import MeCache, MeResponse
+
+    setup_result: dict[str, object] = {}
+
+    # Step 1: Ensure v2 config with OAuth credential
+    import contextlib
+
+    config = get_config(ctx)
+    cred_name = f"oauth-{region}"
+    with contextlib.suppress(ConfigError, ValueError):
+        config.add_credential(name=cred_name, type="oauth", region=region)
+
+    with contextlib.suppress(ConfigError):
+        config.set_active_credential(cred_name)
+
+    # If explicit project_id was provided, set it and we're done
+    if project_id is not None:
+        config.set_active_project(project_id)
+        setup_result["auto_selected_project"] = project_id
+        err_console.print(f"[green]Project {project_id} set as active.[/green]")
+        return setup_result
+
+    # Step 2: Auto-discover projects via direct /me call
+    # Apply custom headers from config before making the /me call
+    config.apply_config_custom_header()
+
+    app_base = ENDPOINTS[region]["app"]
+    me_url = f"{app_base}/me"
+    headers: dict[str, str] = {"Authorization": f"Bearer {access_token}"}
+    custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+    custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
+    if custom_name and custom_value:
+        headers[custom_name] = custom_value
+
+    try:
+        with httpx.Client(timeout=120) as http:
+            resp = http.get(me_url, headers=headers)
+            if resp.status_code != 200:
+                err_console.print(
+                    "[yellow]Could not auto-discover projects.[/yellow] "
+                    "Run 'mp projects list' to see available projects."
+                )
+                return setup_result
+
+            me_raw = resp.json()
+            # app_request unwraps "results", raw HTTP does not
+            me_data = me_raw.get("results", me_raw)
+            projects: dict[str, object] = me_data.get("projects", {})
+
+            # Cache the /me response for subsequent commands
+            try:
+                me_response = MeResponse.model_validate(me_data)
+                MeCache().put(region, me_response)
+            except Exception:
+                pass  # Non-fatal: caching failure doesn't block setup
+
+            if len(projects) == 0:
+                err_console.print(
+                    "[yellow]No projects found.[/yellow] "
+                    "Check your Mixpanel account has project access."
+                )
+            elif len(projects) == 1:
+                pid = next(iter(projects.keys()))
+                proj_data = projects[pid]
+                proj_name = (
+                    proj_data.get("name", pid) if isinstance(proj_data, dict) else pid
+                )
+                config.set_active_project(pid)
+                setup_result["auto_selected_project"] = pid
+                setup_result["project_name"] = proj_name
+                err_console.print(
+                    f"[green]Auto-selected project:[/green] {proj_name} ({pid})"
+                )
+
+                # Auto-detect default workspace from /me data
+                workspaces: dict[str, object] = me_data.get("workspaces", {})
+                _auto_select_workspace(config, pid, workspaces, setup_result)
+            else:
+                setup_result["projects_found"] = len(projects)
+                err_console.print(
+                    f"[yellow]{len(projects)} projects found.[/yellow] "
+                    "Run 'mp projects list' then "
+                    "'mp projects switch <id>' to select one."
+                )
+    except Exception:
+        err_console.print(
+            "[yellow]Could not auto-discover projects.[/yellow] "
+            "Run 'mp projects list' to see available projects."
+        )
+
+    return setup_result
+
+
+def _auto_select_workspace(
+    config: ConfigManager,
+    project_id: str,
+    workspaces: dict[str, object],
+    setup_result: dict[str, object],
+) -> None:
+    """Auto-select the default workspace for a project if applicable.
+
+    Scans the workspaces dict from the /me response and selects the
+    default workspace for the given project. Updates the active context
+    and setup_result dict.
+
+    Args:
+        config: ConfigManager to persist workspace selection.
+        project_id: The active project ID.
+        workspaces: Workspaces dict from /me response, keyed by
+            workspace ID string.
+        setup_result: Mutable dict to add workspace info to.
+    """
+    project_workspaces: list[tuple[int, str, bool]] = []
+    for ws_id_str, ws_data in workspaces.items():
+        if not isinstance(ws_data, dict):
+            continue
+        ws_project = ws_data.get("project_id")
+        # project_id in /me might be int or str
+        if str(ws_project) != str(project_id):
+            continue
+        try:
+            ws_id = int(ws_id_str)
+        except (ValueError, TypeError):
+            continue
+        ws_name = ws_data.get("name", ws_id_str)
+        is_default = bool(ws_data.get("is_default", False))
+        project_workspaces.append((ws_id, str(ws_name), is_default))
+
+    if not project_workspaces:
+        return
+
+    # Pick the default workspace, or the only one
+    selected = None
+    for ws_id, ws_name, is_default in project_workspaces:
+        if is_default:
+            selected = (ws_id, ws_name)
+            break
+
+    if selected is None and len(project_workspaces) == 1:
+        ws_id, ws_name, _ = project_workspaces[0]
+        selected = (ws_id, ws_name)
+
+    if selected is not None:
+        ws_id, ws_name = selected
+        config.set_active_project(project_id, workspace_id=ws_id)
+        setup_result["auto_selected_workspace"] = ws_id
+        setup_result["workspace_name"] = ws_name
+        err_console.print(
+            f"[green]Auto-selected workspace:[/green] {ws_name} ({ws_id})"
+        )
+
+
 @auth_app.command("login")
 @handle_errors
 def login(
@@ -415,8 +593,8 @@ def login(
     """Log in via OAuth 2.0 PKCE flow.
 
     Opens a browser for Mixpanel authorization. After approving,
-    tokens are saved locally for subsequent API calls. Invalidates
-    the /me cache for the region after successful login.
+    tokens are saved locally. Automatically discovers accessible
+    projects and selects one if possible.
 
     Examples:
 
@@ -434,16 +612,23 @@ def login(
 
     MeCache().invalidate(resolved_region)
 
-    output_result(
+    # Auto-setup: create v2 config, discover projects, select if possible
+    setup = _post_login_setup(
         ctx,
-        {
-            "status": "login_success",
-            "region": resolved_region,
-            "scope": tokens.scope,
-            "expires_at": tokens.expires_at.isoformat(),
-        },
-        format=format,
+        region=resolved_region,
+        access_token=tokens.access_token.get_secret_value(),
+        project_id=project_id,
     )
+
+    result: dict[str, object] = {
+        "status": "login_success",
+        "region": resolved_region,
+        "scope": tokens.scope,
+        "expires_at": tokens.expires_at.isoformat(),
+    }
+    result.update(setup)
+
+    output_result(ctx, result, format=format)
 
 
 @auth_app.command("logout")

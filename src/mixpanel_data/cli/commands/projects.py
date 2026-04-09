@@ -19,6 +19,7 @@ Aliases:
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any
 
 import typer
@@ -32,6 +33,9 @@ from mixpanel_data.cli.utils import (
     output_result,
     status_spinner,
 )
+from mixpanel_data.exceptions import ConfigError
+
+logger = logging.getLogger(__name__)
 
 projects_app = typer.Typer(
     name="projects",
@@ -71,6 +75,111 @@ def _projects_to_dicts(
     ]
 
 
+def _discover_projects_via_oauth() -> list[dict[str, Any]] | None:
+    """Discover projects by calling /me directly with OAuth tokens.
+
+    This is a fallback for when no project is configured yet (e.g.,
+    after ``mp auth login`` with multiple projects). Scans OAuth
+    storage for a valid token and calls ``/me`` directly.
+
+    Returns:
+        List of project dicts if discovery succeeds, None otherwise.
+    """
+    import httpx
+
+    from mixpanel_data._internal.api_client import ENDPOINTS
+    from mixpanel_data._internal.auth.storage import OAuthStorage
+    from mixpanel_data._internal.auth_credential import VALID_REGIONS
+    from mixpanel_data._internal.me import MeCache, MeProjectInfo, MeResponse
+
+    storage = OAuthStorage()
+
+    # Find a valid token across all regions
+    for region in VALID_REGIONS:
+        tokens = storage.load_tokens(region)
+        if tokens is None or tokens.is_expired():
+            continue
+
+        access_token = tokens.access_token.get_secret_value()
+        app_base = ENDPOINTS[region]["app"]
+        me_url = f"{app_base}/me"
+        headers: dict[str, str] = {"Authorization": f"Bearer {access_token}"}
+
+        # Propagate custom headers from env or config
+        import os
+
+        custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+        custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
+        if custom_name and custom_value:
+            headers[custom_name] = custom_value
+        else:
+            # Try reading custom header from config settings
+            from mixpanel_data._internal.config import ConfigManager
+
+            cfg = ConfigManager()
+            cfg.apply_config_custom_header()
+            custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+            custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
+            if custom_name and custom_value:
+                headers[custom_name] = custom_value
+
+        try:
+            with httpx.Client(timeout=120) as http:
+                resp = http.get(me_url, headers=headers)
+                if resp.status_code != 200:
+                    continue
+
+                me_raw = resp.json()
+                me_data = me_raw.get("results", me_raw)
+
+                # Cache for subsequent commands
+                try:
+                    me_response = MeResponse.model_validate(me_data)
+                    MeCache().put(region, me_response)
+                except Exception:
+                    pass
+
+                # Parse projects
+                projects_raw: dict[str, Any] = me_data.get("projects", {})
+                result: list[dict[str, Any]] = []
+                for pid, pdata in sorted(
+                    projects_raw.items(),
+                    key=lambda x: (
+                        x[1].get("name", "").lower() if isinstance(x[1], dict) else ""
+                    ),
+                ):
+                    if isinstance(pdata, dict):
+                        try:
+                            info = MeProjectInfo.model_validate(pdata)
+                            result.append(
+                                {
+                                    "project_id": pid,
+                                    "name": info.name,
+                                    "organization_id": info.organization_id,
+                                    "timezone": info.timezone,
+                                    "has_workspaces": info.has_workspaces,
+                                }
+                            )
+                        except Exception:
+                            result.append(
+                                {
+                                    "project_id": pid,
+                                    "name": pdata.get("name", ""),
+                                    "organization_id": pdata.get(
+                                        "organization_id", None
+                                    ),
+                                    "timezone": pdata.get("timezone", None),
+                                    "has_workspaces": pdata.get("has_workspaces", None),
+                                }
+                            )
+                return result
+        except Exception:
+            logger.debug("OAuth /me fallback failed for region %s", region)
+            continue
+
+    return None
+
+
 # =============================================================================
 # Discovery
 # =============================================================================
@@ -95,19 +204,36 @@ def projects_list(
     Mixpanel /me endpoint (cached for 24 hours). Use ``--refresh``
     to force a fresh API call.
 
+    Works even before a project is selected — falls back to direct
+    OAuth token usage for discovery.
+
     Args:
         ctx: Typer context with global options.
         refresh: If True, bypass the cache and fetch fresh data.
         format: Output format.
     """
-    workspace = get_workspace(ctx)
+    try:
+        workspace = get_workspace(ctx)
 
-    with status_spinner(ctx, "Fetching projects..."):
-        if refresh:
-            workspace.me(force_refresh=True)
-        projects = workspace.discover_projects()
+        with status_spinner(ctx, "Fetching projects..."):
+            if refresh:
+                workspace.me(force_refresh=True)
+            projects = workspace.discover_projects()
 
-    data = _projects_to_dicts(projects)
+        data = _projects_to_dicts(projects)
+    except ConfigError:
+        # No project configured yet — fall back to direct OAuth /me call
+        with status_spinner(ctx, "Discovering projects via OAuth..."):
+            data_or_none = _discover_projects_via_oauth()
+
+        if data_or_none is None:
+            err_console.print(
+                "[red]No valid credentials found.[/red] Run 'mp auth login' first."
+            )
+            raise typer.Exit(1) from None
+
+        data = data_or_none
+
     output_result(ctx, data, columns=_PROJECT_COLUMNS, format=format)
 
 
@@ -126,13 +252,26 @@ def projects_refresh(
         ctx: Typer context with global options.
         format: Output format.
     """
-    workspace = get_workspace(ctx)
+    try:
+        workspace = get_workspace(ctx)
 
-    with status_spinner(ctx, "Refreshing /me cache..."):
-        workspace.me(force_refresh=True)
-        projects = workspace.discover_projects()
+        with status_spinner(ctx, "Refreshing /me cache..."):
+            workspace.me(force_refresh=True)
+            projects = workspace.discover_projects()
 
-    data = _projects_to_dicts(projects)
+        data = _projects_to_dicts(projects)
+    except ConfigError:
+        with status_spinner(ctx, "Discovering projects via OAuth..."):
+            data_or_none = _discover_projects_via_oauth()
+
+        if data_or_none is None:
+            err_console.print(
+                "[red]No valid credentials found.[/red] Run 'mp auth login' first."
+            )
+            raise typer.Exit(1) from None
+
+        data = data_or_none
+
     err_console.print(f"[green]Refreshed.[/green] Found {len(data)} projects.")
     output_result(ctx, data, columns=_PROJECT_COLUMNS, format=format)
 
