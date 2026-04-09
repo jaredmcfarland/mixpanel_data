@@ -250,6 +250,7 @@ def find_bridge_file() -> Path | None:
     Search order:
         1. ``MP_AUTH_FILE`` environment variable (explicit path)
         2. ``~/.claude/mixpanel/auth.json`` (standard location)
+        3. ``~/mnt/.claude/mixpanel/auth.json`` (Cowork bindfs mount)
 
     Returns:
         Path to the bridge file if found, None otherwise.
@@ -270,10 +271,19 @@ def find_bridge_file() -> Path | None:
         logger.debug("MP_AUTH_FILE set but file not found: %s", env_path)
         return None
 
-    # Priority 2: Default location
+    # Priority 2: Default location (~/.claude/mixpanel/auth.json)
     default = _default_bridge_path()
     if default.is_file():
         return default
+
+    # Priority 3: Cowork bindfs mount (~/mnt/.claude/mixpanel/auth.json)
+    # In Cowork, the host's ~/.claude/ is mounted at $HOME/mnt/.claude/
+    cowork_mount = (
+        Path.home() / "mnt" / _CLAUDE_DIR_NAME / _BRIDGE_DIR_NAME / _BRIDGE_FILENAME
+    )
+    if cowork_mount.is_file():
+        logger.debug("Found bridge file at Cowork mount: %s", cowork_mount)
+        return cowork_mount
 
     return None
 
