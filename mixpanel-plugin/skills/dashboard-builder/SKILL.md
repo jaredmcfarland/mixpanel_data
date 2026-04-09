@@ -58,8 +58,11 @@ Before building anything, discover the data. Never build reports for events with
 import mixpanel_data as mp
 ws = mp.Workspace()
 
-# Discover events
+# Discover events and top events by volume
 events = ws.events()
+top = ws.top_events(limit=15)
+for t in top:
+    print(f"{t.event}: {t.count:,} ({t.percent_change:+.1%})")
 
 # Check volumes for candidate events
 for event in candidate_events:

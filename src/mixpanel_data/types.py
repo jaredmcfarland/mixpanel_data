@@ -807,6 +807,18 @@ class TopEvent:
     """Today's event activity data.
 
     Represents an event's current activity including count and trend.
+
+    Attributes:
+        event: Event name.
+        count: Today's event count.
+        percent_change: Change vs yesterday (-1.0 to +infinity).
+
+    Example:
+        ```python
+        top = ws.top_events(limit=10)
+        for t in top:
+            print(f"{t.event}: {t.count:,} ({t.percent_change:+.1%})")
+        ```
     """
 
     event: str

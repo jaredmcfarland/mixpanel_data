@@ -1116,10 +1116,18 @@ class Workspace:
             limit: Maximum number of events to return.
 
         Returns:
-            List of TopEvent objects (event, count, percent_change).
+            List of TopEvent objects with ``event``, ``count``, and
+            ``percent_change`` fields.
 
         Raises:
             ConfigError: If API credentials not available.
+
+        Example:
+            ```python
+            top = ws.top_events(limit=10)
+            for t in top:
+                print(f"{t.event}: {t.count:,} ({t.percent_change:+.1%})")
+            ```
         """
         return self._discovery_service.list_top_events(type=type, limit=limit)
 
