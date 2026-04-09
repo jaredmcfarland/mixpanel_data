@@ -372,5 +372,5 @@ class TestErrorMessages:
             )
 
         cm = ConfigManager(config_path=config_path)
-        with pytest.raises(ConfigError, match="mp projects list"):
+        with pytest.raises(ConfigError, match="mp projects list.*--project"):
             cm.resolve_session()

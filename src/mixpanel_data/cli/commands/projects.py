@@ -132,8 +132,8 @@ def _discover_projects_via_oauth() -> list[dict[str, Any]] | None:
                 try:
                     me_response = MeResponse.model_validate(me_data)
                     MeCache().put(region, me_response)
-                except Exception:
-                    pass
+                except (ValueError, OSError) as exc:
+                    logger.debug("Failed to cache /me response: %s", exc)
 
                 # Parse projects
                 projects_raw: dict[str, Any] = me_data.get("projects", {})
@@ -156,7 +156,8 @@ def _discover_projects_via_oauth() -> list[dict[str, Any]] | None:
                                     "has_workspaces": info.has_workspaces,
                                 }
                             )
-                        except Exception:
+                        except (ValueError, TypeError) as exc:
+                            logger.debug("Failed to parse project %s: %s", pid, exc)
                             result.append(
                                 {
                                     "project_id": pid,
@@ -169,8 +170,8 @@ def _discover_projects_via_oauth() -> list[dict[str, Any]] | None:
                                 }
                             )
                 return result
-        except Exception:
-            logger.debug("OAuth /me fallback failed for region %s", region)
+        except (httpx.HTTPError, OSError, ValueError, KeyError) as exc:
+            logger.debug("OAuth /me fallback failed for region %s: %s", region, exc)
             continue
 
     return None

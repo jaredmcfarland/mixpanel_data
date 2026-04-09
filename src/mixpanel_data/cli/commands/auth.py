@@ -19,6 +19,7 @@ This module provides commands for managing Mixpanel accounts:
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from typing import Annotated, Literal
@@ -36,6 +37,8 @@ from mixpanel_data.cli.utils import (
     output_result,
 )
 from mixpanel_data.exceptions import AccountNotFoundError, ConfigError
+
+logger = logging.getLogger(__name__)
 
 auth_app = typer.Typer(
     name="auth",
@@ -475,8 +478,8 @@ def _post_login_setup(
             try:
                 me_response = MeResponse.model_validate(me_data)
                 MeCache().put(region, me_response)
-            except Exception:
-                pass  # Non-fatal: caching failure doesn't block setup
+            except (ValueError, OSError) as exc:
+                logger.debug("Failed to cache /me response: %s", exc)
 
             if len(projects) == 0:
                 err_console.print(
@@ -506,7 +509,8 @@ def _post_login_setup(
                     "Run 'mp projects list' then "
                     "'mp projects switch <id>' to select one."
                 )
-    except Exception:
+    except (httpx.HTTPError, OSError, ValueError, KeyError) as exc:
+        logger.debug("Post-login /me discovery failed: %s", exc)
         err_console.print(
             "[yellow]Could not auto-discover projects.[/yellow] "
             "Run 'mp projects list' to see available projects."

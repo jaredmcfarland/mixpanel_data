@@ -553,7 +553,9 @@ class ConfigManager:
         from mixpanel_data._internal.auth.storage import OAuthStorage
 
         # Determine region and project_id for token lookup
-        region, project_id = self._resolve_region_and_project_for_oauth()
+        region, project_id = self._resolve_region_and_project_for_oauth(
+            _oauth_storage_dir=_oauth_storage_dir,
+        )
         if region is None:
             return None
 
@@ -587,12 +589,19 @@ class ConfigManager:
 
     def _resolve_region_and_project_for_oauth(
         self,
+        *,
+        _oauth_storage_dir: Path | None = None,
     ) -> tuple[str | None, str | None]:
         """Determine region and project_id for OAuth token lookup.
 
         Checks in order:
         1. ``MP_REGION`` / ``MP_PROJECT_ID`` environment variables
         2. Default account from config file
+        3. v2 credentials and active context
+        4. Scan OAuth storage for any valid token
+
+        Args:
+            _oauth_storage_dir: Override OAuth storage directory for testing.
 
         Returns:
             Tuple of ``(region, project_id)``. Either or both may be
@@ -640,7 +649,7 @@ class ConfigManager:
         # Last resort: scan OAuth storage for any valid token
         from mixpanel_data._internal.auth.storage import OAuthStorage
 
-        storage = OAuthStorage()
+        storage = OAuthStorage(storage_dir=_oauth_storage_dir)
         for region_candidate in VALID_REGIONS:
             tokens = storage.load_tokens(region_candidate)
             if tokens is not None and not tokens.is_expired():
@@ -1682,7 +1691,8 @@ class ConfigManager:
             raise ConfigError(
                 "No project selected. "
                 "Run 'mp projects list' to see available projects, then "
-                "'mp projects switch <id>' to select one.",
+                "'mp projects switch <id>' to select one, "
+                "or pass --project for a one-off override.",
             )
 
         project = ProjectContext(
