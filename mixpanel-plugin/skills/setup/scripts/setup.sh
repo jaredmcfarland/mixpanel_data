@@ -118,5 +118,37 @@ except Exception as e:
     print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')
 "
 
+# Cowork detection: check for bridge file
+if [ -d "/sessions" ] || [ -n "${CLAUDE_COWORK:-}" ]; then
+  echo ""
+  echo "Cowork environment detected."
+  BRIDGE_FOUND=""
+  for f in "$HOME/.claude/mixpanel/auth.json"; do
+    if [ -f "$f" ]; then
+      echo "✓ Auth bridge file found: $f"
+      "$python_cmd" -c "
+import json
+with open('$f') as fh:
+    bridge = json.load(fh)
+print(f'  Auth method: {bridge[\"auth_method\"]}')
+print(f'  Region: {bridge[\"region\"]}')
+print(f'  Project: {bridge[\"project_id\"]}')
+if bridge.get('custom_header'):
+    print(f'  Custom header: {bridge[\"custom_header\"][\"name\"]} ✓')
+if bridge.get('oauth') and bridge['oauth'].get('expires_at'):
+    print(f'  Token expires: {bridge[\"oauth\"][\"expires_at\"]}')
+"
+      BRIDGE_FOUND=1
+      break
+    fi
+  done
+  if [ -z "$BRIDGE_FOUND" ]; then
+    echo "⚠ No auth bridge file found."
+    echo "  On your HOST machine, run:"
+    echo "    mp auth cowork-setup"
+    echo "  Then start a new Cowork session."
+  fi
+fi
+
 echo ""
 echo "=== Setup complete ==="

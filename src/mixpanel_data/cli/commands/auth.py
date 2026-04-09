@@ -629,3 +629,286 @@ def migrate_config(
         data["backup_path"] = str(result.backup_path)
 
     output_result(ctx, data, format=format)
+
+
+@auth_app.command("cowork-setup")
+@handle_errors
+def cowork_setup(
+    ctx: typer.Context,
+    credential: Annotated[
+        str | None,
+        typer.Option("--credential", help="Named credential to export."),
+    ] = None,
+    project_id: Annotated[
+        str | None,
+        typer.Option("--project-id", help="Mixpanel project ID."),
+    ] = None,
+    workspace_id: Annotated[
+        int | None,
+        typer.Option("--workspace-id", help="Workspace ID for App API scoping."),
+    ] = None,
+    format: FormatOption = "json",
+) -> None:
+    """Export credentials to a bridge file for Claude Cowork VMs.
+
+    Resolves the current credentials (from env vars, config, or OAuth
+    tokens) and writes them to ``~/.claude/mixpanel/auth.json`` so that
+    ``mixpanel_data`` running inside a Cowork VM can authenticate
+    without browser access.
+
+    For OAuth credentials, includes the refresh token so the VM can
+    silently renew expired access tokens.
+
+    For service accounts, includes username and secret.
+
+    Custom headers from env vars or config ``[settings]`` are also
+    included if present.
+
+    After writing, tests the credentials with a lightweight API call.
+
+    Examples:
+
+        mp auth cowork-setup
+        mp auth cowork-setup --credential demo-sa --project-id 12345
+        mp auth cowork-setup --workspace-id 3448413
+    """
+    from pydantic import SecretStr
+
+    from mixpanel_data._internal.auth.bridge import (
+        AuthBridgeFile,
+        BridgeCustomHeader,
+        BridgeOAuth,
+        BridgeServiceAccount,
+        _default_bridge_path,
+        write_bridge_file,
+    )
+    from mixpanel_data._internal.auth.storage import OAuthStorage
+    from mixpanel_data._internal.config import AuthMethod as _AuthMethod
+
+    config = get_config(ctx)
+    bridge_path = _default_bridge_path()
+
+    # Resolve credentials via the standard priority chain
+    creds = config.resolve_credentials(account=credential)
+
+    # Determine workspace_id from env or config if not explicitly provided
+    resolved_workspace_id = workspace_id
+    if resolved_workspace_id is None:
+        env_ws = os.environ.get("MP_WORKSPACE_ID")
+        if env_ws:
+            import contextlib
+
+            with contextlib.suppress(ValueError):
+                resolved_workspace_id = int(env_ws)
+
+    # Override project_id if explicitly provided
+    resolved_project_id = project_id or creds.project_id
+
+    # Gather custom header from env vars or config [settings]
+    custom_header: BridgeCustomHeader | None = None
+    env_header_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+    env_header_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
+    if env_header_name and env_header_value:
+        custom_header = BridgeCustomHeader(
+            name=env_header_name,
+            value=SecretStr(env_header_value),
+        )
+    else:
+        config_header = config.get_custom_header()
+        if config_header is not None:
+            header_name, header_value = config_header
+            custom_header = BridgeCustomHeader(
+                name=header_name,
+                value=SecretStr(header_value),
+            )
+
+    # Build auth-method-specific sections
+    oauth_section: BridgeOAuth | None = None
+    sa_section: BridgeServiceAccount | None = None
+    auth_method_str: str
+
+    if creds.auth_method == _AuthMethod.oauth:
+        auth_method_str = "oauth"
+        # Load full token data from OAuthStorage for refresh capability
+        storage = OAuthStorage()
+        region = creds.region
+        tokens = storage.load_tokens(region)
+        if tokens is None:
+            err_console.print(
+                "[red]Error:[/red] OAuth tokens not found in local storage. "
+                "Run 'mp auth login' first."
+            )
+            raise typer.Exit(1)
+
+        # Load client info for client_id
+        client_info = storage.load_client_info(region)
+        client_id = client_info.client_id if client_info else "unknown"
+
+        oauth_section = BridgeOAuth(
+            access_token=SecretStr(tokens.access_token.get_secret_value()),
+            refresh_token=SecretStr(tokens.refresh_token.get_secret_value())
+            if tokens.refresh_token
+            else None,
+            expires_at=tokens.expires_at,
+            scope=tokens.scope,
+            token_type=tokens.token_type,
+            client_id=client_id,
+        )
+    else:
+        auth_method_str = "service_account"
+        sa_section = BridgeServiceAccount(
+            username=creds.username,
+            secret=SecretStr(creds.secret.get_secret_value()),
+        )
+
+    # Build and write the bridge file
+    bridge = AuthBridgeFile(
+        version=1,
+        auth_method=auth_method_str,
+        region=creds.region,
+        project_id=resolved_project_id,
+        workspace_id=resolved_workspace_id,
+        custom_header=custom_header,
+        oauth=oauth_section,
+        service_account=sa_section,
+    )
+    write_bridge_file(bridge, bridge_path)
+
+    # Test credentials with a lightweight API call
+    test_ok = False
+    try:
+        from mixpanel_data.workspace import Workspace
+
+        test_result = Workspace.test_credentials(credential)
+        test_ok = bool(test_result.get("success", False))
+    except Exception:
+        pass
+
+    data: dict[str, object] = {
+        "status": "cowork_setup_complete",
+        "bridge_path": str(bridge_path),
+        "auth_method": auth_method_str,
+        "region": creds.region,
+        "project_id": resolved_project_id,
+        "workspace_id": resolved_workspace_id,
+        "has_custom_header": custom_header is not None,
+        "credentials_valid": test_ok,
+    }
+    output_result(ctx, data, format=format)
+
+
+@auth_app.command("cowork-teardown")
+@handle_errors
+def cowork_teardown(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+) -> None:
+    """Remove the Cowork auth bridge file.
+
+    Deletes ``~/.claude/mixpanel/auth.json`` if it exists. This
+    revokes Cowork VM access to Mixpanel credentials exported by
+    ``cowork-setup``.
+
+    Examples:
+
+        mp auth cowork-teardown
+    """
+    from mixpanel_data._internal.auth.bridge import (
+        _default_bridge_path,
+    )
+
+    bridge_path = _default_bridge_path()
+
+    if bridge_path.is_file():
+        bridge_path.unlink()
+        output_result(
+            ctx,
+            {
+                "status": "cowork_teardown_complete",
+                "bridge_path": str(bridge_path),
+                "removed": True,
+            },
+            format=format,
+        )
+    else:
+        output_result(
+            ctx,
+            {
+                "status": "cowork_teardown_complete",
+                "bridge_path": str(bridge_path),
+                "removed": False,
+                "message": "Bridge file did not exist.",
+            },
+            format=format,
+        )
+
+
+@auth_app.command("cowork-status")
+@handle_errors
+def cowork_status(
+    ctx: typer.Context,
+    format: FormatOption = "json",
+) -> None:
+    """Show the status of the Cowork auth bridge file.
+
+    Checks whether ``~/.claude/mixpanel/auth.json`` exists and, if
+    so, displays its auth method, project, region, token expiry, and
+    custom header status.
+
+    If the bridge file does not exist, suggests running
+    ``cowork-setup``.
+
+    Examples:
+
+        mp auth cowork-status
+        mp auth cowork-status --format table
+    """
+    from mixpanel_data._internal.auth.bridge import (
+        _default_bridge_path,
+        load_bridge_file,
+    )
+
+    bridge_path = _default_bridge_path()
+
+    if not bridge_path.is_file():
+        data: dict[str, object] = {
+            "exists": False,
+            "bridge_path": str(bridge_path),
+            "message": "No bridge file found. Run 'mp auth cowork-setup' to create one.",
+        }
+        output_result(ctx, data, format=format)
+        return
+
+    bridge = load_bridge_file(bridge_path)
+    if bridge is None:
+        data = {
+            "exists": True,
+            "valid": False,
+            "bridge_path": str(bridge_path),
+            "message": "Bridge file exists but is invalid. "
+            "Run 'mp auth cowork-setup' to recreate it.",
+        }
+        output_result(ctx, data, format=format)
+        return
+
+    # Build status info
+    data = {
+        "exists": True,
+        "valid": True,
+        "bridge_path": str(bridge_path),
+        "auth_method": bridge.auth_method,
+        "region": bridge.region,
+        "project_id": bridge.project_id,
+        "workspace_id": bridge.workspace_id,
+        "has_custom_header": bridge.custom_header is not None,
+    }
+
+    if bridge.oauth is not None:
+        data["oauth_expires_at"] = bridge.oauth.expires_at.isoformat()
+        data["oauth_is_expired"] = bridge.oauth.is_expired()
+        data["oauth_scope"] = bridge.oauth.scope
+
+    if bridge.service_account is not None:
+        data["sa_username"] = bridge.service_account.username
+
+    output_result(ctx, data, format=format)

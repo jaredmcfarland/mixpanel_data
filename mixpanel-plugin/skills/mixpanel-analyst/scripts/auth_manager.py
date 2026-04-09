@@ -19,6 +19,7 @@ Usage:
     python auth_manager.py projects                  # List accessible projects
     python auth_manager.py context                   # Show active context
     python auth_manager.py switch-project <project_id> [--workspace-id W]
+    python auth_manager.py cowork-status                # Check Cowork bridge file
 """
 
 import argparse
@@ -546,6 +547,47 @@ def cmd_switch_project(args: argparse.Namespace) -> None:
         _json_error(type(e).__name__, str(e))
 
 
+def cmd_cowork_status(_args: argparse.Namespace) -> None:
+    """Check Cowork bridge file status."""
+    try:
+        from mixpanel_data._internal.auth.bridge import (
+            detect_cowork,
+            find_bridge_file,
+            load_bridge_file,
+        )
+    except ImportError:
+        _json_error(
+            "ImportError",
+            "mixpanel_data is not installed or too old for Cowork support.",
+        )
+        return
+
+    is_cowork = detect_cowork()
+    path = find_bridge_file()
+    bridge = load_bridge_file(path) if path else None
+
+    result: dict[str, Any] = {
+        "operation": "cowork-status",
+        "is_cowork": is_cowork,
+        "bridge_found": bridge is not None,
+        "bridge_path": str(path) if path else None,
+    }
+
+    if bridge is not None:
+        result["auth_method"] = bridge.auth_method
+        result["region"] = bridge.region
+        result["project_id"] = bridge.project_id
+        result["workspace_id"] = bridge.workspace_id
+        result["has_custom_header"] = bridge.custom_header is not None
+        if bridge.oauth:
+            result["token_expires_at"] = str(bridge.oauth.expires_at)
+            result["token_expired"] = bridge.oauth.is_expired()
+    else:
+        result["suggestion"] = "Run 'mp auth cowork-setup' on your host machine."
+
+    _json_out(result)
+
+
 def main() -> None:
     """Parse arguments and dispatch to subcommand handler."""
     parser = argparse.ArgumentParser(
@@ -595,6 +637,9 @@ def main() -> None:
     # context (show active context)
     subparsers.add_parser("context", help="Show active context")
 
+    # cowork-status
+    subparsers.add_parser("cowork-status", help="Check Cowork bridge file status")
+
     # switch-project
     p_switch_proj = subparsers.add_parser(
         "switch-project", help="Switch active project"
@@ -627,6 +672,7 @@ def main() -> None:
         "migrate": cmd_migrate,
         "projects": cmd_projects,
         "context": cmd_context,
+        "cowork-status": cmd_cowork_status,
         "switch-project": cmd_switch_project,
         None: cmd_status,
     }

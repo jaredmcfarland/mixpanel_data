@@ -145,6 +145,24 @@ Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager
 On success: Confirm the active project was changed.
 If v1 config: Error suggests running `/mp-auth migrate` first.
 
+### "cowork-setup"
+
+This command is only available on the host machine, not inside Cowork.
+Tell the user: "Run `mp auth cowork-setup` on your **host machine** (not inside Cowork) to export credentials for Cowork sessions."
+
+### "cowork-status"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py cowork-status`
+
+Parse the JSON and present:
+- If `bridge_found` is true: Show auth method, project, region, token expiry, custom header presence
+- If `bridge_found` is false: Suggest running `mp auth cowork-setup` on the host machine
+
+### "cowork-teardown"
+
+This command is only available on the host machine, not inside Cowork.
+Tell the user: "Run `mp auth cowork-teardown` on your **host machine** to remove Cowork credentials."
+
 ## Presentation Style
 
 - Be concise — show status in 2-3 lines, not a wall of JSON

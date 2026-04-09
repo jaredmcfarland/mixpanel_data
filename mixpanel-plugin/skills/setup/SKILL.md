@@ -57,6 +57,42 @@ export MP_PROJECT_ID="12345"
 export MP_REGION="us"  # or "eu", "in"
 ```
 
+## Cowork Environment
+
+If running inside Claude Cowork (detected automatically), credentials work differently:
+
+- **OAuth login and interactive account setup are NOT available** (no browser, no host terminal access)
+- Credentials must be configured on the **host machine** before starting a Cowork session
+
+### If No Credentials Found in Cowork
+
+Tell the user:
+
+> No Mixpanel credentials found in this Cowork session.
+> 
+> On your **host machine** (outside Cowork), run:
+> ```
+> mp auth cowork-setup
+> ```
+> This exports your credentials to `~/.claude/mixpanel/auth.json`, which is
+> automatically mounted into Cowork sessions.
+> 
+> Then **start a new Cowork session** — credentials will be available automatically.
+
+Do NOT suggest `/mp-auth login`, `/mp-auth add`, or environment variables — these won't work inside Cowork.
+
+### If Bridge File Found But Token Expired
+
+The library will auto-refresh the OAuth token (no browser needed). If refresh fails:
+
+> Your OAuth session has expired and could not be refreshed.
+> On your host machine, run:
+> ```
+> mp auth login        # re-authenticate
+> mp auth cowork-setup # re-export to Cowork
+> ```
+> Then start a new Cowork session.
+
 ## Verify Everything Works
 
 ```bash
