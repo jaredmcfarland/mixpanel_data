@@ -109,6 +109,7 @@ For complex questions requiring multiple engines, decompose into a plan:
 | Executive summary, stakeholder report | **Narrator** | Business-ready formatting |
 | Flow/path analysis | **Handle directly** | Use `ws.query_flow()` |
 | Entity CRUD (dashboards, cohorts, flags) | **Handle directly** | App API calls |
+| Build/design a dashboard | **dashboard-builder skill** | Full workflow with templates |
 
 _Each specialist agent has dedicated methodology: Explorer uses [GQM decomposition](../skills/mixpanel-analyst/references/analytical-frameworks.md), Diagnostician follows an [8-step diagnostic protocol](../skills/mixpanel-analyst/references/analytical-frameworks.md), Synthesizer applies [cross-query synthesis patterns](../skills/mixpanel-analyst/references/cross-query-synthesis.md), Narrator uses [AARRR-structured report templates](../skills/mixpanel-analyst/references/analytical-frameworks.md)._
 
@@ -206,6 +207,92 @@ if errors:
     for e in errors:
         print(f"{e.code}: {e.message} (path: {e.path})")
 ```
+
+## Dashboard Building
+
+### Dashboard Delegation Rules
+
+```
+When user asks about dashboards:
+  "build/create/make a dashboard"    → Invoke dashboard-builder skill
+  "update/modify/change dashboard"   → Handle directly with update_dashboard()
+  "add reports to dashboard"         → Handle directly with add_report_to_dashboard()
+  "analyze existing dashboard"       → ws.get_dashboard() + summarize contents
+  "fix/improve dashboard"            → ws.get_dashboard() + identify gaps + suggest
+```
+
+### Quick Dashboard
+
+```python
+import mixpanel_data as mp
+from mixpanel_data.types import CreateDashboardParams, UpdateDashboardParams, CreateBookmarkParams
+import json
+
+ws = mp.Workspace()
+
+# 1. Query metrics
+dau = ws.query("Login", math="dau", last=30)
+signups = ws.query("Signup", math="total", last=30)
+
+# 2. Create dashboard
+dashboard = ws.create_dashboard(CreateDashboardParams(
+    title="Growth Overview",
+    description="DAU and signup trends.",
+))
+
+# 3. Add intro text card
+ws.update_dashboard(dashboard.id, UpdateDashboardParams(
+    content={"action": "create", "content_type": "text",
+             "content_params": {"markdown": "<h2>Growth Overview</h2><p>Key growth metrics.</p>"}}
+))
+
+# 4. Add reports inline (preferred — no separate bookmark)
+for name, btype, result in [("DAU (30d)", "insights", dau), ("Signups (30d)", "insights", signups)]:
+    ws.update_dashboard(dashboard.id, UpdateDashboardParams(
+        content={"action": "create", "content_type": "report",
+                 "content_params": {"bookmark": {"name": name, "type": btype,
+                                                  "params": json.dumps(result.params)}}}
+    ))
+```
+
+### Multi-Engine Dashboard
+
+```python
+ws = mp.Workspace()
+
+# Query across engines
+dau = ws.query("Login", math="dau", last=30)
+funnel = ws.query_funnel(["Signup", "Onboard", "Purchase"], last=30)
+retention = ws.query_retention("Signup", "Login", last=90)
+flow = ws.query_flow("Purchase", forward=0, reverse=3)
+
+# Create dashboard and add all reports
+dashboard = ws.create_dashboard(CreateDashboardParams(title="Product Health"))
+
+ws.update_dashboard(dashboard.id, UpdateDashboardParams(
+    content={"action": "create", "content_type": "text",
+             "content_params": {"markdown": "<h2>Product Health</h2><p>Metrics across all dimensions.</p>"}}
+))
+
+for name, btype, result in [
+    ("Daily Active Users", "insights", dau),
+    ("Conversion Funnel", "funnels", funnel),
+    ("New User Retention", "retention", retention),
+    ("Purchase Journeys", "flows", flow),
+]:
+    ws.update_dashboard(dashboard.id, UpdateDashboardParams(
+        content={"action": "create", "content_type": "report",
+                 "content_params": {"bookmark": {"name": name, "type": btype,
+                                                  "params": json.dumps(result.params)}}}
+    ))
+```
+
+### Dashboard Gotchas
+
+1. Use inline report creation (content action with bookmark params) -- don't create separate bookmarks
+2. Strip `\n` from text card markdown before sending
+3. Max 4 items per row, 12-column grid, max 30 rows
+4. Full guide: see `skills/dashboard-builder/` and its references
 
 ## Quality Standards
 
