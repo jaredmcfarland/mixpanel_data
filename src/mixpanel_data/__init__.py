@@ -126,6 +126,8 @@ from mixpanel_data.types import (
     DailyCount,
     DailyCountsResult,
     Dashboard,
+    DashboardRow,
+    DashboardRowContent,
     DataVolumeAnomaly,
     DeleteSchemasResponse,
     DropFilter,
@@ -359,6 +361,8 @@ __all__ = [
     # Core Entity CRUD types (Phase 024)
     "Dashboard",
     "CreateDashboardParams",
+    "DashboardRow",
+    "DashboardRowContent",
     "UpdateDashboardParams",
     "BlueprintTemplate",
     "BlueprintConfig",

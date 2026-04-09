@@ -444,6 +444,33 @@ _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
     ),
 ]
 
+# Dashboard hints point to the dashboard-expert skill (sibling skill directory),
+# not the analyst's own references/.  Checked separately because the file lives
+# outside refs_dir.
+_DASHBOARD_TRIGGERS = frozenset(
+    {
+        "create_dashboard",
+        "get_dashboard",
+        "update_dashboard",
+        "delete_dashboard",
+        "list_dashboards",
+        "add_report_to_dashboard",
+        "remove_report_from_dashboard",
+        "favorite_dashboard",
+        "unfavorite_dashboard",
+        "pin_dashboard",
+        "unpin_dashboard",
+        "update_text_card",
+        "update_report_link",
+        "bulk_delete_dashboards",
+        "CreateDashboardParams",
+        "UpdateDashboardParams",
+        "UpdateTextCardParams",
+        "UpdateReportLinkParams",
+        "Dashboard",
+    }
+)
+
 
 def _show_reference_hints(query: str) -> None:
     """Print a contextual reference hint based on the help query.
@@ -483,6 +510,20 @@ def _show_reference_hints(query: str) -> None:
                     f"     read references/{filename}"
                 )
             return
+
+    # Dashboard hints — lives in sibling skill directory
+    if "dashboard" in query.lower() or (part_set & _DASHBOARD_TRIGGERS):
+        skill_dir = Path(__file__).resolve().parent.parent.parent / "dashboard-expert"
+        ref = skill_dir / "references" / "dashboard-reference.md"
+        if ref.is_file():
+            print(
+                "\n---\n"
+                "Tip: For dashboard analysis, creation, layout, text cards, and templates,\n"
+                "     read skills/dashboard-expert/references/dashboard-reference.md\n"
+                "     Design templates: skills/dashboard-expert/references/"
+                "dashboard-templates.md\n"
+                "     Full workflow:    skills/dashboard-expert/SKILL.md"
+            )
 
 
 def show_detail(obj: Any, path: str) -> None:

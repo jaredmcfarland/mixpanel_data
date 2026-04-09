@@ -807,6 +807,18 @@ class TopEvent:
     """Today's event activity data.
 
     Represents an event's current activity including count and trend.
+
+    Attributes:
+        event: Event name.
+        count: Today's event count.
+        percent_change: Change vs yesterday (-1.0 to +infinity).
+
+    Example:
+        ```python
+        top = ws.top_events(limit=10)
+        for t in top:
+            print(f"{t.event}: {t.count:,} ({t.percent_change:+.1%})")
+        ```
     """
 
     event: str
@@ -2531,6 +2543,77 @@ class Dashboard(BaseModel):
     """Template type if created from a template."""
 
 
+class DashboardRowContent(BaseModel):
+    """A single content item within a dashboard row.
+
+    Attributes:
+        content_type: Type of content — ``"text"`` or ``"report"``.
+        content_params: Parameters for the content. Shape depends on
+            ``content_type``:
+
+            - **text**: ``{"markdown": "<h2>Title</h2><p>Description</p>"}``
+            - **report**: ``{"bookmark": {"name": "...", "type": "insights",
+              "params": json.dumps(result.params)}}``
+
+    Example:
+        ```python
+        # Text card
+        DashboardRowContent(
+            content_type="text",
+            content_params={"markdown": "<h2>Overview</h2>"},
+        )
+
+        # Report (inline bookmark)
+        DashboardRowContent(
+            content_type="report",
+            content_params={
+                "bookmark": {
+                    "name": "DAU (90d)",
+                    "type": "insights",
+                    "params": json.dumps(result.params),
+                }
+            },
+        )
+        ```
+    """
+
+    content_type: Literal["text", "report"]
+    """Type of content: ``"text"`` for text cards, ``"report"`` for reports."""
+
+    content_params: dict[str, Any]
+    """Content parameters. Shape depends on ``content_type``."""
+
+
+class DashboardRow(BaseModel):
+    """A row of content items for a dashboard.
+
+    Each row can contain 1-4 content items. Items in the same row share the
+    row and have their widths auto-distributed (12-column grid).
+
+    Attributes:
+        contents: List of content items in this row (max 4).
+
+    Example:
+        ```python
+        # Row with 3 KPI cards (auto-distributed to width 4 each)
+        DashboardRow(contents=[
+            DashboardRowContent(content_type="report", content_params={
+                "bookmark": {"name": "DAU", "type": "insights",
+                             "params": json.dumps(dau.params)}}),
+            DashboardRowContent(content_type="report", content_params={
+                "bookmark": {"name": "Signups", "type": "insights",
+                             "params": json.dumps(signups.params)}}),
+            DashboardRowContent(content_type="report", content_params={
+                "bookmark": {"name": "Purchases", "type": "insights",
+                             "params": json.dumps(purchases.params)}}),
+        ])
+        ```
+    """
+
+    contents: list[DashboardRowContent]
+    """Content items in this row (max 4)."""
+
+
 class CreateDashboardParams(BaseModel):
     """Parameters for creating a new dashboard.
 
@@ -2543,12 +2626,45 @@ class CreateDashboardParams(BaseModel):
         breakdowns: Dashboard-level breakdowns.
         time_filter: Dashboard-level time filter.
         duplicate: ID of dashboard to duplicate.
+        rows: Initial dashboard content with layout. Each row contains 1-4
+            content items (text cards or reports). Items in the same row are
+            placed side-by-side with auto-distributed widths. This is the
+            recommended way to create dashboards with proper layout — adding
+            content after creation via ``update_dashboard()`` places each item
+            in its own full-width row, and layout restructuring (merging items
+            into shared rows) is not supported via PATCH.
 
     Example:
         ```python
-        params = CreateDashboardParams(title="Q1 Metrics")
-        data = params.model_dump(exclude_none=True)
-        # {"title": "Q1 Metrics"}
+        import json
+
+        params = CreateDashboardParams(
+            title="Product Health",
+            rows=[
+                DashboardRow(contents=[
+                    DashboardRowContent(
+                        content_type="text",
+                        content_params={"markdown": "<h2>Overview</h2>"},
+                    ),
+                ]),
+                DashboardRow(contents=[
+                    DashboardRowContent(
+                        content_type="report",
+                        content_params={"bookmark": {
+                            "name": "DAU", "type": "insights",
+                            "params": json.dumps(dau_result.params),
+                        }},
+                    ),
+                    DashboardRowContent(
+                        content_type="report",
+                        content_params={"bookmark": {
+                            "name": "Signups", "type": "insights",
+                            "params": json.dumps(signup_result.params),
+                        }},
+                    ),
+                ]),
+            ],
+        )
         ```
     """
 
@@ -2575,6 +2691,9 @@ class CreateDashboardParams(BaseModel):
 
     duplicate: int | None = None
     """ID of dashboard to duplicate."""
+
+    rows: list[DashboardRow] | None = None
+    """Initial content rows with layout. Each row has 1-4 content items."""
 
 
 class UpdateDashboardParams(BaseModel):
