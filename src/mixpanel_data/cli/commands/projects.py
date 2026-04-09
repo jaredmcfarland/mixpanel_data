@@ -120,7 +120,7 @@ def _discover_projects_via_oauth() -> list[dict[str, Any]] | None:
             headers[custom_name] = custom_value
 
         try:
-            with httpx.Client(timeout=30) as http:
+            with httpx.Client(timeout=60) as http:
                 resp = http.get(me_url, headers=headers)
                 if resp.status_code != 200:
                     continue
@@ -218,7 +218,14 @@ def projects_list(
             projects = workspace.discover_projects()
 
         data = _projects_to_dicts(projects)
-    except ConfigError:
+    except ConfigError as exc:
+        # Re-raise subclass errors (e.g. AccountNotFoundError) for
+        # proper handling by @handle_errors decorator
+        from mixpanel_data.exceptions import AccountNotFoundError
+
+        if isinstance(exc, AccountNotFoundError):
+            raise
+
         # No project configured yet — fall back to direct OAuth /me call
         with status_spinner(ctx, "Discovering projects via OAuth..."):
             data_or_none = _discover_projects_via_oauth()
@@ -257,7 +264,12 @@ def projects_refresh(
             projects = workspace.discover_projects()
 
         data = _projects_to_dicts(projects)
-    except ConfigError:
+    except ConfigError as exc:
+        from mixpanel_data.exceptions import AccountNotFoundError
+
+        if isinstance(exc, AccountNotFoundError):
+            raise
+
         with status_spinner(ctx, "Discovering projects via OAuth..."):
             data_or_none = _discover_projects_via_oauth()
 

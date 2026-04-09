@@ -460,7 +460,7 @@ def _post_login_setup(
         headers[custom_name] = custom_value
 
     try:
-        with httpx.Client(timeout=30) as http:
+        with httpx.Client(timeout=60) as http:
             resp = http.get(me_url, headers=headers)
             if resp.status_code != 200:
                 err_console.print(
