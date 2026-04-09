@@ -292,8 +292,6 @@ Content actions add, remove, and modify items on a dashboard via the `content` f
 |---|---|
 | `report` | A report card (insights, funnels, retention, flows) |
 | `text` | A text/markdown card |
-| `media` | A media card (image/video embed) |
-| `dashboard` | A nested dashboard (max 2 levels deep, feature-flag gated) |
 
 ### Actions
 
@@ -371,7 +369,7 @@ The `params` field must be a JSON string (use `json.dumps()`), not a dict.
 ws.update_dashboard(dashboard_id, UpdateDashboardParams(
     content={
         "action": "delete",
-        "content_type": "report",  # or "text", "media"
+        "content_type": "report",  # or "text"
         "content_id": content_id,
     }
 ))
@@ -490,7 +488,7 @@ Key fields:
 | `cells[].id` | Cell identifier (UUID string). |
 | `cells[].width` | Cell width (1-12). Sum of all cells in a row must equal 12. |
 | `cells[].content_id` | Numeric ID of the content item. |
-| `cells[].content_type` | One of: `"text"`, `"report"`, `"media"`, `"dashboard"`. |
+| `cells[].content_type` | One of: `"text"`, `"report"`. |
 
 ### 3.3 Layout PATCH Format
 
@@ -635,7 +633,7 @@ These tags are silently removed by the sanitizer. Your content will render witho
 | `<span>` | Stripped by sanitizer | Inline formatting tags (`<strong>`, `<em>`, etc.) |
 | `<b>` | Non-semantic | `<strong>` |
 | `<i>` | Non-semantic | `<em>` |
-| `<img>` | Not supported | Use a media card instead |
+| `<img>` | Not supported | — |
 | `<table>`, `<tr>`, `<td>`, `<th>` | Not supported | Use a report card with table chart type |
 | Any inline `style` attributes | Stripped | Use semantic tags |
 | Any `class` attributes | Stripped | Use semantic tags |
@@ -909,8 +907,6 @@ markdown = (
 | Cell widths per row | Must sum to exactly 12 |
 | Items per row | Max 4 |
 | Rows per dashboard | Max 30 |
-| Media cards per dashboard | Max 50 |
-| Media cards per project | Max 10,000 |
 | Nested dashboard depth | Max 2 levels |
 
 ### 6.9 Cell widths must sum to 12
