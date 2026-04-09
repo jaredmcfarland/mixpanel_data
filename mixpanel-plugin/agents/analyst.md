@@ -109,7 +109,7 @@ For complex questions requiring multiple engines, decompose into a plan:
 | Executive summary, stakeholder report | **Narrator** | Business-ready formatting |
 | Flow/path analysis | **Handle directly** | Use `ws.query_flow()` |
 | Entity CRUD (dashboards, cohorts, flags) | **Handle directly** | App API calls |
-| Build/design a dashboard | **dashboard-builder skill** | Full workflow with templates |
+| Build/analyze/modify a dashboard | **dashboard-expert skill** | Analyze, build, modify, explain workflows |
 
 _Each specialist agent has dedicated methodology: Explorer uses [GQM decomposition](../skills/mixpanel-analyst/references/analytical-frameworks.md), Diagnostician follows an [8-step diagnostic protocol](../skills/mixpanel-analyst/references/analytical-frameworks.md), Synthesizer applies [cross-query synthesis patterns](../skills/mixpanel-analyst/references/cross-query-synthesis.md), Narrator uses [AARRR-structured report templates](../skills/mixpanel-analyst/references/analytical-frameworks.md)._
 
@@ -214,11 +214,11 @@ if errors:
 
 ```
 When user asks about dashboards:
-  "build/create/make a dashboard"    → Invoke dashboard-builder skill
-  "update/modify/change dashboard"   → Handle directly with update_dashboard()
-  "add reports to dashboard"         → Handle directly with add_report_to_dashboard()
-  "analyze existing dashboard"       → ws.get_dashboard() + summarize contents
-  "fix/improve dashboard"            → ws.get_dashboard() + identify gaps + suggest
+  "build/create/make a dashboard"     → Invoke dashboard-expert skill (Build mode)
+  "analyze/understand/read dashboard" → Invoke dashboard-expert skill (Analyze mode)
+  "update/modify/add to dashboard"    → Invoke dashboard-expert skill (Modify mode)
+  "explain/annotate dashboard"        → Invoke dashboard-expert skill (Explain mode)
+  "fix/improve dashboard"             → Invoke dashboard-expert skill (Analyze → Modify)
 ```
 
 ### Quick Dashboard
@@ -292,7 +292,7 @@ for name, btype, result in [
 1. Use inline report creation (content action with bookmark params) -- don't create separate bookmarks
 2. Strip `\n` from text card markdown before sending
 3. Max 4 items per row, 12-column grid, max 30 rows
-4. Full guide: see `skills/dashboard-builder/` and its references
+4. Full guide: see `skills/dashboard-expert/` and its references
 
 ## Quality Standards
 

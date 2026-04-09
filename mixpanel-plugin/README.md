@@ -99,7 +99,7 @@ _Agents draw on shared analytical frameworks ([AARRR, GQM, Diagnosis](skills/mix
 | Command | auth | `/mp-auth` — manage credentials, accounts, OAuth |
 | Skill | setup | `/mixpanel-data:setup` — install deps, verify auth |
 | Skill | mixpanel-analyst | Auto-triggered on analytics questions |
-| Skill | dashboard-builder | Auto-triggered on dashboard creation requests |
+| Skill | dashboard-expert | Auto-triggered on dashboard analysis, creation, and modification |
 
 | Script | Purpose |
 |--------|---------|
@@ -171,8 +171,8 @@ mixpanel-plugin/
 │   │   ├── SKILL.md                    # /mixpanel-data:setup
 │   │   └── scripts/
 │   │       └── setup.sh               # Dependency installer
-│   ├── dashboard-builder/
-│   │   ├── SKILL.md                    # Dashboard building workflow (8 phases)
+│   ├── dashboard-expert/
+│   │   ├── SKILL.md                    # Dashboard analyze, build, modify, explain
 │   │   └── references/
 │   │       ├── dashboard-reference.md  # API, layout, text cards, gotchas
 │   │       ├── dashboard-templates.md  # 9 design templates (KPI, AARRR, etc.)

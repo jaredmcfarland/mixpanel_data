@@ -300,7 +300,7 @@ Content actions add, remove, and modify items on a dashboard via the `content` f
 | `create` | Add new content to the dashboard |
 | `delete` | Remove content from the dashboard |
 | `update` | Modify existing content in place |
-| `move` | Move content to a different position |
+| `move` | Move content to a different position (prefer layout PATCH — Section 3 — instead) |
 | `duplicate` | Duplicate content within the dashboard |
 | `undelete` | Restore previously deleted content |
 
@@ -492,13 +492,14 @@ Key fields:
 
 ### 3.3 Layout PATCH Format
 
-When patching layout via `UpdateDashboardParams(layout=...)`, use this format:
+When patching layout via `UpdateDashboardParams(layout=...)`, use this format. **Critical: `rows` must be a list (not a dict).** The GET response returns rows as a dict keyed by row ID, but the PATCH expects a list with `id` on each row object.
 
 ```json
 {
   "rows_order": ["row-abc-123", "row-def-456"],
-  "rows": {
-    "row-abc-123": {
+  "rows": [
+    {
+      "id": "row-abc-123",
       "height": 0,
       "cells": [
         {
@@ -509,7 +510,8 @@ When patching layout via `UpdateDashboardParams(layout=...)`, use this format:
         }
       ]
     },
-    "row-def-456": {
+    {
+      "id": "row-def-456",
       "height": 418,
       "cells": [
         {
@@ -526,7 +528,7 @@ When patching layout via `UpdateDashboardParams(layout=...)`, use this format:
         }
       ]
     }
-  }
+  ]
 }
 ```
 
@@ -535,6 +537,7 @@ When patching layout via `UpdateDashboardParams(layout=...)`, use this format:
 | GET response | PATCH payload |
 |---|---|
 | `"order"` | `"rows_order"` |
+| `"rows"` is a **dict** keyed by row ID | `"rows"` is a **list** with `"id"` on each row |
 | Includes `"version"` | **Never include `"version"`** |
 
 ### 3.4 Complete Layout Patch Example
@@ -547,38 +550,19 @@ layout = dash.layout  # dict with version, order, rows
 # 2. Extract existing row/cell IDs and content IDs
 # (IDs are auto-generated UUIDs; you must read them, not invent them)
 
-# 3. Build the patch using rows_order (not order)
+# 3. Build the patch — rows_order (not order), rows as LIST (not dict)
+row_ids = list(layout["order"])  # preserve current order, or rearrange
+rows_list = []
+for row_id in row_ids:
+    row = layout["rows"][row_id]
+    rows_list.append({
+        "id": row_id,
+        "height": row.get("height", 0),
+        "cells": row.get("cells", []),
+    })
+
 ws.update_dashboard(dashboard_id, UpdateDashboardParams(
-    layout={
-        "rows_order": ["row-abc-123", "row-def-456", "row-ghi-789"],
-        "rows": {
-            "row-abc-123": {
-                "height": 0,
-                "cells": [
-                    {"id": "cell-aaa", "width": 12,
-                     "content_id": intro_text_id, "content_type": "text"}
-                ]
-            },
-            "row-def-456": {
-                "height": 336,
-                "cells": [
-                    {"id": "cell-bbb", "width": 4,
-                     "content_id": kpi1_id, "content_type": "report"},
-                    {"id": "cell-ccc", "width": 4,
-                     "content_id": kpi2_id, "content_type": "report"},
-                    {"id": "cell-ddd", "width": 4,
-                     "content_id": kpi3_id, "content_type": "report"},
-                ]
-            },
-            "row-ghi-789": {
-                "height": 500,
-                "cells": [
-                    {"id": "cell-eee", "width": 12,
-                     "content_id": chart_id, "content_type": "report"}
-                ]
-            },
-        },
-    }
+    layout={"rows_order": row_ids, "rows": rows_list}
 ))
 ```
 
@@ -640,11 +624,11 @@ These tags are silently removed by the sanitizer. Your content will render witho
 
 ### 4.3 Formatting Rules
 
-1. **Strip all `\n` newlines before sending.** Mixpanel's TipTap editor takes a markdown-it code path that mangles HTML when newlines are present. Always call `.replace("\n", "")` on the markdown string.
+1. **Strip all `\n` newlines and collapse whitespace before sending.** Mixpanel's TipTap editor takes a markdown-it code path that mangles HTML when newlines are present. Always call `.replace("\n", "").strip()` on the markdown string. Multiple spaces or tabs can also cause rendering issues.
 
 2. **Each HTML element renders as a new line** in the card. A `<p>` tag produces one visual line. Two consecutive `<p>` tags produce two lines. Do not try to use `\n` for line breaks.
 
-3. **Character limit:** The server accepts up to 5,000,000 characters, but keep text cards under 500 characters for readability. Dashboard cards have limited vertical space.
+3. **Character limit:** Practical limit is 2,000 characters. Keep text cards under 500 characters for readability. Dashboard cards have limited vertical space.
 
 4. **No Markdown syntax.** Despite the field being called `markdown`, it accepts only HTML. Do not send `# Heading` or `**bold**` -- use `<h2>Heading</h2>` and `<strong>bold</strong>`.
 
@@ -844,6 +828,20 @@ ws.update_dashboard(dashboard_id, UpdateDashboardParams(
 ws.update_dashboard(dashboard_id, UpdateDashboardParams(time_filter={}))
 ```
 
+### 5.6 Dashboard-Level Filters and Breakdowns
+
+`CreateDashboardParams` accepts `filters` and `breakdowns` fields. These apply globally across all reports on the dashboard. In practice, dashboard-level filters are primarily configured through the Mixpanel UI. The API fields are useful for:
+
+- **Preserving existing filters** when updating a dashboard programmatically
+- **Reading filters** from `get_dashboard()` to understand the dashboard's scope
+
+```python
+# Read existing dashboard-level filters
+dash = ws.get_dashboard(dashboard_id)
+print(dash.filters)     # list of filter dicts, or None
+print(dash.breakdowns)  # list of breakdown dicts, or None
+```
+
 ---
 
 ## 6. Critical Gotchas
@@ -945,6 +943,8 @@ duplicate = ws.create_dashboard(CreateDashboardParams(
 
 This creates a complete copy including all reports, text cards, and layout. The new dashboard has its own ID and independent content IDs.
 
+Cross-project duplication is also possible via the raw API by including `target_project_id` alongside `duplicate` in the POST body.
+
 ### 7.2 Favorite / unfavorite
 
 ```python
@@ -1014,3 +1014,226 @@ ws.update_dashboard(dashboard.id, UpdateDashboardParams(
 # 6. Cleanup: delete when no longer needed
 ws.delete_dashboard(dashboard.id)
 ```
+
+---
+
+## 8. Update Operations
+
+### 8.1 Operation Ordering
+
+When making multiple changes to an existing dashboard, operations must execute in this order:
+
+1. **Metadata** (title, description) — standalone PATCH
+2. **Cell creates** — add new content first
+3. **Row reorder** (`rows_order`) — after creates, so temp IDs can be resolved
+4. **Cell updates** — modify existing content in place
+5. **Cell deletes** — remove content
+6. **Row deletes** — remove entire rows last
+
+Wrong order causes failures: reordering before creating temp rows gives "unknown row ID"; deleting before creating can leave layout gaps.
+
+Re-fetch the dashboard (`ws.get_dashboard()`) between layout-modifying operations to get updated row/cell IDs.
+
+### 8.2 Combined Content + Layout PATCH
+
+To add a cell to a **specific existing row** (not just append to the bottom), send both `content` and `layout` in the same `UpdateDashboardParams`:
+
+```python
+import copy
+
+dash = ws.get_dashboard(dashboard_id)
+layout = copy.deepcopy(dash.layout)
+target_row = layout["rows"][target_row_id]
+
+# Redistribute widths: 12 / (N+1) for all cells including new
+new_count = len(target_row["cells"]) + 1
+cell_width = 12 // new_count
+for cell in target_row["cells"]:
+    cell["width"] = cell_width
+target_row["cells"].append({"temp_id": "-1", "width": cell_width})
+
+ws.update_dashboard(dashboard_id, UpdateDashboardParams(
+    content={
+        "action": "create",
+        "content_type": "report",
+        "content_params": {
+            "bookmark": {
+                "name": "New Report",
+                "type": "insights",
+                "params": json.dumps(result.params),
+            }
+        },
+    },
+    layout={
+        "rows_order": layout["order"],
+        "rows": layout["rows"],
+    },
+))
+```
+
+Without the `layout` field, new content always appends as a full-width row at the bottom.
+
+### 8.3 Temp ID Resolution for New Rows
+
+When adding content to a new row during an update:
+
+1. Use a temp string ID for the new row (e.g., `"temp-row-1"`)
+2. Execute the cell create — the new row appears in the dashboard response with a real ID
+3. Diff row sets before/after to discover the real row ID
+4. Use the real ID in subsequent `rows_order` operations
+
+```python
+before_rows = set(dash.layout["rows"].keys())
+ws.update_dashboard(dashboard_id, UpdateDashboardParams(
+    content={"action": "create", "content_type": "text",
+             "content_params": {"markdown": "<h2>New Section</h2>"}},
+))
+dash = ws.get_dashboard(dashboard_id)
+after_rows = set(dash.layout["rows"].keys())
+new_row_id = (after_rows - before_rows).pop()
+```
+
+### 8.4 Cross-Type Cell Updates
+
+The API rejects changing `content_type` on an update action (e.g., converting a text cell to a report cell). To achieve this:
+
+1. Delete the existing cell
+2. Create a new cell with the desired type
+
+```python
+# Delete old text card
+ws.update_dashboard(dashboard_id, UpdateDashboardParams(
+    content={"action": "delete", "content_type": "text", "content_id": old_text_id},
+))
+# Create new report in its place
+ws.update_dashboard(dashboard_id, UpdateDashboardParams(
+    content={"action": "create", "content_type": "report",
+             "content_params": {"bookmark": {...}}},
+))
+```
+
+### 8.5 Report-Link vs Report
+
+Dashboard cells have two report content types:
+
+| `content_type` | Ownership | Editable? |
+|---|---|---|
+| `"report"` | Owned by this dashboard | Yes — can update params, name, description |
+| `"report-link"` | Linked from another dashboard | No — read-only reference |
+
+When analyzing or modifying existing dashboards, check the `content_type` in layout cells. Attempting to update a report-link's params will fail. Use `update_report_link()` only to change the link type, not the underlying report.
+
+---
+
+## 9. Dashboard Analysis
+
+### 9.1 Extracting Dashboard Structure
+
+`get_dashboard()` returns a `Dashboard` with `layout` and `contents` fields. Parse them to understand what a dashboard contains:
+
+```python
+import json, re
+
+dash = ws.get_dashboard(dashboard_id)
+layout = dash.layout    # {"version": "2.0.0", "order": [...], "rows": {...}}
+contents = dash.contents  # {"report": {...}, "text": {...}}
+
+rows = []
+for row_id in layout["order"]:
+    row = layout["rows"][row_id]
+    cells = []
+    for cell in row["cells"]:
+        cid = str(cell["content_id"])
+        ctype = cell["content_type"]
+        if ctype in ("report", "report-link"):
+            info = contents["report"][cid]
+            params = json.loads(info["params"]) if isinstance(info["params"], str) else (info.get("params") or {})
+            cells.append({
+                "type": ctype,
+                "name": info.get("name", ""),
+                "report_type": info.get("type", "insights"),
+                "bookmark_id": info["id"],
+                "description": info.get("description", ""),
+                "width": cell["width"],
+                "is_owned": ctype == "report",
+                "params": params,
+            })
+        elif ctype == "text":
+            md = contents["text"].get(cid, {}).get("markdown", "")
+            cells.append({
+                "type": "text",
+                "markdown": md,
+                "is_section_header": bool(re.search(r'<h2[\s>]', md, re.I)),
+                "width": cell["width"],
+            })
+    rows.append({"row_id": row_id, "height": row.get("height", 0), "cells": cells})
+```
+
+### 9.2 Section Header Detection
+
+Text cards with `<h2>` tags act as section dividers. Detect them with:
+
+```python
+is_section_header = bool(re.search(r'<h2[\s>]', markdown, re.I))
+```
+
+This lets you group reports by section, which is essential for:
+- Understanding dashboard organization
+- Responding to "add a report to the Retention section"
+- Generating section-aware summaries
+
+### 9.3 Executing Dashboard Reports
+
+Execute each report to get live data as a DataFrame:
+
+```python
+for row in rows:
+    for cell in row["cells"]:
+        if cell["type"] not in ("report", "report-link"):
+            continue
+        bid = cell["bookmark_id"]
+        btype = cell["report_type"]
+        if btype == "flows":
+            result = ws.query_saved_flows(bid)
+        else:
+            result = ws.query_saved_report(bid, bookmark_type=btype)
+        df = result.df
+        # Summarize based on type:
+        # insights: df.describe(), trend = df.iloc[-1] vs df.iloc[-8]
+        # funnels: step conversion rates from result.series
+        # retention: day-N rates from result.series
+```
+
+### 9.4 Cross-Dashboard Analysis
+
+When working with multiple dashboards, build a unified data model:
+
+```python
+import pandas as pd
+
+dashboard_ids = [1001, 1002, 1003]
+all_reports = {}
+
+for did in dashboard_ids:
+    dash = ws.get_dashboard(did)
+    for cid, info in dash.contents.get("report", {}).items():
+        bid, btype = info["id"], info["type"]
+        try:
+            if btype == "flows":
+                result = ws.query_saved_flows(bid)
+            else:
+                result = ws.query_saved_report(bid, bookmark_type=btype)
+            all_reports[f"{dash.title} / {info['name']}"] = result.df
+        except Exception as e:
+            print(f"Skipping {info['name']}: {e}")
+
+# Join on date index for cross-metric correlation
+# combined = pd.concat([df1, df2], axis=1)
+# correlation = combined.corr()
+```
+
+Patterns to look for across dashboards:
+- **Correlated metrics** — DAU trend aligns with feature adoption
+- **Divergent signals** — signups up but retention down
+- **Complementary data** — one dashboard's KPIs explained by another's funnels
+- **Gaps** — metrics referenced in text cards but not visualized

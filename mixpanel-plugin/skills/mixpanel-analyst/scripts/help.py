@@ -444,7 +444,7 @@ _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
     ),
 ]
 
-# Dashboard hints point to the dashboard-builder skill (sibling skill directory),
+# Dashboard hints point to the dashboard-expert skill (sibling skill directory),
 # not the analyst's own references/.  Checked separately because the file lives
 # outside refs_dir.
 _DASHBOARD_TRIGGERS = frozenset(
@@ -513,16 +513,16 @@ def _show_reference_hints(query: str) -> None:
 
     # Dashboard hints — lives in sibling skill directory
     if "dashboard" in query.lower() or (part_set & _DASHBOARD_TRIGGERS):
-        skill_dir = Path(__file__).resolve().parent.parent.parent / "dashboard-builder"
+        skill_dir = Path(__file__).resolve().parent.parent.parent / "dashboard-expert"
         ref = skill_dir / "references" / "dashboard-reference.md"
         if ref.is_file():
             print(
                 "\n---\n"
-                "Tip: For dashboard creation, layout, text cards, and design templates,\n"
-                "     read skills/dashboard-builder/references/dashboard-reference.md\n"
-                "     Design templates: skills/dashboard-builder/references/"
+                "Tip: For dashboard analysis, creation, layout, text cards, and templates,\n"
+                "     read skills/dashboard-expert/references/dashboard-reference.md\n"
+                "     Design templates: skills/dashboard-expert/references/"
                 "dashboard-templates.md\n"
-                "     Full workflow:    skills/dashboard-builder/SKILL.md"
+                "     Full workflow:    skills/dashboard-expert/SKILL.md"
             )
 
 

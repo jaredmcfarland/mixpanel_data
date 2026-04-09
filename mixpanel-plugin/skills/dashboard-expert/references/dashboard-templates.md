@@ -13,7 +13,7 @@
 3. **Map placeholders to real events** -- replace `{signup_event}`, `{login_event}`, etc. with actual event names from the project. Drop any section whose placeholder events have zero volume.
 4. **Validate data** -- query each event before building a report. Skip reports that would render as empty charts.
 5. **Adapt row count** -- remove sections that don't apply, or add sections for project-specific needs. Stay within the 30-row dashboard limit.
-6. **Build** -- follow the 8-phase workflow in `SKILL.md`, using the template layout as the Phase 2 plan.
+6. **Build** -- follow the Build mode workflow in `SKILL.md`, using the template layout as the Phase B2 plan.
 
 ### Layout Conventions
 

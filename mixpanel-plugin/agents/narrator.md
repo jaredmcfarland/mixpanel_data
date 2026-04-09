@@ -413,7 +413,7 @@ print(f"Live dashboard created (ID: {dashboard.id})")
 - Strip `\n` from markdown before sending to the API
 - Use `<h2>` for section headers, `<p>` for descriptions
 - Add explainer cards beneath reports: `<p>^ DAU is <strong>12,450</strong>, up 8.2% MoM.</p>`
-- Full formatting guide: `skills/dashboard-builder/references/dashboard-reference.md`
+- Full formatting guide: `skills/dashboard-expert/references/dashboard-reference.md`
 
 ## API Lookup
 
