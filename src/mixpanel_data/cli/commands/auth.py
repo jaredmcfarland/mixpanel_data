@@ -460,56 +460,59 @@ def _post_login_setup(
         headers[custom_name] = custom_value
 
     try:
-        err_console.print("[dim]Discovering projects...[/dim]")
-        with httpx.Client(timeout=60) as http:
+        with (
+            err_console.status("Discovering projects..."),
+            httpx.Client(timeout=60) as http,
+        ):
             resp = http.get(me_url, headers=headers)
-            if resp.status_code != 200:
-                err_console.print(
-                    "[yellow]Could not auto-discover projects.[/yellow] "
-                    "Run 'mp projects list' to see available projects."
-                )
-                return setup_result
 
-            me_raw = resp.json()
-            # app_request unwraps "results", raw HTTP does not
-            me_data = me_raw.get("results", me_raw)
-            projects: dict[str, object] = me_data.get("projects", {})
+        if resp.status_code != 200:
+            err_console.print(
+                "[yellow]Could not auto-discover projects.[/yellow] "
+                "Run 'mp projects list' to see available projects."
+            )
+            return setup_result
 
-            # Cache the /me response for subsequent commands
-            try:
-                me_response = MeResponse.model_validate(me_data)
-                MeCache().put(region, me_response)
-            except (ValueError, OSError) as exc:
-                logger.debug("Failed to cache /me response: %s", exc)
+        me_raw = resp.json()
+        # app_request unwraps "results", raw HTTP does not
+        me_data = me_raw.get("results", me_raw)
+        projects: dict[str, object] = me_data.get("projects", {})
 
-            if len(projects) == 0:
-                err_console.print(
-                    "[yellow]No projects found.[/yellow] "
-                    "Check your Mixpanel account has project access."
-                )
-            elif len(projects) == 1:
-                pid = next(iter(projects.keys()))
-                proj_data = projects[pid]
-                proj_name = (
-                    proj_data.get("name", pid) if isinstance(proj_data, dict) else pid
-                )
-                config.set_active_project(pid)
-                setup_result["auto_selected_project"] = pid
-                setup_result["project_name"] = proj_name
-                err_console.print(
-                    f"[green]Auto-selected project:[/green] {proj_name} ({pid})"
-                )
+        # Cache the /me response for subsequent commands
+        try:
+            me_response = MeResponse.model_validate(me_data)
+            MeCache().put(region, me_response)
+        except (ValueError, OSError) as exc:
+            logger.debug("Failed to cache /me response: %s", exc)
 
-                # Auto-detect default workspace from /me data
-                workspaces: dict[str, object] = me_data.get("workspaces", {})
-                _auto_select_workspace(config, pid, workspaces, setup_result)
-            else:
-                setup_result["projects_found"] = len(projects)
-                err_console.print(
-                    f"[yellow]{len(projects)} projects found.[/yellow] "
-                    "Run 'mp projects list' then "
-                    "'mp projects switch <id>' to select one."
-                )
+        if len(projects) == 0:
+            err_console.print(
+                "[yellow]No projects found.[/yellow] "
+                "Check your Mixpanel account has project access."
+            )
+        elif len(projects) == 1:
+            pid = next(iter(projects.keys()))
+            proj_data = projects[pid]
+            proj_name = (
+                proj_data.get("name", pid) if isinstance(proj_data, dict) else pid
+            )
+            config.set_active_project(pid)
+            setup_result["auto_selected_project"] = pid
+            setup_result["project_name"] = proj_name
+            err_console.print(
+                f"[green]Auto-selected project:[/green] {proj_name} ({pid})"
+            )
+
+            # Auto-detect default workspace from /me data
+            workspaces: dict[str, object] = me_data.get("workspaces", {})
+            _auto_select_workspace(config, pid, workspaces, setup_result)
+        else:
+            setup_result["projects_found"] = len(projects)
+            err_console.print(
+                f"[yellow]{len(projects)} projects found.[/yellow] "
+                "Run 'mp projects list' then "
+                "'mp projects switch <id>' to select one."
+            )
     except (httpx.HTTPError, OSError, ValueError, KeyError) as exc:
         logger.debug("Post-login /me discovery failed: %s", exc)
         err_console.print(
