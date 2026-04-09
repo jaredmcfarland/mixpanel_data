@@ -418,42 +418,6 @@ ws.update_dashboard(dashboard_id, UpdateDashboardParams(
 ))
 ```
 
-### 2.8 Create media card
-
-```python
-# Image from external URL
-ws.update_dashboard(dashboard_id, UpdateDashboardParams(
-    content={
-        "action": "create",
-        "content_type": "media",
-        "content_params": {
-            "media_type": "image",
-            "path": "https://files.catbox.moe/abc123.png",
-            "service": "url",
-        }
-    }
-))
-
-# Video embed (YouTube, Vimeo, Loom)
-ws.update_dashboard(dashboard_id, UpdateDashboardParams(
-    content={
-        "action": "create",
-        "content_type": "media",
-        "content_params": {
-            "media_type": "video",
-            "path": "dQw4w9WgXcQ",  # YouTube video ID
-            "service": "youtube",
-        }
-    }
-))
-```
-
-**Media types:** `image`, `video`
-
-**Services:** `url` (direct URL), `youtube` (video ID), `vimeo` (video ID), `loom` (video ID)
-
-**Limit:** Max 50 media cards per dashboard, 10,000 per project.
-
 ---
 
 ## 3. Layout System

@@ -173,27 +173,6 @@ Takeaway:     <h3>Key Takeaway</h3><p>Retention stabilizes at <strong>Day 7</str
   Row 10: [Purchase Trend] [Purchase Funnel]                    → paired, w=6 each
 ```
 
-#### When to Use Media Cards (Custom Visualizations)
-
-Native Mixpanel reports are **interactive** (hover, filter, segment). Custom visualizations are **static images**. Only use media cards when the visualization type doesn't exist natively.
-
-| Visualization Need | Use Native Report? | Or Media Card? |
-|---|---|---|
-| Metric over time | **Yes** — `line` chart | No |
-| Category comparison | **Yes** — `bar` chart | No |
-| Conversion funnel | **Yes** — `funnel-steps` | No |
-| Retention curve | **Yes** — `retention-curve` | No |
-| User paths | **Yes** — `sankey` | No |
-| KPI number | **Yes** — `insights-metric` | No |
-| Correlation matrix | No native chart | **Yes** — seaborn heatmap |
-| Network graph | Sankey ≠ force-directed | **Yes** — NetworkX layout |
-| Statistical distribution | No box/violin plot | **Yes** — matplotlib |
-| Multi-engine composite | Can't overlay chart types | **Yes** — multi-panel figure |
-| Annotated forecast | No trendline/annotation | **Yes** — matplotlib |
-| Decision tree | No tree chart | **Yes** — Graphviz |
-
-Media cards require a **publicly accessible image URL**. Generate the image, upload to an image host, then embed the URL as a media card.
-
 ### Phase 3: Query Reports
 
 Query each metric and inspect results to verify meaningful data.
@@ -296,54 +275,6 @@ ws.update_dashboard(dashboard.id, UpdateDashboardParams(
              "content_params": {"markdown": "<p>^ DAU is <strong>12,450</strong>.</p>"}}
 ))
 ```
-
-#### Media Cards: Custom Visualizations
-
-When a visualization type doesn't exist as a native Mixpanel chart, generate it with matplotlib/seaborn, upload to an image host, and embed as a media card.
-
-**Default image host:** [catbox.moe](https://catbox.moe) — free, no signup, no API key, permanent storage.
-
-```python
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
-import subprocess
-
-# Example: Retention heatmap with custom annotations
-ret = ws.query_retention("Signup", "Login", retention_unit="week", last=90)
-pivot = ret.df.pivot(index="cohort_date", columns="bucket", values="rate")
-
-fig, ax = plt.subplots(figsize=(12, 6))
-sns.heatmap(pivot, annot=True, fmt=".0%", cmap="YlOrRd", ax=ax)
-ax.set_title("Weekly Retention by Cohort")
-plt.tight_layout()
-plt.savefig("/tmp/retention_heatmap.png", dpi=150, bbox_inches="tight")
-plt.close()
-
-# Upload to catbox.moe (free, no signup, permanent)
-result = subprocess.run(
-    ["curl", "-s", "-F", "reqtype=fileupload",
-     "-F", "fileToUpload=@/tmp/retention_heatmap.png",
-     "https://catbox.moe/user/api.php"],
-    capture_output=True, text=True,
-)
-image_url = result.stdout.strip()  # https://files.catbox.moe/abc123.png
-
-# Embed on dashboard as media card
-DashboardRow(contents=[
-    DashboardRowContent(
-        content_type="media",
-        content_params={"media_type": "image", "path": image_url, "service": "url"},
-    ),
-])
-```
-
-**Media card params:** `media_type` (`"image"` or `"video"`), `path` (public URL), `service` (`"url"` for external URLs).
-
-**Alternative image hosts:** imgbb.com (free API key), S3 presigned URLs, or any service that returns a public image URL.
-
-**Video embeds:** Mixpanel also supports `"youtube"`, `"vimeo"`, and `"loom"` as service values for embedding videos by ID.
 
 **Height adjustment:** Row heights default to 0 (auto). To set explicit heights, PATCH the layout after creation:
 
