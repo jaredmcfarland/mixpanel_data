@@ -442,6 +442,21 @@ class TestWriteBridgeFile:
         loaded = json.loads(bridge_file.read_text())
         assert loaded["auth_method"] == "service_account"
 
+    def test_write_handles_chmod_failure(self, tmp_path: Path) -> None:
+        """Test that write succeeds even if chmod raises OSError."""
+        bridge = _make_oauth_bridge()
+        bridge_file = tmp_path / "mixpanel" / "auth.json"
+
+        with patch(
+            "mixpanel_data._internal.auth.bridge.os.chmod",
+            side_effect=OSError("permission denied"),
+        ):
+            write_bridge_file(bridge, bridge_file)
+
+        assert bridge_file.exists()
+        loaded = json.loads(bridge_file.read_text())
+        assert loaded["auth_method"] == "oauth"
+
 
 class TestBridgeToCredentials:
     """Tests for bridge_to_credentials() conversion."""

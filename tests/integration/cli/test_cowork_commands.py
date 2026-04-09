@@ -142,7 +142,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -183,7 +183,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -221,7 +221,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -253,7 +253,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -288,7 +288,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -322,7 +322,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -355,7 +355,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -384,7 +384,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -415,7 +415,7 @@ class TestCoworkSetup:
                 return_value=mock_config_manager,
             ),
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -448,7 +448,7 @@ class TestCoworkTeardown:
         assert bridge_path.exists()
 
         with patch(
-            f"{_BRIDGE_MOD}._default_bridge_path",
+            f"{_BRIDGE_MOD}.default_bridge_path",
             return_value=bridge_path,
         ):
             result = cli_runner.invoke(app, ["auth", "cowork-teardown"])
@@ -468,7 +468,7 @@ class TestCoworkTeardown:
         assert not bridge_path.exists()
 
         with patch(
-            f"{_BRIDGE_MOD}._default_bridge_path",
+            f"{_BRIDGE_MOD}.default_bridge_path",
             return_value=bridge_path,
         ):
             result = cli_runner.invoke(app, ["auth", "cowork-teardown"])
@@ -492,7 +492,7 @@ class TestCoworkStatus:
         assert not bridge_path.exists()
 
         with patch(
-            f"{_BRIDGE_MOD}._default_bridge_path",
+            f"{_BRIDGE_MOD}.default_bridge_path",
             return_value=bridge_path,
         ):
             result = cli_runner.invoke(app, ["auth", "cowork-status"])
@@ -526,7 +526,7 @@ class TestCoworkStatus:
 
         with (
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -574,7 +574,7 @@ class TestCoworkStatus:
 
         with (
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
@@ -606,7 +606,7 @@ class TestCoworkStatus:
 
         with (
             patch(
-                f"{_BRIDGE_MOD}._default_bridge_path",
+                f"{_BRIDGE_MOD}.default_bridge_path",
                 return_value=bridge_path,
             ),
             patch(
