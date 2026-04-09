@@ -28,8 +28,7 @@ fi
 
 # Install packages
 # mixpanel_data is not on PyPI — install from GitHub
-# TODO: revert to main branch before merge (currently pinned for Cowork auth bridge testing)
-MIXPANEL_DATA_PKG="git+https://github.com/jaredmcfarland/mixpanel_data.git@cowork-auth-bridge"
+MIXPANEL_DATA_PKG="git+https://github.com/jaredmcfarland/mixpanel_data.git"
 echo ""
 echo "Installing mixpanel_data (from GitHub), pandas, numpy, matplotlib, seaborn, networkx, anytree, scipy..."
 if command -v uv &>/dev/null; then
