@@ -61,6 +61,8 @@ _COWORK_SESSIONS_PATH = Path("/sessions")
 _BRIDGE_FILENAME = "auth.json"
 _BRIDGE_DIR_NAME = "mixpanel"
 _CLAUDE_DIR_NAME = ".claude"
+# Flat file alternative (for Cowork where subdirectories may not be visible)
+_FLAT_BRIDGE_FILENAME = "mixpanel_auth.json"
 
 
 class BridgeCustomHeader(BaseModel):
@@ -276,14 +278,24 @@ def find_bridge_file() -> Path | None:
     if default.is_file():
         return default
 
-    # Priority 3: Cowork bindfs mount (~/mnt/.claude/mixpanel/auth.json)
+    # Priority 3: Flat file (~/.claude/mixpanel_auth.json)
+    # For Cowork where subdirectories created after mount may not be visible
+    flat = Path.home() / _CLAUDE_DIR_NAME / _FLAT_BRIDGE_FILENAME
+    if flat.is_file():
+        logger.debug("Found flat bridge file: %s", flat)
+        return flat
+
+    # Priority 4: Cowork bindfs mount (~/mnt/.claude/...)
     # In Cowork, the host's ~/.claude/ is mounted at $HOME/mnt/.claude/
-    cowork_mount = (
-        Path.home() / "mnt" / _CLAUDE_DIR_NAME / _BRIDGE_DIR_NAME / _BRIDGE_FILENAME
-    )
-    if cowork_mount.is_file():
-        logger.debug("Found bridge file at Cowork mount: %s", cowork_mount)
-        return cowork_mount
+    mnt_base = Path.home() / "mnt" / _CLAUDE_DIR_NAME
+    for name in [
+        Path(_BRIDGE_DIR_NAME) / _BRIDGE_FILENAME,  # mnt/.claude/mixpanel/auth.json
+        Path(_FLAT_BRIDGE_FILENAME),  # mnt/.claude/mixpanel_auth.json
+    ]:
+        cowork_path = mnt_base / name
+        if cowork_path.is_file():
+            logger.debug("Found bridge file at Cowork mount: %s", cowork_path)
+            return cowork_path
 
     return None
 
