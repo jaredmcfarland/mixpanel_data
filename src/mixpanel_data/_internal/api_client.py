@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import time
 from collections.abc import Callable, Iterator
@@ -107,10 +108,6 @@ ENDPOINTS: dict[str, dict[str, str]] = {
 }
 
 
-_INTERNAL_SOURCE_HEADER = "Internal-Source"
-_INTERNAL_SOURCE_VALUE = "mixpanel.data"
-
-
 class MixpanelAPIClient:
     """Low-level HTTP client for Mixpanel APIs.
 
@@ -197,10 +194,15 @@ class MixpanelAPIClient:
             The httpx.Client instance.
         """
         if self._client is None:
+            headers: dict[str, str] = {}
+            custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+            custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
+            if custom_name and custom_value:
+                headers[custom_name] = custom_value
             self._client = httpx.Client(
                 timeout=self._timeout,
                 transport=self._transport,
-                headers={_INTERNAL_SOURCE_HEADER: _INTERNAL_SOURCE_VALUE},
+                headers=headers,
             )
         return self._client
 
@@ -6483,7 +6485,8 @@ class MixpanelAPIClient:
 
         Performs a direct ``PUT`` to the external signed URL (no Mixpanel auth).
         Uses a fresh HTTP client to avoid sending default headers
-        (e.g., ``Internal-Source``) that would invalidate the GCS signature.
+        (e.g., custom headers from ``MP_CUSTOM_HEADER_*`` env vars) that
+        would invalidate the GCS signature.
 
         Args:
             url: Signed upload URL (from ``get_lookup_upload_url()``).
@@ -6500,8 +6503,9 @@ class MixpanelAPIClient:
             ```
         """
         # Use a clean client without default headers — the shared client
-        # has Internal-Source header that GCS includes in signature
-        # validation, causing SignatureDoesNotMatch errors.
+        # may have custom headers (via MP_CUSTOM_HEADER_* env vars) that
+        # GCS includes in signature validation, causing
+        # SignatureDoesNotMatch errors.
         if self._transport is not None:
             # Test mode: use the mock transport
             upload_client = httpx.Client(
