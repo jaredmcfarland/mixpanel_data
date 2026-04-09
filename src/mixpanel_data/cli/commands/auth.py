@@ -687,12 +687,12 @@ def cowork_setup(
     from pydantic import SecretStr
 
     from mixpanel_data._internal.auth.bridge import (
-        _FLAT_BRIDGE_FILENAME,
+        FLAT_BRIDGE_FILENAME,
         AuthBridgeFile,
         BridgeCustomHeader,
         BridgeOAuth,
         BridgeServiceAccount,
-        _default_bridge_path,
+        default_bridge_path,
         write_bridge_file,
     )
     from mixpanel_data._internal.auth.storage import OAuthStorage
@@ -700,9 +700,9 @@ def cowork_setup(
 
     config = get_config(ctx)
     if dir is not None:
-        bridge_path = _Path(dir) / _FLAT_BRIDGE_FILENAME
+        bridge_path = _Path(dir) / FLAT_BRIDGE_FILENAME
     else:
-        bridge_path = _default_bridge_path()
+        bridge_path = default_bridge_path()
 
     # Resolve credentials via the standard priority chain
     creds = config.resolve_credentials(account=credential)
@@ -758,7 +758,13 @@ def cowork_setup(
 
         # Load client info for client_id
         client_info = storage.load_client_info(region)
-        client_id = client_info.client_id if client_info else "unknown"
+        if client_info is None:
+            err_console.print(
+                "[red]Error:[/red] OAuth client registration info not found. "
+                "Run 'mp auth login' first to register the OAuth client."
+            )
+            raise typer.Exit(1)
+        client_id = client_info.client_id
 
         oauth_section = BridgeOAuth(
             access_token=SecretStr(tokens.access_token.get_secret_value()),
@@ -794,7 +800,7 @@ def cowork_setup(
     if dir is None:
         import contextlib as _contextlib
 
-        flat_path = bridge_path.parent.parent / _FLAT_BRIDGE_FILENAME
+        flat_path = bridge_path.parent.parent / FLAT_BRIDGE_FILENAME
         with _contextlib.suppress(OSError):
             write_bridge_file(bridge, flat_path)
 
@@ -827,10 +833,11 @@ def cowork_teardown(
     ctx: typer.Context,
     format: FormatOption = "json",
 ) -> None:
-    """Remove the Cowork auth bridge file.
+    """Remove the Cowork auth bridge file(s).
 
-    Deletes ``~/.claude/mixpanel/auth.json`` if it exists. This
-    revokes Cowork VM access to Mixpanel credentials exported by
+    Deletes ``~/.claude/mixpanel/auth.json`` and the flat alternative
+    ``~/.claude/mixpanel_auth.json`` if they exist. This revokes
+    Cowork VM access to Mixpanel credentials exported by
     ``cowork-setup``.
 
     Examples:
@@ -838,18 +845,25 @@ def cowork_teardown(
         mp auth cowork-teardown
     """
     from mixpanel_data._internal.auth.bridge import (
-        _default_bridge_path,
+        FLAT_BRIDGE_FILENAME,
+        default_bridge_path,
     )
 
-    bridge_path = _default_bridge_path()
+    bridge_path = default_bridge_path()
+    flat_path = bridge_path.parent.parent / FLAT_BRIDGE_FILENAME
 
-    if bridge_path.is_file():
-        bridge_path.unlink()
+    removed_paths: list[str] = []
+    for p in [bridge_path, flat_path]:
+        if p.is_file():
+            p.unlink()
+            removed_paths.append(str(p))
+
+    if removed_paths:
         output_result(
             ctx,
             {
                 "status": "cowork_teardown_complete",
-                "bridge_path": str(bridge_path),
+                "removed_paths": removed_paths,
                 "removed": True,
             },
             format=format,
@@ -888,11 +902,11 @@ def cowork_status(
         mp auth cowork-status --format table
     """
     from mixpanel_data._internal.auth.bridge import (
-        _default_bridge_path,
+        default_bridge_path,
         load_bridge_file,
     )
 
-    bridge_path = _default_bridge_path()
+    bridge_path = default_bridge_path()
 
     if not bridge_path.is_file():
         data: dict[str, object] = {

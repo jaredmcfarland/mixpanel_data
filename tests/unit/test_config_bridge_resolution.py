@@ -332,7 +332,7 @@ class TestBridgeNoFile:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch(
-                "mixpanel_data._internal.auth.bridge._default_bridge_path",
+                "mixpanel_data._internal.auth.bridge.default_bridge_path",
                 return_value=tmp_path / "nonexistent" / "auth.json",
             ),
         ):
@@ -354,7 +354,7 @@ class TestBridgeNoFile:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch(
-                "mixpanel_data._internal.auth.bridge._default_bridge_path",
+                "mixpanel_data._internal.auth.bridge.default_bridge_path",
                 return_value=tmp_path / "nonexistent" / "auth.json",
             ),
         ):

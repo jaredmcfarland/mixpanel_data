@@ -11,7 +11,10 @@ optional custom HTTP headers, and automatic OAuth token refresh
 
 Bridge file search order:
     1. ``MP_AUTH_FILE`` environment variable (explicit path)
-    2. ``~/.claude/mixpanel/auth.json`` (standard location)
+    2. ``mixpanel_auth.json`` in current working directory (Cowork workspace)
+    3. ``~/.claude/mixpanel/auth.json`` (standard location)
+    4. ``~/.claude/mixpanel_auth.json`` (flat file alternative)
+    5. ``~/mnt/{folder}/mixpanel_auth.json`` (Cowork bindfs mount)
 
 Example:
     ```python
@@ -38,7 +41,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, SecretStr, field_validator, model_validator
 
 from mixpanel_data._internal.auth.flow import OAuthFlow
 from mixpanel_data._internal.auth.token import OAuthTokens
@@ -51,6 +54,7 @@ from mixpanel_data._internal.auth_credential import (
     ResolvedSession,
 )
 from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data.exceptions import OAuthError
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +66,7 @@ _BRIDGE_FILENAME = "auth.json"
 _BRIDGE_DIR_NAME = "mixpanel"
 _CLAUDE_DIR_NAME = ".claude"
 # Flat file alternative (for Cowork where subdirectories may not be visible)
-_FLAT_BRIDGE_FILENAME = "mixpanel_auth.json"
+FLAT_BRIDGE_FILENAME = "mixpanel_auth.json"
 
 
 class BridgeCustomHeader(BaseModel):
@@ -215,13 +219,34 @@ class AuthBridgeFile(BaseModel):
             raise ValueError(f"Region must be one of: {valid}. Got: {v}")
         return v_lower
 
+    @model_validator(mode="after")
+    def validate_auth_sections(self) -> AuthBridgeFile:
+        """Validate that the correct credential section is present.
+
+        Raises:
+            ValueError: If ``auth_method`` does not match the provided
+                credential section (e.g., ``"oauth"`` without ``oauth``).
+        """
+        if self.auth_method == "oauth" and self.oauth is None:
+            raise ValueError("auth_method='oauth' requires 'oauth' section")
+        if self.auth_method == "service_account" and self.service_account is None:
+            raise ValueError(
+                "auth_method='service_account' requires 'service_account' section"
+            )
+        return self
+
 
 def detect_cowork() -> bool:
     """Detect if running inside a Claude Cowork VM.
 
     Checks two indicators:
-    1. ``/sessions/`` mount point exists (Cowork session disk)
-    2. ``CLAUDE_COWORK`` environment variable is set
+    1. ``CLAUDE_COWORK`` environment variable is set (reliable)
+    2. ``/sessions/`` mount point exists (heuristic — may false-positive
+       on systems with a ``/sessions`` directory unrelated to Cowork)
+
+    This function is used for informational purposes (CLI output,
+    plugin guidance). Bridge file discovery (``find_bridge_file()``)
+    runs unconditionally and does not depend on this function.
 
     Returns:
         True if running inside a Cowork VM.
@@ -237,7 +262,7 @@ def detect_cowork() -> bool:
     return _COWORK_SESSIONS_PATH.is_dir()
 
 
-def _default_bridge_path() -> Path:
+def default_bridge_path() -> Path:
     """Return the default bridge file path.
 
     Returns:
@@ -251,8 +276,10 @@ def find_bridge_file() -> Path | None:
 
     Search order:
         1. ``MP_AUTH_FILE`` environment variable (explicit path)
-        2. ``~/.claude/mixpanel/auth.json`` (standard location)
-        3. ``~/mnt/.claude/mixpanel/auth.json`` (Cowork bindfs mount)
+        2. ``mixpanel_auth.json`` in current working directory (Cowork workspace)
+        3. ``~/.claude/mixpanel/auth.json`` (standard location)
+        4. ``~/.claude/mixpanel_auth.json`` (flat file alternative)
+        5. ``~/mnt/{folder}/mixpanel_auth.json`` (Cowork bindfs mount)
 
     Returns:
         Path to the bridge file if found, None otherwise.
@@ -275,18 +302,18 @@ def find_bridge_file() -> Path | None:
 
     # Priority 2: Bridge file in CWD (workspace root)
     # In Cowork, the workspace IS mounted — this is the primary Cowork path
-    cwd_bridge = Path.cwd() / _FLAT_BRIDGE_FILENAME
+    cwd_bridge = Path.cwd() / FLAT_BRIDGE_FILENAME
     if cwd_bridge.is_file():
         logger.debug("Found bridge file in workspace: %s", cwd_bridge)
         return cwd_bridge
 
     # Priority 3: Default location (~/.claude/mixpanel/auth.json)
-    default = _default_bridge_path()
+    default = default_bridge_path()
     if default.is_file():
         return default
 
     # Priority 4: Flat file (~/.claude/mixpanel_auth.json)
-    flat = Path.home() / _CLAUDE_DIR_NAME / _FLAT_BRIDGE_FILENAME
+    flat = Path.home() / _CLAUDE_DIR_NAME / FLAT_BRIDGE_FILENAME
     if flat.is_file():
         logger.debug("Found flat bridge file: %s", flat)
         return flat
@@ -298,7 +325,7 @@ def find_bridge_file() -> Path | None:
         for child in mnt_base.iterdir():
             if not child.is_dir():
                 continue
-            cowork_path = child / _FLAT_BRIDGE_FILENAME
+            cowork_path = child / FLAT_BRIDGE_FILENAME
             if cowork_path.is_file():
                 logger.debug("Found bridge file at Cowork mount: %s", cowork_path)
                 return cowork_path
@@ -364,15 +391,21 @@ def write_bridge_file(bridge: AuthBridgeFile, path: Path) -> None:
         ```
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    os.chmod(path.parent, stat.S_IRWXU)  # 0o700
+    try:
+        os.chmod(path.parent, stat.S_IRWXU)  # 0o700
+    except OSError:
+        logger.debug("Could not set directory permissions on %s", path.parent)
 
-    data = _bridge_to_json_dict(bridge)
+    data = bridge_to_json_dict(bridge)
     raw = json.dumps(data, indent=2, default=str)
     path.write_text(raw, encoding="utf-8")
-    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+    try:
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+    except OSError:
+        logger.debug("Could not set file permissions on %s", path)
 
 
-def _bridge_to_json_dict(bridge: AuthBridgeFile) -> dict[str, Any]:
+def bridge_to_json_dict(bridge: AuthBridgeFile) -> dict[str, Any]:
     """Serialize an AuthBridgeFile to a JSON-compatible dict.
 
     Unwraps ``SecretStr`` fields to plain strings for JSON output.
@@ -572,7 +605,8 @@ def refresh_bridge_token(
         AuthBridgeFile with updated OAuth tokens.
 
     Raises:
-        OAuthError: If the refresh request fails (e.g., revoked token).
+        OAuthError: If the refresh token is missing or the refresh
+            request fails (e.g., revoked token).
 
     Example:
         ```python
@@ -592,9 +626,10 @@ def refresh_bridge_token(
     logger.info("Bridge OAuth token expired, attempting refresh...")
 
     if bridge.oauth.refresh_token is None:
-        raise ValueError(
+        raise OAuthError(
             "Cannot refresh: no refresh token in bridge file. "
-            "Re-run 'mp auth cowork-setup' on your host machine."
+            "Re-run 'mp auth cowork-setup' on your host machine.",
+            code="OAUTH_REFRESH_ERROR",
         )
 
     # Build OAuthTokens for the refresh call

@@ -10,7 +10,6 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,6 +22,7 @@ from mixpanel_data._internal.auth.bridge import (
     BridgeServiceAccount,
     apply_bridge_custom_header,
     bridge_to_credentials,
+    bridge_to_json_dict,
     bridge_to_resolved_session,
     detect_cowork,
     find_bridge_file,
@@ -118,49 +118,6 @@ def _make_sa_bridge(
     )
 
 
-def _bridge_to_dict(bridge: AuthBridgeFile) -> dict[str, Any]:
-    """Serialize an AuthBridgeFile to a JSON-compatible dict.
-
-    Args:
-        bridge: The bridge file to serialize.
-
-    Returns:
-        JSON-serializable dictionary.
-    """
-    d: dict[str, Any] = {
-        "version": bridge.version,
-        "auth_method": bridge.auth_method,
-        "region": bridge.region,
-        "project_id": bridge.project_id,
-        "workspace_id": bridge.workspace_id,
-        "custom_header": None,
-        "oauth": None,
-        "service_account": None,
-    }
-    if bridge.custom_header is not None:
-        d["custom_header"] = {
-            "name": bridge.custom_header.name,
-            "value": bridge.custom_header.value.get_secret_value(),
-        }
-    if bridge.oauth is not None:
-        d["oauth"] = {
-            "access_token": bridge.oauth.access_token.get_secret_value(),
-            "refresh_token": bridge.oauth.refresh_token.get_secret_value()
-            if bridge.oauth.refresh_token
-            else None,
-            "expires_at": bridge.oauth.expires_at.isoformat(),
-            "scope": bridge.oauth.scope,
-            "token_type": bridge.oauth.token_type,
-            "client_id": bridge.oauth.client_id,
-        }
-    if bridge.service_account is not None:
-        d["service_account"] = {
-            "username": bridge.service_account.username,
-            "secret": bridge.service_account.secret.get_secret_value(),
-        }
-    return d
-
-
 class TestAuthBridgeFileModel:
     """Tests for AuthBridgeFile Pydantic model validation."""
 
@@ -223,6 +180,26 @@ class TestAuthBridgeFileModel:
                 project_id="123",
             )
 
+    def test_oauth_without_oauth_section_rejected(self) -> None:
+        """Test that auth_method='oauth' without oauth section is rejected."""
+        with pytest.raises((ValueError, ValidationError)):
+            AuthBridgeFile(
+                version=1,
+                auth_method="oauth",
+                region="us",
+                project_id="123",
+            )
+
+    def test_sa_without_sa_section_rejected(self) -> None:
+        """Test that auth_method='service_account' without SA section is rejected."""
+        with pytest.raises((ValueError, ValidationError)):
+            AuthBridgeFile(
+                version=1,
+                auth_method="service_account",
+                region="us",
+                project_id="123",
+            )
+
     def test_version_must_be_1(self) -> None:
         """Test that version must be 1."""
         with pytest.raises((ValueError, ValidationError)):
@@ -269,8 +246,6 @@ class TestDetectCowork:
             ),
             patch.dict(os.environ, {}, clear=True),
         ):
-            # Remove CLAUDE_COWORK if present
-            os.environ.pop("CLAUDE_COWORK", None)
             assert detect_cowork() is False
 
 
@@ -301,7 +276,7 @@ class TestFindBridgeFile:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch(
-                "mixpanel_data._internal.auth.bridge._default_bridge_path",
+                "mixpanel_data._internal.auth.bridge.default_bridge_path",
                 return_value=auth_file,
             ),
         ):
@@ -320,7 +295,7 @@ class TestFindBridgeFile:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch(
-                "mixpanel_data._internal.auth.bridge._default_bridge_path",
+                "mixpanel_data._internal.auth.bridge.default_bridge_path",
                 return_value=tmp_path / "nonexistent" / "auth.json",
             ),
             patch("pathlib.Path.home", return_value=tmp_path),
@@ -335,7 +310,7 @@ class TestFindBridgeFile:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch(
-                "mixpanel_data._internal.auth.bridge._default_bridge_path",
+                "mixpanel_data._internal.auth.bridge.default_bridge_path",
                 return_value=tmp_path / "nonexistent" / "auth.json",
             ),
             patch("pathlib.Path.home", return_value=tmp_path / "fakehome"),
@@ -353,7 +328,7 @@ class TestLoadBridgeFile:
         """Test loading a valid OAuth bridge file."""
         bridge = _make_oauth_bridge()
         bridge_file = tmp_path / "auth.json"
-        bridge_file.write_text(json.dumps(_bridge_to_dict(bridge)))
+        bridge_file.write_text(json.dumps(bridge_to_json_dict(bridge)))
 
         loaded = load_bridge_file(bridge_file)
         assert loaded is not None
@@ -366,7 +341,7 @@ class TestLoadBridgeFile:
         """Test loading a valid service account bridge file."""
         bridge = _make_sa_bridge()
         bridge_file = tmp_path / "auth.json"
-        bridge_file.write_text(json.dumps(_bridge_to_dict(bridge)))
+        bridge_file.write_text(json.dumps(bridge_to_json_dict(bridge)))
 
         loaded = load_bridge_file(bridge_file)
         assert loaded is not None
@@ -378,7 +353,7 @@ class TestLoadBridgeFile:
         """Test loading bridge file with custom header."""
         bridge = _make_oauth_bridge(with_custom_header=True)
         bridge_file = tmp_path / "auth.json"
-        bridge_file.write_text(json.dumps(_bridge_to_dict(bridge)))
+        bridge_file.write_text(json.dumps(bridge_to_json_dict(bridge)))
 
         loaded = load_bridge_file(bridge_file)
         assert loaded is not None
@@ -395,7 +370,7 @@ class TestLoadBridgeFile:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch(
-                "mixpanel_data._internal.auth.bridge._default_bridge_path",
+                "mixpanel_data._internal.auth.bridge.default_bridge_path",
                 return_value=tmp_path / "nonexistent" / "auth.json",
             ),
             patch("pathlib.Path.home", return_value=tmp_path),
@@ -586,6 +561,28 @@ class TestRefreshBridgeToken:
         result = refresh_bridge_token(bridge, Path("/dummy"))
         assert result is bridge  # Same object, no refresh needed
 
+    def test_refresh_raises_oauth_error_when_no_refresh_token(self) -> None:
+        """Test that missing refresh token raises OAuthError."""
+        from mixpanel_data.exceptions import OAuthError
+
+        bridge = AuthBridgeFile(
+            version=1,
+            auth_method="oauth",
+            region="us",
+            project_id="123",
+            oauth=BridgeOAuth(
+                access_token=SecretStr("expired_token"),
+                refresh_token=None,
+                expires_at=_utcnow() - timedelta(hours=1),
+                scope="projects",
+                token_type="Bearer",
+                client_id="client_1",
+            ),
+        )
+
+        with pytest.raises(OAuthError, match="no refresh token"):
+            refresh_bridge_token(bridge, Path("/dummy"))
+
     def test_refreshes_expired_token(self) -> None:
         """Test that expired OAuth token is refreshed."""
         bridge = _make_oauth_bridge(expired=True)
@@ -613,7 +610,7 @@ class TestRefreshBridgeToken:
         """Test that refreshed token is written back to bridge file."""
         bridge = _make_oauth_bridge(expired=True)
         bridge_file = tmp_path / "auth.json"
-        bridge_file.write_text(json.dumps(_bridge_to_dict(bridge)))
+        bridge_file.write_text(json.dumps(bridge_to_json_dict(bridge)))
 
         new_expires = _utcnow() + timedelta(hours=1)
         mock_tokens = MagicMock()

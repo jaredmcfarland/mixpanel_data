@@ -128,17 +128,22 @@ if [ -d "/sessions" ] || [ -n "${CLAUDE_COWORK:-}" ]; then
     if [ -f "$f" ]; then
       echo "✓ Auth bridge file found: $f"
       "$python_cmd" -c "
-import json
-with open('$f') as fh:
-    bridge = json.load(fh)
-print(f'  Auth method: {bridge[\"auth_method\"]}')
-print(f'  Region: {bridge[\"region\"]}')
-print(f'  Project: {bridge[\"project_id\"]}')
-if bridge.get('custom_header'):
-    print(f'  Custom header: {bridge[\"custom_header\"][\"name\"]} ✓')
-if bridge.get('oauth') and bridge['oauth'].get('expires_at'):
-    print(f'  Token expires: {bridge[\"oauth\"][\"expires_at\"]}')
-"
+import json, sys
+try:
+    with open(sys.argv[1]) as fh:
+        bridge = json.load(fh)
+    print(f'  Auth method: {bridge.get(\"auth_method\", \"unknown\")}')
+    print(f'  Region: {bridge.get(\"region\", \"unknown\")}')
+    print(f'  Project: {bridge.get(\"project_id\", \"unknown\")}')
+    ch = bridge.get('custom_header')
+    if ch:
+        print(f'  Custom header: {ch.get(\"name\", \"?\")} ✓')
+    oauth = bridge.get('oauth')
+    if oauth and oauth.get('expires_at'):
+        print(f'  Token expires: {oauth[\"expires_at\"]}')
+except Exception as e:
+    print(f'  Error reading bridge file: {e}')
+" "$f"
       BRIDGE_FOUND=1
       break
     fi

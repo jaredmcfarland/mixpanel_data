@@ -469,6 +469,10 @@ class ConfigManager:
             print(creds.auth_method)  # AuthMethod.basic or AuthMethod.oauth
             ```
         """
+        # Apply custom headers from config [settings] section early —
+        # they should be available regardless of which resolution path succeeds.
+        self.apply_config_custom_header()
+
         # Priority 1: Environment variables (all four must be set)
         env_creds = self._resolve_from_env()
         if env_creds is not None:
@@ -488,9 +492,7 @@ class ConfigManager:
             if oauth_creds is not None:
                 return oauth_creds
 
-        # Priority 3 & 4: Config file (named account or default)
-        # Apply custom headers from config [settings] section
-        self.apply_config_custom_header()
+        # Priority 4: Config file (named account or default)
 
         config = self._read_config()
         accounts = config.get("accounts", {})
@@ -616,21 +618,20 @@ class ConfigManager:
         first_account = next(iter(accounts.values()))
         return first_account.get("region"), first_account.get("project_id")
 
-    def _resolve_from_bridge(self) -> Credentials | None:
-        """Attempt to resolve credentials from an auth bridge file.
+    def _load_and_refresh_bridge(self) -> Any | None:
+        """Load, refresh, and apply custom headers from a bridge file.
 
-        Loads the bridge file from ``MP_AUTH_FILE`` env var or the
-        default location (``~/.claude/mixpanel/auth.json``). If the
-        bridge contains an expired OAuth token, attempts to refresh it.
-
-        Also applies custom headers from the bridge file to env vars.
+        Finds the bridge file, loads it, applies custom headers to env
+        vars, and refreshes expired OAuth tokens. Returns the ready-to-use
+        bridge model, or ``None`` if no valid bridge is found.
 
         Returns:
-            Credentials if a valid bridge file is found, None otherwise.
+            An ``AuthBridgeFile`` instance if a valid bridge file is found
+            and ready, ``None`` otherwise. Typed as ``Any`` to avoid
+            importing bridge types at module level (lazy import).
         """
         from mixpanel_data._internal.auth.bridge import (
             apply_bridge_custom_header,
-            bridge_to_credentials,
             find_bridge_file,
             load_bridge_file,
             refresh_bridge_token,
@@ -658,6 +659,25 @@ class ConfigManager:
             except Exception:
                 logger.debug("Bridge token refresh failed, skipping bridge")
                 return None
+
+        return bridge
+
+    def _resolve_from_bridge(self) -> Credentials | None:
+        """Attempt to resolve credentials from an auth bridge file.
+
+        Loads the bridge file from ``MP_AUTH_FILE`` env var or the
+        default location (``~/.claude/mixpanel/auth.json``). If the
+        bridge contains an expired OAuth token, attempts to refresh it.
+
+        Also applies custom headers from the bridge file to env vars.
+
+        Returns:
+            Credentials if a valid bridge file is found, None otherwise.
+        """
+        bridge = self._load_and_refresh_bridge()
+        if bridge is None:
+            return None
+        from mixpanel_data._internal.auth.bridge import bridge_to_credentials
 
         return bridge_to_credentials(bridge)
 
@@ -671,36 +691,10 @@ class ConfigManager:
         Returns:
             ResolvedSession if a valid bridge file is found, None otherwise.
         """
-        from mixpanel_data._internal.auth.bridge import (
-            apply_bridge_custom_header,
-            bridge_to_resolved_session,
-            find_bridge_file,
-            load_bridge_file,
-            refresh_bridge_token,
-        )
-
-        path = find_bridge_file()
-        if path is None:
-            return None
-
-        bridge = load_bridge_file(path)
+        bridge = self._load_and_refresh_bridge()
         if bridge is None:
             return None
-
-        # Apply custom headers to env vars
-        apply_bridge_custom_header(bridge)
-
-        # Refresh expired OAuth tokens
-        if (
-            bridge.auth_method == "oauth"
-            and bridge.oauth is not None
-            and bridge.oauth.is_expired()
-        ):
-            try:
-                bridge = refresh_bridge_token(bridge, path)
-            except Exception:
-                logger.debug("Bridge token refresh failed, skipping bridge")
-                return None
+        from mixpanel_data._internal.auth.bridge import bridge_to_resolved_session
 
         return bridge_to_resolved_session(bridge)
 
@@ -1435,6 +1429,10 @@ class ConfigManager:
             # session.project_id, session.auth_header(), session.region
             ```
         """
+        # Apply custom headers from config [settings] section early —
+        # they should be available regardless of which resolution path succeeds.
+        self.apply_config_custom_header()
+
         # Priority 1: Environment variables
         env_creds = self._resolve_from_env()
         if env_creds is not None:

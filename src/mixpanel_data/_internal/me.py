@@ -354,8 +354,17 @@ class MeCache:
                 e,
             )
 
-        # Add cache metadata
+        # Add cache metadata, stripping bulky fields that bloat the cache.
+        # Workspace member_list and unified_member_list can be 10-30MB each
+        # (preserved by extra="allow") and are not needed for project/workspace
+        # discovery.
         data = response.model_dump(mode="json")
+        _STRIP_FROM_WORKSPACES = {"member_list", "unified_member_list"}
+        if "workspaces" in data and isinstance(data["workspaces"], dict):
+            for ws_data in data["workspaces"].values():
+                if isinstance(ws_data, dict):
+                    for key in _STRIP_FROM_WORKSPACES:
+                        ws_data.pop(key, None)
         data["cached_at"] = time.time()
         data["cached_region"] = region
 
