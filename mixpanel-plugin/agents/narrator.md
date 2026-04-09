@@ -320,6 +320,101 @@ plt.tight_layout()
 plt.savefig("report_dashboard.png", dpi=150)
 ```
 
+## Dashboard Output
+
+### When to Materialize as a Dashboard
+
+Create a live Mixpanel dashboard instead of (or in addition to) a markdown report when:
+- The user says "dashboard" or "board"
+- The report needs to stay live and auto-update with fresh data
+- The report will be shared with non-technical stakeholders who need interactive exploration
+- The user wants to bookmark the report inside Mixpanel for ongoing use
+
+### How to Convert a Report to a Dashboard
+
+The narrator already structures reports into sections. Each section maps to dashboard rows — a text card header followed by one or more report cards:
+
+```python
+import mixpanel_data as mp
+from mixpanel_data.types import CreateDashboardParams, UpdateDashboardParams
+import json
+
+ws = mp.Workspace()
+
+# Create dashboard from report structure
+dashboard = ws.create_dashboard(CreateDashboardParams(
+    title="Product Health Report — March 2025",
+    description="Monthly AARRR metrics across all dimensions.",
+))
+
+# Each report section becomes: text card header + report(s)
+sections = [
+    {
+        "header": "<h2>Acquisition</h2><p>New user growth and channel performance.</p>",
+        "reports": [
+            ("New Signups (30d)", "insights", signups_result),
+            ("Signups by Channel", "insights", channel_result),
+        ]
+    },
+    {
+        "header": "<h2>Activation</h2><p>Onboarding completion and time to value.</p>",
+        "reports": [
+            ("Onboarding Funnel", "funnels", onboarding_result),
+        ]
+    },
+    {
+        "header": "<h2>Retention</h2><p>User return rates and stickiness.</p>",
+        "reports": [
+            ("New User Retention", "retention", retention_result),
+        ]
+    },
+]
+
+for section in sections:
+    # Add section header as a text card
+    ws.update_dashboard(dashboard.id, UpdateDashboardParams(
+        content={"action": "create", "content_type": "text",
+                 "content_params": {"markdown": section["header"]}}
+    ))
+    # Add report cards for the section
+    for name, btype, result in section["reports"]:
+        ws.update_dashboard(dashboard.id, UpdateDashboardParams(
+            content={"action": "create", "content_type": "report",
+                     "content_params": {"bookmark": {"name": name, "type": btype,
+                                                      "params": json.dumps(result.params)}}}
+        ))
+```
+
+### Dual Output
+
+The narrator can produce BOTH a markdown report AND a live dashboard from the same data:
+
+```python
+# After querying all data and building the report...
+
+# 1. Save markdown report (existing behavior)
+with open("product_health_march_2025.md", "w") as f:
+    f.write(report_markdown)
+
+# 2. Materialize as live Mixpanel dashboard (new capability)
+dashboard = ws.create_dashboard(CreateDashboardParams(
+    title="Product Health — March 2025",
+))
+# ... add sections as shown above
+
+print(f"Report saved: product_health_march_2025.md")
+print(f"Live dashboard: https://mixpanel.com/project/{ws.project_id}/app/boards#id={dashboard.id}")
+```
+
+### Text Card Tips for Narrators
+
+- Use the same data-driven language from the markdown report in text cards
+- Keep text cards concise — under 500 chars
+- Strip `\n` from markdown before sending to the API
+- Use `<h2>` for section headers, `<p>` for descriptions
+- Add explainer cards beneath reports: `<p>^ DAU is <strong>12,450</strong>, up 8.2% MoM.</p>`
+- Full formatting guide: `skills/dashboard-builder/references/dashboard-reference.md`
+
 ## API Lookup
 
 ```bash
