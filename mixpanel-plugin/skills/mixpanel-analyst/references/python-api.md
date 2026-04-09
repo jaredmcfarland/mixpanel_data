@@ -775,6 +775,8 @@ ws.stream_profiles(
 
 ## Dashboard CRUD
 
+> **Full dashboard building guide:** For layout, text cards, design templates, and end-to-end workflows, see `skills/dashboard-builder/SKILL.md` and `skills/dashboard-builder/references/dashboard-reference.md`.
+
 ```python
 ws.list_dashboards(ids: list[int] | None = None) -> list[Dashboard]
 ws.create_dashboard(params: CreateDashboardParams) -> Dashboard

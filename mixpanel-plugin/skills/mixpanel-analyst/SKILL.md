@@ -728,3 +728,13 @@ Load these on demand when the quick reference above is insufficient:
 | [analytical-frameworks.md](references/analytical-frameworks.md) | AARRR deep dive, GQM methodology, diagnosis protocol, retention benchmarks |
 | [python-api.md](references/python-api.md) | Complete method signatures for all Workspace methods including App API CRUD |
 | [bookmark-params.md](references/bookmark-params.md) | Manual bookmark JSON construction for entity management |
+
+**Dashboard Building** (separate skill — `skills/dashboard-builder/`):
+
+| Reference | Content |
+|-----------|---------|
+| [SKILL.md](../dashboard-builder/SKILL.md) | 8-phase dashboard workflow: investigate → plan → build → layout → verify |
+| [dashboard-reference.md](../dashboard-builder/references/dashboard-reference.md) | API types, content actions, layout grid, text card formatting, gotchas |
+| [dashboard-templates.md](../dashboard-builder/references/dashboard-templates.md) | 9 purpose-built templates (KPI, Feature Launch, AARRR, Funnel, Retention, etc.) |
+| [bookmark-pipeline.md](../dashboard-builder/references/bookmark-pipeline.md) | Query → bookmark → dashboard pipeline for all 4 engines |
+| [chart-types.md](../dashboard-builder/references/chart-types.md) | Chart type selection, math types, width recommendations |
