@@ -262,7 +262,7 @@ Design documents in `context/`:
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
 
-## mixpanel-data Plugin (v3.0 — 4-Engine Query Taxonomy)
+## mixpanel-data Plugin (v3.1 — 4-Engine Query Taxonomy + Dashboard Builder)
 
 This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin teaches Claude to be a senior data analyst by writing Python code using `mixpanel_data` + `pandas` — no CLI commands, no MCP tools.
 
