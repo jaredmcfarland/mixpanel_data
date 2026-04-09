@@ -501,8 +501,9 @@ class ConfigManager:
         if not accounts:
             raise ConfigError(
                 "No credentials configured. "
-                "Set MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION environment variables, "
-                "or add an account with add_account()."
+                "Run 'mp auth login' to authenticate via OAuth, "
+                "or set MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION "
+                "environment variables."
             )
 
         # Determine which account to use
@@ -552,7 +553,9 @@ class ConfigManager:
         from mixpanel_data._internal.auth.storage import OAuthStorage
 
         # Determine region and project_id for token lookup
-        region, project_id = self._resolve_region_and_project_for_oauth()
+        region, project_id = self._resolve_region_and_project_for_oauth(
+            _oauth_storage_dir=_oauth_storage_dir,
+        )
         if region is None:
             return None
 
@@ -586,12 +589,19 @@ class ConfigManager:
 
     def _resolve_region_and_project_for_oauth(
         self,
+        *,
+        _oauth_storage_dir: Path | None = None,
     ) -> tuple[str | None, str | None]:
         """Determine region and project_id for OAuth token lookup.
 
         Checks in order:
         1. ``MP_REGION`` / ``MP_PROJECT_ID`` environment variables
         2. Default account from config file
+        3. v2 credentials and active context
+        4. Scan OAuth storage for any valid token
+
+        Args:
+            _oauth_storage_dir: Override OAuth storage directory for testing.
 
         Returns:
             Tuple of ``(region, project_id)``. Either or both may be
@@ -607,17 +617,45 @@ class ConfigManager:
         # Fall back to config file default account
         config = self._read_config()
         accounts = config.get("accounts", {})
-        if not accounts:
-            return None, None
 
-        default_name = config.get("default")
-        if default_name and isinstance(default_name, str) and default_name in accounts:
-            account_data = accounts[default_name]
-            return account_data.get("region"), account_data.get("project_id")
+        if accounts:
+            default_name = config.get("default")
+            if (
+                default_name
+                and isinstance(default_name, str)
+                and default_name in accounts
+            ):
+                account_data = accounts[default_name]
+                return account_data.get("region"), account_data.get("project_id")
 
-        # Use first account as fallback
-        first_account = next(iter(accounts.values()))
-        return first_account.get("region"), first_account.get("project_id")
+            # Use first account as fallback
+            first_account = next(iter(accounts.values()))
+            return first_account.get("region"), first_account.get("project_id")
+
+        # v2 config: check active context for project_id
+        active = config.get("active", {})
+        active_project_id = active.get("project_id")
+
+        # Check credentials for region
+        credentials = config.get("credentials", {})
+        active_cred_name = active.get("credential")
+        if active_cred_name and active_cred_name in credentials:
+            cred_data = credentials[active_cred_name]
+            return cred_data.get("region", "us"), active_project_id
+        if credentials:
+            first_cred = next(iter(credentials.values()))
+            return first_cred.get("region", "us"), active_project_id
+
+        # Last resort: scan OAuth storage for any valid token
+        from mixpanel_data._internal.auth.storage import OAuthStorage
+
+        storage = OAuthStorage(storage_dir=_oauth_storage_dir)
+        for region_candidate in VALID_REGIONS:
+            tokens = storage.load_tokens(region_candidate)
+            if tokens is not None and not tokens.is_expired():
+                # Prefer token's project_id, fall back to active context
+                return region_candidate, tokens.project_id or active_project_id
+        return None, None
 
     def _load_and_refresh_bridge(self) -> AuthBridgeFile | None:
         """Load, refresh, and apply custom headers from a bridge file.
@@ -1598,7 +1636,9 @@ class ConfigManager:
         if not cred_name or cred_name not in credentials:
             raise ConfigError(
                 "No credentials configured. "
-                "Add a credential with add_credential() or set environment variables.",
+                "Run 'mp auth login' to authenticate via OAuth, "
+                "or set MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION "
+                "environment variables.",
             )
 
         cred_data = credentials[cred_name]
@@ -1649,7 +1689,10 @@ class ConfigManager:
 
         if not resolved_project_id:
             raise ConfigError(
-                "No project selected. Run 'mp projects switch <id>' or pass --project.",
+                "No project selected. "
+                "Run 'mp projects list' to see available projects, then "
+                "'mp projects switch <id>' to select one, "
+                "or pass --project for a one-off override.",
             )
 
         project = ProjectContext(
