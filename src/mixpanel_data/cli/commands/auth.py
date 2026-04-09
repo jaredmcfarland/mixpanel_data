@@ -460,6 +460,7 @@ def _post_login_setup(
         headers[custom_name] = custom_value
 
     try:
+        err_console.print("[dim]Discovering projects...[/dim]")
         with httpx.Client(timeout=60) as http:
             resp = http.get(me_url, headers=headers)
             if resp.status_code != 200:
