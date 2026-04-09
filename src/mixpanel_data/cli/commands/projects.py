@@ -85,6 +85,8 @@ def _discover_projects_via_oauth() -> list[dict[str, Any]] | None:
     Returns:
         List of project dicts if discovery succeeds, None otherwise.
     """
+    import os
+
     import httpx
 
     from mixpanel_data._internal.api_client import ENDPOINTS
@@ -93,6 +95,16 @@ def _discover_projects_via_oauth() -> list[dict[str, Any]] | None:
     from mixpanel_data._internal.me import MeCache, MeProjectInfo, MeResponse
 
     storage = OAuthStorage()
+
+    # Propagate custom headers from env or config (once, outside loop)
+    custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+    custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
+    if not (custom_name and custom_value):
+        from mixpanel_data._internal.config import ConfigManager
+
+        ConfigManager().apply_config_custom_header()
+        custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+        custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
 
     # Find a valid token across all regions
     for region in VALID_REGIONS:
@@ -104,27 +116,11 @@ def _discover_projects_via_oauth() -> list[dict[str, Any]] | None:
         app_base = ENDPOINTS[region]["app"]
         me_url = f"{app_base}/me"
         headers: dict[str, str] = {"Authorization": f"Bearer {access_token}"}
-
-        # Propagate custom headers from env or config
-        import os
-
-        custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
-        custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
         if custom_name and custom_value:
             headers[custom_name] = custom_value
-        else:
-            # Try reading custom header from config settings
-            from mixpanel_data._internal.config import ConfigManager
-
-            cfg = ConfigManager()
-            cfg.apply_config_custom_header()
-            custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
-            custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
-            if custom_name and custom_value:
-                headers[custom_name] = custom_value
 
         try:
-            with httpx.Client(timeout=120) as http:
+            with httpx.Client(timeout=30) as http:
                 resp = http.get(me_url, headers=headers)
                 if resp.status_code != 200:
                     continue
