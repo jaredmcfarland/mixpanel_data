@@ -8048,18 +8048,27 @@ _PROPERTY_OPERATOR_MAP: dict[str, str] = {
 }
 """Maps ``CohortCriteria.has_property()`` operator names to selector tree operators."""
 
-_FILTER_TO_SELECTOR_MAP: dict[str, str] = {
-    "equals": "==",
-    "does not equal": "!=",
-    "contains": "in",
-    "does not contain": "not in",
-    "is greater than": ">",
-    "is less than": "<",
-    "is set": "defined",
-    "is not set": "not defined",
-    "is between": "between",
-}
-"""Maps ``Filter._operator`` strings to event selector expression operators."""
+_FILTER_TO_SELECTOR_SUPPORTED: frozenset[str] = frozenset(
+    {
+        "equals",
+        "does not equal",
+        "contains",
+        "does not contain",
+        "is greater than",
+        "is less than",
+        "is set",
+        "is not set",
+        "is between",
+    }
+)
+"""Set of ``Filter._operator`` values accepted by ``_build_event_selector``.
+
+These operators are emitted verbatim in the Insights bookmark filter
+format (``filterOperator`` key) — no mapping is needed because the
+server's ``output_leaf_node`` routes ``filterOperator`` nodes through
+``filter_to_arb_selector_string``, which understands these names
+natively.
+"""
 
 
 def _validate_cohort_date(date_str: str) -> None:
@@ -8086,14 +8095,19 @@ def _build_event_selector(
 ) -> dict[str, Any]:
     """Convert Filter objects to an event selector expression tree.
 
-    Reads internal fields from ``Filter`` instances and maps operators
-    via ``_FILTER_TO_SELECTOR_MAP`` to produce selector tree nodes.
+    Each ``Filter`` is emitted as an **Insights bookmark filter** node
+    (``filterOperator`` / ``filterValue`` / ``filterType`` keys) rather
+    than the legacy selector-tree format (``operator`` / ``operand``).
+    The server's ``output_leaf_node`` routes ``filterOperator`` nodes
+    through ``filter_to_arb_selector_string``, which handles all
+    operators correctly.
 
     Args:
         filters: Single Filter or list of Filters to convert.
 
     Returns:
         Expression tree dict with ``operator`` and ``children`` keys.
+        Each child is an Insights bookmark filter node.
 
     Raises:
         ValueError: If a filter uses an unsupported operator.
@@ -8101,22 +8115,22 @@ def _build_event_selector(
     filter_list = [filters] if isinstance(filters, Filter) else filters
     children: list[dict[str, Any]] = []
     for f in filter_list:
-        mapped_op = _FILTER_TO_SELECTOR_MAP.get(f._operator)
-        if mapped_op is None:
-            supported = ", ".join(sorted(_FILTER_TO_SELECTOR_MAP.keys()))
+        if f._operator not in _FILTER_TO_SELECTOR_SUPPORTED:
+            supported = ", ".join(sorted(_FILTER_TO_SELECTOR_SUPPORTED))
             msg = (
                 f"unsupported filter operator for cohort selector: {f._operator!r}. "
                 f"Supported operators: {supported}"
             )
             raise ValueError(msg)
         node: dict[str, Any] = {
-            "property": "event",
+            "resourceType": f._resource_type,
+            "filterType": f._property_type,
+            "defaultType": f._property_type,
+            "filterOperator": f._operator,
             "value": f._property,
-            "operator": mapped_op,
         }
         if f._value is not None:
-            node["operand"] = f._value
-        node["type"] = f._property_type
+            node["filterValue"] = f._value
         children.append(node)
     return {"operator": "and", "children": children}
 
