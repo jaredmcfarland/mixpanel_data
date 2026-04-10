@@ -682,8 +682,6 @@ ws.retention(
 ) -> RetentionResult
 # Legacy — prefer: ws.query_retention() for ad-hoc retention queries
 
-ws.jql(script: str, params: dict | None = None) -> JQLResult
-
 ws.query_saved_report(bookmark_id: int) -> SavedReportResult
 ```
 
@@ -735,16 +733,6 @@ ws.segmentation_average(
     where: str | None = None,
 ) -> NumericAverageResult
 # Legacy — prefer: ws.query(event, math="average", math_property="...")
-```
-
-## Analytics — JQL Discovery Helpers
-
-```python
-ws.property_distribution(event: str, property: str, limit: int = 20) -> PropertyDistributionResult
-ws.numeric_summary(event: str, property: str) -> NumericPropertySummaryResult
-ws.daily_counts(event: str, from_date: str, to_date: str) -> DailyCountsResult
-ws.engagement_distribution(event: str, from_date: str, to_date: str) -> EngagementDistributionResult
-ws.property_coverage(event: str, property: str, from_date: str, to_date: str) -> PropertyCoverageResult
 ```
 
 ## Streaming
@@ -1058,7 +1046,6 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 | `SegmentationResult` | `segmentation()` | `.df`, `.data`, `.series` |
 | `FunnelResult` | `funnel()` | `.df`, `.steps` (list of `FunnelResultStep`), `.conversion_rate` |
 | `RetentionResult` | `retention()` | `.df`, `.data` |
-| `JQLResult` | `jql()` | `.df`, `.data` |
 | `EventCountsResult` | `event_counts()` | `.df`, `.data` |
 | `ActivityFeedResult` | `activity_feed()` | `.events` |
 | `FlowsResult` | `query_saved_flows()` | `.df`, `.data` |
@@ -1081,7 +1068,6 @@ MixpanelDataError (base)
 │   ├── AuthenticationError (401)
 │   ├── RateLimitError (429)
 │   ├── QueryError (400)
-│   │   └── JQLSyntaxError (412)
 │   └── ServerError (5xx)
 ├── ProjectNotFoundError
 ├── OAuthError
