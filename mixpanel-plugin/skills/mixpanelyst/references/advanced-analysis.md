@@ -1050,17 +1050,17 @@ from sklearn.preprocessing import StandardScaler
 
 ws = mp.Workspace()
 
-# Build user-level feature vectors from multiple queries
-dau_by_user = ws.query("Login", math="total", per_user="total", last=90, mode="table").df
-purchases_by_user = ws.query("Purchase", math="total", per_user="total", last=90, mode="table").df
-searches_by_user = ws.query("Search", math="total", per_user="total", last=90, mode="table").df
+# Build user-level feature vectors from profile properties
+profiles = []
+for p in ws.stream_profiles():
+    props = p.get("properties", {})
+    profiles.append({
+        "logins_30d": props.get("logins_30d", 0),
+        "purchases_30d": props.get("purchases_30d", 0),
+        "searches_30d": props.get("searches_30d", 0),
+    })
 
-# Join into a feature matrix (users x features)
-features = pd.DataFrame({
-    "logins": dau_by_user.set_index("distinct_id")["count"],
-    "purchases": purchases_by_user.set_index("distinct_id")["count"],
-    "searches": searches_by_user.set_index("distinct_id")["count"],
-}).fillna(0)
+features = pd.DataFrame(profiles).fillna(0)
 
 # Normalize — different scales (logins vs purchases) would skew clustering
 scaler = StandardScaler()
@@ -1074,11 +1074,14 @@ features["segment"] = kmeans.fit_predict(X)
 for seg in sorted(features["segment"].unique()):
     group = features[features["segment"] == seg]
     print(f"\nSegment {seg} ({len(group):,} users):")
-    print(f"  Avg logins:    {group['logins'].mean():,.1f}")
-    print(f"  Avg purchases: {group['purchases'].mean():,.1f}")
-    print(f"  Avg searches:  {group['searches'].mean():,.1f}")
+    print(f"  Avg logins:    {group['logins_30d'].mean():,.1f}")
+    print(f"  Avg purchases: {group['purchases_30d'].mean():,.1f}")
+    print(f"  Avg searches:  {group['searches_30d'].mean():,.1f}")
 
 # Label segments based on their profiles
+# NOTE: K-means cluster numbering is non-deterministic — cluster 0 will not
+# reliably contain the same user type across runs. Always inspect each
+# cluster's profile before assigning labels.
 segment_labels = {0: "Power Users", 1: "Browsers", 2: "Buyers", 3: "Dormant"}
 features["label"] = features["segment"].map(segment_labels)
 print(features["label"].value_counts())
@@ -1144,6 +1147,7 @@ import mixpanel_data as mp
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
 
 ws = mp.Workspace()
 
@@ -1177,7 +1181,10 @@ print("=== Feature Importance for Purchase Prediction ===")
 for feat, imp in importance.head(10).items():
     bar = "#" * int(imp * 100)
     print(f"  {feat:25s} {imp:.3f} {bar}")
-print(f"\nModel accuracy: {rf.score(X, y):.1%}")
+
+# Cross-validated accuracy (honest estimate — never report training accuracy alone)
+cv_scores = cross_val_score(rf, X, y, cv=5, scoring="accuracy")
+print(f"\nCV accuracy: {cv_scores.mean():.1%} +/- {cv_scores.std():.1%}")
 ```
 
 ### Predictive Scoring — Churn Probability
@@ -1190,6 +1197,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 ws = mp.Workspace()
@@ -1202,26 +1210,27 @@ for p in ws.stream_profiles():
         "distinct_id": p["distinct_id"],
         "logins_30d": props.get("logins_30d", 0),
         "purchases_30d": props.get("purchases_30d", 0),
-        "days_since_last_active": props.get("days_since_last_active", 999),
         "feature_count": props.get("features_used", 0),
+        # Label: use a backend-set flag or inactivity window
+        # IMPORTANT: do not use the same field as both feature and label —
+        # that causes target leakage (model learns a trivial rule).
         "churned": 1 if props.get("days_since_last_active", 999) > 30 else 0,
     })
 
 df = pd.DataFrame(profiles)
-feature_cols = ["logins_30d", "purchases_30d", "days_since_last_active", "feature_count"]
+feature_cols = ["logins_30d", "purchases_30d", "feature_count"]
 X = df[feature_cols].fillna(0)
 y = df["churned"]
 
-# Normalize features
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
-
-# Logistic regression with cross-validation
-lr = LogisticRegression(random_state=42, max_iter=1000)
-cv_scores = cross_val_score(lr, X_scaled, y, cv=5, scoring="roc_auc")
+# Cross-validate with pipeline (scaler inside each fold to prevent data leakage)
+cv_pipeline = make_pipeline(StandardScaler(), LogisticRegression(random_state=42, max_iter=1000))
+cv_scores = cross_val_score(cv_pipeline, X, y, cv=5, scoring="roc_auc")
 print(f"Cross-validated AUC: {cv_scores.mean():.3f} +/- {cv_scores.std():.3f}")
 
-# Train final model and score all users
+# Train final model on full data and score all users
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+lr = LogisticRegression(random_state=42, max_iter=1000)
 lr.fit(X_scaled, y)
 df["churn_probability"] = lr.predict_proba(X_scaled)[:, 1]
 
@@ -1229,7 +1238,7 @@ df["churn_probability"] = lr.predict_proba(X_scaled)[:, 1]
 print("\n=== Churn Risk Distribution ===")
 bins = [0, 0.2, 0.5, 0.8, 1.0]
 labels = ["Low", "Medium", "High", "Critical"]
-df["risk_tier"] = pd.cut(df["churn_probability"], bins=bins, labels=labels)
+df["risk_tier"] = pd.cut(df["churn_probability"], bins=bins, labels=labels, include_lowest=True)
 print(df["risk_tier"].value_counts().sort_index())
 
 # Coefficient interpretation
@@ -1328,9 +1337,8 @@ Use auto-fit ARIMA for short-term metric forecasting.
 import mixpanel_data as mp
 import pandas as pd
 import numpy as np
-from statsmodels.tsa.arima.model import ARIMA
 import warnings
-warnings.filterwarnings("ignore")  # suppress convergence warnings
+from statsmodels.tsa.arima.model import ARIMA
 
 ws = mp.Workspace()
 
@@ -1341,7 +1349,9 @@ counts = counts.asfreq("D", method="ffill")
 
 # Fit ARIMA(1,1,1) — good default for daily metrics
 model = ARIMA(counts, order=(1, 1, 1))
-fitted = model.fit()
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=UserWarning, module="statsmodels")
+    fitted = model.fit()
 
 # Forecast 14 days ahead
 forecast = fitted.get_forecast(steps=14)
@@ -1352,7 +1362,7 @@ print("=== 14-Day DAU Forecast ===")
 print(f"Current DAU (last 7d avg): {counts.tail(7).mean():,.0f}")
 print(f"Forecast DAU (next 7d avg): {fc_mean.head(7).mean():,.0f}")
 print(f"Forecast DAU (next 14d avg): {fc_mean.mean():,.0f}")
-print(f"\nDay-by-day forecast:")
+print("\nDay-by-day forecast:")
 for date, mean in fc_mean.items():
     ci_low = fc_ci.loc[date].iloc[0]
     ci_high = fc_ci.loc[date].iloc[1]
@@ -1411,7 +1421,7 @@ print(model.summary())
 coef = model.params["searches"]
 p_val = model.pvalues["searches"]
 r2 = model.rsquared
-print(f"\n=== Interpretation ===")
+print("\n=== Interpretation ===")
 print(f"Each additional daily searcher is associated with ${coef:,.2f} in revenue")
 print(f"Search volume explains {r2:.1%} of revenue variance")
 print(f"Relationship is {'statistically significant' if p_val < 0.05 else 'not significant'} (p={p_val:.4f})")
@@ -1489,7 +1499,6 @@ Model retention as a survival problem: "how long until a user churns?" Handles c
 import mixpanel_data as mp
 import pandas as pd
 import numpy as np
-from statsmodels.duration.survfunc import SurvfuncRight
 
 ws = mp.Workspace()
 
@@ -1583,16 +1592,24 @@ paid = ws.query_retention(
 organic_rates = organic.average.get("rates", [])
 paid_rates = paid.average.get("rates", [])
 buckets = [1, 7, 14, 30, 60]
+n = min(len(organic_rates), len(paid_rates), len(buckets))
 
 comparison = pd.DataFrame({
-    "day": buckets[:min(len(organic_rates), len(paid_rates))],
-    "organic": organic_rates[:len(buckets)],
-    "paid": paid_rates[:len(buckets)],
+    "day": buckets[:n],
+    "organic": organic_rates[:n],
+    "paid": paid_rates[:n],
 })
-comparison["lift"] = (comparison["organic"] - comparison["paid"]) / comparison["paid"] * 100
+comparison["lift"] = (comparison["organic"] - comparison["paid"]) / comparison["paid"]
 
 print("=== Retention: Organic vs Paid ===")
-print(comparison.to_string(index=False, float_format=lambda x: f"{x:.1%}" if abs(x) < 10 else f"{x:+.0f}%"))
+print(comparison.to_string(
+    index=False,
+    formatters={
+        "organic": lambda x: f"{x:.1%}",
+        "paid": lambda x: f"{x:.1%}",
+        "lift": lambda x: f"{x:+.1%}",
+    },
+))
 
 if len(organic_rates) >= 3 and len(paid_rates) >= 3:
     stat, p = mannwhitneyu(organic_rates, paid_rates, alternative="greater")
@@ -1610,7 +1627,7 @@ if len(organic_rates) >= 3 and len(paid_rates) >= 3:
 - **`plt.close(fig)`**: Close figures after saving to free memory, especially in loops.
 - **scikit-learn requires numeric input**: Use `pd.get_dummies()` for categorical features. Always `StandardScaler()` before distance-based methods (K-means, PCA).
 - **statsmodels requires regular time indices**: Use `counts.asfreq("D", method="ffill")` before time series methods.
-- **ARIMA convergence**: If ARIMA fails to converge, try a simpler order (0,1,1) or increase `maxiter`. Suppress warnings with `warnings.filterwarnings("ignore")`.
+- **ARIMA convergence**: If ARIMA fails to converge, try a simpler order (0,1,1) or increase `maxiter`. Scope warning suppression with `warnings.catch_warnings()` — never use global `filterwarnings("ignore")`.
 - **Feature importance is correlation, not causation**: Random Forest importance shows predictive power, not causal relationships. Use Granger causality or domain knowledge for causal claims.
 - **Cross-validate predictions**: Never report model accuracy on training data alone. Use `cross_val_score()` for honest estimates.
 - **scipy is optional**: Statistical functions require `pip install scipy`. Check availability before using.

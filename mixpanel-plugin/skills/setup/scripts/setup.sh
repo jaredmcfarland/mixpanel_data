@@ -33,10 +33,10 @@ echo ""
 echo "Installing mixpanel_data (from GitHub), pandas, numpy, matplotlib, seaborn, networkx, anytree, scipy, scikit-learn, statsmodels..."
 if command -v uv &>/dev/null; then
   echo "  (using uv)"
-  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy scikit-learn statsmodels || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy scikit-learn statsmodels; }
+  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy 'scikit-learn>=1.3' 'statsmodels>=0.14' || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy 'scikit-learn>=1.3' 'statsmodels>=0.14'; }
 elif "$python_cmd" -m pip --version &>/dev/null; then
   echo "  (using pip via $python_cmd)"
-  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy scikit-learn statsmodels
+  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy 'scikit-learn>=1.3' 'statsmodels>=0.14'
 else
   echo "✗ No package manager found. Install pip or uv."
   echo "  Recommended: https://docs.astral.sh/uv/"
