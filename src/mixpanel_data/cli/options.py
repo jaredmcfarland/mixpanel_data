@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
+import click
 import typer
 
 # Output format type for formatting command output
@@ -15,13 +16,15 @@ OutputFormat = Literal["json", "jsonl", "table", "csv", "plain"]
 
 # Reusable Annotated type for --format option
 # Used by all commands that produce output
+# Uses str + click.Choice for Typer compatibility across versions
+# (Literal types cause RuntimeError on older Typer versions)
 FormatOption = Annotated[
-    OutputFormat,
+    str,
     typer.Option(
         "--format",
         "-f",
-        help="Output format: json, jsonl, table, csv, plain.",
-        show_choices=False,
+        help="Output format.",
+        click_type=click.Choice(["json", "jsonl", "table", "csv", "plain"]),
     ),
 ]
 
