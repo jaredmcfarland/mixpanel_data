@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from mixpanel_data.types import (
-    _FILTER_TO_SELECTOR_MAP,
+    _FILTER_TO_SELECTOR_SUPPORTED,
     _PROPERTY_OPERATOR_MAP,
     CohortCriteria,
     CohortDefinition,
@@ -44,20 +44,20 @@ class TestOperatorMaps:
         }
         assert expected == _PROPERTY_OPERATOR_MAP
 
-    def test_filter_to_selector_map_has_all_operators(self) -> None:
-        """_FILTER_TO_SELECTOR_MAP maps all expected Filter._operator strings."""
+    def test_filter_to_selector_supported_has_all_operators(self) -> None:
+        """_FILTER_TO_SELECTOR_SUPPORTED contains all expected Filter._operator strings."""
         expected = {
-            "equals": "==",
-            "does not equal": "!=",
-            "contains": "in",
-            "does not contain": "not in",
-            "is greater than": ">",
-            "is less than": "<",
-            "is set": "defined",
-            "is not set": "not defined",
-            "is between": "between",
+            "equals",
+            "does not equal",
+            "contains",
+            "does not contain",
+            "is greater than",
+            "is less than",
+            "is set",
+            "is not set",
+            "is between",
         }
-        assert expected == _FILTER_TO_SELECTOR_MAP
+        assert expected == _FILTER_TO_SELECTOR_SUPPORTED
 
 
 # =============================================================================
@@ -125,7 +125,7 @@ class TestCohortCriteriaDidEvent:
         assert c._behavior["to_date"] == "2024-03-31"
 
     def test_where_single_filter(self) -> None:
-        """did_event with single where filter builds event selector expression."""
+        """did_event with single where filter builds Insights bookmark filter node."""
         c = CohortCriteria.did_event(
             "Purchase",
             at_least=1,
@@ -138,11 +138,12 @@ class TestCohortCriteriaDidEvent:
         assert selector["operator"] == "and"
         assert len(selector["children"]) == 1
         child = selector["children"][0]
-        assert child["property"] == "event"
+        assert child["resourceType"] == "events"
         assert child["value"] == "plan"
-        assert child["operator"] == "=="
-        assert child["operand"] == ["premium"]
-        assert child["type"] == "string"
+        assert child["filterOperator"] == "equals"
+        assert child["filterValue"] == ["premium"]
+        assert child["filterType"] == "string"
+        assert child["defaultType"] == "string"
 
     def test_where_multiple_filters(self) -> None:
         """did_event with multiple where filters produces AND-combined children."""
@@ -161,15 +162,15 @@ class TestCohortCriteriaDidEvent:
         assert selector["operator"] == "and"
         assert len(selector["children"]) == 2
 
-        # First child: plan == premium
+        # First child: plan equals premium
         assert selector["children"][0]["value"] == "plan"
-        assert selector["children"][0]["operator"] == "=="
+        assert selector["children"][0]["filterOperator"] == "equals"
 
         # Second child: amount > 100
         assert selector["children"][1]["value"] == "amount"
-        assert selector["children"][1]["operator"] == ">"
-        assert selector["children"][1]["operand"] == 100
-        assert selector["children"][1]["type"] == "number"
+        assert selector["children"][1]["filterOperator"] == "is greater than"
+        assert selector["children"][1]["filterValue"] == 100
+        assert selector["children"][1]["filterType"] == "number"
 
     def test_exactly_zero_is_valid(self) -> None:
         """did_event with exactly=0 is valid (used by did_not_do_event)."""
@@ -250,7 +251,7 @@ class TestCohortCriteriaDidEventValidation:
             )
 
     def test_unsupported_filter_operator_raises(self) -> None:
-        """ValueError when Filter uses an operator not in _FILTER_TO_SELECTOR_MAP."""
+        """ValueError when Filter uses an operator not in _FILTER_TO_SELECTOR_SUPPORTED."""
         with pytest.raises(ValueError, match="unsupported filter operator"):
             CohortCriteria.did_event(
                 "Login",
