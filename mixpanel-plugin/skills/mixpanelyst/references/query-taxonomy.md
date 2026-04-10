@@ -11,7 +11,7 @@ Deep reference for mapping natural-language analytics questions to the correct `
 | **Retention** | `ws.query_retention()` | Cohort retention curves, return behavior | `RetentionQueryResult` |
 | **Flows** | `ws.query_flow()` | User path analysis, event sequences | `FlowQueryResult` |
 
-Additionally, legacy methods (`segmentation`, `funnel`, `retention`, `jql`) remain available for specific cases, and discovery methods (`events`, `properties`, `property_values`, `top_events`) provide schema context.
+Additionally, legacy methods (`segmentation`, `funnel`, `retention`) remain available for specific cases, and discovery methods (`events`, `properties`, `property_values`, `top_events`) provide schema context.
 
 ---
 
