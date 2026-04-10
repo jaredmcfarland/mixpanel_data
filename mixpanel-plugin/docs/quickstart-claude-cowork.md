@@ -31,8 +31,8 @@ mp auth test
 You should see a success message. If not, set up credentials first:
 
 ```bash
-# OAuth (opens browser)
-mp auth login --region us --project-id YOUR_PROJECT_ID
+# OAuth (opens browser, auto-discovers your projects)
+mp auth login --region us
 
 # OR service account (prompts for secret securely)
 mp auth add my-project --username YOUR_SA_USERNAME --project YOUR_PROJECT_ID --region us
@@ -50,15 +50,20 @@ mp auth cowork-setup
 
 This creates a bridge file at `~/.claude/mixpanel/auth.json` containing your credentials. Cowork VMs can read this file automatically.
 
-You'll see output confirming what was exported:
+You'll see JSON output confirming what was exported:
 
-```
-status: cowork_setup_complete
-bridge_path: /home/you/.claude/mixpanel/auth.json
-auth_method: service_account
-region: us
-project_id: 12345
-credentials_valid: true
+```json
+{
+  "status": "cowork_setup_complete",
+  "bridge_path": "/home/you/.claude/mixpanel/auth.json",
+  "auth_method": "service_account",
+  "region": "us",
+  "project_id": "12345",
+  "workspace_id": null,
+  "has_custom_header": false,
+  "credentials_valid": true,
+  "test_error": null
+}
 ```
 
 ### Options
@@ -164,7 +169,7 @@ If you authenticated with OAuth (rather than a service account), the bridge file
 
 ```bash
 # On your local machine
-mp auth login --region us --project-id YOUR_PROJECT_ID
+mp auth login --region us
 mp auth cowork-setup
 ```
 
@@ -232,7 +237,7 @@ mp auth cowork-setup    # re-export fresh credentials
 
 **Fix**: On your local machine:
 ```bash
-mp auth login --region us --project-id YOUR_PROJECT_ID
+mp auth login --region us
 mp auth cowork-setup
 ```
 Then start a new Cowork session.
@@ -255,12 +260,12 @@ mp --version   # verify
 
 ### Important: What Doesn't Work Inside Cowork
 
-These commands require a browser or host terminal and **cannot run inside Cowork**:
+These commands require a browser or host terminal and **should be run on your local machine**, not inside Cowork:
 
-- `mp auth login` (needs browser)
-- `mp auth add` (needs interactive secret input from host)
-- `mp auth cowork-setup` (runs on host, exports to bridge)
-- `mp auth cowork-teardown` (runs on host, removes bridge)
+- `mp auth login` (needs a browser for OAuth)
+- `mp auth add` (prompts for secret interactively by default; supports `--secret-stdin` and `MP_SECRET` env var for non-interactive use, but the credential bridge is the recommended approach for Cowork)
+- `mp auth cowork-setup` (reads host credentials, writes bridge file)
+- `mp auth cowork-teardown` (removes bridge file from host)
 
 Always run these on your **local machine** before starting a Cowork session.
 

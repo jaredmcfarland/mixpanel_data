@@ -66,7 +66,7 @@ Your secret is never visible in the conversation.
 /mp-auth login
 ```
 
-Claude will ask for your region and project ID, then open a browser window where you log in with your Mixpanel credentials.
+Claude will ask for your region, then open a browser window where you log in with your Mixpanel credentials. After login, your projects are automatically discovered — if you have exactly one project, it's selected for you. If you have multiple, Claude will help you pick one.
 
 ### Verify It Worked
 

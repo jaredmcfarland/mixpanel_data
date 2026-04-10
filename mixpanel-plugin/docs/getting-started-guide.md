@@ -31,9 +31,9 @@ Before you begin, make sure you have:
 - **A Mixpanel account** with access to a project
 - **One of the following** for authentication:
   - A **service account** (username + secret) from your Mixpanel project settings, OR
-  - A browser for **OAuth login** (interactive)
+  - A browser for **OAuth login** (interactive — your project is auto-discovered)
 
-You'll also need your **Mixpanel Project ID**, which you can find in your Mixpanel project settings under "Project Details."
+For service accounts, you'll also need your **Mixpanel Project ID**, which you can find in your Mixpanel project settings under "Project Details." For OAuth login, your projects are discovered automatically.
 
 ---
 
@@ -76,10 +76,21 @@ You need to connect `mixpanel_data` to your Mixpanel project. There are two ways
 This opens your browser so you can log in with your Mixpanel credentials:
 
 ```bash
-mp auth login --region us --project-id YOUR_PROJECT_ID
+mp auth login --region us
 ```
 
-Replace `YOUR_PROJECT_ID` with your actual project ID (a number like `12345`).
+After logging in, `mixpanel_data` automatically discovers your accessible projects. If you have exactly one project, it is selected for you. If you have multiple projects, you'll be prompted to choose one:
+
+```bash
+mp projects list                  # See all your projects
+mp projects switch YOUR_PROJECT_ID  # Select a project
+```
+
+You can also specify a project ID upfront if you already know it:
+
+```bash
+mp auth login --region us --project-id YOUR_PROJECT_ID
+```
 
 **Region options:**
 
@@ -89,7 +100,7 @@ Replace `YOUR_PROJECT_ID` with your actual project ID (a number like `12345`).
 | Europe | `--region eu` | EU data residency |
 | India | `--region in` | India data residency |
 
-After logging in through your browser, verify the connection:
+Verify the connection:
 
 ```bash
 mp auth status
@@ -196,7 +207,7 @@ mp query segmentation --event "Purchase" --from 2025-01-01 --to 2025-01-31 --on 
 Query a saved funnel by its ID (find IDs with `mp inspect funnels`):
 
 ```bash
-mp query funnel --funnel-id 12345 --from 2025-01-01 --to 2025-01-31
+mp query funnel 12345 --from 2025-01-01 --to 2025-01-31
 ```
 
 ### Filter JSON Output with --jq
@@ -475,7 +486,10 @@ If you authenticated with OAuth, the bridge file includes a refresh token. The l
 | `mp inspect events` | List all tracked events |
 | `mp inspect properties --event <name>` | List properties for an event |
 | `mp query segmentation --event <name> --from <date> --to <date>` | Run a segmentation query |
-| `mp query funnel --funnel-id <id> --from <date> --to <date>` | Query a saved funnel |
+| `mp query funnel <id> --from <date> --to <date>` | Query a saved funnel |
+| `mp projects list` | List accessible projects |
+| `mp projects switch <id>` | Switch active project |
+| `mp auth migrate` | Migrate v1 config to v2 format |
 | `mp --help` | Show all available commands |
 | `mp <command> --help` | Show help for a specific command |
 
@@ -549,8 +563,8 @@ If using `uv`, make sure the virtual environment is activated.
 Run one of:
 
 ```bash
-# OAuth (interactive)
-mp auth login --region us --project-id YOUR_PROJECT_ID
+# OAuth (interactive — auto-discovers your projects)
+mp auth login --region us
 
 # Service account
 mp auth add my-project --username YOUR_USERNAME --project YOUR_PROJECT_ID --region us
@@ -560,7 +574,7 @@ mp auth add my-project --username YOUR_USERNAME --project YOUR_PROJECT_ID --regi
 
 ```bash
 # Re-authenticate
-mp auth login --region us --project-id YOUR_PROJECT_ID
+mp auth login --region us
 ```
 
 ### Plugin Not Working in Claude Code
