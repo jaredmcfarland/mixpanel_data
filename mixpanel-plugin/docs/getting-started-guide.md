@@ -191,7 +191,7 @@ mp inspect events --format csv      # Spreadsheet-friendly CSV
 See how often an event occurred over a date range:
 
 ```bash
-mp query segmentation --event "Signup" --from 2025-01-01 --to 2025-01-31
+mp query segmentation --event "Signup" --from YYYY-MM-DD --to YYYY-MM-DD
 ```
 
 ### Break Down by Property
@@ -199,7 +199,7 @@ mp query segmentation --event "Signup" --from 2025-01-01 --to 2025-01-31
 Add `--on` to break results down by a property:
 
 ```bash
-mp query segmentation --event "Purchase" --from 2025-01-01 --to 2025-01-31 --on country
+mp query segmentation --event "Purchase" --from YYYY-MM-DD --to YYYY-MM-DD --on country
 ```
 
 ### Funnel Conversion
@@ -207,7 +207,7 @@ mp query segmentation --event "Purchase" --from 2025-01-01 --to 2025-01-31 --on 
 Query a saved funnel by its ID (find IDs with `mp inspect funnels`):
 
 ```bash
-mp query funnel 12345 --from 2025-01-01 --to 2025-01-31
+mp query funnel 12345 --from YYYY-MM-DD --to YYYY-MM-DD
 ```
 
 ### Filter JSON Output with --jq
@@ -225,7 +225,7 @@ mp inspect events --format json --jq '.[].name'
 ### Format as a Table
 
 ```bash
-mp query segmentation --event "Login" --from 2025-01-01 --to 2025-01-31 --format table
+mp query segmentation --event "Login" --from YYYY-MM-DD --to YYYY-MM-DD --format table
 ```
 
 ---
@@ -268,7 +268,7 @@ print(result.df)  # pandas DataFrame
 ```python
 from mixpanel_data import Filter, GroupBy
 
-# Purchase revenue by country, filtered to US
+# Purchase revenue by plan type, filtered to US customers
 result = ws.query(
     "Purchase",
     math="total",
@@ -320,7 +320,7 @@ print(flow.drop_off_summary())     # Where users drop off
 For processing large datasets without loading everything into memory:
 
 ```python
-for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
+for event in ws.stream_events(from_date="2025-06-01", to_date="2025-06-30"):
     print(event["event"], event["properties"]["distinct_id"])
 ```
 
