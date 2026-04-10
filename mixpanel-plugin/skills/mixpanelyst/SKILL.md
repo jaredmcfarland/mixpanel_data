@@ -640,6 +640,8 @@ Use these to extend Mixpanel's capabilities:
 | **networkx** | Flow graph analysis (centrality, shortest paths, cycles, PageRank) | `flow_result.graph` |
 | **anytree** | Flow tree analysis (branching, parent traversal, Graphviz export) | `flow_result.anytree` or `tree.to_anytree()` |
 | **numpy/scipy** | Statistical testing (t-test, chi-squared, correlation) | Import directly |
+| **scikit-learn** | Clustering (user segmentation), anomaly detection, feature importance, predictive scoring (churn/conversion) | Import directly |
+| **statsmodels** | Time series decomposition, ARIMA forecasting, OLS regression with diagnostics, survival analysis (retention curves) | Import directly |
 | **matplotlib/seaborn** | Visualization | Import directly |
 
 ### NetworkX Quick Patterns
@@ -724,7 +726,7 @@ Load these on demand when the quick reference above is insufficient:
 | [retention-reference.md](references/retention-reference.md) | Deep retention API: RetentionEvent, alignment, custom buckets, cohort analysis patterns |
 | [flows-reference.md](references/flows-reference.md) | Deep flows API: FlowStep, NetworkX graph analysis, anytree traversal, FlowTreeNode methods |
 | [cross-query-synthesis.md](references/cross-query-synthesis.md) | Multi-engine join strategies, 10 investigation templates, synthesis patterns |
-| [advanced-analysis.md](references/advanced-analysis.md) | Statistical methods, trend analysis, graph algorithms, visualization gallery |
+| [advanced-analysis.md](references/advanced-analysis.md) | Statistical methods, trend analysis, graph algorithms, visualization gallery, scikit-learn (clustering, anomaly detection, prediction), statsmodels (forecasting, regression, survival analysis) |
 | [analytical-frameworks.md](references/analytical-frameworks.md) | AARRR deep dive, GQM methodology, diagnosis protocol, retention benchmarks |
 | [python-api.md](references/python-api.md) | Complete method signatures for all Workspace methods including App API CRUD |
 | [bookmark-params.md](references/bookmark-params.md) | Manual bookmark JSON construction for entity management |
