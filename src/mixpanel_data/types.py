@@ -8122,13 +8122,43 @@ def _build_event_selector(
                 f"Supported operators: {supported}"
             )
             raise ValueError(msg)
+        prop = f._property
         node: dict[str, Any] = {
             "resourceType": f._resource_type,
             "filterType": f._property_type,
             "defaultType": f._property_type,
             "filterOperator": f._operator,
-            "value": f._property,
         }
+        if isinstance(prop, CustomPropertyRef):
+            node["customPropertyId"] = prop.id
+            node["dataset"] = "$mixpanel"
+        elif isinstance(prop, InlineCustomProperty):
+            effective_type = (
+                prop.property_type
+                if prop.property_type is not None
+                else f._property_type
+            )
+            node["customProperty"] = {
+                "displayFormula": prop.formula,
+                "composedProperties": {
+                    letter: {
+                        "value": pi.name,
+                        "type": pi.type,
+                        "resourceType": pi.resource_type,
+                    }
+                    for letter, pi in prop.inputs.items()
+                },
+                "name": "",
+                "description": "",
+                "propertyType": effective_type,
+                "resourceType": prop.resource_type,
+            }
+            node["filterType"] = effective_type
+            node["defaultType"] = effective_type
+            node["dataset"] = "$mixpanel"
+            node["resourceType"] = prop.resource_type
+        else:
+            node["value"] = prop
         if f._value is not None:
             node["filterValue"] = f._value
         children.append(node)
