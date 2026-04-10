@@ -409,28 +409,25 @@ You don't need to invoke these manually — Claude routes to the right agent bas
 
 ### Step 1: Set Up the Credential Bridge (On Your Local Machine)
 
-Run this command on your **local machine** (not inside Cowork):
+Choose or create a directory to use as your Cowork workspace, then run this on your **local machine** (not inside Cowork):
 
 ```bash
-mp auth cowork-setup
+mp auth cowork-setup --dir /path/to/your/workspace
 ```
 
-This creates a credential bridge file at `~/.claude/mixpanel/mixpanel-data:auth.json` that Cowork VMs can read.
+This writes a `mixpanel_auth.json` bridge file into the specified directory. When you start a Cowork session, select this same directory as your workspace so the VM can access the credentials.
 
 **Options:**
 
 ```bash
 # Use a specific credential (if you have multiple accounts)
-mp auth cowork-setup --credential production
+mp auth cowork-setup --dir /path/to/workspace --credential production
 
 # Override the project ID
-mp auth cowork-setup --project-id 12345
+mp auth cowork-setup --dir /path/to/workspace --project-id 12345
 
 # Include a workspace ID (needed for dashboard and entity management)
-mp auth cowork-setup --workspace-id 3448413
-
-# Write to a specific directory (e.g., a shared Cowork workspace folder)
-mp auth cowork-setup --dir /path/to/workspace
+mp auth cowork-setup --dir /path/to/workspace --workspace-id 3448413
 ```
 
 ### Step 2: Verify the Bridge (Anywhere)
@@ -455,21 +452,15 @@ The setup script automatically detects the Cowork environment and reads credenti
 
 ### Step 4: Clean Up (When Done)
 
-When you no longer need Cowork access, remove the bridge file from your local machine:
+When you no longer need Cowork access, remove the bridge file:
 
 ```bash
-mp auth cowork-teardown
-```
-
-If you used `--dir` during setup, include it during teardown:
-
-```bash
-mp auth cowork-teardown --dir /path/to/workspace
+mp auth cowork-teardown --dir /path/to/your/workspace
 ```
 
 ### OAuth Token Refresh
 
-If you authenticated with OAuth, the bridge file includes a refresh token. The library automatically refreshes expired tokens inside Cowork — no browser interaction needed. If the refresh token itself expires, you'll need to re-authenticate on your local machine (`mp auth login`) and re-run `mp auth cowork-setup`.
+If you authenticated with OAuth, the bridge file includes a refresh token. The library automatically refreshes expired tokens inside Cowork — no browser interaction needed. If the refresh token itself expires, you'll need to re-authenticate on your local machine (`mp auth login`) and re-run `mp auth cowork-setup --dir /path/to/your/workspace`.
 
 ---
 
@@ -586,7 +577,7 @@ mp auth login --region us
 
 ### Cowork VM Can't Find Credentials
 
-1. On your **local machine**, run: `mp auth cowork-setup`
+1. On your **local machine**, run: `mp auth cowork-setup --dir /path/to/your/workspace`
 2. Verify with: `mp auth cowork-status`
 3. Inside the Cowork session, run: `/mixpanel-data:setup`
 

@@ -46,20 +46,20 @@ You should see a success message confirming the connection.
 
 ## Step 2: Export Credentials for Cowork
 
-On your **local machine**, run:
+On your **local machine**, choose or create a directory to use as your Cowork workspace, then export your credentials there:
 
 ```bash
-mp auth cowork-setup
+mp auth cowork-setup --dir /path/to/your/workspace
 ```
 
-This creates a bridge file at `~/.claude/mixpanel/auth.json` containing your credentials. Cowork VMs can read this file automatically.
+This writes a `mixpanel_auth.json` bridge file into the specified directory. When you start a Cowork session, select this same directory as your workspace so the VM can access the credentials.
 
 You'll see JSON output confirming what was exported:
 
 ```json
 {
   "status": "cowork_setup_complete",
-  "bridge_path": "/home/you/.claude/mixpanel/auth.json",
+  "bridge_path": "/path/to/your/workspace/mixpanel_auth.json",
   "auth_method": "service_account",
   "region": "us",
   "project_id": "12345",
@@ -74,16 +74,13 @@ You'll see JSON output confirming what was exported:
 
 ```bash
 # Use a specific credential (if you have multiple accounts)
-mp auth cowork-setup --credential production
+mp auth cowork-setup --dir /path/to/workspace --credential production
 
 # Override the project ID
-mp auth cowork-setup --project-id 12345
+mp auth cowork-setup --dir /path/to/workspace --project-id 12345
 
 # Include a workspace ID (required for dashboard/entity management)
-mp auth cowork-setup --workspace-id 3448413
-
-# Write to a specific directory
-mp auth cowork-setup --dir /path/to/workspace
+mp auth cowork-setup --dir /path/to/workspace --workspace-id 3448413
 ```
 
 ---
@@ -140,10 +137,10 @@ Shows whether the bridge file exists, the auth method, region, project ID, and (
 
 ### Update credentials
 
-If you change your credentials or switch projects, re-export:
+If you change your credentials or switch projects, re-export to the same workspace directory:
 
 ```bash
-mp auth cowork-setup
+mp auth cowork-setup --dir /path/to/your/workspace
 ```
 
 Then start a **new Cowork session** for the changes to take effect.
@@ -153,13 +150,7 @@ Then start a **new Cowork session** for the changes to take effect.
 When you no longer need Cowork access to your Mixpanel data:
 
 ```bash
-mp auth cowork-teardown
-```
-
-If you used `--dir` during setup, include it during teardown:
-
-```bash
-mp auth cowork-teardown --dir /path/to/workspace
+mp auth cowork-teardown --dir /path/to/your/workspace
 ```
 
 ---
@@ -174,7 +165,7 @@ If you authenticated with OAuth (rather than a service account), the bridge file
 ```bash
 # On your local machine
 mp auth login --region us
-mp auth cowork-setup
+mp auth cowork-setup --dir /path/to/your/workspace
 ```
 
 Then start a new Cowork session.
@@ -187,11 +178,11 @@ The credential bridge is a JSON file that maps your local credentials into a for
 
 ```
 Your machine                          Cowork VM
-┌─────────────────────┐               ┌─────────────────────┐
-│ ~/.mp/config.toml   │               │ ~/.claude/mixpanel/  │
-│ (your credentials)  │──cowork-setup──▶│ auth.json           │
-│                     │               │ (bridge file)        │
-└─────────────────────┘               └─────────────────────┘
+┌─────────────────────┐               ┌──────────────────────────┐
+│ ~/.mp/config.toml   │               │ /path/to/your/workspace/ │
+│ (your credentials)  │──cowork-setup──▶│ mixpanel_auth.json       │
+│                     │   --dir ...    │ (bridge file)            │
+└─────────────────────┘               └──────────────────────────┘
                                              │
                                       mixpanel_data detects
                                       Cowork + reads bridge
@@ -220,10 +211,10 @@ The bridge file is searched in this priority order:
 
 **Fix**: On your local machine:
 ```bash
-mp auth cowork-setup
+mp auth cowork-setup --dir /path/to/your/workspace
 mp auth cowork-status   # verify it was created
 ```
-Then start a **new** Cowork session (existing sessions won't pick up the new file).
+Then start a **new** Cowork session using that workspace directory (existing sessions won't pick up the new file).
 
 ### "Authentication failed" inside Cowork
 
@@ -232,7 +223,7 @@ Then start a **new** Cowork session (existing sessions won't pick up the new fil
 **Fix**: On your local machine:
 ```bash
 mp auth test            # verify local credentials still work
-mp auth cowork-setup    # re-export fresh credentials
+mp auth cowork-setup --dir /path/to/your/workspace   # re-export fresh credentials
 ```
 
 ### OAuth token expired and won't refresh
@@ -242,7 +233,7 @@ mp auth cowork-setup    # re-export fresh credentials
 **Fix**: On your local machine:
 ```bash
 mp auth login --region us
-mp auth cowork-setup
+mp auth cowork-setup --dir /path/to/your/workspace
 ```
 Then start a new Cowork session.
 
@@ -260,7 +251,7 @@ mp --version   # verify
 
 **Cause**: You're inside Cowork but the bridge file is missing.
 
-**Fix**: You cannot configure credentials from inside Cowork (no browser, no host terminal). Exit Cowork, run `mp auth cowork-setup` on your local machine, then start a new Cowork session.
+**Fix**: You cannot configure credentials from inside Cowork (no browser, no host terminal). Exit Cowork, run `mp auth cowork-setup --dir /path/to/your/workspace` on your local machine, then start a new Cowork session using that workspace directory.
 
 ### Important: What Doesn't Work Inside Cowork
 
