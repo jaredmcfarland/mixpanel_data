@@ -41,7 +41,7 @@ Write Python code. Never teach CLI commands. Never call MCP tools.
 
 ## 8-Step Diagnostic Protocol
 
-_Expands the 7-step diagnosis methodology from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §Diagnosis Methodology. For ready-to-run diagnostic templates, see [cross-query-synthesis.md](../skills/mixpanel-analyst/references/cross-query-synthesis.md) §Template 1: Revenue Drop Diagnosis._
+_Expands the 7-step diagnosis methodology from [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §Diagnosis Methodology. For ready-to-run diagnostic templates, see [cross-query-synthesis.md](../skills/mixpanelyst/references/cross-query-synthesis.md) §Template 1: Revenue Drop Diagnosis._
 
 ### Step 1: QUANTIFY (Insights)
 
@@ -92,7 +92,7 @@ print(trend.nlargest(5, "daily_change")[["daily_change"]])
 
 ### Step 3: SEGMENT (Insights, parallel)
 
-_(→ [insights-reference.md](../skills/mixpanel-analyst/references/insights-reference.md) §GroupBy Deep Reference for numeric bucketing and multiple breakdowns)_
+_(→ [insights-reference.md](../skills/mixpanelyst/references/insights-reference.md) §GroupBy Deep Reference for numeric bucketing and multiple breakdowns)_
 
 Break down by 4-6 dimensions to find which segment drives the change. Run all queries simultaneously:
 
@@ -137,7 +137,7 @@ cohort_result = ws.query("TARGET_EVENT", last=60,
 
 ### Step 4: CHECK CONVERSION (Funnels)
 
-_(→ [funnels-reference.md](../skills/mixpanel-analyst/references/funnels-reference.md) for FunnelStep, Exclusion, display modes, and per-step filter details)_
+_(→ [funnels-reference.md](../skills/mixpanelyst/references/funnels-reference.md) for FunnelStep, Exclusion, display modes, and per-step filter details)_
 
 Did conversion through related steps change?
 
@@ -154,7 +154,7 @@ print(f"Overall conversion: {funnel.overall_conversion_rate:.1%}")
 
 ### Step 5: CHECK RETENTION (Retention)
 
-_(→ [retention-reference.md](../skills/mixpanel-analyst/references/retention-reference.md) for RetentionEvent, alignment modes, and custom bucket_sizes | [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §Retention for industry benchmarks)_
+_(→ [retention-reference.md](../skills/mixpanelyst/references/retention-reference.md) for RetentionEvent, alignment modes, and custom bucket_sizes | [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §Retention for industry benchmarks)_
 
 Did return rates change for the affected behavior?
 
@@ -172,7 +172,7 @@ print(ret.df)
 
 ### Step 6: CHECK PATHS (Flows)
 
-_(→ [flows-reference.md](../skills/mixpanel-analyst/references/flows-reference.md) for FlowStep, NetworkX graph analysis, and FlowTreeNode traversal)_
+_(→ [flows-reference.md](../skills/mixpanelyst/references/flows-reference.md) for FlowStep, NetworkX graph analysis, and FlowTreeNode traversal)_
 
 Did user paths change? Are there new drop-offs or route changes?
 
@@ -189,7 +189,7 @@ print(flow.drop_off_summary())
 
 ### Step 7: CORRELATE (pandas)
 
-_(→ [cross-query-synthesis.md](../skills/mixpanel-analyst/references/cross-query-synthesis.md) §Synthesis Patterns for correlation analysis and statistical significance testing | [advanced-analysis.md](../skills/mixpanel-analyst/references/advanced-analysis.md) §Statistical Methods for t-tests, confidence intervals, effect sizes)_
+_(→ [cross-query-synthesis.md](../skills/mixpanelyst/references/cross-query-synthesis.md) §Synthesis Patterns for correlation analysis and statistical significance testing | [advanced-analysis.md](../skills/mixpanelyst/references/advanced-analysis.md) §Statistical Methods for t-tests, confidence intervals, effect sizes)_
 
 Merge results across engines by date. What changed first? What has the largest impact?
 
@@ -318,17 +318,17 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 ## API Lookup
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_funnel
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_retention
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_flow
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_funnel
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_retention
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_flow
 ```
 
 ## Auth Error Recovery
 
 If `Workspace()` or any query raises `AuthenticationError` or `ConfigError`:
 
-1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py status`
 2. Parse the JSON to diagnose:
    - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
    - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."

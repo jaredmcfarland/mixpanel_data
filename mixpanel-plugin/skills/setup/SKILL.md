@@ -26,7 +26,7 @@ This will:
 After installation, check auth status:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/../mixpanel-analyst/scripts/auth_manager.py status
+python3 ${CLAUDE_SKILL_DIR}/../mixpanelyst/scripts/auth_manager.py status
 ```
 
 Parse the JSON result:
@@ -96,7 +96,7 @@ The library will auto-refresh the OAuth token (no browser needed). If refresh fa
 ## Verify Everything Works
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/../mixpanel-analyst/scripts/auth_manager.py test
+python3 ${CLAUDE_SKILL_DIR}/../mixpanelyst/scripts/auth_manager.py test
 ```
 
 If the result shows `"success": true`, setup is complete. The user can now ask questions about their Mixpanel data.
@@ -122,4 +122,4 @@ ws = mp.Workspace(credential="production")        # named credential (v2)
 ws = mp.Workspace(project_id="67890", region="eu") # explicit project
 ```
 
-_The mixpanel-analyst skill auto-triggers on analytics questions. For the analytical frameworks that guide investigations, see [analytical-frameworks.md](../mixpanel-analyst/references/analytical-frameworks.md). For the complete Python API, see [python-api.md](../mixpanel-analyst/references/python-api.md)._
+_The mixpanelyst skill auto-triggers on analytics questions. For the analytical frameworks that guide investigations, see [analytical-frameworks.md](../mixpanelyst/references/analytical-frameworks.md). For the complete Python API, see [python-api.md](../mixpanelyst/references/python-api.md)._

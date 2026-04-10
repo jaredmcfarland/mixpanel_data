@@ -68,7 +68,7 @@ for tree in result.trees:
     print(tree.render())           # ASCII visualization
 ```
 
-_Each engine has a comprehensive reference: [insights](skills/mixpanel-analyst/references/insights-reference.md) | [funnels](skills/mixpanel-analyst/references/funnels-reference.md) | [retention](skills/mixpanel-analyst/references/retention-reference.md) | [flows](skills/mixpanel-analyst/references/flows-reference.md). For routing questions to the right engine, see [query-taxonomy.md](skills/mixpanel-analyst/references/query-taxonomy.md)._
+_Each engine has a comprehensive reference: [insights](skills/mixpanelyst/references/insights-reference.md) | [funnels](skills/mixpanelyst/references/funnels-reference.md) | [retention](skills/mixpanelyst/references/retention-reference.md) | [flows](skills/mixpanelyst/references/flows-reference.md). For routing questions to the right engine, see [query-taxonomy.md](skills/mixpanelyst/references/query-taxonomy.md)._
 
 ## Agents
 
@@ -90,7 +90,7 @@ Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
 Task(subagent_type="mixpanel-data:narrator", prompt="...")
 ```
 
-_Agents draw on shared analytical frameworks ([AARRR, GQM, Diagnosis](skills/mixpanel-analyst/references/analytical-frameworks.md)) and [cross-query synthesis patterns](skills/mixpanel-analyst/references/cross-query-synthesis.md)._
+_Agents draw on shared analytical frameworks ([AARRR, GQM, Diagnosis](skills/mixpanelyst/references/analytical-frameworks.md)) and [cross-query synthesis patterns](skills/mixpanelyst/references/cross-query-synthesis.md)._
 
 ## Components
 
@@ -98,7 +98,7 @@ _Agents draw on shared analytical frameworks ([AARRR, GQM, Diagnosis](skills/mix
 |------|------|------------|
 | Command | auth | `/mp-auth` — manage credentials, accounts, OAuth |
 | Skill | setup | `/mixpanel-data:setup` — install deps, verify auth |
-| Skill | mixpanel-analyst | Auto-triggered on analytics questions |
+| Skill | mixpanelyst | Auto-triggered on analytics questions |
 | Skill | dashboard-expert | Auto-triggered on dashboard analysis, creation, and modification |
 
 | Script | Purpose |
@@ -178,7 +178,7 @@ mixpanel-plugin/
 │   │       ├── dashboard-templates.md  # 9 design templates (KPI, AARRR, etc.)
 │   │       ├── bookmark-pipeline.md    # Query → bookmark → dashboard
 │   │       └── chart-types.md          # Chart type selection guide
-│   └── mixpanel-analyst/
+│   └── mixpanelyst/
 │       ├── SKILL.md                    # Core brain skill (query taxonomy)
 │       ├── scripts/
 │       │   ├── help.py                 # API documentation lookup

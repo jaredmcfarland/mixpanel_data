@@ -314,7 +314,7 @@ Add the plugin from the `mixpanel-plugin/` directory, then restart Claude Code.
 - **Command**: `/mp-auth` — Secure credential management with account switching
 - **Skills**:
   - `setup` — Install dependencies and verify authentication
-  - `mixpanel-analyst` — Auto-triggered on analytics questions; teaches query API patterns, 4-engine taxonomy, cohort-scoped queries, typed filters, AARRR frameworks, and progressive reference docs
+  - `mixpanelyst` — Auto-triggered on analytics questions; teaches query API patterns, 4-engine taxonomy, cohort-scoped queries, typed filters, AARRR frameworks, and progressive reference docs
 - **5 specialist agents** (auto-invoked via Task tool):
   - `analyst` — General-purpose orchestrator for multi-step analytics investigations
   - `explorer` — Schema discovery, hypothesis generation, GQM decomposition for vague questions

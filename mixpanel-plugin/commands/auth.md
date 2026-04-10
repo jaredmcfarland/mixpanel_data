@@ -8,7 +8,7 @@ argument-hint: [status|add|list|switch|test|login|remove|logout|migrate|projects
 
 You manage Mixpanel credentials using `auth_manager.py`. All operations output JSON — parse it and present results conversationally.
 
-**Script path:** `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py`
+**Script path:** `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py`
 
 ## Security Rules (NON-NEGOTIABLE)
 
@@ -22,7 +22,7 @@ Parse `$ARGUMENTS` and route to the appropriate operation:
 
 ### No arguments or "status"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py status`
 
 Present the result conversationally:
 - If `active_method` is not `"none"`: Show a brief confirmation with the active method, account name, project ID, and region. If multiple accounts/credentials exist, mention `/mp-auth list`.
@@ -33,7 +33,7 @@ Present the result conversationally:
 
 ### "list"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py list`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py list`
 
 For **v1 config**: Present accounts as a clean table. Mark the default account with a star. Show account name, project ID, and region.
 
@@ -60,13 +60,13 @@ Now run this command — it will prompt for your service account secret with hid
 Replace the placeholders with the values collected above. The `!` prefix runs the command in the user's terminal session.
 
 6. After the user confirms they ran it, verify:
-   `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py test <NAME>`
+   `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py test <NAME>`
 7. Report success or failure.
 
 ### "switch" or "switch <name>"
 
 If a name is provided:
-- Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py switch <name>`
+- Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py switch <name>`
 
 If no name:
 - First run `list` to show available accounts/credentials
@@ -75,7 +75,7 @@ If no name:
 
 ### "test" or "test <name>"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py test [name]`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py test [name]`
 
 On success: "Connected! Found N events in project P (region R)."
 On failure: Diagnose the specific error and suggest remediation:
@@ -87,7 +87,7 @@ On failure: Diagnose the specific error and suggest remediation:
 
 Ask for the region if not provided (default: us). Ask for project ID if the user wants to associate one.
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py oauth-login --region <REGION> [--project-id <ID>]`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py oauth-login --region <REGION> [--project-id <ID>]`
 
 Tell the user a browser window will open for Mixpanel authentication. Wait for the result.
 
@@ -101,24 +101,24 @@ If no name: run `list` first, then ask which account/credential to remove.
 **Always confirm before removing**: "Remove account '<name>'? This cannot be undone."
 
 After confirmation:
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py remove <name>`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py remove <name>`
 
 For v2 config, if the response includes `orphaned_aliases`, warn the user about project aliases that referenced the removed credential.
 
 ### "logout" or "logout --region <R>"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py oauth-logout [--region <R>]`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py oauth-logout [--region <R>]`
 
 If no region specified, removes all OAuth tokens. Confirm first: "This will remove all OAuth tokens. Continue?"
 
 ### "migrate"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py migrate --dry-run`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py migrate --dry-run`
 
 Show the user what will change (credentials created, aliases created). Ask for confirmation.
 
 If confirmed:
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py migrate`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py migrate`
 
 On success: Report migration results. Explain that accounts are now split into credentials (auth identity) and project aliases (project selection), enabling project switching without reconfiguring auth.
 
@@ -126,13 +126,13 @@ If already v2: Tell the user no migration is needed.
 
 ### "projects"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py projects`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py projects`
 
 Present accessible projects as a table: organization, project name, project ID, timezone. Suggest `/mp-auth switch-project <ID>` to switch.
 
 ### "context"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py context`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py context`
 
 Show the active credential, project ID, and workspace ID. For v1 config, suggest migrating.
 
@@ -140,7 +140,7 @@ Show the active credential, project ID, and workspace ID. For v1 config, suggest
 
 If no project_id: run `projects` first, then ask which to switch to.
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py switch-project <PROJECT_ID> [--workspace-id <WS_ID>]`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py switch-project <PROJECT_ID> [--workspace-id <WS_ID>]`
 
 On success: Confirm the active project was changed.
 If v1 config: Error suggests running `/mp-auth migrate` first.
@@ -152,7 +152,7 @@ Tell the user: "Run `mp auth cowork-setup` on your **host machine** (not inside 
 
 ### "cowork-status"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py cowork-status`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py cowork-status`
 
 Parse the JSON and present:
 - If `bridge_found` is true: Show auth method, project, region, token expiry, custom header presence
