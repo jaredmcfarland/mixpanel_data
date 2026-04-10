@@ -1068,7 +1068,6 @@ MixpanelDataError (base)
 │   ├── AuthenticationError (401)
 │   ├── RateLimitError (429)
 │   ├── QueryError (400)
-│   │   └── JQLSyntaxError (412)
 │   └── ServerError (5xx)
 ├── ProjectNotFoundError
 ├── OAuthError
