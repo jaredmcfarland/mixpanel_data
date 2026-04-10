@@ -850,3 +850,388 @@ class TestDateRangeOrdering:
         )
         assert c._behavior is not None
         assert c._behavior["from_date"] == "2024-06-15"
+
+
+# =============================================================================
+# CF3: Inline Cohort Event-Property Filter Rejection
+# =============================================================================
+
+
+class TestCF3InlineCohortEventPropertyFilters:
+    """Tests for CF3 validation — inline cohorts with event-property filters.
+
+    Mixpanel's inline cohort evaluator silently ignores event-property
+    filter operators, producing wrong results. The SDK must reject these
+    at construction time with a clear ValueError.
+    """
+
+    def _make_definition_with_where(
+        self, where: Filter | list[Filter]
+    ) -> CohortDefinition:
+        """Build a CohortDefinition containing did_event(where=...).
+
+        Args:
+            where: Filter(s) to pass to did_event's where parameter.
+
+        Returns:
+            CohortDefinition wrapping one behavioral criterion with filters.
+        """
+        return CohortDefinition.all_of(
+            CohortCriteria.did_event(
+                "Purchase", at_least=1, within_days=30, where=where
+            )
+        )
+
+    # --- Rejection tests ---
+
+    def test_cf3_in_cohort_rejects_inline_with_equals_filter(self) -> None:
+        """Filter.in_cohort raises ValueError for inline cohort with equals filter."""
+        defn = self._make_definition_with_where(Filter.equals("prop", "val"))
+        with pytest.raises(ValueError, match="event-property filters"):
+            Filter.in_cohort(defn, "test")
+
+    def test_cf3_not_in_cohort_rejects_inline_with_equals_filter(self) -> None:
+        """Filter.not_in_cohort raises ValueError for inline cohort with equals filter."""
+        defn = self._make_definition_with_where(Filter.equals("prop", "val"))
+        with pytest.raises(ValueError, match="event-property filters"):
+            Filter.not_in_cohort(defn, "test")
+
+    @pytest.mark.parametrize(
+        ("filter_factory", "factory_args"),
+        [
+            (Filter.equals, ("prop", "val")),
+            (Filter.not_equals, ("prop", "val")),
+            (Filter.is_set, ("prop",)),
+            (Filter.is_not_set, ("prop",)),
+            (Filter.greater_than, ("prop", 10)),
+            (Filter.less_than, ("prop", 100)),
+            (Filter.contains, ("prop", "sub")),
+            (Filter.not_contains, ("prop", "sub")),
+            (Filter.between, ("prop", 1, 100)),
+        ],
+    )
+    def test_cf3_rejects_all_filter_operators(
+        self, filter_factory: Any, factory_args: tuple[Any, ...]
+    ) -> None:
+        """CF3 rejects every supported filter operator in inline cohorts."""
+        f = filter_factory(*factory_args)
+        defn = self._make_definition_with_where(f)
+        with pytest.raises(ValueError, match="event-property filters"):
+            Filter.in_cohort(defn, "test")
+
+    def test_cf3_rejects_multiple_where_filters(self) -> None:
+        """CF3 rejects inline cohort with multiple where filters."""
+        defn = self._make_definition_with_where(
+            [Filter.equals("plan", "premium"), Filter.greater_than("amount", 100)]
+        )
+        with pytest.raises(ValueError, match="event-property filters"):
+            Filter.in_cohort(defn, "test")
+
+    def test_cf3_rejects_nested_definition_with_event_filters(self) -> None:
+        """CF3 detects event-property filters in nested CohortDefinitions."""
+        nested = CohortDefinition.any_of(
+            CohortCriteria.has_property("plan", "premium"),
+            CohortDefinition.all_of(
+                CohortCriteria.did_event(
+                    "Purchase",
+                    at_least=1,
+                    within_days=30,
+                    where=Filter.equals("coupon", "true"),
+                ),
+            ),
+        )
+        with pytest.raises(ValueError, match="event-property filters"):
+            Filter.in_cohort(nested, "nested test")
+
+    def test_cf3_rejects_deeply_nested_event_filters(self) -> None:
+        """CF3 detects event-property filters at 3+ levels of nesting."""
+        deep = CohortDefinition.any_of(
+            CohortCriteria.has_property("plan", "premium"),
+            CohortDefinition.all_of(
+                CohortCriteria.has_property("country", "US"),
+                CohortDefinition.any_of(
+                    CohortCriteria.did_event(
+                        "Click",
+                        at_least=1,
+                        within_days=7,
+                        where=Filter.is_set("target"),
+                    ),
+                ),
+            ),
+        )
+        with pytest.raises(ValueError, match="event-property filters"):
+            Filter.in_cohort(deep, "deep test")
+
+    # --- Acceptance tests (should NOT raise) ---
+
+    def test_cf3_allows_inline_cohort_without_where(self) -> None:
+        """Inline CohortDefinition without where= is accepted."""
+        defn = CohortDefinition.all_of(
+            CohortCriteria.did_event("Login", at_least=1, within_days=30)
+        )
+        f = Filter.in_cohort(defn, "no filters")
+        assert f._property == "$cohorts"
+
+    def test_cf3_allows_inline_cohort_with_empty_where(self) -> None:
+        """Inline CohortDefinition with where=[] is accepted."""
+        defn = CohortDefinition.all_of(
+            CohortCriteria.did_event("Login", at_least=1, within_days=30, where=[])
+        )
+        f = Filter.in_cohort(defn, "empty where")
+        assert f._property == "$cohorts"
+
+    def test_cf3_allows_property_only_cohort(self) -> None:
+        """Inline CohortDefinition with only property criteria is accepted."""
+        defn = CohortDefinition.all_of(
+            CohortCriteria.has_property("plan", "premium"),
+        )
+        f = Filter.in_cohort(defn, "property only")
+        assert f._property == "$cohorts"
+
+    def test_cf3_allows_saved_cohort_id(self) -> None:
+        """Saved cohort ID always accepted (server evaluates differently)."""
+        f = Filter.in_cohort(123, "saved")
+        assert f._property == "$cohorts"
+
+    def test_cf3_allows_mixed_behavioral_and_property_without_where(self) -> None:
+        """Mixed criteria without where= filters are accepted."""
+        defn = CohortDefinition.all_of(
+            CohortCriteria.has_property("plan", "premium"),
+            CohortCriteria.did_event("Login", at_least=1, within_days=30),
+            CohortCriteria.in_cohort(456),
+        )
+        f = Filter.in_cohort(defn, "mixed no where")
+        assert f._property == "$cohorts"
+
+    def test_cf3_error_message_contains_workarounds(self) -> None:
+        """Error message includes actionable workaround suggestions."""
+        defn = self._make_definition_with_where(Filter.equals("prop", "val"))
+        with pytest.raises(ValueError, match="Workarounds") as exc_info:
+            Filter.in_cohort(defn, "test")
+        msg = str(exc_info.value)
+        assert "ws.query(event, where=...)" in msg
+        assert "FunnelStep" in msg
+        assert "RetentionEvent" in msg
+        assert "ws.create_cohort()" in msg
+
+
+# =============================================================================
+# Event Selector JSON Snapshot Tests
+# =============================================================================
+
+
+class TestEventSelectorJSONSnapshots:
+    """Pin the exact JSON emitted by _build_event_selector for each filter operator.
+
+    These snapshot tests ensure the cohort selector payload structure
+    doesn't silently change across refactors.
+    """
+
+    def test_selector_equals(self) -> None:
+        """equals filter emits == operator with string operand list."""
+        c = CohortCriteria.did_event(
+            "coupon applied",
+            at_least=1,
+            within_days=30,
+            where=Filter.equals("coupon_injected", "true"),
+        )
+        assert c._behavior is not None
+        selector = c._behavior["count"]["event_selector"]["selector"]
+        assert selector == {
+            "operator": "and",
+            "children": [
+                {
+                    "property": "event",
+                    "value": "coupon_injected",
+                    "operator": "==",
+                    "operand": ["true"],
+                    "type": "string",
+                }
+            ],
+        }
+
+    def test_selector_not_equals(self) -> None:
+        """not_equals filter emits != operator."""
+        c = CohortCriteria.did_event(
+            "coupon applied",
+            at_least=1,
+            within_days=30,
+            where=Filter.not_equals("coupon_injected", "true"),
+        )
+        assert c._behavior is not None
+        child = c._behavior["count"]["event_selector"]["selector"]["children"][0]
+        assert child["operator"] == "!="
+        assert child["operand"] == ["true"]
+
+    def test_selector_is_not_set(self) -> None:
+        """is_not_set filter emits 'not defined' operator with no operand."""
+        c = CohortCriteria.did_event(
+            "coupon applied",
+            at_least=1,
+            within_days=30,
+            where=Filter.is_not_set("coupon_injected"),
+        )
+        assert c._behavior is not None
+        child = c._behavior["count"]["event_selector"]["selector"]["children"][0]
+        assert child["operator"] == "not defined"
+        assert "operand" not in child
+
+    def test_selector_is_set(self) -> None:
+        """is_set filter emits 'defined' operator with no operand."""
+        c = CohortCriteria.did_event(
+            "coupon applied",
+            at_least=1,
+            within_days=30,
+            where=Filter.is_set("coupon_injected"),
+        )
+        assert c._behavior is not None
+        child = c._behavior["count"]["event_selector"]["selector"]["children"][0]
+        assert child["operator"] == "defined"
+        assert "operand" not in child
+
+    def test_selector_greater_than_number(self) -> None:
+        """greater_than filter emits > operator with numeric operand."""
+        c = CohortCriteria.did_event(
+            "coupon applied",
+            at_least=1,
+            within_days=30,
+            where=Filter.greater_than("discount_value", 50),
+        )
+        assert c._behavior is not None
+        child = c._behavior["count"]["event_selector"]["selector"]["children"][0]
+        assert child == {
+            "property": "event",
+            "value": "discount_value",
+            "operator": ">",
+            "operand": 50,
+            "type": "number",
+        }
+
+    def test_selector_less_than_number(self) -> None:
+        """less_than filter emits < operator with numeric operand."""
+        c = CohortCriteria.did_event(
+            "coupon applied",
+            at_least=1,
+            within_days=30,
+            where=Filter.less_than("discount_value", 10),
+        )
+        assert c._behavior is not None
+        child = c._behavior["count"]["event_selector"]["selector"]["children"][0]
+        assert child["operator"] == "<"
+        assert child["operand"] == 10
+        assert child["type"] == "number"
+
+    def test_selector_contains(self) -> None:
+        """contains filter emits 'in' operator."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            at_least=1,
+            within_days=30,
+            where=Filter.contains("category", "electronics"),
+        )
+        assert c._behavior is not None
+        child = c._behavior["count"]["event_selector"]["selector"]["children"][0]
+        assert child["operator"] == "in"
+        assert child["operand"] == "electronics"
+
+    def test_selector_between(self) -> None:
+        """between filter emits 'between' operator with two-element operand."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            at_least=1,
+            within_days=30,
+            where=Filter.between("amount", 10, 100),
+        )
+        assert c._behavior is not None
+        child = c._behavior["count"]["event_selector"]["selector"]["children"][0]
+        assert child["operator"] == "between"
+        assert child["operand"] == [10, 100]
+        assert child["type"] == "number"
+
+    def test_selector_multiple_filters_and_combined(self) -> None:
+        """Multiple where filters produce AND-combined children list."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            at_least=1,
+            within_days=30,
+            where=[
+                Filter.equals("plan", "premium"),
+                Filter.greater_than("amount", 100),
+                Filter.is_set("coupon"),
+            ],
+        )
+        assert c._behavior is not None
+        selector = c._behavior["count"]["event_selector"]["selector"]
+        assert selector["operator"] == "and"
+        assert len(selector["children"]) == 3
+        assert selector["children"][0]["operator"] == "=="
+        assert selector["children"][1]["operator"] == ">"
+        assert selector["children"][2]["operator"] == "defined"
+
+
+# =============================================================================
+# Operator Contract Test
+# =============================================================================
+
+
+class TestOperatorContract:
+    """Contract test: SDK-accepted operators match _FILTER_TO_SELECTOR_MAP.
+
+    Ensures no operator is silently added to Filter without a corresponding
+    cohort selector mapping, and vice versa.
+    """
+
+    def test_all_mapped_operators_are_accepted_by_did_event(self) -> None:
+        """Every operator in _FILTER_TO_SELECTOR_MAP can be used in did_event(where=...)."""
+        for op_name in _FILTER_TO_SELECTOR_MAP:
+            # Build a Filter with this operator via internal constructor
+            f = Filter(
+                _property="test_prop",
+                _operator=op_name,
+                _value=["dummy"] if op_name not in ("is set", "is not set") else None,
+                _property_type="string",
+                _resource_type="events",
+            )
+            # Should not raise
+            c = CohortCriteria.did_event(
+                "TestEvent", at_least=1, within_days=30, where=f
+            )
+            assert c._behavior is not None
+            selector = c._behavior["count"]["event_selector"]["selector"]
+            assert selector is not None
+
+    def test_unsupported_operator_rejected_by_did_event(self) -> None:
+        """Operators NOT in _FILTER_TO_SELECTOR_MAP raise ValueError in did_event."""
+        unsupported_ops = ["true", "false", "on", "before", "after", "within"]
+        for op in unsupported_ops:
+            f = Filter(
+                _property="test_prop",
+                _operator=op,
+                _value=["dummy"],
+                _property_type="string",
+                _resource_type="events",
+            )
+            with pytest.raises(ValueError, match="unsupported filter operator"):
+                CohortCriteria.did_event(
+                    "TestEvent", at_least=1, within_days=30, where=f
+                )
+
+    def test_selector_map_covers_all_value_filter_operators(self) -> None:
+        """_FILTER_TO_SELECTOR_MAP covers all non-date, non-boolean Filter operators.
+
+        This is the set of operators that a user would reasonably pass to
+        did_event(where=...). Date and boolean operators are correctly
+        rejected by the existing validator.
+        """
+        expected_covered = {
+            "equals",
+            "does not equal",
+            "contains",
+            "does not contain",
+            "is greater than",
+            "is less than",
+            "is set",
+            "is not set",
+            "is between",
+        }
+        assert set(_FILTER_TO_SELECTOR_MAP.keys()) == expected_covered

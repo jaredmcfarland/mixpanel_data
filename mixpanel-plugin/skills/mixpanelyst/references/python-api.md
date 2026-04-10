@@ -180,7 +180,7 @@ Build inline cohort definitions for use with `Filter.in_cohort()`, `CohortBreakd
 from mixpanel_data import CohortDefinition, CohortCriteria
 
 # Atomic criteria (factory methods)
-CohortCriteria.did_event(event, *, at_least=None, within_days=None)
+CohortCriteria.did_event(event, *, at_least=None, within_days=None, where=None)
 CohortCriteria.has_property(property, value, *, operator="equals")
 CohortCriteria.in_cohort(cohort_id)
 CohortCriteria.not_in_cohort(cohort_id)
@@ -205,6 +205,12 @@ premium_active = CohortDefinition.all_of(
 result = ws.query("Login", where=Filter.in_cohort(premium_active, "Premium Active"), last=30)
 result = ws.query("Login", group_by=CohortBreakdown(premium_active, "Premium Active"))
 ```
+
+> **Limitation**: `CohortCriteria.did_event(where=...)` with event-property
+> filters **cannot** be used in inline cohorts passed to `Filter.in_cohort()`.
+> The SDK raises `ValueError` to prevent silently wrong server results.
+> Use top-level `ws.query(where=...)`, `FunnelStep(filters=[...])`, or
+> `RetentionEvent(filters=[...])` for event-property scoping.
 
 ### Formula
 

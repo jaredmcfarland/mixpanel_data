@@ -535,6 +535,18 @@ result = ws.query("Login", group_by=CohortBreakdown(premium_active, "Premium Act
 
 **Note**: When using inline `CohortDefinition` with `CohortMetric`, always provide a descriptive `name` parameter — it is required for server-side label generation.
 
+> **Known limitation — event-property filters in inline cohorts**: Inline
+> `CohortDefinition` objects containing `CohortCriteria.did_event(where=...)`
+> **cannot** be used with `Filter.in_cohort()`. Mixpanel's inline cohort
+> evaluator silently ignores event-property filter operators, producing wrong
+> results. The SDK raises `ValueError` to prevent this. Use one of these
+> workarounds instead:
+>
+> - **Top-level filter**: `ws.query(event, where=Filter.equals(...))`
+> - **Funnels**: `FunnelStep(event, filters=[Filter.equals(...)])`
+> - **Retention**: `RetentionEvent(event, filters=[Filter.equals(...)])`
+> - **Saved cohort**: `ws.create_cohort(...)` then `Filter.in_cohort(<saved_id>)`
+
 ## Custom Properties in Queries
 
 Use saved custom properties or define computed properties inline — in breakdowns, filters, and measurement. Custom properties work everywhere a plain string property name does.

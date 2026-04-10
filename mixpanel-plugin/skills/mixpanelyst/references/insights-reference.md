@@ -572,7 +572,7 @@ from mixpanel_data import Filter, CohortDefinition, CohortCriteria
 # Saved cohort
 result = ws.query("Login", math="dau", where=Filter.in_cohort(123, "Power Users"), last=30)
 
-# Inline definition
+# Inline definition (behavioral + property criteria, no event-property filters)
 premium = CohortDefinition.all_of(
     CohortCriteria.has_property("plan", "premium"),
     CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
@@ -582,6 +582,17 @@ result = ws.query("Login", where=Filter.in_cohort(premium, "Premium Users"), las
 # Exclude a cohort
 result = ws.query("Login", where=Filter.not_in_cohort(123, "Churned"), last=30)
 ```
+
+> **Known limitation**: Inline `CohortDefinition` objects containing
+> `CohortCriteria.did_event(where=...)` (event-property filters) **cannot**
+> be used with `Filter.in_cohort()`. Mixpanel's inline cohort evaluator
+> silently ignores event-property filter operators. The SDK raises `ValueError`
+> to prevent wrong results. To scope users by an event property, prefer:
+>
+> - **Top-level**: `ws.query("event", where=Filter.equals("prop", "val"))`
+> - **Funnels**: `FunnelStep("event", filters=[Filter.equals("prop", "val")])`
+> - **Retention**: `RetentionEvent("event", filters=[Filter.equals("prop", "val")])`
+> - **Saved cohort**: `ws.create_cohort(...)` then `Filter.in_cohort(<saved_id>)`
 
 ### Cohort Breakdowns (group_by=)
 

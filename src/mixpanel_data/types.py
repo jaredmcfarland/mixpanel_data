@@ -7606,6 +7606,21 @@ class Filter:
         on any query method (``query``, ``query_funnel``,
         ``query_retention``, ``query_flow``).
 
+        .. warning::
+
+            Inline ``CohortDefinition`` objects that contain
+            event-property filters (``CohortCriteria.did_event(where=...)``)
+            are **rejected** with a ``ValueError``. Mixpanel's inline
+            cohort evaluator silently ignores event-property filter
+            operators, producing wrong results. Use one of these
+            workarounds instead:
+
+            - Top-level: ``ws.query(event, where=Filter.equals(...))``
+            - Funnels: ``FunnelStep(event, filters=[Filter.equals(...)])``
+            - Retention: ``RetentionEvent(event, filters=[...])``
+            - Saved cohort: ``ws.create_cohort(...)`` then
+              ``Filter.in_cohort(<saved_id>)``
+
         Args:
             cohort: Saved cohort ID (positive integer) or inline
                 ``CohortDefinition``.
@@ -7616,8 +7631,9 @@ class Filter:
             Filter for cohort membership (contains).
 
         Raises:
-            ValueError: If cohort ID is not positive (CF1) or name
-                is empty when provided (CF2).
+            ValueError: If cohort ID is not positive (CF1), name
+                is empty when provided (CF2), or inline definition
+                contains event-property filters (CF3).
 
         Example:
             ```python
@@ -7626,7 +7642,7 @@ class Filter:
             # Saved cohort
             f = Filter.in_cohort(123, "Power Users")
 
-            # Inline cohort
+            # Inline cohort (no event-property filters)
             f = Filter.in_cohort(cohort_def, name="Frequent Buyers")
             ```
         """
@@ -7644,6 +7660,11 @@ class Filter:
         ``CohortDefinition``. The filter can be passed to ``where=``
         on any query method.
 
+        .. warning::
+
+            See ``in_cohort()`` for the restriction on inline
+            ``CohortDefinition`` objects with event-property filters.
+
         Args:
             cohort: Saved cohort ID (positive integer) or inline
                 ``CohortDefinition``.
@@ -7654,8 +7675,9 @@ class Filter:
             Filter for cohort exclusion (does not contain).
 
         Raises:
-            ValueError: If cohort ID is not positive (CF1) or name
-                is empty when provided (CF2).
+            ValueError: If cohort ID is not positive (CF1), name
+                is empty when provided (CF2), or inline definition
+                contains event-property filters (CF3).
 
         Example:
             ```python
@@ -7688,6 +7710,28 @@ class Filter:
             ValueError: On CF1 or CF2 violations.
         """
         _validate_cohort_args(cohort, name)
+
+        # CF3: Reject inline cohort definitions with event-property filters.
+        # Mixpanel's inline cohort evaluator silently ignores event-property
+        # filter operators in the legacy event_selector.selector schema,
+        # returning wrong results (all operators collapse to "is set"
+        # semantics for strings, or are dropped entirely for numbers).
+        if isinstance(cohort, CohortDefinition) and _cohort_has_event_selector_filters(
+            cohort
+        ):
+            raise ValueError(
+                "Inline CohortDefinition with event-property filters "
+                "(CohortCriteria.did_event(where=...)) cannot be used in "
+                "Filter.in_cohort() because Mixpanel's inline cohort "
+                "evaluator silently ignores event-property filter operators, "
+                "producing wrong results. "
+                "Workarounds: (1) use top-level ws.query(event, where=...) "
+                "for single-event scoping, (2) use "
+                "FunnelStep(event, filters=[...]) or "
+                "RetentionEvent(event, filters=[...]) for multi-step "
+                "queries, or (3) save the cohort via ws.create_cohort() "
+                "and reference it by ID with Filter.in_cohort(<saved_id>)."
+            )
 
         operator = "does not contain" if negated else "contains"
 
@@ -8170,6 +8214,17 @@ class CohortCriteria:
     ) -> CohortCriteria:
         """Create a behavioral criterion based on event frequency.
 
+        .. warning::
+
+            The ``where`` parameter works correctly when the resulting
+            ``CohortDefinition`` is saved via ``ws.create_cohort()``,
+            but **cannot** be used in inline cohort definitions passed
+            to ``Filter.in_cohort()``. Mixpanel's inline cohort
+            evaluator silently ignores event-property filter operators
+            in the legacy ``event_selector.selector`` schema. Calling
+            ``Filter.in_cohort()`` with such a definition raises
+            ``ValueError``. See ``Filter.in_cohort()`` for workarounds.
+
         Args:
             event: Event name (must be non-empty).
             at_least: Minimum event count (``>=``).
@@ -8180,7 +8235,8 @@ class CohortCriteria:
             within_months: Rolling window in months.
             from_date: Absolute start date (YYYY-MM-DD).
             to_date: Absolute end date (YYYY-MM-DD).
-            where: Event property filter(s).
+            where: Event property filter(s). See warning above regarding
+                inline cohort usage.
 
         Returns:
             CohortCriteria with behavioral selector node and behavior entry.
@@ -8581,6 +8637,36 @@ def _sanitize_raw_cohort(raw: dict[str, Any]) -> dict[str, Any]:
             if isinstance(es, dict) and es.get("selector") is None:
                 del es["selector"]
     return result
+
+
+def _cohort_has_event_selector_filters(
+    definition: CohortDefinition,
+) -> bool:
+    """Check whether an inline CohortDefinition contains event-property filters.
+
+    Recursively walks the criteria tree and returns ``True`` if any
+    behavioral criterion (``CohortCriteria.did_event``) has a non-None
+    ``event_selector.selector``, indicating event-property filters were
+    applied via the ``where=`` parameter.
+
+    Args:
+        definition: CohortDefinition to inspect.
+
+    Returns:
+        ``True`` if any criterion contains event-property filters.
+    """
+    for item in definition._criteria:
+        if isinstance(item, CohortCriteria):
+            if item._behavior is not None:
+                count = item._behavior.get("count", {})
+                es = count.get("event_selector", {})
+                if es.get("selector") is not None:
+                    return True
+        elif isinstance(item, CohortDefinition) and _cohort_has_event_selector_filters(
+            item
+        ):
+            return True
+    return False
 
 
 @dataclass(frozen=True, init=False)
