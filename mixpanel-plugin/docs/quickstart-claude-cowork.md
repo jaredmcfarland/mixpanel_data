@@ -8,27 +8,23 @@ Cowork runs Claude agents in sandboxed virtual machines. These VMs don't have ac
 
 ## What You'll Need
 
-- **Claude Code** with Cowork access
-- **The `mp` CLI installed on your local machine** — this is the tool that exports your credentials
-- **Working Mixpanel credentials** already configured on your local machine
+- **Claude Desktop** with Cowork access
+- **A Mixpanel account** with access to a project
+- **One of the following** for authentication:
+  - A **service account** (username + secret) from your Mixpanel project settings, OR
+  - A browser for **OAuth login** (interactive — your project is auto-discovered)
 
-If you haven't installed `mixpanel_data` or set up credentials yet, complete the [Claude Code Quick Start](quickstart-claude-code.md) first (Steps 1-3), or install the CLI directly:
+---
+
+## Step 1: Install the CLI and Set Up Credentials
+
+On your **local machine** (not inside Cowork), install the `mp` command-line tool:
 
 ```bash
 pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
 ```
 
----
-
-## Step 1: Verify Your Local Credentials
-
-On your **local machine** (not inside Cowork), confirm you have working credentials:
-
-```bash
-mp auth test
-```
-
-You should see a success message. If not, set up credentials first:
+Then configure your Mixpanel credentials:
 
 ```bash
 # OAuth (opens browser, auto-discovers your projects)
@@ -37,6 +33,14 @@ mp auth login --region us
 # OR service account (prompts for secret securely)
 mp auth add my-project --username YOUR_SA_USERNAME --project YOUR_PROJECT_ID --region us
 ```
+
+Verify the credentials work:
+
+```bash
+mp auth test
+```
+
+You should see a success message confirming the connection.
 
 ---
 
