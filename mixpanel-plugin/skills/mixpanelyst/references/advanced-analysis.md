@@ -1035,7 +1035,7 @@ _For multi-panel dashboards combining all four engines, see [cross-query-synthes
 
 ## Machine Learning with scikit-learn
 
-_scikit-learn moves analytics from descriptive ("what happened") to predictive ("what will happen") and prescriptive ("what segments matter"). These patterns operate on DataFrames from any query engine._
+_scikit-learn moves analytics from descriptive ("what happened") to predictive ("what will happen") and segmentation-driven ("what user groups exist"). These patterns operate on DataFrames from any query engine._
 
 ### Behavioral Clustering — Automatic User Segmentation
 
@@ -1082,9 +1082,11 @@ for seg in sorted(features["segment"].unique()):
 # NOTE: K-means cluster numbering is non-deterministic — cluster 0 will not
 # reliably contain the same user type across runs. Always inspect each
 # cluster's profile before assigning labels.
+# After inspecting the profiles above, assign labels to match observed behavior:
 segment_labels = {0: "Power Users", 1: "Browsers", 2: "Buyers", 3: "Dormant"}
 features["label"] = features["segment"].map(segment_labels)
 print(features["label"].value_counts())
+# (Re-inspect and re-assign after every new fit)
 ```
 
 **Choosing k**: Use the elbow method — plot inertia vs k and pick the bend.
@@ -1491,9 +1493,9 @@ for lag, result in results.items():
     print(f"  Lag {lag}d: F={f_stat:.2f}, p={p_value:.4f} {sig}")
 ```
 
-### Survival Analysis — Proper Retention Curve Modeling
+### Retention Curve Modeling — Half-Life and Decay Projection
 
-Model retention as a survival problem: "how long until a user churns?" Handles censoring (users who haven't churned yet aren't failures — they're still being observed).
+Model retention as a decay problem: "how quickly do users churn?" Fits aggregate retention rates to estimate half-life and project long-term retention.
 
 ```python
 import mixpanel_data as mp
@@ -1560,7 +1562,7 @@ except RuntimeError:
     print("\nExponential fit did not converge — retention curve may not follow exponential decay")
 ```
 
-### Segment Comparison with Survival Analysis
+### Retention Curve Comparison Between Segments
 
 Compare retention curves between segments and test for statistical significance.
 
@@ -1611,6 +1613,9 @@ print(comparison.to_string(
     },
 ))
 
+# NOTE: Rough directional comparison only. Retention rates across buckets
+# are NOT independent (D30 survivors ⊂ D7 survivors). For rigorous testing,
+# compare a single bucket (e.g. D30) across multiple independent cohorts.
 if len(organic_rates) >= 3 and len(paid_rates) >= 3:
     stat, p = mannwhitneyu(organic_rates, paid_rates, alternative="greater")
     print(f"\nOrganic > Paid? Mann-Whitney p={p:.4f}")
@@ -1625,7 +1630,7 @@ if len(organic_rates) >= 3 and len(paid_rates) >= 3:
 - **`plt.savefig()` not `plt.show()`**: Save to files. `show()` blocks or fails in headless environments.
 - **`plt.tight_layout()`**: Call before `savefig()` to prevent label clipping.
 - **`plt.close(fig)`**: Close figures after saving to free memory, especially in loops.
-- **scikit-learn requires numeric input**: Use `pd.get_dummies()` for categorical features. Always `StandardScaler()` before distance-based methods (K-means, PCA).
+- **scikit-learn requires numeric input**: Use `pd.get_dummies()` for categorical features. Always `StandardScaler()` before scale-sensitive methods (K-means, PCA, logistic regression).
 - **statsmodels requires regular time indices**: Use `counts.asfreq("D", method="ffill")` before time series methods.
 - **ARIMA convergence**: If ARIMA fails to converge, try a simpler order (0,1,1) or increase `maxiter`. Scope warning suppression with `warnings.catch_warnings()` — never use global `filterwarnings("ignore")`.
 - **Feature importance is correlation, not causation**: Random Forest importance shows predictive power, not causal relationships. Use Granger causality or domain knowledge for causal claims.
