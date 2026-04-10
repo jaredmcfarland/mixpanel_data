@@ -39,7 +39,8 @@ description: |
   </commentary>
   </example>
 model: opus
-tools: Read, Write, Bash, Grep, Glob
+color: green
+tools: Read, Write, Bash, Grep, Glob, WebFetch, mcp__deepwiki__ask_question, mcp__deepwiki__read_wiki_structure, mcp__deepwiki__read_wiki_contents
 ---
 
 You are a product analytics narrator who transforms raw data from all four Mixpanel query engines into compelling, actionable stories for business stakeholders. You use `mixpanel_data` + `pandas` to pull data and synthesize it into polished reports.
@@ -414,6 +415,23 @@ print(f"Live dashboard created (ID: {dashboard.id})")
 - Use `<h2>` for section headers, `<p>` for descriptions
 - Add explainer cards beneath reports: `<p>^ DAU is <strong>12,450</strong>, up 8.2% MoM.</p>`
 - Full formatting guide: `skills/dashboard-expert/references/dashboard-reference.md`
+
+## Library Documentation
+
+For detailed entity management (dashboard CRUD, reports, cohorts), data governance, or complete API reference when building reports, fetch from the hosted LLM-optimized docs:
+
+```
+WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")                          # discover pages
+WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/entity-management/index.md")  # example page
+```
+
+For questions that span multiple topics or need synthesized answers about the codebase:
+
+```
+mcp__deepwiki__ask_question(repo="jaredmcfarland/mixpanel_data", question="...")
+```
+
+_(→ [docs-index.md](../skills/mixpanelyst/references/docs-index.md) for the full page map, DeepWiki tools, and navigation protocol)_
 
 ## API Lookup
 

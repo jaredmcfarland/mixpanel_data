@@ -737,3 +737,22 @@ Load these on demand when the quick reference above is insufficient:
 | [dashboard-templates.md](../dashboard-expert/references/dashboard-templates.md) | 9 purpose-built templates (KPI, Feature Launch, AARRR, Funnel, Retention, etc.) |
 | [bookmark-pipeline.md](../dashboard-expert/references/bookmark-pipeline.md) | Query → bookmark → dashboard pipeline for all 4 engines |
 | [chart-types.md](../dashboard-expert/references/chart-types.md) | Chart type selection, math types, width recommendations |
+
+## Library Documentation (Hosted)
+
+For comprehensive library coverage beyond the analytical methodology above — entity management, data governance, streaming, configuration, complete type reference, and detailed API docs — use the hosted LLM-optimized documentation:
+
+_(→ [docs-index.md](references/docs-index.md) for the full navigation protocol and page map)_
+
+**Hosted docs** — fetch `llms.txt` to discover pages, then fetch the specific `index.md`:
+
+```
+WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")
+WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/entity-management/index.md")
+```
+
+**DeepWiki** — ask synthesized questions about the codebase (bundled via `.mcp.json`):
+
+```
+mcp__deepwiki__ask_question(repo="jaredmcfarland/mixpanel_data", question="...")
+```
