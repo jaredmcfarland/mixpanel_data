@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mixpanel_data"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Python library for working with Mixpanel analytics data, designed for AI coding agents"
 readme = "README.md"
 license = "MIT"
@@ -56,6 +56,9 @@ docs = [
     "mkdocs-llmstxt-md>=0.1.0",
 ]
 notebook = ["ipykernel>=6.0"]
+
+[tool.hatch.version]
+path = "src/mixpanel_data/__init__.py"
 
 [project.scripts]
 mp = "mixpanel_data.cli.main:app"
