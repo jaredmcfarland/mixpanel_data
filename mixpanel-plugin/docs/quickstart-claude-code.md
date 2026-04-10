@@ -44,10 +44,10 @@ You only need to do this once. Choose the method that works best for you.
 
 ### Option A: Service Account (Recommended)
 
-Run the `/mp-auth` command:
+Run the `/mixpanel-data:auth` command:
 
 ```
-/mp-auth add my-project
+/mixpanel-data:auth add my-project
 ```
 
 Claude will walk you through it step by step:
@@ -63,7 +63,7 @@ Your secret is never visible in the conversation.
 ### Option B: OAuth Login (Browser-Based)
 
 ```
-/mp-auth login
+/mixpanel-data:auth login
 ```
 
 Claude will ask for your region, then open a browser window where you log in with your Mixpanel credentials. After login, your projects are automatically discovered — if you have exactly one project, it's selected for you. If you have multiple, Claude will help you pick one.
@@ -71,7 +71,7 @@ Claude will ask for your region, then open a browser window where you log in wit
 ### Verify It Worked
 
 ```
-/mp-auth test
+/mixpanel-data:auth test
 ```
 
 You should see confirmation that Claude connected successfully and found events in your project.
@@ -172,32 +172,32 @@ You don't need to think about these — Claude picks the right one based on your
 ### Check current status
 
 ```
-/mp-auth status
+/mixpanel-data:auth status
 ```
 
 ### Switch between accounts
 
 ```
-/mp-auth list
-/mp-auth switch production
+/mixpanel-data:auth list
+/mixpanel-data:auth switch production
 ```
 
 ### Discover accessible projects
 
 ```
-/mp-auth projects
+/mixpanel-data:auth projects
 ```
 
 ### Switch projects (v2 config)
 
 ```
-/mp-auth switch-project 67890
+/mixpanel-data:auth switch-project 67890
 ```
 
 ### Upgrade to v2 config (enables project switching)
 
 ```
-/mp-auth migrate
+/mixpanel-data:auth migrate
 ```
 
 ---
@@ -206,14 +206,14 @@ You don't need to think about these — Claude picks the right one based on your
 
 ### "No credentials configured"
 
-Run `/mp-auth add my-project` and follow the prompts, or `/mp-auth login` for OAuth.
+Run `/mixpanel-data:auth add my-project` and follow the prompts, or `/mixpanel-data:auth login` for OAuth.
 
 ### "Authentication failed"
 
 - Check that your service account username and secret are correct (Mixpanel Settings > Service Accounts)
 - Verify your project ID matches the project the service account has access to
 - Make sure the region matches your project's data residency
-- Run `/mp-auth test` for detailed error information
+- Run `/mixpanel-data:auth test` for detailed error information
 
 ### Plugin not appearing
 

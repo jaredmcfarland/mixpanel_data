@@ -1,5 +1,5 @@
 ---
-name: auth
+name: mixpanel-data:auth
 description: Manage Mixpanel authentication — check status, add/switch/test accounts, OAuth login, migrate config, discover projects. Use with no arguments for a quick status check.
 argument-hint: [status|add|list|switch|test|login|remove|logout|migrate|projects|context|switch-project]
 ---

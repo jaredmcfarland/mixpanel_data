@@ -361,10 +361,10 @@ This will:
 
 ### Configure Credentials (If Not Already Done)
 
-If the setup skill reports that no credentials are found, use the `/mp-auth` command:
+If the setup skill reports that no credentials are found, use the `/mixpanel-data:auth` command:
 
 ```
-/mp-auth add my-project
+/mixpanel-data:auth add my-project
 ```
 
 Claude will guide you through entering your service account username, project ID, and region. You'll be prompted to run a shell command that securely collects your secret.
@@ -415,7 +415,7 @@ Run this command on your **local machine** (not inside Cowork):
 mp auth cowork-setup
 ```
 
-This creates a credential bridge file at `~/.claude/mixpanel/auth.json` that Cowork VMs can read.
+This creates a credential bridge file at `~/.claude/mixpanel/mixpanel-data:auth.json` that Cowork VMs can read.
 
 **Options:**
 
@@ -581,7 +581,7 @@ mp auth login --region us
 
 1. Make sure plugins are enabled in your Claude Code settings
 2. Run `/mixpanel-data:setup` to install dependencies
-3. Check auth with `/mp-auth status`
+3. Check auth with `/mixpanel-data:auth status`
 4. If the plugin doesn't appear, try restarting Claude Code
 
 ### Cowork VM Can't Find Credentials
