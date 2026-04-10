@@ -1205,22 +1205,27 @@ from sklearn.preprocessing import StandardScaler
 ws = mp.Workspace()
 
 # Build labeled dataset from user profiles
+# KEY: features and label must cover DIFFERENT time windows to avoid
+# target leakage. Use an observation window (e.g. days 31-60 ago) for
+# features and a prediction window (last 30 days) for the churn label.
+# If features and label share the same window, churned users have
+# zero activity by definition — the model learns the labeling rule
+# instead of genuine predictive patterns, inflating AUC.
 profiles = []
 for p in ws.stream_profiles():
     props = p.get("properties", {})
     profiles.append({
         "distinct_id": p["distinct_id"],
-        "logins_30d": props.get("logins_30d", 0),
-        "purchases_30d": props.get("purchases_30d", 0),
+        # Observation-window features (days 31-60 ago)
+        "logins_prev_month": props.get("logins_prev_month", 0),
+        "purchases_prev_month": props.get("purchases_prev_month", 0),
         "feature_count": props.get("features_used", 0),
-        # Label: use a backend-set flag or inactivity window
-        # IMPORTANT: do not use the same field as both feature and label —
-        # that causes target leakage (model learns a trivial rule).
+        # Prediction-window label (last 30 days)
         "churned": 1 if props.get("days_since_last_active", 999) > 30 else 0,
     })
 
 df = pd.DataFrame(profiles)
-feature_cols = ["logins_30d", "purchases_30d", "feature_count"]
+feature_cols = ["logins_prev_month", "purchases_prev_month", "feature_count"]
 X = df[feature_cols].fillna(0)
 y = df["churned"]
 
@@ -1576,18 +1581,25 @@ from scipy.stats import mannwhitneyu
 ws = mp.Workspace()
 
 # Compare organic vs paid user retention
+# Use RetentionEvent with per-event filters on the born event only.
+# A global where= filter would require utm_medium on both Sign Up AND
+# Login events — but attribution properties typically exist only on
+# signup, so Login events would be filtered out, producing artificially
+# low or empty retention curves.
+from mixpanel_data import RetentionEvent
+
 organic = ws.query_retention(
-    "Sign Up", "Login",
+    RetentionEvent("Sign Up", filters=[Filter.equals("utm_medium", "organic")]),
+    "Login",
     retention_unit="day",
     bucket_sizes=[1, 7, 14, 30, 60],
-    where=Filter.equals("utm_medium", "organic"),
     last=180,
 )
 paid = ws.query_retention(
-    "Sign Up", "Login",
+    RetentionEvent("Sign Up", filters=[Filter.equals("utm_medium", "cpc")]),
+    "Login",
     retention_unit="day",
     bucket_sizes=[1, 7, 14, 30, 60],
-    where=Filter.equals("utm_medium", "cpc"),
     last=180,
 )
 
