@@ -85,7 +85,7 @@ User says...                              → Engine
 "product health", "overview"              → MULTI-ENGINE
 ```
 
-_For 50+ NL→engine signal patterns and 12 decomposition templates, see [query-taxonomy.md](../skills/mixpanel-analyst/references/query-taxonomy.md)._
+_For 50+ NL→engine signal patterns and 12 decomposition templates, see [query-taxonomy.md](../skills/mixpanelyst/references/query-taxonomy.md)._
 
 ### Multi-Query Planning
 
@@ -111,7 +111,7 @@ For complex questions requiring multiple engines, decompose into a plan:
 | Entity CRUD (dashboards, cohorts, flags) | **Handle directly** | App API calls |
 | Build/analyze/modify a dashboard | **dashboard-expert skill** | Analyze, build, modify, explain workflows |
 
-_Each specialist agent has dedicated methodology: Explorer uses [GQM decomposition](../skills/mixpanel-analyst/references/analytical-frameworks.md), Diagnostician follows an [8-step diagnostic protocol](../skills/mixpanel-analyst/references/analytical-frameworks.md), Synthesizer applies [cross-query synthesis patterns](../skills/mixpanel-analyst/references/cross-query-synthesis.md), Narrator uses [AARRR-structured report templates](../skills/mixpanel-analyst/references/analytical-frameworks.md)._
+_Each specialist agent has dedicated methodology: Explorer uses [GQM decomposition](../skills/mixpanelyst/references/analytical-frameworks.md), Diagnostician follows an [8-step diagnostic protocol](../skills/mixpanelyst/references/analytical-frameworks.md), Synthesizer applies [cross-query synthesis patterns](../skills/mixpanelyst/references/cross-query-synthesis.md), Narrator uses [AARRR-structured report templates](../skills/mixpanelyst/references/analytical-frameworks.md)._
 
 ## Code Pattern — All Four Engines
 
@@ -150,7 +150,7 @@ print(flow.drop_off_summary())
 
 ## Cohort-Scoped Queries
 
-_(→ [insights-reference.md](../skills/mixpanel-analyst/references/insights-reference.md) §Cohort Capabilities for the complete cohort API including inline CohortDefinition)_
+_(→ [insights-reference.md](../skills/mixpanelyst/references/insights-reference.md) §Cohort Capabilities for the complete cohort API including inline CohortDefinition)_
 
 ```python
 from mixpanel_data import CohortBreakdown, CohortMetric
@@ -170,18 +170,18 @@ result = ws.query(CohortMetric(123, "Power Users"), last=90)
 Before any unfamiliar API call, look up the exact signature:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_funnel
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_retention
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_flow
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py types
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_funnel
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_retention
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_flow
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py types
 ```
 
 ## Auth Error Recovery
 
 If `Workspace()` or any query raises `AuthenticationError` or `ConfigError`:
 
-1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py status`
 2. Parse the JSON to diagnose:
    - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
    - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."
@@ -195,7 +195,7 @@ Manage Mixpanel entities (dashboards, cohorts, bookmarks, feature flags, experim
 
 ### Bookmark Validation
 
-_(→ [bookmark-params.md](../skills/mixpanel-analyst/references/bookmark-params.md) for the full bookmark JSON structure and per-engine validation rules)_
+_(→ [bookmark-params.md](../skills/mixpanelyst/references/bookmark-params.md) for the full bookmark JSON structure and per-engine validation rules)_
 
 When creating or updating bookmarks, validate params before calling the API:
 

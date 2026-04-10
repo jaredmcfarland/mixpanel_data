@@ -135,7 +135,7 @@ print(r["flow"].top_transitions(5))
 
 ### Product Health Report (AARRR)
 
-_Implements the AARRR framework from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §AARRR with one section per lifecycle stage._
+_Implements the AARRR framework from [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §AARRR with one section per lifecycle stage._
 
 One section per stage, each using the optimal engine:
 
@@ -174,7 +174,7 @@ One section per stage, each using the optimal engine:
 
 ### Metric Deep Dive
 
-_Structure mirrors the Diagnosis Methodology from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §Diagnosis Methodology — current state, then cross-engine investigation._
+_Structure mirrors the Diagnosis Methodology from [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §Diagnosis Methodology — current state, then cross-engine investigation._
 
 ```markdown
 # [Metric Name] — Deep Dive
@@ -200,7 +200,7 @@ _Structure mirrors the Diagnosis Methodology from [analytical-frameworks.md](../
 
 ### Feature Report
 
-_Follows the 4-step Feature Adoption Framework from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §Feature Adoption Framework: Discovery→Activation→Habit→Impact._
+_Follows the 4-step Feature Adoption Framework from [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §Feature Adoption Framework: Discovery→Activation→Habit→Impact._
 
 ```markdown
 # Feature Report: [Feature Name] — [Period]
@@ -232,7 +232,7 @@ _Follows the 4-step Feature Adoption Framework from [analytical-frameworks.md](.
 
 ## Data Pulling Patterns
 
-_For detailed per-engine parameter references, see [insights-reference.md](../skills/mixpanel-analyst/references/insights-reference.md) | [funnels-reference.md](../skills/mixpanel-analyst/references/funnels-reference.md) | [retention-reference.md](../skills/mixpanel-analyst/references/retention-reference.md) | [flows-reference.md](../skills/mixpanel-analyst/references/flows-reference.md)._
+_For detailed per-engine parameter references, see [insights-reference.md](../skills/mixpanelyst/references/insights-reference.md) | [funnels-reference.md](../skills/mixpanelyst/references/funnels-reference.md) | [retention-reference.md](../skills/mixpanelyst/references/retention-reference.md) | [flows-reference.md](../skills/mixpanelyst/references/flows-reference.md)._
 
 ### Pulling from Each Engine
 
@@ -284,7 +284,7 @@ with ThreadPoolExecutor(max_workers=len(queries)) as pool:
 
 ## Narrative Principles
 
-_(→ [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §Delivering Insights for detailed guidance on contextualizing findings and structuring recommendations)_
+_(→ [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §Delivering Insights for detailed guidance on contextualizing findings and structuring recommendations)_
 
 1. **Lead with the headline** — most important finding first
 2. **Quantify everything** — "23% increase (12,400 to 15,252)" not "significant increase"
@@ -295,7 +295,7 @@ _(→ [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytica
 
 ## Visual Standards
 
-_(→ [advanced-analysis.md](../skills/mixpanel-analyst/references/advanced-analysis.md) §Visualization Patterns for 6 chart types with code: time series, funnel bars, retention curves, multi-panel dashboards, annotated charts, and export patterns)_
+_(→ [advanced-analysis.md](../skills/mixpanelyst/references/advanced-analysis.md) §Visualization Patterns for 6 chart types with code: time series, funnel bars, retention curves, multi-panel dashboards, annotated charts, and export patterns)_
 
 - **Retention heatmaps** — seaborn heatmap with percentage annotations
 - **Flow diagrams** — top transitions bar chart or Graphviz export
@@ -418,17 +418,17 @@ print(f"Live dashboard created (ID: {dashboard.id})")
 ## API Lookup
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_funnel
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_retention
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query_flow
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_funnel
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_retention
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_flow
 ```
 
 ## Auth Error Recovery
 
 If `Workspace()` or any query raises `AuthenticationError` or `ConfigError`:
 
-1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py status`
 2. Parse the JSON to diagnose:
    - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
    - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."

@@ -52,7 +52,7 @@ Write Python code. Never teach CLI commands. Never call MCP tools.
 
 ### Schema Discovery
 
-_(→ [python-api.md](../skills/mixpanel-analyst/references/python-api.md) §Discovery for complete method signatures)_
+_(→ [python-api.md](../skills/mixpanelyst/references/python-api.md) §Discovery for complete method signatures)_
 
 ```python
 import mixpanel_data as mp
@@ -115,7 +115,7 @@ print(f"Status: {schema.status}")
 
 ## GQM Decomposition Workflow (Four-Engine)
 
-_Implements the GQM methodology from [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §GQM with a four-engine twist._
+_Implements the GQM methodology from [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §GQM with a four-engine twist._
 
 ### Step 1: Parse the Implicit Goal
 
@@ -151,7 +151,7 @@ for event_name in [t.event for t in top[:5]]:
 
 ### Step 3: Classify with AARRR
 
-_(→ [analytical-frameworks.md](../skills/mixpanel-analyst/references/analytical-frameworks.md) §AARRR for the complete framework with industry benchmarks and engine mappings)_
+_(→ [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §AARRR for the complete framework with industry benchmarks and engine mappings)_
 
 Map the question to pirate metric stages:
 
@@ -178,7 +178,7 @@ For each sub-question, specify the engine, method, and parameters:
 
 ### Step 5: Define the Join Strategy
 
-_(→ [cross-query-synthesis.md](../skills/mixpanel-analyst/references/cross-query-synthesis.md) for 6 detailed join strategies with full pandas merge code)_
+_(→ [cross-query-synthesis.md](../skills/mixpanelyst/references/cross-query-synthesis.md) for 6 detailed join strategies with full pandas merge code)_
 
 How will results from different engines be combined?
 
@@ -227,15 +227,15 @@ How will results from different engines be combined?
 Before any unfamiliar API call:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.query
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/help.py Workspace.events
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.events
 ```
 
 ## Auth Error Recovery
 
 If `Workspace()` or any query raises `AuthenticationError` or `ConfigError`:
 
-1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanel-analyst/scripts/auth_manager.py status`
+1. Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py status`
 2. Parse the JSON to diagnose:
    - `active_method: "none"` → "No credentials configured. Run `/mp-auth` to set up."
    - OAuth expired → "OAuth session expired. Run `/mp-auth login` to re-authenticate."

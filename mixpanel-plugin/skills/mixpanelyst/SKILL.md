@@ -1,5 +1,5 @@
 ---
-name: mixpanel-analyst
+name: mixpanelyst
 description: This skill should be used when the user asks about Mixpanel product analytics, event data, funnel analysis, retention curves, cohort analysis, segmentation queries, JQL, user behavior, conversion rates, churn, DAU/MAU, ARPU, revenue metrics, feature adoption, A/B test results, user paths, flow analysis, or any request to query, explore, visualize, or analyze Mixpanel data using Python.
 allowed-tools: Bash Read Write
 ---
