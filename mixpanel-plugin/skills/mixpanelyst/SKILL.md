@@ -8,9 +8,9 @@ allowed-tools: Bash Read Write
 
 Analyze the user's Mixpanel data by **writing and executing Python code** that uses the `mixpanel_data` library, `pandas`, `networkx`, and `anytree`. Act as a senior data analyst and product analytics expert.
 
-## Core Principle: Code Over Tools
+## Core Principle: Code First
 
-Write Python code. Never teach CLI commands. Never call MCP tools.
+Prefer writing and executing Python code using the `mixpanel_data` library. When the library provides a method, use it over CLI commands or external tools.
 
 - **Quick lookups** → `python3 -c "..."` one-liners
 - **Multi-step analysis** → write and execute `.py` files
@@ -751,7 +751,7 @@ WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")
 WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/entity-management/index.md")
 ```
 
-**DeepWiki** — ask synthesized questions about the codebase (bundled via `.mcp.json`):
+**DeepWiki** (optional) — if [DeepWiki MCP](https://deepwiki.com/jaredmcfarland/mixpanel_data) is configured, ask synthesized questions about the codebase:
 
 ```
 mcp__deepwiki__ask_question(repo="jaredmcfarland/mixpanel_data", question="...")

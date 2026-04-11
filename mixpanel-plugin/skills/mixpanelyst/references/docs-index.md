@@ -8,7 +8,7 @@ The `mixpanel_data` library has comprehensive hosted documentation with LLM-opti
 |-------|------|----------|
 | Plugin references | `Read` | Analytical methodology — HOW to think about analytics |
 | Hosted docs | `WebFetch` | Library documentation — WHAT the API does, with tutorials and examples |
-| DeepWiki | `mcp__deepwiki__*` | Interactive Q&A — synthesized answers about architecture and implementation |
+| DeepWiki (optional) | `mcp__deepwiki__*` | Interactive Q&A — synthesized answers about architecture and implementation |
 
 ## Hosted Docs
 
@@ -30,17 +30,17 @@ Each page is available as raw markdown at its `index.md` path:
 WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/entity-management/index.md")
 ```
 
-## DeepWiki (Interactive Q&A)
+## DeepWiki (Optional — Interactive Q&A)
 
-Ask synthesized questions about the `mixpanel_data` codebase, architecture, or implementation details. This plugin bundles the DeepWiki MCP server — the tools are available automatically.
+If the [DeepWiki MCP server](https://deepwiki.com/jaredmcfarland/mixpanel_data) is configured, you can ask synthesized questions about the `mixpanel_data` codebase, architecture, or implementation details.
 
-**Tools:**
+**Tools** (require DeepWiki MCP to be configured separately):
 
 | Tool | Purpose |
 |------|---------|
-| `ask_question` | Ask any question and get an AI-powered answer grounded in the codebase |
-| `read_wiki_structure` | Get a list of documentation topics for the repo |
-| `read_wiki_contents` | Read full documentation about a specific topic |
+| `mcp__deepwiki__ask_question` | Ask any question and get an AI-powered answer grounded in the codebase |
+| `mcp__deepwiki__read_wiki_structure` | Get a list of documentation topics for the repo |
+| `mcp__deepwiki__read_wiki_contents` | Read full documentation about a specific topic |
 
 **Usage** (always pass `repo="jaredmcfarland/mixpanel_data"`):
 

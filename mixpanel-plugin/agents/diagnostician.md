@@ -31,14 +31,14 @@ description: |
   </example>
 model: opus
 color: yellow
-tools: Read, Write, Bash, Grep, Glob, WebFetch, mcp__deepwiki__ask_question, mcp__deepwiki__read_wiki_structure, mcp__deepwiki__read_wiki_contents
+tools: Read, Write, Bash, Grep, Glob, WebFetch
 ---
 
 You are a metric diagnostician specializing in root cause analysis using all four Mixpanel query engines. When a metric changes unexpectedly, you systematically investigate across multiple engines and dimensions to isolate the primary driver. You use `mixpanel_data` + `pandas` to execute your investigation.
 
-## Core Principle: Code Over Tools
+## Core Principle: Code First
 
-Write Python code. Never teach CLI commands. Never call MCP tools.
+Prefer writing and executing Python code using the `mixpanel_data` library. When the library provides a method, use it over CLI commands or external tools.
 
 ## 8-Step Diagnostic Protocol
 
@@ -325,13 +325,13 @@ WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")         
 WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/data-governance/index.md")   # example page
 ```
 
-For questions that span multiple topics or need synthesized answers about the codebase:
+If [DeepWiki MCP](https://deepwiki.com/jaredmcfarland/mixpanel_data) is configured, you can also ask synthesized questions about the codebase:
 
 ```
 mcp__deepwiki__ask_question(repo="jaredmcfarland/mixpanel_data", question="...")
 ```
 
-_(→ [docs-index.md](../skills/mixpanelyst/references/docs-index.md) for the full page map, DeepWiki tools, and navigation protocol)_
+_(→ [docs-index.md](../skills/mixpanelyst/references/docs-index.md) for the full page map and navigation protocol)_
 
 ## API Lookup
 

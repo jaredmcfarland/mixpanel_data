@@ -80,9 +80,7 @@ demo/
 context/fastmcp/
 
 # MCP client configuration (local dev only)
-/.mcp.json
-# Allow plugin-bundled MCP config
-!mixpanel-plugin/.mcp.json
+.mcp.json
 
 # oh-my-claudecode local state
 .omc/
