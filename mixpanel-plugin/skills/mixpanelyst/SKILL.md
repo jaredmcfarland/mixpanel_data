@@ -110,17 +110,15 @@ _(→ [query-taxonomy.md](references/query-taxonomy.md) §Complex Question Decom
 Before any unfamiliar API call, look up the exact signature:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_funnel
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_retention
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_flow
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult       # result types
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py FlowTreeNode      # tree node
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types              # list all types
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions         # all exceptions
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py search cohort      # find all cohort-related types and methods
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query     # exact method signature + docstring
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult         # result type fields
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py FlowTreeNode        # tree node API
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types               # list all types
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions          # all exceptions
 ```
 
-Use this before every unfamiliar method. It pulls live docstrings — always accurate.
+Use `search <term>` when you know the concept but not the exact name. Use the specific name when you know what to look up. It pulls live docstrings — always accurate.
 
 ## Workspace Construction
 

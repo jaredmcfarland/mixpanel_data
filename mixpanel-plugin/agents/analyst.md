@@ -188,11 +188,9 @@ _(→ [docs-index.md](../skills/mixpanelyst/references/docs-index.md) for the fu
 Before any unfamiliar API call, look up the exact signature:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_funnel
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_retention
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query_flow
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py types
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py search dashboard  # find by concept
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query   # exact signature
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py types             # list all types
 ```
 
 ## Auth Error Recovery

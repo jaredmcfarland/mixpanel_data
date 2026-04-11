@@ -226,8 +226,8 @@ _(→ [docs-index.md](../skills/mixpanelyst/references/docs-index.md) for the fu
 Before any unfamiliar API call:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.events
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py search discovery  # find by concept
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/help.py Workspace.query   # exact signature
 ```
 
 ## Auth Error Recovery
