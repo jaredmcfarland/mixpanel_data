@@ -8,6 +8,7 @@ Usage:
     python help.py FeatureFlagStatus            # Enum members + values
     python help.py types                        # List all public types
     python help.py exceptions                   # List all exceptions
+    python help.py search <term>                # Search all names for a term
 """
 
 import contextlib
@@ -557,6 +558,67 @@ def show_detail(obj: Any, path: str) -> None:
         show_related(path.split(".")[-1])
 
 
+def search(term: str) -> None:
+    """Search all public names (types, methods, properties) for a term.
+
+    Case-insensitive substring match across module-level exports and
+    Workspace methods/properties. Shows matched name + first-line docstring.
+
+    Args:
+        term: Substring to search for (case-insensitive).
+    """
+    mod = importlib.import_module("mixpanel_data")
+    needle = term.lower()
+    results: list[tuple[str, str, str]] = []  # (category, name, description)
+
+    # Search module-level exports (types, functions, enums)
+    for name in sorted(dir(mod)):
+        if name.startswith("_"):
+            continue
+        if needle not in name.lower():
+            continue
+        obj = getattr(mod, name)
+        doc = inspect.getdoc(obj) or ""
+        first_line = doc.split("\n")[0] if doc else ""
+        if isinstance(obj, type) and issubclass(obj, Exception):
+            results.append(("exception", name, first_line))
+        elif isinstance(obj, type) and issubclass(obj, enum.Enum):
+            results.append(("enum", name, first_line))
+        elif isinstance(obj, type):
+            results.append(("type", name, first_line))
+        elif callable(obj):
+            results.append(("function", name, first_line))
+
+    # Search Workspace methods and properties
+    ws_cls = getattr(mod, "Workspace", None)
+    if ws_cls is not None:
+        for attr_name in sorted(dir(ws_cls)):
+            if attr_name.startswith("_"):
+                continue
+            if needle not in attr_name.lower():
+                continue
+            attr = getattr(ws_cls, attr_name, None)
+            if attr is None:
+                continue
+            doc = inspect.getdoc(attr) or ""
+            first_line = doc.split("\n")[0] if doc else ""
+            qualified = f"Workspace.{attr_name}"
+            if isinstance(attr, property):
+                results.append(("property", qualified, first_line))
+            elif callable(attr):
+                results.append(("method", qualified, first_line))
+
+    if not results:
+        print(f'No matches for "{term}"')
+        print("Try: search cohort, search dashboard, search filter")
+        return
+
+    print(f'# Search: "{term}" — {len(results)} matches\n')
+    max_name = max(len(r[1]) for r in results)
+    for category, name, desc in results:
+        print(f"  [{category:9s}] {name:<{max_name}}  {desc}")
+
+
 def main() -> None:
     """Entry point for the help script."""
     if len(sys.argv) < 2:
@@ -572,7 +634,14 @@ def main() -> None:
         print("Run /mixpanel-data:setup to install it.")
         sys.exit(1)
 
-    if query == "types":
+    if query == "search":
+        if len(sys.argv) < 3:
+            print("Usage: help.py search <term>")
+            print("Example: help.py search cohort")
+            sys.exit(1)
+        search(sys.argv[2])
+        return
+    elif query == "types":
         list_types()
     elif query == "exceptions":
         list_exceptions()

@@ -8,9 +8,9 @@ allowed-tools: Bash Read Write
 
 Analyze the user's Mixpanel data by **writing and executing Python code** that uses the `mixpanel_data` library, `pandas`, `networkx`, and `anytree`. Act as a senior data analyst and product analytics expert.
 
-## Core Principle: Code Over Tools
+## Core Principle: Code First
 
-Write Python code. Never teach CLI commands. Never call MCP tools.
+Prefer writing and executing Python code using the `mixpanel_data` library. When the library provides a method, use it over CLI commands or external tools.
 
 - **Quick lookups** → `python3 -c "..."` one-liners
 - **Multi-step analysis** → write and execute `.py` files
@@ -110,17 +110,15 @@ _(→ [query-taxonomy.md](references/query-taxonomy.md) §Complex Question Decom
 Before any unfamiliar API call, look up the exact signature:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_funnel
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_retention
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_flow
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult       # result types
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py FlowTreeNode      # tree node
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types              # list all types
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions         # all exceptions
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py search cohort      # find all cohort-related types and methods
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query     # exact method signature + docstring
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult         # result type fields
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py FlowTreeNode        # tree node API
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types               # list all types
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions          # all exceptions
 ```
 
-Use this before every unfamiliar method. It pulls live docstrings — always accurate.
+Use `search <term>` when you know the concept but not the exact name. Use the specific name when you know what to look up. It pulls live docstrings — always accurate.
 
 ## Workspace Construction
 
@@ -737,3 +735,22 @@ Load these on demand when the quick reference above is insufficient:
 | [dashboard-templates.md](../dashboard-expert/references/dashboard-templates.md) | 9 purpose-built templates (KPI, Feature Launch, AARRR, Funnel, Retention, etc.) |
 | [bookmark-pipeline.md](../dashboard-expert/references/bookmark-pipeline.md) | Query → bookmark → dashboard pipeline for all 4 engines |
 | [chart-types.md](../dashboard-expert/references/chart-types.md) | Chart type selection, math types, width recommendations |
+
+## Library Documentation (Hosted)
+
+For comprehensive library coverage beyond the analytical methodology above — entity management, data governance, streaming, configuration, complete type reference, and detailed API docs — use the hosted LLM-optimized documentation:
+
+_(→ [docs-index.md](references/docs-index.md) for the full navigation protocol and page map)_
+
+**Hosted docs** — fetch `llms.txt` to discover pages, then fetch the specific `index.md`:
+
+```
+WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")
+WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/entity-management/index.md")
+```
+
+**DeepWiki** (optional) — if [DeepWiki MCP](https://deepwiki.com/jaredmcfarland/mixpanel_data) is configured, ask synthesized questions about the codebase:
+
+```
+mcp__deepwiki__ask_question(repo="jaredmcfarland/mixpanel_data", question="...")
+```
