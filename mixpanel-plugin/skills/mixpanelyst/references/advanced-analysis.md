@@ -1037,6 +1037,29 @@ _For multi-panel dashboards combining all four engines, see [cross-query-synthes
 
 _scikit-learn moves analytics from descriptive ("what happened") to predictive ("what will happen") and segmentation-driven ("what user groups exist"). These patterns operate on DataFrames from any query engine._
 
+**Pre-flight: verify profile properties before building models.** The examples below assume properties like `logins_30d`, `purchases_30d`, and `features_used` exist on user profiles. These are typically set via scheduled scripts, computed properties, or backend `$set` calls. If your profiles lack behavioral counters, you can derive features from dates and metadata -- but check coverage first:
+
+```python
+# Audit profile property coverage before modeling
+import itertools
+sample = list(itertools.islice(ws.stream_profiles(), 100))
+props_df = pd.DataFrame([p.get("properties", {}) for p in sample])
+
+# Check desired features
+for feat in ["logins_30d", "purchases_30d", "days_since_signup"]:
+    if feat not in props_df.columns:
+        print(f"  {feat}: MISSING — not set on any profile")
+    else:
+        coverage = props_df[feat].notna().mean()
+        print(f"  {feat}: {coverage:.0%} coverage")
+
+# If features are missing, derive from dates:
+#   days_since_signup = (today - date_joined).days
+#   days_since_last_login = (today - last_login).days
+#   login_recency_ratio = days_since_last_login / days_since_signup
+# Rule of thumb: features with <20% non-null coverage add noise, not signal.
+```
+
 ### Behavioral Clustering — Automatic User Segmentation
 
 Build user feature vectors from multiple queries, then cluster to discover natural segments. More objective than hand-defined cohorts.
@@ -1187,6 +1210,17 @@ for feat, imp in importance.head(10).items():
 # Cross-validated accuracy (honest estimate — never report training accuracy alone)
 cv_scores = cross_val_score(rf, X, y, cv=5, scoring="accuracy")
 print(f"\nCV accuracy: {cv_scores.mean():.1%} +/- {cv_scores.std():.1%}")
+
+# RED FLAG: near-perfect accuracy usually means leakage, not a great model.
+if cv_scores.mean() > 0.95:
+    print(f"\n⚠ CV accuracy {cv_scores.mean():.1%} is suspiciously high — investigate:")
+    print("  - Does a feature encode the target? (e.g., purchase_count predicting has_purchased)")
+    print("  - Are there complementary fields? (e.g., CRM lead vs contact status)")
+    print("  - Is class imbalance inflating accuracy? Check AUC instead.")
+
+# Cross-validated AUC (better than accuracy for imbalanced classes)
+cv_auc = cross_val_score(rf, X, y, cv=5, scoring="roc_auc")
+print(f"CV AUC: {cv_auc.mean():.3f} +/- {cv_auc.std():.3f}")
 ```
 
 ### Predictive Scoring — Churn Probability
@@ -1233,6 +1267,13 @@ y = df["churned"]
 cv_pipeline = make_pipeline(StandardScaler(), LogisticRegression(random_state=42, max_iter=1000))
 cv_scores = cross_val_score(cv_pipeline, X, y, cv=5, scoring="roc_auc")
 print(f"Cross-validated AUC: {cv_scores.mean():.3f} +/- {cv_scores.std():.3f}")
+
+# RED FLAG: AUC near 1.0 almost always means leakage, not a perfect model.
+# Real-world churn models typically achieve AUC 0.65–0.80.
+if cv_scores.mean() > 0.95:
+    print(f"\n⚠ AUC={cv_scores.mean():.3f} is suspiciously high — investigate before trusting.")
+    print("  Common causes: target leaked into features, complementary CRM fields,")
+    print("  or observation/prediction windows overlap (see target leakage note above).")
 
 # Train final model on full data and score all users
 scaler = StandardScaler()
@@ -1294,6 +1335,16 @@ print("Saved: user_behavior_pca.png")
 
 _statsmodels adds proper time series modeling, forecasting, and regression diagnostics beyond what scipy provides. These patterns turn Mixpanel trends into forward-looking predictions._
 
+**Data Preparation: Drop Today's Incomplete Data.** Queries using `last=N` include the current (incomplete) day. A half-finished day looks like a sudden crash to time-series models -- ARIMA forecasts a decline, decomposition shows a false anomaly, and regression slopes get pulled toward zero. Always drop today before modeling:
+
+```python
+import datetime
+today = pd.Timestamp(datetime.date.today())
+counts = counts[counts.index < today]
+```
+
+The examples below assume you have already excluded the current day.
+
 ### Time Series Decomposition (Trend + Seasonality + Residual)
 
 Replaces hand-rolled decomposition with a proper statistical method. Handles multiplicative and additive seasonal patterns.
@@ -1336,16 +1387,16 @@ plt.savefig("dau_decomposition.png", dpi=150)
 print("Saved: dau_decomposition.png")
 ```
 
-### ARIMA Forecasting — "What Will DAU Be Next Week?"
+### Forecasting with ARIMA / SARIMAX
 
-Use auto-fit ARIMA for short-term metric forecasting.
+Daily product metrics almost always have weekly seasonality (weekday/weekend patterns). Use SARIMAX as the default; fall back to plain ARIMA only if decomposition confirms no seasonal pattern.
 
 ```python
 import mixpanel_data as mp
 import pandas as pd
 import numpy as np
 import warnings
-from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 ws = mp.Workspace()
 
@@ -1354,18 +1405,27 @@ counts = dau.set_index("date")["count"]
 counts.index = pd.to_datetime(counts.index)
 counts = counts.asfreq("D", method="ffill")
 
-# Fit ARIMA(1,1,1) — good default for daily metrics
-model = ARIMA(counts, order=(1, 1, 1))
+# Drop today's incomplete data (see Data Preparation note above)
+import datetime
+today = pd.Timestamp(datetime.date.today())
+counts = counts[counts.index < today]
+
+# SARIMAX with weekly seasonality — the right default for daily metrics
+model = SARIMAX(counts, order=(1, 1, 1), seasonal_order=(1, 1, 1, 7))
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=UserWarning, module="statsmodels")
-    fitted = model.fit()
+    fitted = model.fit(disp=False)
 
 # Forecast 14 days ahead
 forecast = fitted.get_forecast(steps=14)
 fc_mean = forecast.predicted_mean
 fc_ci = forecast.conf_int(alpha=0.05)
 
-print("=== 14-Day DAU Forecast ===")
+# Non-negative metrics cannot go below zero — clip forecasts
+fc_mean = fc_mean.clip(lower=0)
+fc_ci = fc_ci.clip(lower=0)
+
+print("=== 14-Day DAU Forecast (SARIMAX) ===")
 print(f"Current DAU (last 7d avg): {counts.tail(7).mean():,.0f}")
 print(f"Forecast DAU (next 7d avg): {fc_mean.head(7).mean():,.0f}")
 print(f"Forecast DAU (next 14d avg): {fc_mean.mean():,.0f}")
@@ -1378,17 +1438,29 @@ for date, mean in fc_mean.items():
 # Model diagnostics
 print(f"\nModel AIC: {fitted.aic:.1f}")
 print(f"Model BIC: {fitted.bic:.1f}")
+
+# Is this forecast actionable? If the CI is wider than the forecast,
+# the prediction is too uncertain to act on — report that honestly.
+avg_ci_width = (fc_ci.iloc[:, 1] - fc_ci.iloc[:, 0]).mean()
+if avg_ci_width > fc_mean.mean():
+    print(f"\n⚠ Average CI width ({avg_ci_width:,.0f}) exceeds forecast mean ({fc_mean.mean():,.0f}).")
+    print("  This forecast is too uncertain to be actionable. Consider:")
+    print("  - More historical data (last=180 instead of last=90)")
+    print("  - Shorter forecast horizon (7 days instead of 14)")
+    print("  - The metric may be too volatile to forecast reliably.")
 ```
 
-**Choosing ARIMA order**: For daily product metrics, start with (1,1,1). If data has weekly seasonality, consider SARIMAX with `seasonal_order=(1,1,1,7)`.
+**Non-seasonal alternative**: If decomposition shows no weekly pattern, use plain ARIMA. Do not assume (1,1,1) is a universal default -- treat it as a starting point.
 
 ```python
-from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.arima.model import ARIMA
 
-# SARIMAX with weekly seasonality
-model = SARIMAX(counts, order=(1, 1, 1), seasonal_order=(1, 1, 1, 7))
-fitted = model.fit(disp=False)
+# Plain ARIMA — only when data has no seasonal pattern
+model = ARIMA(counts, order=(1, 1, 1))
+fitted = model.fit()
 forecast = fitted.get_forecast(steps=14)
+# Still clip for non-negative metrics:
+fc_mean = forecast.predicted_mean.clip(lower=0)
 ```
 
 ### OLS Regression with Full Diagnostics
@@ -1434,6 +1506,24 @@ print(f"Search volume explains {r2:.1%} of revenue variance")
 print(f"Relationship is {'statistically significant' if p_val < 0.05 else 'not significant'} (p={p_val:.4f})")
 ```
 
+**When diagnostics flag issues.** If Durbin-Watson is well below 2.0 or Ljung-Box is significant, the regression may be **spurious** -- both variables share a common cycle (e.g., weekday/weekend), creating a false relationship. The R² looks impressive but is inflated.
+
+Before trusting the result, try first-differencing to remove shared trends:
+
+```python
+# Remedy: regress daily *changes* instead of levels
+daily_diff = daily.diff().dropna()
+X_diff = sm.add_constant(daily_diff["searches"])
+model_diff = sm.OLS(daily_diff["revenue"], X_diff).fit()
+
+print(f"First-differenced R²: {model_diff.rsquared:.3f}")
+print(f"First-differenced DW: {sm.stats.stattools.durbin_watson(model_diff.resid):.3f}")
+# If R² drops sharply (e.g., 0.95 → 0.05), the original relationship
+# was likely spurious — driven by shared trends, not a real connection.
+# A modest R² with healthy diagnostics is more trustworthy than a
+# high R² with autocorrelated residuals.
+```
+
 ### Multiple Regression — Multi-Factor Analysis
 
 Test multiple predictors simultaneously to identify which factors independently drive a metric.
@@ -1468,6 +1558,28 @@ print(f"  R-squared: {model.rsquared:.3f} (adjusted: {model.rsquared_adj:.3f})")
 print(f"  F-statistic p-value: {model.f_pvalue:.4f}")
 ```
 
+**Check for multicollinearity with VIF.** When predictors are correlated (e.g., signups and searches both track overall traffic), coefficients become unreliable even if R² looks good.
+
+```python
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# VIF for each predictor (exclude the constant)
+X_check = daily[["signups", "searches", "support_tickets"]]
+for i, col in enumerate(X_check.columns):
+    vif = variance_inflation_factor(X_check.values, i)
+    flag = " — WARNING: too high, coefficients unreliable" if vif > 10 else ""
+    print(f"  {col:20s}: VIF={vif:.1f}{flag}")
+
+# VIF > 10 means predictors share too much variance. Options:
+#   1. Drop one of the correlated predictors
+#   2. Combine them (e.g., signups + searches → "traffic index")
+#   3. Use PCA to extract orthogonal components
+#   4. If you only care about R² (prediction), not coefficients
+#      (explanation), high VIF doesn't matter
+# NOTE: Daily product metrics almost always have high VIF because
+# they share weekday/weekend patterns. This is expected, not a bug.
+```
+
 ### Granger Causality — Does Event A Cause Metric B to Change?
 
 Test whether one time series helps predict another (beyond just correlation).
@@ -1475,6 +1587,7 @@ Test whether one time series helps predict another (beyond just correlation).
 ```python
 import mixpanel_data as mp
 import pandas as pd
+import warnings
 from statsmodels.tsa.stattools import grangercausalitytests
 
 ws = mp.Workspace()
@@ -1490,7 +1603,9 @@ daily = pd.DataFrame({
 
 # Test up to 7-day lags
 print("=== Granger Causality: Campaign Impressions → Signups ===")
-results = grangercausalitytests(daily[["signups", "campaigns"]], maxlag=7, verbose=False)
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", FutureWarning)
+    results = grangercausalitytests(daily[["signups", "campaigns"]], maxlag=7, verbose=False)
 for lag, result in results.items():
     f_stat = result[0]["ssr_ftest"][0]
     p_value = result[0]["ssr_ftest"][1]
@@ -1549,27 +1664,71 @@ else:
     else:
         print(f"\nHalf-life: <{buckets[0]} day(s)")
 
-# Exponential decay fit for long-term projection
+# Retention curve fit — shifted exponential: a*exp(-b*t) + c
+# 'c' captures the "retained core" — users who stick around indefinitely.
+# Pure exponential (c=0) forces retention toward zero, which almost never
+# matches real product data. The shifted form typically fits dramatically
+# better (e.g., R²=0.99 vs R²=0.95 for pure exponential).
 from scipy.optimize import curve_fit
 
-def exp_decay(t, a, b):
-    return a * np.exp(-b * np.array(t))
+def shifted_exp_decay(t, a, b, c):
+    """Shifted exponential: decays toward c (the retained core), not zero."""
+    return a * np.exp(-b * np.array(t)) + c
 
 try:
-    popt, pcov = curve_fit(exp_decay, buckets, avg_rates, p0=[1.0, 0.01], maxfev=5000)
-    a, b = popt
+    popt, pcov = curve_fit(shifted_exp_decay, buckets, avg_rates,
+                           p0=[0.5, 0.05, 0.05], maxfev=5000)
+    a, b, c = popt
+    print(f"\nShifted exponential: retention = {a:.2f} * exp(-{b:.4f} * t) + {c:.2f}")
+    print(f"  Retained core (long-term floor): {c:.1%}")
+    if b > 0:
+        print(f"  Decay half-life: {np.log(2)/b:.0f} days (for the non-core portion)")
+
+    # Goodness of fit
+    predicted = shifted_exp_decay(np.array(buckets), *popt)
+    ss_res = np.sum((np.array(avg_rates) - predicted) ** 2)
+    ss_tot = np.sum((np.array(avg_rates) - np.mean(avg_rates)) ** 2)
+    r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
+    print(f"  R²: {r_squared:.4f}")
+
     projected_days = [120, 180, 365]
-    print(f"\nExponential decay fit: retention = {a:.2f} * exp(-{b:.4f} * t)")
     for d in projected_days:
-        projected_rate = exp_decay(d, a, b)
+        projected_rate = shifted_exp_decay(d, *popt)
         print(f"  Projected D{d}: {projected_rate:.1%}")
+
 except RuntimeError:
-    print("\nExponential fit did not converge — retention curve may not follow exponential decay")
+    print("\nShifted exponential did not converge — try pure exponential (less accurate):")
+    def pure_exp_decay(t, a, b):
+        return a * np.exp(-b * np.array(t))
+    try:
+        popt, _ = curve_fit(pure_exp_decay, buckets, avg_rates, p0=[1.0, 0.01], maxfev=5000)
+        a, b = popt
+        print(f"  retention = {a:.2f} * exp(-{b:.4f} * t)")
+        print(f"  NOTE: pure exponential assumes retention decays to zero.")
+        print(f"  If your retention plateaus above zero, projections will underestimate.")
+        for d in [120, 180, 365]:
+            print(f"  Projected D{d}: {pure_exp_decay(d, *popt):.1%}")
+    except RuntimeError:
+        print("  Neither model converged — retention may not follow exponential decay")
 ```
 
 ### Retention Curve Comparison Between Segments
 
 Compare retention curves between segments and test for statistical significance.
+
+**Pre-flight: verify the segmenting property has enough diversity.** If the property you're splitting on (e.g., `utm_medium`) has only one value, or one segment has near-zero users, the comparison is meaningless -- it will produce trivially significant results. Always check first:
+
+```python
+# Verify segment property has meaningful diversity before comparing
+values = ws.property_values("utm_medium", event="Sign Up")
+if len(values) < 2:
+    print(f"WARNING: property has only {len(values)} value(s): {values}")
+    print("Cannot perform meaningful segment comparison — try a different property.")
+elif len(values) == 2:
+    print(f"Two segments found: {values} — proceeding with comparison.")
+else:
+    print(f"{len(values)} segments found: {values[:5]}... — pick the two most relevant.")
+```
 
 ```python
 import mixpanel_data as mp
@@ -1647,6 +1806,9 @@ if len(organic_rates) >= 3 and len(paid_rates) >= 3:
 - **ARIMA convergence**: If ARIMA fails to converge, try a simpler order (0,1,1) or increase `maxiter`. Scope warning suppression with `warnings.catch_warnings()` — never use global `filterwarnings("ignore")`.
 - **Feature importance is correlation, not causation**: Random Forest importance shows predictive power, not causal relationships. Use Granger causality or domain knowledge for causal claims.
 - **Cross-validate predictions**: Never report model accuracy on training data alone. Use `cross_val_score()` for honest estimates.
+- **Drop today before time-series modeling**: `last=N` includes the current incomplete day. A half-finished day looks like a sudden drop, poisoning forecasts and trend estimates. Always filter to `counts[counts.index < today]` before fitting models.
+- **Suspect perfect scores**: AUC=1.0 or accuracy=100% almost always indicates data leakage or a trivial relationship (e.g., complementary CRM fields), not a great model. An AUC of 0.65-0.80 is typical for real-world churn/conversion models. Investigate before celebrating.
+- **Retention decays to a floor, not zero**: Pure exponential decay `a*exp(-b*t)` assumes all users eventually churn. Real products have a "retained core." Use `a*exp(-b*t)+c` (shifted exponential) -- the `c` parameter estimates the long-term retention floor.
 - **scipy is optional**: Statistical functions require `pip install scipy`. Check availability before using.
 - **seaborn is optional**: Heatmaps and styled plots require `pip install seaborn`.
 - **anytree is optional**: Tree rendering and export require `pip install anytree`.
