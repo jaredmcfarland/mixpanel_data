@@ -99,6 +99,7 @@ from mixpanel_data.exceptions import (
     MixpanelDataError,
     QueryError,
     RateLimitError,
+    ServerError,
     ValidationError,
 )
 from mixpanel_data.types import (
@@ -8769,15 +8770,44 @@ class Workspace:
             # Structure: [{"cohort": {"id": N, "negated": bool, "name": str}}]
             raw_value = cohort_from_filter._value
             if not isinstance(raw_value, list) or len(raw_value) == 0:
-                raise ValueError(
-                    "Expected non-empty list from Filter.in_cohort() value, "
-                    f"got {type(raw_value).__name__}"
+                raise BookmarkValidationError(
+                    errors=[
+                        ValidationError(
+                            path="where",
+                            message=(
+                                "Expected non-empty list from Filter.in_cohort() "
+                                f"value, got {type(raw_value).__name__}"
+                            ),
+                            code="U_COHORT",
+                        )
+                    ]
                 )
             first_item = raw_value[0]
             if not isinstance(first_item, dict):
-                raise ValueError(
-                    "Expected dict in Filter.in_cohort() value, "
-                    f"got {type(first_item).__name__}"
+                raise BookmarkValidationError(
+                    errors=[
+                        ValidationError(
+                            path="where",
+                            message=(
+                                "Expected dict in Filter.in_cohort() value, "
+                                f"got {type(first_item).__name__}"
+                            ),
+                            code="U_COHORT",
+                        )
+                    ]
+                )
+            if "cohort" not in first_item:
+                raise BookmarkValidationError(
+                    errors=[
+                        ValidationError(
+                            path="where",
+                            message=(
+                                "Filter.in_cohort() value missing 'cohort' "
+                                f"key: {first_item!r}"
+                            ),
+                            code="U_COHORT",
+                        )
+                    ]
                 )
             cohort_wrapper: dict[str, Any] = first_item["cohort"]
             if "id" in cohort_wrapper:
@@ -8787,9 +8817,17 @@ class Workspace:
                     {"raw_cohort": cohort_wrapper["raw_cohort"]}
                 )
             else:
-                raise ValueError(
-                    "Filter.in_cohort() value has no 'id' or 'raw_cohort' key: "
-                    f"{cohort_wrapper!r}"
+                raise BookmarkValidationError(
+                    errors=[
+                        ValidationError(
+                            path="where",
+                            message=(
+                                "Filter.in_cohort() value has no 'id' or "
+                                f"'raw_cohort' key: {cohort_wrapper!r}"
+                            ),
+                            code="U_COHORT",
+                        )
+                    ]
                 )
 
         # --- properties → output_properties ---
@@ -8905,15 +8943,14 @@ class Workspace:
             )
             ```
         """
-        from datetime import datetime, timezone
-
         api_client = self._require_api_client()
 
         # Reuse _build_page_kwargs for params→kwargs translation.
         # Pass limit server-side for efficient fetching.
-        # The API's total field equals len(profiles) — the number of
-        # profiles returned, not the full population. Use
-        # mode="aggregate", aggregate="count" for the full count.
+        # We return len(profiles) as total — the count of profiles in
+        # this response, not the API's total field (which reflects
+        # the full matching population). Use mode="aggregate",
+        # aggregate="count" for the full count.
         api_kwargs = self._build_page_kwargs(params)
         api_kwargs["limit"] = limit
 
@@ -9328,6 +9365,22 @@ class Workspace:
 
         Returns:
             Tuple of (profiles, total, computed_at, meta).
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: API rate limit exceeded (429).
+            ServerError: Mixpanel server error (5xx).
+            QueryError: Query execution failed (400).
+
+        Example:
+            ```python
+            profiles, total, ts, meta = ws._execute_user_query_parallel(
+                params={"where": 'properties["plan"] == "premium"'},
+                limit=5000,
+                workers=3,
+            )
+            ```
         """
         api_client = self._require_api_client()
         capped_workers = min(workers, 5)
@@ -9395,7 +9448,12 @@ class Workspace:
                 try:
                     pnum, profiles = future.result()
                     page_results[pnum] = profiles
-                except (AuthenticationError, RateLimitError):
+                except (
+                    AuthenticationError,
+                    RateLimitError,
+                    ServerError,
+                    QueryError,
+                ):
                     for f in futures:
                         f.cancel()
                     raise
@@ -9436,6 +9494,12 @@ class Workspace:
 
         Returns:
             Keyword arguments for ``export_profiles_page()``.
+
+        Example:
+            ```python
+            kwargs = ws._build_page_kwargs({"where": 'properties["x"] == 1'})
+            # {"where": 'properties["x"] == 1'}
+            ```
         """
         kwargs: dict[str, Any] = {}
         if "where" in params:

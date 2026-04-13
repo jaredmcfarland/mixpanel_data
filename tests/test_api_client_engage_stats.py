@@ -20,6 +20,7 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import Credentials
+from mixpanel_data.exceptions import QueryError
 
 # =============================================================================
 # Helpers
@@ -414,6 +415,21 @@ class TestEngageStats:
         assert captured_body.get("data_group_id") == "companies"
         assert captured_body.get("as_of_timestamp") == 1700000000
         assert captured_body.get("include_all_users") is True
+
+    def test_non_dict_response_raises_query_error(
+        self, test_credentials: Credentials
+    ) -> None:
+        """engage_stats() raises QueryError when the API returns a non-dict response."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            """Return a JSON list instead of a dict."""
+            return httpx.Response(200, json=[1, 2, 3])
+
+        with (
+            _create_mock_client(test_credentials, handler) as client,
+            pytest.raises(QueryError, match="unexpected response type"),
+        ):
+            client.engage_stats()
 
 
 # =============================================================================

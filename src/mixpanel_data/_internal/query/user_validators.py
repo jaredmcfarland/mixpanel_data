@@ -79,7 +79,7 @@ def validate_user_args(
 ) -> list[ValidationError]:
     """Validate query_user() arguments before engage param construction.
 
-    Implements rules U1-U28. Returns all errors found in a single pass,
+    Implements rules U0-U28 (U9 enforced at call site). Returns all errors found in a single pass,
     enabling callers to fix multiple issues at once.
 
     Args:
@@ -97,7 +97,7 @@ def validate_user_args(
         mode: Output mode.
         aggregate: Aggregation function.
         aggregate_property: Property to aggregate on.
-        percentile: Percentile value (0-100). Required when
+        percentile: Percentile value (0-100, exclusive). Required when
             ``aggregate="percentile"``.
         segment_by: Cohort IDs for segmented aggregation.
         parallel: Enable concurrent fetching.
@@ -230,7 +230,7 @@ def validate_user_args(
             )
         )
 
-    # U9: Skipped — where type is enforced by Python typing
+    # U9: Enforced at runtime in _resolve_and_build_user_params (type guard)
 
     # U10: Filter property names must be non-empty
     for i, f in enumerate(filters):

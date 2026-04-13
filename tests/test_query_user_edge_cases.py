@@ -601,16 +601,16 @@ class TestTier1DataCorruption:
 class TestTier2CrashPaths:
     """Tests for code paths that crash with unhelpful errors."""
 
-    def test_t2_01_cohort_extraction_keyerror_on_malformed_filter_value(
+    def test_t2_01_cohort_extraction_raises_validation_error_on_malformed_filter(
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """Malformed cohort filter value causes KeyError during extraction.
+        """Malformed cohort filter value raises BookmarkValidationError.
 
         When a Filter passes ``_is_cohort_filter`` (value is a list of
         dicts) but the dict is missing the ``"cohort"`` key, the
-        extraction at workspace.py:8751 crashes with ``KeyError``
-        instead of a validation error.
+        extraction raises ``BookmarkValidationError`` with code
+        ``U_COHORT``.
         """
         # Construct a Filter that passes _is_cohort_filter but has
         # wrong internal structure
@@ -623,8 +623,9 @@ class TestTier2CrashPaths:
 
         ws = workspace_factory()
         try:
-            with pytest.raises(KeyError, match="cohort"):
+            with pytest.raises(BookmarkValidationError) as exc_info:
                 ws.build_user_params(where=malformed_filter)
+            assert any(e.code == "U_COHORT" for e in exc_info.value.errors)
         finally:
             ws.close()
 

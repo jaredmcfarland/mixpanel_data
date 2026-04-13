@@ -16,7 +16,11 @@ Functions:
 
 from __future__ import annotations
 
+import logging
+
 from mixpanel_data.types import Filter
+
+logger = logging.getLogger(__name__)
 
 
 def _format_value(value: str | int | float) -> str:
@@ -114,6 +118,13 @@ def filter_to_selector(f: Filter) -> str:
             for v in value
             if isinstance(v, (str, int, float))
         ]
+        dropped = [v for v in value if not isinstance(v, (str, int, float))]
+        if dropped:
+            logger.warning(
+                "Filter.equals() dropped %d non-scalar value(s): %r",
+                len(dropped),
+                dropped,
+            )
         if not parts:
             raise ValueError(
                 f"Filter.equals() produced no valid selector terms. "
@@ -133,6 +144,13 @@ def filter_to_selector(f: Filter) -> str:
             for v in value
             if isinstance(v, (str, int, float))
         ]
+        dropped = [v for v in value if not isinstance(v, (str, int, float))]
+        if dropped:
+            logger.warning(
+                "Filter.not_equals() dropped %d non-scalar value(s): %r",
+                len(dropped),
+                dropped,
+            )
         if not parts:
             raise ValueError(
                 f"Filter.not_equals() produced no valid selector terms. "
@@ -267,6 +285,10 @@ def extract_cohort_filter(
             else:
                 # U13 guarantees at most one cohort filter; extra
                 # cohorts stay in remaining as a defensive measure
+                logger.warning(
+                    "Multiple cohort filters found; first used as cohort, "
+                    "extras moved to remaining filters"
+                )
                 remaining.append(f)
         else:
             remaining.append(f)

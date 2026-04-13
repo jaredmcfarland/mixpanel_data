@@ -27,7 +27,13 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data.exceptions import BookmarkValidationError
+from mixpanel_data.exceptions import (
+    AuthenticationError,
+    BookmarkValidationError,
+    QueryError,
+    RateLimitError,
+    ServerError,
+)
 from mixpanel_data.types import ProfilePageResult, UserQueryResult
 
 if TYPE_CHECKING:
@@ -1281,5 +1287,148 @@ class TestParallelResultStructure:
 
             profile_ids = [p["distinct_id"] for p in result.profiles]
             assert result.distinct_ids == profile_ids
+        finally:
+            ws.close()
+
+
+# =============================================================================
+# Test: Systemic exceptions propagate immediately from parallel execution
+# =============================================================================
+
+
+class TestParallelErrorPropagation:
+    """Tests that systemic exceptions propagate immediately from parallel fetch.
+
+    The parallel path re-raises AuthenticationError, RateLimitError,
+    ServerError, and QueryError instead of silently catching them as
+    transient per-page failures. This ensures callers see the real error
+    rather than receiving partial results with failed_pages metadata.
+    """
+
+    def test_authentication_error_propagates(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """AuthenticationError on page 1 propagates instead of being caught.
+
+        Args:
+            self: Test instance.
+            workspace_factory: Factory for creating Workspace with mocked deps.
+            mock_api_client: Mocked MixpanelAPIClient instance.
+        """
+        page0 = _make_page_result(
+            profiles=_make_profiles_batch(0, 100),
+            page=0,
+            total=500,
+            page_size=100,
+            session_id="sess_auth",
+            has_more=True,
+        )
+        mock_api_client.export_profiles_page.side_effect = [
+            page0,
+            AuthenticationError(message="bad creds", status_code=401),
+        ]
+
+        ws = workspace_factory()
+        try:
+            with pytest.raises(AuthenticationError, match="bad creds"):
+                ws.query_user(mode="profiles", parallel=True, limit=5000, workers=2)
+        finally:
+            ws.close()
+
+    def test_rate_limit_error_propagates(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """RateLimitError on page 1 propagates instead of being caught.
+
+        Args:
+            self: Test instance.
+            workspace_factory: Factory for creating Workspace with mocked deps.
+            mock_api_client: Mocked MixpanelAPIClient instance.
+        """
+        page0 = _make_page_result(
+            profiles=_make_profiles_batch(0, 100),
+            page=0,
+            total=500,
+            page_size=100,
+            session_id="sess_rate",
+            has_more=True,
+        )
+        mock_api_client.export_profiles_page.side_effect = [
+            page0,
+            RateLimitError(message="throttled", status_code=429),
+        ]
+
+        ws = workspace_factory()
+        try:
+            with pytest.raises(RateLimitError, match="throttled"):
+                ws.query_user(mode="profiles", parallel=True, limit=5000, workers=2)
+        finally:
+            ws.close()
+
+    def test_server_error_propagates(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """ServerError on page 1 propagates instead of being caught.
+
+        Args:
+            self: Test instance.
+            workspace_factory: Factory for creating Workspace with mocked deps.
+            mock_api_client: Mocked MixpanelAPIClient instance.
+        """
+        page0 = _make_page_result(
+            profiles=_make_profiles_batch(0, 100),
+            page=0,
+            total=500,
+            page_size=100,
+            session_id="sess_server",
+            has_more=True,
+        )
+        mock_api_client.export_profiles_page.side_effect = [
+            page0,
+            ServerError(message="server down", status_code=500),
+        ]
+
+        ws = workspace_factory()
+        try:
+            with pytest.raises(ServerError, match="server down"):
+                ws.query_user(mode="profiles", parallel=True, limit=5000, workers=2)
+        finally:
+            ws.close()
+
+    def test_query_error_propagates(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """QueryError on page 1 propagates instead of being caught.
+
+        Args:
+            self: Test instance.
+            workspace_factory: Factory for creating Workspace with mocked deps.
+            mock_api_client: Mocked MixpanelAPIClient instance.
+        """
+        page0 = _make_page_result(
+            profiles=_make_profiles_batch(0, 100),
+            page=0,
+            total=500,
+            page_size=100,
+            session_id="sess_query",
+            has_more=True,
+        )
+        mock_api_client.export_profiles_page.side_effect = [
+            page0,
+            QueryError(message="bad query", status_code=400),
+        ]
+
+        ws = workspace_factory()
+        try:
+            with pytest.raises(QueryError, match="bad query"):
+                ws.query_user(mode="profiles", parallel=True, limit=5000, workers=2)
         finally:
             ws.close()

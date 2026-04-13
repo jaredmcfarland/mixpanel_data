@@ -10683,7 +10683,7 @@ class UserQueryResult(ResultWithDataFrame):
     """Engage API params used for the query (for debugging)."""
 
     meta: dict[str, Any] = field(default_factory=dict)
-    """Execution metadata (timing, sampling, etc.)."""
+    """Execution metadata (pagination, parallelism, or aggregation details)."""
 
     mode: Literal["profiles", "aggregate"] = "aggregate"
     """Output mode — ``"profiles"`` or ``"aggregate"``."""

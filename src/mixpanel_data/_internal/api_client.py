@@ -1536,8 +1536,10 @@ class MixpanelAPIClient:
 
         Args:
             where: Filter expression (e.g., 'properties["plan"] == "premium"').
-            action: Aggregation expression. Defaults to "count()". Examples:
-                "sum(properties['revenue'])", "mean(properties['age'])".
+            action: Aggregation expression. Defaults to ``"count()"``.
+                Supported: ``'extremes(properties["name"])'``,
+                ``'percentile(properties["name"], N)'``,
+                ``'numeric_summary(properties["name"])'``.
             filter_by_cohort: Pre-encoded JSON cohort filter string.
                 Supports both ``{"id": N}`` and ``{"raw_cohort": {...}}``
                 formats.
@@ -1561,10 +1563,10 @@ class MixpanelAPIClient:
             # Count all profiles
             stats = client.engage_stats()
 
-            # Sum revenue for premium users
+            # Revenue extremes for premium users
             stats = client.engage_stats(
                 where='properties["plan"] == "premium"',
-                action="sum(properties['revenue'])",
+                action='extremes(properties["revenue"])',
             )
 
             # Count profiles in a cohort
@@ -1597,12 +1599,14 @@ class MixpanelAPIClient:
 
         response = self._request("POST", url, data=params)
         if not isinstance(response, dict):
-            logger.warning(
-                "engage_stats returned unexpected response type %s: %r",
-                type(response).__name__,
-                response,
+            raise QueryError(
+                message=(
+                    f"engage_stats returned unexpected response type "
+                    f"{type(response).__name__}: {response!r}"
+                ),
+                status_code=200,
+                response_body=str(response),
             )
-            return {"results": response}
         return response
 
     # =========================================================================
