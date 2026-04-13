@@ -263,12 +263,18 @@ class TestCohortRouting:
         assert isinstance(fbc["raw_cohort"], dict)
 
     def test_cohort_definition_includes_to_dict_output(self, ws: Workspace) -> None:
-        """CohortDefinition's raw_cohort value matches to_dict() output."""
+        """CohortDefinition's raw_cohort value matches sanitized to_dict().
+
+        The workspace sanitizes inline cohorts via ``_sanitize_raw_cohort()``
+        to remove ``selector: None`` entries that crash the Mixpanel API.
+        """
+        from mixpanel_data.types import _sanitize_raw_cohort
+
         defn = CohortDefinition.all_of(
             CohortCriteria.has_property("plan", "premium"),
             CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
         )
-        expected = defn.to_dict()
+        expected = _sanitize_raw_cohort(defn.to_dict())
         params = ws.build_user_params(cohort=defn)
         fbc = params["filter_by_cohort"]
         if isinstance(fbc, str):

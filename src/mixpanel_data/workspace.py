@@ -8740,7 +8740,7 @@ class Workspace:
                 params["filter_by_cohort"] = json.dumps({"id": cohort})
             elif isinstance(cohort, CohortDefinition):
                 params["filter_by_cohort"] = json.dumps(
-                    {"raw_cohort": cohort.to_dict()}
+                    {"raw_cohort": _sanitize_raw_cohort(cohort.to_dict())}
                 )
         elif cohort_from_filter is not None:
             # Extract cohort ID from the Filter.in_cohort() value
@@ -8758,8 +8758,17 @@ class Workspace:
                     f"got {type(first_item).__name__}"
                 )
             cohort_wrapper: dict[str, Any] = first_item["cohort"]
-            extracted_id: int = cohort_wrapper["id"]
-            params["filter_by_cohort"] = json.dumps({"id": extracted_id})
+            if "id" in cohort_wrapper:
+                params["filter_by_cohort"] = json.dumps({"id": cohort_wrapper["id"]})
+            elif "raw_cohort" in cohort_wrapper:
+                params["filter_by_cohort"] = json.dumps(
+                    {"raw_cohort": cohort_wrapper["raw_cohort"]}
+                )
+            else:
+                raise ValueError(
+                    "Filter.in_cohort() value has no 'id' or 'raw_cohort' key: "
+                    f"{cohort_wrapper!r}"
+                )
 
         # --- properties → output_properties ---
         if properties is not None:
@@ -9288,7 +9297,9 @@ class Workspace:
         if limit is None:
             pages_needed = math.ceil(total / page_size)
         else:
-            pages_needed = math.ceil(limit / page_size)
+            # Cap by total to avoid fetching empty pages when limit > total
+            effective = min(limit, total) if total > 0 else limit
+            pages_needed = math.ceil(effective / page_size)
 
         # Single page — skip parallel overhead
         if pages_needed <= 1 or not page0.has_more:
