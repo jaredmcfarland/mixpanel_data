@@ -338,7 +338,7 @@ class TestEngageStats:
         assert captured_body.get("include_all_users") is not True
 
     def test_include_all_users_true(self, test_credentials: Credentials) -> None:
-        """engage_stats() should send include_all_users=True when set."""
+        """engage_stats() should send include_all_users when cohort filter present."""
         captured_body: dict[str, Any] = {}
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -348,7 +348,10 @@ class TestEngageStats:
             return httpx.Response(200, json={"results": [], "total": 0})
 
         with _create_mock_client(test_credentials, handler) as client:
-            client.engage_stats(include_all_users=True)
+            client.engage_stats(
+                filter_by_cohort='{"id": 42}',
+                include_all_users=True,
+            )
 
         assert captured_body.get("include_all_users") is True
 

@@ -53,7 +53,7 @@ src/mixpanel_data/
 │   │   └── client_registration.py  # Dynamic Client Registration (RFC 7591)
 │   ├── query/               # Query engine builders and validators
 │   │   ├── user_builders.py       # Filter→selector translation for Engage API
-│   │   └── user_validators.py     # Validation rules U1-U24, UP1-UP4
+│   │   └── user_validators.py     # Validation rules U1-U25, UP1-UP4
 │   └── services/            # Discovery, LiveQuery services
 └── cli/
     ├── main.py              # Typer app entry point

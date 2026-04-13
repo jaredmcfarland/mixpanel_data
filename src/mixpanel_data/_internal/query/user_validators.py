@@ -3,7 +3,7 @@
 Two validation functions following the two-layer pattern:
 
 - ``validate_user_args()``: Validates Python-level arguments before
-  engage param construction (Layer 1, rules U1-U24).
+  engage param construction (Layer 1, rules U1-U25).
 - ``validate_user_params()``: Validates the engage params dict after
   construction (Layer 2, rules UP1-UP4).
 
@@ -71,7 +71,7 @@ def validate_user_args(
 ) -> list[ValidationError]:
     """Validate query_user() arguments before engage param construction.
 
-    Implements rules U1-U24. Returns all errors found in a single pass,
+    Implements rules U1-U25. Returns all errors found in a single pass,
     enabling callers to fix multiple issues at once.
 
     Args:
@@ -169,16 +169,13 @@ def validate_user_args(
             )
         )
 
-    # U6: as_of string must be valid YYYY-MM-DD
+    # U6 + U8: as_of string validation (single parse)
     if isinstance(as_of, str):
-        valid_date = False
+        parsed_date: date | None = None
         if _DATE_RE.match(as_of):
-            try:
-                date.fromisoformat(as_of)
-                valid_date = True
-            except ValueError:
-                pass
-        if not valid_date:
+            with contextlib.suppress(ValueError):
+                parsed_date = date.fromisoformat(as_of)
+        if parsed_date is None:
             errors.append(
                 ValidationError(
                     path="as_of",
@@ -186,6 +183,17 @@ def validate_user_args(
                         f"as_of must be a valid YYYY-MM-DD date string (got {as_of!r})"
                     ),
                     code="U6",
+                )
+            )
+        elif parsed_date > date.today():
+            errors.append(
+                ValidationError(
+                    path="as_of",
+                    message=(
+                        f"as_of must not be in the future "
+                        f"(got {as_of}, today is {date.today().isoformat()})"
+                    ),
+                    code="U8",
                 )
             )
 
@@ -198,24 +206,6 @@ def validate_user_args(
                 code="U7",
             )
         )
-
-    # U8: as_of must not be in the future
-    if isinstance(as_of, str) and _DATE_RE.match(as_of):
-        try:
-            parsed = date.fromisoformat(as_of)
-            if parsed > date.today():
-                errors.append(
-                    ValidationError(
-                        path="as_of",
-                        message=(
-                            f"as_of must not be in the future "
-                            f"(got {as_of}, today is {date.today().isoformat()})"
-                        ),
-                        code="U8",
-                    )
-                )
-        except ValueError:
-            pass  # Already caught by U6
 
     # U9: Skipped — where type is enforced by Python typing
 
@@ -453,8 +443,17 @@ def validate_user_params(
     if "filter_by_cohort" in params:
         fbc = params["filter_by_cohort"]
         if isinstance(fbc, str):
-            with contextlib.suppress(json.JSONDecodeError, TypeError):
+            try:
                 fbc = json.loads(fbc)
+            except (json.JSONDecodeError, TypeError) as exc:
+                errors.append(
+                    ValidationError(
+                        path="filter_by_cohort",
+                        message=f"filter_by_cohort is not valid JSON: {exc}",
+                        code="UP2",
+                    )
+                )
+                return errors
         if isinstance(fbc, dict) and "id" not in fbc and "raw_cohort" not in fbc:
             errors.append(
                 ValidationError(

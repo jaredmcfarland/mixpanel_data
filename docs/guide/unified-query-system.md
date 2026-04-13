@@ -610,7 +610,7 @@ result = ws.query(
     where=Filter.not_in_cohort(456, "Bots"),
 )
 
-# Works in all four engines
+# Works in all five engines
 result = ws.query_funnel(
     ["Signup", "Purchase"],
     where=Filter.in_cohort(power_users, name="PU"),
@@ -1146,9 +1146,9 @@ Each has a matching `build_*_params()` that returns the validated params dict wi
 |---|---|---|---|
 | `where=` | `Filter \| list[Filter]` | `None` | All (flows: cohort only) |
 | `group_by=` | `str \| GroupBy \| CohortBreakdown` | `None` | I, F, R |
-| `last=` | `int` | `30` | All |
-| `from_date=` | `str` (YYYY-MM-DD) | `None` | All |
-| `to_date=` | `str` (YYYY-MM-DD) | `None` | All |
+| `last=` | `int` | `30` | I, F, R, Fl |
+| `from_date=` | `str` (YYYY-MM-DD) | `None` | I, F, R, Fl |
+| `to_date=` | `str` (YYYY-MM-DD) | `None` | I, F, R, Fl |
 | `unit=` | `"day" \| "week" \| "month"` | `"day"` | I, F, R |
 | `mode=` | engine-specific | varies | All |
 | `math=` | engine-specific | varies | I, F, R |

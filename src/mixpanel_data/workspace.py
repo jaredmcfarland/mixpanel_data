@@ -91,10 +91,12 @@ from mixpanel_data._literal_types import (
     TimeUnit,
 )
 from mixpanel_data.exceptions import (
+    AuthenticationError,
     BookmarkValidationError,
     ConfigError,
     MixpanelDataError,
     QueryError,
+    RateLimitError,
     ValidationError,
 )
 from mixpanel_data.types import (
@@ -8652,6 +8654,9 @@ class Workspace:
             segment_by: Cohort IDs for segmented aggregation.
             parallel: Whether to enable concurrent page fetching.
             workers: Maximum concurrent workers for parallel fetching.
+            limit: Maximum profiles to return. Defaults to ``1``. Used
+                for argument-level validation (U3); not included in the
+                returned params dict.
             include_all_users: Include non-members in cohort query results.
 
         Returns:
@@ -8659,7 +8664,7 @@ class Workspace:
 
         Raises:
             BookmarkValidationError: If any validation rule fails at
-                either the argument level (U1-U24) or the param level
+                either the argument level (U1-U25) or the param level
                 (UP1-UP4).
 
         Example:
@@ -8721,15 +8726,9 @@ class Workspace:
         cohort_from_filter: Filter | None = None
         if isinstance(where, str):
             params["where"] = where
-        elif isinstance(where, Filter):
-            filters_list = [where]
+        elif isinstance(where, (Filter, list)):
+            filters_list = [where] if isinstance(where, Filter) else where
             remaining, cohort_from_filter = extract_cohort_filter(filters_list)
-            if remaining:
-                selector = filters_to_selector(remaining)
-                if selector:
-                    params["where"] = selector
-        elif isinstance(where, list):
-            remaining, cohort_from_filter = extract_cohort_filter(where)
             if remaining:
                 selector = filters_to_selector(remaining)
                 if selector:
@@ -8747,9 +8746,17 @@ class Workspace:
             # Extract cohort ID from the Filter.in_cohort() value
             # Structure: [{"cohort": {"id": N, "negated": bool, "name": str}}]
             raw_value = cohort_from_filter._value
-            assert isinstance(raw_value, list)
+            if not isinstance(raw_value, list) or len(raw_value) == 0:
+                raise ValueError(
+                    "Expected non-empty list from Filter.in_cohort() value, "
+                    f"got {type(raw_value).__name__}"
+                )
             first_item = raw_value[0]
-            assert isinstance(first_item, dict)
+            if not isinstance(first_item, dict):
+                raise ValueError(
+                    "Expected dict in Filter.in_cohort() value, "
+                    f"got {type(first_item).__name__}"
+                )
             cohort_wrapper: dict[str, Any] = first_item["cohort"]
             extracted_id: int = cohort_wrapper["id"]
             params["filter_by_cohort"] = json.dumps({"id": extracted_id})
@@ -8860,41 +8867,12 @@ class Workspace:
 
         api_client = self._require_api_client()
 
-        # Map params to export_profiles_page kwargs
-        # output_properties in params is JSON string, API wants list
-        output_props: list[str] | None = None
-        if "output_properties" in params:
-            raw_output = params["output_properties"]
-            if isinstance(raw_output, str):
-                output_props = json.loads(raw_output)
-            else:
-                output_props = raw_output
-
-        api_kwargs: dict[str, Any] = {
-            "where": params.get("where"),
-            "output_properties": output_props,
-            "sort_key": params.get("sort_key"),
-            "sort_order": params.get("sort_order"),
-            "search": params.get("search"),
-            "filter_by_cohort": params.get("filter_by_cohort"),
-            "group_id": params.get("data_group_id"),
-            "as_of_timestamp": params.get("as_of_timestamp"),
-            "include_all_users": params.get("include_all_users", False),
-        }
-
+        # Reuse _build_page_kwargs for params→kwargs translation.
         # Pass limit server-side for efficient fetching.
         # The API's total field reflects the server-side limit, not the
         # full population count. Use mode="aggregate" for the full count.
+        api_kwargs = self._build_page_kwargs(params)
         api_kwargs["limit"] = limit
-
-        # Forward distinct_id/distinct_ids for user-targeted lookups
-        if "distinct_id" in params:
-            api_kwargs["distinct_id"] = params["distinct_id"]
-        if "distinct_ids" in params:
-            raw_ids = params["distinct_ids"]
-            api_kwargs["distinct_ids"] = (
-                json.loads(raw_ids) if isinstance(raw_ids, str) else raw_ids
-            )
 
         result = api_client.export_profiles_page(page=0, **api_kwargs)
         profiles: list[dict[str, Any]] = [transform_profile(p) for p in result.profiles]
@@ -9109,6 +9087,7 @@ class Workspace:
         aggregate: Literal["count", "sum", "mean", "min", "max"] = "count",
         aggregate_property: str | None = None,
         segment_by: list[int] | None = None,
+        limit: int | None = 1,
         parallel: bool = False,
         workers: int = 5,
         include_all_users: bool = False,
@@ -9142,17 +9121,25 @@ class Workspace:
             aggregate_property: Property to aggregate on (required for
                 non-count aggregations).
             segment_by: Cohort IDs for segmented aggregation.
+            limit: Maximum profiles to return. Defaults to ``1``. Used
+                for argument-level validation (U3); not included in the
+                returned params dict.
             parallel: Whether to enable concurrent page fetching.
+                Accepted for signature compatibility with ``query_user()``
+                but has no effect on the returned params dict.
             workers: Maximum concurrent workers for parallel fetching.
+                Accepted for signature compatibility with ``query_user()``
+                but has no effect on the returned params dict.
             include_all_users: Include non-members in cohort query results.
 
         Returns:
             Engage API params dict. Does not include pagination params
-            (``page``, ``session_id``), which are added at execution time.
+            (``page``, ``session_id``) or ``limit``, which are added at
+            execution time by ``query_user()``.
 
         Raises:
             BookmarkValidationError: If any validation rule fails at
-                either the argument level (U1-U24) or the param level
+                either the argument level (U1-U25) or the param level
                 (UP1-UP4).
 
         Example:
@@ -9183,6 +9170,7 @@ class Workspace:
             aggregate=aggregate,
             aggregate_property=aggregate_property,
             segment_by=segment_by,
+            limit=limit,
             parallel=parallel,
             workers=workers,
             include_all_users=include_all_users,
@@ -9210,6 +9198,12 @@ class Workspace:
             aggregate_data is the raw result (scalar or dict), total is
             the count, computed_at is the ISO timestamp, and meta has
             execution metadata.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: API rate limit exceeded (429).
+            APIError: Other API communication errors.
         """
         from datetime import datetime, timezone
 
@@ -9342,10 +9336,18 @@ class Workspace:
                 try:
                     pnum, profiles = future.result()
                     page_results[pnum] = profiles
-                except Exception:
+                except (AuthenticationError, RateLimitError):
+                    for f in futures:
+                        f.cancel()
+                    raise
+                except Exception as exc:
                     logger.warning(
-                        "Failed to fetch page %d, continuing with partial results",
+                        "Failed to fetch page %d (%s: %s), "
+                        "continuing with partial results",
                         page_num,
+                        type(exc).__name__,
+                        exc,
+                        exc_info=True,
                     )
                     failed_pages.append(page_num)
 

@@ -123,7 +123,7 @@ All results are returned as `UserQueryResult`, a frozen dataclass with:
 | Property | Type | Description |
 |----------|------|-------------|
 | `.df` | `pd.DataFrame` | Lazy cached DataFrame. Profiles mode: `distinct_id`, `last_seen`, then alphabetical properties (`$` prefix stripped). Aggregate mode: `metric`/`value` columns. |
-| `.total` | `int` | Matching profile count (reflects server-side limit) |
+| `.total` | `int` | Matching profile count as reported by the API (reflects server-side limit; use `mode='aggregate'` for full count) |
 | `.profiles` | `list[dict]` | Normalized profile dicts |
 | `.distinct_ids` | `list[str]` | List of distinct IDs from profiles |
 | `.value` | `int \| float \| None` | Scalar aggregate result (aggregate mode only) |

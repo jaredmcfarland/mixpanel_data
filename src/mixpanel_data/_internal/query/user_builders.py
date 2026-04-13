@@ -111,9 +111,14 @@ def filter_to_selector(f: Filter) -> str:
             for v in value
             if isinstance(v, (str, int, float))
         ]
+        if not parts:
+            raise ValueError(
+                f"Filter.equals() produced no valid selector terms. "
+                f"All values were non-scalar: {value!r}"
+            )
         if len(parts) > 1:
             return f"({' or '.join(parts)})"
-        return parts[0] if parts else ""
+        return parts[0]
 
     if op == "does not equal":
         if not isinstance(value, list):
@@ -125,6 +130,11 @@ def filter_to_selector(f: Filter) -> str:
             for v in value
             if isinstance(v, (str, int, float))
         ]
+        if not parts:
+            raise ValueError(
+                f"Filter.does_not_equal() produced no valid selector terms. "
+                f"All values were non-scalar: {value!r}"
+            )
         return " and ".join(parts)
 
     if op == "contains":
@@ -249,6 +259,8 @@ def extract_cohort_filter(
         if _is_cohort_filter(f):
             if cohort is None:
                 cohort = f
+            else:
+                remaining.append(f)
         else:
             remaining.append(f)
     return remaining, cohort

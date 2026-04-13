@@ -407,9 +407,9 @@ class TestTier1DataCorruption:
         """Accessing distinct_ids raises KeyError when profile lacks key.
 
         The ``distinct_ids`` property uses ``p["distinct_id"]`` (bracket
-        access) rather than ``.get()``, so a missing key raises KeyError
-        instead of returning a default. Documents inconsistency with
-        ``_build_profiles_df`` which uses ``.get()``.
+        access) uses ``.get("distinct_id", "")`` to match
+        ``_build_profiles_df`` behavior. A missing key returns an empty
+        string instead of raising KeyError.
         """
         result = UserQueryResult(
             computed_at="2025-01-01T00:00:00Z",
@@ -426,8 +426,8 @@ class TestTier1DataCorruption:
             mode="profiles",
         )
 
-        with pytest.raises(KeyError, match="distinct_id"):
-            _ = result.distinct_ids
+        ids = result.distinct_ids
+        assert ids == [""]
 
     def test_t1_06_sequential_empty_page_does_not_infinite_loop(
         self,

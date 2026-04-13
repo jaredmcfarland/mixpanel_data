@@ -1531,8 +1531,7 @@ class MixpanelAPIClient:
     ) -> dict[str, Any]:
         """Fetch aggregate statistics from the Engage API.
 
-        POSTs to ``/api/2.0/engage/stats`` (path-based routing via
-        ``filter_type`` URL segment) to retrieve aggregate metrics
+        POSTs to ``/api/2.0/engage/stats`` to retrieve aggregate metrics
         over the user/group population.
 
         Args:
@@ -1592,11 +1591,16 @@ class MixpanelAPIClient:
             params["data_group_id"] = group_id
         if as_of_timestamp is not None:
             params["as_of_timestamp"] = as_of_timestamp
-        if include_all_users:
+        if filter_by_cohort:
             params["include_all_users"] = include_all_users
 
         response = self._request("POST", url, data=params)
         if not isinstance(response, dict):
+            logger.warning(
+                "engage_stats returned unexpected response type %s: %r",
+                type(response).__name__,
+                response,
+            )
             return {"results": response}
         return response
 

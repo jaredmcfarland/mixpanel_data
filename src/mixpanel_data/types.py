@@ -10630,7 +10630,7 @@ class UserQueryResult(ResultWithDataFrame):
 
     - **profiles**: Returns individual user profiles with their properties.
     - **aggregate**: Returns aggregate statistics (counts, sums, etc.)
-      optionally segmented by a property.
+      optionally segmented by cohort.
 
     Attributes:
         computed_at: When the query was computed (ISO format).
@@ -10667,7 +10667,11 @@ class UserQueryResult(ResultWithDataFrame):
     """When the query was computed (ISO format)."""
 
     total: int
-    """Total number of matching profiles (regardless of limit)."""
+    """Total matching profiles as reported by the API.
+
+    When a limit is passed, this reflects the capped count, not the full
+    population. Use ``mode='aggregate'`` for the true total.
+    """
 
     profiles: list[dict[str, Any]] = field(default_factory=list)
     """Normalized profile dicts; empty list for aggregate mode."""
@@ -10806,7 +10810,7 @@ class UserQueryResult(ResultWithDataFrame):
         """
         if self.mode != "profiles":
             return []
-        return [p["distinct_id"] for p in self.profiles]
+        return [p.get("distinct_id", "") for p in self.profiles]
 
     @property
     def value(self) -> int | float | None:

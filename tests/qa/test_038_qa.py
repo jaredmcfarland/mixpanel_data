@@ -1720,6 +1720,12 @@ class TestCLIExitCodes:
             "mixpanel_data.cli.commands.projects._discover_projects_via_oauth",
             lambda: None,
         )
+        # Also block OAuth credential resolution in ConfigManager
+        # (runs before _discover_projects_via_oauth is reached)
+        monkeypatch.setattr(
+            "mixpanel_data._internal.config.ConfigManager._resolve_from_oauth",
+            lambda _self, **_kw: None,
+        )
 
         result = cli_runner.invoke(app, ["projects", "list"])
         assert result.exit_code != 0
