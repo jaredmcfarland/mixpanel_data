@@ -803,14 +803,17 @@ class TestUserQueryResultAggregateValueDfPBT:
         """Segmented aggregate DataFrame has one row per segment.
 
         The number of rows in the DataFrame matches the number of
-        entries in the ``aggregate_data`` dict.
+        entries in the ``aggregate_data`` dict. The ``meta`` dict
+        must include ``"segmented": True`` so the ``df`` property
+        uses the segmented code path rather than treating the dict
+        as an unsegmented structured result (e.g. extremes output).
         """
         result = UserQueryResult(
             computed_at="2025-01-15T10:00:00",
             total=sum(segments.values()),
             profiles=[],
             params={},
-            meta={},
+            meta={"segmented": True},
             mode="aggregate",
             aggregate_data=segments,
         )

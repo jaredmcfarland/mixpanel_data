@@ -491,6 +491,7 @@ class TestUserQueryResultSegmentedAggregateDf:
             mode="aggregate",
             aggregate_data=seg_data,
             total=60,
+            meta={"action": "count()", "segmented": True},
         )
         df = r.df
         assert len(df) == 3
@@ -502,6 +503,7 @@ class TestUserQueryResultSegmentedAggregateDf:
             mode="aggregate",
             aggregate_data=seg_data,
             total=120,
+            meta={"action": "count()", "segmented": True},
         )
         df = r.df
         segments = set(df["segment"].tolist())
@@ -517,6 +519,7 @@ class TestUserQueryResultSegmentedAggregateDf:
             mode="aggregate",
             aggregate_data=seg_data,
             total=99,
+            meta={"action": "count()", "segmented": True},
         )
         df = r.df
         assert len(df) == 1

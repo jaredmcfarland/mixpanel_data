@@ -544,13 +544,14 @@ UniqueDotExporter(root).to_picture("flow.png")
 
 ### Users — `query_user()`
 
-Search, filter, sort, and aggregate user profiles stored in Mixpanel.
+Search, filter, sort, and aggregate user profiles stored in Mixpanel. Default mode is `"aggregate"` — use `mode="profiles"` to fetch individual records.
 
 ```python
 from mixpanel_data import Filter
 
 # Find premium users, sorted by lifetime value
 result = ws.query_user(
+    mode="profiles",
     where=Filter.equals("plan", "premium"),
     properties=["$email", "$name", "ltv"],
     sort_by="ltv",
@@ -560,8 +561,8 @@ result = ws.query_user(
 print(f"{result.total} premium users")
 print(result.df)
 
-# Count profiles matching a condition
-count = ws.query_user(mode="aggregate", where=Filter.is_set("$email"))
+# Count profiles matching a condition (aggregate is the default mode)
+count = ws.query_user(where=Filter.is_set("$email"))
 print(f"Users with email: {count.value}")
 ```
 
@@ -1164,7 +1165,7 @@ I = Insights, F = Funnels, R = Retention
 | **Funnels** | `conversion_window`, `conversion_window_unit`, `order`, `exclusions`, `holding_constant` |
 | **Retention** | `retention_unit`, `alignment`, `bucket_sizes` |
 | **Flows** | `forward`, `reverse`, `count_type`, `cardinality`, `collapse_repeated`, `hidden_events` |
-| **Users** | `properties`, `sort_by`, `sort_order`, `limit`, `mode` |
+| **Users** | `properties`, `sort_by`, `sort_order`, `limit`, `mode`, `aggregate`, `aggregate_property`, `percentile`, `segment_by`, `parallel`, `workers` |
 
 ### Result types
 

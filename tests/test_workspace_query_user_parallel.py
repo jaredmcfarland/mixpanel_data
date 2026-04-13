@@ -259,7 +259,7 @@ class TestParallelSinglePageSkip:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert isinstance(result, UserQueryResult)
             assert len(result.profiles) == 3
@@ -286,7 +286,7 @@ class TestParallelSinglePageSkip:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert result.meta["pages_fetched"] == 1
         finally:
@@ -310,7 +310,7 @@ class TestParallelSinglePageSkip:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert result.total == 2
         finally:
@@ -339,7 +339,7 @@ class TestParallelMultiPageFetch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert len(result.profiles) == total
             assert result.total == total
@@ -361,7 +361,7 @@ class TestParallelMultiPageFetch:
 
         ws = workspace_factory()
         try:
-            ws.query_user(parallel=True, limit=total)
+            ws.query_user(mode="profiles", parallel=True, limit=total)
 
             assert mock_api_client.export_profiles_page.call_count == expected_pages
         finally:
@@ -381,7 +381,7 @@ class TestParallelMultiPageFetch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert result.meta["parallel"] is True
         finally:
@@ -402,7 +402,7 @@ class TestParallelMultiPageFetch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=total)
+            result = ws.query_user(mode="profiles", parallel=True, limit=total)
 
             assert result.meta["pages_fetched"] == expected_pages
         finally:
@@ -422,7 +422,7 @@ class TestParallelMultiPageFetch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert result.meta["session_id"] == "sess_keepme"
         finally:
@@ -442,7 +442,7 @@ class TestParallelMultiPageFetch:
 
         ws = workspace_factory()
         try:
-            ws.query_user(parallel=True, limit=100_000)
+            ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             # All calls after page 0 should pass session_id
             calls = mock_api_client.export_profiles_page.call_args_list
@@ -469,7 +469,7 @@ class TestParallelMultiPageFetch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             # All profiles should be normalized (distinct_id, not $distinct_id)
             for profile in result.profiles:
@@ -494,7 +494,7 @@ class TestParallelMultiPageFetch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert isinstance(result, UserQueryResult)
             assert result.mode == "profiles"
@@ -527,7 +527,7 @@ class TestParallelLimitAwareDispatch:
 
         ws = workspace_factory()
         try:
-            ws.query_user(parallel=True, limit=limit)
+            ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             assert mock_api_client.export_profiles_page.call_count == expected_pages
         finally:
@@ -548,7 +548,7 @@ class TestParallelLimitAwareDispatch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=limit)
+            result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             assert len(result.profiles) == limit
         finally:
@@ -569,7 +569,7 @@ class TestParallelLimitAwareDispatch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=limit)
+            result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             assert result.total == total
         finally:
@@ -590,7 +590,7 @@ class TestParallelLimitAwareDispatch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=limit)
+            result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             # ceil(1000/1000) = 1, so only page 0
             assert mock_api_client.export_profiles_page.call_count == 1
@@ -613,7 +613,7 @@ class TestParallelLimitAwareDispatch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=limit)
+            result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             # ceil(1001/1000) = 2
             assert mock_api_client.export_profiles_page.call_count == 2
@@ -636,7 +636,7 @@ class TestParallelLimitAwareDispatch:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=total)
+            result = ws.query_user(mode="profiles", parallel=True, limit=total)
 
             assert mock_api_client.export_profiles_page.call_count == expected_pages
             assert len(result.profiles) == total
@@ -667,7 +667,7 @@ class TestParallelFailedPageHandling:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             # Should have profiles from pages 0 and 2 (200 profiles)
             # Page 1 failed, so its 100 profiles are missing
@@ -690,7 +690,7 @@ class TestParallelFailedPageHandling:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert "failed_pages" in result.meta
             assert 2 in result.meta["failed_pages"]
@@ -712,7 +712,7 @@ class TestParallelFailedPageHandling:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert "failed_pages" in result.meta
             for fp in fail_pages:
@@ -737,7 +737,7 @@ class TestParallelFailedPageHandling:
         ws = workspace_factory()
         try:
             with caplog.at_level(logging.WARNING):
-                ws.query_user(parallel=True, limit=100_000)
+                ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             warning_messages = [
                 r.message for r in caplog.records if r.levelno >= logging.WARNING
@@ -763,7 +763,7 @@ class TestParallelFailedPageHandling:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             failed = result.meta.get("failed_pages", [])
             assert len(failed) == 0
@@ -785,7 +785,7 @@ class TestParallelFailedPageHandling:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert result.total == total
         finally:
@@ -809,7 +809,7 @@ class TestParallelWorkerCap:
         ws = workspace_factory()
         try:
             with pytest.raises(BookmarkValidationError) as exc_info:
-                ws.query_user(parallel=True, workers=10, limit=100_000)
+                ws.query_user(mode="profiles", parallel=True, workers=10, limit=100_000)
 
             errors = exc_info.value.errors
             codes = [e.code for e in errors]
@@ -826,7 +826,7 @@ class TestParallelWorkerCap:
         ws = workspace_factory()
         try:
             with pytest.raises(BookmarkValidationError) as exc_info:
-                ws.query_user(parallel=True, workers=0, limit=100_000)
+                ws.query_user(mode="profiles", parallel=True, workers=0, limit=100_000)
 
             errors = exc_info.value.errors
             codes = [e.code for e in errors]
@@ -843,7 +843,7 @@ class TestParallelWorkerCap:
         ws = workspace_factory()
         try:
             with pytest.raises(BookmarkValidationError) as exc_info:
-                ws.query_user(parallel=True, workers=-1, limit=100_000)
+                ws.query_user(mode="profiles", parallel=True, workers=-1, limit=100_000)
 
             errors = exc_info.value.errors
             codes = [e.code for e in errors]
@@ -863,7 +863,9 @@ class TestParallelWorkerCap:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, workers=5, limit=100_000)
+            result = ws.query_user(
+                mode="profiles", parallel=True, workers=5, limit=100_000
+            )
 
             assert isinstance(result, UserQueryResult)
         finally:
@@ -881,7 +883,9 @@ class TestParallelWorkerCap:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, workers=1, limit=100_000)
+            result = ws.query_user(
+                mode="profiles", parallel=True, workers=1, limit=100_000
+            )
 
             assert isinstance(result, UserQueryResult)
         finally:
@@ -913,7 +917,7 @@ class TestParallelRateLimitWarning:
         ws = workspace_factory()
         try:
             with caplog.at_level(logging.WARNING):
-                ws.query_user(parallel=True, limit=100_000)
+                ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             warning_messages = [
                 r.message for r in caplog.records if r.levelno >= logging.WARNING
@@ -941,7 +945,7 @@ class TestParallelRateLimitWarning:
         ws = workspace_factory()
         try:
             with caplog.at_level(logging.WARNING):
-                ws.query_user(parallel=True, limit=total)
+                ws.query_user(mode="profiles", parallel=True, limit=total)
 
             warning_messages = [
                 r.message for r in caplog.records if r.levelno >= logging.WARNING
@@ -973,7 +977,7 @@ class TestParallelRateLimitWarning:
         ws = workspace_factory()
         try:
             with caplog.at_level(logging.WARNING):
-                ws.query_user(parallel=True, limit=limit)
+                ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             warning_messages = [
                 r.message for r in caplog.records if r.levelno >= logging.WARNING
@@ -1074,7 +1078,7 @@ class TestParallelEarlyExitOnLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=limit)
+            result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             assert len(result.profiles) == limit
         finally:
@@ -1095,7 +1099,7 @@ class TestParallelEarlyExitOnLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=limit)
+            result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             # ceil(50/1000) = 1, only page 0
             assert mock_api_client.export_profiles_page.call_count == 1
@@ -1117,7 +1121,7 @@ class TestParallelEarlyExitOnLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True)  # default limit=1
+            result = ws.query_user(mode="profiles", parallel=True)  # default limit=1
 
             assert len(result.profiles) == 1
             assert mock_api_client.export_profiles_page.call_count == 1
@@ -1139,7 +1143,7 @@ class TestParallelEarlyExitOnLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=limit)
+            result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             assert len(result.profiles) == limit
             # ceil(350/100) = 4 pages
@@ -1164,7 +1168,7 @@ class TestParallelEarlyExitOnLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=limit)
+            result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
             # Can only return what's available
             assert len(result.profiles) == total
@@ -1193,7 +1197,7 @@ class TestParallelResultStructure:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert isinstance(result.computed_at, str)
             assert len(result.computed_at) > 0
@@ -1212,7 +1216,7 @@ class TestParallelResultStructure:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert isinstance(result.params, dict)
         finally:
@@ -1230,7 +1234,7 @@ class TestParallelResultStructure:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             df = result.df
             assert df.columns[0] == "distinct_id"
@@ -1252,7 +1256,7 @@ class TestParallelResultStructure:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert len(result.df) == total
         finally:
@@ -1272,7 +1276,7 @@ class TestParallelResultStructure:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             profile_ids = [p["distinct_id"] for p in result.profiles]
             assert result.distinct_ids == profile_ids

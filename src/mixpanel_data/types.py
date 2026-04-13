@@ -10667,10 +10667,13 @@ class UserQueryResult(ResultWithDataFrame):
     """When the query was computed (ISO format)."""
 
     total: int
-    """Total matching profiles as reported by the API.
+    """Number of profiles returned in this response.
 
-    When a limit is passed, this reflects the capped count, not the full
-    population. Use ``mode='aggregate'`` for the true total.
+    Equals ``len(self.profiles)`` in profile mode. For non-count
+    aggregates (extremes, percentile, numeric_summary), total is 0
+    because the API returns the aggregate value, not a profile count.
+    Use ``mode='aggregate', aggregate='count'`` for the full population
+    count.
     """
 
     profiles: list[dict[str, Any]] = field(default_factory=list)
@@ -10682,7 +10685,7 @@ class UserQueryResult(ResultWithDataFrame):
     meta: dict[str, Any] = field(default_factory=dict)
     """Execution metadata (timing, sampling, etc.)."""
 
-    mode: Literal["profiles", "aggregate"] = "profiles"
+    mode: Literal["profiles", "aggregate"] = "aggregate"
     """Output mode — ``"profiles"`` or ``"aggregate"``."""
 
     aggregate_data: dict[str, Any] | int | float | None = None
@@ -10703,10 +10706,15 @@ class UserQueryResult(ResultWithDataFrame):
           alphabetical order. Built-in Mixpanel properties have their ``$``
           prefix stripped (e.g., ``$email`` becomes ``email``). Missing
           properties across profiles become ``NaN``.
-        - **aggregate unsegmented** (``aggregate_data`` is ``int`` or
-          ``float``): Single row with columns ``metric`` and ``value``.
-        - **aggregate segmented** (``aggregate_data`` is ``dict``): Multiple
-          rows with columns ``segment`` and ``value``.
+        - **aggregate unsegmented scalar** (``count()``): Single row with
+          columns ``metric`` and ``value``.
+        - **aggregate unsegmented structured** (``extremes``,
+          ``percentile``, ``numeric_summary``): Single row with ``metric``
+          column plus one column per result key (e.g., ``max``, ``min``).
+        - **aggregate segmented scalar**: Rows with ``segment`` and
+          ``value`` columns.
+        - **aggregate segmented structured**: Rows with ``segment``
+          column plus one column per result key.
 
         Returns:
             Normalized DataFrame. For empty profiles, returns an empty
@@ -10728,15 +10736,25 @@ class UserQueryResult(ResultWithDataFrame):
         if self.mode == "profiles":
             result_df = self._build_profiles_df()
         elif isinstance(self.aggregate_data, dict):
-            rows = [
-                {"segment": seg, "value": val}
-                for seg, val in self.aggregate_data.items()
-            ]
-            result_df = (
-                pd.DataFrame(rows, columns=["segment", "value"])
-                if rows
-                else pd.DataFrame(columns=["segment", "value"])
-            )
+            if self.meta.get("segmented"):
+                # Segmented aggregate — one row per cohort
+                rows: list[dict[str, Any]] = []
+                for seg, val in self.aggregate_data.items():
+                    if isinstance(val, dict):
+                        rows.append({"segment": seg, **val})
+                    else:
+                        rows.append({"segment": seg, "value": val})
+                if rows:
+                    result_df = pd.DataFrame(rows)
+                else:
+                    result_df = pd.DataFrame(columns=["segment", "value"])
+            else:
+                # Unsegmented structured result (extremes, percentile,
+                # numeric_summary) — single row with metric + dict keys
+                action = self.params.get("action", "aggregate")
+                result_df = pd.DataFrame(
+                    [{"metric": action, **self.aggregate_data}],
+                )
         elif self.aggregate_data is not None:
             result_df = pd.DataFrame(
                 [

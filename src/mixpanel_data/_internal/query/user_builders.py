@@ -59,8 +59,11 @@ def _prop_ref(f: Filter) -> str:
 def _is_cohort_filter(f: Filter) -> bool:
     """Return True if *f* is a cohort filter (in_cohort / not_in_cohort).
 
-    Cohort filters store their value as a list of dicts, unlike regular
-    filters which use str, number, list-of-str, or None.
+    Cohort filters store their value as a list of dicts (from
+    ``CohortDefinition.to_dict()``), unlike regular filters which use
+    str, number, list-of-str, or None. This shape heuristic is safe
+    because ``Filter`` only produces list-of-dict values for
+    ``in_cohort()`` / ``not_in_cohort()``.
 
     Args:
         f: Filter to test.
@@ -132,9 +135,11 @@ def filter_to_selector(f: Filter) -> str:
         ]
         if not parts:
             raise ValueError(
-                f"Filter.does_not_equal() produced no valid selector terms. "
+                f"Filter.not_equals() produced no valid selector terms. "
                 f"All values were non-scalar: {value!r}"
             )
+        # AND-combine: "!= a AND != b" means "not in [a, b]"
+        # (contrast: equals uses OR — "== a OR == b" means "in [a, b]")
         return " and ".join(parts)
 
     if op == "contains":
@@ -171,13 +176,13 @@ def filter_to_selector(f: Filter) -> str:
                 f"Expected list of length 2 for 'is between' operator, got {type(value).__name__}"
             )
         lo, hi = value[0], value[1]
-        if not isinstance(lo, (str, int, float)):
+        if not isinstance(lo, (int, float)):
             raise ValueError(
-                f"Expected str, int, or float for lower bound, got {type(lo).__name__}"
+                f"Expected int or float for lower bound, got {type(lo).__name__}"
             )
-        if not isinstance(hi, (str, int, float)):
+        if not isinstance(hi, (int, float)):
             raise ValueError(
-                f"Expected str, int, or float for upper bound, got {type(hi).__name__}"
+                f"Expected int or float for upper bound, got {type(hi).__name__}"
             )
         return f"{prop} >= {_format_value(lo)} and {prop} <= {_format_value(hi)}"
 
@@ -260,6 +265,8 @@ def extract_cohort_filter(
             if cohort is None:
                 cohort = f
             else:
+                # U13 guarantees at most one cohort filter; extra
+                # cohorts stay in remaining as a defensive measure
                 remaining.append(f)
         else:
             remaining.append(f)

@@ -30,8 +30,8 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data.exceptions import ConfigError
-from mixpanel_data.types import ProfilePageResult, UserQueryResult
+from mixpanel_data.exceptions import BookmarkValidationError, ConfigError
+from mixpanel_data.types import Filter, ProfilePageResult, UserQueryResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -186,7 +186,7 @@ class TestQueryUserDefaultLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert isinstance(result, UserQueryResult)
             assert result.mode == "profiles"
@@ -209,7 +209,7 @@ class TestQueryUserDefaultLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert result.total == 5432
         finally:
@@ -229,7 +229,7 @@ class TestQueryUserDefaultLimit:
 
         ws = workspace_factory()
         try:
-            ws.query_user()
+            ws.query_user(mode="profiles")
 
             assert mock_api_client.export_profiles_page.call_count == 1
         finally:
@@ -258,7 +258,7 @@ class TestQueryUserExplicitLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=2)
+            result = ws.query_user(mode="profiles", limit=2)
 
             assert len(result.profiles) == 2
         finally:
@@ -298,7 +298,7 @@ class TestQueryUserExplicitLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=3)
+            result = ws.query_user(mode="profiles", limit=3)
 
             assert len(result.profiles) == 3
             assert mock_api_client.export_profiles_page.call_count == 3
@@ -324,7 +324,7 @@ class TestQueryUserExplicitLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=2)
+            result = ws.query_user(mode="profiles", limit=2)
 
             assert len(result.profiles) == 2
             # Should not fetch page 1 since limit already met
@@ -358,7 +358,7 @@ class TestQueryUserExplicitLimit:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=100_000)
+            result = ws.query_user(mode="profiles", limit=100_000)
 
             assert len(result.profiles) == 2
             assert mock_api_client.export_profiles_page.call_count == 2
@@ -387,7 +387,7 @@ class TestQueryUserPropertySelection:
 
         ws = workspace_factory()
         try:
-            ws.query_user(properties=["$email", "plan"])
+            ws.query_user(mode="profiles", properties=["$email", "plan"])
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             # output_properties should be passed as a keyword argument
@@ -408,7 +408,7 @@ class TestQueryUserPropertySelection:
 
         ws = workspace_factory()
         try:
-            ws.query_user(properties=None)
+            ws.query_user(mode="profiles", properties=None)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("output_properties") is None
@@ -437,7 +437,7 @@ class TestQueryUserSorting:
 
         ws = workspace_factory()
         try:
-            ws.query_user(sort_by="$last_seen")
+            ws.query_user(mode="profiles", sort_by="$last_seen")
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("sort_key") == 'properties["$last_seen"]'
@@ -457,7 +457,7 @@ class TestQueryUserSorting:
 
         ws = workspace_factory()
         try:
-            ws.query_user(sort_by="revenue", sort_order="ascending")
+            ws.query_user(mode="profiles", sort_by="revenue", sort_order="ascending")
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("sort_order") == "ascending"
@@ -477,10 +477,50 @@ class TestQueryUserSorting:
 
         ws = workspace_factory()
         try:
-            ws.query_user(sort_by="$last_seen")
+            ws.query_user(mode="profiles", sort_by="$last_seen")
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("sort_order") == "descending"
+        finally:
+            ws.close()
+
+    def test_sort_by_escapes_double_quotes(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """sort_by with double quotes is escaped in sort_key."""
+        mock_api_client.export_profiles_page.return_value = _make_page_result(
+            profiles=[RAW_PROFILE_1],
+            total=1,
+        )
+
+        ws = workspace_factory()
+        try:
+            ws.query_user(mode="profiles", sort_by='weird"prop')
+
+            call_kwargs = mock_api_client.export_profiles_page.call_args
+            assert call_kwargs.kwargs.get("sort_key") == 'properties["weird\\"prop"]'
+        finally:
+            ws.close()
+
+    def test_sort_by_escapes_backslashes(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """sort_by with backslashes is escaped in sort_key."""
+        mock_api_client.export_profiles_page.return_value = _make_page_result(
+            profiles=[RAW_PROFILE_1],
+            total=1,
+        )
+
+        ws = workspace_factory()
+        try:
+            ws.query_user(mode="profiles", sort_by="back\\slash")
+
+            call_kwargs = mock_api_client.export_profiles_page.call_args
+            assert call_kwargs.kwargs.get("sort_key") == 'properties["back\\\\slash"]'
         finally:
             ws.close()
 
@@ -506,7 +546,7 @@ class TestQueryUserSearch:
 
         ws = workspace_factory()
         try:
-            ws.query_user(search="alice")
+            ws.query_user(mode="profiles", search="alice")
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("search") == "alice"
@@ -526,7 +566,7 @@ class TestQueryUserSearch:
 
         ws = workspace_factory()
         try:
-            ws.query_user()
+            ws.query_user(mode="profiles")
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("search") is None
@@ -557,7 +597,7 @@ class TestQueryUserDistinctId:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(distinct_id="user_target")
+            result = ws.query_user(mode="profiles", distinct_id="user_target")
 
             assert len(result.profiles) == 1
             assert result.profiles[0]["distinct_id"] == "user_target"
@@ -590,6 +630,7 @@ class TestQueryUserDistinctIds:
         ws = workspace_factory()
         try:
             result = ws.query_user(
+                mode="profiles",
                 distinct_ids=["user_001", "user_002"],
                 limit=100_000,
             )
@@ -624,7 +665,7 @@ class TestQueryUserGroupId:
 
         ws = workspace_factory()
         try:
-            ws.query_user(group_id="companies")
+            ws.query_user(mode="profiles", group_id="companies")
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("group_id") == "companies"
@@ -653,7 +694,7 @@ class TestQueryUserAsOf:
 
         ws = workspace_factory()
         try:
-            ws.query_user(as_of=1704067200)
+            ws.query_user(mode="profiles", as_of=1704067200)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("as_of_timestamp") == 1704067200
@@ -673,7 +714,7 @@ class TestQueryUserAsOf:
 
         ws = workspace_factory()
         try:
-            ws.query_user(as_of="2024-01-01")
+            ws.query_user(mode="profiles", as_of="2024-01-01")
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             as_of_ts = call_kwargs.kwargs.get("as_of_timestamp")
@@ -706,7 +747,7 @@ class TestQueryUserTotalCount:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()  # default limit=1
+            result = ws.query_user(mode="profiles")  # default limit=1
 
             assert result.total == 99999
             assert len(result.profiles) == 1
@@ -727,7 +768,7 @@ class TestQueryUserTotalCount:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=2)
+            result = ws.query_user(mode="profiles", limit=2)
 
             assert result.total == 10000
             assert len(result.profiles) == 2
@@ -748,7 +789,7 @@ class TestQueryUserTotalCount:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=100_000)
+            result = ws.query_user(mode="profiles", limit=100_000)
 
             assert result.total == 2
             assert len(result.profiles) == 2
@@ -777,7 +818,7 @@ class TestQueryUserDataFrame:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             df = result.df
             assert df.columns[0] == "distinct_id"
@@ -797,7 +838,7 @@ class TestQueryUserDataFrame:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             df = result.df
             assert df.columns[1] == "last_seen"
@@ -821,7 +862,7 @@ class TestQueryUserDataFrame:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             df = result.df
             assert "email" in df.columns
@@ -850,7 +891,7 @@ class TestQueryUserDataFrame:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             df = result.df
             columns = list(df.columns)
@@ -877,7 +918,7 @@ class TestQueryUserDataFrame:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=2)
+            result = ws.query_user(mode="profiles", limit=2)
 
             assert len(result.df) == 2
         finally:
@@ -907,7 +948,7 @@ class TestQueryUserEmptyResult:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert len(result.profiles) == 0
             assert result.total == 0
@@ -930,7 +971,7 @@ class TestQueryUserEmptyResult:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             df = result.df
             assert "distinct_id" in df.columns
@@ -953,7 +994,7 @@ class TestQueryUserEmptyResult:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert result.distinct_ids == []
         finally:
@@ -983,7 +1024,7 @@ class TestQueryUserConfigError:
         )
 
         with pytest.raises(ConfigError, match="credentials"):
-            ws.query_user()
+            ws.query_user(mode="profiles")
 
     def test_config_error_not_raised_with_valid_credentials(
         self,
@@ -999,7 +1040,7 @@ class TestQueryUserConfigError:
         ws = workspace_factory()
         try:
             # Should not raise
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
             assert isinstance(result, UserQueryResult)
         finally:
             ws.close()
@@ -1026,7 +1067,7 @@ class TestQueryUserResultMetadata:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert isinstance(result, UserQueryResult)
         finally:
@@ -1045,7 +1086,7 @@ class TestQueryUserResultMetadata:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert result.mode == "profiles"
         finally:
@@ -1064,7 +1105,7 @@ class TestQueryUserResultMetadata:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert isinstance(result.computed_at, str)
             assert len(result.computed_at) > 0
@@ -1084,7 +1125,7 @@ class TestQueryUserResultMetadata:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert isinstance(result.params, dict)
         finally:
@@ -1103,7 +1144,7 @@ class TestQueryUserResultMetadata:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert isinstance(result.meta, dict)
         finally:
@@ -1122,7 +1163,7 @@ class TestQueryUserResultMetadata:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert result.aggregate_data is None
         finally:
@@ -1150,7 +1191,7 @@ class TestQueryUserProfileNormalization:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             profile = result.profiles[0]
             assert "distinct_id" in profile
@@ -1171,7 +1212,7 @@ class TestQueryUserProfileNormalization:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             profile = result.profiles[0]
             assert "last_seen" in profile
@@ -1191,7 +1232,7 @@ class TestQueryUserProfileNormalization:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             profile = result.profiles[0]
             assert "properties" in profile
@@ -1214,7 +1255,7 @@ class TestQueryUserProfileNormalization:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             profile = result.profiles[0]
             assert profile["properties"]["plan"] == "premium"
@@ -1257,7 +1298,7 @@ class TestQueryUserPaginationSessionId:
 
         ws = workspace_factory()
         try:
-            ws.query_user(limit=2)
+            ws.query_user(mode="profiles", limit=2)
 
             first_call = mock_api_client.export_profiles_page.call_args_list[0]
             # First page should not pass a session_id (or pass None)
@@ -1294,7 +1335,7 @@ class TestQueryUserPaginationSessionId:
 
         ws = workspace_factory()
         try:
-            ws.query_user(limit=2)
+            ws.query_user(mode="profiles", limit=2)
 
             second_call = mock_api_client.export_profiles_page.call_args_list[1]
             # Second page should pass the session_id from page 0
@@ -1302,5 +1343,57 @@ class TestQueryUserPaginationSessionId:
                 second_call.args[1] if len(second_call.args) > 1 else None
             )
             assert session_id == "sess_paginate"
+        finally:
+            ws.close()
+
+
+# =============================================================================
+# PR #118 review fixes — ValueError wrapping and aggregate escaping
+# =============================================================================
+
+
+class TestQueryUserValueErrorWrapping:
+    """Tests for ValueError→BookmarkValidationError wrapping (#9)."""
+
+    def test_unsupported_filter_operator_raises_bookmark_error(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Unsupported filter operator raises BookmarkValidationError."""
+        f = Filter("prop", "unsupported_op", "val")
+        ws = workspace_factory()
+        try:
+            with pytest.raises(BookmarkValidationError):
+                ws.query_user(
+                    mode="profiles",
+                    where=f,
+                )
+        finally:
+            ws.close()
+
+
+class TestQueryUserAggregatePropertyEscaping:
+    """Tests for aggregate_property escaping in action strings."""
+
+    def test_aggregate_property_with_double_quote(
+        self,
+        workspace_factory: Callable[..., Workspace],
+        mock_api_client: MagicMock,
+    ) -> None:
+        """aggregate_property with double quote is escaped in action."""
+        mock_api_client.engage_stats.return_value = {"results": 42}
+
+        ws = workspace_factory()
+        try:
+            ws.query_user(
+                mode="aggregate",
+                aggregate="extremes",
+                aggregate_property='has"quote',
+            )
+
+            call_kwargs = mock_api_client.engage_stats.call_args
+            assert call_kwargs.kwargs.get("action") == (
+                'extremes(properties["has\\"quote"])'
+            )
         finally:
             ws.close()

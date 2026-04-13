@@ -68,6 +68,7 @@ class TestBugVerification:
             ws: Workspace fixture.
         """
         result = ws.query_user(
+            mode="profiles",
             sort_by="$last_seen",
             sort_order="descending",
             limit=3,
@@ -85,6 +86,7 @@ class TestBugVerification:
             ws: Workspace fixture.
         """
         common_kwargs = {
+            "mode": "profiles",
             "sort_by": "$last_seen",
             "sort_order": "descending",
             "limit": 5,
@@ -129,7 +131,7 @@ class TestProfilesCore:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user()
+        result = ws.query_user(mode="profiles")
         assert len(result.profiles) == 1
         assert result.total > 1_000_000
         assert result.mode == "profiles"
@@ -140,7 +142,7 @@ class TestProfilesCore:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(limit=10)
+        result = ws.query_user(mode="profiles", limit=10)
         assert len(result.profiles) == 10
         assert result.total > len(result.profiles)
 
@@ -150,8 +152,8 @@ class TestProfilesCore:
         Args:
             ws: Workspace fixture.
         """
-        unfiltered = ws.query_user()
-        filtered = ws.query_user(where=Filter.is_set("$email"))
+        unfiltered = ws.query_user(mode="profiles")
+        filtered = ws.query_user(mode="profiles", where=Filter.is_set("$email"))
         assert filtered.total < unfiltered.total
 
     def test_filter_equals_returns_matching_profiles(self, ws: Workspace) -> None:
@@ -161,6 +163,7 @@ class TestProfilesCore:
             ws: Workspace fixture.
         """
         result = ws.query_user(
+            mode="profiles",
             where=Filter.equals("$browser", "Chrome"),
             properties=["$browser"],
             limit=5,
@@ -176,7 +179,7 @@ class TestProfilesCore:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(properties=["$email", "$name"], limit=3)
+        result = ws.query_user(mode="profiles", properties=["$email", "$name"], limit=3)
         cols = set(result.df.columns)
         expected = {"distinct_id", "last_seen", "email", "name"}
         assert cols == expected
@@ -188,6 +191,7 @@ class TestProfilesCore:
             ws: Workspace fixture.
         """
         result = ws.query_user(
+            mode="profiles",
             search="mixpanel.com",
             properties=["$email"],
             limit=10,
@@ -208,10 +212,10 @@ class TestProfilesCore:
             ws: Workspace fixture.
         """
         # First get a distinct_id to look up
-        seed = ws.query_user(limit=1)
+        seed = ws.query_user(mode="profiles", limit=1)
         known_id = seed.distinct_ids[0]
 
-        result = ws.query_user(distinct_id=known_id)
+        result = ws.query_user(mode="profiles", distinct_id=known_id)
         assert len(result.profiles) == 1
         assert result.distinct_ids[0] == known_id
 
@@ -221,11 +225,11 @@ class TestProfilesCore:
         Args:
             ws: Workspace fixture.
         """
-        seed = ws.query_user(limit=3)
+        seed = ws.query_user(mode="profiles", limit=3)
         ids = seed.distinct_ids
         assert len(ids) == 3
 
-        result = ws.query_user(distinct_ids=ids, limit=len(ids))
+        result = ws.query_user(mode="profiles", distinct_ids=ids, limit=len(ids))
         assert set(result.distinct_ids) == set(ids)
 
 
@@ -244,6 +248,7 @@ class TestProfilesSorting:
             ws: Workspace fixture.
         """
         result = ws.query_user(
+            mode="profiles",
             sort_by="$last_seen",
             sort_order="descending",
             limit=10,
@@ -261,6 +266,7 @@ class TestProfilesSorting:
             ws: Workspace fixture.
         """
         result = ws.query_user(
+            mode="profiles",
             sort_by="$last_seen",
             sort_order="ascending",
             limit=10,
@@ -277,6 +283,7 @@ class TestProfilesSorting:
             ws: Workspace fixture.
         """
         result = ws.query_user(
+            mode="profiles",
             sort_by="$email",
             sort_order="ascending",
             where=Filter.is_set("$email"),
@@ -362,8 +369,8 @@ class TestParallelFetching:
         Args:
             ws: Workspace fixture.
         """
-        seq = ws.query_user(limit=100, parallel=False)
-        par = ws.query_user(limit=100, parallel=True)
+        seq = ws.query_user(mode="profiles", limit=100, parallel=False)
+        par = ws.query_user(mode="profiles", limit=100, parallel=True)
         assert seq.total == par.total
 
     def test_parallel_large_fetch(self, ws: Workspace) -> None:
@@ -372,7 +379,7 @@ class TestParallelFetching:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(limit=3000, parallel=True, workers=3)
+        result = ws.query_user(mode="profiles", limit=3000, parallel=True, workers=3)
         assert len(result.profiles) == 3000
         assert result.meta.get("parallel") is True
         assert result.meta.get("pages_fetched", 0) >= 3
@@ -383,7 +390,7 @@ class TestParallelFetching:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(limit=2000, parallel=True, workers=5)
+        result = ws.query_user(mode="profiles", limit=2000, parallel=True, workers=5)
         meta = result.meta
         assert "session_id" in meta
         assert "pages_fetched" in meta
@@ -397,7 +404,7 @@ class TestParallelFetching:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(parallel=True, limit=1)
+        result = ws.query_user(mode="profiles", parallel=True, limit=1)
         assert result.meta.get("parallel") is False
         assert len(result.profiles) == 1
 
@@ -411,16 +418,15 @@ class TestAggregateMode:
     """Aggregate mode queries via engage_stats."""
 
     def test_aggregate_count_all_profiles(self, ws: Workspace) -> None:
-        """L6.01 — aggregate count approximates the profiles-mode total.
+        """L6.01 — aggregate count returns a positive integer.
 
         Args:
             ws: Workspace fixture.
         """
         agg = ws.query_user(mode="aggregate")
-        profiles = ws.query_user(limit=1)
-        # They come from the same data, should be approximately equal
         assert agg.value is not None
-        assert abs(agg.value - profiles.total) < profiles.total * 0.01
+        assert agg.value > 0
+        assert isinstance(agg.value, int)
 
     def test_aggregate_count_with_filter(self, ws: Workspace) -> None:
         """L6.02 — filtered aggregate count is less than unfiltered.
@@ -449,20 +455,71 @@ class TestAggregateMode:
         assert "value" in df.columns
         assert len(df) > 0
 
-    @pytest.mark.xfail(reason="Non-count aggregation support pending API investigation")
-    def test_aggregate_mean_with_property(self, ws: Workspace) -> None:
-        """L6.04 — aggregate mean on a numeric property returns a float.
+    def test_aggregate_extremes_with_property(self, ws: Workspace) -> None:
+        """L6.04 — aggregate extremes on a numeric property returns a dict.
 
         Args:
             ws: Workspace fixture.
         """
         result = ws.query_user(
             mode="aggregate",
-            aggregate="mean",
+            aggregate="extremes",
             aggregate_property="SFDC Company Size",
         )
-        assert result.value is not None
-        assert isinstance(result.value, float)
+        assert isinstance(result.aggregate_data, dict)
+        assert "max" in result.aggregate_data
+        assert "min" in result.aggregate_data
+
+    def test_aggregate_numeric_summary_with_property(self, ws: Workspace) -> None:
+        """L6.05 — numeric_summary returns count, mean, var, sum_of_squares.
+
+        Args:
+            ws: Workspace fixture.
+        """
+        result = ws.query_user(
+            mode="aggregate",
+            aggregate="numeric_summary",
+            aggregate_property="SFDC Company Size",
+        )
+        assert isinstance(result.aggregate_data, dict)
+        assert "count" in result.aggregate_data
+        assert "mean" in result.aggregate_data
+        assert "var" in result.aggregate_data
+        assert "sum_of_squares" in result.aggregate_data
+
+    def test_aggregate_percentile_with_property(self, ws: Workspace) -> None:
+        """L6.06 — percentile returns percentile and result keys.
+
+        Args:
+            ws: Workspace fixture.
+        """
+        result = ws.query_user(
+            mode="aggregate",
+            aggregate="percentile",
+            aggregate_property="SFDC Company Size",
+            percentile=50,
+        )
+        assert isinstance(result.aggregate_data, dict)
+        assert "percentile" in result.aggregate_data
+        assert result.aggregate_data["percentile"] == 50
+        assert "result" in result.aggregate_data
+
+    def test_aggregate_extremes_df_has_structured_columns(self, ws: Workspace) -> None:
+        """L6.07 — extremes DataFrame has metric + result key columns.
+
+        Args:
+            ws: Workspace fixture.
+        """
+        result = ws.query_user(
+            mode="aggregate",
+            aggregate="extremes",
+            aggregate_property="SFDC Company Size",
+        )
+        df = result.df
+        assert len(df) == 1
+        assert "metric" in df.columns
+        assert "max" in df.columns
+        assert "min" in df.columns
 
 
 # =============================================================================
@@ -479,7 +536,7 @@ class TestResultTypeAndDataFrame:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(limit=5)
+        result = ws.query_user(mode="profiles", limit=5)
         assert result.df.columns[0] == "distinct_id"
         assert result.df.columns[1] == "last_seen"
 
@@ -489,7 +546,7 @@ class TestResultTypeAndDataFrame:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(properties=["$email", "$name"], limit=3)
+        result = ws.query_user(mode="profiles", properties=["$email", "$name"], limit=3)
         cols = set(result.df.columns)
         assert "email" in cols
         assert "name" in cols
@@ -502,7 +559,7 @@ class TestResultTypeAndDataFrame:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(limit=5)
+        result = ws.query_user(mode="profiles", limit=5)
         assert isinstance(result.distinct_ids, list)
         assert len(result.distinct_ids) == 5
 
@@ -525,7 +582,7 @@ class TestResultTypeAndDataFrame:
         Args:
             ws: Workspace fixture.
         """
-        result = ws.query_user(limit=100, properties=["$email"])
+        result = ws.query_user(mode="profiles", limit=100, properties=["$email"])
         # groupby should work
         grouped = result.df.groupby("email").size()
         assert len(grouped) > 0
@@ -550,8 +607,10 @@ class TestCrossEngineComposition:
         Args:
             ws: Workspace fixture.
         """
-        r1 = ws.query_user(limit=3)
-        r2 = ws.query_user(distinct_ids=r1.distinct_ids, limit=len(r1.distinct_ids))
+        r1 = ws.query_user(mode="profiles", limit=3)
+        r2 = ws.query_user(
+            mode="profiles", distinct_ids=r1.distinct_ids, limit=len(r1.distinct_ids)
+        )
         assert set(r2.distinct_ids) == set(r1.distinct_ids)
 
     def test_build_user_params_matches_query_user_params(self, ws: Workspace) -> None:
@@ -561,6 +620,7 @@ class TestCrossEngineComposition:
             ws: Workspace fixture.
         """
         kwargs = {
+            "mode": "profiles",
             "where": Filter.is_set("$email"),
             "properties": ["$email"],
         }
@@ -593,7 +653,8 @@ class TestErrorHandling:
             ws: Workspace fixture.
         """
         result = ws.query_user(
-            where='properties["nonexistent_prop_xyz_abc_123"] == "impossible"'
+            mode="profiles",
+            where='properties["nonexistent_prop_xyz_abc_123"] == "impossible"',
         )
         assert result.total == 0
         assert result.profiles == []

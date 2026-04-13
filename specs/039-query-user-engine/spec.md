@@ -31,7 +31,7 @@ An analyst wants to find users matching specific criteria and examine their prof
 
 ### User Story 2 - Compute Aggregate Statistics Across Profiles (Priority: P2)
 
-An analyst wants to answer questions like "how many premium users do we have?", "what is the average LTV?", or "what is the total revenue across enterprise users?" without fetching individual records. The system computes aggregate statistics (count, sum, mean, min, max) across all matching profiles and returns a concise summary.
+An analyst wants to answer questions like "how many premium users do we have?", "what is the average LTV?", or "what are the min/max ages?" without fetching individual records. The system computes aggregate statistics (count, extremes, percentile, numeric_summary) across all matching profiles and returns a concise summary.
 
 **Why this priority**: Aggregate analytics complement profile listing. Many analytical questions need population-level statistics rather than individual records. This avoids the overhead of fetching thousands of profiles just to compute a count or average.
 
@@ -40,8 +40,8 @@ An analyst wants to answer questions like "how many premium users do we have?", 
 **Acceptance Scenarios**:
 
 1. **Given** a set of filter criteria, **When** the analyst requests a count, **Then** the system returns the total number of matching profiles as a single value.
-2. **Given** a numeric property (e.g., LTV) and a set of filter criteria, **When** the analyst requests a mean, **Then** the system returns the average value of that property across matching profiles.
-3. **Given** a numeric property, **When** the analyst requests sum, min, or max, **Then** the system returns the corresponding aggregate value.
+2. **Given** a numeric property (e.g., LTV) and a set of filter criteria, **When** the analyst requests a numeric_summary, **Then** the system returns count, mean, and variance of that property across matching profiles.
+3. **Given** a numeric property, **When** the analyst requests extremes or percentile, **Then** the system returns the corresponding aggregate value(s).
 4. **Given** aggregate criteria and a list of cohort IDs for segmentation, **When** the query executes, **Then** the system returns the aggregate value broken down by each cohort segment in tabular form.
 5. **Given** a request for sum/mean/min/max without specifying which property to aggregate, **When** the query is submitted, **Then** the system rejects the query with a clear validation error before any data is fetched.
 
@@ -106,7 +106,7 @@ An analyst runs a segmentation or funnel query to identify interesting patterns,
 - What happens when both a direct cohort filter and a cohort-based property filter are specified in the same query? The system rejects the query with a validation error before execution.
 - What happens when an aggregate function other than "count" is requested without specifying a property? The system rejects the query with a validation error.
 - What happens when sort or search parameters are used with aggregate mode? The system rejects the query with a validation error (these only apply to profile listing mode).
-- What happens when the parallel worker count exceeds the platform's concurrency limit? The system silently caps the worker count to the maximum allowed.
+- What happens when the parallel worker count exceeds the platform's concurrency limit? The system rejects the query with a validation error (U23: workers must be between 1 and 5).
 - What happens when a point-in-time date is in the future? The system rejects the query with a validation error.
 
 ## Requirements *(mandatory)*
@@ -124,7 +124,7 @@ An analyst runs a segmentation or funnel query to identify interesting patterns,
 - **FR-009**: System MUST support filtering by inline behavioral criteria expressed through the typed cohort definition builder (no raw query strings).
 - **FR-010**: System MUST support querying group-level profiles (e.g., companies, accounts) in addition to user profiles.
 - **FR-011**: System MUST support point-in-time queries to retrieve historical profile state.
-- **FR-012**: System MUST support aggregate mode returning count, sum, mean, min, or max across matching profiles.
+- **FR-012**: System MUST support aggregate mode returning count, extremes, percentile, or numeric_summary across matching profiles.
 - **FR-013**: System MUST support cohort-segmented aggregation, breaking down aggregate values by cohort membership.
 - **FR-014**: System MUST support concurrent page fetching for large result sets with configurable worker count (capped at platform limit).
 - **FR-015**: System MUST validate all inputs before executing any query, collecting all validation errors and reporting them together.
@@ -148,7 +148,7 @@ An analyst runs a segmentation or funnel query to identify interesting patterns,
 
 - **SC-001**: Analysts can query user profiles using the identical filter syntax they use for insights, funnels, retention, and flow queries, with zero new syntax to learn for basic filtering.
 - **SC-002**: A bare query with no parameters returns a total count and 1 sample profile in a single lightweight operation, making it safe and cheap to call without configuration.
-- **SC-003**: Aggregate statistics (count, sum, mean, min, max) across matching profiles are available in a single query call without fetching individual records.
+- **SC-003**: Aggregate statistics (count, extremes, percentile, numeric_summary) across matching profiles are available in a single query call without fetching individual records.
 - **SC-004**: Large profile retrievals (5,000+ records) complete up to 5x faster with parallel fetching compared to sequential retrieval.
 - **SC-005**: All input validation errors are caught and reported before any data is fetched from the platform, preventing wasted API calls.
 - **SC-006**: Profile query results compose naturally with other engine outputs through shared identifiers and standard tabular data operations.

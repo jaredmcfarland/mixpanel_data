@@ -1592,6 +1592,7 @@ class MixpanelAPIClient:
         if as_of_timestamp is not None:
             params["as_of_timestamp"] = as_of_timestamp
         if filter_by_cohort:
+            # Must send explicitly because API defaults to True
             params["include_all_users"] = include_all_users
 
         response = self._request("POST", url, data=params)

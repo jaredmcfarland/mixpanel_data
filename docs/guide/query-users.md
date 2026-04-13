@@ -11,12 +11,12 @@ Use `query_user()` when you need to work with **user profiles** rather than even
 
 | Use Case | Example |
 |----------|---------|
-| Filter profiles by property | `query_user(where=Filter.equals("plan", "premium"))` |
-| Count matching profiles | `query_user(mode="aggregate", where=Filter.is_set("$email"))` |
-| Get top users by a metric | `query_user(sort_by="ltv", sort_order="descending", limit=50)` |
-| Look up specific users | `query_user(distinct_id="user_abc123")` |
-| Profile a behavioral cohort | `query_user(cohort=CohortDefinition.all_of(...))` |
-| Build ML feature matrices | `query_user(properties=[...], limit=5000, parallel=True)` |
+| Filter profiles by property | `query_user(mode="profiles", where=Filter.equals("plan", "premium"))` |
+| Count matching profiles | `query_user(where=Filter.is_set("$email"))` |
+| Get top users by a metric | `query_user(mode="profiles", sort_by="ltv", sort_order="descending", limit=50)` |
+| Look up specific users | `query_user(mode="profiles", distinct_id="user_abc123")` |
+| Profile a behavioral cohort | `query_user(mode="profiles", cohort=CohortDefinition.all_of(...))` |
+| Build ML feature matrices | `query_user(mode="profiles", properties=[...], limit=5000, parallel=True)` |
 | Cross-engine profiling | Insights identifies a segment, `query_user()` profiles those users |
 
 Use `stream_profiles()` when you need to iterate over raw profile dicts without structured filtering or DataFrame output.
@@ -29,12 +29,17 @@ from mixpanel_data import Filter
 
 ws = mp.Workspace()
 
-# Quick peek — one profile (safe default: limit=1)
+# Quick count — how many profiles exist? (default: mode="aggregate")
 result = ws.query_user()
+print(f"Total profiles: {result.value}")
+
+# Quick peek — one sample profile
+result = ws.query_user(mode="profiles")
 print(result.df)
 
 # Filter and select properties
 result = ws.query_user(
+    mode="profiles",
     where=Filter.equals("plan", "premium"),
     properties=["$email", "$name", "ltv"],
     sort_by="ltv",
@@ -46,16 +51,44 @@ print(result.df)  # distinct_id | last_seen | email | name | ltv
 
 ## Aggregate Mode
 
-Count matching profiles without fetching individual records:
+Aggregate mode is the default (`mode="aggregate"`). Compute statistics across matching profiles without fetching individual records:
 
 ```python
-# Total users with email
-count = ws.query_user(mode="aggregate", where=Filter.is_set("$email"))
+# Count users with email (aggregate is the default mode)
+count = ws.query_user(where=Filter.is_set("$email"))
 print(f"Users with email: {count.value}")
 
 # Total users (all)
-total = ws.query_user(mode="aggregate")
+total = ws.query_user()
 print(f"Total profiles: {total.value}")
+
+# Extremes (min/max) of a numeric property
+result = ws.query_user(
+    aggregate="extremes",
+    aggregate_property="ltv",
+)
+print(result.aggregate_data)  # {"max": 9500, "min": 0, ...}
+
+# Percentile
+result = ws.query_user(
+    aggregate="percentile",
+    aggregate_property="ltv",
+    percentile=90,
+)
+print(result.aggregate_data)  # {"percentile": 90, "result": 4500}
+
+# Numeric summary (count, mean, variance, sum_of_squares)
+result = ws.query_user(
+    aggregate="numeric_summary",
+    aggregate_property="ltv",
+)
+print(result.aggregate_data)  # {"count": 1532, "mean": 245.6, ...}
+
+# Segmented count by cohort IDs
+result = ws.query_user(
+    segment_by=[12345, 67890],
+)
+print(result.df)  # columns: segment, value
 ```
 
 ## Behavioral Filtering
@@ -67,6 +100,7 @@ from mixpanel_data import CohortDefinition, CohortCriteria
 
 # Users who purchased 3+ times in 30 days
 result = ws.query_user(
+    mode="profiles",
     cohort=CohortDefinition.all_of(
         CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
     ),
@@ -76,7 +110,7 @@ result = ws.query_user(
 print(f"Power buyers: {len(result.profiles)}")
 
 # Filter by saved cohort ID
-result = ws.query_user(cohort=12345, limit=100)
+result = ws.query_user(mode="profiles", cohort=12345, limit=100)
 ```
 
 ## Parallel Fetching
@@ -85,6 +119,7 @@ For large result sets, enable concurrent page retrieval:
 
 ```python
 result = ws.query_user(
+    mode="profiles",
     where=Filter.is_set("$email"),
     properties=["$email", "plan", "ltv"],
     limit=5000,
@@ -106,6 +141,7 @@ top_plan = dau.df.sort_values("count", ascending=False).iloc[0]["event"]
 
 # Step 2: Profile users from that plan
 users = ws.query_user(
+    mode="profiles",
     where=Filter.equals("plan", top_plan),
     properties=["$email", "company", "ltv"],
     sort_by="ltv",
@@ -123,7 +159,7 @@ All results are returned as `UserQueryResult`, a frozen dataclass with:
 | Property | Type | Description |
 |----------|------|-------------|
 | `.df` | `pd.DataFrame` | Lazy cached DataFrame. Profiles mode: `distinct_id`, `last_seen`, then alphabetical properties (`$` prefix stripped). Aggregate mode: `metric`/`value` columns. |
-| `.total` | `int` | Matching profile count as reported by the API (reflects server-side limit; use `mode='aggregate'` for full count) |
+| `.total` | `int` | Total matching profile count (regardless of limit). In aggregate mode this is the population count. |
 | `.profiles` | `list[dict]` | Normalized profile dicts |
 | `.distinct_ids` | `list[str]` | List of distinct IDs from profiles |
 | `.value` | `int \| float \| None` | Scalar aggregate result (aggregate mode only) |

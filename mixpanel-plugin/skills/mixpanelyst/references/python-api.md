@@ -667,15 +667,16 @@ ws.query_user(
     properties: list[str] | None = None,
     sort_by: str | None = None,
     sort_order: Literal["ascending", "descending"] = "descending",
-    limit: int = 1,
+    limit: int | None = 1,
     search: str | None = None,
     distinct_id: str | None = None,
     distinct_ids: list[str] | None = None,
     group_id: str | None = None,
     as_of: str | int | None = None,
-    mode: Literal["profiles", "aggregate"] = "profiles",
-    aggregate: Literal["count", "sum", "mean", "min", "max"] = "count",
+    mode: Literal["profiles", "aggregate"] = "aggregate",
+    aggregate: Literal["count", "extremes", "percentile", "numeric_summary"] = "count",
     aggregate_property: str | None = None,
+    percentile: float | None = None,
     segment_by: list[int] | None = None,
     parallel: bool = False,
     workers: int = 5,
@@ -683,7 +684,7 @@ ws.query_user(
 ) -> UserQueryResult
 ```
 
-**Gotcha**: `limit` is an `int` with default `1` (for quick exploration). Pass a larger value for bulk queries. Use `mode="aggregate"` for population counts without fetching profiles.
+**Gotcha**: `limit` is `int | None` with default `1` (for quick exploration). Pass a larger value for bulk queries, or `None` to fetch all. Default mode is `"aggregate"` — use `mode="profiles"` to fetch individual profile records.
 
 ### build_user_params()
 
@@ -692,8 +693,8 @@ Same signature as `query_user()` but returns the engage API params dict without 
 ```python
 ws.build_user_params(
     *, where, cohort, properties, sort_by, sort_order,
-    search, distinct_id, distinct_ids, group_id, as_of,
-    mode, aggregate, aggregate_property, segment_by,
+    limit, search, distinct_id, distinct_ids, group_id, as_of,
+    mode, aggregate, aggregate_property, percentile, segment_by,
     parallel, workers, include_all_users,
 ) -> dict
 ```
@@ -702,6 +703,7 @@ ws.build_user_params(
 
 ```python
 result = ws.query_user(
+    mode="profiles",
     where=Filter.equals("plan", "premium"),
     properties=["$email", "company_size"],
     sort_by="ltv",

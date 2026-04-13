@@ -151,6 +151,7 @@ print(flow_result.top_transitions(5))
 
 # User profile query — filter, sort, and aggregate profiles
 result = ws.query_user(
+    mode="profiles",
     where=Filter.equals("plan", "premium"),
     properties=["$email", "$name", "ltv"],
     sort_by="ltv",
@@ -159,8 +160,8 @@ result = ws.query_user(
 )
 print(result.df)  # distinct_id | last_seen | email | name | ltv
 
-# Aggregate count of matching profiles
-count = ws.query_user(mode="aggregate", where=Filter.is_set("$email"))
+# Aggregate count of matching profiles (aggregate is the default mode)
+count = ws.query_user(where=Filter.is_set("$email"))
 print(f"Users with email: {count.value}")
 
 # Cohort-scoped queries — define cohorts inline, no UI needed

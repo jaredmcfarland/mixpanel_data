@@ -204,7 +204,7 @@ class TestBehavioralFilteringAllOf:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=cohort, limit=1)
+            ws.query_user(mode="profiles", cohort=cohort, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             fbc_raw = call_kwargs.kwargs.get("filter_by_cohort")
@@ -234,7 +234,7 @@ class TestBehavioralFilteringAllOf:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=cohort, limit=1)
+            ws.query_user(mode="profiles", cohort=cohort, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             fbc = json.loads(call_kwargs.kwargs["filter_by_cohort"])
@@ -267,7 +267,7 @@ class TestBehavioralFilteringAllOf:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=cohort, limit=1)
+            ws.query_user(mode="profiles", cohort=cohort, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             fbc = json.loads(call_kwargs.kwargs["filter_by_cohort"])
@@ -298,7 +298,7 @@ class TestBehavioralFilteringAnyOf:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=cohort, limit=2)
+            ws.query_user(mode="profiles", cohort=cohort, limit=2)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             fbc = json.loads(call_kwargs.kwargs["filter_by_cohort"])
@@ -325,7 +325,7 @@ class TestBehavioralFilteringAnyOf:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=cohort, limit=1)
+            ws.query_user(mode="profiles", cohort=cohort, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             fbc = json.loads(call_kwargs.kwargs["filter_by_cohort"])
@@ -351,7 +351,7 @@ class TestBehavioralFilteringAnyOf:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=cohort, limit=1)
+            ws.query_user(mode="profiles", cohort=cohort, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             fbc = json.loads(call_kwargs.kwargs["filter_by_cohort"])
@@ -377,7 +377,7 @@ class TestBehavioralFilteringSavedCohort:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=12345, limit=1)
+            ws.query_user(mode="profiles", cohort=12345, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             fbc_raw = call_kwargs.kwargs.get("filter_by_cohort")
@@ -401,7 +401,7 @@ class TestBehavioralFilteringSavedCohort:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=99999, limit=1)
+            ws.query_user(mode="profiles", cohort=99999, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             fbc = json.loads(call_kwargs.kwargs["filter_by_cohort"])
@@ -422,7 +422,7 @@ class TestBehavioralFilteringSavedCohort:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=12345, limit=1)
+            ws.query_user(mode="profiles", cohort=12345, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert "include_all_users" in call_kwargs.kwargs
@@ -447,6 +447,7 @@ class TestBehavioralFilteringCombinedCohortAndWhere:
         ws = workspace_factory()
         try:
             ws.query_user(
+                mode="profiles",
                 cohort=12345,
                 where=Filter.equals("plan", "premium", resource_type="people"),
                 limit=1,
@@ -477,6 +478,7 @@ class TestBehavioralFilteringCombinedCohortAndWhere:
         ws = workspace_factory()
         try:
             ws.query_user(
+                mode="profiles",
                 cohort=cohort,
                 where=Filter.equals("plan", "premium", resource_type="people"),
                 limit=1,
@@ -503,6 +505,7 @@ class TestBehavioralFilteringCombinedCohortAndWhere:
         ws = workspace_factory()
         try:
             ws.query_user(
+                mode="profiles",
                 cohort=12345,
                 where=[
                     Filter.equals("plan", "premium", resource_type="people"),
@@ -531,6 +534,7 @@ class TestBehavioralFilteringCohortPlusInCohortError:
         try:
             with pytest.raises(BookmarkValidationError) as exc_info:
                 ws.query_user(
+                    mode="profiles",
                     cohort=12345,
                     where=Filter.in_cohort(67890),
                     limit=1,
@@ -555,6 +559,7 @@ class TestBehavioralFilteringCohortPlusInCohortError:
         try:
             with pytest.raises(BookmarkValidationError) as exc_info:
                 ws.query_user(
+                    mode="profiles",
                     cohort=cohort,
                     where=Filter.in_cohort(67890),
                     limit=1,
@@ -575,6 +580,7 @@ class TestBehavioralFilteringCohortPlusInCohortError:
         try:
             with pytest.raises(BookmarkValidationError) as exc_info:
                 ws.query_user(
+                    mode="profiles",
                     cohort=12345,
                     where=Filter.in_cohort(67890),
                     limit=1,
@@ -609,7 +615,7 @@ class TestBehavioralFilteringCohortSerializationError:
             ws = workspace_factory()
             try:
                 with pytest.raises(BookmarkValidationError) as exc_info:
-                    ws.query_user(cohort=broken_cohort, limit=1)
+                    ws.query_user(mode="profiles", cohort=broken_cohort, limit=1)
 
                 error_codes = [e.code for e in exc_info.value.errors]
                 assert "U24" in error_codes
@@ -634,7 +640,7 @@ class TestBehavioralFilteringCohortSerializationError:
             ws = workspace_factory()
             try:
                 with pytest.raises(BookmarkValidationError) as exc_info:
-                    ws.query_user(cohort=broken_cohort, limit=1)
+                    ws.query_user(mode="profiles", cohort=broken_cohort, limit=1)
 
                 u24_errors = [e for e in exc_info.value.errors if e.code == "U24"]
                 assert len(u24_errors) == 1
@@ -665,7 +671,7 @@ class TestCrossEngineDistinctIds:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=3)
+            result = ws.query_user(mode="profiles", limit=3)
 
             ids = result.distinct_ids
             assert isinstance(ids, list)
@@ -689,7 +695,7 @@ class TestCrossEngineDistinctIds:
 
         ws = workspace_factory()
         try:
-            result1 = ws.query_user(limit=2)
+            result1 = ws.query_user(mode="profiles", limit=2)
             ids = result1.distinct_ids
 
             # Second query uses those IDs
@@ -698,7 +704,7 @@ class TestCrossEngineDistinctIds:
                 total=2,
                 has_more=False,
             )
-            result2 = ws.query_user(distinct_ids=ids, limit=100_000)
+            result2 = ws.query_user(mode="profiles", distinct_ids=ids, limit=100_000)
 
             assert len(result2.profiles) == 2
             assert result2.distinct_ids == ids
@@ -720,7 +726,7 @@ class TestCrossEngineDistinctIds:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert result.distinct_ids == []
             assert isinstance(result.distinct_ids, list)
@@ -741,7 +747,7 @@ class TestCrossEngineDistinctIds:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=2)
+            result = ws.query_user(mode="profiles", limit=2)
 
             assert len(result.distinct_ids) == len(result.profiles)
         finally:
@@ -770,7 +776,7 @@ class TestCrossEngineDataFrameComposition:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=4)
+            result = ws.query_user(mode="profiles", limit=4)
 
             df = result.df
             grouped = df.groupby("plan").size()
@@ -798,7 +804,7 @@ class TestCrossEngineDataFrameComposition:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=3)
+            result = ws.query_user(mode="profiles", limit=3)
 
             df = result.df
             desc = df["revenue"].describe()
@@ -822,7 +828,7 @@ class TestCrossEngineDataFrameComposition:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=2)
+            result = ws.query_user(mode="profiles", limit=2)
 
             # Simulate external data (e.g., from a funnel result)
             external_df = pd.DataFrame(
@@ -862,7 +868,7 @@ class TestCrossEngineDataFrameComposition:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=3)
+            result = ws.query_user(mode="profiles", limit=3)
 
             df = result.df
             premium_users = df[df["plan"] == "premium"]
@@ -884,7 +890,7 @@ class TestCrossEngineDataFrameComposition:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user()
+            result = ws.query_user(mode="profiles")
 
             assert isinstance(result.df, pd.DataFrame)
         finally:
@@ -908,6 +914,7 @@ class TestCrossEngineFilterConsistency:
         ws = workspace_factory()
         try:
             result = ws.query_user(
+                mode="profiles",
                 where=Filter.equals("plan", "premium", resource_type="people"),
                 limit=1,
             )
@@ -931,6 +938,7 @@ class TestCrossEngineFilterConsistency:
         ws = workspace_factory()
         try:
             result = ws.query_user(
+                mode="profiles",
                 where=[
                     Filter.equals("plan", "premium", resource_type="people"),
                     Filter.greater_than("revenue", 100, resource_type="people"),
@@ -991,6 +999,7 @@ class TestCrossEngineFilterConsistency:
         ws = workspace_factory()
         try:
             ws.query_user(
+                mode="profiles",
                 where=Filter.equals("plan", "premium", resource_type="people"),
                 limit=1,
             )
@@ -1023,7 +1032,9 @@ class TestCrossEngineCohortIdFromFunnel:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(cohort=funnel_cohort_id, limit=100_000)
+            result = ws.query_user(
+                mode="profiles", cohort=funnel_cohort_id, limit=100_000
+            )
 
             assert isinstance(result, UserQueryResult)
             assert len(result.profiles) == 2
@@ -1048,7 +1059,7 @@ class TestCrossEngineCohortIdFromFunnel:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(cohort=42, limit=100_000)
+            result = ws.query_user(mode="profiles", cohort=42, limit=100_000)
 
             ids = result.distinct_ids
             assert len(ids) == 2
@@ -1071,7 +1082,7 @@ class TestCrossEngineCohortIdFromFunnel:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(cohort=42, limit=100_000)
+            result = ws.query_user(mode="profiles", cohort=42, limit=100_000)
 
             df = result.df
             assert isinstance(df, pd.DataFrame)
@@ -1094,7 +1105,7 @@ class TestCrossEngineCohortIdFromFunnel:
 
         ws = workspace_factory()
         try:
-            ws.query_user(cohort=42, limit=1)
+            ws.query_user(mode="profiles", cohort=42, limit=1)
 
             call_kwargs = mock_api_client.export_profiles_page.call_args
             assert call_kwargs.kwargs.get("include_all_users") is False

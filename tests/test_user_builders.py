@@ -448,3 +448,56 @@ class TestExtractCohortFilter:
         original_len = len(filters)
         extract_cohort_filter(filters)
         assert len(filters) == original_len
+
+
+# =============================================================================
+# PR #118 review fixes — property escaping and between bounds
+# =============================================================================
+
+
+class TestFilterToSelectorPropertyEscaping:
+    """Tests for property name escaping in selectors."""
+
+    def test_property_with_double_quote(self) -> None:
+        """Property name containing double quote is escaped."""
+        f = Filter.equals('weird"prop', "val")
+        result = filter_to_selector(f)
+        assert result == 'properties["weird\\"prop"] == "val"'
+
+    def test_property_with_backslash(self) -> None:
+        """Property name containing backslash is escaped."""
+        f = Filter.equals("back\\slash", "val")
+        result = filter_to_selector(f)
+        assert result == 'properties["back\\\\slash"] == "val"'
+
+
+class TestFilterToSelectorBetweenBoundsValidation:
+    """Tests for between operator bound type validation."""
+
+    def test_string_lower_bound_rejected(self) -> None:
+        """String lower bound raises ValueError."""
+        f = Filter("prop", "is between", ["low", 10])  # type: ignore[arg-type]
+        import pytest
+
+        with pytest.raises(ValueError, match="int or float for lower bound"):
+            filter_to_selector(f)
+
+    def test_string_upper_bound_rejected(self) -> None:
+        """String upper bound raises ValueError."""
+        f = Filter("prop", "is between", [0, "high"])  # type: ignore[arg-type]
+        import pytest
+
+        with pytest.raises(ValueError, match="int or float for upper bound"):
+            filter_to_selector(f)
+
+
+class TestNotEqualsErrorMessage:
+    """Tests for not_equals error message correctness."""
+
+    def test_error_references_correct_method_name(self) -> None:
+        """Error message references Filter.not_equals(), not does_not_equal()."""
+        f = Filter("prop", "does not equal", [{"nested": True}])
+        import pytest
+
+        with pytest.raises(ValueError, match="Filter.not_equals"):
+            filter_to_selector(f)

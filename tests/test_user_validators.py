@@ -187,21 +187,31 @@ class TestValidateUserArgsValid:
         errors = validate_user_args(mode="aggregate", aggregate="count")
         assert errors == []
 
-    def test_aggregate_mode_sum_with_property(self) -> None:
-        """Aggregate mode with sum requires aggregate_property."""
+    def test_aggregate_mode_extremes_with_property(self) -> None:
+        """Aggregate mode with extremes requires aggregate_property."""
         errors = validate_user_args(
             mode="aggregate",
-            aggregate="sum",
+            aggregate="extremes",
             aggregate_property="ltv",
         )
         assert errors == []
 
-    def test_aggregate_mode_mean_with_property(self) -> None:
-        """Aggregate mode with mean requires aggregate_property."""
+    def test_aggregate_mode_numeric_summary_with_property(self) -> None:
+        """Aggregate mode with numeric_summary requires aggregate_property."""
         errors = validate_user_args(
             mode="aggregate",
-            aggregate="mean",
+            aggregate="numeric_summary",
             aggregate_property="revenue",
+        )
+        assert errors == []
+
+    def test_aggregate_mode_percentile_with_property(self) -> None:
+        """Aggregate mode with percentile requires aggregate_property and percentile."""
+        errors = validate_user_args(
+            mode="aggregate",
+            aggregate="percentile",
+            aggregate_property="age",
+            percentile=50,
         )
         assert errors == []
 
@@ -636,7 +646,7 @@ class TestValidateUserArgsAggregateRules:
 
     def test_u14_aggregate_property_required_for_non_count(self) -> None:
         """U14: aggregate_property is required when aggregate is not 'count'."""
-        for agg in ("sum", "mean", "min", "max"):
+        for agg in ("extremes", "percentile", "numeric_summary"):
             errors = validate_user_args(
                 mode="aggregate",
                 aggregate=agg,
@@ -653,11 +663,11 @@ class TestValidateUserArgsAggregateRules:
         )
         assert not _has_code(errors, "U14")
 
-    def test_u14_sum_with_property_is_valid(self) -> None:
+    def test_u14_extremes_with_property_is_valid(self) -> None:
         """U14: non-count aggregate with aggregate_property is valid."""
         errors = validate_user_args(
             mode="aggregate",
-            aggregate="sum",
+            aggregate="extremes",
             aggregate_property="ltv",
         )
         assert not _has_code(errors, "U14")
@@ -838,6 +848,98 @@ class TestValidateUserArgsModeSpecific:
 
 
 # =============================================================================
+# TestValidateUserArgsPercentileRules — Rules U26, U27, U28
+# =============================================================================
+
+
+class TestValidateUserArgsPercentileRules:
+    """Tests for percentile-specific validation rules U26, U27, U28."""
+
+    def test_u26_percentile_required_for_percentile_aggregate(self) -> None:
+        """U26: percentile param is required when aggregate='percentile'."""
+        errors = validate_user_args(
+            mode="aggregate",
+            aggregate="percentile",
+            aggregate_property="age",
+        )
+        assert _has_code(errors, "U26")
+
+    def test_u26_percentile_provided_is_valid(self) -> None:
+        """U26: percentile param provided with aggregate='percentile' is valid."""
+        errors = validate_user_args(
+            mode="aggregate",
+            aggregate="percentile",
+            aggregate_property="age",
+            percentile=50,
+        )
+        assert not _has_code(errors, "U26")
+
+    def test_u27_percentile_prohibited_for_non_percentile(self) -> None:
+        """U27: percentile param must not be set for non-percentile aggregates."""
+        for agg in ("count", "extremes", "numeric_summary"):
+            kwargs: dict[str, object] = {
+                "mode": "aggregate",
+                "aggregate": agg,
+                "percentile": 50,
+            }
+            if agg != "count":
+                kwargs["aggregate_property"] = "ltv"
+            errors = validate_user_args(**kwargs)  # type: ignore[arg-type]
+            assert _has_code(errors, "U27"), (
+                f"aggregate='{agg}' with percentile should trigger U27"
+            )
+
+    def test_u27_no_percentile_for_extremes_is_valid(self) -> None:
+        """U27: no percentile param with aggregate='extremes' is valid."""
+        errors = validate_user_args(
+            mode="aggregate",
+            aggregate="extremes",
+            aggregate_property="ltv",
+        )
+        assert not _has_code(errors, "U27")
+
+    def test_u28_percentile_must_be_between_0_and_100_exclusive(self) -> None:
+        """U28: percentile must be between 0 and 100 (exclusive boundaries)."""
+        for val in (0, 100, -1, 101, 0.0, 100.0):
+            errors = validate_user_args(
+                mode="aggregate",
+                aggregate="percentile",
+                aggregate_property="age",
+                percentile=val,
+            )
+            assert _has_code(errors, "U28"), f"percentile={val} should trigger U28"
+
+    def test_u28_valid_percentile_values(self) -> None:
+        """U28: valid percentile values between 0 and 100 exclusive pass."""
+        for val in (0.1, 1, 25, 50, 75, 99, 99.9):
+            errors = validate_user_args(
+                mode="aggregate",
+                aggregate="percentile",
+                aggregate_property="age",
+                percentile=val,
+            )
+            assert not _has_code(errors, "U28"), f"percentile={val} should be valid"
+
+    def test_u28_boundary_values(self) -> None:
+        """U28: boundary values 0 and 100 are invalid (exclusive range)."""
+        errors_zero = validate_user_args(
+            mode="aggregate",
+            aggregate="percentile",
+            aggregate_property="age",
+            percentile=0,
+        )
+        assert _has_code(errors_zero, "U28")
+
+        errors_hundred = validate_user_args(
+            mode="aggregate",
+            aggregate="percentile",
+            aggregate_property="age",
+            percentile=100,
+        )
+        assert _has_code(errors_hundred, "U28")
+
+
+# =============================================================================
 # TestValidateUserArgsMultipleViolations — Simultaneous error collection
 # =============================================================================
 
@@ -891,7 +993,7 @@ class TestValidateUserArgsMultipleViolations:
         """Aggregate-specific violations are all reported."""
         errors = validate_user_args(
             mode="aggregate",
-            aggregate="sum",
+            aggregate="extremes",
             # Missing aggregate_property → U14
             segment_by=[0, -1],  # Invalid IDs → U17
         )
@@ -987,10 +1089,9 @@ class TestValidateUserParamsValid:
         """Params with valid action expressions are valid."""
         for action in (
             "count()",
-            "sum(ltv)",
-            "mean(revenue)",
-            "min(age)",
-            "max(score)",
+            'extremes(properties["ltv"])',
+            'numeric_summary(properties["revenue"])',
+            'percentile(properties["age"], 50)',
         ):
             errors = validate_user_params({"action": action})
             assert errors == [], f"action='{action}' should be valid"
@@ -1093,24 +1194,21 @@ class TestValidateUserParamsUP4:
         errors = validate_user_params({"action": "count()"})
         assert not _has_code(errors, "UP4")
 
-    def test_up4_sum_with_property_is_valid(self) -> None:
-        """UP4: 'sum(property)' is a valid action."""
-        errors = validate_user_params({"action": "sum(ltv)"})
+    def test_up4_extremes_with_property_is_valid(self) -> None:
+        """UP4: 'extremes(properties[\"prop\"])' is a valid action."""
+        errors = validate_user_params({"action": 'extremes(properties["ltv"])'})
         assert not _has_code(errors, "UP4")
 
-    def test_up4_mean_with_property_is_valid(self) -> None:
-        """UP4: 'mean(property)' is a valid action."""
-        errors = validate_user_params({"action": "mean(revenue)"})
+    def test_up4_numeric_summary_with_property_is_valid(self) -> None:
+        """UP4: 'numeric_summary(properties[\"prop\"])' is a valid action."""
+        errors = validate_user_params(
+            {"action": 'numeric_summary(properties["revenue"])'}
+        )
         assert not _has_code(errors, "UP4")
 
-    def test_up4_min_with_property_is_valid(self) -> None:
-        """UP4: 'min(property)' is a valid action."""
-        errors = validate_user_params({"action": "min(age)"})
-        assert not _has_code(errors, "UP4")
-
-    def test_up4_max_with_property_is_valid(self) -> None:
-        """UP4: 'max(property)' is a valid action."""
-        errors = validate_user_params({"action": "max(score)"})
+    def test_up4_percentile_with_property_is_valid(self) -> None:
+        """UP4: 'percentile(properties[\"prop\"], N)' is a valid action."""
+        errors = validate_user_params({"action": 'percentile(properties["age"], 50)'})
         assert not _has_code(errors, "UP4")
 
     def test_up4_missing_action_is_valid(self) -> None:
@@ -1142,3 +1240,45 @@ class TestValidateUserParamsMultipleViolations:
         assert "UP2" in codes, "empty filter_by_cohort"
         assert "UP3" in codes, "empty output_properties"
         assert "UP4" in codes, "invalid action"
+
+
+# =============================================================================
+# PR #118 review fixes — U0 type-check and U7 false-positive
+# =============================================================================
+
+
+class TestValidateUserArgsWhereTypeCheck:
+    """Tests for U0: where list items must be Filter instances."""
+
+    def test_u0_non_filter_in_where_list(self) -> None:
+        """U0: Non-Filter item in where list produces ValidationError."""
+        errors = validate_user_args(
+            where=["not-a-filter"],  # type: ignore[list-item]
+        )
+        assert _has_code(errors, "U0")
+
+    def test_u0_mixed_filter_and_non_filter(self) -> None:
+        """U0: Mixed list with both Filter and non-Filter items."""
+        errors = validate_user_args(
+            where=[Filter.equals("plan", "premium"), 42],  # type: ignore[list-item]
+        )
+        assert _has_code(errors, "U0")
+
+
+class TestValidateUserArgsU7WithInCohortFilter:
+    """Tests for U7 fix: include_all_users with Filter.in_cohort()."""
+
+    def test_u7_include_all_users_with_in_cohort_filter_is_valid(self) -> None:
+        """U7: include_all_users=True with Filter.in_cohort() is valid."""
+        errors = validate_user_args(
+            include_all_users=True,
+            where=[Filter.in_cohort(42)],
+        )
+        assert not _has_code(errors, "U7")
+
+    def test_u7_include_all_users_without_any_cohort_is_invalid(self) -> None:
+        """U7: include_all_users=True without any cohort source is invalid."""
+        errors = validate_user_args(
+            include_all_users=True,
+        )
+        assert _has_code(errors, "U7")

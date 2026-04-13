@@ -44,7 +44,7 @@ Extends `ResultWithDataFrame`. Mode-aware result container for user profile quer
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `action` | `str` | Aggregation expression used (e.g., `"mean(ltv)"`) |
+| `action` | `str` | Aggregation expression used (e.g., `"count()"`, `"numeric_summary(properties[\"ltv\"])"`) |
 | `segmented` | `bool` | Whether cohort segmentation was applied |
 
 ---
@@ -105,6 +105,10 @@ Not a data entity, but a critical data transformation:
 | U22 | `properties` only applies to `mode="profiles"` | error |
 | U23 | `workers` must be between 1 and 5 | error |
 | U24 | `CohortDefinition.to_dict()` must succeed | error |
+| U25 | Filter `_property` must be a string type | error |
+| U26 | `percentile` required when `aggregate="percentile"` | error |
+| U27 | `percentile` must NOT be set when `aggregate != "percentile"` | error |
+| U28 | `percentile` must be between 0 and 100 exclusive | error |
 
 **Layer 2: Parameter Validation (UP1-UP4)**
 
@@ -166,7 +170,7 @@ CohortDefinition ──[to_dict()]──→ raw_cohort dict ──→ engage API
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `metric` | `str` | e.g., `"count"`, `"mean(ltv)"` |
+| `metric` | `str` | e.g., `"count()"`, `"numeric_summary(properties[\"ltv\"])"` |
 | `value` | `int \| float` | Aggregate result |
 
 ### Aggregate Mode (segmented)

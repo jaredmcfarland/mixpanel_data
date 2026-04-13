@@ -226,7 +226,7 @@ class TestTier1DataCorruption:
 
         ws = workspace_factory()
         try:
-            ws.query_user(sort_by="ltv", parallel=True, limit=100_000)
+            ws.query_user(mode="profiles", sort_by="ltv", parallel=True, limit=100_000)
 
             calls = mock_api_client.export_profiles_page.call_args_list
             for call in calls:
@@ -331,7 +331,7 @@ class TestTier1DataCorruption:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             # Total reflects API total, but profiles are fewer
             assert result.total == 500
@@ -391,7 +391,7 @@ class TestTier1DataCorruption:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             assert len(result.profiles) == 100, (
                 "Only page 0 profiles should be returned"
@@ -499,7 +499,7 @@ class TestTier1DataCorruption:
             # limit=100_000 means "fetch all" — tests loop termination
             # If the implementation doesn't guard against empty pages,
             # this will hit the RuntimeError from the loop guard.
-            result = ws.query_user(limit=100_000)
+            result = ws.query_user(mode="profiles", limit=100_000)
             # If we get here, the loop terminated on its own (fixed)
             assert len(result.profiles) >= 1
         finally:
@@ -526,7 +526,7 @@ class TestTier1DataCorruption:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(limit=1000)
+            result = ws.query_user(mode="profiles", limit=1000)
 
             assert mock_api_client.export_profiles_page.call_count == 1, (
                 "Should fetch only page 0 when limit equals page_size"
@@ -580,7 +580,7 @@ class TestTier1DataCorruption:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             # Should still return all profiles
             assert len(result.profiles) == total
@@ -779,20 +779,18 @@ class TestTier3ValidationGaps:
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """Sort_by with double quote creates malformed selector.
+        """Sort_by with double quote is escaped in the selector.
 
-        ``build_user_params`` uses f-string interpolation
-        ``f'properties["{sort_by}"]'`` without escaping. A double quote
-        in the value breaks the selector syntax.
+        ``build_user_params`` escapes double quotes in property names
+        to prevent selector injection.
         """
         ws = workspace_factory()
         try:
-            params = ws.build_user_params(sort_by='foo"bar')
+            params = ws.build_user_params(mode="profiles", sort_by='foo"bar')
 
-            # The sort_key should contain the broken selector
             sort_key = params["sort_key"]
-            assert sort_key == 'properties["foo"bar"]', (
-                f"Expected broken selector with unescaped quote, got {sort_key!r}"
+            assert sort_key == 'properties["foo\\"bar"]', (
+                f"Expected escaped quote in selector, got {sort_key!r}"
             )
         finally:
             ws.close()
@@ -801,18 +799,18 @@ class TestTier3ValidationGaps:
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """Sort_by with close bracket creates malformed selector.
+        """Sort_by with close bracket is escaped in the selector.
 
-        Passing ``"]`` as sort_by produces ``properties[""]"]`` which
-        is syntactically broken. U5 only checks for empty string.
+        Passing ``"]`` as sort_by escapes the double quote to prevent
+        selector injection.
         """
         ws = workspace_factory()
         try:
-            params = ws.build_user_params(sort_by='"]')
+            params = ws.build_user_params(mode="profiles", sort_by='"]')
 
             sort_key = params["sort_key"]
-            assert sort_key == 'properties[""]"]', (
-                f"Expected malformed selector, got {sort_key!r}"
+            assert sort_key == 'properties["\\"]"]', (
+                f"Expected escaped selector, got {sort_key!r}"
             )
         finally:
             ws.close()
@@ -880,29 +878,24 @@ class TestTier3ValidationGaps:
             "check makes it dead code in normal flow"
         )
 
-    def test_t3_06_include_all_users_with_in_cohort_filter_but_no_cohort_param(
+    def test_t3_06_include_all_users_with_in_cohort_filter_accepted(
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """include_all_users + Filter.in_cohort raises U7 (false positive).
+        """include_all_users + Filter.in_cohort does not raise U7.
 
-        U7 checks ``cohort is None`` but the user set a cohort filter
-        via ``where=Filter.in_cohort(42)``. This is a false positive
-        because a cohort *is* being used, just through a different param.
+        U7 now checks both ``cohort is None`` and ``in_cohort_count == 0``,
+        so ``Filter.in_cohort(42)`` satisfies the cohort requirement
+        without needing the ``cohort`` param.
         """
         ws = workspace_factory()
         try:
-            with pytest.raises(BookmarkValidationError) as exc_info:
-                ws.build_user_params(
-                    where=Filter.in_cohort(42),
-                    include_all_users=True,
-                )
-
-            codes = [e.code for e in exc_info.value.errors]
-            assert "U7" in codes, (
-                "Expected U7 false positive: include_all_users=True "
-                "requires cohort param even though in_cohort filter exists"
+            # Should NOT raise — in_cohort filter satisfies the cohort requirement
+            params = ws.build_user_params(
+                where=Filter.in_cohort(42),
+                include_all_users=True,
             )
+            assert "include_all_users" in params
         finally:
             ws.close()
 
@@ -945,21 +938,24 @@ class TestTier3ValidationGaps:
         finally:
             ws.close()
 
-    def test_t3_09_validate_action_mean_none_string(
+    def test_t3_09_validate_action_malformed_string_rejected(
         self,
     ) -> None:
-        """UP4 regex matches ``mean(None)`` as valid.
+        """UP4 regex rejects malformed action strings.
 
-        The regex ``^(count\\(\\)|(?:sum|mean|min|max)\\(.+\\))$`` uses
-        ``.+`` which matches the string ``None``. This means
-        ``mean(None)`` passes validation even though it's semantically
-        invalid. Defense-in-depth gap.
+        The refactored ``_ACTION_RE`` requires structured action
+        formats: ``count()``, ``extremes(properties["prop"])``,
+        ``percentile(properties["prop"], N)``, or
+        ``numeric_summary(properties["prop"])``. A bare function
+        call like ``extremes(None)`` that omits the required
+        ``properties["..."]`` wrapper is correctly rejected.
         """
-        errors = validate_user_params({"action": "mean(None)"})
+        errors = validate_user_params({"action": "extremes(None)"})
 
         up4_errors = [e for e in errors if e.code == "UP4"]
-        assert len(up4_errors) == 0, (
-            "Expected UP4 to pass: regex .+ matches 'None' string"
+        assert len(up4_errors) == 1, (
+            "Expected UP4 to reject: 'extremes(None)' does not match "
+            'the required properties["..."] format'
         )
 
     def test_t3_10_workers_6_raises_u23(

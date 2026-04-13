@@ -31,7 +31,9 @@ import logging
 import math
 import time
 from collections.abc import Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date as _date
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -8615,9 +8617,12 @@ class Workspace:
         distinct_ids: list[str] | None = None,
         group_id: str | None = None,
         as_of: str | int | None = None,
-        mode: Literal["profiles", "aggregate"] = "profiles",
-        aggregate: Literal["count", "sum", "mean", "min", "max"] = "count",
+        mode: Literal["profiles", "aggregate"] = "aggregate",
+        aggregate: Literal[
+            "count", "extremes", "percentile", "numeric_summary"
+        ] = "count",
         aggregate_property: str | None = None,
+        percentile: float | None = None,
         segment_by: list[int] | None = None,
         parallel: bool = False,
         workers: int = 5,
@@ -8648,9 +8653,14 @@ class Workspace:
                 is converted to a Unix timestamp; an ``int`` is passed
                 through directly.
             mode: Output mode (``"profiles"`` or ``"aggregate"``).
-            aggregate: Aggregation function for aggregate mode.
+            aggregate: Aggregation function for aggregate mode. One of
+                ``"count"`` (profile count), ``"extremes"`` (min/max),
+                ``"percentile"`` (Nth percentile), or
+                ``"numeric_summary"`` (count/mean/var/sum_of_squares).
             aggregate_property: Property to aggregate on (required for
                 non-count aggregations).
+            percentile: Percentile value (0-100 exclusive). Required
+                when ``aggregate="percentile"``.
             segment_by: Cohort IDs for segmented aggregation.
             parallel: Whether to enable concurrent page fetching.
             workers: Maximum concurrent workers for parallel fetching.
@@ -8664,7 +8674,7 @@ class Workspace:
 
         Raises:
             BookmarkValidationError: If any validation rule fails at
-                either the argument level (U1-U25) or the param level
+                either the argument level (U1-U28) or the param level
                 (UP1-UP4).
 
         Example:
@@ -8710,6 +8720,7 @@ class Workspace:
             mode=mode,
             aggregate=aggregate,
             aggregate_property=aggregate_property,
+            percentile=percentile,
             segment_by=segment_by,
             parallel=parallel,
             workers=workers,
@@ -8730,7 +8741,18 @@ class Workspace:
             filters_list = [where] if isinstance(where, Filter) else where
             remaining, cohort_from_filter = extract_cohort_filter(filters_list)
             if remaining:
-                selector = filters_to_selector(remaining)
+                try:
+                    selector = filters_to_selector(remaining)
+                except ValueError as exc:
+                    raise BookmarkValidationError(
+                        errors=[
+                            ValidationError(
+                                path="where",
+                                message=str(exc),
+                                code="U_FILTER",
+                            )
+                        ]
+                    ) from exc
                 if selector:
                     params["where"] = selector
 
@@ -8776,7 +8798,8 @@ class Workspace:
 
         # --- sort_by → sort_key ---
         if sort_by is not None:
-            params["sort_key"] = f'properties["{sort_by}"]'
+            escaped_sort = sort_by.replace("\\", "\\\\").replace('"', '\\"')
+            params["sort_key"] = f'properties["{escaped_sort}"]'
             params["sort_order"] = sort_order
 
         # --- as_of → as_of_timestamp ---
@@ -8813,7 +8836,17 @@ class Workspace:
             if aggregate == "count":
                 action = "count()"
             else:
-                action = f"{aggregate}({aggregate_property})"
+                escaped_agg_prop = (
+                    aggregate_property.replace("\\", "\\\\").replace('"', '\\"')
+                    if aggregate_property is not None
+                    else ""
+                )
+                if aggregate == "percentile":
+                    action = (
+                        f'percentile(properties["{escaped_agg_prop}"], {percentile})'
+                    )
+                else:
+                    action = f'{aggregate}(properties["{escaped_agg_prop}"])'
             params["action"] = action
             if segment_by is not None:
                 params["segment_by_cohorts"] = json.dumps(
@@ -8878,8 +8911,9 @@ class Workspace:
 
         # Reuse _build_page_kwargs for params→kwargs translation.
         # Pass limit server-side for efficient fetching.
-        # The API's total field reflects the server-side limit, not the
-        # full population count. Use mode="aggregate" for the full count.
+        # The API's total field equals len(profiles) — the number of
+        # profiles returned, not the full population. Use
+        # mode="aggregate", aggregate="count" for the full count.
         api_kwargs = self._build_page_kwargs(params)
         api_kwargs["limit"] = limit
 
@@ -8935,9 +8969,12 @@ class Workspace:
         distinct_ids: list[str] | None = None,
         group_id: str | None = None,
         as_of: str | int | None = None,
-        mode: Literal["profiles", "aggregate"] = "profiles",
-        aggregate: Literal["count", "sum", "mean", "min", "max"] = "count",
+        mode: Literal["profiles", "aggregate"] = "aggregate",
+        aggregate: Literal[
+            "count", "extremes", "percentile", "numeric_summary"
+        ] = "count",
         aggregate_property: str | None = None,
+        percentile: float | None = None,
         segment_by: list[int] | None = None,
         parallel: bool = False,
         workers: int = 5,
@@ -8971,9 +9008,14 @@ class Workspace:
                 is converted to a Unix timestamp; an ``int`` is passed
                 through directly.
             mode: Output mode (``"profiles"`` or ``"aggregate"``).
-            aggregate: Aggregation function for aggregate mode.
+            aggregate: Aggregation function for aggregate mode. One of
+                ``"count"`` (profile count), ``"extremes"`` (min/max),
+                ``"percentile"`` (Nth percentile), or
+                ``"numeric_summary"`` (count/mean/var/sum_of_squares).
             aggregate_property: Property to aggregate on (required for
                 non-count aggregations).
+            percentile: Percentile value (0-100 exclusive). Required
+                when ``aggregate="percentile"``.
             segment_by: Cohort IDs for segmented aggregation.
             parallel: Whether to enable concurrent page fetching.
             workers: Maximum concurrent workers for parallel fetching.
@@ -9038,6 +9080,7 @@ class Workspace:
             mode=mode,
             aggregate=aggregate,
             aggregate_property=aggregate_property,
+            percentile=percentile,
             segment_by=segment_by,
             parallel=parallel,
             workers=workers,
@@ -9065,6 +9108,8 @@ class Workspace:
                 params, limit, workers
             )
         else:
+            if parallel and limit == 1:
+                logger.debug("parallel=True ignored: limit=1 uses sequential path")
             profiles, total, computed_at, meta = self._execute_user_query_sequential(
                 params, limit
             )
@@ -9092,9 +9137,12 @@ class Workspace:
         distinct_ids: list[str] | None = None,
         group_id: str | None = None,
         as_of: str | int | None = None,
-        mode: Literal["profiles", "aggregate"] = "profiles",
-        aggregate: Literal["count", "sum", "mean", "min", "max"] = "count",
+        mode: Literal["profiles", "aggregate"] = "aggregate",
+        aggregate: Literal[
+            "count", "extremes", "percentile", "numeric_summary"
+        ] = "count",
         aggregate_property: str | None = None,
+        percentile: float | None = None,
         segment_by: list[int] | None = None,
         limit: int | None = 1,
         parallel: bool = False,
@@ -9126,9 +9174,14 @@ class Workspace:
                 is converted to a Unix timestamp; an ``int`` is passed
                 through directly.
             mode: Output mode (``"profiles"`` or ``"aggregate"``).
-            aggregate: Aggregation function for aggregate mode.
+            aggregate: Aggregation function for aggregate mode. One of
+                ``"count"`` (profile count), ``"extremes"`` (min/max),
+                ``"percentile"`` (Nth percentile), or
+                ``"numeric_summary"`` (count/mean/var/sum_of_squares).
             aggregate_property: Property to aggregate on (required for
                 non-count aggregations).
+            percentile: Percentile value (0-100 exclusive). Required
+                when ``aggregate="percentile"``.
             segment_by: Cohort IDs for segmented aggregation.
             limit: Maximum profiles to return. Defaults to ``1``. Used
                 for argument-level validation (U3); not included in the
@@ -9148,7 +9201,7 @@ class Workspace:
 
         Raises:
             BookmarkValidationError: If any validation rule fails at
-                either the argument level (U1-U25) or the param level
+                either the argument level (U1-U28) or the param level
                 (UP1-UP4).
 
         Example:
@@ -9178,6 +9231,7 @@ class Workspace:
             mode=mode,
             aggregate=aggregate,
             aggregate_property=aggregate_property,
+            percentile=percentile,
             segment_by=segment_by,
             limit=limit,
             parallel=parallel,
@@ -9214,8 +9268,6 @@ class Workspace:
             RateLimitError: API rate limit exceeded (429).
             APIError: Other API communication errors.
         """
-        from datetime import datetime, timezone
-
         api_client = self._require_api_client()
 
         stats_kwargs: dict[str, Any] = {}
@@ -9249,7 +9301,7 @@ class Workspace:
             total = 0
 
         action = params.get("action", "count()")
-        segmented = isinstance(aggregate_data, dict)
+        segmented = "segment_by_cohorts" in params
         meta: dict[str, Any] = {"action": action, "segmented": segmented}
 
         return aggregate_data, total, computed_at, meta
@@ -9278,9 +9330,6 @@ class Workspace:
         Returns:
             Tuple of (profiles, total, computed_at, meta).
         """
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        from datetime import datetime, timezone
-
         api_client = self._require_api_client()
         capped_workers = min(workers, 5)
         page_kwargs = self._build_page_kwargs(params)

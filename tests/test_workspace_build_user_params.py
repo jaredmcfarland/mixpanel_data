@@ -317,6 +317,7 @@ class TestPropertySelection:
     def test_properties_maps_to_output_properties(self, ws: Workspace) -> None:
         """Properties list maps to output_properties in params."""
         params = ws.build_user_params(
+            mode="profiles",
             properties=["$email", "$name", "plan"],
         )
         assert "output_properties" in params
@@ -335,6 +336,7 @@ class TestPropertySelection:
     def test_properties_preserves_dollar_prefix(self, ws: Workspace) -> None:
         """Dollar-prefixed property names are passed through unchanged."""
         params = ws.build_user_params(
+            mode="profiles",
             properties=["$email", "$last_seen"],
         )
         output = params["output_properties"]
@@ -354,13 +356,13 @@ class TestSortByTranslation:
 
     def test_sort_by_translates_to_sort_key(self, ws: Workspace) -> None:
         """sort_by='ltv' translates to sort_key='properties[\"ltv\"]'."""
-        params = ws.build_user_params(sort_by="ltv")
+        params = ws.build_user_params(mode="profiles", sort_by="ltv")
         assert "sort_key" in params
         assert params["sort_key"] == 'properties["ltv"]'
 
     def test_sort_by_with_dollar_prefix(self, ws: Workspace) -> None:
         """sort_by='$last_seen' translates with dollar prefix preserved."""
-        params = ws.build_user_params(sort_by="$last_seen")
+        params = ws.build_user_params(mode="profiles", sort_by="$last_seen")
         assert params["sort_key"] == 'properties["$last_seen"]'
 
     def test_no_sort_by_omits_sort_key(self, ws: Workspace) -> None:
@@ -371,6 +373,7 @@ class TestSortByTranslation:
     def test_sort_order_passthrough(self, ws: Workspace) -> None:
         """sort_order is passed through to params."""
         params = ws.build_user_params(
+            mode="profiles",
             sort_by="ltv",
             sort_order="ascending",
         )
@@ -378,7 +381,7 @@ class TestSortByTranslation:
 
     def test_default_sort_order_is_descending(self, ws: Workspace) -> None:
         """Default sort_order is 'descending'."""
-        params = ws.build_user_params(sort_by="ltv")
+        params = ws.build_user_params(mode="profiles", sort_by="ltv")
         assert params["sort_order"] == "descending"
 
 
@@ -425,12 +428,13 @@ class TestDistinctIdHandling:
 
     def test_distinct_id_passthrough(self, ws: Workspace) -> None:
         """distinct_id is passed through to params."""
-        params = ws.build_user_params(distinct_id="user_abc123")
+        params = ws.build_user_params(mode="profiles", distinct_id="user_abc123")
         assert params["distinct_id"] == "user_abc123"
 
     def test_distinct_ids_passthrough(self, ws: Workspace) -> None:
         """distinct_ids is passed through to params."""
         params = ws.build_user_params(
+            mode="profiles",
             distinct_ids=["user_1", "user_2", "user_3"],
         )
         distinct_ids = params["distinct_ids"]
@@ -475,7 +479,7 @@ class TestSearchPassthrough:
 
     def test_search_passthrough(self, ws: Workspace) -> None:
         """search string is passed through to params."""
-        params = ws.build_user_params(search="alice@example.com")
+        params = ws.build_user_params(mode="profiles", search="alice@example.com")
         assert params["search"] == "alice@example.com"
 
     def test_no_search_omits_param(self, ws: Workspace) -> None:
@@ -619,48 +623,40 @@ class TestAggregateModeParams:
         params = ws.build_user_params(mode="aggregate")
         assert params.get("action") == "count()"
 
-    def test_aggregate_mean_action(self, ws: Workspace) -> None:
-        """mode='aggregate', aggregate='mean' produces action='mean(ltv)'."""
+    def test_aggregate_numeric_summary_action(self, ws: Workspace) -> None:
+        """mode='aggregate', aggregate='numeric_summary' produces correct action string."""
         params = ws.build_user_params(
             mode="aggregate",
-            aggregate="mean",
+            aggregate="numeric_summary",
             aggregate_property="ltv",
         )
-        assert params.get("action") == "mean(ltv)"
+        assert params.get("action") == 'numeric_summary(properties["ltv"])'
 
-    def test_aggregate_sum_action(self, ws: Workspace) -> None:
-        """mode='aggregate', aggregate='sum' produces action='sum(revenue)'."""
+    def test_aggregate_extremes_action(self, ws: Workspace) -> None:
+        """mode='aggregate', aggregate='extremes' produces correct action string."""
         params = ws.build_user_params(
             mode="aggregate",
-            aggregate="sum",
+            aggregate="extremes",
             aggregate_property="revenue",
         )
-        assert params.get("action") == "sum(revenue)"
+        assert params.get("action") == 'extremes(properties["revenue"])'
 
-    def test_aggregate_min_action(self, ws: Workspace) -> None:
-        """mode='aggregate', aggregate='min' produces action='min(age)'."""
+    def test_aggregate_percentile_action(self, ws: Workspace) -> None:
+        """mode='aggregate', aggregate='percentile' produces correct action string."""
         params = ws.build_user_params(
             mode="aggregate",
-            aggregate="min",
+            aggregate="percentile",
             aggregate_property="age",
+            percentile=50,
         )
-        assert params.get("action") == "min(age)"
-
-    def test_aggregate_max_action(self, ws: Workspace) -> None:
-        """mode='aggregate', aggregate='max' produces action='max(ltv)'."""
-        params = ws.build_user_params(
-            mode="aggregate",
-            aggregate="max",
-            aggregate_property="ltv",
-        )
-        assert params.get("action") == "max(ltv)"
+        assert params.get("action") == 'percentile(properties["age"], 50)'
 
     def test_aggregate_without_property_raises_error(self, ws: Workspace) -> None:
-        """aggregate='sum' without aggregate_property raises error (U14)."""
+        """aggregate='extremes' without aggregate_property raises error (U14)."""
         with pytest.raises(BookmarkValidationError) as exc_info:
             ws.build_user_params(
                 mode="aggregate",
-                aggregate="sum",
+                aggregate="extremes",
             )
         codes = [e.code for e in exc_info.value.errors]
         assert "U14" in codes
@@ -755,6 +751,7 @@ class TestCombinedScenarios:
     def test_full_profile_query_params(self, ws: Workspace) -> None:
         """A full profile query produces all expected params."""
         params = ws.build_user_params(
+            mode="profiles",
             where=[
                 Filter.equals("plan", "premium"),
                 Filter.greater_than("ltv", 100),
@@ -799,6 +796,7 @@ class TestCombinedScenarios:
     def test_group_id_with_filters(self, ws: Workspace) -> None:
         """group_id combined with where filters produces correct params."""
         params = ws.build_user_params(
+            mode="profiles",
             group_id="companies",
             where=Filter.greater_than("arr", 50000),
             sort_by="arr",
@@ -811,6 +809,7 @@ class TestCombinedScenarios:
     def test_as_of_with_distinct_id(self, ws: Workspace) -> None:
         """as_of combined with distinct_id produces both params."""
         params = ws.build_user_params(
+            mode="profiles",
             as_of="2025-01-01",
             distinct_id="user_123",
         )
@@ -821,6 +820,7 @@ class TestCombinedScenarios:
         """Valid parameter combinations complete without raising."""
         # Should not raise
         ws.build_user_params(
+            mode="profiles",
             where=Filter.equals("plan", "premium"),
             properties=["$email"],
             sort_by="ltv",

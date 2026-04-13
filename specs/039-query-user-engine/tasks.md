@@ -91,7 +91,7 @@
 - [X] T018 [US2] Implement _execute_user_aggregate() private method in src/mixpanel_data/workspace.py — build stats params (filter_type=stats, action from aggregate/aggregate_property, segment_by_cohorts from segment_by); call api_client.engage_stats(); parse response (scalar or segmented dict); return (aggregate_data, total, computed_at, meta)
 - [X] T019 [US2] Wire aggregate mode into query_user() in src/mixpanel_data/workspace.py — route mode="aggregate" to _execute_user_aggregate(); build UserQueryResult with mode="aggregate", aggregate_data, empty profiles list
 
-**Checkpoint**: User Stories 1 AND 2 both work independently. `ws.query_user(mode="aggregate", aggregate="mean", aggregate_property="ltv")` returns result.value with the average.
+**Checkpoint**: User Stories 1 AND 2 both work independently. `ws.query_user(aggregate="numeric_summary", aggregate_property="ltv")` returns result.aggregate_data with count, mean, and variance.
 
 ---
 
@@ -119,7 +119,7 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [X] T021 [P] [US4] Write parallel execution tests in tests/test_workspace_query_user_parallel.py — test single-page result skips parallel overhead, multi-page parallel fetch collects all profiles, limit-aware dispatch fetches only ceil(limit/page_size) pages, failed page handling returns partial results with meta["failed_pages"], worker cap enforcement (values > 5 silently reduced), rate limit warning when pages > 48, parallel=True with mode="aggregate" produces validation error U18, early exit when limit reached mid-fetch
+- [X] T021 [P] [US4] Write parallel execution tests in tests/test_workspace_query_user_parallel.py — test single-page result skips parallel overhead, multi-page parallel fetch collects all profiles, limit-aware dispatch fetches only ceil(limit/page_size) pages, failed page handling returns partial results with meta["failed_pages"], worker cap enforcement (values > 5 rejected with validation error U23), rate limit warning when pages > 48, parallel=True with mode="aggregate" produces validation error U18, early exit when limit reached mid-fetch
 
 ### Implementation for User Story 4
 

@@ -6,7 +6,7 @@ to return controlled aggregate responses.
 
 Coverage:
 - Count aggregate returns scalar value via result.value
-- sum/mean/min/max with aggregate_property
+- extremes/numeric_summary/percentile with aggregate_property
 - Segmented aggregate returns DataFrame with segment/value columns
 - aggregate_property required for non-count (U14)
 - aggregate_property prohibited for count (U15)
@@ -238,98 +238,131 @@ class TestAggregateCount:
 
 
 # =============================================================================
-# Test: sum/mean/min/max with aggregate_property
+# Test: extremes/numeric_summary/percentile with aggregate_property
 # =============================================================================
 
 
 class TestAggregateWithProperty:
     """Tests for aggregate mode with property-based aggregations."""
 
-    def test_sum_with_aggregate_property(
+    def test_extremes_with_aggregate_property(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Sum aggregation returns the summed value and uses correct action."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(15000.50)
+        """Extremes aggregation returns dict with max/min and uses correct action."""
+        extremes_result: dict[str, Any] = {
+            "max": 99999.99,
+            "min": 10.0,
+            "nth_percentile": 500.0,
+        }
+        mock_api_client.engage_stats.return_value = _make_stats_response(
+            extremes_result
+        )
 
         ws = workspace_factory()
         try:
             result = ws.query_user(
                 mode="aggregate",
-                aggregate="sum",
+                aggregate="extremes",
                 aggregate_property="revenue",
             )
 
-            assert result.value == 15000.50
+            assert isinstance(result.aggregate_data, dict)
+            assert result.aggregate_data == extremes_result
+            assert result.value is None  # dict results have no scalar value
             call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs.get("action") == "sum(revenue)"
+            assert call_kwargs.get("action") == 'extremes(properties["revenue"])'
         finally:
             ws.close()
 
-    def test_mean_with_aggregate_property(
+    def test_numeric_summary_with_aggregate_property(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Mean aggregation returns the average and uses correct action."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(42.7)
+        """Numeric summary returns dict with count/mean/var/sum_of_squares."""
+        summary_result: dict[str, Any] = {
+            "count": 150,
+            "mean": 42.7,
+            "var": 123.4,
+            "sum_of_squares": 18510.0,
+        }
+        mock_api_client.engage_stats.return_value = _make_stats_response(summary_result)
 
         ws = workspace_factory()
         try:
             result = ws.query_user(
                 mode="aggregate",
-                aggregate="mean",
+                aggregate="numeric_summary",
                 aggregate_property="ltv",
             )
 
-            assert result.value == 42.7
+            assert isinstance(result.aggregate_data, dict)
+            assert result.aggregate_data == summary_result
+            assert result.value is None  # dict results have no scalar value
             call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs.get("action") == "mean(ltv)"
+            assert call_kwargs.get("action") == 'numeric_summary(properties["ltv"])'
         finally:
             ws.close()
 
-    def test_min_with_aggregate_property(
+    def test_percentile_with_aggregate_property(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Min aggregation returns the minimum and uses correct action."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(18)
+        """Percentile aggregation returns dict with percentile and result."""
+        percentile_result: dict[str, Any] = {
+            "percentile": 50,
+            "result": 35.0,
+        }
+        mock_api_client.engage_stats.return_value = _make_stats_response(
+            percentile_result
+        )
 
         ws = workspace_factory()
         try:
             result = ws.query_user(
                 mode="aggregate",
-                aggregate="min",
+                aggregate="percentile",
                 aggregate_property="age",
+                percentile=50,
             )
 
-            assert result.value == 18
+            assert isinstance(result.aggregate_data, dict)
+            assert result.aggregate_data == percentile_result
+            assert result.value is None  # dict results have no scalar value
             call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs.get("action") == "min(age)"
+            assert call_kwargs.get("action") == 'percentile(properties["age"], 50)'
         finally:
             ws.close()
 
-    def test_max_with_aggregate_property(
+    def test_percentile_with_fractional_value(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Max aggregation returns the maximum and uses correct action."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(99999.99)
+        """Percentile with a fractional value passes correct action string."""
+        percentile_result: dict[str, Any] = {
+            "percentile": 99.5,
+            "result": 980.0,
+        }
+        mock_api_client.engage_stats.return_value = _make_stats_response(
+            percentile_result
+        )
 
         ws = workspace_factory()
         try:
             result = ws.query_user(
                 mode="aggregate",
-                aggregate="max",
-                aggregate_property="ltv",
+                aggregate="percentile",
+                aggregate_property="score",
+                percentile=99.5,
             )
 
-            assert result.value == 99999.99
+            assert isinstance(result.aggregate_data, dict)
             call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs.get("action") == "max(ltv)"
+            assert call_kwargs.get("action") == 'percentile(properties["score"], 99.5)'
         finally:
             ws.close()
 
@@ -339,13 +372,16 @@ class TestAggregateWithProperty:
         mock_api_client: MagicMock,
     ) -> None:
         """Property-based aggregation sets mode='aggregate' on result."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(500.0)
+        extremes_result: dict[str, Any] = {"max": 500.0, "min": 1.0}
+        mock_api_client.engage_stats.return_value = _make_stats_response(
+            extremes_result
+        )
 
         ws = workspace_factory()
         try:
             result = ws.query_user(
                 mode="aggregate",
-                aggregate="sum",
+                aggregate="extremes",
                 aggregate_property="revenue",
             )
 
@@ -359,18 +395,24 @@ class TestAggregateWithProperty:
         mock_api_client: MagicMock,
     ) -> None:
         """Aggregate result includes the params dict used for the API call."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(100.0)
+        summary_result: dict[str, Any] = {
+            "count": 50,
+            "mean": 100.0,
+            "var": 25.0,
+            "sum_of_squares": 5000.0,
+        }
+        mock_api_client.engage_stats.return_value = _make_stats_response(summary_result)
 
         ws = workspace_factory()
         try:
             result = ws.query_user(
                 mode="aggregate",
-                aggregate="mean",
+                aggregate="numeric_summary",
                 aggregate_property="score",
             )
 
             assert isinstance(result.params, dict)
-            assert result.params.get("action") == "mean(score)"
+            assert result.params.get("action") == 'numeric_summary(properties["score"])'
         finally:
             ws.close()
 
@@ -525,7 +567,7 @@ class TestAggregateSegmented:
         try:
             result = ws.query_user(
                 mode="aggregate",
-                aggregate="sum",
+                aggregate="extremes",
                 aggregate_property="revenue",
                 segment_by=[123],
             )
@@ -545,8 +587,8 @@ class TestValidationU14AggregatePropertyRequired:
 
     @pytest.mark.parametrize(
         "agg_func",
-        ["sum", "mean", "min", "max"],
-        ids=["sum", "mean", "min", "max"],
+        ["extremes", "percentile", "numeric_summary"],
+        ids=["extremes", "percentile", "numeric_summary"],
     )
     def test_non_count_without_property_raises_u14(
         self,
@@ -578,7 +620,7 @@ class TestValidationU14AggregatePropertyRequired:
             with pytest.raises(BookmarkValidationError) as exc_info:
                 ws.query_user(
                     mode="aggregate",
-                    aggregate="sum",
+                    aggregate="extremes",
                 )
 
             u14_errors = [e for e in exc_info.value.errors if e.code == "U14"]
@@ -873,7 +915,7 @@ class TestValidationMultipleErrors:
             with pytest.raises(BookmarkValidationError) as exc_info:
                 ws.query_user(
                     mode="aggregate",
-                    aggregate="sum",
+                    aggregate="extremes",
                     # Missing aggregate_property (U14)
                     search="bob",  # U20
                 )
@@ -911,87 +953,99 @@ class TestEngageStatsCallParameters:
         finally:
             ws.close()
 
-    def test_sum_action_expression(
+    def test_extremes_action_expression(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Sum aggregate passes action='sum(property)' to engage_stats."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(500.0)
+        """Extremes aggregate passes correct action to engage_stats."""
+        extremes_result: dict[str, Any] = {"max": 500.0, "min": 1.0}
+        mock_api_client.engage_stats.return_value = _make_stats_response(
+            extremes_result
+        )
 
         ws = workspace_factory()
         try:
             ws.query_user(
                 mode="aggregate",
-                aggregate="sum",
+                aggregate="extremes",
                 aggregate_property="revenue",
             )
 
             call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs["action"] == "sum(revenue)"
+            assert call_kwargs["action"] == 'extremes(properties["revenue"])'
         finally:
             ws.close()
 
-    def test_mean_action_expression(
+    def test_numeric_summary_action_expression(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Mean aggregate passes action='mean(property)' to engage_stats."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(25.0)
+        """Numeric summary passes correct action to engage_stats."""
+        summary_result: dict[str, Any] = {"count": 10, "mean": 25.0}
+        mock_api_client.engage_stats.return_value = _make_stats_response(summary_result)
 
         ws = workspace_factory()
         try:
             ws.query_user(
                 mode="aggregate",
-                aggregate="mean",
+                aggregate="numeric_summary",
                 aggregate_property="score",
             )
 
             call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs["action"] == "mean(score)"
+            assert call_kwargs["action"] == 'numeric_summary(properties["score"])'
         finally:
             ws.close()
 
-    def test_min_action_expression(
+    def test_percentile_action_expression(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Min aggregate passes action='min(property)' to engage_stats."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(1)
+        """Percentile aggregate passes correct action to engage_stats."""
+        percentile_result: dict[str, Any] = {"percentile": 90, "result": 150.0}
+        mock_api_client.engage_stats.return_value = _make_stats_response(
+            percentile_result
+        )
 
         ws = workspace_factory()
         try:
             ws.query_user(
                 mode="aggregate",
-                aggregate="min",
+                aggregate="percentile",
                 aggregate_property="age",
+                percentile=90,
             )
 
             call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs["action"] == "min(age)"
+            assert call_kwargs["action"] == 'percentile(properties["age"], 90)'
         finally:
             ws.close()
 
-    def test_max_action_expression(
+    def test_percentile_action_with_decimal(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Max aggregate passes action='max(property)' to engage_stats."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(999)
+        """Percentile with decimal value passes correct action to engage_stats."""
+        percentile_result: dict[str, Any] = {"percentile": 95.5, "result": 200.0}
+        mock_api_client.engage_stats.return_value = _make_stats_response(
+            percentile_result
+        )
 
         ws = workspace_factory()
         try:
             ws.query_user(
                 mode="aggregate",
-                aggregate="max",
+                aggregate="percentile",
                 aggregate_property="ltv",
+                percentile=95.5,
             )
 
             call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs["action"] == "max(ltv)"
+            assert call_kwargs["action"] == 'percentile(properties["ltv"], 95.5)'
         finally:
             ws.close()
 

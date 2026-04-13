@@ -233,7 +233,7 @@ class TestParallelPageOrderingPreserved:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             # Verify profiles are in page order: user_000..user_099 (page 0),
             # user_100..user_199 (page 1), etc.
@@ -270,7 +270,7 @@ class TestParallelLimit1FallsBackToSequential:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=1)
+            result = ws.query_user(mode="profiles", parallel=True, limit=1)
 
             assert result.meta["parallel"] is False
             assert len(result.profiles) == 1
@@ -305,7 +305,7 @@ class TestParallelPageSizeZeroFallback:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             # Should not raise ZeroDivisionError
             assert len(result.profiles) == 5
@@ -345,7 +345,7 @@ class TestParallelPageSizeNoneFallback:
 
         ws = workspace_factory()
         try:
-            result = ws.query_user(parallel=True, limit=100_000)
+            result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
             # Should not crash
             assert len(result.profiles) == 3

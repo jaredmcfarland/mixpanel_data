@@ -3,7 +3,7 @@
 Two validation functions following the two-layer pattern:
 
 - ``validate_user_args()``: Validates Python-level arguments before
-  engage param construction (Layer 1, rules U1-U25).
+  engage param construction (Layer 1, rules U1-U28).
 - ``validate_user_params()``: Validates the engage params dict after
   construction (Layer 2, rules UP1-UP4).
 
@@ -24,7 +24,14 @@ from mixpanel_data.exceptions import ValidationError
 from mixpanel_data.types import CohortDefinition, Filter
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_ACTION_RE = re.compile(r"^(count\(\)|(?:sum|mean|min|max)\(.+\))$")
+_ACTION_RE = re.compile(
+    r"^("
+    r"count\(\)"
+    r'|extremes\(properties\[".+"\]\)'
+    r'|percentile\(properties\[".+"\],\s*[\d.]+\)'
+    r'|numeric_summary\(properties\[".+"\]\)'
+    r")$"
+)
 
 
 def _normalize_filters(
@@ -61,9 +68,10 @@ def validate_user_args(
     distinct_ids: list[str] | None = None,
     group_id: str | None = None,  # noqa: ARG001
     as_of: str | int | None = None,
-    mode: Literal["profiles", "aggregate"] = "profiles",
-    aggregate: Literal["count", "sum", "mean", "min", "max"] = "count",
+    mode: Literal["profiles", "aggregate"] = "aggregate",
+    aggregate: Literal["count", "extremes", "percentile", "numeric_summary"] = "count",
     aggregate_property: str | None = None,
+    percentile: float | None = None,
     segment_by: list[int] | None = None,
     parallel: bool = False,
     workers: int = 5,
@@ -71,7 +79,7 @@ def validate_user_args(
 ) -> list[ValidationError]:
     """Validate query_user() arguments before engage param construction.
 
-    Implements rules U1-U25. Returns all errors found in a single pass,
+    Implements rules U1-U28. Returns all errors found in a single pass,
     enabling callers to fix multiple issues at once.
 
     Args:
@@ -89,6 +97,8 @@ def validate_user_args(
         mode: Output mode.
         aggregate: Aggregation function.
         aggregate_property: Property to aggregate on.
+        percentile: Percentile value (0-100). Required when
+            ``aggregate="percentile"``.
         segment_by: Cohort IDs for segmented aggregation.
         parallel: Enable concurrent fetching.
         workers: Max concurrent workers.
@@ -122,6 +132,19 @@ def validate_user_args(
                 code="U1",
             )
         )
+
+    # U0: where list items must be Filter instances
+    for i, item in enumerate(filters):
+        if not isinstance(item, Filter):
+            errors.append(
+                ValidationError(
+                    path=f"where[{i}]",
+                    message=(f"expected Filter instance, got {type(item).__name__}"),
+                    code="U0",
+                )
+            )
+    # Filter down to valid Filter instances for subsequent checks
+    filters = [f for f in filters if isinstance(f, Filter)]
 
     # U2: cohort param and Filter.in_cohort() in where mutually exclusive
     in_cohort_count = sum(
@@ -197,8 +220,8 @@ def validate_user_args(
                 )
             )
 
-    # U7: include_all_users requires cohort
-    if include_all_users and cohort is None:
+    # U7: include_all_users requires cohort (param or Filter.in_cohort in where)
+    if include_all_users and cohort is None and in_cohort_count == 0:
         errors.append(
             ValidationError(
                 path="include_all_users",
@@ -321,6 +344,41 @@ def validate_user_args(
                         code="U17",
                     )
                 )
+
+    # U26: percentile required when aggregate is "percentile"
+    if mode == "aggregate" and aggregate == "percentile" and percentile is None:
+        errors.append(
+            ValidationError(
+                path="percentile",
+                message=("percentile is required when aggregate is 'percentile'"),
+                code="U26",
+            )
+        )
+
+    # U27: percentile must not be set when aggregate is not "percentile"
+    if mode == "aggregate" and aggregate != "percentile" and percentile is not None:
+        errors.append(
+            ValidationError(
+                path="percentile",
+                message=(
+                    f"percentile must not be set when aggregate is "
+                    f"{aggregate!r} (only valid for aggregate='percentile')"
+                ),
+                code="U27",
+            )
+        )
+
+    # U28: percentile must be between 0 and 100 (exclusive)
+    if percentile is not None and not (0 < percentile < 100):
+        errors.append(
+            ValidationError(
+                path="percentile",
+                message=(
+                    f"percentile must be between 0 and 100 exclusive (got {percentile})"
+                ),
+                code="U28",
+            )
+        )
 
     # U18: parallel only applies to mode="profiles"
     if parallel and mode != "profiles":
@@ -488,8 +546,10 @@ def validate_user_params(
                     path="action",
                     message=(
                         f"action must be a valid aggregation expression "
-                        f"like count(), sum(prop), mean(prop), min(prop), "
-                        f"or max(prop) (got {action!r})"
+                        f'like count(), extremes(properties["prop"]), '
+                        f'percentile(properties["prop"], N), '
+                        f'or numeric_summary(properties["prop"]) '
+                        f"(got {action!r})"
                     ),
                     code="UP4",
                 )
