@@ -257,6 +257,16 @@ def validate_user_args(
                 )
             )
 
+    # U29: properties must be non-empty list (if provided)
+    if properties is not None and len(properties) == 0:
+        errors.append(
+            ValidationError(
+                path="properties",
+                message="properties must be a non-empty list",
+                code="U29",
+            )
+        )
+
     # U11: properties items must be non-empty strings
     if properties is not None:
         for i, prop in enumerate(properties):
@@ -524,18 +534,20 @@ def validate_user_params(
             )
 
     # UP3: output_properties must be non-empty array if present
-    if (
-        "output_properties" in params
-        and isinstance(params["output_properties"], list)
-        and len(params["output_properties"]) == 0
-    ):
-        errors.append(
-            ValidationError(
-                path="output_properties",
-                message="output_properties must be a non-empty array",
-                code="UP3",
+    if "output_properties" in params:
+        op_val = params["output_properties"]
+        # Handle both raw list and JSON-encoded string forms
+        if isinstance(op_val, str):
+            with contextlib.suppress(json.JSONDecodeError):
+                op_val = json.loads(op_val)
+        if isinstance(op_val, list) and len(op_val) == 0:
+            errors.append(
+                ValidationError(
+                    path="output_properties",
+                    message="output_properties must be a non-empty array",
+                    code="UP3",
+                )
             )
-        )
 
     # UP4: action must be valid aggregation expression
     if "action" in params:

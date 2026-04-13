@@ -481,6 +481,24 @@ class TestValidateUserArgsBasic:
         )
         assert _has_code(errors, "U10")
 
+    def test_u29_empty_properties_list(self) -> None:
+        """U29: properties must be a non-empty list."""
+        errors = validate_user_args(properties=[], mode="profiles")
+        assert _has_code(errors, "U29")
+
+    def test_u29_non_empty_properties_is_valid(self) -> None:
+        """U29: non-empty properties list is valid."""
+        errors = validate_user_args(
+            properties=["$email"],
+            mode="profiles",
+        )
+        assert not _has_code(errors, "U29")
+
+    def test_u29_none_properties_is_valid(self) -> None:
+        """U29: None properties is valid (optional field)."""
+        errors = validate_user_args(properties=None, mode="profiles")
+        assert not _has_code(errors, "U29")
+
     def test_u11_properties_items_must_be_non_empty(self) -> None:
         """U11: items in properties list must be non-empty strings."""
         errors = validate_user_args(
@@ -1168,6 +1186,16 @@ class TestValidateUserParamsUP3:
     def test_up3_non_empty_output_properties_is_valid(self) -> None:
         """UP3: non-empty output_properties array is valid."""
         errors = validate_user_params({"output_properties": ["$email"]})
+        assert not _has_code(errors, "UP3")
+
+    def test_up3_json_encoded_empty_array(self) -> None:
+        """UP3: JSON-encoded empty array string is also rejected."""
+        errors = validate_user_params({"output_properties": "[]"})
+        assert _has_code(errors, "UP3")
+
+    def test_up3_json_encoded_non_empty_array_is_valid(self) -> None:
+        """UP3: JSON-encoded non-empty array string is valid."""
+        errors = validate_user_params({"output_properties": '["$email"]'})
         assert not _has_code(errors, "UP3")
 
     def test_up3_missing_output_properties_is_valid(self) -> None:
