@@ -1,6 +1,6 @@
-# Advanced Analysis -- Statistical, Graph, and Visualization Techniques
+# Advanced Analysis -- Statistical, ML, and Visualization Techniques
 
-Advanced analytical methods using `mixpanel_data` results with pandas, numpy, scipy, networkx, anytree, matplotlib, and seaborn.
+Advanced analytical methods using `mixpanel_data` results with pandas, numpy, scipy, scikit-learn, statsmodels, networkx, anytree, matplotlib, and seaborn.
 
 ---
 
@@ -1033,16 +1033,788 @@ _For multi-panel dashboards combining all four engines, see [cross-query-synthes
 
 ---
 
+## Machine Learning with scikit-learn
+
+_scikit-learn moves analytics from descriptive ("what happened") to predictive ("what will happen") and segmentation-driven ("what user groups exist"). These patterns operate on DataFrames from any query engine._
+
+**Pre-flight: verify profile properties before building models.** The examples below assume properties like `logins_30d`, `purchases_30d`, and `features_used` exist on user profiles. These are typically set via scheduled scripts, computed properties, or backend `$set` calls. If your profiles lack behavioral counters, you can derive features from dates and metadata -- but check coverage first:
+
+```python
+# Audit profile property coverage before modeling
+import itertools
+sample = list(itertools.islice(ws.stream_profiles(), 100))
+props_df = pd.DataFrame([p.get("properties", {}) for p in sample])
+
+# Check desired features
+for feat in ["logins_30d", "purchases_30d", "days_since_signup"]:
+    if feat not in props_df.columns:
+        print(f"  {feat}: MISSING — not set on any profile")
+    else:
+        coverage = props_df[feat].notna().mean()
+        print(f"  {feat}: {coverage:.0%} coverage")
+
+# If features are missing, derive from dates:
+#   days_since_signup = (today - date_joined).days
+#   days_since_last_login = (today - last_login).days
+#   login_recency_ratio = days_since_last_login / days_since_signup
+# Rule of thumb: features with <20% non-null coverage add noise, not signal.
+```
+
+### Behavioral Clustering — Automatic User Segmentation
+
+Build user feature vectors from multiple queries, then cluster to discover natural segments. More objective than hand-defined cohorts.
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+ws = mp.Workspace()
+
+# Build user-level feature vectors from profile properties
+profiles = []
+for p in ws.stream_profiles():
+    props = p.get("properties", {})
+    profiles.append({
+        "logins_30d": props.get("logins_30d", 0),
+        "purchases_30d": props.get("purchases_30d", 0),
+        "searches_30d": props.get("searches_30d", 0),
+    })
+
+features = pd.DataFrame(profiles).fillna(0)
+
+# Normalize — different scales (logins vs purchases) would skew clustering
+scaler = StandardScaler()
+X = scaler.fit_transform(features)
+
+# K-means with 4 clusters
+kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+features["segment"] = kmeans.fit_predict(X)
+
+# Profile each segment
+for seg in sorted(features["segment"].unique()):
+    group = features[features["segment"] == seg]
+    print(f"\nSegment {seg} ({len(group):,} users):")
+    print(f"  Avg logins:    {group['logins_30d'].mean():,.1f}")
+    print(f"  Avg purchases: {group['purchases_30d'].mean():,.1f}")
+    print(f"  Avg searches:  {group['searches_30d'].mean():,.1f}")
+
+# Label segments based on their profiles
+# NOTE: K-means cluster numbering is non-deterministic — cluster 0 will not
+# reliably contain the same user type across runs. Always inspect each
+# cluster's profile before assigning labels.
+# After inspecting the profiles above, assign labels to match observed behavior:
+segment_labels = {0: "Power Users", 1: "Browsers", 2: "Buyers", 3: "Dormant"}
+features["label"] = features["segment"].map(segment_labels)
+print(features["label"].value_counts())
+# (Re-inspect and re-assign after every new fit)
+```
+
+**Choosing k**: Use the elbow method — plot inertia vs k and pick the bend.
+
+```python
+inertias = []
+for k in range(2, 10):
+    km = KMeans(n_clusters=k, random_state=42, n_init=10)
+    km.fit(X)
+    inertias.append(km.inertia_)
+
+print("k | Inertia")
+for k, inertia in zip(range(2, 10), inertias):
+    print(f"{k} | {inertia:,.0f}")
+```
+
+### Anomaly Detection — Outlier Days and Users
+
+Identify anomalous metric values using Isolation Forest (multivariate, handles non-normal distributions).
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+
+ws = mp.Workspace()
+
+# Daily metrics as features
+dau = ws.query("Login", math="dau", last=180).df
+signups = ws.query("Sign Up", math="unique", last=180).df
+errors = ws.query("Error", math="total", last=180).df
+
+daily = pd.DataFrame({
+    "dau": dau.set_index("date")["count"],
+    "signups": signups.set_index("date")["count"],
+    "errors": errors.set_index("date")["count"],
+}).fillna(0)
+daily.index = pd.to_datetime(daily.index)
+
+# Isolation Forest — detects multivariate outliers
+iso = IsolationForest(contamination=0.05, random_state=42)
+daily["anomaly"] = iso.fit_predict(daily[["dau", "signups", "errors"]])
+
+# -1 = anomaly, 1 = normal
+anomalies = daily[daily["anomaly"] == -1]
+print(f"Detected {len(anomalies)} anomalous days out of {len(daily)}:")
+for date, row in anomalies.iterrows():
+    print(f"  {date.strftime('%Y-%m-%d')}: DAU={row['dau']:,.0f}, "
+          f"Signups={row['signups']:,.0f}, Errors={row['errors']:,.0f}")
+```
+
+**Why Isolation Forest over z-scores?** Z-scores check one variable at a time. Isolation Forest catches days where the *combination* of metrics is unusual — e.g., normal DAU but abnormally high errors.
+
+### Feature Importance — What Predicts Conversion?
+
+Use Random Forest to rank which user properties most predict a target outcome (purchase, churn, activation).
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
+
+ws = mp.Workspace()
+
+# Stream user profiles with relevant properties
+profiles = []
+for p in ws.stream_profiles():
+    props = p.get("properties", {})
+    profiles.append({
+        "logins_30d": props.get("logins_30d", 0),
+        "searches_30d": props.get("searches_30d", 0),
+        "days_since_signup": props.get("days_since_signup", 0),
+        "platform": props.get("platform", "unknown"),
+        "has_purchased": 1 if props.get("purchase_count", 0) > 0 else 0,
+    })
+
+df = pd.DataFrame(profiles)
+
+# One-hot encode categorical features
+df = pd.get_dummies(df, columns=["platform"], drop_first=True)
+
+# Target: has_purchased
+X = df.drop(columns=["has_purchased"])
+y = df["has_purchased"]
+
+# Train and extract feature importance
+rf = RandomForestClassifier(n_estimators=100, random_state=42, max_depth=10)
+rf.fit(X, y)
+
+importance = pd.Series(rf.feature_importances_, index=X.columns).sort_values(ascending=False)
+print("=== Feature Importance for Purchase Prediction ===")
+for feat, imp in importance.head(10).items():
+    bar = "#" * int(imp * 100)
+    print(f"  {feat:25s} {imp:.3f} {bar}")
+
+# Cross-validated accuracy (honest estimate — never report training accuracy alone)
+cv_scores = cross_val_score(rf, X, y, cv=5, scoring="accuracy")
+print(f"\nCV accuracy: {cv_scores.mean():.1%} +/- {cv_scores.std():.1%}")
+
+# RED FLAG: near-perfect accuracy usually means leakage, not a great model.
+if cv_scores.mean() > 0.95:
+    print(f"\n⚠ CV accuracy {cv_scores.mean():.1%} is suspiciously high — investigate:")
+    print("  - Does a feature encode the target? (e.g., purchase_count predicting has_purchased)")
+    print("  - Are there complementary fields? (e.g., CRM lead vs contact status)")
+    print("  - Is class imbalance inflating accuracy? Check AUC instead.")
+
+# Cross-validated AUC (better than accuracy for imbalanced classes)
+cv_auc = cross_val_score(rf, X, y, cv=5, scoring="roc_auc")
+print(f"CV AUC: {cv_auc.mean():.3f} +/- {cv_auc.std():.3f}")
+```
+
+### Predictive Scoring — Churn Probability
+
+Score each user's likelihood of churning using logistic regression.
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+ws = mp.Workspace()
+
+# Build labeled dataset from user profiles
+# KEY: features and label must cover DIFFERENT time windows to avoid
+# target leakage. Use an observation window (e.g. days 31-60 ago) for
+# features and a prediction window (last 30 days) for the churn label.
+# If features and label share the same window, churned users have
+# zero activity by definition — the model learns the labeling rule
+# instead of genuine predictive patterns, inflating AUC.
+profiles = []
+for p in ws.stream_profiles():
+    props = p.get("properties", {})
+    profiles.append({
+        "distinct_id": p["distinct_id"],
+        # Observation-window features (days 31-60 ago)
+        "logins_prev_month": props.get("logins_prev_month", 0),
+        "purchases_prev_month": props.get("purchases_prev_month", 0),
+        "feature_count": props.get("features_used", 0),
+        # Prediction-window label (last 30 days)
+        "churned": 1 if props.get("days_since_last_active", 999) > 30 else 0,
+    })
+
+df = pd.DataFrame(profiles)
+feature_cols = ["logins_prev_month", "purchases_prev_month", "feature_count"]
+X = df[feature_cols].fillna(0)
+y = df["churned"]
+
+# Cross-validate with pipeline (scaler inside each fold to prevent data leakage)
+cv_pipeline = make_pipeline(StandardScaler(), LogisticRegression(random_state=42, max_iter=1000))
+cv_scores = cross_val_score(cv_pipeline, X, y, cv=5, scoring="roc_auc")
+print(f"Cross-validated AUC: {cv_scores.mean():.3f} +/- {cv_scores.std():.3f}")
+
+# RED FLAG: AUC near 1.0 almost always means leakage, not a perfect model.
+# Real-world churn models typically achieve AUC 0.65–0.80.
+if cv_scores.mean() > 0.95:
+    print(f"\n⚠ AUC={cv_scores.mean():.3f} is suspiciously high — investigate before trusting.")
+    print("  Common causes: target leaked into features, complementary CRM fields,")
+    print("  or observation/prediction windows overlap (see target leakage note above).")
+
+# Train final model on full data and score all users
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+lr = LogisticRegression(random_state=42, max_iter=1000)
+lr.fit(X_scaled, y)
+df["churn_probability"] = lr.predict_proba(X_scaled)[:, 1]
+
+# Report risk tiers
+print("\n=== Churn Risk Distribution ===")
+bins = [0, 0.2, 0.5, 0.8, 1.0]
+labels = ["Low", "Medium", "High", "Critical"]
+df["risk_tier"] = pd.cut(df["churn_probability"], bins=bins, labels=labels, include_lowest=True)
+print(df["risk_tier"].value_counts().sort_index())
+
+# Coefficient interpretation
+print("\n=== Feature Coefficients ===")
+for feat, coef in zip(feature_cols, lr.coef_[0]):
+    direction = "increases" if coef > 0 else "decreases"
+    print(f"  {feat}: {coef:+.3f} ({direction} churn risk)")
+```
+
+### Dimensionality Reduction — Visualizing User Behavior Space
+
+Use PCA or t-SNE to project high-dimensional behavior into 2D for visual exploration.
+
+```python
+import numpy as np
+from sklearn.decomposition import PCA
+
+# Assuming 'features' DataFrame and 'X' (scaled) from clustering section above
+pca = PCA(n_components=2)
+coords = pca.fit_transform(X)
+
+print(f"Explained variance: PC1={pca.explained_variance_ratio_[0]:.1%}, "
+      f"PC2={pca.explained_variance_ratio_[1]:.1%}, "
+      f"Total={sum(pca.explained_variance_ratio_):.1%}")
+
+# Scatter plot colored by cluster
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(figsize=(10, 8))
+scatter = ax.scatter(coords[:, 0], coords[:, 1], c=features["segment"],
+                     cmap="viridis", alpha=0.5, s=10)
+ax.set_xlabel(f"PC1 ({pca.explained_variance_ratio_[0]:.1%} variance)")
+ax.set_ylabel(f"PC2 ({pca.explained_variance_ratio_[1]:.1%} variance)")
+ax.set_title("User Behavior Space (PCA)")
+plt.colorbar(scatter, label="Segment")
+plt.tight_layout()
+plt.savefig("user_behavior_pca.png", dpi=150)
+print("Saved: user_behavior_pca.png")
+```
+
+---
+
+## Time Series and Forecasting with statsmodels
+
+_statsmodels adds proper time series modeling, forecasting, and regression diagnostics beyond what scipy provides. These patterns turn Mixpanel trends into forward-looking predictions._
+
+**Data Preparation: Drop Today's Incomplete Data.** Queries using `last=N` include the current (incomplete) day. A half-finished day looks like a sudden crash to time-series models -- ARIMA forecasts a decline, decomposition shows a false anomaly, and regression slopes get pulled toward zero. Always drop today before modeling:
+
+```python
+import datetime
+today = pd.Timestamp(datetime.date.today())
+counts = counts[counts.index < today]
+```
+
+The examples below assume you have already excluded the current day.
+
+### Time Series Decomposition (Trend + Seasonality + Residual)
+
+Replaces hand-rolled decomposition with a proper statistical method. Handles multiplicative and additive seasonal patterns.
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+ws = mp.Workspace()
+
+dau = ws.query("Login", math="dau", last=180).df
+counts = dau.set_index("date")["count"]
+counts.index = pd.to_datetime(counts.index)
+counts = counts.asfreq("D", method="ffill")  # ensure regular frequency
+
+# Decompose: period=7 for weekly seasonality
+decomposition = seasonal_decompose(counts, model="additive", period=7)
+
+print("=== Time Series Decomposition ===")
+print(f"Trend range: {decomposition.trend.min():,.0f} - {decomposition.trend.max():,.0f}")
+print(f"Seasonal amplitude: {decomposition.seasonal.max() - decomposition.seasonal.min():,.0f}")
+print(f"Residual std: {decomposition.resid.std():,.0f}")
+
+# Is the trend actually declining, or is it just seasonal?
+trend = decomposition.trend.dropna()
+slope = (trend.iloc[-1] - trend.iloc[0]) / len(trend)
+print(f"Trend direction: {slope:+.1f}/day ({'declining' if slope < 0 else 'growing'})")
+
+# Visualization
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+fig = decomposition.plot()
+fig.set_size_inches(14, 10)
+plt.suptitle("DAU Decomposition (180 days)")
+plt.tight_layout()
+plt.savefig("dau_decomposition.png", dpi=150)
+print("Saved: dau_decomposition.png")
+```
+
+### Forecasting with ARIMA / SARIMAX
+
+Daily product metrics almost always have weekly seasonality (weekday/weekend patterns). Use SARIMAX as the default; fall back to plain ARIMA only if decomposition confirms no seasonal pattern.
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+import numpy as np
+import warnings
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+ws = mp.Workspace()
+
+dau = ws.query("Login", math="dau", last=90).df
+counts = dau.set_index("date")["count"]
+counts.index = pd.to_datetime(counts.index)
+counts = counts.asfreq("D", method="ffill")
+
+# Drop today's incomplete data (see Data Preparation note above)
+import datetime
+today = pd.Timestamp(datetime.date.today())
+counts = counts[counts.index < today]
+
+# SARIMAX with weekly seasonality — the right default for daily metrics
+model = SARIMAX(counts, order=(1, 1, 1), seasonal_order=(1, 1, 1, 7))
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=UserWarning, module="statsmodels")
+    fitted = model.fit(disp=False)
+
+# Forecast 14 days ahead
+forecast = fitted.get_forecast(steps=14)
+fc_mean = forecast.predicted_mean
+fc_ci = forecast.conf_int(alpha=0.05)
+
+# Non-negative metrics cannot go below zero — clip forecasts
+fc_mean = fc_mean.clip(lower=0)
+fc_ci = fc_ci.clip(lower=0)
+
+print("=== 14-Day DAU Forecast (SARIMAX) ===")
+print(f"Current DAU (last 7d avg): {counts.tail(7).mean():,.0f}")
+print(f"Forecast DAU (next 7d avg): {fc_mean.head(7).mean():,.0f}")
+print(f"Forecast DAU (next 14d avg): {fc_mean.mean():,.0f}")
+print("\nDay-by-day forecast:")
+for date, mean in fc_mean.items():
+    ci_low = fc_ci.loc[date].iloc[0]
+    ci_high = fc_ci.loc[date].iloc[1]
+    print(f"  {date.strftime('%Y-%m-%d')}: {mean:,.0f} (95% CI: [{ci_low:,.0f}, {ci_high:,.0f}])")
+
+# Model diagnostics
+print(f"\nModel AIC: {fitted.aic:.1f}")
+print(f"Model BIC: {fitted.bic:.1f}")
+
+# Is this forecast actionable? If the CI is wider than the forecast,
+# the prediction is too uncertain to act on — report that honestly.
+avg_ci_width = (fc_ci.iloc[:, 1] - fc_ci.iloc[:, 0]).mean()
+if avg_ci_width > fc_mean.mean():
+    print(f"\n⚠ Average CI width ({avg_ci_width:,.0f}) exceeds forecast mean ({fc_mean.mean():,.0f}).")
+    print("  This forecast is too uncertain to be actionable. Consider:")
+    print("  - More historical data (last=180 instead of last=90)")
+    print("  - Shorter forecast horizon (7 days instead of 14)")
+    print("  - The metric may be too volatile to forecast reliably.")
+```
+
+**Non-seasonal alternative**: If decomposition shows no weekly pattern, use plain ARIMA. Do not assume (1,1,1) is a universal default -- treat it as a starting point.
+
+```python
+from statsmodels.tsa.arima.model import ARIMA
+
+# Plain ARIMA — only when data has no seasonal pattern
+model = ARIMA(counts, order=(1, 1, 1))
+fitted = model.fit()
+forecast = fitted.get_forecast(steps=14)
+# Still clip for non-negative metrics:
+fc_mean = forecast.predicted_mean.clip(lower=0)
+```
+
+### OLS Regression with Full Diagnostics
+
+scipy gives p-values; statsmodels gives the full regression table with R-squared, confidence intervals, and diagnostic tests.
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+
+ws = mp.Workspace()
+
+# Question: "Does search usage predict purchase revenue?"
+searches = ws.query("Search", math="unique", last=90).df
+revenue = ws.query("Purchase", math="total", math_property="revenue", last=90).df
+
+daily = pd.DataFrame({
+    "searches": searches.set_index("date")["count"],
+    "revenue": revenue.set_index("date")["count"],
+}).dropna()
+
+# OLS with constant (intercept)
+X = sm.add_constant(daily["searches"])
+model = sm.OLS(daily["revenue"], X).fit()
+
+# Full regression summary
+print(model.summary())
+# Key outputs:
+#   R-squared: how much variance in revenue is explained by searches
+#   coef (searches): revenue change per additional search
+#   P>|t|: statistical significance
+#   [0.025, 0.975]: 95% confidence interval for coefficient
+
+# Actionable interpretation
+coef = model.params["searches"]
+p_val = model.pvalues["searches"]
+r2 = model.rsquared
+print("\n=== Interpretation ===")
+print(f"Each additional daily searcher is associated with ${coef:,.2f} in revenue")
+print(f"Search volume explains {r2:.1%} of revenue variance")
+print(f"Relationship is {'statistically significant' if p_val < 0.05 else 'not significant'} (p={p_val:.4f})")
+```
+
+**When diagnostics flag issues.** If Durbin-Watson is well below 2.0 or Ljung-Box is significant, the regression may be **spurious** -- both variables share a common cycle (e.g., weekday/weekend), creating a false relationship. The R² looks impressive but is inflated.
+
+Before trusting the result, try first-differencing to remove shared trends:
+
+```python
+# Remedy: regress daily *changes* instead of levels
+daily_diff = daily.diff().dropna()
+X_diff = sm.add_constant(daily_diff["searches"])
+model_diff = sm.OLS(daily_diff["revenue"], X_diff).fit()
+
+print(f"First-differenced R²: {model_diff.rsquared:.3f}")
+print(f"First-differenced DW: {sm.stats.stattools.durbin_watson(model_diff.resid):.3f}")
+# If R² drops sharply (e.g., 0.95 → 0.05), the original relationship
+# was likely spurious — driven by shared trends, not a real connection.
+# A modest R² with healthy diagnostics is more trustworthy than a
+# high R² with autocorrelated residuals.
+```
+
+### Multiple Regression — Multi-Factor Analysis
+
+Test multiple predictors simultaneously to identify which factors independently drive a metric.
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+import statsmodels.api as sm
+
+ws = mp.Workspace()
+period = dict(last=90)
+
+# Gather daily metrics
+daily = pd.DataFrame({
+    "signups": ws.query("Sign Up", math="unique", **period).df.set_index("date")["count"],
+    "searches": ws.query("Search", math="unique", **period).df.set_index("date")["count"],
+    "support_tickets": ws.query("Submit Ticket", math="total", **period).df.set_index("date")["count"],
+    "revenue": ws.query("Purchase", math="total", math_property="revenue", **period).df.set_index("date")["count"],
+}).dropna()
+
+# Revenue as dependent, others as independent
+X = sm.add_constant(daily[["signups", "searches", "support_tickets"]])
+model = sm.OLS(daily["revenue"], X).fit()
+
+print("=== Revenue Drivers (Multiple Regression) ===")
+for var in ["signups", "searches", "support_tickets"]:
+    coef = model.params[var]
+    p = model.pvalues[var]
+    sig = "*" if p < 0.05 else " "
+    print(f"  {var:20s}: coef={coef:>10,.2f}, p={p:.4f} {sig}")
+print(f"  R-squared: {model.rsquared:.3f} (adjusted: {model.rsquared_adj:.3f})")
+print(f"  F-statistic p-value: {model.f_pvalue:.4f}")
+```
+
+**Check for multicollinearity with VIF.** When predictors are correlated (e.g., signups and searches both track overall traffic), coefficients become unreliable even if R² looks good.
+
+```python
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# VIF for each predictor (exclude the constant)
+X_check = daily[["signups", "searches", "support_tickets"]]
+for i, col in enumerate(X_check.columns):
+    vif = variance_inflation_factor(X_check.values, i)
+    flag = " — WARNING: too high, coefficients unreliable" if vif > 10 else ""
+    print(f"  {col:20s}: VIF={vif:.1f}{flag}")
+
+# VIF > 10 means predictors share too much variance. Options:
+#   1. Drop one of the correlated predictors
+#   2. Combine them (e.g., signups + searches → "traffic index")
+#   3. Use PCA to extract orthogonal components
+#   4. If you only care about R² (prediction), not coefficients
+#      (explanation), high VIF doesn't matter
+# NOTE: Daily product metrics almost always have high VIF because
+# they share weekday/weekend patterns. This is expected, not a bug.
+```
+
+### Granger Causality — Does Event A Cause Metric B to Change?
+
+Test whether one time series helps predict another (beyond just correlation).
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+import warnings
+from statsmodels.tsa.stattools import grangercausalitytests
+
+ws = mp.Workspace()
+
+# Does a marketing campaign Granger-cause signups?
+campaigns = ws.query("Campaign Impression", math="total", last=90).df
+signups = ws.query("Sign Up", math="unique", last=90).df
+
+daily = pd.DataFrame({
+    "campaigns": campaigns.set_index("date")["count"],
+    "signups": signups.set_index("date")["count"],
+}).dropna()
+
+# Test up to 7-day lags
+print("=== Granger Causality: Campaign Impressions → Signups ===")
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", FutureWarning)
+    results = grangercausalitytests(daily[["signups", "campaigns"]], maxlag=7, verbose=False)
+for lag, result in results.items():
+    f_stat = result[0]["ssr_ftest"][0]
+    p_value = result[0]["ssr_ftest"][1]
+    sig = "***" if p_value < 0.01 else "**" if p_value < 0.05 else "*" if p_value < 0.1 else ""
+    print(f"  Lag {lag}d: F={f_stat:.2f}, p={p_value:.4f} {sig}")
+```
+
+### Retention Curve Modeling — Half-Life and Decay Projection
+
+Model retention as a decay problem: "how quickly do users churn?" Fits aggregate retention rates to estimate half-life and project long-term retention.
+
+```python
+import mixpanel_data as mp
+import pandas as pd
+import numpy as np
+
+ws = mp.Workspace()
+
+# Get retention data
+retention = ws.query_retention(
+    "Sign Up", "Login",
+    retention_unit="day",
+    bucket_sizes=[1, 3, 7, 14, 30, 60, 90],
+    last=180,
+)
+
+# Build survival data from retention rates
+avg_rates = retention.average.get("rates", [])
+buckets = [1, 3, 7, 14, 30, 60, 90][:len(avg_rates)]
+
+# Convert retention rates to survival times
+# Each rate represents P(survived to day d)
+survival_df = pd.DataFrame({
+    "day": buckets,
+    "retention_rate": avg_rates,
+    "churned_rate": [1 - r for r in avg_rates],
+})
+
+print("=== Retention as Survival Function ===")
+for _, row in survival_df.iterrows():
+    bar = "#" * int(row["retention_rate"] * 50)
+    print(f"  Day {row['day']:>3d}: {row['retention_rate']:.1%} surviving {bar}")
+
+# Half-life: when does retention cross 50%?
+for i in range(len(avg_rates) - 1):
+    if avg_rates[i] >= 0.5 > avg_rates[i + 1]:
+        # Linear interpolation
+        d1, d2 = buckets[i], buckets[i + 1]
+        r1, r2 = avg_rates[i], avg_rates[i + 1]
+        half_life = d1 + (0.5 - r1) / (r2 - r1) * (d2 - d1)
+        print(f"\nHalf-life: ~{half_life:.0f} days (50% of users churn by this point)")
+        break
+else:
+    if avg_rates[-1] >= 0.5:
+        print(f"\nHalf-life: >{buckets[-1]} days (retention still above 50%)")
+    else:
+        print(f"\nHalf-life: <{buckets[0]} day(s)")
+
+# Retention curve fit — shifted exponential: a*exp(-b*t) + c
+# 'c' captures the "retained core" — users who stick around indefinitely.
+# Pure exponential (c=0) forces retention toward zero, which almost never
+# matches real product data. The shifted form typically fits dramatically
+# better (e.g., R²=0.99 vs R²=0.95 for pure exponential).
+from scipy.optimize import curve_fit
+
+def shifted_exp_decay(t, a, b, c):
+    """Shifted exponential: decays toward c (the retained core), not zero."""
+    return a * np.exp(-b * np.array(t)) + c
+
+try:
+    popt, pcov = curve_fit(shifted_exp_decay, buckets, avg_rates,
+                           p0=[0.5, 0.05, 0.05], maxfev=5000)
+    a, b, c = popt
+    print(f"\nShifted exponential: retention = {a:.2f} * exp(-{b:.4f} * t) + {c:.2f}")
+    print(f"  Retained core (long-term floor): {c:.1%}")
+    if b > 0:
+        print(f"  Decay half-life: {np.log(2)/b:.0f} days (for the non-core portion)")
+
+    # Goodness of fit
+    predicted = shifted_exp_decay(np.array(buckets), *popt)
+    ss_res = np.sum((np.array(avg_rates) - predicted) ** 2)
+    ss_tot = np.sum((np.array(avg_rates) - np.mean(avg_rates)) ** 2)
+    r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
+    print(f"  R²: {r_squared:.4f}")
+
+    projected_days = [120, 180, 365]
+    for d in projected_days:
+        projected_rate = shifted_exp_decay(d, *popt)
+        print(f"  Projected D{d}: {projected_rate:.1%}")
+
+except RuntimeError:
+    print("\nShifted exponential did not converge — try pure exponential (less accurate):")
+    def pure_exp_decay(t, a, b):
+        return a * np.exp(-b * np.array(t))
+    try:
+        popt, _ = curve_fit(pure_exp_decay, buckets, avg_rates, p0=[1.0, 0.01], maxfev=5000)
+        a, b = popt
+        print(f"  retention = {a:.2f} * exp(-{b:.4f} * t)")
+        print(f"  NOTE: pure exponential assumes retention decays to zero.")
+        print(f"  If your retention plateaus above zero, projections will underestimate.")
+        for d in [120, 180, 365]:
+            print(f"  Projected D{d}: {pure_exp_decay(d, *popt):.1%}")
+    except RuntimeError:
+        print("  Neither model converged — retention may not follow exponential decay")
+```
+
+### Retention Curve Comparison Between Segments
+
+Compare retention curves between segments and test for statistical significance.
+
+**Pre-flight: verify the segmenting property has enough diversity.** If the property you're splitting on (e.g., `utm_medium`) has only one value, or one segment has near-zero users, the comparison is meaningless -- it will produce trivially significant results. Always check first:
+
+```python
+# Verify segment property has meaningful diversity before comparing
+values = ws.property_values("utm_medium", event="Sign Up")
+if len(values) < 2:
+    print(f"WARNING: property has only {len(values)} value(s): {values}")
+    print("Cannot perform meaningful segment comparison — try a different property.")
+elif len(values) == 2:
+    print(f"Two segments found: {values} — proceeding with comparison.")
+else:
+    print(f"{len(values)} segments found: {values[:5]}... — pick the two most relevant.")
+```
+
+```python
+import mixpanel_data as mp
+from mixpanel_data import Filter
+import pandas as pd
+import numpy as np
+from scipy.stats import mannwhitneyu
+
+ws = mp.Workspace()
+
+# Compare organic vs paid user retention
+# Use RetentionEvent with per-event filters on the born event only.
+# A global where= filter would require utm_medium on both Sign Up AND
+# Login events — but attribution properties typically exist only on
+# signup, so Login events would be filtered out, producing artificially
+# low or empty retention curves.
+from mixpanel_data import RetentionEvent
+
+organic = ws.query_retention(
+    RetentionEvent("Sign Up", filters=[Filter.equals("utm_medium", "organic")]),
+    "Login",
+    retention_unit="day",
+    bucket_sizes=[1, 7, 14, 30, 60],
+    last=180,
+)
+paid = ws.query_retention(
+    RetentionEvent("Sign Up", filters=[Filter.equals("utm_medium", "cpc")]),
+    "Login",
+    retention_unit="day",
+    bucket_sizes=[1, 7, 14, 30, 60],
+    last=180,
+)
+
+organic_rates = organic.average.get("rates", [])
+paid_rates = paid.average.get("rates", [])
+buckets = [1, 7, 14, 30, 60]
+n = min(len(organic_rates), len(paid_rates), len(buckets))
+
+comparison = pd.DataFrame({
+    "day": buckets[:n],
+    "organic": organic_rates[:n],
+    "paid": paid_rates[:n],
+})
+comparison["lift"] = (comparison["organic"] - comparison["paid"]) / comparison["paid"]
+
+print("=== Retention: Organic vs Paid ===")
+print(comparison.to_string(
+    index=False,
+    formatters={
+        "organic": lambda x: f"{x:.1%}",
+        "paid": lambda x: f"{x:.1%}",
+        "lift": lambda x: f"{x:+.1%}",
+    },
+))
+
+# NOTE: Rough directional comparison only. Retention rates across buckets
+# are NOT independent (D30 survivors ⊂ D7 survivors). For rigorous testing,
+# compare a single bucket (e.g. D30) across multiple independent cohorts.
+if len(organic_rates) >= 3 and len(paid_rates) >= 3:
+    stat, p = mannwhitneyu(organic_rates, paid_rates, alternative="greater")
+    print(f"\nOrganic > Paid? Mann-Whitney p={p:.4f}")
+    print("Significant" if p < 0.05 else "Not significant")
+```
+
+---
+
 ## Tips and Gotchas
 
 - **Always `matplotlib.use("Agg")`**: Set before `import matplotlib.pyplot`. Required for non-interactive environments (scripts, agents, CI).
 - **`plt.savefig()` not `plt.show()`**: Save to files. `show()` blocks or fails in headless environments.
 - **`plt.tight_layout()`**: Call before `savefig()` to prevent label clipping.
 - **`plt.close(fig)`**: Close figures after saving to free memory, especially in loops.
+- **scikit-learn requires numeric input**: Use `pd.get_dummies()` for categorical features. Always `StandardScaler()` before scale-sensitive methods (K-means, PCA, logistic regression).
+- **statsmodels requires regular time indices**: Use `counts.asfreq("D", method="ffill")` before time series methods.
+- **ARIMA convergence**: If ARIMA fails to converge, try a simpler order (0,1,1) or increase `maxiter`. Scope warning suppression with `warnings.catch_warnings()` — never use global `filterwarnings("ignore")`.
+- **Feature importance is correlation, not causation**: Random Forest importance shows predictive power, not causal relationships. Use Granger causality or domain knowledge for causal claims.
+- **Cross-validate predictions**: Never report model accuracy on training data alone. Use `cross_val_score()` for honest estimates.
+- **Drop today before time-series modeling**: `last=N` includes the current incomplete day. A half-finished day looks like a sudden drop, poisoning forecasts and trend estimates. Always filter to `counts[counts.index < today]` before fitting models.
+- **Suspect perfect scores**: AUC=1.0 or accuracy=100% almost always indicates data leakage or a trivial relationship (e.g., complementary CRM fields), not a great model. An AUC of 0.65-0.80 is typical for real-world churn/conversion models. Investigate before celebrating.
+- **Retention decays to a floor, not zero**: Pure exponential decay `a*exp(-b*t)` assumes all users eventually churn. Real products have a "retained core." Use `a*exp(-b*t)+c` (shifted exponential) -- the `c` parameter estimates the long-term retention floor.
 - **scipy is optional**: Statistical functions require `pip install scipy`. Check availability before using.
 - **seaborn is optional**: Heatmaps and styled plots require `pip install seaborn`.
 - **anytree is optional**: Tree rendering and export require `pip install anytree`.
 - **networkx is optional**: Graph analysis requires `pip install networkx`.
+- **scikit-learn is optional**: ML methods require `pip install scikit-learn`.
+- **statsmodels is optional**: Forecasting and regression require `pip install statsmodels`.
 - **Frozen results**: Query results are immutable. Cache in variables; do not re-query to re-access data.
 - **Date indexing**: Always convert date columns with `pd.to_datetime()` before time-series operations.
 - **Retention rates are floats 0-1**: Multiply by 100 for percentage display.
