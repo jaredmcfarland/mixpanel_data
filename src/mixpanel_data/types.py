@@ -10623,7 +10623,7 @@ class FlowQueryResult(ResultWithDataFrame):
 
 @dataclass(frozen=True)
 class UserQueryResult(ResultWithDataFrame):
-    """Structured output from a Workspace.query_users() execution.
+    """Structured output from a Workspace.query_user() execution.
 
     Contains profile query results with lazy DataFrame conversion.
     Supports two output modes:
@@ -10646,16 +10646,16 @@ class UserQueryResult(ResultWithDataFrame):
     Example:
         ```python
         # Profiles mode
-        result = ws.query_users(
+        result = ws.query_user(
             where='properties["plan"] == "premium"',
-            output_properties=["$email", "$last_seen"],
+            properties=["$email", "$last_seen"],
         )
         print(result.total)          # 1532
         print(result.df.head())      # DataFrame with distinct_id, last_seen, email
         print(result.distinct_ids)   # ["abc123", "def456", ...]
 
         # Aggregate mode
-        result = ws.query_users(
+        result = ws.query_user(
             where='properties["plan"] == "premium"',
             mode="aggregate",
         )
@@ -10710,9 +10710,9 @@ class UserQueryResult(ResultWithDataFrame):
 
         Example:
             ```python
-            result = ws.query_users(
+            result = ws.query_user(
                 where='properties["plan"] == "premium"',
-                output_properties=["$email", "$city"],
+                properties=["$email", "$city"],
             )
             df = result.df
             # columns: distinct_id, last_seen, city, email
@@ -10735,7 +10735,12 @@ class UserQueryResult(ResultWithDataFrame):
             )
         elif self.aggregate_data is not None:
             result_df = pd.DataFrame(
-                [{"metric": "aggregate", "value": self.aggregate_data}],
+                [
+                    {
+                        "metric": self.params.get("action", "aggregate"),
+                        "value": self.aggregate_data,
+                    }
+                ],
                 columns=["metric", "value"],
             )
         else:
@@ -10792,7 +10797,7 @@ class UserQueryResult(ResultWithDataFrame):
 
         Example:
             ```python
-            result = ws.query_users(
+            result = ws.query_user(
                 where='properties["plan"] == "premium"',
             )
             ids = result.distinct_ids
@@ -10815,7 +10820,7 @@ class UserQueryResult(ResultWithDataFrame):
 
         Example:
             ```python
-            result = ws.query_users(
+            result = ws.query_user(
                 where='properties["plan"] == "premium"',
                 mode="aggregate",
             )
@@ -10842,7 +10847,7 @@ class UserQueryResult(ResultWithDataFrame):
 
         Example:
             ```python
-            result = ws.query_users(
+            result = ws.query_user(
                 where='properties["plan"] == "premium"',
             )
             import json

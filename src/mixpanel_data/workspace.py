@@ -8619,6 +8619,7 @@ class Workspace:
         segment_by: list[int] | None = None,
         parallel: bool = False,
         workers: int = 5,
+        limit: int | None = 1,
         include_all_users: bool = False,
     ) -> dict[str, Any]:
         """Validate arguments and build engage API params dict.
@@ -8695,6 +8696,7 @@ class Workspace:
             properties=properties,
             sort_by=sort_by,
             sort_order=sort_order,
+            limit=limit,
             search=search,
             distinct_id=distinct_id,
             distinct_ids=distinct_ids,
@@ -8812,7 +8814,7 @@ class Workspace:
     def _execute_user_query_sequential(
         self,
         params: dict[str, Any],
-        limit: int,
+        limit: int | None,
     ) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
         """Execute a user profile query with sequential page fetching.
 
@@ -8885,6 +8887,15 @@ class Workspace:
         # full population count. Use mode="aggregate" for the full count.
         api_kwargs["limit"] = limit
 
+        # Forward distinct_id/distinct_ids for user-targeted lookups
+        if "distinct_id" in params:
+            api_kwargs["distinct_id"] = params["distinct_id"]
+        if "distinct_ids" in params:
+            raw_ids = params["distinct_ids"]
+            api_kwargs["distinct_ids"] = (
+                json.loads(raw_ids) if isinstance(raw_ids, str) else raw_ids
+            )
+
         result = api_client.export_profiles_page(page=0, **api_kwargs)
         profiles: list[dict[str, Any]] = [transform_profile(p) for p in result.profiles]
         total = result.total
@@ -8892,18 +8903,18 @@ class Workspace:
         pages_fetched = 1
 
         # Check if we already have enough
-        if len(profiles) >= limit:
+        if limit is not None and len(profiles) >= limit:
             profiles = profiles[:limit]
         elif result.has_more and result.profiles:
             # Paginate for more (guard: stop if page returns no profiles)
             current_page = 0
             while result.has_more:
-                if len(profiles) >= limit:
+                if limit is not None and len(profiles) >= limit:
                     break
                 current_page += 1
                 result = api_client.export_profiles_page(
-                    current_page,
-                    session_id,
+                    page=current_page,
+                    session_id=session_id,
                     **api_kwargs,
                 )
                 if not result.profiles:
@@ -8911,6 +8922,7 @@ class Workspace:
                 profiles.extend(transform_profile(p) for p in result.profiles)
                 pages_fetched += 1
 
+            # Slice with None returns all profiles (intentional for limit=None)
             profiles = profiles[:limit]
 
         computed_at = datetime.now(timezone.utc).isoformat()
@@ -8930,7 +8942,7 @@ class Workspace:
         properties: list[str] | None = None,
         sort_by: str | None = None,
         sort_order: Literal["ascending", "descending"] = "descending",
-        limit: int = 1,
+        limit: int | None = 1,
         search: str | None = None,
         distinct_id: str | None = None,
         distinct_ids: list[str] | None = None,
@@ -9016,12 +9028,21 @@ class Workspace:
             )
             ```
         """
+        # Credential check (before validation to fail fast)
+        if self._credentials is None:
+            raise ConfigError(
+                "query_user() requires credentials. "
+                "Provide credentials via environment variables, "
+                "config file, or Workspace constructor."
+            )
+
         params = self._resolve_and_build_user_params(
             where=where,
             cohort=cohort,
             properties=properties,
             sort_by=sort_by,
             sort_order=sort_order,
+            limit=limit,
             search=search,
             distinct_id=distinct_id,
             distinct_ids=distinct_ids,
@@ -9035,14 +9056,6 @@ class Workspace:
             workers=workers,
             include_all_users=include_all_users,
         )
-
-        # Credential check
-        if self._credentials is None:
-            raise ConfigError(
-                "query_user() requires credentials. "
-                "Provide credentials via environment variables, "
-                "config file, or Workspace constructor."
-            )
 
         # Route by mode
         if mode == "aggregate":
@@ -9245,7 +9258,7 @@ class Workspace:
     def _execute_user_query_parallel(
         self,
         params: dict[str, Any],
-        limit: int,
+        limit: int | None,
         workers: int,
     ) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
         """Fetch profiles with concurrent page retrieval.
@@ -9278,7 +9291,10 @@ class Workspace:
 
         all_profiles = [transform_profile(p) for p in page0.profiles]
 
-        pages_needed = math.ceil(limit / page_size)
+        if limit is None:
+            pages_needed = math.ceil(total / page_size)
+        else:
+            pages_needed = math.ceil(limit / page_size)
 
         # Single page — skip parallel overhead
         if pages_needed <= 1 or not page0.has_more:

@@ -1395,6 +1395,8 @@ class MixpanelAPIClient:
         search: str | None = None,
         limit: int | None = None,
         filter_by_cohort: str | None = None,
+        distinct_id: str | None = None,
+        distinct_ids: list[str] | None = None,
     ) -> ProfilePageResult:
         """Fetch a single page of profiles from the Engage API.
 
@@ -1414,14 +1416,18 @@ class MixpanelAPIClient:
             as_of_timestamp: Unix timestamp for point-in-time query.
             include_all_users: Include non-members in cohort results.
                 Sent when either cohort_id or filter_by_cohort is set.
-            sort_key: Sort expression (e.g., '$last_seen' or
-                'properties["revenue"]').
+            sort_key: Sort expression in selector format (e.g.,
+                'properties["$last_seen"]' or 'properties["revenue"]').
             sort_order: Sort direction — "ascending" or "descending".
             search: Full-text search string applied to profile properties.
             limit: Server-side result cap per page.
             filter_by_cohort: Pre-encoded JSON cohort filter string.
                 Supports both ``{"id": N}`` and ``{"raw_cohort": {...}}``
                 formats. Takes precedence over cohort_id when both are set.
+            distinct_id: Optional single user ID to fetch. Mutually exclusive
+                with distinct_ids.
+            distinct_ids: Optional list of user IDs to fetch. Mutually
+                exclusive with distinct_id.
 
         Returns:
             ProfilePageResult with profiles, session_id, page, and has_more.
@@ -1446,7 +1452,7 @@ class MixpanelAPIClient:
             # Sorted, filtered query
             result = client.export_profiles_page(
                 page=0,
-                sort_key="$last_seen",
+                sort_key='properties["$last_seen"]',
                 sort_order="descending",
                 search="alice",
                 limit=50,
@@ -1488,6 +1494,10 @@ class MixpanelAPIClient:
             params["search"] = search
         if limit is not None:
             params["limit"] = limit
+        if distinct_id:
+            params["distinct_id"] = distinct_id
+        if distinct_ids:
+            params["distinct_ids"] = json.dumps(distinct_ids)
 
         response = self._request("POST", url, data=params)
 
@@ -1528,7 +1538,7 @@ class MixpanelAPIClient:
         Args:
             where: Filter expression (e.g., 'properties["plan"] == "premium"').
             action: Aggregation expression. Defaults to "count()". Examples:
-                "sum(properties['revenue'])", "avg(properties['age'])".
+                "sum(properties['revenue'])", "mean(properties['age'])".
             filter_by_cohort: Pre-encoded JSON cohort filter string.
                 Supports both ``{"id": N}`` and ``{"raw_cohort": {...}}``
                 formats.

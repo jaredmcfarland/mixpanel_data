@@ -35,11 +35,11 @@ class TestFilterToSelectorEquals:
         f = Filter.equals("country", ["US", "CA", "UK"])
         result = filter_to_selector(f)
         assert result == (
-            'properties["country"] == "US"'
+            '(properties["country"] == "US"'
             " or "
             'properties["country"] == "CA"'
             " or "
-            'properties["country"] == "UK"'
+            'properties["country"] == "UK")'
         )
 
     def test_two_values_or(self) -> None:
@@ -47,7 +47,7 @@ class TestFilterToSelectorEquals:
         f = Filter.equals("status", ["active", "trial"])
         result = filter_to_selector(f)
         assert result == (
-            'properties["status"] == "active" or properties["status"] == "trial"'
+            '(properties["status"] == "active" or properties["status"] == "trial")'
         )
 
     def test_single_value_in_list(self) -> None:

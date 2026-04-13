@@ -1298,9 +1298,9 @@ class TestQueryUserPaginationSessionId:
 
             second_call = mock_api_client.export_profiles_page.call_args_list[1]
             # Second page should pass the session_id from page 0
-            assert (
-                second_call.args[1] == "sess_paginate"
-                or second_call.kwargs.get("session_id") == "sess_paginate"
+            session_id = second_call.kwargs.get("session_id") or (
+                second_call.args[1] if len(second_call.args) > 1 else None
             )
+            assert session_id == "sess_paginate"
         finally:
             ws.close()

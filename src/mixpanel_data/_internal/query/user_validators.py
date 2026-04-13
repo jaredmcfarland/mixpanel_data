@@ -13,34 +13,18 @@ Both return ``list[ValidationError]``. Callers decide whether to raise
 
 from __future__ import annotations
 
+import contextlib
+import json
 import re
 from datetime import date
 from typing import Any, Literal
 
+from mixpanel_data._internal.query.user_builders import _is_cohort_filter
 from mixpanel_data.exceptions import ValidationError
 from mixpanel_data.types import CohortDefinition, Filter
 
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ACTION_RE = re.compile(r"^(count\(\)|(?:sum|mean|min|max)\(.+\))$")
-
-
-def _is_cohort_filter(f: Filter) -> bool:
-    """Check whether a Filter represents a cohort membership test.
-
-    Cohort filters have ``_value`` as a list of dicts (built by
-    ``Filter.in_cohort()`` / ``Filter.not_in_cohort()``).
-
-    Args:
-        f: Filter to inspect.
-
-    Returns:
-        True if the filter is a cohort filter.
-    """
-    return (
-        isinstance(f._value, list)
-        and len(f._value) > 0
-        and isinstance(f._value[0], dict)
-    )
 
 
 def _normalize_filters(
@@ -71,7 +55,7 @@ def validate_user_args(
     properties: list[str] | None = None,
     sort_by: str | None = None,
     sort_order: Literal["ascending", "descending"] = "descending",  # noqa: ARG001
-    limit: int = 1,
+    limit: int | None = 1,
     search: str | None = None,
     distinct_id: str | None = None,
     distinct_ids: list[str] | None = None,
@@ -155,8 +139,8 @@ def validate_user_args(
             )
         )
 
-    # U3: limit must be positive
-    if limit <= 0:
+    # U3: limit must be positive (None means fetch all)
+    if limit is not None and limit <= 0:
         errors.append(
             ValidationError(
                 path="limit",
@@ -243,6 +227,20 @@ def validate_user_args(
                     path=f"where[{i}]._property",
                     message="filter property name must be a non-empty string",
                     code="U10",
+                )
+            )
+
+    # U25: Filter property must be a string for engage queries
+    for i, f in enumerate(filters):
+        if not _is_cohort_filter(f) and not isinstance(f._property, str):
+            errors.append(
+                ValidationError(
+                    path=f"where[{i}]._property",
+                    message=(
+                        f"filter property must be a string for query_user() "
+                        f"(got {type(f._property).__name__})"
+                    ),
+                    code="U25",
                 )
             )
 
@@ -398,7 +396,7 @@ def validate_user_args(
     if isinstance(cohort, CohortDefinition):
         try:
             cohort.to_dict()
-        except Exception as exc:
+        except (ValueError, TypeError, RuntimeError) as exc:
             errors.append(
                 ValidationError(
                     path="cohort",
@@ -454,6 +452,9 @@ def validate_user_params(
     # UP2: filter_by_cohort must have "id" or "raw_cohort" key
     if "filter_by_cohort" in params:
         fbc = params["filter_by_cohort"]
+        if isinstance(fbc, str):
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
+                fbc = json.loads(fbc)
         if isinstance(fbc, dict) and "id" not in fbc and "raw_cohort" not in fbc:
             errors.append(
                 ValidationError(

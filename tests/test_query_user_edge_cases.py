@@ -429,15 +429,6 @@ class TestTier1DataCorruption:
         with pytest.raises(KeyError, match="distinct_id"):
             _ = result.distinct_ids
 
-    @pytest.mark.xfail(
-        reason=(
-            "BUG: Sequential loop does not break on empty pages. "
-            "When has_more=True but profiles=[] on every page after "
-            "page 0, the while loop never terminates. The loop guard "
-            "prevents an actual hang."
-        ),
-        strict=True,
-    )
     def test_t1_06_sequential_empty_page_does_not_infinite_loop(
         self,
         workspace_factory: Callable[..., Workspace],
@@ -718,13 +709,11 @@ class TestTier2CrashPaths:
     def test_t2_06_filter_to_selector_equals_non_list_value(
         self,
     ) -> None:
-        """Equals operator with non-list value triggers AssertionError.
+        """Equals operator with non-list value triggers ValueError.
 
-        The assert at user_builders.py:98 checks
-        ``isinstance(value, list)``. When value is a string, it fails
-        with AssertionError. Under ``python -O`` (optimized mode),
-        asserts are stripped and the code would iterate over string
-        characters instead, silently producing wrong results.
+        The type check at user_builders.py raises ValueError when
+        ``isinstance(value, list)`` fails. This is production-safe
+        (not stripped by ``python -O`` like bare assert).
         """
         f = Filter(
             _property="plan",
@@ -733,17 +722,16 @@ class TestTier2CrashPaths:
             _property_type="string",
         )
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="Expected list"):
             filter_to_selector(f)
 
     def test_t2_07_filter_to_selector_between_wrong_length(
         self,
     ) -> None:
-        """Between operator with wrong list length triggers AssertionError.
+        """Between operator with wrong list length triggers ValueError.
 
-        The assert at user_builders.py:124 checks
-        ``isinstance(value, list) and len(value) == 2``. A 3-element
-        list fails.
+        The type check at user_builders.py raises ValueError when
+        the value is not a list of length 2. A 3-element list fails.
         """
         between_val: list[int | float] = [1, 2, 3]
         f = Filter(
@@ -753,7 +741,7 @@ class TestTier2CrashPaths:
             _property_type="number",
         )
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="Expected list"):
             filter_to_selector(f)
 
     def test_t2_08_aggregate_response_missing_results_key(

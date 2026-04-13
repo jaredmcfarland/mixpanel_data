@@ -46,7 +46,14 @@ def _prop_ref(f: Filter) -> str:
     Returns:
         String of the form ``properties["<name>"]``.
     """
-    return f'properties["{f._property}"]'
+    if not isinstance(f._property, str):
+        raise ValueError(
+            f"Engage selector requires a string property name, "
+            f"got {type(f._property).__name__}. Custom properties "
+            f"are not supported in query_user() filters."
+        )
+    escaped = f._property.replace("\\", "\\\\").replace('"', '\\"')
+    return f'properties["{escaped}"]'
 
 
 def _is_cohort_filter(f: Filter) -> bool:
@@ -95,16 +102,24 @@ def filter_to_selector(f: Filter) -> str:
     value = f._value
 
     if op == "equals":
-        assert isinstance(value, list)
+        if not isinstance(value, list):
+            raise ValueError(
+                f"Expected list for 'equals' operator, got {type(value).__name__}"
+            )
         parts = [
             f"{prop} == {_format_value(v)}"
             for v in value
             if isinstance(v, (str, int, float))
         ]
-        return " or ".join(parts)
+        if len(parts) > 1:
+            return f"({' or '.join(parts)})"
+        return parts[0] if parts else ""
 
     if op == "does not equal":
-        assert isinstance(value, list)
+        if not isinstance(value, list):
+            raise ValueError(
+                f"Expected list for 'does not equal' operator, got {type(value).__name__}"
+            )
         parts = [
             f"{prop} != {_format_value(v)}"
             for v in value
@@ -113,26 +128,47 @@ def filter_to_selector(f: Filter) -> str:
         return " and ".join(parts)
 
     if op == "contains":
-        assert isinstance(value, str)
+        if not isinstance(value, str):
+            raise ValueError(
+                f"Expected str for 'contains' operator, got {type(value).__name__}"
+            )
         return f"{_format_value(value)} in {prop}"
 
     if op == "does not contain":
-        assert isinstance(value, str)
+        if not isinstance(value, str):
+            raise ValueError(
+                f"Expected str for 'does not contain' operator, got {type(value).__name__}"
+            )
         return f"not {_format_value(value)} in {prop}"
 
     if op == "is greater than":
-        assert isinstance(value, (int, float))
+        if not isinstance(value, (int, float)):
+            raise ValueError(
+                f"Expected int or float for 'is greater than' operator, got {type(value).__name__}"
+            )
         return f"{prop} > {_format_value(value)}"
 
     if op == "is less than":
-        assert isinstance(value, (int, float))
+        if not isinstance(value, (int, float)):
+            raise ValueError(
+                f"Expected int or float for 'is less than' operator, got {type(value).__name__}"
+            )
         return f"{prop} < {_format_value(value)}"
 
     if op == "is between":
-        assert isinstance(value, list) and len(value) == 2
+        if not isinstance(value, list) or len(value) != 2:
+            raise ValueError(
+                f"Expected list of length 2 for 'is between' operator, got {type(value).__name__}"
+            )
         lo, hi = value[0], value[1]
-        assert isinstance(lo, (str, int, float))
-        assert isinstance(hi, (str, int, float))
+        if not isinstance(lo, (str, int, float)):
+            raise ValueError(
+                f"Expected str, int, or float for lower bound, got {type(lo).__name__}"
+            )
+        if not isinstance(hi, (str, int, float)):
+            raise ValueError(
+                f"Expected str, int, or float for upper bound, got {type(hi).__name__}"
+            )
         return f"{prop} >= {_format_value(lo)} and {prop} <= {_format_value(hi)}"
 
     if op == "is set":

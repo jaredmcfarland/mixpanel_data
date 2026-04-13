@@ -28,7 +28,7 @@ from mixpanel_data._internal.query.user_builders import (
     filters_to_selector,
 )
 from mixpanel_data._internal.transforms import transform_profile
-from mixpanel_data.exceptions import BookmarkValidationError
+from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import Filter, ProfilePageResult, UserQueryResult
 
 if TYPE_CHECKING:
@@ -412,20 +412,19 @@ class TestAggregateComputedAtFallback:
             ws.close()
 
 
-class TestCredentialCheckAfterValidation:
-    """T4.08: Validation errors raise before credential check."""
+class TestCredentialCheckBeforeValidation:
+    """T4.08: Credential check raises before validation errors."""
 
-    def test_credential_check_happens_after_param_building(
+    def test_credential_check_happens_before_param_building(
         self,
         mock_api_client: MagicMock,
     ) -> None:
-        """Invalid args raise BookmarkValidationError before ConfigError.
+        """Missing credentials raise ConfigError before validation runs.
 
-        The query_user() method calls _resolve_and_build_user_params()
-        first (which runs validate_user_args), and only then checks
-        credentials. workers=0 triggers validation error U23 inside
-        validate_user_args before the credential check at
-        workspace.py:9051 can fire.
+        The query_user() method checks credentials first and raises
+        ConfigError immediately if none are configured, before doing
+        any argument validation. This fails fast on the more fundamental
+        problem.
         """
         no_creds_manager = MagicMock(spec=ConfigManager)
         no_creds_manager.config_version.return_value = 1
@@ -436,11 +435,8 @@ class TestCredentialCheckAfterValidation:
             _api_client=mock_api_client,
         )
 
-        with pytest.raises(BookmarkValidationError) as exc_info:
+        with pytest.raises(ConfigError):
             ws.query_user(workers=0)
-
-        codes = [e.code for e in exc_info.value.errors]
-        assert "U23" in codes
 
 
 # =============================================================================
@@ -494,34 +490,29 @@ class TestPbtFormatValueSpecialChars:
 
 
 class TestFiltersToSelectorOrAndPrecedence:
-    """T5.02: OR/AND precedence hazard in multi-value equals + AND."""
+    """T5.02: OR/AND precedence with parenthesized multi-value equals."""
 
     def test_filters_to_selector_or_and_precedence(self) -> None:
-        """Multi-value equals combined with AND produces ambiguous precedence.
+        """Multi-value equals combined with AND produces correct precedence.
 
         ``Filter.equals("plan", ["free", "trial"])`` translates to
-        ``properties["plan"] == "free" or properties["plan"] == "trial"``.
+        ``(properties["plan"] == "free" or properties["plan"] == "trial")``.
 
         Combined with ``Filter.is_set("email")`` via AND, the result is:
-        ``... == "free" or ... == "trial" and defined(...)``
+        ``(...) and defined(...)``
 
-        Because AND binds tighter than OR in the selector language, the
-        effective semantics are:
-        ``"free" OR ("trial" AND has email)``
-        instead of the likely intended:
+        The parentheses ensure correct semantics:
         ``("free" OR "trial") AND has email``
-
-        This test documents the existing behavior as a known hazard.
         """
         f1 = Filter.equals("plan", ["free", "trial"])
         f2 = Filter.is_set("email")
 
         result = filters_to_selector([f1, f2])
 
-        # Verify the exact output — no parentheses around the OR clause
+        # OR clause is wrapped in parentheses for correct precedence
         expected = (
-            'properties["plan"] == "free" or '
-            'properties["plan"] == "trial" and '
+            '(properties["plan"] == "free" or '
+            'properties["plan"] == "trial") and '
             'defined(properties["email"])'
         )
         assert result == expected, (
