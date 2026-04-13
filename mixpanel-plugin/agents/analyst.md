@@ -62,6 +62,7 @@ Prefer writing and executing Python code using the `mixpanel_data` library. When
 | **Funnels** | `ws.query_funnel()` | Do users convert through a sequence? | `FunnelQueryResult` |
 | **Retention** | `ws.query_retention()` | Do users come back? | `RetentionQueryResult` |
 | **Flows** | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
+| **Users** | `ws.query_user()` | Who are they? What do they look like? | `UserQueryResult` |
 
 ## Routing Decision Tree
 
@@ -79,6 +80,8 @@ User says...                              → Engine
 "D1/D7/D30", "cohort", "stickiness"      → Retention
 "path", "flow", "journey"                → Flows
 "what happens after X", "what led to"     → Flows
+"user properties", "profile", "who are"   → Users
+"demographics", "company_size", "plan"    → Users
 "why did X change/drop/spike"             → MULTI-ENGINE
 "filter by cohort", "only power users"    → ANY ENGINE + where=Filter.in_cohort()
 "compare cohort vs rest"                  → Insights/Funnels/Retention + CohortBreakdown
@@ -147,6 +150,15 @@ print(ret.df)
 flow = ws.query_flow("Purchase", forward=0, reverse=3, mode="sankey")
 print(flow.top_transitions(10))
 print(flow.drop_off_summary())
+
+# 6. Users — who are they?
+from mixpanel_data import CohortDefinition, CohortCriteria
+users = ws.query_user(
+    properties=["plan", "company_size", "ltv"],
+    where=Filter.is_set("plan"),
+    limit=500,
+)
+print(users.df)
 ```
 
 ## Cohort-Scoped Queries

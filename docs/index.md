@@ -16,7 +16,7 @@ A complete programmable interface to Mixpanel analytics—available as both a Py
 
 Mixpanel's web UI is built for interactive exploration. But many workflows need something different: scripts that run unattended, notebooks that combine Mixpanel data with other sources, agents that query analytics programmatically, or pipelines that move data between systems.
 
-`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, typed retention queries, typed flow queries, segmentation, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
+`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, typed retention queries, typed flow queries, typed user profile queries, segmentation, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
 
 ## Two Interfaces, One Capability Set
 
@@ -107,6 +107,18 @@ from mixpanel_data import FlowStep
 flow_result = ws.query_flow("Purchase", forward=3, reverse=1)
 print(flow_result.nodes_df.head())   # step | event | type | count
 print(flow_result.top_transitions(5))
+
+# Typed user profile query — search and aggregate user profiles
+from mixpanel_data import Filter
+result = ws.query_user(
+    where=Filter.equals("plan", "premium"),
+    properties=["$email", "$name", "ltv"],
+    sort_by="ltv",
+    sort_order="descending",
+    limit=50,
+)
+print(f"{result.total} premium users")
+print(result.df)
 
 # Cohort-scoped queries — filter, break down, or track cohorts
 from mixpanel_data import CohortCriteria, CohortDefinition, CohortBreakdown, CohortMetric
@@ -225,6 +237,7 @@ Discovery commands let you survey what exists before writing queries—no guessi
 - Typed funnel queries with ad-hoc step definitions, exclusions, and conversion windows
 - Typed retention queries with event pairs, custom buckets, alignment modes, and segmentation
 - Typed flow queries with path analysis, direction controls, and visualization modes
+- Typed user profile queries with filtering, sorting, property selection, and aggregation
 - Funnel conversion analysis (legacy saved funnels)
 - Retention analysis (legacy)
 - Saved reports (Insights, Funnels, Flows, Retention)
@@ -290,6 +303,7 @@ For interactive exploration of the codebase itself, see [DeepWiki](https://deepw
 - [Funnel Queries](guide/query-funnels.md) — Typed funnel conversion analysis with steps, exclusions, and conversion windows
 - [Retention Queries](guide/query-retention.md) — Typed retention analysis with event pairs, custom buckets, and alignment modes
 - [Flow Queries](guide/query-flows.md) — Typed flow path analysis with direction controls and visualization modes
+- [User Profile Queries](guide/query-users.md) — Typed user profile queries with filtering, sorting, and aggregation
 - [API Reference](api/index.md) — Complete Python API documentation
 - [Entity Management](guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, and webhooks
 - [Data Governance](guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables

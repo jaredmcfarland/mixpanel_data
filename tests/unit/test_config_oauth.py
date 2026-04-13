@@ -11,6 +11,8 @@ Verifies:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import SecretStr, ValidationError
 
@@ -258,10 +260,13 @@ class TestCredentialResolutionRegression:
     def test_no_credentials_still_raises(
         self,
         config_manager: ConfigManager,
+        temp_dir: Path,
     ) -> None:
         """Verify that missing credentials still raises ConfigError."""
         with pytest.raises(ConfigError, match="No credentials configured"):
-            config_manager.resolve_credentials()
+            config_manager.resolve_credentials(
+                _oauth_storage_dir=temp_dir / "oauth",
+            )
 
     def test_invalid_env_region_still_raises(
         self,

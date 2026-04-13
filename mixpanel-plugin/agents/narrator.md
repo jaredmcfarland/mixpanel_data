@@ -119,6 +119,10 @@ print(r["flow"].top_transitions(5))
 - **Key Funnel CVR**: [value]%
 - **W1 Retention**: [value]%
 
+## User Demographics (optional)
+- Active users by plan: [ws.query_user(mode="aggregate") counts]
+- Top segments: [plan/company_size/region breakdown]
+
 ## What's Working
 1. [Positive finding with data from specific engine]
 2. [Positive finding with data]
@@ -210,6 +214,7 @@ _Follows the 4-step Feature Adoption Framework from [analytical-frameworks.md](.
 - Users: [unique count]
 - Trend: [daily/weekly over time]
 - Segment breakdown: [by platform, user type]
+- Profile adopters: `ws.query_user(cohort=..., properties=[...])` to see who adopted
 
 ## Discovery (Flows)
 - How users find this feature: [reverse flow analysis]

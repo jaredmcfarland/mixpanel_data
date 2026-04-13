@@ -653,6 +653,83 @@ ws.build_flow_params(
 
 ---
 
+## Typed Query API — Users
+
+_Complete reference → [users-reference.md](users-reference.md)_
+
+`Workspace.query_user()` queries user profiles from Mixpanel's Engage API with typed filters, cohort membership, sorting, and pagination. Returns a structured `UserQueryResult` with lazy DataFrame conversion. This is the **profile engine** -- it answers "who are these users?" rather than "what did they do?"
+
+```python
+ws.query_user(
+    *,
+    where: Filter | list[Filter] | str | None = None,
+    cohort: int | CohortDefinition | None = None,
+    properties: list[str] | None = None,
+    sort_by: str | None = None,
+    sort_order: Literal["ascending", "descending"] = "descending",
+    limit: int = 1,
+    search: str | None = None,
+    distinct_id: str | None = None,
+    distinct_ids: list[str] | None = None,
+    group_id: str | None = None,
+    as_of: str | int | None = None,
+    mode: Literal["profiles", "aggregate"] = "profiles",
+    aggregate: Literal["count", "sum", "mean", "min", "max"] = "count",
+    aggregate_property: str | None = None,
+    segment_by: list[int] | None = None,
+    parallel: bool = False,
+    workers: int = 5,
+    include_all_users: bool = False,
+) -> UserQueryResult
+```
+
+**Gotcha**: `limit` is an `int` with default `1` (for quick exploration). Pass a larger value for bulk queries. Use `mode="aggregate"` for population counts without fetching profiles.
+
+### build_user_params()
+
+Same signature as `query_user()` but returns the engage API params dict without making an API call:
+
+```python
+ws.build_user_params(
+    *, where, cohort, properties, sort_by, sort_order,
+    search, distinct_id, distinct_ids, group_id, as_of,
+    mode, aggregate, aggregate_property, segment_by,
+    parallel, workers, include_all_users,
+) -> dict
+```
+
+### UserQueryResult
+
+```python
+result = ws.query_user(
+    where=Filter.equals("plan", "premium"),
+    properties=["$email", "company_size"],
+    sort_by="ltv",
+    limit=100,
+)
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `computed_at` | `str` | ISO timestamp when the query was computed |
+| `total` | `int` | Total matching profile count (regardless of limit) |
+| `profiles` | `list[dict]` | Normalized profile dicts; empty list for aggregate mode |
+| `params` | `dict` | Engage API params used (for debugging) |
+| `meta` | `dict` | Execution metadata (timing, sampling) |
+| `mode` | `Literal["profiles", "aggregate"]` | Output mode |
+| `aggregate_data` | `dict | int | float | None` | Raw aggregate result; `None` for profiles mode |
+
+**Computed properties**:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `.df` | `DataFrame` | Lazy cached DataFrame. Profiles mode: one row per profile (`distinct_id`, `last_seen`, then properties alphabetical, `$` prefix stripped). Aggregate mode: `metric`/`value` or `segment`/`value` columns. |
+| `.distinct_ids` | `list[str]` | Distinct IDs from profiles. Empty list for aggregate mode. |
+| `.value` | `int | float | None` | Scalar aggregate value for unsegmented aggregates. `None` for profiles or segmented aggregates. |
+| `.to_dict()` | `dict` | JSON-serializable representation of the full result. |
+
+---
+
 ## Analytics — Legacy Core Queries
 
 ```python
@@ -1054,6 +1131,7 @@ All query results have a `.df` property returning a pandas DataFrame. Key types:
 | `FunnelQueryResult` | `query_funnel()` | `.df`, `.steps_data`, `.params`, `.series`, `.meta`, `.from_date`, `.to_date`, `.computed_at` |
 | `RetentionQueryResult` | `query_retention()` | `.df`, `.cohorts`, `.average`, `.segments`, `.segment_averages`, `.params`, `.meta`, `.from_date`, `.to_date`, `.computed_at` |
 | `FlowQueryResult` | `query_flow()` | `.df`, `.nodes_df`, `.edges_df`, `.graph`, `.trees`, `.anytree`, `.top_transitions()`, `.drop_off_summary()`, `.params`, `.meta`, `.computed_at` |
+| `UserQueryResult` | `query_user()` | `.df`, `.distinct_ids`, `.value`, `.profiles`, `.total`, `.params`, `.meta`, `.computed_at`, `.mode`, `.aggregate_data` |
 
 ## Exception Hierarchy
 

@@ -150,6 +150,8 @@ See the [Data Governance guide](../guide/data-governance.md) for complete covera
         - build_retention_params
         - query_flow
         - build_flow_params
+        - query_user
+        - build_user_params
         - segmentation
         - funnel
         - retention

@@ -28,7 +28,7 @@ Infrastructure           → ConfigManager, MixpanelAPIClient
 
 **Three capability areas:**
 - **Discovery**: Explore schema (events, properties, funnels, cohorts, bookmarks)
-- **Live queries & streaming**: Call Mixpanel API directly (segmentation, funnels, retention, JQL), stream events and profiles
+- **Live queries & streaming**: Call Mixpanel API directly (segmentation, funnels, retention, user profiles, JQL), stream events and profiles
 - **Entity CRUD & Data Governance**: Create, read, update, delete dashboards, reports (bookmarks), cohorts, feature flags, experiments, alerts, annotations, webhooks, Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via App API
 
 ## Package Structure
@@ -51,6 +51,9 @@ src/mixpanel_data/
 │   │   ├── pkce.py          # PKCE challenge generation (RFC 7636)
 │   │   ├── callback_server.py  # Local HTTP callback server
 │   │   └── client_registration.py  # Dynamic Client Registration (RFC 7591)
+│   ├── query/               # Query engine builders and validators
+│   │   ├── user_builders.py       # Filter→selector translation for Engage API
+│   │   └── user_validators.py     # Validation rules U1-U24, UP1-UP4
 │   └── services/            # Discovery, LiveQuery services
 └── cli/
     ├── main.py              # Typer app entry point
@@ -264,7 +267,7 @@ Design documents in `context/`:
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
 
-## mixpanel-data Plugin (v3.1 — 4-Engine Query Taxonomy + Dashboard Builder)
+## mixpanel-data Plugin (v3.2 — 5-Engine Query Taxonomy + Dashboard Builder)
 
 This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin teaches Claude to be a senior data analyst by writing Python code using `mixpanel_data` + `pandas` — no CLI commands, no MCP tools.
 
@@ -312,6 +315,7 @@ Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
 - N/A — pure query-building types, no persistence (037-custom-properties-queries)
 - Python 3.10+ (mypy --strict compliant) + Pydantic v2 (validation/models), httpx (HTTP client), Typer (CLI), Rich (output), tomli/tomli_w (TOML read/write) (038-auth-project-workspace-redesign)
 - TOML config file (`~/.mp/config.toml`), JSON cache files (`~/.mp/oauth/me_{region}.json`), JSON OAuth token files (`~/.mp/oauth/tokens_{region}.json`) (038-auth-project-workspace-redesign)
+- Python 3.10+ (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), pandas (DataFrames), Hypothesis (PBT) (039-query-user-engine)
 
 ## Recent Changes
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)

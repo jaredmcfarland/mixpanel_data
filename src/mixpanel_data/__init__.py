@@ -236,6 +236,7 @@ from mixpanel_data.types import (
     UpdateWebhookParams,
     UploadLookupTableParams,
     UserEvent,
+    UserQueryResult,
     ValidateAlertsForBookmarkParams,
     ValidateAlertsForBookmarkResponse,
     WebhookAuthType,
@@ -245,7 +246,7 @@ from mixpanel_data.types import (
 )
 from mixpanel_data.workspace import Workspace
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 __all__ = [
     # Core
@@ -516,4 +517,6 @@ __all__ = [
     "FlowStep",
     "FlowTreeNode",
     "FlowQueryResult",
+    # User query types (Phase 039)
+    "UserQueryResult",
 ]

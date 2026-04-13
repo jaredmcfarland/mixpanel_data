@@ -1,6 +1,6 @@
 # The Unified Query System
 
-Four analytics engines. One Python vocabulary. Every query validated before it hits the network.
+Five analytics engines. One Python vocabulary. Every query validated before it hits the network.
 
 ```python
 import mixpanel_data as mp
@@ -11,6 +11,7 @@ ws.query("Login")                           # Insights
 ws.query_funnel(["Signup", "Purchase"])      # Funnels
 ws.query_retention("Signup", "Login")        # Retention
 ws.query_flow("Purchase")                    # Flows
+ws.query_user(where=Filter.is_set("$email")) # Users
 ```
 
 Each method returns a typed result with a lazy `.df` property. Each method validates every parameter before making an API call. And the keyword arguments you learn for one method work in all the others.
@@ -214,7 +215,7 @@ result.anytree                   # anytree AnyNode objects
 
 ---
 
-## The four engines
+## The five engines
 
 ### Insights — `query()`
 
@@ -541,6 +542,33 @@ UniqueDotExporter(root).to_picture("flow.png")
 
 ---
 
+### Users — `query_user()`
+
+Search, filter, sort, and aggregate user profiles stored in Mixpanel.
+
+```python
+from mixpanel_data import Filter
+
+# Find premium users, sorted by lifetime value
+result = ws.query_user(
+    where=Filter.equals("plan", "premium"),
+    properties=["$email", "$name", "ltv"],
+    sort_by="ltv",
+    sort_order="descending",
+    limit=50,
+)
+print(f"{result.total} premium users")
+print(result.df)
+
+# Count profiles matching a condition
+count = ws.query_user(mode="aggregate", where=Filter.is_set("$email"))
+print(f"Users with email: {count.value}")
+```
+
+**Full reference:** [User Profile Queries](query-users.md)
+
+---
+
 ## Cross-cutting capabilities
 
 These features work across multiple engines through the same parameters.
@@ -648,11 +676,11 @@ Works with `query()` only.
 
 #### Engine compatibility
 
-| Capability | `query()` | `query_funnel()` | `query_retention()` | `query_flow()` |
-|---|:-:|:-:|:-:|:-:|
-| **Cohort Filters** | yes | yes | yes | yes |
-| **Cohort Breakdowns** | yes | yes | yes | -- |
-| **Cohort Metrics** | yes | -- | -- | -- |
+| Capability | `query()` | `query_funnel()` | `query_retention()` | `query_flow()` | `query_user()` |
+|---|:-:|:-:|:-:|:-:|:-:|
+| **Cohort Filters** | yes | yes | yes | yes | yes |
+| **Cohort Breakdowns** | yes | yes | yes | -- | -- |
+| **Cohort Metrics** | yes | -- | -- | -- | -- |
 
 ---
 
@@ -1108,8 +1136,9 @@ ws.create_bookmark(CreateBookmarkParams(
 | `query_funnel()` | Funnels | `steps` — list of str or FunnelStep |
 | `query_retention()` | Retention | `born_event`, `return_event` |
 | `query_flow()` | Flows | `event` — str, FlowStep, or list |
+| `query_user()` | Users | keyword-only — `where`, `properties`, `sort_by`, `limit` |
 
-Each has a matching `build_*_params()` that returns the validated bookmark dict without querying.
+Each has a matching `build_*_params()` that returns the validated params dict without querying.
 
 ### Shared parameters
 
@@ -1135,6 +1164,7 @@ I = Insights, F = Funnels, R = Retention
 | **Funnels** | `conversion_window`, `conversion_window_unit`, `order`, `exclusions`, `holding_constant` |
 | **Retention** | `retention_unit`, `alignment`, `bucket_sizes` |
 | **Flows** | `forward`, `reverse`, `count_type`, `cardinality`, `collapse_repeated`, `hidden_events` |
+| **Users** | `properties`, `sort_by`, `sort_order`, `limit`, `mode` |
 
 ### Result types
 
@@ -1144,6 +1174,7 @@ I = Insights, F = Funnels, R = Retention
 | Funnels | `FunnelQueryResult` | `.df`, `.overall_conversion_rate` |
 | Retention | `RetentionQueryResult` | `.df`, `.cohorts`, `.average` |
 | Flows | `FlowQueryResult` | `.nodes_df`, `.edges_df`, `.graph`, `.trees` |
+| Users | `UserQueryResult` | `.df`, `.total`, `.value`, `.params` |
 
 ### Imports
 
@@ -1191,5 +1222,6 @@ from mixpanel_data import (
 - [Funnel Queries](query-funnels.md) — step configuration, exclusion targeting, session funnels
 - [Retention Queries](query-retention.md) — alignment modes, custom buckets, cohort structure
 - [Flow Queries](query-flows.md) — NetworkX graph algorithms, tree traversal, anytree export
+- [User Profile Queries](query-users.md) — filtering, sorting, property selection, aggregation
 - [API Reference: Workspace](../api/workspace.md) — complete method signatures
 - [API Reference: Types](../api/types.md) — all type definitions

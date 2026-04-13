@@ -386,10 +386,15 @@ class TestCredentialResolution:
         assert "nonexistent" in str(exc_info.value)
         assert "test_account" in exc_info.value.available_accounts
 
-    def test_resolve_no_credentials_raises(self, config_manager: ConfigManager) -> None:
+    def test_resolve_no_credentials_raises(
+        self, config_manager: ConfigManager, temp_dir: Path
+    ) -> None:
         """No credentials available should raise ConfigError."""
+        # Use empty temp dir for OAuth storage to prevent real tokens leaking in
         with pytest.raises(ConfigError) as exc_info:
-            config_manager.resolve_credentials()
+            config_manager.resolve_credentials(
+                _oauth_storage_dir=temp_dir / "oauth",
+            )
 
         assert "No credentials configured" in str(exc_info.value)
 
