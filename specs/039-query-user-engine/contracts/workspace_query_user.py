@@ -30,7 +30,7 @@ class UserQueryResult(ResultWithDataFrame):
 
     Fields:
         computed_at: ISO timestamp when the query was computed.
-        total: Total profiles matching the filter, regardless of limit.
+        total: Number of profiles returned (equals len(profiles)).
         profiles: Normalized profile dicts (empty for mode="aggregate").
         params: Engage API parameters used (for debugging/reproduction).
         meta: Response metadata (session_id, pages_fetched, etc.).
@@ -137,7 +137,7 @@ class WorkspaceQueryUserContract:
                 Only applies to mode="profiles".
             sort_order: Sort direction. Default "descending".
             limit: Maximum profiles to return. Default 1 (safe: returns 1
-                sample + total count). None fetches all matching profiles.
+                sample profile). None fetches all matching profiles.
                 Only applies to mode="profiles".
             search: Full-text search across profile fields.
                 Only applies to mode="profiles".

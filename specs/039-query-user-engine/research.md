@@ -114,7 +114,7 @@ build_user_params() → _resolve_and_build_user_params() → return params dict
 
 **Key fields**:
 - `computed_at: str` — ISO timestamp
-- `total: int` — total matching count (always present regardless of limit)
+- `total: int` — number of profiles returned (equals `len(profiles)`)
 - `profiles: list[dict[str, Any]]` — normalized profile dicts (empty for aggregate mode)
 - `params: dict[str, Any]` — engage API params used
 - `meta: dict[str, Any]` — execution metadata (session_id, pages_fetched, etc.)

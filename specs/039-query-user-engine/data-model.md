@@ -14,7 +14,7 @@ Extends `ResultWithDataFrame`. Mode-aware result container for user profile quer
 | Field | Type | Presence | Description |
 |-------|------|----------|-------------|
 | `computed_at` | `str` | Always | ISO timestamp when query was computed |
-| `total` | `int` | Always | Total matching profiles (regardless of limit) |
+| `total` | `int` | Always | Number of profiles returned (`len(profiles)`) |
 | `profiles` | `list[dict[str, Any]]` | Always | Normalized profile dicts; empty for aggregate mode |
 | `params` | `dict[str, Any]` | Always | Engage API params used (for debugging) |
 | `meta` | `dict[str, Any]` | Always | Execution metadata |

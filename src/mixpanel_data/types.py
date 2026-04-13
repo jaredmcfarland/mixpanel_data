@@ -10634,7 +10634,7 @@ class UserQueryResult(ResultWithDataFrame):
 
     Attributes:
         computed_at: When the query was computed (ISO format).
-        total: Total number of matching profiles (regardless of limit).
+        total: Number of profiles in this result (equals ``len(profiles)``).
         profiles: Normalized profile dicts; empty list for aggregate mode.
         params: Engage API params used for the query (for debugging).
         meta: Execution metadata (timing, sampling, etc.).

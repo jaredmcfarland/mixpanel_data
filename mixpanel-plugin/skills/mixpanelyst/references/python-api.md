@@ -714,7 +714,7 @@ result = ws.query_user(
 | Field | Type | Description |
 |-------|------|-------------|
 | `computed_at` | `str` | ISO timestamp when the query was computed |
-| `total` | `int` | Total matching profile count (regardless of limit) |
+| `total` | `int` | Number of profiles returned (`len(profiles)`) |
 | `profiles` | `list[dict]` | Normalized profile dicts; empty list for aggregate mode |
 | `params` | `dict` | Engage API params used (for debugging) |
 | `meta` | `dict` | Execution metadata (timing, sampling) |

@@ -5,7 +5,7 @@ in profiles mode. Each test mocks api_client.export_profiles_page() to
 return controlled ProfilePageResult responses.
 
 Coverage:
-- Default limit=1 returns 1 profile + total count
+- Default limit=1 returns 1 profile
 - Explicit limit fetches correct number via pagination
 - Property selection reduces DataFrame columns
 - sort_by/sort_order passed to API
@@ -14,7 +14,7 @@ Coverage:
 - distinct_ids batch lookup
 - group_id queries group profiles
 - as_of passes timestamp
-- result.total always reflects full count regardless of limit
+- result.total equals len(profiles)
 - result.df has correct column schema
 - Empty result returns empty DataFrame with correct columns
 - Credentials check raises ConfigError when None
@@ -195,12 +195,12 @@ class TestQueryUserDefaultLimit:
         finally:
             ws.close()
 
-    def test_default_limit_preserves_total_count(
+    def test_default_limit_total_equals_len_profiles(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """Default limit=1 still reports the full total count from the API."""
+        """Default limit=1 returns total == len(profiles) == 1."""
         mock_api_client.export_profiles_page.return_value = _make_page_result(
             profiles=[RAW_PROFILE_1],
             total=5432,
@@ -211,7 +211,8 @@ class TestQueryUserDefaultLimit:
         try:
             result = ws.query_user(mode="profiles")
 
-            assert result.total == 5432
+            assert result.total == 1
+            assert result.total == len(result.profiles)
         finally:
             ws.close()
 
@@ -726,19 +727,19 @@ class TestQueryUserAsOf:
 
 
 # =============================================================================
-# Test: result.total always reflects full count regardless of limit
+# Test: result.total equals len(profiles)
 # =============================================================================
 
 
 class TestQueryUserTotalCount:
-    """Tests for result.total reflecting the full server-side count."""
+    """Tests for result.total equalling len(profiles)."""
 
-    def test_total_reflects_full_count_with_limit_1(
+    def test_total_equals_len_profiles_with_limit_1(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """result.total is the full matching count, not the limited result count."""
+        """result.total equals len(profiles), not the API's full population count."""
         mock_api_client.export_profiles_page.return_value = _make_page_result(
             profiles=[RAW_PROFILE_1],
             total=99999,
@@ -749,17 +750,17 @@ class TestQueryUserTotalCount:
         try:
             result = ws.query_user(mode="profiles")  # default limit=1
 
-            assert result.total == 99999
-            assert len(result.profiles) == 1
+            assert result.total == 1
+            assert result.total == len(result.profiles)
         finally:
             ws.close()
 
-    def test_total_reflects_full_count_with_explicit_limit(
+    def test_total_equals_len_profiles_with_explicit_limit(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """result.total reports full count even when limit restricts profiles."""
+        """result.total equals len(profiles) even when API reports more."""
         mock_api_client.export_profiles_page.return_value = _make_page_result(
             profiles=[RAW_PROFILE_1, RAW_PROFILE_2, RAW_PROFILE_3],
             total=10000,
@@ -770,8 +771,8 @@ class TestQueryUserTotalCount:
         try:
             result = ws.query_user(mode="profiles", limit=2)
 
-            assert result.total == 10000
-            assert len(result.profiles) == 2
+            assert result.total == 2
+            assert result.total == len(result.profiles)
         finally:
             ws.close()
 
@@ -792,7 +793,7 @@ class TestQueryUserTotalCount:
             result = ws.query_user(mode="profiles", limit=100_000)
 
             assert result.total == 2
-            assert len(result.profiles) == 2
+            assert result.total == len(result.profiles)
         finally:
             ws.close()
 

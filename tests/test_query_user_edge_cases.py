@@ -333,11 +333,11 @@ class TestTier1DataCorruption:
         try:
             result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
-            # Total reflects API total, but profiles are fewer
-            assert result.total == 500
+            # Total equals len(profiles), not the API total
             assert len(result.profiles) == 300, (
                 "Expected 300 profiles (500 - 2*100 failed pages)"
             )
+            assert result.total == len(result.profiles)
             assert sorted(result.meta["failed_pages"]) == [2, 3]
         finally:
             ws.close()
@@ -396,7 +396,7 @@ class TestTier1DataCorruption:
             assert len(result.profiles) == 100, (
                 "Only page 0 profiles should be returned"
             )
-            assert result.total == 500
+            assert result.total == len(result.profiles)
             assert sorted(result.meta["failed_pages"]) == [1, 2, 3, 4]
         finally:
             ws.close()

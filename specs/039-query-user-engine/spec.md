@@ -18,8 +18,8 @@ An analyst wants to find users matching specific criteria and examine their prof
 **Acceptance Scenarios**:
 
 1. **Given** a project with user profiles, **When** the analyst queries for users matching a property filter (e.g., plan equals "premium"), **Then** the system returns matching user records as a table with distinct ID, last seen timestamp, and requested properties.
-2. **Given** a query with no explicit result limit, **When** the query executes, **Then** the system returns 1 sample profile and a total count of all matching profiles (safe default to prevent unbounded data transfer).
-3. **Given** a query with an explicit limit of 500, **When** the query executes, **Then** the system returns at most 500 profiles and the total count of all matching profiles regardless of limit.
+2. **Given** a query with no explicit result limit, **When** the query executes, **Then** the system returns 1 sample profile with `total=1` (safe default to prevent unbounded data transfer). Use `mode='aggregate', aggregate='count'` for the full population count.
+3. **Given** a query with an explicit limit of 500, **When** the query executes, **Then** the system returns at most 500 profiles with `total` equal to `len(profiles)`.
 4. **Given** a query requesting specific properties (e.g., email, plan, LTV), **When** the query executes, **Then** only the requested properties appear in the result columns (plus distinct ID and last seen, which are always included).
 5. **Given** a query with sort criteria (e.g., sort by LTV descending), **When** the query executes, **Then** results are ordered by the specified property in the specified direction.
 6. **Given** a full-text search term, **When** the query executes, **Then** results are filtered to profiles containing the search term across searchable fields.
@@ -115,7 +115,7 @@ An analyst runs a segmentation or funnel query to identify interesting patterns,
 
 - **FR-001**: System MUST accept the same filter vocabulary used by other query engines (insights, funnels, retention, flows) for filtering user profiles by property values.
 - **FR-002**: System MUST return profile query results as structured tabular data with one row per user, consistent with the result format of other query engines.
-- **FR-003**: System MUST default to returning 1 sample profile and the total matching count when no explicit limit is specified (safe default).
+- **FR-003**: System MUST default to returning 1 sample profile with `total=1` when no explicit limit is specified (safe default).
 - **FR-004**: System MUST support selecting specific output properties to control which columns appear in the result and reduce response size.
 - **FR-005**: System MUST support sorting results by a profile property in ascending or descending order.
 - **FR-006**: System MUST support full-text search across profile fields.
@@ -131,14 +131,14 @@ An analyst runs a segmentation or funnel query to identify interesting patterns,
 - **FR-016**: System MUST enforce mutual exclusions between conflicting parameters (e.g., single distinct ID vs. batch, cohort filter vs. inline cohort in property filters).
 - **FR-017**: System MUST enforce mode-specific parameter restrictions (e.g., sort/search/limit only in profile mode; aggregate property only in aggregate mode).
 - **FR-018**: System MUST provide a parameter preview capability that generates the query parameters without executing the query.
-- **FR-019**: System MUST always include the total matching profile count in the result, regardless of the limit applied.
+- **FR-019**: System MUST include `total` in the result, equal to `len(profiles)` (the number of profiles actually returned).
 - **FR-020**: System MUST normalize built-in property names in tabular output by stripping the `$` prefix (e.g., `$email` becomes `email`).
 - **FR-021**: System MUST handle partial failures in parallel mode gracefully, returning successfully fetched results with failed pages reported in metadata.
 - **FR-022**: System MUST expose the result type as a public export from the library.
 
 ### Key Entities
 
-- **UserQueryResult**: The result container for profile queries. Contains the total matching count, a list of normalized profile records, query parameters used, execution metadata, and mode-aware tabular data access. For aggregate mode, contains the computed statistic value(s) instead of individual profiles.
+- **UserQueryResult**: The result container for profile queries. Contains the count of returned profiles (`total = len(profiles)`), a list of normalized profile records, query parameters used, execution metadata, and mode-aware tabular data access. For aggregate mode, contains the computed statistic value(s) instead of individual profiles.
 - **Filter**: The unified filter type shared across all query engines. Supports property comparisons (equals, not equals, greater than, less than, between, contains), existence checks (is set, is not set), boolean checks, and cohort membership.
 - **CohortDefinition**: A typed builder for expressing behavioral and property-based cohort criteria with AND/OR composition. Used for inline behavioral filtering without raw query strings.
 

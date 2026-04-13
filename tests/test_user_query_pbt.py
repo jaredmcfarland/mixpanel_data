@@ -182,10 +182,10 @@ def profile_list_strategy(draw: st.DrawFn) -> list[dict[str, Any]]:
 def user_query_result_profiles_strategy(
     draw: st.DrawFn,
 ) -> UserQueryResult:
-    """Generate a UserQueryResult in profiles mode with valid total >= len(profiles).
+    """Generate a UserQueryResult in profiles mode with total == len(profiles).
 
-    The ``total`` field is always at least as large as the number of profiles,
-    since total represents the full count before any limit is applied.
+    The ``total`` field always equals the number of profiles returned,
+    since the API's total reflects the count of profiles in the response.
 
     Args:
         draw: Hypothesis draw function for composing strategies.
@@ -194,7 +194,7 @@ def user_query_result_profiles_strategy(
         A UserQueryResult in profiles mode.
     """
     profiles = draw(profile_list_strategy())
-    extra = draw(st.integers(min_value=0, max_value=1000))
+    extra = 0  # total == len(profiles)
     total = len(profiles) + extra
     return UserQueryResult(
         computed_at="2025-01-15T10:00:00",
@@ -649,45 +649,42 @@ class TestUserQueryResultPropertySelectionPBT:
 
 
 # =============================================================================
-# Invariant 5: total >= len(profiles) always holds
+# Invariant 5: total == len(profiles) always holds
 # =============================================================================
 
 
 class TestUserQueryResultTotalInvariantPBT:
-    """Property-based tests for the total >= len(profiles) invariant.
+    """Property-based tests for the total == len(profiles) invariant.
 
-    Verifies that the ``total`` field is always at least as large as
-    the number of profiles, since ``total`` represents the full count
-    before any pagination limit is applied.
+    Verifies that the ``total`` field always equals the number of
+    profiles, since ``total`` reflects the count of profiles returned
+    by the API (not the full population).
     """
 
     @given(result=user_query_result_profiles_strategy())
     @settings(max_examples=100)
-    def test_total_gte_profile_count(self, result: UserQueryResult) -> None:
-        """total is always >= len(profiles) for any generated result.
+    def test_total_equals_profile_count(self, result: UserQueryResult) -> None:
+        """total always equals len(profiles) for any generated result.
 
-        The strategy enforces ``total = len(profiles) + extra`` where
-        ``extra >= 0``, so this invariant must always hold.
+        The strategy enforces ``total = len(profiles)`` since the API's
+        total field reflects the number of profiles returned.
         """
-        assert result.total >= len(result.profiles)
+        assert result.total == len(result.profiles)
 
     @given(
         profiles=profile_list_strategy(),
-        extra=st.integers(min_value=0, max_value=50000),
     )
     @settings(
         max_examples=100,
         suppress_health_check=[HealthCheck.too_slow],
     )
-    def test_total_gte_df_row_count(
-        self, profiles: list[dict[str, Any]], extra: int
-    ) -> None:
-        """total is always >= len(df) since df rows come from profiles.
+    def test_total_equals_df_row_count(self, profiles: list[dict[str, Any]]) -> None:
+        """total always equals len(df) since df rows come from profiles.
 
         The DataFrame has exactly ``len(profiles)`` rows, and
-        ``total >= len(profiles)``, so ``total >= len(df)`` must hold.
+        ``total == len(profiles)``, so ``total == len(df)`` must hold.
         """
-        total = len(profiles) + extra
+        total = len(profiles)
         result = UserQueryResult(
             computed_at="2025-01-15T10:00:00",
             total=total,
@@ -697,7 +694,7 @@ class TestUserQueryResultTotalInvariantPBT:
             mode="profiles",
             aggregate_data=None,
         )
-        assert result.total >= len(result.df)
+        assert result.total == len(result.df)
 
 
 # =============================================================================

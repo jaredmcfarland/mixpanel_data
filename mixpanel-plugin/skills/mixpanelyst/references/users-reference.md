@@ -52,7 +52,7 @@ Workspace.query_user(
 | Field | Type | Description |
 |-------|------|-------------|
 | `computed_at` | `str` | ISO timestamp of query execution |
-| `total` | `int` | Total matching profiles (regardless of limit) |
+| `total` | `int` | Number of profiles returned (`len(profiles)`) |
 | `profiles` | `list[dict]` | Normalized profile dicts; empty for aggregate mode |
 | `params` | `dict` | Engage API params used (for debugging) |
 | `meta` | `dict` | Execution metadata (timing, pages fetched) |
@@ -160,7 +160,7 @@ result = ws.query_user(
     workers=5,
     limit=5000,
 )
-print(f"Fetched {len(result.profiles)} of {result.total} total")
+print(f"Fetched {result.total} profiles")
 ```
 
 Only takes effect when `parallel=True` and `limit > 1`. The `workers` param controls concurrency (default 5).

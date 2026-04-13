@@ -248,12 +248,11 @@ ws.query_user(sort_by="$last_seen", sort_order="descending", limit=100)
 
 Caps the total number of profiles returned. Passed **server-side** to the ARB query engine (not just client-side truncation), so the API only returns `limit` profiles in the response — minimizing network transfer.
 
-The default of `1` is deliberately safe: a bare `ws.query_user()` call returns 1 sample profile and the `total` count of all matching profiles. This is the cheapest possible "count + peek" operation — one lightweight API call.
+The default of `1` is deliberately safe: a bare `ws.query_user()` call returns 1 sample profile. This is the cheapest possible "peek" operation — one lightweight API call. Use `mode='aggregate', aggregate='count'` for the full population count.
 
 ```python
-# Default: 1 profile + total count (safe, cheap)
+# Default: 1 sample profile (safe, cheap)
 result = ws.query_user(where=Filter.equals("plan", "premium"))
-print(f"{result.total} premium users")  # e.g., 45000
 print(result.df)  # 1 sample row
 
 # Explicit larger fetch
@@ -266,7 +265,7 @@ result = ws.query_user(where=Filter.equals("plan", "premium"), limit=None)
 **Type**: `int | None`  
 **Default**: `1`  
 **Engage API mapping**: `limit` parameter (server-side cap on total results). `None` omits the limit parameter, fetching all matching profiles via pagination.  
-**Note**: The `total` field in the result always reflects the **full** matching count regardless of `limit`. Only applies to `mode="profiles"`.
+**Note**: The `total` field in the result equals `len(profiles)` — it reflects the number of profiles returned, not the full population. Use `mode='aggregate', aggregate='count'` for the full matching count.
 
 #### `search` — Full-Text Search
 
@@ -447,7 +446,7 @@ class UserQueryResult(ResultWithDataFrame):
 
     Attributes:
         computed_at: ISO timestamp when the query was computed by Mixpanel.
-        total: Total profiles matching the filter, regardless of limit.
+        total: Number of profiles returned (equals len(profiles)).
         profiles: Normalized profile dicts (empty for mode="aggregate").
         params: Engage API parameters used (for debugging/reproduction).
         meta: Response metadata (session_id, pages_fetched, etc.).
@@ -499,7 +498,7 @@ class UserQueryResult(ResultWithDataFrame):
 | `.df` | `[distinct_id, last_seen, props...]` | `[metric, value]` or `[segment, value]` |
 | `.distinct_ids` | List of IDs from profiles | Empty list `[]` |
 | `.value` | `None` | Scalar aggregate result |
-| `.total` | Total matching count | Total matching count |
+| `.total` | Profile count returned | Profile count returned |
 
 ### 4.4 DataFrame Schema
 
@@ -828,11 +827,11 @@ query_user(where=Filter.equals("plan", "premium"), properties=["$email"])
     ▼  _execute_user_query_sequential(params, limit=1)
     │    Page 0 with limit=1 → total=45000, 1 profile returned
     │    Single API call, minimal payload
-    ▼  _transform_user_result(profiles, total=45000, ...)
+    ▼  _transform_user_result(profiles, total=1, ...)
     │
-    ▼  UserQueryResult(total=45000, profiles=[1 dict], mode="profiles")
+    ▼  UserQueryResult(total=1, profiles=[1 dict], mode="profiles")
        .df → DataFrame with 1 row (sample profile)
-       .total → 45000 (full matching count)
+       .total → 1 (equals len(profiles))
 ```
 
 ### 7.3 Data Flow — Profile Mode (Parallel)
@@ -1073,7 +1072,7 @@ top_users = ws.query_user(
     limit=100,
 )
 
-print(f"Top {len(top_users.profiles)} of {top_users.total} premium users")
+print(f"Top {top_users.total} premium users by LTV")
 print(top_users.df.describe())
 ```
 

@@ -8882,8 +8882,8 @@ class Workspace:
 
             - **profiles**: List of normalized profile dicts (truncated
               to *limit*).
-            - **total**: Total matching profiles reported by the API
-              (regardless of limit).
+            - **total**: Number of profiles returned (equals
+              ``len(profiles)``).
             - **computed_at**: ISO timestamp of when the query was
               executed.
             - **meta**: Execution metadata dict with ``session_id``,
@@ -8919,7 +8919,6 @@ class Workspace:
 
         result = api_client.export_profiles_page(page=0, **api_kwargs)
         profiles: list[dict[str, Any]] = [transform_profile(p) for p in result.profiles]
-        total = result.total
         session_id = result.session_id
         pages_fetched = 1
 
@@ -8953,7 +8952,7 @@ class Workspace:
             "parallel": False,
         }
 
-        return profiles, total, computed_at, meta
+        return profiles, len(profiles), computed_at, meta
 
     def query_user(
         self,
@@ -9355,7 +9354,7 @@ class Workspace:
             all_profiles = all_profiles[:limit]
             return (
                 all_profiles,
-                total,
+                len(all_profiles),
                 computed_at,
                 {
                     "session_id": session_id,
@@ -9418,7 +9417,7 @@ class Workspace:
 
         return (
             all_profiles,
-            total,
+            len(all_profiles),
             computed_at,
             {
                 "session_id": session_id,

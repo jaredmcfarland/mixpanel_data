@@ -554,12 +554,12 @@ class TestParallelLimitAwareDispatch:
         finally:
             ws.close()
 
-    def test_limit_preserves_total_from_api(
+    def test_limit_total_equals_len_profiles(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,  # noqa: ARG002
     ) -> None:
-        """result.total reflects the full API count regardless of limit."""
+        """result.total equals len(profiles), not the API's full count."""
         total = 5000
         page_size = 1000
         limit = 100
@@ -571,7 +571,8 @@ class TestParallelLimitAwareDispatch:
         try:
             result = ws.query_user(mode="profiles", parallel=True, limit=limit)
 
-            assert result.total == total
+            assert result.total == len(result.profiles)
+            assert result.total == limit
         finally:
             ws.close()
 
@@ -770,12 +771,12 @@ class TestParallelFailedPageHandling:
         finally:
             ws.close()
 
-    def test_total_preserved_despite_failed_pages(
+    def test_total_equals_len_profiles_despite_failed_pages(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,  # noqa: ARG002
     ) -> None:
-        """result.total reflects the API total even when pages fail."""
+        """result.total equals len(profiles) even when pages fail."""
         total = 300
         page_size = 100
         fail_pages = {1}
@@ -787,7 +788,7 @@ class TestParallelFailedPageHandling:
         try:
             result = ws.query_user(mode="profiles", parallel=True, limit=100_000)
 
-            assert result.total == total
+            assert result.total == len(result.profiles)
         finally:
             ws.close()
 

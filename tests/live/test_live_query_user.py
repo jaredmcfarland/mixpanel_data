@@ -123,17 +123,15 @@ class TestBugVerification:
 class TestProfilesCore:
     """Core profiles-mode queries."""
 
-    def test_default_limit_one_returns_single_profile_with_total(
-        self, ws: Workspace
-    ) -> None:
-        """L2.01 — default query returns 1 profile with a large total.
+    def test_default_limit_one_returns_single_profile(self, ws: Workspace) -> None:
+        """L2.01 — default query returns 1 profile with total == 1.
 
         Args:
             ws: Workspace fixture.
         """
         result = ws.query_user(mode="profiles")
         assert len(result.profiles) == 1
-        assert result.total > 1_000_000
+        assert result.total == len(result.profiles)
         assert result.mode == "profiles"
 
     def test_explicit_limit_returns_exact_count(self, ws: Workspace) -> None:
@@ -144,7 +142,7 @@ class TestProfilesCore:
         """
         result = ws.query_user(mode="profiles", limit=10)
         assert len(result.profiles) == 10
-        assert result.total > len(result.profiles)
+        assert result.total == len(result.profiles)
 
     def test_filter_is_set_reduces_total(self, ws: Workspace) -> None:
         """L2.03 — filtering by is_set($email) returns fewer profiles than unfiltered.
