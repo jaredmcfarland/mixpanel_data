@@ -1,6 +1,6 @@
 {
   "integration": "claude",
-  "version": "0.5.0",
+  "version": "0.6.1",
   "scripts": {
     "update-context": ".specify/integrations/claude/scripts/update-context.sh"
   }
