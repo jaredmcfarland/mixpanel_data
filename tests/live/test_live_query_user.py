@@ -147,12 +147,17 @@ class TestProfilesCore:
     def test_filter_is_set_reduces_total(self, ws: Workspace) -> None:
         """L2.03 — filtering by is_set($email) returns fewer profiles than unfiltered.
 
+        Uses aggregate mode to compare full population counts, since
+        profiles mode total equals len(profiles) which is capped by limit.
+
         Args:
             ws: Workspace fixture.
         """
-        unfiltered = ws.query_user(mode="profiles")
-        filtered = ws.query_user(mode="profiles", where=Filter.is_set("$email"))
-        assert filtered.total < unfiltered.total
+        unfiltered = ws.query_user(mode="aggregate")
+        filtered = ws.query_user(mode="aggregate", where=Filter.is_set("$email"))
+        assert filtered.value is not None
+        assert unfiltered.value is not None
+        assert filtered.value < unfiltered.value
 
     def test_filter_equals_returns_matching_profiles(self, ws: Workspace) -> None:
         """L2.04 — equals filter returns profiles with matching property values.
