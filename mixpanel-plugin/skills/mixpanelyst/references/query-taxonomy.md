@@ -96,7 +96,7 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`) remain avai
 | "user list", "export users", "targeting list" | "Export a list of enterprise users" | `properties=[...], limit=500` |
 | "demographics", "what do X users look like" | "What do churned users look like?" | `properties=["plan", "company_size", ...]` |
 | "profile attributes", "user data", "user info" | "Get user profile data for segment" | `where=..., properties=[...]` |
-| "feature extraction", "user modeling", "ML" | "Build a feature matrix for clustering" | `properties=[...], limit=5000, parallel=True` |
+| "profile analysis", "user segmentation", "demographics" | "Segment users by profile attributes" | `properties=[...], limit=5000, parallel=True` |
 | "profile the cohort", "who churned" | "Profile users who stopped using the product" | `cohort=CohortDefinition.all_of(...)` |
 
 ### Cohort-Scoped Signals (Cross-Engine)
@@ -598,14 +598,14 @@ Otherwise → query() (Insights)
 
 **Join strategy**: Profile enrichment — retention identifies the behavioral cohort, query_user extracts profile attributes, pandas compares demographics.
 
-### Pattern 14: Feature Engineering for ML
+### Pattern 14: Profile-Based Segmentation
 
 **Question**: "Segment users by behavior + demographics"
 
 | Step | Engine | Query | Purpose |
 |------|--------|-------|---------|
-| 1 | Users | `ws.query_user(properties=[...], limit=5000, parallel=True)` | Profile features |
-| 2 | sklearn | `KMeans(n_clusters=4).fit_predict(features)` | Behavioral segments |
+| 1 | Users | `ws.query_user(properties=[...], limit=5000, parallel=True)` | Profile attributes |
+| 2 | pandas | `pd.qcut(df["ltv"], q=4, labels=[...])` | Quantile-based segments |
 | 3 | Insights | `ws.query("Purchase", group_by=segment_col)` | Per-segment metrics |
 
-**Join strategy**: Feature matrix — query_user provides the attribute dimensions, sklearn clusters them, insights validates the segments behaviorally.
+**Join strategy**: Profile segmentation — query_user provides the attribute dimensions, pandas segments them by quantiles or business rules, insights validates the segments behaviorally.

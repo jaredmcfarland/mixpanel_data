@@ -390,7 +390,7 @@ by_source = profiles.df.groupby("signup_source").agg(
 print(by_source.sort_values("users", ascending=False))
 ```
 
-**Unique insight**: Event engines tell you WHAT users did. `query_user()` tells you WHO they are. Combining both answers "what kind of people do X?" -- the foundation for targeting, personalization, and ML feature engineering.
+**Unique insight**: Event engines tell you WHAT users did. `query_user()` tells you WHO they are. Combining both answers "what kind of people do X?" -- the foundation for targeting, personalization, and demographic analysis.
 
 ---
 

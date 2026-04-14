@@ -15,7 +15,7 @@ _User queries use Filter for property filtering — see [insights-reference.md](
 - **Profile attribute lookup** — retrieve email, plan, city, LTV, or any user property
 - **User counts** — how many users match a filter? (aggregate mode)
 - **Targeting lists** — extract distinct IDs for cohort creation or messaging
-- **Feature extraction** — pull profile properties into a DataFrame for clustering or scoring
+- **Profile analysis** — pull profile properties into a DataFrame for segmentation or comparison
 - **Cross-engine profiling** — enrich insights/funnel/retention results with user-level attributes
 
 ## Complete Signature
@@ -199,10 +199,10 @@ result = ws.query_user(
 churn_risk_df = result.df
 ```
 
-## Feature Extraction
+## Profile Segmentation
 
 ```python
-from sklearn.cluster import KMeans
+import pandas as pd
 
 result = ws.query_user(
     mode="profiles",
@@ -210,8 +210,8 @@ result = ws.query_user(
     parallel=True, workers=5, limit=5000,
 )
 df = result.df[["ltv", "session_count", "days_since_signup"]].dropna()
-df["cluster"] = KMeans(n_clusters=4, random_state=42).fit_predict(df)
-print(df.groupby("cluster").mean())
+df["ltv_tier"] = pd.qcut(df["ltv"], q=4, labels=["Low", "Mid-Low", "Mid-High", "High"])
+print(df.groupby("ltv_tier").mean())
 ```
 
 ## Limitations

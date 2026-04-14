@@ -58,7 +58,7 @@ The analyst delegates to you when:
 - anytree traversal and comparison across flow trees
 - Statistical testing (significance, confidence intervals)
 - Complex DataFrame operations merging results from different engines
-- User profile enrichment and ML feature engineering
+- User profile enrichment and cross-engine segmentation
 - Visualization dashboards combining multiple result types
 
 ## Multi-Engine Synthesis Workflow
@@ -414,24 +414,24 @@ power_users = ws.query_user(
 print(power_users.df.groupby("plan").agg({"ltv": ["mean", "count"]}))
 ```
 
-### Pattern 7: Feature Matrix for sklearn
+### Pattern 7: User Segmentation by Profile Attributes
 
-**Question**: Can we cluster users by profile attributes for segmentation?
+**Question**: Can we segment users by profile attributes?
 
 ```python
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+import pandas as pd
 
 profiles = ws.query_user(
     properties=["ltv", "plan", "company_size"],
     where=Filter.is_set("ltv"),
     limit=5000, parallel=True,
 )
-features = profiles.df[["ltv"]].dropna()
-scaler = StandardScaler()
-X = scaler.fit_transform(features)
-profiles.df["segment"] = KMeans(n_clusters=4).fit_predict(X)
-print(profiles.df.groupby("segment")[["ltv"]].describe())
+# Quantile-based segmentation using pandas
+profiles.df["ltv_tier"] = pd.qcut(
+    profiles.df["ltv"].dropna(), q=4, labels=["Low", "Mid-Low", "Mid-High", "High"]
+)
+print(profiles.df.groupby("ltv_tier")[["ltv"]].describe())
+print(profiles.df.groupby(["ltv_tier", "plan"]).size().unstack(fill_value=0))
 ```
 
 ## Library Documentation

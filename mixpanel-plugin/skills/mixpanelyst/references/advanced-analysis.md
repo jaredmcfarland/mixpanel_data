@@ -458,17 +458,15 @@ print(comparison.map(lambda x: f"{x:.0%}" if pd.notna(x) else "").to_string())
 
 ---
 
-## User Feature Engineering with query_user()
+## User Profiling with query_user()
 
-`query_user()` provides the identity axis -- combine with behavioral metrics from event engines to build ML feature matrices. Profile attributes (plan, company size, LTV) become features; behavioral data from insights or retention provides the labels or additional dimensions.
+`query_user()` provides the identity axis — combine with behavioral metrics from event engines for cross-engine profiling. Profile attributes (plan, company size, LTV) describe who users are; behavioral data from insights or retention describes what they do.
 
-### Clustering Users by Profile Attributes
+### Segmenting Users by Profile Attributes
 
 ```python
 import mixpanel_data as mp
 from mixpanel_data import Filter
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler, LabelEncoder
 import pandas as pd
 
 ws = mp.Workspace()
@@ -481,57 +479,24 @@ profiles = ws.query_user(
     parallel=True,
 )
 
-# Step 2: Encode categorical features
+# Step 2: Quantile-based segmentation on LTV
 df = profiles.df.copy()
-le = LabelEncoder()
-df["plan_encoded"] = le.fit_transform(df["plan"].fillna("unknown"))
-
-# Step 3: Build feature matrix and cluster
-features = df[["ltv", "plan_encoded"]].dropna()
-scaler = StandardScaler()
-X = scaler.fit_transform(features)
-kmeans = KMeans(n_clusters=4, random_state=42)
-df.loc[features.index, "segment"] = kmeans.fit_predict(X)
-
-# Step 4: Profile each segment
-for seg in sorted(df["segment"].dropna().unique()):
-    subset = df[df["segment"] == seg]
-    print(f"Segment {int(seg)}: n={len(subset)}, "
-          f"avg_ltv={subset['ltv'].mean():.0f}, "
-          f"top_plan={subset['plan'].mode().iloc[0]}")
-```
-
-### Churn Prediction with Profile + Behavioral Features
-
-Combine profile attributes from `query_user()` with behavioral signals from event engines to build predictive models. Profile data provides static features; behavioral queries provide dynamic labels.
-
-```python
-import mixpanel_data as mp
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-import pandas as pd
-
-ws = mp.Workspace()
-
-# Profile features
-profiles = ws.query_user(
-    properties=["plan", "company_size", "days_since_signup"],
-    limit=5000,
-    parallel=True,
+df["ltv_tier"] = pd.qcut(
+    df["ltv"].dropna(), q=4, labels=["Low", "Mid-Low", "Mid-High", "High"]
 )
 
-# Label: did the user log in last 30 days?
-# (Combine with insights or retention data for the label)
+# Step 3: Profile each segment
+for tier in ["Low", "Mid-Low", "Mid-High", "High"]:
+    subset = df[df["ltv_tier"] == tier]
+    print(f"{tier}: n={len(subset)}, "
+          f"avg_ltv={subset['ltv'].mean():.0f}, "
+          f"top_plan={subset['plan'].mode().iloc[0]}")
 
-# Simple model
-X = profiles.df[["days_since_signup", "company_size"]].dropna()
-# y = ... (binary label from behavioral data)
-# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-# model = LogisticRegression().fit(X_train, y_train)
-# print(f"Accuracy: {model.score(X_test, y_test):.2%}")
+# Step 4: Cross-tabulate with plan
+print(df.groupby(["ltv_tier", "plan"]).size().unstack(fill_value=0))
 ```
 
-**Tip**: The profile data from `query_user()` is most powerful when joined with behavioral metrics. Use insights (`ws.query()`) to compute per-user engagement scores, then merge on `distinct_id` to create a complete feature matrix.
+**Tip**: The profile data from `query_user()` is most powerful when joined with behavioral metrics from event engines — merge on `distinct_id` to compare demographics across behavioral segments.
 
 ---
 
