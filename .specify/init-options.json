@@ -6,5 +6,5 @@
   "integration": "claude",
   "preset": null,
   "script": "sh",
-  "speckit_version": "0.6.1"
+  "speckit_version": "0.7.0"
 }
