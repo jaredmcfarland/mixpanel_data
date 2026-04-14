@@ -911,7 +911,7 @@ class TestTier3ValidationGaps:
         """
         ws = workspace_factory()
         try:
-            params = ws.build_user_params(as_of=0)
+            params = ws.build_user_params(mode="profiles", as_of=0)
 
             assert params["as_of_timestamp"] == 0, (
                 "as_of=0 should be treated as valid timestamp, not skipped"
@@ -931,7 +931,7 @@ class TestTier3ValidationGaps:
         """
         ws = workspace_factory()
         try:
-            params = ws.build_user_params(as_of=-1)
+            params = ws.build_user_params(mode="profiles", as_of=-1)
 
             assert params["as_of_timestamp"] == -1, (
                 "Negative timestamps pass through without validation"

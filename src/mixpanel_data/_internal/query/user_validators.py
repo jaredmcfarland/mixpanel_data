@@ -440,6 +440,16 @@ def validate_user_args(
             )
         )
 
+    # U30: as_of only applies to mode="profiles"
+    if as_of is not None and mode != "profiles":
+        errors.append(
+            ValidationError(
+                path="as_of",
+                message="as_of only applies to mode='profiles'",
+                code="U30",
+            )
+        )
+
     # U23: workers must be between 1 and 5
     if workers < 1 or workers > 5:
         errors.append(

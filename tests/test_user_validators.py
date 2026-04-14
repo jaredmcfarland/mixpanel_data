@@ -864,6 +864,32 @@ class TestValidateUserArgsModeSpecific:
         )
         assert not _has_code(errors, "U22")
 
+    def test_u30_as_of_in_aggregate_mode_rejected(self) -> None:
+        """U30: as_of only applies to mode='profiles'."""
+        errors = validate_user_args(
+            as_of="2025-01-01",
+            mode="aggregate",
+            aggregate="count",
+        )
+        assert _has_code(errors, "U30")
+
+    def test_u30_as_of_int_in_aggregate_mode_rejected(self) -> None:
+        """U30: as_of integer timestamp in aggregate mode is rejected."""
+        errors = validate_user_args(
+            as_of=1735689600,
+            mode="aggregate",
+            aggregate="count",
+        )
+        assert _has_code(errors, "U30")
+
+    def test_u30_as_of_in_profiles_mode_is_valid(self) -> None:
+        """U30: as_of in profiles mode is valid."""
+        errors = validate_user_args(
+            as_of="2025-01-01",
+            mode="profiles",
+        )
+        assert not _has_code(errors, "U30")
+
 
 # =============================================================================
 # TestValidateUserArgsPercentileRules — Rules U26, U27, U28
@@ -997,6 +1023,7 @@ class TestValidateUserArgsMultipleViolations:
             search="john",
             distinct_id="user1",
             properties=["$email"],
+            as_of="2025-01-01",
             mode="aggregate",
             aggregate="count",
         )
@@ -1006,6 +1033,7 @@ class TestValidateUserArgsMultipleViolations:
         assert "U20" in codes, "search in aggregate mode"
         assert "U21" in codes, "distinct_id in aggregate mode"
         assert "U22" in codes, "properties in aggregate mode"
+        assert "U30" in codes, "as_of in aggregate mode"
 
     def test_aggregate_violations_collected(self) -> None:
         """Aggregate-specific violations are all reported."""

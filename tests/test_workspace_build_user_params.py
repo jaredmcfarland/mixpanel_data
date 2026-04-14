@@ -395,14 +395,14 @@ class TestAsOfConversion:
 
     def test_as_of_date_string_to_timestamp(self, ws: Workspace) -> None:
         """as_of='2025-01-01' converts to Unix timestamp (midnight UTC)."""
-        params = ws.build_user_params(as_of="2025-01-01")
+        params = ws.build_user_params(mode="profiles", as_of="2025-01-01")
         assert "as_of_timestamp" in params
         expected = calendar.timegm(date(2025, 1, 1).timetuple())
         assert params["as_of_timestamp"] == expected
 
     def test_as_of_integer_passthrough(self, ws: Workspace) -> None:
         """as_of=1704067200 (int) passes through directly as as_of_timestamp."""
-        params = ws.build_user_params(as_of=1704067200)
+        params = ws.build_user_params(mode="profiles", as_of=1704067200)
         assert "as_of_timestamp" in params
         assert params["as_of_timestamp"] == 1704067200
 
@@ -413,7 +413,7 @@ class TestAsOfConversion:
 
     def test_as_of_date_produces_correct_epoch(self, ws: Workspace) -> None:
         """Verify the epoch value for a known date (2024-06-15)."""
-        params = ws.build_user_params(as_of="2024-06-15")
+        params = ws.build_user_params(mode="profiles", as_of="2024-06-15")
         expected = calendar.timegm(date(2024, 6, 15).timetuple())
         assert params["as_of_timestamp"] == expected
 

@@ -1070,24 +1070,33 @@ class TestEngageStatsCallParameters:
         finally:
             ws.close()
 
-    def test_as_of_forwarded_to_engage_stats(
+    def test_as_of_rejected_in_aggregate_mode(
         self,
         workspace_factory: Callable[..., Workspace],
         mock_api_client: MagicMock,
     ) -> None:
-        """as_of timestamp is forwarded to engage_stats."""
-        mock_api_client.engage_stats.return_value = _make_stats_response(30)
+        """as_of in aggregate mode is rejected by validation (U30).
 
+        The ``/engage/stats`` endpoint does not support ``as_of_timestamp``,
+        so validation catches this before the API call is made.
+
+        Args:
+            workspace_factory: Factory for Workspace instances.
+            mock_api_client: Mocked API client.
+        """
         ws = workspace_factory()
         try:
-            ws.query_user(
-                mode="aggregate",
-                aggregate="count",
-                as_of=1704067200,
+            with pytest.raises(BookmarkValidationError) as exc_info:
+                ws.query_user(
+                    mode="aggregate",
+                    aggregate="count",
+                    as_of=1704067200,
+                )
+            assert any(e.code == "U30" for e in exc_info.value.errors), (
+                "Expected U30 validation error"
             )
-
-            call_kwargs = mock_api_client.engage_stats.call_args.kwargs
-            assert call_kwargs.get("as_of_timestamp") == 1704067200
+            # engage_stats should never be called
+            mock_api_client.engage_stats.assert_not_called()
         finally:
             ws.close()
 
