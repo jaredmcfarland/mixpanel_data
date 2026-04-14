@@ -29,14 +29,21 @@ fi
 # Install packages
 # mixpanel_data is not on PyPI — install from GitHub
 MIXPANEL_DATA_PKG="git+https://github.com/jaredmcfarland/mixpanel_data.git"
+DEPS=(pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy)
+
+# pyarrow is only needed on Python 3.11+ (for pandas 3.x Arrow-backed dtypes)
+if [ "$minor" -ge 11 ]; then
+  DEPS+=('pyarrow>=17.0')
+fi
+
 echo ""
-echo "Installing mixpanel_data (from GitHub), pandas, numpy, matplotlib, seaborn, networkx, anytree, scipy..."
+echo "Installing mixpanel_data (from GitHub) and dependencies..."
 if command -v uv &>/dev/null; then
   echo "  (using uv)"
-  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy; }
+  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" "${DEPS[@]}" || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" "${DEPS[@]}"; }
 elif "$python_cmd" -m pip --version &>/dev/null; then
   echo "  (using pip via $python_cmd)"
-  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy
+  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" "${DEPS[@]}"
 else
   echo "✗ No package manager found. Install pip or uv."
   echo "  Recommended: https://docs.astral.sh/uv/"
@@ -47,6 +54,7 @@ fi
 echo ""
 echo "Verifying installation..."
 "$python_cmd" -c "
+import sys
 import mixpanel_data as mp
 import pandas as pd
 import numpy as np
@@ -57,6 +65,9 @@ import anytree
 import scipy
 print(f'✓ mixpanel_data installed')
 print(f'✓ pandas {pd.__version__}')
+if sys.version_info >= (3, 11):
+    import pyarrow as pa
+    print(f'✓ pyarrow {pa.__version__}')
 print(f'✓ numpy {np.__version__}')
 print(f'✓ matplotlib {matplotlib.__version__}')
 print(f'✓ seaborn {sns.__version__}')
