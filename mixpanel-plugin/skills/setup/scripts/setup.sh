@@ -30,13 +30,13 @@ fi
 # mixpanel_data is not on PyPI — install from GitHub
 MIXPANEL_DATA_PKG="git+https://github.com/jaredmcfarland/mixpanel_data.git"
 echo ""
-echo "Installing mixpanel_data (from GitHub), pandas, numpy, matplotlib, seaborn, networkx, anytree, scipy..."
+echo "Installing mixpanel_data (from GitHub), pandas, pyarrow, numpy, matplotlib, seaborn, networkx, anytree, scipy..."
 if command -v uv &>/dev/null; then
   echo "  (using uv)"
-  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy; }
+  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas pyarrow numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" pandas pyarrow numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy; }
 elif "$python_cmd" -m pip --version &>/dev/null; then
   echo "  (using pip via $python_cmd)"
-  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy
+  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" pandas pyarrow numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy
 else
   echo "✗ No package manager found. Install pip or uv."
   echo "  Recommended: https://docs.astral.sh/uv/"
@@ -49,6 +49,7 @@ echo "Verifying installation..."
 "$python_cmd" -c "
 import mixpanel_data as mp
 import pandas as pd
+import pyarrow as pa
 import numpy as np
 import matplotlib
 import seaborn as sns
@@ -57,6 +58,7 @@ import anytree
 import scipy
 print(f'✓ mixpanel_data installed')
 print(f'✓ pandas {pd.__version__}')
+print(f'✓ pyarrow {pa.__version__}')
 print(f'✓ numpy {np.__version__}')
 print(f'✓ matplotlib {matplotlib.__version__}')
 print(f'✓ seaborn {sns.__version__}')

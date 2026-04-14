@@ -1,6 +1,6 @@
 ---
 name: mixpanel-data:setup
-description: This skill installs mixpanel_data, pandas, numpy, matplotlib, seaborn, networkx, anytree, and scipy, then verifies Mixpanel credentials. It should be invoked when setting up a new environment for Mixpanel data analysis, when dependencies are missing, or when configuring service account or OAuth credentials for the first time.
+description: This skill installs mixpanel_data, pandas, pyarrow, numpy, matplotlib, seaborn, networkx, anytree, and scipy, then verifies Mixpanel credentials. It should be invoked when setting up a new environment for Mixpanel data analysis, when dependencies are missing, or when configuring service account or OAuth credentials for the first time.
 disable-model-invocation: true
 allowed-tools: Bash
 ---
@@ -17,8 +17,8 @@ bash ${CLAUDE_SKILL_DIR}/scripts/setup.sh
 
 This will:
 1. Verify Python 3.10+ is available
-2. Install `mixpanel_data`, `pandas`, `numpy`, `matplotlib`, `seaborn`, `networkx>=3.0`, `anytree>=2.8.0`, and `scipy` (tries uv, pip in order)
-3. Verify all packages import successfully (including networkx, anytree, and scipy)
+2. Install `mixpanel_data`, `pandas`, `pyarrow`, `numpy`, `matplotlib`, `seaborn`, `networkx>=3.0`, `anytree>=2.8.0`, and `scipy` (tries uv, pip in order)
+3. Verify all packages import successfully (including pyarrow, networkx, anytree, and scipy)
 4. Check for configured Mixpanel credentials (supports both v1 and v2 config schemas)
 
 ## Check Credentials
