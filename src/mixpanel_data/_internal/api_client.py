@@ -1390,6 +1390,13 @@ class MixpanelAPIClient:
         behaviors: list[dict[str, Any]] | None = None,
         as_of_timestamp: int | None = None,
         include_all_users: bool = False,
+        sort_key: str | None = None,
+        sort_order: str | None = None,
+        search: str | None = None,
+        limit: int | None = None,
+        filter_by_cohort: str | None = None,
+        distinct_id: str | None = None,
+        distinct_ids: list[str] | None = None,
     ) -> ProfilePageResult:
         """Fetch a single page of profiles from the Engage API.
 
@@ -1401,12 +1408,26 @@ class MixpanelAPIClient:
             page: Zero-based page index to fetch.
             session_id: Session ID from previous page (None for first page).
             where: Filter expression (e.g., 'properties["plan"] == "premium"').
-            cohort_id: Filter to specific cohort by ID.
+            cohort_id: Filter to specific cohort by ID. Ignored when
+                filter_by_cohort is also provided.
             output_properties: Properties to include (None for all).
             group_id: Group analytics group identifier.
             behaviors: Behavioral filter definitions.
             as_of_timestamp: Unix timestamp for point-in-time query.
             include_all_users: Include non-members in cohort results.
+                Sent when either cohort_id or filter_by_cohort is set.
+            sort_key: Sort expression in selector format (e.g.,
+                'properties["$last_seen"]' or 'properties["revenue"]').
+            sort_order: Sort direction — "ascending" or "descending".
+            search: Full-text search string applied to profile properties.
+            limit: Server-side result cap per page.
+            filter_by_cohort: Pre-encoded JSON cohort filter string.
+                Supports both ``{"id": N}`` and ``{"raw_cohort": {...}}``
+                formats. Takes precedence over cohort_id when both are set.
+            distinct_id: Optional single user ID to fetch. Mutually exclusive
+                with distinct_ids.
+            distinct_ids: Optional list of user IDs to fetch. Mutually
+                exclusive with distinct_id.
 
         Returns:
             ProfilePageResult with profiles, session_id, page, and has_more.
@@ -1427,6 +1448,15 @@ class MixpanelAPIClient:
                     page=result.page + 1,
                     session_id=result.session_id,
                 )
+
+            # Sorted, filtered query
+            result = client.export_profiles_page(
+                page=0,
+                sort_key='properties["$last_seen"]',
+                sort_order="descending",
+                search="alice",
+                limit=50,
+            )
             ```
         """
         url = self._build_url("engage", "")
@@ -1439,7 +1469,10 @@ class MixpanelAPIClient:
             params["session_id"] = session_id
         if where:
             params["where"] = where
-        if cohort_id:
+        # filter_by_cohort takes precedence over cohort_id
+        if filter_by_cohort:
+            params["filter_by_cohort"] = filter_by_cohort
+        elif cohort_id:
             params["filter_by_cohort"] = json.dumps({"id": cohort_id})
         if output_properties:
             params["output_properties"] = json.dumps(output_properties)
@@ -1449,10 +1482,22 @@ class MixpanelAPIClient:
             params["behaviors"] = json.dumps(behaviors)
         if as_of_timestamp is not None:
             params["as_of_timestamp"] = as_of_timestamp
-        # Only send include_all_users when cohort_id is set (it's meaningless otherwise)
+        # Send include_all_users when cohort_id or filter_by_cohort is set
         # Must send explicitly because API defaults to True
-        if cohort_id:
+        if cohort_id or filter_by_cohort:
             params["include_all_users"] = include_all_users
+        if sort_key:
+            params["sort_key"] = sort_key
+        if sort_order:
+            params["sort_order"] = sort_order
+        if search:
+            params["search"] = search
+        if limit is not None:
+            params["limit"] = limit
+        if distinct_id:
+            params["distinct_id"] = distinct_id
+        if distinct_ids:
+            params["distinct_ids"] = json.dumps(distinct_ids)
 
         response = self._request("POST", url, data=params)
 
@@ -1472,6 +1517,97 @@ class MixpanelAPIClient:
             total=total,
             page_size=page_size,
         )
+
+    def engage_stats(
+        self,
+        *,
+        where: str | None = None,
+        action: str = "count()",
+        filter_by_cohort: str | None = None,
+        segment_by_cohorts: dict[str, bool] | None = None,
+        group_id: str | None = None,
+        as_of_timestamp: int | None = None,
+        include_all_users: bool = False,
+    ) -> dict[str, Any]:
+        """Fetch aggregate statistics from the Engage API.
+
+        POSTs to ``/api/2.0/engage/stats`` to retrieve aggregate metrics
+        over the user/group population.
+
+        Args:
+            where: Filter expression (e.g., 'properties["plan"] == "premium"').
+            action: Aggregation expression. Defaults to ``"count()"``.
+                Supported: ``'extremes(properties["name"])'``,
+                ``'percentile(properties["name"], N)'``,
+                ``'numeric_summary(properties["name"])'``.
+            filter_by_cohort: Pre-encoded JSON cohort filter string.
+                Supports both ``{"id": N}`` and ``{"raw_cohort": {...}}``
+                formats.
+            segment_by_cohorts: Mapping of cohort ID to boolean indicating
+                whether to include or exclude the cohort in segmentation.
+                Serialized as JSON in the request.
+            group_id: Group analytics group identifier.
+            as_of_timestamp: Unix timestamp for point-in-time query.
+            include_all_users: Include non-members in cohort results.
+
+        Returns:
+            Raw response dict from the Engage API containing aggregate results.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+            RateLimitError: API rate limit exceeded.
+            APIError: Other API errors.
+
+        Example:
+            ```python
+            # Count all profiles
+            stats = client.engage_stats()
+
+            # Revenue extremes for premium users
+            stats = client.engage_stats(
+                where='properties["plan"] == "premium"',
+                action='extremes(properties["revenue"])',
+            )
+
+            # Count profiles in a cohort
+            stats = client.engage_stats(
+                filter_by_cohort='{"id": 42}',
+                include_all_users=False,
+            )
+            ```
+        """
+        url = self._build_url("engage", "stats")
+
+        params: dict[str, Any] = {
+            "project_id": self._credentials.project_id,
+            "action": action,
+        }
+        if where:
+            # Stats endpoint accepts "selector", not "where"
+            params["selector"] = where
+        if filter_by_cohort:
+            params["filter_by_cohort"] = filter_by_cohort
+        if segment_by_cohorts is not None:
+            params["segment_by_cohorts"] = json.dumps(segment_by_cohorts)
+        if group_id:
+            params["data_group_id"] = group_id
+        if as_of_timestamp is not None:
+            params["as_of_timestamp"] = as_of_timestamp
+        if filter_by_cohort:
+            # Must send explicitly because API defaults to True
+            params["include_all_users"] = include_all_users
+
+        response = self._request("POST", url, data=params)
+        if not isinstance(response, dict):
+            raise QueryError(
+                message=(
+                    f"engage_stats returned unexpected response type "
+                    f"{type(response).__name__}: {response!r}"
+                ),
+                status_code=200,
+                response_body=str(response),
+            )
+        return response
 
     # =========================================================================
     # Discovery API

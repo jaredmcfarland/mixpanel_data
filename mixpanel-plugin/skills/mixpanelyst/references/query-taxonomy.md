@@ -87,6 +87,18 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`) remain avai
 | "drop-off paths" | "Where do users go after dropping?" | Forward flow from drop-off event |
 | "bidirectional" | "Activity around the purchase event?" | `forward=3, reverse=2` |
 
+### Users Engine Signals (ws.query_user)
+
+| Signal Pattern | Example Question | Key Parameters |
+|---|---|---|
+| "who are", "user properties", "user profile" | "Who are our premium users?" | `where=Filter.equals("plan", "premium")` |
+| "how many users have", "user count" | "How many users have email set?" | `mode="aggregate", where=Filter.is_set("$email")` |
+| "user list", "export users", "targeting list" | "Export a list of enterprise users" | `properties=[...], limit=500` |
+| "demographics", "what do X users look like" | "What do churned users look like?" | `properties=["plan", "company_size", ...]` |
+| "profile attributes", "user data", "user info" | "Get user profile data for segment" | `where=..., properties=[...]` |
+| "profile analysis", "user segmentation", "demographics" | "Segment users by profile attributes" | `properties=[...], limit=5000, parallel=True` |
+| "profile the cohort", "who churned" | "Profile users who stopped using the product" | `cohort=CohortDefinition.all_of(...)` |
+
 ### Cohort-Scoped Signals (Cross-Engine)
 
 | Signal Pattern | Example Question | Capability |
@@ -361,6 +373,31 @@ for event in core_events[:5]:
     print(f"  {event}: {total:,.0f} unique users")
 ```
 
+### Profile Enrichment Join
+
+Enrich behavioral results with user profile attributes by extracting distinct_ids from any engine and querying user profiles.
+
+```python
+from mixpanel_data import Filter
+
+# Step 1: Identify interesting users via behavioral engine
+funnel = ws.query_funnel(["Browse", "Cart", "Purchase"])
+# Users who dropped off at step 2 are the target
+
+# Step 2: Profile those users
+profiles = ws.query_user(
+    where=Filter.equals("plan", "free"),
+    properties=["$email", "company_size", "signup_source"],
+    limit=500,
+)
+
+# Step 3: Merge behavioral and profile data
+# profiles.df has distinct_id + profile attributes
+print(profiles.df.groupby("signup_source").size())
+```
+
+**Use case**: "Profile the users who dropped off at step 2 of the funnel" — behavioral results → extract distinct_ids → `ws.query_user(distinct_ids=ids)` → merge on distinct_id.
+
 ---
 
 ## Multi-Query Execution Patterns
@@ -548,3 +585,27 @@ Otherwise → query() (Insights)
 | 4 | Retention | `ws.query_retention("Purchase", "Purchase", group_by=GroupBy(property=CustomPropertyRef(42), property_type="number"))` | Repeat purchase by saved CP |
 
 **Join strategy**: Time-aligned — all queries share the same date range. Custom property breakdowns produce the same segment structure as regular GroupBy breakdowns.
+
+### Pattern 13: User Profiling
+
+**Question**: "What do churned users look like?"
+
+| Step | Engine | Query | Purpose |
+|------|--------|-------|---------|
+| 1 | Retention | `ws.query_retention("Signup", "Login", retention_unit="week")` | Identify low-retention cohorts |
+| 2 | Users | `ws.query_user(cohort=churned_cohort, properties=["plan", "company_size"], limit=500)` | Get demographic breakdown |
+| 3 | pandas | `churned_df.groupby("plan").size()` vs `retained_df.groupby("plan").size()` | Find demographic differences |
+
+**Join strategy**: Profile enrichment — retention identifies the behavioral cohort, query_user extracts profile attributes, pandas compares demographics.
+
+### Pattern 14: Profile-Based Segmentation
+
+**Question**: "Segment users by behavior + demographics"
+
+| Step | Engine | Query | Purpose |
+|------|--------|-------|---------|
+| 1 | Users | `ws.query_user(properties=[...], limit=5000, parallel=True)` | Profile attributes |
+| 2 | pandas | `pd.qcut(df["ltv"], q=4, labels=[...])` | Quantile-based segments |
+| 3 | Insights | `ws.query("Purchase", group_by=segment_col)` | Per-segment metrics |
+
+**Join strategy**: Profile segmentation — query_user provides the attribute dimensions, pandas segments them by quantiles or business rules, insights validates the segments behaviorally.

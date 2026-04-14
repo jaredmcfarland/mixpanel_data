@@ -349,6 +349,51 @@ with ThreadPoolExecutor(max_workers=5) as pool:
 
 ---
 
+## Join Strategy 7: Profile Enrichment Join
+
+**Use when**: You have identified interesting users via a behavioral engine (insights, funnels, retention, flows) and want to understand WHO they are -- their demographics, plan, company size, or other profile attributes.
+
+**Principle**: Behavioral identification (event engines) followed by profile extraction (Users engine) followed by demographic analysis (pandas). This is the canonical cross-engine pattern for `query_user()`.
+
+**Join key**: `distinct_id` (implicit -- cohort definition or distinct_id list bridges engines).
+
+```python
+import mixpanel_data as mp
+from mixpanel_data import Filter, CohortDefinition, CohortCriteria
+import pandas as pd
+
+ws = mp.Workspace()
+
+# Step 1: Identify interesting users via behavioral engine
+# e.g., find users who purchased but did not return (retention analysis)
+retention = ws.query_retention("Purchase", "Purchase", retention_unit="week", last=90)
+# Inspect retention.average to understand repeat purchase rates
+
+# Step 2: Profile those users with query_user
+profiles = ws.query_user(
+    cohort=CohortDefinition.all_of(
+        CohortCriteria.did_event("Purchase", within_days=90),
+    ),
+    properties=["$email", "plan", "company_size", "signup_source"],
+    limit=1000,
+)
+
+# Step 3: Analyze demographics of the behavioral cohort
+print(profiles.df.groupby("plan").size())
+print(profiles.df.groupby("company_size").agg({"distinct_id": "count"}))
+
+# Step 4: Compare segments
+by_source = profiles.df.groupby("signup_source").agg(
+    users=("distinct_id", "count"),
+    top_plan=("plan", lambda x: x.mode().iloc[0] if len(x) > 0 else "unknown"),
+)
+print(by_source.sort_values("users", ascending=False))
+```
+
+**Unique insight**: Event engines tell you WHAT users did. `query_user()` tells you WHO they are. Combining both answers "what kind of people do X?" -- the foundation for targeting, personalization, and demographic analysis.
+
+---
+
 ## Synthesis Patterns with pandas/numpy
 
 ### Correlation Analysis Across Query Results

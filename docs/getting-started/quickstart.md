@@ -309,6 +309,31 @@ print(result.edges_df)
 
 See the [Flow Queries guide](../guide/query-flows.md) for full coverage.
 
+### User Profile Queries
+
+Search, filter, and aggregate user profiles stored in Mixpanel:
+
+```python
+from mixpanel_data import Filter
+
+# Query user profiles
+result = ws.query_user(
+    where=Filter.equals("plan", "premium"),
+    properties=["$email", "$name", "ltv"],
+    sort_by="ltv",
+    sort_order="descending",
+    limit=50,
+)
+print(f"{result.total} premium users")
+print(result.df)
+
+# Count matching profiles
+count = ws.query_user(mode="aggregate", where=Filter.is_set("$email"))
+print(f"Users with email: {count.value}")
+```
+
+See the [User Profile Queries guide](../guide/query-users.md) for full coverage.
+
 ### Legacy Query Methods
 
 For segmentation, funnels, and retention via the older Query API:
@@ -416,6 +441,7 @@ For ETL pipelines or data processing, stream data directly:
 - [Funnel Queries](../guide/query-funnels.md) — Typed funnel conversion analysis
 - [Retention Queries](../guide/query-retention.md) — Typed retention analysis with event pairs and custom buckets
 - [Flow Queries](../guide/query-flows.md) — Typed flow path analysis with direction controls and visualization modes
+- [User Profile Queries](../guide/query-users.md) — Typed user profile queries with filtering, sorting, and aggregation
 - [Live Analytics](../guide/live-analytics.md) — Segmentation, funnels, retention
 - [Entity Management](../guide/entity-management.md) — Manage dashboards, reports, cohorts, feature flags, and experiments
 - [Data Governance](../guide/data-governance.md) — Manage Lexicon definitions, drop filters, custom properties, and lookup tables

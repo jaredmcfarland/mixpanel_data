@@ -458,6 +458,48 @@ print(comparison.map(lambda x: f"{x:.0%}" if pd.notna(x) else "").to_string())
 
 ---
 
+## User Profiling with query_user()
+
+`query_user()` provides the identity axis — combine with behavioral metrics from event engines for cross-engine profiling. Profile attributes (plan, company size, LTV) describe who users are; behavioral data from insights or retention describes what they do.
+
+### Segmenting Users by Profile Attributes
+
+```python
+import mixpanel_data as mp
+from mixpanel_data import Filter
+import pandas as pd
+
+ws = mp.Workspace()
+
+# Step 1: Profile attributes from Users engine
+profiles = ws.query_user(
+    properties=["plan", "company_size", "ltv", "signup_date"],
+    where=Filter.is_set("$email"),
+    limit=5000,
+    parallel=True,
+)
+
+# Step 2: Quantile-based segmentation on LTV
+df = profiles.df.copy()
+df["ltv_tier"] = pd.qcut(
+    df["ltv"].dropna(), q=4, labels=["Low", "Mid-Low", "Mid-High", "High"]
+)
+
+# Step 3: Profile each segment
+for tier in ["Low", "Mid-Low", "Mid-High", "High"]:
+    subset = df[df["ltv_tier"] == tier]
+    print(f"{tier}: n={len(subset)}, "
+          f"avg_ltv={subset['ltv'].mean():.0f}, "
+          f"top_plan={subset['plan'].mode().iloc[0]}")
+
+# Step 4: Cross-tabulate with plan
+print(df.groupby(["ltv_tier", "plan"]).size().unstack(fill_value=0))
+```
+
+**Tip**: The profile data from `query_user()` is most powerful when joined with behavioral metrics from event engines — merge on `distinct_id` to compare demographics across behavioral segments.
+
+---
+
 ## Graph Analysis with NetworkX (Beyond Basics)
 
 _These patterns extend the basic NetworkX integration in [flows-reference.md](flows-reference.md) §NetworkX Integration Patterns. The flow result's `.graph` property is the entry point._

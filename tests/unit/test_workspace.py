@@ -176,9 +176,10 @@ class TestCredentialResolution:
         monkeypatch.delenv("MP_PROJECT_ID", raising=False)
         monkeypatch.delenv("MP_REGION", raising=False)
 
-        # Empty config
+        # Empty config + isolated OAuth dir so real tokens don't leak in
         config_path = temp_dir / "empty_config.toml"
         config_manager = ConfigManager(config_path=config_path)
+        monkeypatch.setattr(config_manager, "_resolve_from_oauth", lambda **_kw: None)
 
         with pytest.raises(ConfigError):
             Workspace(_config_manager=config_manager)

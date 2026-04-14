@@ -358,6 +358,18 @@ _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
     (
         frozenset(
             {
+                "query_user",
+                "build_user_params",
+                "UserQueryResult",
+            }
+        ),
+        "users-reference.md",
+        "User profile queries — filtering, sorting, aggregate counts, "
+        "cross-engine composition, feature extraction",
+    ),
+    (
+        frozenset(
+            {
                 "query_flow",
                 "build_flow_params",
                 "query_saved_flows",

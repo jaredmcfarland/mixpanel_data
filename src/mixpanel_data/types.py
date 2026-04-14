@@ -10614,3 +10614,274 @@ class FlowQueryResult(ResultWithDataFrame):
         roots = [t.to_anytree() for t in self.trees]
         object.__setattr__(self, "_anytree_cache", roots)
         return roots
+
+
+# =============================================================================
+# User / Engage Query Result (Phase 039)
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class UserQueryResult(ResultWithDataFrame):
+    """Structured output from a Workspace.query_user() execution.
+
+    Contains profile query results with lazy DataFrame conversion.
+    Supports two output modes:
+
+    - **profiles**: Returns individual user profiles with their properties.
+    - **aggregate**: Returns aggregate statistics (counts, sums, etc.)
+      optionally segmented by cohort.
+
+    Attributes:
+        computed_at: When the query was computed (ISO format).
+        total: Number of profiles in this result (equals ``len(profiles)``).
+        profiles: Normalized profile dicts; empty list for aggregate mode.
+        params: Engage API params used for the query (for debugging).
+        meta: Execution metadata (timing, sampling, etc.).
+        mode: Output mode — ``"profiles"`` or ``"aggregate"``.
+        aggregate_data: Raw aggregate result; ``None`` for profiles mode.
+            For unsegmented aggregates this is an ``int`` or ``float``.
+            For segmented aggregates this is a ``dict[str, Any]``.
+
+    Example:
+        ```python
+        # Profiles mode
+        result = ws.query_user(
+            where='properties["plan"] == "premium"',
+            properties=["$email", "$last_seen"],
+        )
+        print(result.total)          # 1532
+        print(result.df.head())      # DataFrame with distinct_id, last_seen, email
+        print(result.distinct_ids)   # ["abc123", "def456", ...]
+
+        # Aggregate mode
+        result = ws.query_user(
+            where='properties["plan"] == "premium"',
+            mode="aggregate",
+        )
+        print(result.value)          # 1532
+        ```
+    """
+
+    computed_at: str
+    """When the query was computed (ISO format)."""
+
+    total: int
+    """Number of profiles returned in this response.
+
+    Equals ``len(self.profiles)`` in profile mode. For non-count
+    aggregates (extremes, percentile, numeric_summary), total is 0
+    because the API returns the aggregate value, not a profile count.
+    Use ``mode='aggregate', aggregate='count'`` for the full population
+    count.
+    """
+
+    profiles: list[dict[str, Any]] = field(default_factory=list)
+    """Normalized profile dicts; empty list for aggregate mode."""
+
+    params: dict[str, Any] = field(default_factory=dict)
+    """Engage API params used for the query (for debugging)."""
+
+    meta: dict[str, Any] = field(default_factory=dict)
+    """Execution metadata (pagination, parallelism, or aggregation details)."""
+
+    mode: Literal["profiles", "aggregate"] = "aggregate"
+    """Output mode — ``"profiles"`` or ``"aggregate"``."""
+
+    aggregate_data: dict[str, Any] | int | float | None = None
+    """Raw aggregate result; ``None`` for profiles mode.
+
+    For unsegmented aggregates this is an ``int`` or ``float``.
+    For segmented aggregates this is a ``dict[str, Any]``.
+    """
+
+    @property
+    def df(self) -> pd.DataFrame:
+        """Convert result to a normalized DataFrame.
+
+        The DataFrame structure depends on the query mode:
+
+        - **profiles mode**: One row per profile. Columns are ``distinct_id``
+          (first), ``last_seen`` (second), then remaining property columns in
+          alphabetical order. Built-in Mixpanel properties have their ``$``
+          prefix stripped (e.g., ``$email`` becomes ``email``). Missing
+          properties across profiles become ``NaN``.
+        - **aggregate unsegmented scalar** (``count()``): Single row with
+          columns ``metric`` and ``value``.
+        - **aggregate unsegmented structured** (``extremes``,
+          ``percentile``, ``numeric_summary``): Single row with ``metric``
+          column plus one column per result key (e.g., ``max``, ``min``).
+        - **aggregate segmented scalar**: Rows with ``segment`` and
+          ``value`` columns.
+        - **aggregate segmented structured**: Rows with ``segment``
+          column plus one column per result key.
+
+        Returns:
+            Normalized DataFrame. For empty profiles, returns an empty
+            DataFrame with columns ``["distinct_id", "last_seen"]``.
+
+        Example:
+            ```python
+            result = ws.query_user(
+                where='properties["plan"] == "premium"',
+                properties=["$email", "$city"],
+            )
+            df = result.df
+            # columns: distinct_id, last_seen, city, email
+            ```
+        """
+        if self._df_cache is not None:
+            return self._df_cache
+
+        if self.mode == "profiles":
+            result_df = self._build_profiles_df()
+        elif isinstance(self.aggregate_data, dict):
+            if self.meta.get("segmented"):
+                # Segmented aggregate — one row per cohort
+                rows: list[dict[str, Any]] = []
+                for seg, val in self.aggregate_data.items():
+                    if isinstance(val, dict):
+                        rows.append({"segment": seg, **val})
+                    else:
+                        rows.append({"segment": seg, "value": val})
+                if rows:
+                    result_df = pd.DataFrame(rows)
+                else:
+                    result_df = pd.DataFrame(columns=["segment", "value"])
+            else:
+                # Unsegmented structured result (extremes, percentile,
+                # numeric_summary) — single row with metric + dict keys
+                action = self.params.get("action", "aggregate")
+                result_df = pd.DataFrame(
+                    [{"metric": action, **self.aggregate_data}],
+                )
+        elif self.aggregate_data is not None:
+            result_df = pd.DataFrame(
+                [
+                    {
+                        "metric": self.params.get("action", "aggregate"),
+                        "value": self.aggregate_data,
+                    }
+                ],
+                columns=["metric", "value"],
+            )
+        else:
+            result_df = pd.DataFrame(columns=["metric", "value"])
+
+        object.__setattr__(self, "_df_cache", result_df)
+        return result_df
+
+    def _build_profiles_df(self) -> pd.DataFrame:
+        """Build a DataFrame from profile dicts with normalized columns.
+
+        Strips the ``$`` prefix from built-in Mixpanel property names,
+        places ``distinct_id`` first and ``last_seen`` second, then
+        sorts remaining columns alphabetically.
+
+        Returns:
+            DataFrame with one row per profile. Empty DataFrame with
+            columns ``["distinct_id", "last_seen"]`` when no profiles.
+        """
+        if not self.profiles:
+            return pd.DataFrame(columns=["distinct_id", "last_seen"])
+
+        normalized: list[dict[str, Any]] = []
+        for profile in self.profiles:
+            row: dict[str, Any] = {
+                "distinct_id": profile.get("distinct_id", ""),
+                "last_seen": profile.get("last_seen"),
+            }
+            # Flatten properties dict, stripping $ prefix from keys
+            props = profile.get("properties", {})
+            if isinstance(props, dict):
+                for key, val in props.items():
+                    clean_key = key[1:] if key.startswith("$") else key
+                    row[clean_key] = val
+            normalized.append(row)
+
+        result_df = pd.DataFrame(normalized)
+
+        # Reorder: distinct_id first, last_seen second, rest alphabetical
+        cols = list(result_df.columns)
+        priority = ["distinct_id", "last_seen"]
+        ordered: list[str] = [c for c in priority if c in cols]
+        remaining = sorted(c for c in cols if c not in priority)
+        ordered.extend(remaining)
+        return result_df[ordered]
+
+    @property
+    def distinct_ids(self) -> list[str]:
+        """Return distinct IDs from profile results.
+
+        Returns:
+            List of ``distinct_id`` strings from each profile dict for
+            profiles mode. Empty list for aggregate mode.
+
+        Example:
+            ```python
+            result = ws.query_user(
+                where='properties["plan"] == "premium"',
+            )
+            ids = result.distinct_ids
+            # ["user_abc123", "user_def456", ...]
+            ```
+        """
+        if self.mode != "profiles":
+            return []
+        return [p.get("distinct_id", "") for p in self.profiles]
+
+    @property
+    def value(self) -> int | float | None:
+        """Return the scalar aggregate value for unsegmented aggregates.
+
+        Returns:
+            The aggregate scalar (``int`` or ``float``) when mode is
+            ``"aggregate"`` and ``aggregate_data`` is not a dict.
+            Returns ``None`` for profiles mode or segmented aggregates
+            (where ``aggregate_data`` is a dict).
+
+        Example:
+            ```python
+            result = ws.query_user(
+                where='properties["plan"] == "premium"',
+                mode="aggregate",
+            )
+            print(result.value)  # 1532
+            ```
+        """
+        if self.mode != "aggregate":
+            return None
+        if isinstance(self.aggregate_data, dict):
+            return None
+        if isinstance(self.aggregate_data, (int, float)):
+            return self.aggregate_data
+        return None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output.
+
+        Returns all fields except the internal ``_df_cache``.
+
+        Returns:
+            Dictionary with keys: ``computed_at``, ``total``,
+            ``profiles``, ``params``, ``meta``, ``mode``,
+            ``aggregate_data``.
+
+        Example:
+            ```python
+            result = ws.query_user(
+                where='properties["plan"] == "premium"',
+            )
+            import json
+            print(json.dumps(result.to_dict(), indent=2))
+            ```
+        """
+        return {
+            "computed_at": self.computed_at,
+            "total": self.total,
+            "profiles": self.profiles,
+            "params": self.params,
+            "meta": self.meta,
+            "mode": self.mode,
+            "aggregate_data": self.aggregate_data,
+        }

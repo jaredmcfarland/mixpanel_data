@@ -8,6 +8,7 @@ Private infrastructure powering mixpanel_data's complete programmable interface 
 |------|---------|
 | `config.py` | Configuration management, credential resolution, TOML parsing |
 | `api_client.py` | HTTP client for Mixpanel API (authentication, error handling) |
+| `query/` | Query engine builders and validators (user_builders.py, user_validators.py) |
 | `services/` | Domain services: DiscoveryService (events, properties, funnels, cohorts, bookmarks, lexicon), LiveQueryService (segmentation, retention, JQL) |
 
 ## Key Classes

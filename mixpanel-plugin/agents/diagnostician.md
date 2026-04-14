@@ -95,7 +95,7 @@ print(trend.nlargest(5, "daily_change")[["daily_change"]])
 
 _(→ [insights-reference.md](../skills/mixpanelyst/references/insights-reference.md) §GroupBy Deep Reference for numeric bucketing and multiple breakdowns)_
 
-Break down by 4-6 dimensions to find which segment drives the change. Run all queries simultaneously:
+Break down by 4-6 dimensions to find which segment drives the change. For user-attribute dimensions (plan, company_size, region), use `ws.query_user()` to profile the affected segment after identification. Run all queries simultaneously:
 
 ```python
 from concurrent.futures import ThreadPoolExecutor

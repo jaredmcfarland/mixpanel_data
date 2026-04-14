@@ -145,6 +145,8 @@ Map the question to pirate metric stages:
 | **Revenue** | Do they pay? | Insights (revenue metrics), Funnels (purchase conversion) |
 | **Referral** | Do they invite others? | Insights (invite events), Funnels (invite flow) |
 
+For each stage, use `ws.query_user()` to profile users in that stage -- e.g., demographics, plan distribution, or company size of users who activated vs. those who did not.
+
 ### Step 4: Decompose into Sub-Questions
 
 For each sub-question, specify the engine, method, and parameters:
@@ -155,8 +157,11 @@ For each sub-question, specify the engine, method, and parameters:
 | 2 | Do they complete onboarding? | Funnels | `ws.query_funnel()` | `steps=[...], conversion_window=7` |
 | 3 | Do they come back after week 1? | Retention | `ws.query_retention()` | `retention_unit="week"` |
 | 4 | What paths lead to activation? | Flows | `ws.query_flow()` | `forward=3, mode="sankey"` |
-| 5 | How do results connect? | pandas | merge/correlate | Join on date or cohort |
-| 6 | Does behavior differ for [cohort]? | Any | `ws.query()` | `where=Filter.in_cohort(...)` or `group_by=CohortBreakdown(...)` |
+| 5 | Who are these users? | Users | `ws.query_user()` | `properties=[...], cohort=...` |
+| 6 | How do results connect? | pandas | merge/correlate | Join on date or cohort |
+| 7 | Does behavior differ for [cohort]? | Any | `ws.query()` | `where=Filter.in_cohort(...)` or `group_by=CohortBreakdown(...)` |
+
+"Who" questions (demographics, user attributes, profile data) map to the Users engine via `ws.query_user()`.
 
 ### Step 5: Define the Join Strategy
 

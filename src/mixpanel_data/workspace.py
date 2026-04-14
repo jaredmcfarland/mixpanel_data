@@ -25,10 +25,15 @@ Example:
 
 from __future__ import annotations
 
+import calendar
+import json
 import logging
+import math
 import time
 from collections.abc import Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date as _date
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -54,6 +59,14 @@ from mixpanel_data._internal.bookmark_builders import (
     patch_custom_property_filters_for_transform,
 )
 from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.query.user_builders import (
+    extract_cohort_filter,
+    filters_to_selector,
+)
+from mixpanel_data._internal.query.user_validators import (
+    validate_user_args,
+    validate_user_params,
+)
 from mixpanel_data._internal.segfilter import build_segfilter_entry
 from mixpanel_data._internal.services.discovery import DiscoveryService
 from mixpanel_data._internal.services.live_query import LiveQueryService
@@ -80,10 +93,13 @@ from mixpanel_data._literal_types import (
     TimeUnit,
 )
 from mixpanel_data.exceptions import (
+    AuthenticationError,
     BookmarkValidationError,
     ConfigError,
     MixpanelDataError,
     QueryError,
+    RateLimitError,
+    ServerError,
     ValidationError,
 )
 from mixpanel_data.types import (
@@ -112,6 +128,7 @@ from mixpanel_data.types import (
     BulkUpdatePropertiesParams,
     Cohort,
     CohortBreakdown,
+    CohortDefinition,
     CohortMetric,
     CreateAlertParams,
     CreateAnnotationParams,
@@ -218,6 +235,7 @@ from mixpanel_data.types import (
     UpdateTextCardParams,
     UpdateWebhookParams,
     UploadLookupTableParams,
+    UserQueryResult,
     ValidateAlertsForBookmarkParams,
     ValidateAlertsForBookmarkResponse,
     WebhookMutationResult,
@@ -8582,3 +8600,932 @@ class Workspace:
         return client.preview_deletion_filters(
             params.model_dump(exclude_none=True, by_alias=True)
         )
+
+    # =========================================================================
+    # QUERY USER ENGINE
+    # =========================================================================
+
+    def _resolve_and_build_user_params(
+        self,
+        *,
+        where: Filter | list[Filter] | str | None = None,
+        cohort: int | CohortDefinition | None = None,
+        properties: list[str] | None = None,
+        sort_by: str | None = None,
+        sort_order: Literal["ascending", "descending"] = "descending",
+        search: str | None = None,
+        distinct_id: str | None = None,
+        distinct_ids: list[str] | None = None,
+        group_id: str | None = None,
+        as_of: str | int | None = None,
+        mode: Literal["profiles", "aggregate"] = "aggregate",
+        aggregate: Literal[
+            "count", "extremes", "percentile", "numeric_summary"
+        ] = "count",
+        aggregate_property: str | None = None,
+        percentile: float | None = None,
+        segment_by: list[int] | None = None,
+        parallel: bool = False,
+        workers: int = 5,
+        limit: int | None = 1,
+        include_all_users: bool = False,
+    ) -> dict[str, Any]:
+        """Validate arguments and build engage API params dict.
+
+        Performs two-layer validation (argument-level then param-level)
+        and translates high-level Python arguments into the flat dict
+        expected by ``export_profiles_page()``.
+
+        Args:
+            where: Filter profiles by property values. Accepts a single
+                ``Filter``, a list of ``Filter`` objects (AND-combined),
+                a raw selector string, or ``None``.
+            cohort: Filter by cohort membership. An ``int`` for a saved
+                cohort ID, or a ``CohortDefinition`` for an inline
+                cohort definition.
+            properties: Output properties to include in results.
+            sort_by: Property name to sort results by.
+            sort_order: Sort direction (``"ascending"`` or ``"descending"``).
+            search: Full-text search term applied to profile properties.
+            distinct_id: Look up a single user by distinct ID.
+            distinct_ids: Batch look up multiple users by distinct IDs.
+            group_id: Query group profiles instead of user profiles.
+            as_of: Point-in-time query. An ISO date string (``YYYY-MM-DD``)
+                is converted to a Unix timestamp; an ``int`` is passed
+                through directly.
+            mode: Output mode (``"profiles"`` or ``"aggregate"``).
+            aggregate: Aggregation function for aggregate mode. One of
+                ``"count"`` (profile count), ``"extremes"`` (min/max),
+                ``"percentile"`` (Nth percentile), or
+                ``"numeric_summary"`` (count/mean/var/sum_of_squares).
+            aggregate_property: Property to aggregate on (required for
+                non-count aggregations).
+            percentile: Percentile value (0-100 exclusive). Required
+                when ``aggregate="percentile"``.
+            segment_by: Cohort IDs for segmented aggregation.
+            parallel: Whether to enable concurrent page fetching.
+            workers: Maximum concurrent workers for parallel fetching.
+            limit: Maximum profiles to return. Defaults to ``1``. Used
+                for argument-level validation (U3); not included in the
+                returned params dict.
+            include_all_users: Include non-members in cohort query results.
+
+        Returns:
+            Engage API params dict ready for ``export_profiles_page()``.
+
+        Raises:
+            BookmarkValidationError: If any validation rule fails at
+                either the argument level (U1-U28) or the param level
+                (UP1-UP4).
+
+        Example:
+            ```python
+            ws = Workspace()
+            params = ws._resolve_and_build_user_params(
+                where=Filter.equals("plan", "premium"),
+                sort_by="ltv",
+            )
+            # {"where": 'properties["plan"] == "premium"',
+            #  "sort_key": 'properties["ltv"]',
+            #  "sort_order": "descending"}
+            ```
+        """
+        # Type guard for where
+        if where is not None and not isinstance(where, (Filter, list, str)):
+            raise BookmarkValidationError(
+                errors=[
+                    ValidationError(
+                        path="where",
+                        message=(
+                            f"where must be a Filter, list[Filter], str, or None "
+                            f"(got {type(where).__name__})"
+                        ),
+                        code="U9",
+                    )
+                ],
+            )
+
+        # Layer 1: argument-level validation
+        arg_errors = validate_user_args(
+            where=where,
+            cohort=cohort,
+            properties=properties,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            search=search,
+            distinct_id=distinct_id,
+            distinct_ids=distinct_ids,
+            group_id=group_id,
+            as_of=as_of,
+            mode=mode,
+            aggregate=aggregate,
+            aggregate_property=aggregate_property,
+            percentile=percentile,
+            segment_by=segment_by,
+            parallel=parallel,
+            workers=workers,
+            include_all_users=include_all_users,
+        )
+        error_severity = [e for e in arg_errors if e.severity == "error"]
+        if error_severity:
+            raise BookmarkValidationError(errors=error_severity)
+
+        # Build params dict
+        params: dict[str, Any] = {}
+
+        # --- where handling ---
+        cohort_from_filter: Filter | None = None
+        if isinstance(where, str):
+            params["where"] = where
+        elif isinstance(where, (Filter, list)):
+            filters_list = [where] if isinstance(where, Filter) else where
+            remaining, cohort_from_filter = extract_cohort_filter(filters_list)
+            if remaining:
+                try:
+                    selector = filters_to_selector(remaining)
+                except ValueError as exc:
+                    raise BookmarkValidationError(
+                        errors=[
+                            ValidationError(
+                                path="where",
+                                message=str(exc),
+                                code="U_FILTER",
+                            )
+                        ]
+                    ) from exc
+                if selector:
+                    params["where"] = selector
+
+        # --- cohort handling ---
+        if cohort is not None:
+            if isinstance(cohort, int):
+                params["filter_by_cohort"] = json.dumps({"id": cohort})
+            elif isinstance(cohort, CohortDefinition):
+                params["filter_by_cohort"] = json.dumps(
+                    {"raw_cohort": _sanitize_raw_cohort(cohort.to_dict())}
+                )
+        elif cohort_from_filter is not None:
+            # Extract cohort ID from the Filter.in_cohort() value
+            # Structure: [{"cohort": {"id": N, "negated": bool, "name": str}}]
+            raw_value = cohort_from_filter._value
+            if not isinstance(raw_value, list) or len(raw_value) == 0:
+                raise BookmarkValidationError(
+                    errors=[
+                        ValidationError(
+                            path="where",
+                            message=(
+                                "Expected non-empty list from Filter.in_cohort() "
+                                f"value, got {type(raw_value).__name__}"
+                            ),
+                            code="U_COHORT",
+                        )
+                    ]
+                )
+            first_item = raw_value[0]
+            if not isinstance(first_item, dict):
+                raise BookmarkValidationError(
+                    errors=[
+                        ValidationError(
+                            path="where",
+                            message=(
+                                "Expected dict in Filter.in_cohort() value, "
+                                f"got {type(first_item).__name__}"
+                            ),
+                            code="U_COHORT",
+                        )
+                    ]
+                )
+            if "cohort" not in first_item:
+                raise BookmarkValidationError(
+                    errors=[
+                        ValidationError(
+                            path="where",
+                            message=(
+                                "Filter.in_cohort() value missing 'cohort' "
+                                f"key: {first_item!r}"
+                            ),
+                            code="U_COHORT",
+                        )
+                    ]
+                )
+            cohort_wrapper: dict[str, Any] = first_item["cohort"]
+            if "id" in cohort_wrapper:
+                params["filter_by_cohort"] = json.dumps({"id": cohort_wrapper["id"]})
+            elif "raw_cohort" in cohort_wrapper:
+                params["filter_by_cohort"] = json.dumps(
+                    {"raw_cohort": cohort_wrapper["raw_cohort"]}
+                )
+            else:
+                raise BookmarkValidationError(
+                    errors=[
+                        ValidationError(
+                            path="where",
+                            message=(
+                                "Filter.in_cohort() value has no 'id' or "
+                                f"'raw_cohort' key: {cohort_wrapper!r}"
+                            ),
+                            code="U_COHORT",
+                        )
+                    ]
+                )
+
+        # --- properties → output_properties ---
+        if properties is not None:
+            params["output_properties"] = json.dumps(properties)
+
+        # --- sort_by → sort_key ---
+        if sort_by is not None:
+            escaped_sort = sort_by.replace("\\", "\\\\").replace('"', '\\"')
+            params["sort_key"] = f'properties["{escaped_sort}"]'
+            params["sort_order"] = sort_order
+
+        # --- as_of → as_of_timestamp ---
+        if as_of is not None:
+            if isinstance(as_of, str):
+                params["as_of_timestamp"] = calendar.timegm(
+                    _date.fromisoformat(as_of).timetuple()
+                )
+            elif isinstance(as_of, int):
+                params["as_of_timestamp"] = as_of
+
+        # --- distinct_id ---
+        if distinct_id is not None:
+            params["distinct_id"] = distinct_id
+
+        # --- distinct_ids ---
+        if distinct_ids is not None:
+            params["distinct_ids"] = json.dumps(distinct_ids)
+
+        # --- group_id → data_group_id ---
+        if group_id is not None:
+            params["data_group_id"] = group_id
+
+        # --- search ---
+        if search is not None:
+            params["search"] = search
+
+        # --- include_all_users (only when cohort is set) ---
+        if "filter_by_cohort" in params:
+            params["include_all_users"] = include_all_users
+
+        # --- aggregate mode ---
+        if mode == "aggregate":
+            if aggregate == "count":
+                action = "count()"
+            else:
+                escaped_agg_prop = (
+                    aggregate_property.replace("\\", "\\\\").replace('"', '\\"')
+                    if aggregate_property is not None
+                    else ""
+                )
+                if aggregate == "percentile":
+                    action = (
+                        f'percentile(properties["{escaped_agg_prop}"], {percentile})'
+                    )
+                else:
+                    action = f'{aggregate}(properties["{escaped_agg_prop}"])'
+            params["action"] = action
+            if segment_by is not None:
+                params["segment_by_cohorts"] = json.dumps(
+                    {str(sid): True for sid in segment_by}
+                )
+
+        # Layer 2: param-level validation
+        param_errors = validate_user_params(params)
+        if param_errors:
+            raise BookmarkValidationError(errors=param_errors)
+
+        return params
+
+    def _execute_user_query_sequential(
+        self,
+        params: dict[str, Any],
+        limit: int | None,
+    ) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
+        """Execute a user profile query with sequential page fetching.
+
+        Fetches profiles from the Engage API one page at a time,
+        collecting results until the requested limit is reached or
+        all pages are exhausted.
+
+        Args:
+            params: Engage API params dict from
+                ``_resolve_and_build_user_params()``.
+            limit: Maximum number of profiles to collect. ``None`` means
+                fetch all matching profiles.
+
+        Returns:
+            Tuple of ``(profiles, total, computed_at, meta)`` where:
+
+            - **profiles**: List of normalized profile dicts (truncated
+              to *limit*).
+            - **total**: Number of profiles returned (equals
+              ``len(profiles)``).
+            - **computed_at**: ISO timestamp of when the query was
+              executed.
+            - **meta**: Execution metadata dict with ``session_id``,
+              ``pages_fetched``, and ``parallel`` keys.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: API rate limit exceeded (429).
+            APIError: Other API communication errors.
+
+        Example:
+            ```python
+            params = ws._resolve_and_build_user_params(
+                where=Filter.equals("plan", "premium"),
+            )
+            profiles, total, computed_at, meta = (
+                ws._execute_user_query_sequential(params, limit=10)
+            )
+            ```
+        """
+        api_client = self._require_api_client()
+
+        # Reuse _build_page_kwargs for params→kwargs translation.
+        # Pass limit server-side for efficient fetching.
+        # We return len(profiles) as total — the count of profiles in
+        # this response, not the API's total field (which reflects
+        # the full matching population). Use mode="aggregate",
+        # aggregate="count" for the full count.
+        api_kwargs = self._build_page_kwargs(params)
+        api_kwargs["limit"] = limit
+
+        result = api_client.export_profiles_page(page=0, **api_kwargs)
+        profiles: list[dict[str, Any]] = [transform_profile(p) for p in result.profiles]
+        session_id = result.session_id
+        pages_fetched = 1
+
+        # Check if we already have enough
+        if limit is not None and len(profiles) >= limit:
+            profiles = profiles[:limit]
+        elif result.has_more and result.profiles:
+            # Paginate for more (guard: stop if page returns no profiles)
+            current_page = 0
+            while result.has_more:
+                if limit is not None and len(profiles) >= limit:
+                    break
+                current_page += 1
+                result = api_client.export_profiles_page(
+                    page=current_page,
+                    session_id=session_id,
+                    **api_kwargs,
+                )
+                if not result.profiles:
+                    break
+                profiles.extend(transform_profile(p) for p in result.profiles)
+                pages_fetched += 1
+
+            # Slice with None returns all profiles (intentional for limit=None)
+            profiles = profiles[:limit]
+
+        computed_at = datetime.now(timezone.utc).isoformat()
+        meta: dict[str, Any] = {
+            "session_id": session_id,
+            "pages_fetched": pages_fetched,
+            "parallel": False,
+        }
+
+        return profiles, len(profiles), computed_at, meta
+
+    def query_user(
+        self,
+        *,
+        where: Filter | list[Filter] | str | None = None,
+        cohort: int | CohortDefinition | None = None,
+        properties: list[str] | None = None,
+        sort_by: str | None = None,
+        sort_order: Literal["ascending", "descending"] = "descending",
+        limit: int | None = 1,
+        search: str | None = None,
+        distinct_id: str | None = None,
+        distinct_ids: list[str] | None = None,
+        group_id: str | None = None,
+        as_of: str | int | None = None,
+        mode: Literal["profiles", "aggregate"] = "aggregate",
+        aggregate: Literal[
+            "count", "extremes", "percentile", "numeric_summary"
+        ] = "count",
+        aggregate_property: str | None = None,
+        percentile: float | None = None,
+        segment_by: list[int] | None = None,
+        parallel: bool = False,
+        workers: int = 5,
+        include_all_users: bool = False,
+    ) -> UserQueryResult:
+        """Query user profiles from Mixpanel's Engage API.
+
+        Provides a high-level interface to Mixpanel's Engage API for
+        querying user profiles with typed filters, cohort membership,
+        sorting, and pagination. Results are returned as a structured
+        ``UserQueryResult`` with lazy DataFrame conversion.
+
+        Args:
+            where: Filter profiles by property values. Accepts a single
+                ``Filter``, a list of ``Filter`` objects (AND-combined),
+                a raw selector string, or ``None``.
+            cohort: Filter by cohort membership. An ``int`` for a saved
+                cohort ID, or a ``CohortDefinition`` for an inline
+                cohort definition.
+            properties: Output properties to include in results.
+            sort_by: Property name to sort results by.
+            sort_order: Sort direction (``"ascending"`` or ``"descending"``).
+            limit: Maximum profiles to return. Defaults to ``1`` for
+                quick exploration. Use ``None`` to fetch all matching
+                profiles.
+            search: Full-text search term applied to profile properties.
+            distinct_id: Look up a single user by distinct ID.
+            distinct_ids: Batch look up multiple users by distinct IDs.
+            group_id: Query group profiles instead of user profiles.
+            as_of: Point-in-time query. An ISO date string (``YYYY-MM-DD``)
+                is converted to a Unix timestamp; an ``int`` is passed
+                through directly.
+            mode: Output mode (``"profiles"`` or ``"aggregate"``).
+            aggregate: Aggregation function for aggregate mode. One of
+                ``"count"`` (profile count), ``"extremes"`` (min/max),
+                ``"percentile"`` (Nth percentile), or
+                ``"numeric_summary"`` (count/mean/var/sum_of_squares).
+            aggregate_property: Property to aggregate on (required for
+                non-count aggregations).
+            percentile: Percentile value (0-100 exclusive). Required
+                when ``aggregate="percentile"``.
+            segment_by: Cohort IDs for segmented aggregation.
+            parallel: Whether to enable concurrent page fetching.
+            workers: Maximum concurrent workers for parallel fetching.
+            include_all_users: Include non-members in cohort query results.
+
+        Returns:
+            ``UserQueryResult`` with profiles, total count, DataFrame,
+            and execution metadata.
+
+        Raises:
+            BookmarkValidationError: If any validation rule fails.
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: API rate limit exceeded (429).
+            APIError: Other API communication errors.
+
+        Example:
+            ```python
+            ws = Workspace()
+
+            # Quick peek at one profile
+            result = ws.query_user()
+            print(result.df)
+
+            # Filter premium users, sorted by LTV
+            result = ws.query_user(
+                where=Filter.equals("plan", "premium"),
+                sort_by="ltv",
+                sort_order="descending",
+                limit=100,
+            )
+            print(f"Total premium users: {result.total}")
+            print(result.df.head())
+
+            # Batch lookup specific users
+            result = ws.query_user(
+                distinct_ids=["user_001", "user_002"],
+                limit=None,
+            )
+            ```
+        """
+        # Credential check (before validation to fail fast)
+        if self._credentials is None:
+            raise ConfigError(
+                "query_user() requires credentials. "
+                "Provide credentials via environment variables, "
+                "config file, or Workspace constructor."
+            )
+
+        params = self._resolve_and_build_user_params(
+            where=where,
+            cohort=cohort,
+            properties=properties,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            search=search,
+            distinct_id=distinct_id,
+            distinct_ids=distinct_ids,
+            group_id=group_id,
+            as_of=as_of,
+            mode=mode,
+            aggregate=aggregate,
+            aggregate_property=aggregate_property,
+            percentile=percentile,
+            segment_by=segment_by,
+            parallel=parallel,
+            workers=workers,
+            include_all_users=include_all_users,
+        )
+
+        # Route by mode
+        if mode == "aggregate":
+            aggregate_data, total, computed_at, meta = self._execute_user_aggregate(
+                params
+            )
+            return UserQueryResult(
+                computed_at=computed_at,
+                total=total,
+                profiles=[],
+                params=params,
+                meta=meta,
+                mode="aggregate",
+                aggregate_data=aggregate_data,
+            )
+
+        # Profiles mode — choose sequential or parallel
+        if parallel and limit != 1:
+            profiles, total, computed_at, meta = self._execute_user_query_parallel(
+                params, limit, workers
+            )
+        else:
+            if parallel and limit == 1:
+                logger.debug("parallel=True ignored: limit=1 uses sequential path")
+            profiles, total, computed_at, meta = self._execute_user_query_sequential(
+                params, limit
+            )
+
+        return UserQueryResult(
+            computed_at=computed_at,
+            total=total,
+            profiles=profiles,
+            params=params,
+            meta=meta,
+            mode="profiles",
+            aggregate_data=None,
+        )
+
+    def build_user_params(
+        self,
+        *,
+        where: Filter | list[Filter] | str | None = None,
+        cohort: int | CohortDefinition | None = None,
+        properties: list[str] | None = None,
+        sort_by: str | None = None,
+        sort_order: Literal["ascending", "descending"] = "descending",
+        search: str | None = None,
+        distinct_id: str | None = None,
+        distinct_ids: list[str] | None = None,
+        group_id: str | None = None,
+        as_of: str | int | None = None,
+        mode: Literal["profiles", "aggregate"] = "aggregate",
+        aggregate: Literal[
+            "count", "extremes", "percentile", "numeric_summary"
+        ] = "count",
+        aggregate_property: str | None = None,
+        percentile: float | None = None,
+        segment_by: list[int] | None = None,
+        limit: int | None = 1,
+        parallel: bool = False,
+        workers: int = 5,
+        include_all_users: bool = False,
+    ) -> dict[str, Any]:
+        """Build engage API params without executing a query.
+
+        Validates arguments and constructs the params dict that would be
+        sent to the Engage API, without actually making an API call.
+        Useful for debugging, testing, and inspecting the generated
+        params before execution.
+
+        Args:
+            where: Filter profiles by property values. Accepts a single
+                ``Filter``, a list of ``Filter`` objects (AND-combined),
+                a raw selector string, or ``None``.
+            cohort: Filter by cohort membership. An ``int`` for a saved
+                cohort ID, or a ``CohortDefinition`` for an inline
+                cohort definition.
+            properties: Output properties to include in results.
+            sort_by: Property name to sort results by.
+            sort_order: Sort direction (``"ascending"`` or ``"descending"``).
+            search: Full-text search term applied to profile properties.
+            distinct_id: Look up a single user by distinct ID.
+            distinct_ids: Batch look up multiple users by distinct IDs.
+            group_id: Query group profiles instead of user profiles.
+            as_of: Point-in-time query. An ISO date string (``YYYY-MM-DD``)
+                is converted to a Unix timestamp; an ``int`` is passed
+                through directly.
+            mode: Output mode (``"profiles"`` or ``"aggregate"``).
+            aggregate: Aggregation function for aggregate mode. One of
+                ``"count"`` (profile count), ``"extremes"`` (min/max),
+                ``"percentile"`` (Nth percentile), or
+                ``"numeric_summary"`` (count/mean/var/sum_of_squares).
+            aggregate_property: Property to aggregate on (required for
+                non-count aggregations).
+            percentile: Percentile value (0-100 exclusive). Required
+                when ``aggregate="percentile"``.
+            segment_by: Cohort IDs for segmented aggregation.
+            limit: Maximum profiles to return. Defaults to ``1``. Used
+                for argument-level validation (U3); not included in the
+                returned params dict.
+            parallel: Whether to enable concurrent page fetching.
+                Accepted for signature compatibility with ``query_user()``
+                but has no effect on the returned params dict.
+            workers: Maximum concurrent workers for parallel fetching.
+                Accepted for signature compatibility with ``query_user()``
+                but has no effect on the returned params dict.
+            include_all_users: Include non-members in cohort query results.
+
+        Returns:
+            Engage API params dict. Does not include pagination params
+            (``page``, ``session_id``) or ``limit``, which are added at
+            execution time by ``query_user()``.
+
+        Raises:
+            BookmarkValidationError: If any validation rule fails at
+                either the argument level (U1-U28) or the param level
+                (UP1-UP4).
+
+        Example:
+            ```python
+            ws = Workspace()
+            params = ws.build_user_params(
+                where=Filter.equals("plan", "premium"),
+                sort_by="ltv",
+            )
+            print(params)
+            # {"where": 'properties["plan"] == "premium"',
+            #  "sort_key": 'properties["ltv"]',
+            #  "sort_order": "descending"}
+            ```
+        """
+        return self._resolve_and_build_user_params(
+            where=where,
+            cohort=cohort,
+            properties=properties,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            search=search,
+            distinct_id=distinct_id,
+            distinct_ids=distinct_ids,
+            group_id=group_id,
+            as_of=as_of,
+            mode=mode,
+            aggregate=aggregate,
+            aggregate_property=aggregate_property,
+            percentile=percentile,
+            segment_by=segment_by,
+            limit=limit,
+            parallel=parallel,
+            workers=workers,
+            include_all_users=include_all_users,
+        )
+
+    # =========================================================================
+    # User Query — Aggregate Execution (T018)
+    # =========================================================================
+
+    def _execute_user_aggregate(
+        self,
+        params: dict[str, Any],
+    ) -> tuple[dict[str, Any] | int | float | None, int, str, dict[str, Any]]:
+        """Execute an aggregate query via the Engage stats endpoint.
+
+        Calls ``api_client.engage_stats()`` with the appropriate parameters
+        and parses the response into a structured tuple.
+
+        Args:
+            params: Engage API params dict from
+                ``_resolve_and_build_user_params()``.
+
+        Returns:
+            Tuple of (aggregate_data, total, computed_at, meta) where
+            aggregate_data is the raw result (scalar or dict), total is
+            the count, computed_at is the ISO timestamp, and meta has
+            execution metadata.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: API rate limit exceeded (429).
+            APIError: Other API communication errors.
+        """
+        api_client = self._require_api_client()
+
+        stats_kwargs: dict[str, Any] = {}
+        if "where" in params:
+            stats_kwargs["where"] = params["where"]
+        if "action" in params:
+            stats_kwargs["action"] = params["action"]
+        if "filter_by_cohort" in params:
+            stats_kwargs["filter_by_cohort"] = params["filter_by_cohort"]
+        if "segment_by_cohorts" in params:
+            raw = params["segment_by_cohorts"]
+            stats_kwargs["segment_by_cohorts"] = (
+                json.loads(raw) if isinstance(raw, str) else raw
+            )
+        if "data_group_id" in params:
+            stats_kwargs["group_id"] = params["data_group_id"]
+        if "as_of_timestamp" in params:
+            stats_kwargs["as_of_timestamp"] = params["as_of_timestamp"]
+        if "include_all_users" in params:
+            stats_kwargs["include_all_users"] = params["include_all_users"]
+
+        response = api_client.engage_stats(**stats_kwargs)
+
+        aggregate_data = response.get("results")
+        computed_at = response.get(
+            "computed_at", datetime.now(timezone.utc).isoformat()
+        )
+        if isinstance(aggregate_data, (int, float)):
+            total = int(aggregate_data) if params.get("action") == "count()" else 0
+        else:
+            total = 0
+
+        action = params.get("action", "count()")
+        segmented = "segment_by_cohorts" in params
+        meta: dict[str, Any] = {"action": action, "segmented": segmented}
+
+        return aggregate_data, total, computed_at, meta
+
+    # =========================================================================
+    # User Query — Parallel Execution (T022)
+    # =========================================================================
+
+    def _execute_user_query_parallel(
+        self,
+        params: dict[str, Any],
+        limit: int | None,
+        workers: int,
+    ) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
+        """Fetch profiles with concurrent page retrieval.
+
+        Fetches page 0 sequentially for metadata, then dispatches
+        remaining pages via ``ThreadPoolExecutor``. Failed pages are
+        recorded in metadata rather than aborting the query.
+
+        Args:
+            params: Engage API params dict.
+            limit: Maximum profiles to return, or ``None`` for all.
+            workers: Maximum concurrent workers (capped at 5).
+
+        Returns:
+            Tuple of (profiles, total, computed_at, meta).
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            RateLimitError: API rate limit exceeded (429).
+            ServerError: Mixpanel server error (5xx).
+            QueryError: Query execution failed (400).
+
+        Example:
+            ```python
+            profiles, total, ts, meta = ws._execute_user_query_parallel(
+                params={"where": 'properties["plan"] == "premium"'},
+                limit=5000,
+                workers=3,
+            )
+            ```
+        """
+        api_client = self._require_api_client()
+        capped_workers = min(workers, 5)
+        page_kwargs = self._build_page_kwargs(params)
+
+        # Page 0: get metadata
+        page0 = api_client.export_profiles_page(page=0, **page_kwargs)
+        total = page0.total
+        page_size = page0.page_size or 1000
+        session_id = page0.session_id
+        computed_at = datetime.now(timezone.utc).isoformat()
+
+        all_profiles = [transform_profile(p) for p in page0.profiles]
+
+        if limit is None:
+            pages_needed = math.ceil(total / page_size)
+        else:
+            # Cap by total to avoid fetching empty pages when limit > total
+            effective = min(limit, total) if total > 0 else limit
+            pages_needed = math.ceil(effective / page_size)
+
+        # Single page — skip parallel overhead
+        if pages_needed <= 1 or not page0.has_more:
+            all_profiles = all_profiles[:limit]
+            return (
+                all_profiles,
+                len(all_profiles),
+                computed_at,
+                {
+                    "session_id": session_id,
+                    "pages_fetched": 1,
+                    "failed_pages": [],
+                    "parallel": True,
+                    "workers": capped_workers,
+                },
+            )
+
+        if pages_needed > 48:
+            logger.warning(
+                "Fetching %d pages may trigger rate limiting "
+                "(engage API allows ~60 queries/hour).",
+                pages_needed,
+            )
+
+        failed_pages: list[int] = []
+        page_results: dict[int, list[dict[str, Any]]] = {}
+
+        def _fetch_page(
+            page_num: int,
+        ) -> tuple[int, list[dict[str, Any]]]:
+            """Fetch and normalize a single page."""
+            result = api_client.export_profiles_page(
+                page=page_num,
+                session_id=session_id,
+                **page_kwargs,
+            )
+            return page_num, [transform_profile(p) for p in result.profiles]
+
+        with ThreadPoolExecutor(max_workers=capped_workers) as executor:
+            futures = {
+                executor.submit(_fetch_page, p): p for p in range(1, pages_needed)
+            }
+            for future in as_completed(futures):
+                page_num = futures[future]
+                try:
+                    pnum, profiles = future.result()
+                    page_results[pnum] = profiles
+                except (
+                    AuthenticationError,
+                    RateLimitError,
+                    ServerError,
+                    QueryError,
+                ):
+                    for f in futures:
+                        f.cancel()
+                    raise
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to fetch page %d (%s: %s), "
+                        "continuing with partial results",
+                        page_num,
+                        type(exc).__name__,
+                        exc,
+                        exc_info=True,
+                    )
+                    failed_pages.append(page_num)
+
+        for p in sorted(page_results.keys()):
+            all_profiles.extend(page_results[p])
+
+        all_profiles = all_profiles[:limit]
+
+        return (
+            all_profiles,
+            len(all_profiles),
+            computed_at,
+            {
+                "session_id": session_id,
+                "pages_fetched": pages_needed - len(failed_pages),
+                "failed_pages": sorted(failed_pages),
+                "parallel": True,
+                "workers": capped_workers,
+            },
+        )
+
+    def _build_page_kwargs(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Extract export_profiles_page kwargs from engage params dict.
+
+        Args:
+            params: Engage API params dict.
+
+        Returns:
+            Keyword arguments for ``export_profiles_page()``.
+
+        Example:
+            ```python
+            kwargs = ws._build_page_kwargs({"where": 'properties["x"] == 1'})
+            # {"where": 'properties["x"] == 1'}
+            ```
+        """
+        kwargs: dict[str, Any] = {}
+        if "where" in params:
+            kwargs["where"] = params["where"]
+        if "output_properties" in params:
+            val = params["output_properties"]
+            kwargs["output_properties"] = (
+                json.loads(val) if isinstance(val, str) else val
+            )
+        if "sort_key" in params:
+            kwargs["sort_key"] = params["sort_key"]
+        if "sort_order" in params:
+            kwargs["sort_order"] = params["sort_order"]
+        if "search" in params:
+            kwargs["search"] = params["search"]
+        if "filter_by_cohort" in params:
+            kwargs["filter_by_cohort"] = params["filter_by_cohort"]
+        if "data_group_id" in params:
+            kwargs["group_id"] = params["data_group_id"]
+        if "as_of_timestamp" in params:
+            kwargs["as_of_timestamp"] = params["as_of_timestamp"]
+        if "include_all_users" in params:
+            kwargs["include_all_users"] = params["include_all_users"]
+        if "distinct_id" in params:
+            kwargs["distinct_id"] = params["distinct_id"]
+        if "distinct_ids" in params:
+            val = params["distinct_ids"]
+            kwargs["distinct_ids"] = json.loads(val) if isinstance(val, str) else val
+        return kwargs

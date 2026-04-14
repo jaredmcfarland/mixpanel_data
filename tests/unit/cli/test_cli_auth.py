@@ -8,6 +8,7 @@ Tests cover:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -54,6 +55,20 @@ def expired_tokens() -> OAuthTokens:
 
 class TestAuthLogin:
     """Tests for mp auth login command."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Isolate config to prevent login tests writing to real ~/.mp/config.toml.
+
+        The login command calls _post_login_setup which writes credential
+        entries to the config file. Without isolation, this pollutes the
+        real user config.
+
+        Args:
+            tmp_path: Pytest-provided temp directory.
+            monkeypatch: Pytest monkeypatch fixture.
+        """
+        monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / "config.toml"))
 
     @patch("mixpanel_data.cli.commands.auth.OAuthFlow")
     def test_login_triggers_oauth_flow(
@@ -545,6 +560,16 @@ class TestAuthMigrateCommand:
 
 class TestAuthLoginCacheInvalidation:
     """Tests for /me cache invalidation after OAuth login."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Isolate config to prevent login tests writing to real ~/.mp/config.toml.
+
+        Args:
+            tmp_path: Pytest-provided temp directory.
+            monkeypatch: Pytest monkeypatch fixture.
+        """
+        monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / "config.toml"))
 
     @patch("mixpanel_data._internal.me.MeCache")
     @patch("mixpanel_data.cli.commands.auth.OAuthFlow")

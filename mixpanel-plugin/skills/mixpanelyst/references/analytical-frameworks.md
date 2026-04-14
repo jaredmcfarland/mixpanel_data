@@ -14,13 +14,14 @@ The library provides four typed query engines. Choose the right engine for each 
 | **Funnels** | `ws.query_funnel()` | Step-by-step conversion, drop-off analysis |
 | **Retention** | `ws.query_retention()` | Cohort curves, return rates over time |
 | **Flows** | `ws.query_flow()` | User path analysis, entry/exit patterns |
+| **Users** | `ws.query_user()` | Profile attributes, user lists, aggregate counts |
 
 _For engine-specific AARRR mappings (which engine for which stage), see the explorer agent's §Classify with AARRR step. For a complete AARRR-structured report template, see the narrator agent's §Product Health Report._
 
 ### Acquisition — "Where do users come from?"
 
 **Questions**: Traffic sources, campaign effectiveness, channel attribution, entry paths
-**Engines**: Insights (source breakdown) + Flows (entry paths)
+**Engines**: Insights (source breakdown) + Flows (entry paths) + Users (profile new acquisitions)
 **Key methods**: `query` with group_by breakdown, `query_flow` for entry path analysis
 
 ```python
@@ -40,7 +41,7 @@ for src, tgt, count in flow.top_transitions(5):
 ### Activation — "Do they reach the aha moment?"
 
 **Questions**: Onboarding completion, time-to-value, first key action, activation paths
-**Engines**: Funnels (onboarding completion) + Flows (activation paths)
+**Engines**: Funnels (onboarding completion) + Flows (activation paths) + Users (profile activated vs non-activated)
 **Key methods**: `query_funnel` for conversion, `query_flow` for path discovery
 
 ```python
@@ -68,7 +69,7 @@ for src, tgt, count in flow.top_transitions(5):
 ### Retention — "Do they come back?"
 
 **Questions**: Return rates, cohort behavior, churn patterns, sticky features
-**Engines**: Retention (cohort curves) + Insights (usage trends)
+**Engines**: Retention (cohort curves) + Insights (usage trends) + Users (profile churned vs retained)
 **Key methods**: `query_retention` for cohort analysis, `query` for trend monitoring
 
 ```python
@@ -108,7 +109,7 @@ _For detailed retention API parameters (alignment, custom buckets, retention_uni
 ### Revenue — "Do they pay?"
 
 **Questions**: Conversion to paid, ARPU, LTV indicators, upgrade triggers
-**Engines**: Insights (revenue metrics) + Funnels (purchase conversion)
+**Engines**: Insights (revenue metrics) + Funnels (purchase conversion) + Users (profile high-LTV users)
 **Key methods**: `query` with math aggregations, `query_funnel` for purchase flow
 
 ```python
@@ -138,7 +139,7 @@ print(f"View -> Purchase: {purchase_funnel.steps_data[-1]['overall_conv_ratio']:
 ### Referral — "Do they invite others?"
 
 **Questions**: Invite rates, viral coefficient, referral attribution
-**Engines**: Insights (invite events) + Funnels (invite-to-accept)
+**Engines**: Insights (invite events) + Funnels (invite-to-accept) + Users (profile referrers for lookalike targeting)
 **Key methods**: `query` for invite volume, `query_funnel` for invite-to-accept conversion
 
 ```python

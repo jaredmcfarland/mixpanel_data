@@ -11,7 +11,7 @@ A complete programmable interface to Mixpanel analytics—Python library and CLI
 
 Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_data** provides a unified interface: discover your schema, run analytics queries, stream data, and manage entities—all through consistent Python methods or CLI commands.
 
-Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, breakdowns, cohort-scoped queries), typed funnel queries (ad-hoc steps, exclusions, conversion windows), typed retention queries (event pairs, custom buckets, alignment modes), typed flow queries (path analysis, direction controls, visualization modes), segmentation, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
+Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, breakdowns, cohort-scoped queries), typed funnel queries (ad-hoc steps, exclusions, conversion windows), typed retention queries (event pairs, custom buckets, alignment modes), typed flow queries (path analysis, direction controls, visualization modes), typed user profile queries (property filtering, sorting, parallel fetching, aggregate statistics), segmentation, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
 
 ## Installation
 
@@ -149,6 +149,21 @@ flow_result = ws.query_flow("Purchase", forward=3, reverse=1)
 print(flow_result.nodes_df.head())   # step | event | type | count
 print(flow_result.top_transitions(5))
 
+# User profile query — filter, sort, and aggregate profiles
+result = ws.query_user(
+    mode="profiles",
+    where=Filter.equals("plan", "premium"),
+    properties=["$email", "$name", "ltv"],
+    sort_by="ltv",
+    sort_order="descending",
+    limit=50,
+)
+print(result.df)  # distinct_id | last_seen | email | name | ltv
+
+# Aggregate count of matching profiles (aggregate is the default mode)
+count = ws.query_user(where=Filter.is_set("$email"))
+print(f"Users with email: {count.value}")
+
 # Cohort-scoped queries — define cohorts inline, no UI needed
 from mixpanel_data import CohortCriteria, CohortDefinition, CohortBreakdown
 power_users = CohortDefinition(
@@ -277,6 +292,7 @@ Full documentation: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarl
 - [Funnel Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-funnels/) — Typed funnel conversion analysis with steps, exclusions, conversion windows
 - [Retention Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-retention/) — Typed retention analysis with event pairs, custom buckets, alignment modes
 - [Flow Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-flows/) — Typed flow path analysis with direction controls, visualization modes
+- [User Profile Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-users/) — Profile filtering, sorting, parallel fetching, aggregate statistics
 - [CLI Reference](https://jaredmcfarland.github.io/mixpanel_data/cli/)
 - [Python API](https://jaredmcfarland.github.io/mixpanel_data/api/)
 - [Streaming Guide](https://jaredmcfarland.github.io/mixpanel_data/guide/streaming/)
@@ -290,7 +306,7 @@ The entire surface area is self-documenting. Every CLI command supports `--help`
 
 Key design features:
 
-- **Typed Insights Queries**: `query()`, `query_funnel()`, `query_retention()`, and `query_flow()` generate Mixpanel Insights bookmark params from typed Python arguments — DAU/WAU/MAU, formulas, funnel steps, retention event pairs, flow path analysis, filters, breakdowns, cohort-scoped queries (filter by cohort, break down by cohort membership, track cohort size), and more
+- **Typed Query Engines**: `query()`, `query_funnel()`, `query_retention()`, `query_flow()`, and `query_user()` provide five composable engines — Insights analytics, funnel conversion, retention cohorts, flow path analysis, and user profile queries — all sharing the same `Filter` vocabulary, `CohortDefinition` builders, and DataFrame output
 - **Entity CRUD & Data Governance**: Full lifecycle management of dashboards, reports, cohorts, feature flags, experiments, alerts, annotations, webhooks, plus Lexicon definitions, drop filters, custom properties, custom events, and lookup tables via Mixpanel App API
 - **Discoverable schema**: `events()`, `properties()`, `funnels()`, `cohorts()`, `bookmarks()` reveal what's in your project before you query
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
@@ -303,7 +319,7 @@ Key design features:
 
 This project includes a Claude Code plugin (v3.0) that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_data` + `pandas` rather than calling CLI commands or MCP tools.
 
-The plugin is built around the 4-engine query taxonomy — `query()`, `query_funnel()`, `query_retention()`, and `query_flow()` — with full cohort-scoped query support. Agents translate natural language analytics questions into typed query calls with filters, breakdowns, formulas, cohort definitions, and aggregations, then interpret results as DataFrames.
+The plugin is built around the 5-engine query taxonomy — `query()`, `query_funnel()`, `query_retention()`, `query_flow()`, and `query_user()` — with full cohort-scoped query support. Agents translate natural language analytics questions into typed query calls with filters, breakdowns, formulas, cohort definitions, and aggregations, then interpret results as DataFrames.
 
 **Installation:**
 
@@ -314,7 +330,7 @@ Add the plugin from the `mixpanel-plugin/` directory, then restart Claude Code.
 - **Command**: `/mp-auth` — Secure credential management with account switching
 - **Skills**:
   - `setup` — Install dependencies and verify authentication
-  - `mixpanelyst` — Auto-triggered on analytics questions; teaches query API patterns, 4-engine taxonomy, cohort-scoped queries, typed filters, AARRR frameworks, and progressive reference docs
+  - `mixpanelyst` — Auto-triggered on analytics questions; teaches query API patterns, 5-engine taxonomy, cohort-scoped queries, typed filters, AARRR frameworks, and progressive reference docs
 - **5 specialist agents** (auto-invoked via Task tool):
   - `analyst` — General-purpose orchestrator for multi-step analytics investigations
   - `explorer` — Schema discovery, hypothesis generation, GQM decomposition for vague questions

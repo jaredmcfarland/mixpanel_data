@@ -1133,6 +1133,8 @@ class TestBackwardCompatibility:
         from mixpanel_data.workspace import Workspace
 
         cm = ConfigManager(config_path=v1_config_path)
+        # Isolate from real OAuth tokens on disk
+        monkeypatch.setattr(cm, "_resolve_from_oauth", lambda **_kw: None)
         ws = Workspace(_config_manager=cm)
         assert ws._credentials is not None
         assert ws._credentials.project_id == "12345"
@@ -1163,6 +1165,8 @@ class TestBackwardCompatibility:
             monkeypatch.delenv(var, raising=False)
 
         cm = ConfigManager(config_path=v1_config_path)
+        # Isolate from real OAuth tokens on disk
+        monkeypatch.setattr(cm, "_resolve_from_oauth", lambda **_kw: None)
         session = cm.resolve_session()
         assert session.project_id == "12345"
 
@@ -1415,6 +1419,8 @@ class TestEnvVarEdgeCases:
         monkeypatch.setenv("MP_REGION", "")
 
         cm = ConfigManager(config_path=v1_config_path)
+        # Isolate from real OAuth tokens on disk
+        monkeypatch.setattr(cm, "_resolve_from_oauth", lambda **_kw: None)
         creds = cm.resolve_credentials()
         assert creds.project_id == "12345"
 
@@ -1713,6 +1719,12 @@ class TestCLIExitCodes:
         monkeypatch.setattr(
             "mixpanel_data.cli.commands.projects._discover_projects_via_oauth",
             lambda: None,
+        )
+        # Also block OAuth credential resolution in ConfigManager
+        # (runs before _discover_projects_via_oauth is reached)
+        monkeypatch.setattr(
+            "mixpanel_data._internal.config.ConfigManager._resolve_from_oauth",
+            lambda _self, **_kw: None,
         )
 
         result = cli_runner.invoke(app, ["projects", "list"])

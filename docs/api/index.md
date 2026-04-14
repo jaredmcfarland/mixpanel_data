@@ -37,6 +37,9 @@ from mixpanel_data import RetentionEvent, RetentionQueryResult
 # Flow Query types
 from mixpanel_data import FlowStep, FlowTreeNode, FlowQueryResult
 
+# User Profile Query types
+from mixpanel_data import UserQueryResult
+
 # Auth utilities
 from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
 
@@ -80,6 +83,7 @@ The main entry point for all operations:
 - **Funnel Queries** — Typed funnel conversion analysis (`query_funnel()`)
 - **Retention Queries** — Typed retention analysis with event pairs (`query_retention()`)
 - **Flow Queries** — Typed flow path analysis (`query_flow()`)
+- **User Profile Queries** — Typed user profile queries with filtering, sorting, and aggregation (`query_user()`)
 - **Live Queries** — Legacy analytics endpoints (segmentation, funnels, retention, JQL)
 - **Streaming** — Stream events and profiles directly from Mixpanel (ETL, pipelines)
 - **Entity CRUD & Data Governance** — Create, read, update, delete dashboards, reports, cohorts, feature flags, experiments, plus Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, volume anomalies, and event deletion requests
@@ -122,6 +126,7 @@ Typed results for all operations:
 - **FunnelQueryResult**, **FunnelStep**, **Exclusion** — Typed funnel results
 - **RetentionQueryResult**, **RetentionEvent**, **RetentionAlignment**, **RetentionMode**, **RetentionMathType** — Typed retention results
 - **FlowQueryResult**, **FlowStep**, **FlowTreeNode** — Typed flow analysis results
+- **UserQueryResult** — Typed user profile query results
 - **SegmentationResult** — Time-series data (legacy)
 - **FunnelResult** — Funnel conversion data (legacy)
 - **RetentionResult** — Retention cohort data (legacy)

@@ -27,9 +27,9 @@ print(f'Total logins (30d): {r.df[\"count\"].sum():,.0f}')
 "
 ```
 
-## The Four Query Engines
+## The Five Query Engines
 
-Mixpanel has four fundamentally different query engines. Each answers a different *type* of question. Choosing the right engine is the most important decision in any analysis.
+Mixpanel has five fundamentally different query engines. Each answers a different *type* of question. Choosing the right engine is the most important decision in any analysis.
 
 | Engine | Method | Core Question | Result Type |
 |--------|--------|--------------|-------------|
@@ -37,6 +37,7 @@ Mixpanel has four fundamentally different query engines. Each answers a differen
 | **Funnels** | `ws.query_funnel()` | Do users convert through a sequence? | `FunnelQueryResult` |
 | **Retention** | `ws.query_retention()` | Do users come back? | `RetentionQueryResult` |
 | **Flows** | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
+| **Users** | `ws.query_user()` | Who are they? What do they look like? | `UserQueryResult` |
 
 _Each engine has a dedicated deep reference — load on demand when the quick reference below is insufficient. For NL→engine routing with 50+ signal patterns, see [query-taxonomy.md](references/query-taxonomy.md)._
 
@@ -49,6 +50,8 @@ _Each engine has a dedicated deep reference — load on demand when the quick re
 - **Retention** — "I need to measure whether a **behavior repeats**." Born/return event pairs across cohorts with custom time buckets. The answer to "do users come back?"
 
 - **Flows** — "I need to **explore the routes** through my product." Forward and reverse step tracing from anchor events, producing graphs and trees. The answer to "what do users do after/before X?"
+
+- **Users** — "I need to know **who** these users are." Profile properties, demographics, user lists, aggregate counts. The answer to "what do premium users look like?" and "how many users have X?"
 
 ### When in Doubt
 
@@ -86,6 +89,12 @@ User says...                              → Use...
 "what led to X", "how did they get to"    → Flows (reverse)
 "user paths", "navigation patterns"       → Flows
 ─────────────────────────────────────────────────────
+"who are these users", "user properties"      → Users
+"how many users have X", "user count"         → Users (mode="aggregate")
+"user list", "export users", "user profile"   → Users
+"demographics", "user attributes"             → Users
+"what do X users look like"                   → Users + Insights
+─────────────────────────────────────────────────────
 "why did X change/drop/spike"             → MULTI-ENGINE
 "how is feature X performing"             → MULTI-ENGINE
 "product health", "overview"              → MULTI-ENGINE
@@ -102,6 +111,9 @@ For complex questions, decompose into a query plan:
 | "Feature adoption?" | Ins+Fun+Ret | Insights (usage) + Funnels (discovery→use) + Retention (continued use) |
 | "Onboarding health?" | Fun+Flow+Ret | Funnels (completion) + Flows (user paths) + Retention (post-onboarding) |
 | "Product health?" | All 4 | DAU (Insights) + Key funnels + Retention curves + Top paths |
+| "What kind of users churn?" | Ret+Users | Retention (identify churned cohort) → Users (profile those users) |
+| "Who are our power users?" | Ins+Users | Insights (identify heavy users) → Users (get their demographics) |
+| "Build a targeting list" | Cohort+Users | CohortDefinition (behavioral criteria) → Users (extract profiles) |
 
 _(→ [query-taxonomy.md](references/query-taxonomy.md) §Complex Question Decomposition for 12 detailed decomposition patterns with code | [cross-query-synthesis.md](references/cross-query-synthesis.md) for implementation templates)_
 
@@ -383,6 +395,46 @@ Filter.greater_than(property=CustomPropertyRef(42), value=100)
 Filter.between(property=InlineCustomProperty.numeric("A*B", A="price", B="qty"), value=[10, 500])
 ```
 
+### User Profiles — `query_user()`
+
+```python
+from mixpanel_data import Filter, CohortDefinition, CohortCriteria
+
+# Filter and sort user profiles
+result = ws.query_user(
+    where=Filter.equals("plan", "premium"),
+    properties=["$email", "$name", "ltv"],
+    sort_by="ltv",
+    sort_order="descending",
+    limit=50,
+)
+print(result.df)  # distinct_id | last_seen | email | name | ltv
+
+# Count matching profiles (aggregate mode)
+count = ws.query_user(mode="aggregate", where=Filter.is_set("$email"))
+print(f"Users with email: {count.value}")
+
+# Behavioral cohort profiling
+power_users = ws.query_user(
+    cohort=CohortDefinition.all_of(
+        CohortCriteria.did_event("Purchase", at_least=3, within_days=30),
+    ),
+    properties=["$email", "plan", "ltv"],
+    limit=200,
+)
+
+# Cross-engine: insights → profile the top segment
+dau = ws.query("Login", math="dau", group_by="plan", last=30)
+top_plan = dau.df.sort_values("count", ascending=False).iloc[0]["event"]
+users = ws.query_user(
+    where=Filter.equals("plan", top_plan),
+    properties=["$email", "company", "ltv"],
+    limit=100,
+)
+```
+
+_For the full parameter reference, load [users-reference.md](references/users-reference.md)._
+
 ### Streaming — Raw Data Access
 
 ```python
@@ -391,6 +443,7 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-02"):
 
 for profile in ws.stream_profiles():
     print(profile["distinct_id"])
+# For structured queries with filtering, sorting, and DataFrames, use ws.query_user() instead
 ```
 
 ### Entity Management (App API)

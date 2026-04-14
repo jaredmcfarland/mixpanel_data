@@ -85,6 +85,7 @@ plugins:
           - guide/query-funnels.md
           - guide/query-retention.md
           - guide/query-flows.md
+          - guide/query-users.md
           - guide/live-analytics.md
           - guide/streaming.md
           - guide/entity-management.md
@@ -138,6 +139,7 @@ plugins:
           - guide/query-funnels.md: "Typed funnel queries — steps, exclusions, conversion windows"
           - guide/query-retention.md: "Typed retention queries — event pairs, custom buckets, alignment modes"
           - guide/query-flows.md: "Typed flow queries — path analysis, direction controls, visualization modes"
+          - guide/query-users.md: "Typed user profile queries — filtering, sorting, parallel fetching, aggregate counts"
           - guide/live-analytics.md: "Segmentation, funnels, retention, JQL"
           - guide/streaming.md: "Stream events and profiles for ETL"
           - guide/entity-management.md: "Create, update, delete dashboards, reports, and cohorts"
@@ -182,6 +184,7 @@ nav:
       - Funnel Queries: guide/query-funnels.md
       - Retention Queries: guide/query-retention.md
       - Flow Queries: guide/query-flows.md
+      - User Profile Queries: guide/query-users.md
       - Live Analytics: guide/live-analytics.md
       - Streaming Data: guide/streaming.md
       - Entity Management: guide/entity-management.md
