@@ -16,7 +16,7 @@ Use `query_user()` when you need to work with **user profiles** rather than even
 | Get top users by a metric | `query_user(mode="profiles", sort_by="ltv", sort_order="descending", limit=50)` |
 | Look up specific users | `query_user(mode="profiles", distinct_id="user_abc123")` |
 | Profile a behavioral cohort | `query_user(mode="profiles", cohort=CohortDefinition.all_of(...))` |
-| Build ML feature matrices | `query_user(mode="profiles", properties=[...], limit=5000, parallel=True)` |
+| Export profiles at scale | `query_user(mode="profiles", properties=[...], limit=5000, parallel=True)` |
 | Cross-engine profiling | Insights identifies a segment, `query_user()` profiles those users |
 
 Use `stream_profiles()` when you need to iterate over raw profile dicts without structured filtering or DataFrame output.
