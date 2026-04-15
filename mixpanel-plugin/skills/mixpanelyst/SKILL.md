@@ -26,61 +26,99 @@ print(result.df.head())
 | Who are they? What do they look like? | `ws.query_user()` | `UserQueryResult` |
 
 All result types have a `.df` property returning a pandas DataFrame and a `.params` dict containing the bookmark JSON.
-`FlowQueryResult` also has `.graph` (NetworkX DiGraph) and `.anytree` (list of tree roots):
-
-```python
-import networkx as nx
-from anytree import RenderTree
-
-# Graph analysis (sankey/paths mode)
-flow = ws.query_flow("Signup", forward=4)
-g = flow.graph                                    # nx.DiGraph
-print(nx.betweenness_centrality(g, weight="count"))  # bottlenecks
-print(flow.top_transitions(5))                    # highest-traffic edges
-
-# Tree analysis (tree mode)
-flow_tree = ws.query_flow("Signup", mode="tree")
-for root in flow_tree.anytree:
-    for pre, _, node in RenderTree(root):
-        print(f"{pre}{node.event} ({node.total_count})")
-```
+`FlowQueryResult` also has `.graph` (NetworkX DiGraph) and `.anytree` (list of tree roots).
 
 **Quick lookups** use `python3 -c "..."` one-liners. **Multi-step analysis** writes `.py` files.
 
-## API Lookup — `help.py`
+## Discovery — ALWAYS Do Both Steps Before Querying
 
-`help.py` is the primary mechanism for discovering API details at runtime. It extracts live signatures, docstrings, and type definitions directly from the installed library — always current, never stale. **Use it liberally** before writing queries, especially when unsure about parameter names, types, or result shapes.
+Guessing event names causes silent empty results. Guessing API parameters causes TypeErrors and invalid queries. **Discover both the data schema AND the API surface before writing any query.**
+
+### Step 1: Discover the data schema
+
+```python
+import mixpanel_data as mp
+from mixpanel_data import Filter, GroupBy, Metric
+ws = mp.Workspace()
+
+# 1. Find real event names
+events = ws.events()
+top = ws.top_events(limit=10)
+print("Events:", events[:20])
+print("Top:", [(e.event, e.count) for e in top])
+
+# 2. Find real property names for the event you'll query
+props = ws.properties("Login")  # use an actual event name from step 1
+print("Properties:", props)
+
+# 3. (Optional) Check property values to validate filter inputs
+vals = ws.property_values("platform", event="Login")
+print("Platforms:", vals)
+```
+
+### Step 2: Discover the API surface with `help.py`
+
+**`help.py` is the source of truth for method signatures, parameter names, type constructors, and enum values.** The method signatures later in this document are summaries — always verify with `help.py` before using a method or type you haven't looked up.
+
+**Never guess parameter names.** If you're unsure whether a parameter is called `property` or `math_property`, or what arguments `GroupBy()` accepts, run `help.py` first. Wrong parameter names cause TypeErrors that waste tool calls.
 
 ```bash
-# Look up any method — full signature, args, returns, examples
+# Look up a query method BEFORE writing the query
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_funnel
 
-# Inspect result types — see all fields and properties
+# Look up types BEFORE constructing them
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Filter          # → classmethods: .equals(), .less_than(), etc.
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Metric          # → property=, NOT math_property=
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py GroupBy          # → property, property_type only
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py MathType         # → enum values
+
+# Look up result types to know what columns .df returns
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py QueryResult
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py FlowQueryResult
 
-# Inspect parameter types — constructors, fields, enum values
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Filter
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py MathType
+# Search when you're not sure of the exact name
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py search cohort   # → CohortBreakdown, CohortMetric, CohortDefinition, ...
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py search retention # → query_retention, RetentionEvent, RetentionMathType, ...
 
-# List everything available
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types               # all all types
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions           # all exceptions
+# List everything
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types            # all public types
+python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions        # all exceptions
 ```
 
-**`search` is your best starting point** when you're not sure of the exact name, or want to find all related types, methods, and exceptions for a concept:
+For tutorials and guides: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")`
 
-```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py search cohort       # → CohortBreakdown, CohortMetric, CohortDefinition, ...
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py search retention     # → query_retention, RetentionEvent, RetentionMathType, ...
-python3 ${CLAUDE_SKILL_DIR}/scripts/help.py search bookmark      # → create_bookmark, BookmarkInfo, BookmarkValidationError, ...
+### Discovery method signatures
+
+```python
+def events(self) -> list[str]: ...
+    # List all event names (cached).
+
+def properties(self, event: str) -> list[str]: ...
+    # List all property names for an event (cached).
+
+def property_values(self, property_name: str, *, event: str | None = None, limit: int = 100) -> list[str]: ...
+    # Get sample values for a property.
+
+def top_events(self, *, type: Literal['general', 'average', 'unique'] = 'general', limit: int | None = None) -> list[TopEvent]: ...
+    # Get today's most active events. TopEvent has .event (str), .count (int), .percent_change (float).
+
+def funnels(self) -> list[FunnelInfo]: ...
+    # List saved funnels.
+
+def cohorts(self) -> list[SavedCohort]: ...
+    # List saved cohorts.
+
+def list_bookmarks(self, bookmark_type: BookmarkType | None = None) -> list[BookmarkInfo]: ...
+    # List all saved reports (bookmarks).
+
+def lexicon_schemas(self, *, entity_type: EntityType | None = None) -> list[LexiconSchema]: ...
+    # List Lexicon schemas (event/property definitions).
+
+def clear_discovery_cache(self) -> None: ...
+    # Clear cached discovery results.
+# User Guide: WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/discovery/index.md")
 ```
-
-When `search` doesn't surface what you need, or you want tutorials and guides, use the **hosted documentation**:
-- Index: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")`
-- Full: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms-full.txt")`
-- Specific page: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/query/index.md")`
 
 ## Workspace
 
@@ -112,63 +150,6 @@ class Workspace:
 ```
 
 Supports context manager: `with mp.Workspace() as ws: ...`
-
-### Discovery
-
-**Always discover the real schema before querying.** Event and property names vary by project — guessing causes silent empty results. Start most analyses with:
-
-```python
-import mixpanel_data as mp
-from mixpanel_data import Filter, GroupBy, Metric
-ws = mp.Workspace()
-
-# 1. Find real event names
-events = ws.events()
-top = ws.top_events(limit=10)
-print("Events:", events[:20])
-print("Top:", [(e.event, e.count) for e in top])
-
-# 2. Find real property names for the event you'll query
-props = ws.properties("Login")  # use an actual event name from step 1
-print("Properties:", props)
-
-# 3. (Optional) Check property values to validate filter inputs
-vals = ws.property_values("platform", event="Login")
-print("Platforms:", vals)
-```
-
-```python
-def events(self) -> list[str]: ...
-    # List all event names (cached).
-
-def properties(self, event: str) -> list[str]: ...
-    # List all property names for an event (cached).
-
-def property_values(self, property_name: str, *, event: str | None = None, limit: int = 100) -> list[str]: ...
-    # Get sample values for a property.
-
-def top_events(self, *, type: Literal['general', 'average', 'unique'] = 'general', limit: int | None = None) -> list[TopEvent]: ...
-    # Get today's most active events.
-
-def funnels(self) -> list[FunnelInfo]: ...
-    # List saved funnels.
-
-def cohorts(self) -> list[SavedCohort]: ...
-    # List saved cohorts.
-
-def list_bookmarks(self, bookmark_type: BookmarkType | None = None) -> list[BookmarkInfo]: ...
-    # List all saved reports (bookmarks).
-
-def lexicon_schemas(self, *, entity_type: EntityType | None = None) -> list[LexiconSchema]: ...
-    # List Lexicon schemas (event/property definitions).
-
-def lexicon_schema(self, entity_type: EntityType, name: str) -> LexiconSchema: ...
-    # Get a single Lexicon schema by entity type and name.
-
-def clear_discovery_cache(self) -> None: ...
-    # Clear cached discovery results.
-# User Guide: WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/discovery/index.md")
-```
 
 ### Project & Workspace Management
 
@@ -207,45 +188,40 @@ def close(self) -> None: ...
 
 ### Insights Query
 
+Run `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query` for the full signature.
+
 ```python
 def query(
     self,
-    events: str | Metric | CohortMetric | Formula | Sequence[str | Metric | CohortMetric | Formula],
+    events: str | Metric | CohortMetric | Formula | Sequence[...],
     *,
     from_date: str | None = None,        # YYYY-MM-DD, overrides last
     to_date: str | None = None,          # YYYY-MM-DD, requires from_date
     last: int = 30,                      # relative days (ignored if from_date set)
     unit: QueryTimeUnit = 'day',
     math: MathType = 'total',            # aggregation: total, unique, dau, average, sum, ...
-    math_property: str | None = None,    # top-level property for math; on Metric use property= instead
-    per_user: PerUserAggregation | None = None,  # per-user pre-aggregation
-    percentile_value: int | float | None = None, # for math="percentile"
+    math_property: str | None = None,    # top-level shorthand; Metric() uses property= instead
+    per_user: PerUserAggregation | None = None,
+    percentile_value: int | float | None = None,
     group_by: str | GroupBy | CohortBreakdown | FrequencyBreakdown | list[...] | None = None,
-    where: Filter | FrequencyFilter | list[Filter | FrequencyFilter] | None = None,
+    where: Filter | FrequencyFilter | list[...] | None = None,
     formula: str | None = None,          # e.g. "(B / A) * 100", requires 2+ events
     formula_label: str | None = None,
-    rolling: int | None = None,          # rolling window (mutually exclusive with cumulative)
+    rolling: int | None = None,
     cumulative: bool = False,
     mode: Literal['timeseries', 'total', 'table'] = 'timeseries',
-    time_comparison: TimeComparison | None = None,  # period-over-period
+    time_comparison: TimeComparison | None = None,
     data_group_id: int | None = None,
 ) -> QueryResult:
-    """Run a typed insights query. Returns QueryResult with .df DataFrame.
-
-    events accepts strings, Metric objects (per-event math), CohortMetric (cohort size),
-    or Formula objects. Multi-event queries support formula expressions.
-
-    NOTE: Metric() uses property= (not math_property=) for per-event aggregation.
-    Example: Metric("Purchase", math="average", property="amount")
-    GroupBy() accepts property and property_type only (no resource_type).
-    Filter uses classmethods: Filter.equals("prop", val), Filter.less_than("prop", val), etc.
-    """
-    # For details: python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
-    # User Guide:  WebFetch https://jaredmcfarland.github.io/mixpanel_data/guide/query/index.md
+    # .df columns: timeseries → [date, event, count]
+    #              total → [event, count]
+    #              with group_by → adds segment column
     ...
 ```
 
 ### Funnel Query
+
+Run `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_funnel` for the full signature.
 
 ```python
 def query_funnel(
@@ -255,12 +231,10 @@ def query_funnel(
     conversion_window: int = 14,
     conversion_window_unit: Literal['second', 'minute', 'hour', 'day', 'week', 'month', 'session'] = 'day',
     order: Literal['loose', 'any'] = 'loose',
-    from_date: str | None = None,
-    to_date: str | None = None,
-    last: int = 30,
+    from_date: str | None = None, to_date: str | None = None, last: int = 30,
     unit: QueryTimeUnit = 'day',
     math: FunnelMathType = 'conversion_rate_unique',
-    math_property: str | None = None,    # for property-aggregation math types
+    math_property: str | None = None,
     group_by: str | GroupBy | CohortBreakdown | list[...] | None = None,
     where: Filter | list[Filter] | None = None,
     exclusions: list[str | Exclusion] | None = None,
@@ -270,13 +244,14 @@ def query_funnel(
     time_comparison: TimeComparison | None = None,
     data_group_id: int | None = None,
 ) -> FunnelQueryResult:
-    """Run a typed funnel query. Returns FunnelQueryResult with .df, .overall_conversion_rate."""
-    # For details: python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_funnel
-    # User Guide:  WebFetch https://jaredmcfarland.github.io/mixpanel_data/guide/query-funnels/index.md
+    # .df columns: [step, event, count, step_conv_ratio, avg_time]
+    # .overall_conversion_rate: float
     ...
 ```
 
 ### Retention Query
+
+Run `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_retention` for the full signature.
 
 ```python
 def query_retention(
@@ -286,10 +261,8 @@ def query_retention(
     *,
     retention_unit: TimeUnit = 'week',
     alignment: RetentionAlignment = 'birth',
-    bucket_sizes: list[int] | None = None,  # custom bucket sizes (ascending)
-    from_date: str | None = None,
-    to_date: str | None = None,
-    last: int = 30,
+    bucket_sizes: list[int] | None = None,
+    from_date: str | None = None, to_date: str | None = None, last: int = 30,
     unit: QueryTimeUnit = 'day',
     math: RetentionMathType = 'retention_rate',
     group_by: str | GroupBy | CohortBreakdown | list[...] | None = None,
@@ -300,24 +273,22 @@ def query_retention(
     time_comparison: TimeComparison | None = None,
     data_group_id: int | None = None,
 ) -> RetentionQueryResult:
-    """Run a typed retention query. Returns RetentionQueryResult with .df, .average."""
-    # For details: python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_retention
-    # User Guide:  WebFetch https://jaredmcfarland.github.io/mixpanel_data/guide/query-retention/index.md
+    # .df columns: [cohort_date, bucket, count, rate]  (+ segment with group_by)
+    # .average: synthetic average across cohorts
     ...
 ```
 
 ### Flow Query
+
+Run `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_flow` for the full signature.
 
 ```python
 def query_flow(
     self,
     event: str | FlowStep | Sequence[str | FlowStep],
     *,
-    forward: int = 3,
-    reverse: int = 0,
-    from_date: str | None = None,
-    to_date: str | None = None,
-    last: int = 30,
+    forward: int = 3, reverse: int = 0,
+    from_date: str | None = None, to_date: str | None = None, last: int = 30,
     conversion_window: int = 7,
     conversion_window_unit: Literal['day', 'week', 'month', 'session'] = 'day',
     count_type: Literal['unique', 'total', 'session'] = 'unique',
@@ -326,45 +297,43 @@ def query_flow(
     hidden_events: list[str] | None = None,
     mode: Literal['sankey', 'paths', 'tree'] = 'sankey',
     where: Filter | list[Filter] | None = None,
-    data_group_id: int | None = None,
     segments: str | GroupBy | CohortBreakdown | FrequencyBreakdown | list[...] | None = None,
     exclusions: list[str] | None = None,
+    data_group_id: int | None = None,
 ) -> FlowQueryResult:
-    """Run a typed flow query. Returns FlowQueryResult with .df, .graph (NetworkX), .anytree."""
-    # For details: python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_flow
-    # User Guide:  WebFetch https://jaredmcfarland.github.io/mixpanel_data/guide/query-flows/index.md
+    # .df, .graph (NetworkX DiGraph), .anytree (tree mode)
+    # .top_transitions(n), .drop_off_summary()
     ...
 ```
 
 ### User Profile Query
+
+Run `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_user` for the full signature.
 
 ```python
 def query_user(
     self,
     *,
     where: Filter | list[Filter] | str | None = None,
-    cohort: int | CohortDefinition | None = None,  # saved cohort ID or inline definition
+    cohort: int | CohortDefinition | None = None,
     properties: list[str] | None = None,
     sort_by: str | None = None,
     sort_order: Literal['ascending', 'descending'] = 'descending',
     limit: int | None = 1,              # None = fetch all matching
-    search: str | None = None,          # full-text search
+    search: str | None = None,
     distinct_id: str | None = None,     # single user lookup
     distinct_ids: list[str] | None = None,  # batch lookup
     group_id: str | None = None,        # query group profiles
-    as_of: str | int | None = None,     # point-in-time (ISO date or unix ts)
+    as_of: str | int | None = None,     # point-in-time
     mode: Literal['profiles', 'aggregate'] = 'aggregate',
     aggregate: Literal['count', 'extremes', 'percentile', 'numeric_summary'] = 'count',
     aggregate_property: str | None = None,
     percentile: float | None = None,
     segment_by: list[int] | None = None,
-    parallel: bool = False,
-    workers: int = 5,
+    parallel: bool = False, workers: int = 5,
     include_all_users: bool = False,
 ) -> UserQueryResult:
-    """Query user profiles. Returns UserQueryResult with .df, .total, .profiles."""
-    # For details: python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_user
-    # User Guide:  WebFetch https://jaredmcfarland.github.io/mixpanel_data/guide/query-users/index.md
+    # .df, .total, .profiles
     ...
 ```
 
