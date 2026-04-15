@@ -641,15 +641,22 @@ def build_flow_cohort_filter(
 def build_frequency_group_entry(fb: FrequencyBreakdown) -> dict[str, Any]:
     """Build a single frequency group entry for sections.group[].
 
-    Produces the frequency-specific group dict with ``behaviorType``
-    set to ``"$frequency"`` and ``resourceType`` set to ``"people"``.
+    Produces the frequency-specific group dict matching the Mixpanel
+    bookmark API format with ``behaviorType`` inside the ``behavior``
+    sub-dict, ``event`` as a ``{label, value}`` object, and bucket
+    configuration in a ``customBucket`` object with camelCase keys.
 
     Args:
         fb: FrequencyBreakdown specification.
 
     Returns:
-        Group entry dict with ``behavior`` sub-dict containing the
-        frequency event and bucket configuration.
+        Group entry dict matching the Mixpanel bookmark API schema:
+        ``dataset``, ``behavior`` (with ``behaviorType``, ``event``
+        object, ``aggregationOperator``, ``filters``,
+        ``filtersOperator``, ``dateRange``), ``value`` (display
+        label), ``resourceType``, ``propertyType``, ``dataGroupId``,
+        and ``customBucket`` (with ``bucketSize``, ``min``, ``max``,
+        ``disabled``).
 
     Example:
         ```python
@@ -659,22 +666,35 @@ def build_frequency_group_entry(fb: FrequencyBreakdown) -> dict[str, Any]:
         from mixpanel_data.types import FrequencyBreakdown
 
         entry = build_frequency_group_entry(FrequencyBreakdown("Purchase"))
-        # {"resourceType": "people", "behaviorType": "$frequency",
-        #  "behavior": {"event": "Purchase", ...}}
+        # {"dataset": "$mixpanel", "resourceType": "people",
+        #  "behavior": {"behaviorType": "$frequency",
+        #               "event": {"label": "Purchase", "value": "Purchase"},
+        #               ...},
+        #  "customBucket": {"bucketSize": 1, "min": 0, "max": 10, ...}}
         ```
     """
+    display_label = fb.label if fb.label is not None else f"{fb.event} Frequency"
     entry: dict[str, Any] = {
-        "resourceType": "people",
-        "behaviorType": "$frequency",
+        "dataset": "$mixpanel",
         "behavior": {
-            "event": fb.event,
-            "bucket_size": fb.bucket_size,
-            "bucket_min": fb.bucket_min,
-            "bucket_max": fb.bucket_max,
+            "aggregationOperator": "total",
+            "event": {"label": fb.event, "value": fb.event},
+            "behaviorType": "$frequency",
+            "filters": [],
+            "filtersOperator": "and",
+            "dateRange": None,
+        },
+        "value": display_label,
+        "resourceType": "people",
+        "propertyType": "number",
+        "dataGroupId": None,
+        "customBucket": {
+            "bucketSize": fb.bucket_size,
+            "min": fb.bucket_min,
+            "max": fb.bucket_max,
+            "disabled": False,
         },
     }
-    if fb.label is not None:
-        entry["label"] = fb.label
     return entry
 
 

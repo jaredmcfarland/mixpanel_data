@@ -1480,11 +1480,14 @@ class TestFrequencyBreakdownInBuildParams:
         group = params["sections"]["group"]
         assert len(group) == 1
         assert group[0]["resourceType"] == "people"
-        assert group[0]["behaviorType"] == "$frequency"
-        assert group[0]["behavior"]["event"] == "Purchase"
+        assert group[0]["behavior"]["behaviorType"] == "$frequency"
+        assert group[0]["behavior"]["event"] == {
+            "label": "Purchase",
+            "value": "Purchase",
+        }
 
     def test_frequency_breakdown_with_label(self, ws: Workspace) -> None:
-        """build_params with labeled FrequencyBreakdown includes label."""
+        """build_params with labeled FrequencyBreakdown includes label in value."""
         from mixpanel_data.types import FrequencyBreakdown
 
         params = ws.build_params(
@@ -1492,7 +1495,7 @@ class TestFrequencyBreakdownInBuildParams:
             group_by=FrequencyBreakdown("Purchase", label="Buy Freq"),
         )
         group = params["sections"]["group"]
-        assert group[0]["label"] == "Buy Freq"
+        assert group[0]["value"] == "Buy Freq"
 
     def test_frequency_breakdown_mixed_with_string(self, ws: Workspace) -> None:
         """build_params with mixed string and FrequencyBreakdown in list."""
@@ -1505,7 +1508,7 @@ class TestFrequencyBreakdownInBuildParams:
         group = params["sections"]["group"]
         assert len(group) == 2
         assert group[0]["value"] == "country"
-        assert group[1]["behaviorType"] == "$frequency"
+        assert group[1]["behavior"]["behaviorType"] == "$frequency"
 
     def test_existing_groupby_still_works(self, ws: Workspace) -> None:
         """Backward compat: existing GroupBy usage still works."""

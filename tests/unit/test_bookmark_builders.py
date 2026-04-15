@@ -524,7 +524,29 @@ class TestBuildTimeComparison:
 
 
 class TestBuildFrequencyGroupEntry:
-    """Tests for build_frequency_group_entry() — frequency breakdown dict."""
+    """Tests for build_frequency_group_entry() — frequency breakdown dict.
+
+    Expected API format (from audit report section 2.2.1):
+
+    .. code-block:: json
+
+        {
+          "dataset": "$mixpanel",
+          "behavior": {
+            "aggregationOperator": "total",
+            "event": {"label": "Purchase", "value": "Purchase"},
+            "behaviorType": "$frequency",
+            "filters": [],
+            "filtersOperator": "and",
+            "dateRange": null
+          },
+          "value": "Purchase Frequency",
+          "resourceType": "people",
+          "propertyType": "number",
+          "dataGroupId": null,
+          "customBucket": {"bucketSize": 1, "min": 0, "max": 10, "disabled": false}
+        }
+    """
 
     def test_basic_structure(self) -> None:
         """FrequencyBreakdown produces correct group entry structure."""
@@ -535,16 +557,57 @@ class TestBuildFrequencyGroupEntry:
 
         fb = FrequencyBreakdown("Purchase")
         result = build_frequency_group_entry(fb)
+        assert result["dataset"] == "$mixpanel"
         assert result["resourceType"] == "people"
-        assert result["behaviorType"] == "$frequency"
-        assert "behavior" in result
-        assert result["behavior"]["event"] == "Purchase"
-        assert result["behavior"]["bucket_size"] == 1
-        assert result["behavior"]["bucket_min"] == 0
-        assert result["behavior"]["bucket_max"] == 10
+        assert result["propertyType"] == "number"
+        assert result["dataGroupId"] is None
+
+    def test_behavior_dict_structure(self) -> None:
+        """Behavior dict contains behaviorType, event object, and defaults."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        result = build_frequency_group_entry(fb)
+        behavior = result["behavior"]
+        assert behavior["behaviorType"] == "$frequency"
+        assert behavior["aggregationOperator"] == "total"
+        assert behavior["event"] == {"label": "Purchase", "value": "Purchase"}
+        assert behavior["filters"] == []
+        assert behavior["filtersOperator"] == "and"
+        assert behavior["dateRange"] is None
+
+    def test_behaviortype_not_at_top_level(self) -> None:
+        """behaviorType must be inside behavior, not at the top level."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        result = build_frequency_group_entry(fb)
+        assert "behaviorType" not in result
+        assert result["behavior"]["behaviorType"] == "$frequency"
+
+    def test_custom_bucket_default_values(self) -> None:
+        """Default bucket config uses camelCase in customBucket object."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        result = build_frequency_group_entry(fb)
+        bucket = result["customBucket"]
+        assert bucket["bucketSize"] == 1
+        assert bucket["min"] == 0
+        assert bucket["max"] == 10
+        assert bucket["disabled"] is False
 
     def test_custom_bucket_values(self) -> None:
-        """Custom bucket params are reflected in output."""
+        """Custom bucket params are reflected in customBucket object."""
         from mixpanel_data._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
@@ -552,29 +615,42 @@ class TestBuildFrequencyGroupEntry:
 
         fb = FrequencyBreakdown("Purchase", bucket_size=5, bucket_min=0, bucket_max=50)
         result = build_frequency_group_entry(fb)
-        assert result["behavior"]["bucket_size"] == 5
-        assert result["behavior"]["bucket_min"] == 0
-        assert result["behavior"]["bucket_max"] == 50
+        bucket = result["customBucket"]
+        assert bucket["bucketSize"] == 5
+        assert bucket["min"] == 0
+        assert bucket["max"] == 50
+        assert bucket["disabled"] is False
 
-    def test_label_included(self) -> None:
-        """Label is included in output when set."""
-        from mixpanel_data._internal.bookmark_builders import (
-            build_frequency_group_entry,
-        )
-        from mixpanel_data.types import FrequencyBreakdown
-
-        fb = FrequencyBreakdown("Purchase", label="Purchase Frequency")
-        result = build_frequency_group_entry(fb)
-        assert result["label"] == "Purchase Frequency"
-
-    def test_label_omitted_when_none(self) -> None:
-        """Label key is omitted when label is None."""
+    def test_value_label_from_event_name(self) -> None:
+        """Value field defaults to '<event> Frequency' when no label set."""
         from mixpanel_data._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
         from mixpanel_data.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
+        result = build_frequency_group_entry(fb)
+        assert result["value"] == "Purchase Frequency"
+
+    def test_label_overrides_value(self) -> None:
+        """Custom label overrides the default value field."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase", label="Buy Count")
+        result = build_frequency_group_entry(fb)
+        assert result["value"] == "Buy Count"
+
+    def test_no_top_level_label_key(self) -> None:
+        """Label is expressed via value field, not a separate label key."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase", label="Buy Count")
         result = build_frequency_group_entry(fb)
         assert "label" not in result
 
@@ -736,7 +812,7 @@ class TestBuildGroupSectionFrequency:
         result = build_group_section(FrequencyBreakdown("Purchase"))
         assert len(result) == 1
         assert result[0]["resourceType"] == "people"
-        assert result[0]["behaviorType"] == "$frequency"
+        assert result[0]["behavior"]["behaviorType"] == "$frequency"
 
     def test_mixed_groupby_and_frequency(self) -> None:
         """List with GroupBy and FrequencyBreakdown produces correct entries."""
@@ -747,7 +823,7 @@ class TestBuildGroupSectionFrequency:
         assert result[0]["value"] == "country"
         assert result[0]["propertyType"] == "string"
         assert result[1]["resourceType"] == "people"
-        assert result[1]["behaviorType"] == "$frequency"
+        assert result[1]["behavior"]["behaviorType"] == "$frequency"
 
 
 # =============================================================================
