@@ -13,6 +13,7 @@ Usage:
 
 import contextlib
 import dataclasses
+import difflib
 import enum
 import importlib
 import inspect
@@ -351,21 +352,217 @@ def show_related(type_name: str) -> None:
             print(m)
 
 
+def _show_referenced_types(obj: Any) -> None:
+    """Show types from mixpanel_data referenced in a callable's signature.
+
+    Scans the signature string for type names exported by the module
+    and prints matching types with their one-line descriptions.
+
+    Args:
+        obj: A callable (method or function) to inspect.
+    """
+    try:
+        sig = inspect.signature(obj)
+    except (ValueError, TypeError):
+        return
+
+    sig_text = str(sig)
+    mod = importlib.import_module("mixpanel_data")
+    found: list[tuple[str, str]] = []
+
+    for name in sorted(dir(mod)):
+        if name.startswith("_") or name == "Workspace" or len(name) < 4:
+            continue
+        val = getattr(mod, name)
+        if not isinstance(val, type):
+            continue
+        if name in sig_text:
+            doc = inspect.getdoc(val) or ""
+            first_line = doc.split("\n")[0] if doc else ""
+            found.append((name, first_line))
+
+    if found:
+        print(f"\nReferenced types ({len(found)}):")
+        for name, desc in found:
+            print(f"  {name:42s} {desc}")
+
+
+# Entity nouns for "See also" grouping — ordered longest-first to
+# avoid partial matches (e.g. "feature_flag" before "flag").
+_ENTITY_NOUNS = [
+    "custom_property",
+    "custom_event",
+    "lookup_table",
+    "drop_filter",
+    "feature_flag",
+    "annotation_tag",
+    "lexicon_tag",
+    "blueprint",
+    "dashboard",
+    "bookmark",
+    "experiment",
+    "annotation",
+    "webhook",
+    "cohort",
+    "alert",
+    "schema",
+    "flag",
+]
+
+
+def _show_see_also(path: str) -> None:
+    """Show related methods for the same entity (CRUD siblings).
+
+    Extracts the entity noun from the method name and finds other
+    Workspace methods operating on the same entity.
+
+    Args:
+        path: Dotted path like ``Workspace.create_dashboard``.
+    """
+    parts = path.rsplit(".", 1)
+    if len(parts) != 2 or parts[0] != "Workspace":
+        return
+    method_name = parts[1]
+
+    matched = None
+    for entity in _ENTITY_NOUNS:
+        if entity in method_name:
+            matched = entity
+            break
+
+    if not matched:
+        return
+
+    mod = importlib.import_module("mixpanel_data")
+    ws_cls = getattr(mod, "Workspace", None)
+    if ws_cls is None:
+        return
+
+    siblings = [
+        name
+        for name in sorted(dir(ws_cls))
+        if not name.startswith("_") and name != method_name and matched in name
+    ]
+
+    if siblings:
+        print(f"\nSee also: {', '.join(siblings)}")
+
+
+def _doc_summary(doc: str) -> str:
+    """Extract the description portion of a docstring.
+
+    Returns everything before the first keyword section
+    (Args:, Returns:, Raises:, Example:, etc.).
+
+    Args:
+        doc: Full docstring text.
+
+    Returns:
+        Description text only, with keyword sections stripped.
+    """
+    if not doc:
+        return ""
+    lines = doc.split("\n")
+    summary_lines: list[str] = []
+    for line in lines:
+        if line.strip().startswith(
+            (
+                "Args:",
+                "Returns:",
+                "Raises:",
+                "Example:",
+                "Examples:",
+                "Yields:",
+                "Note:",
+                "Notes:",
+                "Attributes:",
+            )
+        ):
+            break
+        summary_lines.append(line)
+    return "\n".join(summary_lines)
+
+
+def _get_all_names() -> list[tuple[str, str]]:
+    """Collect all public names for fuzzy matching.
+
+    Returns:
+        List of (name, first_line_docstring) tuples covering
+        module-level exports and Workspace members.
+    """
+    mod = importlib.import_module("mixpanel_data")
+    names: list[tuple[str, str]] = []
+
+    for name in sorted(dir(mod)):
+        if name.startswith("_"):
+            continue
+        obj = getattr(mod, name)
+        doc = inspect.getdoc(obj) or ""
+        first_line = doc.split("\n")[0] if doc else ""
+        names.append((name, first_line))
+
+    ws_cls = getattr(mod, "Workspace", None)
+    if ws_cls:
+        for attr_name in sorted(dir(ws_cls)):
+            if attr_name.startswith("_"):
+                continue
+            attr = getattr(ws_cls, attr_name, None)
+            if attr is None:
+                continue
+            doc = inspect.getdoc(attr) or ""
+            first_line = doc.split("\n")[0] if doc else ""
+            names.append((f"Workspace.{attr_name}", first_line))
+
+    return names
+
+
+def _suggest_similar(
+    query: str,
+    candidates: list[tuple[str, str]] | None = None,
+    prefix: str = "",
+) -> bool:
+    """Suggest similar names when an exact lookup fails.
+
+    Uses ``difflib.get_close_matches`` for edit-distance fuzzy matching.
+
+    Args:
+        query: The failed lookup string.
+        candidates: Optional (name, description) pairs. If ``None``,
+            uses all public names from ``_get_all_names()``.
+        prefix: Optional prefix to prepend to displayed names
+            (e.g. ``"Workspace."`` for dotted lookups).
+
+    Returns:
+        ``True`` if suggestions were printed, ``False`` otherwise.
+    """
+    if candidates is None:
+        candidates = _get_all_names()
+
+    names = [name for name, _ in candidates]
+    matches = difflib.get_close_matches(query, names, n=5, cutoff=0.5)
+
+    if not matches:
+        return False
+
+    print("\nDid you mean?")
+    name_to_desc = dict(candidates)
+    for match in matches:
+        display = f"{prefix}{match}" if prefix else match
+        desc = name_to_desc.get(match, "")
+        print(f"  {display:42s} {desc}")
+    return True
+
+
 # Reference hints: ordered most-specific-first so e.g. "query_funnel" matches
 # funnels before "query" matches insights.  Each entry is
-# (trigger_keywords, reference_filename, one-line description).
+# (trigger_keywords, hosted_docs_path, one-line description).
+_DOCS_BASE = "https://jaredmcfarland.github.io/mixpanel_data"
+
 _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
     (
-        frozenset(
-            {
-                "query_user",
-                "build_user_params",
-                "UserQueryResult",
-            }
-        ),
-        "users-reference.md",
-        "User profile queries — filtering, sorting, aggregate counts, "
-        "cross-engine composition, feature extraction",
+        frozenset({"query_user", "build_user_params", "UserQueryResult"}),
+        "guide/query/index.md",
+        "User profile queries — filtering, sorting, aggregate counts",
     ),
     (
         frozenset(
@@ -382,8 +579,8 @@ _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
                 "FlowChartType",
             }
         ),
-        "flows-reference.md",
-        "FlowStep, NetworkX graph, anytree trees, modes, pitfalls",
+        "guide/query-flows/index.md",
+        "FlowStep, NetworkX graph, anytree trees, modes",
     ),
     (
         frozenset(
@@ -397,8 +594,8 @@ _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
                 "RetentionMode",
             }
         ),
-        "retention-reference.md",
-        "RetentionEvent, alignment, custom buckets, pitfalls",
+        "guide/query-retention/index.md",
+        "RetentionEvent, alignment, custom buckets",
     ),
     (
         frozenset(
@@ -412,8 +609,8 @@ _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
                 "FunnelMathType",
             }
         ),
-        "funnels-reference.md",
-        "FunnelStep, Exclusion, HoldingConstant, conversion windows, pitfalls",
+        "guide/query-funnels/index.md",
+        "FunnelStep, Exclusion, HoldingConstant, conversion windows",
     ),
     (
         frozenset(
@@ -434,8 +631,8 @@ _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
                 "InlineCustomProperty",
             }
         ),
-        "insights-reference.md",
-        "MathType, Filter, GroupBy, Formula, validation rules, pitfalls",
+        "guide/query/index.md",
+        "MathType, Filter, GroupBy, Formula, validation rules",
     ),
     (
         frozenset(
@@ -452,8 +649,8 @@ _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
                 "SavedReportType",
             }
         ),
-        "bookmark-params.md",
-        "bookmark JSON structure, validation rules",
+        "guide/entity-management/index.md",
+        "bookmark params, entity management",
     ),
 ]
 
@@ -490,38 +687,33 @@ def _show_reference_hints(query: str) -> None:
 
     Checks each hint rule in priority order (most specific first).
     Prints the first matching hint, pointing the reader to the
-    relevant deep-dive reference document.
+    relevant hosted documentation page.
 
     Args:
         query: The user's help query string.
     """
-    refs_dir = Path(__file__).resolve().parent.parent / "references"
     parts = query.replace(".", " ").split()
     part_set = set(parts)
 
-    # Special case: standalone "Workspace" (no dot) → python-api.md
+    # Special case: standalone "Workspace" (no dot) → hosted API reference
     if query == "Workspace":
-        ref = refs_dir / "python-api.md"
-        if ref.is_file():
-            print(
-                "\n---\n"
-                "Tip: For complete method signatures organized by domain,\n"
-                "     read references/python-api.md"
-            )
+        print(
+            "\n---\n"
+            "Tip: For complete method signatures organized by domain,\n"
+            f"     WebFetch {_DOCS_BASE}/api/workspace/index.md"
+        )
         return
 
-    for triggers, filename, description in _REFERENCE_HINTS:
+    for triggers, docs_path, description in _REFERENCE_HINTS:
         # Match if any trigger appears as a token (substring matching avoided
         # because generic triggers like "query" false-positive on compound
         # names like "query_saved_report")
         if part_set & triggers:
-            ref = refs_dir / filename
-            if ref.is_file():
-                print(
-                    f"\n---\n"
-                    f"Tip: For complete parameter docs ({description}),\n"
-                    f"     read references/{filename}"
-                )
+            print(
+                f"\n---\n"
+                f"Tip: For tutorials and examples ({description}),\n"
+                f"     WebFetch {_DOCS_BASE}/{docs_path}"
+            )
             return
 
     # Dashboard hints — lives in sibling skill directory
@@ -568,6 +760,10 @@ def show_detail(obj: Any, path: str) -> None:
 
     if isinstance(obj, type) and path.split(".")[-1] != "Workspace":
         show_related(path.split(".")[-1])
+
+    if callable(obj) and not isinstance(obj, type):
+        _show_referenced_types(obj)
+        _show_see_also(path)
 
 
 def search(term: str) -> None:
@@ -620,9 +816,64 @@ def search(term: str) -> None:
             elif callable(attr):
                 results.append(("method", qualified, first_line))
 
+    # Extend search to docstring content (avoid duplicates)
+    matched_names = {r[1] for r in results}
+
+    for name in sorted(dir(mod)):
+        if name.startswith("_") or name in matched_names:
+            continue
+        obj = getattr(mod, name)
+        doc = inspect.getdoc(obj) or ""
+        first_line = doc.split("\n")[0] if doc else ""
+        if needle not in _doc_summary(doc).lower():
+            continue
+        if isinstance(obj, type) and issubclass(obj, Exception):
+            results.append(("exception", name, first_line))
+        elif isinstance(obj, type) and issubclass(obj, enum.Enum):
+            results.append(("enum", name, first_line))
+        elif isinstance(obj, type):
+            results.append(("type", name, first_line))
+        elif callable(obj):
+            results.append(("function", name, first_line))
+        matched_names.add(name)
+
+    if ws_cls is not None:
+        for attr_name in sorted(dir(ws_cls)):
+            if attr_name.startswith("_"):
+                continue
+            qualified = f"Workspace.{attr_name}"
+            if qualified in matched_names:
+                continue
+            attr = getattr(ws_cls, attr_name, None)
+            if attr is None:
+                continue
+            doc = inspect.getdoc(attr) or ""
+            first_line = doc.split("\n")[0] if doc else ""
+            if needle not in _doc_summary(doc).lower():
+                continue
+            if isinstance(attr, property):
+                results.append(("property", qualified, first_line))
+            elif callable(attr):
+                results.append(("method", qualified, first_line))
+            matched_names.add(qualified)
+
+    # Search enum member names and values
+    for name in sorted(dir(mod)):
+        if name.startswith("_"):
+            continue
+        obj = getattr(mod, name)
+        if not (isinstance(obj, type) and issubclass(obj, enum.Enum)):
+            continue
+        for member in obj:
+            if needle in member.name.lower() or needle in str(member.value).lower():
+                qualified = f"{name}.{member.name}"
+                if qualified not in matched_names:
+                    results.append(("member", qualified, f"= {member.value!r}"))
+                    matched_names.add(qualified)
+
     if not results:
         print(f'No matches for "{term}"')
-        print("Try: search cohort, search dashboard, search filter")
+        _suggest_similar(term)
         return
 
     print(f'# Search: "{term}" — {len(results)} matches\n')
@@ -672,10 +923,11 @@ def main() -> None:
                 show_detail(obj, query)
         except AttributeError:
             print(f"Error: '{query}' not found in mixpanel_data")
-            print(
-                "Try: Workspace, types, exceptions, or a dotted path"
-                " like Workspace.segmentation"
-            )
+            if not _suggest_similar(query):
+                print(
+                    "Try: Workspace, types, exceptions, or a dotted path"
+                    " like Workspace.segmentation"
+                )
             sys.exit(1)
     else:
         try:
@@ -687,10 +939,23 @@ def main() -> None:
             if len(parts) == 2:
                 try:
                     parent = get_obj(parts[0])
-                    print(f"\nAvailable on {parts[0]}:")
-                    list_members(parent, parts[0])
+                    members = []
+                    for attr_name in sorted(dir(parent)):
+                        if attr_name.startswith("_"):
+                            continue
+                        attr = getattr(parent, attr_name, None)
+                        if attr is None:
+                            continue
+                        doc = inspect.getdoc(attr) or ""
+                        first_line = doc.split("\n")[0] if doc else ""
+                        members.append((attr_name, first_line))
+                    if not _suggest_similar(parts[1], members, prefix=f"{parts[0]}."):
+                        print(f"\nAvailable on {parts[0]}:")
+                        list_members(parent, parts[0])
                 except AttributeError:
                     pass
+            else:
+                _suggest_similar(query)
             sys.exit(1)
 
     if query not in ("types", "exceptions"):
