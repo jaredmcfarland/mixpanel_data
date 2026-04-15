@@ -119,6 +119,7 @@ Supports context manager: `with mp.Workspace() as ws: ...`
 
 ```python
 import mixpanel_data as mp
+from mixpanel_data import Filter, GroupBy, Metric
 ws = mp.Workspace()
 
 # 1. Find real event names
@@ -216,7 +217,7 @@ def query(
     last: int = 30,                      # relative days (ignored if from_date set)
     unit: QueryTimeUnit = 'day',
     math: MathType = 'total',            # aggregation: total, unique, dau, average, sum, ...
-    math_property: str | None = None,    # required for property-based math
+    math_property: str | None = None,    # top-level property for math; on Metric use property= instead
     per_user: PerUserAggregation | None = None,  # per-user pre-aggregation
     percentile_value: int | float | None = None, # for math="percentile"
     group_by: str | GroupBy | CohortBreakdown | FrequencyBreakdown | list[...] | None = None,
@@ -233,6 +234,11 @@ def query(
 
     events accepts strings, Metric objects (per-event math), CohortMetric (cohort size),
     or Formula objects. Multi-event queries support formula expressions.
+
+    NOTE: Metric() uses property= (not math_property=) for per-event aggregation.
+    Example: Metric("Purchase", math="average", property="amount")
+    GroupBy() accepts property and property_type only (no resource_type).
+    Filter uses classmethods: Filter.equals("prop", val), Filter.less_than("prop", val), etc.
     """
     # For details: python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query
     # User Guide:  WebFetch https://jaredmcfarland.github.io/mixpanel_data/guide/query/index.md
