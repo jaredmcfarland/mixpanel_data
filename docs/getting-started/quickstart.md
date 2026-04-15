@@ -234,7 +234,7 @@ result = ws.query("Login", where=Filter.in_cohort(power_users, name="Power Users
 result = ws.query("Login", group_by=CohortBreakdown(power_users, name="Power Users"))
 ```
 
-Cohort filters work across all four query methods. See the [Insights Queries guide — Cohort-Scoped Queries](../guide/query.md#cohort-scoped-queries) for full coverage.
+Cohort filters work across all five query methods. See the [Insights Queries guide — Cohort-Scoped Queries](../guide/query.md#cohort-scoped-queries) for full coverage.
 
 ### Funnel Queries
 

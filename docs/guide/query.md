@@ -894,7 +894,7 @@ result = ws.query(
 )
 ```
 
-Cohort filters work with all four query methods: `query()`, `query_funnel()`, `query_retention()`, and `query_flow()`.
+Cohort filters work with all five query methods: `query()`, `query_funnel()`, `query_retention()`, `query_flow()`, and `query_user()`.
 
 ### Cohort Breakdowns
 

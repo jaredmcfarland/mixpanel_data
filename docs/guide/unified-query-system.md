@@ -823,7 +823,7 @@ result = ws.query(
 
 ### Time ranges
 
-`last=` and absolute dates (`from_date`/`to_date`) work in all four engines. The `unit=` parameter applies to insights, funnels, and retention (flows has no `unit=`).
+`last=` and absolute dates (`from_date`/`to_date`) work in all five engines. The `unit=` parameter applies to insights, funnels, and retention (flows and users have no `unit=`).
 
 ```python
 # Relative — last N days (default: 30)
@@ -923,7 +923,7 @@ ws.create_bookmark(CreateBookmarkParams(
 ))
 ```
 
-This works for all four engines. Build params in code, persist them as reports visible in the Mixpanel UI.
+This works for all five engines. Build params in code, persist them as reports visible in the Mixpanel UI.
 
 ---
 

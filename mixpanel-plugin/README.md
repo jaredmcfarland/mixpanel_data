@@ -1,6 +1,6 @@
 # mixpanel-data — CodeMode Analyst Plugin
 
-Turn Claude into a senior data analyst and Mixpanel product analytics expert. Instead of calling CLI commands or MCP tools, Claude writes Python code using `mixpanel_data`'s four typed query engines plus `pandas`, `networkx`, and `anytree` for sophisticated multi-engine analysis. Ask questions in natural language — Claude autonomously writes and executes Python to answer them.
+Turn Claude into a senior data analyst and Mixpanel product analytics expert. Claude writes Python code using `mixpanel_data`'s five typed query engines plus `pandas`, `networkx`, and `anytree` for sophisticated multi-engine analysis. Ask questions in natural language — Claude autonomously writes and executes Python to answer them.
 
 ## Quick Start
 
@@ -10,26 +10,18 @@ Turn Claude into a senior data analyst and Mixpanel product analytics expert. In
 3. "Where do users drop off?"         # Funnel analysis
 4. "Do users retain after onboarding?"# Retention curve
 5. "What do users do after signup?"   # Flow analysis
+6. "Who are our power users?"         # User profile query
 ```
 
 ## Query Engines
 
 | Engine | Method | Core Question | Result Type |
 |--------|--------|---------------|-------------|
-| Insights | `ws.query()` | How much? How many? | `QueryResult` |
+| Insights | `ws.query()` | How much? How many? Trends? | `QueryResult` |
 | Funnels | `ws.query_funnel()` | Do users convert through a sequence? | `FunnelQueryResult` |
 | Retention | `ws.query_retention()` | Do users come back? | `RetentionQueryResult` |
 | Flows | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
 | Users | `ws.query_user()` | Who are they? What do they look like? | `UserQueryResult` |
-
-### Recent Additions
-
-- **TimeComparison**: Period-over-period analysis across Insights, Funnels, and Retention
-- **FrequencyBreakdown / FrequencyFilter**: Frequency-based breakdowns and filters
-- **7 new MathTypes**: `cumulative_unique`, `sessions`, `unique_values`, `most_frequent`, `first_value`, `multi_attribution`, `numeric_summary`
-- **Flow enhancements**: `segments`, `exclusions`, property filters, `FlowStep.session_event`
-- **Funnel reentry**: `reentry_mode` parameter with 4 modes
-- **Retention modes**: `unbounded_mode`, `retention_cumulative`, expanded `RetentionMathType`
 
 When you ask a question, Claude writes Python using the appropriate engine:
 
@@ -39,7 +31,11 @@ When you ask a question, Claude writes Python using the appropriate engine:
 import mixpanel_data as mp
 ws = mp.Workspace()
 result = ws.query("Signup", last=30, unit="day")
-df = result.df
+df = result.df  # date, event, count
+
+# With group_by segmentation
+result = ws.query("Signup", last=30, group_by="platform")
+df = result.df  # date, event, segment, count
 ```
 
 ### Funnels (conversion analysis)
@@ -78,25 +74,61 @@ for tree in result.trees:
     print(tree.render())           # ASCII visualization
 ```
 
-For detailed API docs, use `help.py` or the [hosted documentation](https://jaredmcfarland.github.io/mixpanel_data/).
+### Users (profile queries)
+
+```python
+from mixpanel_data import Filter
+
+result = ws.query_user(
+    filters=Filter.greater_than("purchase_count", 10),
+    properties=["$name", "$email", "plan"],
+)
+print(result.df)  # distinct_id, $name, $email, plan
+```
+
+## API Documentation
+
+Use `help.py` for live API docs extracted from library docstrings, or browse the [hosted documentation](https://jaredmcfarland.github.io/mixpanel_data/).
+
+```bash
+python help.py Workspace.query        # method signature + docstring + referenced types
+python help.py search cohort           # fuzzy search across names, docstrings, enum members
+python help.py Filter                  # type fields + construction patterns + related methods
+python help.py types                   # list all public types
+python help.py exceptions              # list all exceptions
+```
 
 ## Components
 
 | Type | Name | Invocation |
 |------|------|------------|
-| Command | auth | `/mp-auth` — manage credentials, accounts, OAuth |
+| Command | auth | `/mixpanel-data:auth` — manage credentials, accounts, OAuth |
 | Skill | setup | `/mixpanel-data:setup` — install deps, verify auth |
 | Skill | mixpanelyst | Auto-triggered on analytics questions |
 | Skill | dashboard-expert | Auto-triggered on dashboard analysis, creation, and modification |
 
 | Script | Purpose |
 |--------|---------|
-| `help.py` | Live API documentation lookup from library docstrings |
+| `help.py` | Live API documentation lookup with fuzzy search |
 | `auth_manager.py` | Programmatic auth status and credential management (JSON output) |
+
+## Beyond Querying
+
+The plugin also provides full entity CRUD via the Mixpanel App API:
+
+- **Dashboards** — create, layout, text cards, blueprints, RCA dashboards
+- **Reports/Bookmarks** — save queries as persistent reports
+- **Cohorts** — define and manage user segments
+- **Feature Flags & Experiments** — lifecycle management
+- **Alerts & Annotations** — monitoring and timeline markers
+- **Webhooks** — event-driven integrations
+- **Data Governance** — Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry
+
+All entity methods require a workspace ID. Use `ws.resolve_workspace_id()` to auto-discover it.
 
 ## Authentication
 
-Two auth methods: service account (Basic Auth) or OAuth 2.0 PKCE. Run `/mixpanel-data:setup` for first-time configuration, or `/mp-auth` to manage credentials after initial setup.
+Two auth methods: service account (Basic Auth) or OAuth 2.0 PKCE. Run `/mixpanel-data:setup` for first-time configuration, or `/mixpanel-data:auth` to manage credentials after initial setup.
 
 ## Installation
 
@@ -145,7 +177,11 @@ mixpanel-plugin/
 │           ├── help.py                 # Live API documentation lookup
 │           └── auth_manager.py         # Auth status and management
 ├── commands/
-│   └── auth.md                         # /mp-auth command
+│   └── auth.md                         # /mixpanel-data:auth command
+├── docs/
+│   ├── quickstart-claude-code.md       # Getting started (Claude Code)
+│   ├── quickstart-claude-cowork.md     # Getting started (Cowork)
+│   └── getting-started-guide.md        # General getting started
 └── README.md
 ```
 

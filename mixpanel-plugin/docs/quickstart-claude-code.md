@@ -140,7 +140,7 @@ flow = ws.query_flow("Signup", forward=4)
 print(flow.top_transitions(5))
 ```
 
-You never need to write this yourself, but it's helpful to know what's possible. Claude uses four query engines:
+You never need to write this yourself, but it's helpful to know what's possible. Claude uses five query engines:
 
 | Engine | Method | Answers |
 |--------|--------|---------|
@@ -148,22 +148,7 @@ You never need to write this yourself, but it's helpful to know what's possible.
 | Funnels | `ws.query_funnel()` | Do users convert through a sequence? |
 | Retention | `ws.query_retention()` | Do users come back after an action? |
 | Flows | `ws.query_flow()` | What paths do users take? |
-
----
-
-## Specialist Agents
-
-For complex questions, the plugin includes specialist agents that Claude invokes automatically:
-
-| Agent | Handles |
-|-------|---------|
-| **analyst** | General analytics, dashboards, multi-metric queries |
-| **explorer** | "What data do we have?" Schema discovery, data landscape |
-| **diagnostician** | "Why did X drop?" Root cause analysis across dimensions |
-| **synthesizer** | Cross-engine analysis, statistical testing, graph algorithms |
-| **narrator** | Executive summaries, stakeholder reports |
-
-You don't need to think about these — Claude picks the right one based on your question.
+| Users | `ws.query_user()` | Who are they? What do they look like? |
 
 ---
 
