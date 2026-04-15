@@ -18,8 +18,9 @@ Usage:
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import json
-from datetime import datetime
+from datetime import datetime as dt_datetime
 from pathlib import Path
 from typing import get_args
 
@@ -71,8 +72,12 @@ from mixpanel_data.types import (
 # Custom Strategies
 # =============================================================================
 
-# Strategy for generating valid date strings (YYYY-MM-DD format)
-date_strings = st.dates().map(lambda d: d.strftime("%Y-%m-%d"))
+# Strategy for generating valid date strings (YYYY-MM-DD format).
+# Constrained to 4-digit years (1000-9999) to match _DATE_RE regex.
+date_strings = st.dates(
+    min_value=datetime.date(1000, 1, 1),
+    max_value=datetime.date(9999, 12, 31),
+).map(lambda d: d.strftime("%Y-%m-%d"))
 
 # Strategy for event names (non-empty printable strings)
 event_names = st.text(
@@ -103,8 +108,8 @@ time_units = st.sampled_from(["day", "week", "month"])
 
 # Strategy for datetime values (deterministic for reproducibility)
 datetimes = st.datetimes(
-    min_value=datetime(2020, 1, 1),
-    max_value=datetime(2030, 12, 31),
+    min_value=dt_datetime(2020, 1, 1),
+    max_value=dt_datetime(2030, 12, 31),
 )
 
 
@@ -1354,7 +1359,7 @@ class TestActivityFeedResultProperties:
         from_date: str | None,
         to_date: str | None,
         event_count: int,
-        event_time: datetime,
+        event_time: dt_datetime,
     ) -> None:
         """to_dict() output should always be JSON-serializable."""
         events = [
@@ -1380,7 +1385,7 @@ class TestActivityFeedResultProperties:
 
     @given(event_count=st.integers(min_value=0, max_value=20), event_time=datetimes)
     def test_df_row_count_matches_events(
-        self, event_count: int, event_time: datetime
+        self, event_count: int, event_time: dt_datetime
     ) -> None:
         """DataFrame row count should equal number of events."""
         events = [
@@ -1637,7 +1642,7 @@ class TestHelperTypeProperties:
         ),
     )
     def test_user_event_to_dict_json_serializable(
-        self, event: str, event_time: datetime, properties: dict[str, object]
+        self, event: str, event_time: dt_datetime, properties: dict[str, object]
     ) -> None:
         """UserEvent.to_dict() should always be JSON-serializable."""
         result = UserEvent(event=event, time=event_time, properties=properties)
@@ -2377,7 +2382,7 @@ class TestOAuthTokensRoundTripPBT:
 
         from mixpanel_data._internal.auth.token import OAuthTokens
 
-        now = datetime.now(timezone.utc)
+        now = dt_datetime.now(timezone.utc)
         tokens = OAuthTokens(
             access_token=SecretStr("tok"),
             expires_at=now - timedelta(seconds=seconds_past),
