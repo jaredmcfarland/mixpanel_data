@@ -398,6 +398,26 @@ class TestCredentialResolution:
 
         assert "No credentials configured" in str(exc_info.value)
 
+    @pytest.mark.parametrize(
+        "region_input,expected",
+        [("US", "us"), ("Eu", "eu"), ("IN", "in"), ("Us", "us")],
+    )
+    def test_resolve_env_region_case_insensitive(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        region_input: str,
+        expected: str,
+    ) -> None:
+        """MP_REGION env var should be case-insensitive."""
+        monkeypatch.setenv("MP_USERNAME", "env_user")
+        monkeypatch.setenv("MP_SECRET", "env_secret")
+        monkeypatch.setenv("MP_PROJECT_ID", "env_project")
+        monkeypatch.setenv("MP_REGION", region_input)
+
+        creds = config_manager.resolve_credentials()
+        assert creds.region == expected
+
     def test_resolve_invalid_env_region_raises(
         self, config_manager: ConfigManager, monkeypatch: pytest.MonkeyPatch
     ) -> None:

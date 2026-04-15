@@ -9583,6 +9583,23 @@ class FrequencyFilter:
             )
 
 
+def _normalize_date_key(date_key: str) -> str:
+    """Strip timezone offset from ISO timestamps.
+
+    Args:
+        date_key: Date string from API response.
+
+    Returns:
+        Date string with timezone offset removed if present.
+        ``"2024-01-01T00:00:00-07:00"`` → ``"2024-01-01T00:00:00"``,
+        ``"2024-01-01T00:00:00"`` → unchanged (hourly),
+        ``"2024-01-01"`` → unchanged (daily).
+    """
+    if len(date_key) > 19 and "T" in date_key:
+        return date_key[:19]
+    return date_key
+
+
 @dataclass(frozen=True)
 class QueryResult(ResultWithDataFrame):
     """Structured output from a Workspace.query() execution.
@@ -9653,43 +9670,86 @@ class QueryResult(ResultWithDataFrame):
 
         For timeseries mode: columns are ``date``, ``event``, ``count``.
         For total mode: columns are ``event``, ``count``.
-        Table mode: depends on API response structure; typically matches
-        timeseries or total depending on date presence.
+        For segmented timeseries (with ``group_by``): columns are
+        ``date``, ``event``, ``segment``, ``count``.
+        For segmented total (with ``group_by``): columns are
+        ``event``, ``segment``, ``count``.
 
         Returns:
-            Normalized DataFrame with one row per (date, metric) pair
-            for timeseries, or one row per metric for total.
+            Normalized DataFrame with one row per (date, metric, segment)
+            combination. Segmented responses are detected automatically
+            by checking whether inner values are dicts (segment nesting)
+            or scalars (flat response).
         """
         if self._df_cache is not None:
             return self._df_cache
 
         rows: list[dict[str, Any]] = []
+        has_segments = False
+        has_dates = False
 
         for metric_name, date_values in self.series.items():
             if not isinstance(date_values, dict):
                 continue
-            for date_key, value in date_values.items():
-                if date_key == "all":
-                    # Total mode: no date column
-                    rows.append({"event": metric_name, "count": value})
-                else:
-                    # Strip timezone offset from ISO timestamps
-                    # "2024-01-01T00:00:00-07:00" → "2024-01-01T00:00:00"
-                    # "2024-01-01T00:00:00" → unchanged (hourly)
-                    # "2024-01-01" → unchanged (daily)
-                    normalized_date = date_key
-                    if len(date_key) > 19 and "T" in date_key:
-                        normalized_date = date_key[:19]
-                    rows.append(
-                        {"date": normalized_date, "event": metric_name, "count": value}
-                    )
 
-        if not rows:
-            result_df = pd.DataFrame(columns=["date", "event", "count"])
-        elif "date" in rows[0]:
-            result_df = pd.DataFrame(rows, columns=["date", "event", "count"])
+            # Detect segmented response: if any value is a dict,
+            # the structure is {segment: {date_or_"all": scalar}}
+            first_value = next(iter(date_values.values()), None)
+            if isinstance(first_value, dict):
+                has_segments = True
+                for segment_name, segment_data in date_values.items():
+                    if not isinstance(segment_data, dict):
+                        continue
+                    for date_key, value in segment_data.items():
+                        if date_key == "all":
+                            rows.append(
+                                {
+                                    "event": metric_name,
+                                    "segment": segment_name,
+                                    "count": value,
+                                }
+                            )
+                        else:
+                            has_dates = True
+                            normalized_date = _normalize_date_key(date_key)
+                            rows.append(
+                                {
+                                    "date": normalized_date,
+                                    "event": metric_name,
+                                    "segment": segment_name,
+                                    "count": value,
+                                }
+                            )
+            else:
+                # Flat response: {date_or_"all": scalar}
+                for date_key, value in date_values.items():
+                    if date_key == "all":
+                        rows.append({"event": metric_name, "count": value})
+                    else:
+                        has_dates = True
+                        normalized_date = _normalize_date_key(date_key)
+                        rows.append(
+                            {
+                                "date": normalized_date,
+                                "event": metric_name,
+                                "count": value,
+                            }
+                        )
+
+        if has_segments and has_dates:
+            cols = ["date", "event", "segment", "count"]
+        elif has_segments:
+            cols = ["event", "segment", "count"]
+        elif has_dates:
+            cols = ["date", "event", "count"]
         else:
-            result_df = pd.DataFrame(rows, columns=["event", "count"])
+            cols = ["event", "count"]
+
+        result_df = (
+            pd.DataFrame(rows, columns=cols)
+            if rows
+            else pd.DataFrame(columns=["date", "event", "count"])
+        )
 
         object.__setattr__(self, "_df_cache", result_df)
         return result_df

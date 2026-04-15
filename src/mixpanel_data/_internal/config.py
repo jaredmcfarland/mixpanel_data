@@ -772,6 +772,7 @@ class ConfigManager:
 
         # All four must be set to use env vars
         if username and secret and project_id and region:
+            region = region.lower()
             if region not in VALID_REGIONS:
                 raise ConfigError(
                     f"Invalid MP_REGION: '{region}'. Must be 'us', 'eu', or 'in'."

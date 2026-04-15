@@ -315,6 +315,179 @@ class TestQueryResultDataFrame:
         assert df1 is df2
 
 
+class TestQueryResultSegmentedDataFrame:
+    """Tests for QueryResult.df with group_by (segmented) responses."""
+
+    def test_segmented_total_columns(self) -> None:
+        """Segmented total mode produces event, segment, count columns."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total Events]": {
+                    "$overall": {"all": 500},
+                    "US": {"all": 300},
+                    "EU": {"all": 200},
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        assert "segment" in df.columns
+        assert "count" in df.columns
+        assert "event" in df.columns
+        assert "date" not in df.columns
+
+    def test_segmented_total_scalar_counts(self) -> None:
+        """Segmented total mode count column contains scalar integers, not dicts."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total Events]": {
+                    "$overall": {"all": 500},
+                    "US": {"all": 300},
+                    "EU": {"all": 200},
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        for val in df["count"]:
+            assert isinstance(val, (int, float)), (
+                f"count should be scalar, got {type(val)}: {val}"
+            )
+
+    def test_segmented_total_values(self) -> None:
+        """Segmented total mode has correct segment names and counts."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total Events]": {
+                    "$overall": {"all": 500},
+                    "US": {"all": 300},
+                    "EU": {"all": 200},
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        # $overall + US + EU = 3 rows
+        assert len(df) == 3
+        us_rows = df[df["segment"] == "US"]
+        assert len(us_rows) == 1
+        assert us_rows.iloc[0]["count"] == 300
+
+    def test_segmented_timeseries_columns(self) -> None:
+        """Segmented timeseries produces date, event, segment, count columns."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total Events]": {
+                    "$overall": {"2024-01-01": 100, "2024-01-02": 120},
+                    "US": {"2024-01-01": 60, "2024-01-02": 72},
+                    "EU": {"2024-01-01": 40, "2024-01-02": 48},
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        assert list(df.columns) == ["date", "event", "segment", "count"]
+
+    def test_segmented_timeseries_scalar_counts(self) -> None:
+        """Segmented timeseries count column contains scalar integers."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total Events]": {
+                    "$overall": {"2024-01-01": 100},
+                    "US": {"2024-01-01": 60},
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        for val in df["count"]:
+            assert isinstance(val, (int, float)), (
+                f"count should be scalar, got {type(val)}: {val}"
+            )
+
+    def test_segmented_timeseries_values(self) -> None:
+        """Segmented timeseries has correct date, segment, count values."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total Events]": {
+                    "US": {"2024-01-01": 60, "2024-01-02": 72},
+                    "EU": {"2024-01-01": 40, "2024-01-02": 48},
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        assert len(df) == 4
+        us_jan1 = df[(df["segment"] == "US") & (df["date"] == "2024-01-01")]
+        assert len(us_jan1) == 1
+        assert us_jan1.iloc[0]["count"] == 60
+
+    def test_segmented_timeseries_strips_timezone(self) -> None:
+        """Segmented timeseries normalizes timezone offsets from ISO timestamps."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total Events]": {
+                    "US": {"2024-01-01T00:00:00-07:00": 60},
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        assert df.iloc[0]["date"] == "2024-01-01T00:00:00"
+
+    def test_segmented_multi_metric(self) -> None:
+        """Multiple metrics each with segments produce correct rows."""
+        qr = QueryResult(
+            computed_at="",
+            from_date="",
+            to_date="",
+            series={
+                "Login [Total]": {
+                    "US": {"all": 300},
+                    "EU": {"all": 200},
+                },
+                "Signup [Total]": {
+                    "US": {"all": 50},
+                    "EU": {"all": 30},
+                },
+            },
+            params={},
+            meta={},
+        )
+        df = qr.df
+        assert len(df) == 4
+        login_us = df[(df["event"] == "Login [Total]") & (df["segment"] == "US")]
+        assert login_us.iloc[0]["count"] == 300
+
+
 class TestQueryResultToDict:
     """Tests for QueryResult.to_dict() serialization."""
 
