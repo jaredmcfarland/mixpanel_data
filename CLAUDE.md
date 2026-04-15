@@ -267,9 +267,9 @@ Design documents in `context/`:
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
 
-## mixpanel-data Plugin (v3.2 — 5-Engine Query Taxonomy + Dashboard Builder)
+## mixpanel-data Plugin (v4.0 — Distilled API Surface + Live Docs)
 
-This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin teaches Claude to be a senior data analyst by writing Python code using `mixpanel_data` + `pandas` — no CLI commands, no MCP tools.
+This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin provides the `mixpanel_data` API surface and a live documentation system (`help.py`) for querying and analyzing Mixpanel data with Python.
 
 ### Plugin Components
 
@@ -278,12 +278,8 @@ This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin tea
 | **Command** | `mixpanel-data:auth` | `/mixpanel-data:auth` — manage credentials, accounts, OAuth |
 | **Skill** | `mixpanel-data:setup` | `/mixpanel-data:setup` — install deps, verify auth |
 | **Skill** | `mixpanelyst` | Auto-triggered on analytics questions |
-| **Agent** | `analyst` | Task tool — general-purpose orchestrator |
-| **Agent** | `explorer` | Task tool — schema discovery, GQM decomposition |
-| **Agent** | `diagnostician` | Task tool — root cause analysis |
-| **Agent** | `narrator` | Task tool — executive summaries and reports |
-| **Agent** | `synthesizer` | Task tool — multi-engine joins, graph analysis, statistical testing |
-| **Script** | `help.py` | `python help.py Workspace.segmentation` — live API docs |
+| **Skill** | `dashboard-expert` | Auto-triggered on dashboard analysis, creation, modification |
+| **Script** | `help.py` | `python help.py Workspace.query` — live API docs with fuzzy search |
 | **Script** | `auth_manager.py` | `python auth_manager.py status` — auth status JSON |
 
 ### Usage
@@ -292,12 +288,10 @@ This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin tea
 # Setup
 /mixpanel-data:setup
 
-# Agents (via Task tool)
-Task(subagent_type="mixpanel-data:analyst", prompt="...")
-Task(subagent_type="mixpanel-data:explorer", prompt="...")
-Task(subagent_type="mixpanel-data:diagnostician", prompt="...")
-Task(subagent_type="mixpanel-data:narrator", prompt="...")
-Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
+# API lookup
+python help.py Workspace.query        # method signature + docstring + referenced types
+python help.py search cohort           # fuzzy search across names, docstrings, enum members
+python help.py Filter                  # type fields + construction patterns + related methods
 ```
 
 ## Active Technologies

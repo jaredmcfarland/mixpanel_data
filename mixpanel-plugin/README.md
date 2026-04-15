@@ -78,29 +78,7 @@ for tree in result.trees:
     print(tree.render())           # ASCII visualization
 ```
 
-_Each engine has a comprehensive reference: [insights](skills/mixpanelyst/references/insights-reference.md) | [funnels](skills/mixpanelyst/references/funnels-reference.md) | [retention](skills/mixpanelyst/references/retention-reference.md) | [flows](skills/mixpanelyst/references/flows-reference.md). For routing questions to the right engine, see [query-taxonomy.md](skills/mixpanelyst/references/query-taxonomy.md)._
-
-## Agents
-
-The plugin uses a specialist agent hierarchy. The **analyst** is the general-purpose entry point — it handles simple queries directly and delegates complex investigations to the appropriate specialist based on question type.
-
-| Agent | Role | When to use |
-|-------|------|-------------|
-| **analyst** | Orchestrator | General analytics, dashboards, entity management, multi-metric queries |
-| **explorer** | Schema discovery + GQM | Vague or open-ended questions, data landscape mapping, "what data do we have?" |
-| **diagnostician** | Root cause analysis | "Why did X drop/spike?", metric changes, 8-step cross-engine investigation |
-| **synthesizer** | Cross-engine analysis | Multi-engine joins, graph algorithms (NetworkX), statistical testing (scipy) |
-| **narrator** | Executive reporting | Stakeholder reports, executive summaries, audience-tailored narratives |
-
-```
-Task(subagent_type="mixpanel-data:analyst", prompt="...")
-Task(subagent_type="mixpanel-data:explorer", prompt="...")
-Task(subagent_type="mixpanel-data:diagnostician", prompt="...")
-Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
-Task(subagent_type="mixpanel-data:narrator", prompt="...")
-```
-
-_Agents draw on shared analytical frameworks ([AARRR, GQM, Diagnosis](skills/mixpanelyst/references/analytical-frameworks.md)) and [cross-query synthesis patterns](skills/mixpanelyst/references/cross-query-synthesis.md)._
+For detailed API docs, use `help.py` or the [hosted documentation](https://jaredmcfarland.github.io/mixpanel_data/).
 
 ## Components
 
@@ -119,33 +97,6 @@ _Agents draw on shared analytical frameworks ([AARRR, GQM, Diagnosis](skills/mix
 ## Authentication
 
 Two auth methods: service account (Basic Auth) or OAuth 2.0 PKCE. Run `/mixpanel-data:setup` for first-time configuration, or `/mp-auth` to manage credentials after initial setup.
-
-## Reference Library
-
-### Engine References
-
-| File | Content |
-|------|---------|
-| `insights-reference.md` | Deep insights API: MathTypes, filters, formulas, patterns |
-| `funnels-reference.md` | Deep funnels API: steps, exclusions, conversion windows |
-| `retention-reference.md` | Deep retention API: cohorts, buckets, alignment modes |
-| `flows-reference.md` | Deep flows API: NetworkX graph, anytree, tree traversal |
-
-### Analysis & Methodology
-
-| File | Content |
-|------|---------|
-| `query-taxonomy.md` | NL-to-engine routing, decomposition patterns, join strategies |
-| `cross-query-synthesis.md` | Multi-engine join strategies, 11 investigation templates |
-| `advanced-analysis.md` | Statistical methods, graph algorithms, visualization |
-| `analytical-frameworks.md` | AARRR, GQM, North Star, diagnosis methodology |
-
-### API & Schema
-
-| File | Content |
-|------|---------|
-| `python-api.md` | Complete method signatures for all Workspace methods |
-| `bookmark-params.md` | Bookmark params JSON for entity management |
 
 ## Installation
 
@@ -189,27 +140,10 @@ mixpanel-plugin/
 │   │       ├── bookmark-pipeline.md    # Query → bookmark → dashboard
 │   │       └── chart-types.md          # Chart type selection guide
 │   └── mixpanelyst/
-│       ├── SKILL.md                    # Core brain skill (query taxonomy)
-│       ├── scripts/
-│       │   ├── help.py                 # API documentation lookup
-│       │   └── auth_manager.py         # Auth status and management
-│       └── references/
-│           ├── query-taxonomy.md       # Query routing + decomposition
-│           ├── insights-reference.md   # Deep insights API
-│           ├── funnels-reference.md    # Deep funnels API
-│           ├── retention-reference.md  # Deep retention API
-│           ├── flows-reference.md      # Deep flows + graph/tree
-│           ├── cross-query-synthesis.md # Multi-engine synthesis
-│           ├── advanced-analysis.md    # Statistical + visualization
-│           ├── analytical-frameworks.md # AARRR, GQM, diagnosis
-│           ├── python-api.md           # Full method signatures
-│           └── bookmark-params.md      # Bookmark params schema
-├── agents/
-│   ├── analyst.md                      # Orchestrator
-│   ├── explorer.md                     # Schema discovery + GQM
-│   ├── diagnostician.md               # Root cause analysis
-│   ├── synthesizer.md                  # Cross-query analysis
-│   └── narrator.md                     # Executive reporting
+│       ├── SKILL.md                    # API reference (distilled workspace.py)
+│       └── scripts/
+│           ├── help.py                 # Live API documentation lookup
+│           └── auth_manager.py         # Auth status and management
 ├── commands/
 │   └── auth.md                         # /mp-auth command
 └── README.md
