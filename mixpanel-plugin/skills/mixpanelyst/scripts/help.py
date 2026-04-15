@@ -388,8 +388,8 @@ def _show_referenced_types(obj: Any) -> None:
             print(f"  {name:42s} {desc}")
 
 
-# Entity nouns for "See also" grouping — ordered longest-first to
-# avoid partial matches (e.g. "feature_flag" before "flag").
+# Entity nouns for "See also" grouping — ordered so each substring
+# appears after strings that contain it (e.g. "feature_flag" before "flag").
 _ENTITY_NOUNS = [
     "custom_property",
     "custom_event",
