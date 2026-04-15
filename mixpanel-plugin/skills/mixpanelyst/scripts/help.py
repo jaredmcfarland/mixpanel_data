@@ -562,7 +562,7 @@ _DOCS_BASE = "https://jaredmcfarland.github.io/mixpanel_data"
 _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
     (
         frozenset({"query_user", "build_user_params", "UserQueryResult"}),
-        "guide/query/index.md",
+        "guide/query-users/index.md",
         "User profile queries — filtering, sorting, aggregate counts",
     ),
     (

@@ -358,7 +358,7 @@ def query_user(
 ) -> UserQueryResult:
     """Query user profiles. Returns UserQueryResult with .df, .total, .profiles."""
     # For details: python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.query_user
-    # User Guide:  WebFetch https://jaredmcfarland.github.io/mixpanel_data/guide/query/index.md
+    # User Guide:  WebFetch https://jaredmcfarland.github.io/mixpanel_data/guide/query-users/index.md
     ...
 ```
 
