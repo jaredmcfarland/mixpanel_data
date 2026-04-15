@@ -125,7 +125,7 @@ ws = mp.Workspace()
 events = ws.events()
 top = ws.top_events(limit=10)
 print("Events:", events[:20])
-print("Top:", [(e.event, e.amount) for e in top])
+print("Top:", [(e.event, e.count) for e in top])
 
 # 2. Find real property names for the event you'll query
 props = ws.properties("Login")  # use an actual event name from step 1
