@@ -1238,7 +1238,7 @@ class TestFrequencyFilterValidation:
         from mixpanel_data.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="operator"):
-            FrequencyFilter("Login", operator="invalid_op", value=5)
+            FrequencyFilter("Login", operator="invalid_op", value=5)  # type: ignore[arg-type]
 
     def test_ff2_all_valid_operators_accepted(self) -> None:
         """FF2: all valid operators are accepted."""
@@ -1253,7 +1253,7 @@ class TestFrequencyFilterValidation:
             "is between",
         ]
         for op in valid_ops:
-            ff = FrequencyFilter("Login", operator=op, value=5)
+            ff = FrequencyFilter("Login", operator=op, value=5)  # type: ignore[arg-type]
             assert ff.operator == op
 
     def test_ff3_negative_value_raises(self) -> None:

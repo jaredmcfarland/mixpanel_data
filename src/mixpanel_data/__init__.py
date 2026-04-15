@@ -25,6 +25,7 @@ from mixpanel_data._literal_types import (
     FlowCountType,
     FlowNodeType,
     FlowSessionEvent,
+    FrequencyFilterOperator,
     FunnelMathType,
     FunnelMode,
     FunnelOrder,
@@ -305,6 +306,7 @@ __all__ = [
     "TimeComparisonUnit",
     "CohortAggregationType",
     "FlowSessionEvent",
+    "FrequencyFilterOperator",
     # Result structure TypedDicts
     "QueryMeta",
     "FunnelStepData",

@@ -38,6 +38,9 @@ from mixpanel_data._literal_types import FlowChartType as FlowChartType
 from mixpanel_data._literal_types import (
     FlowConversionWindowUnit as FlowConversionWindowUnit,
 )
+from mixpanel_data._literal_types import (
+    FrequencyFilterOperator as FrequencyFilterOperator,
+)
 from mixpanel_data._literal_types import FunnelMathType as FunnelMathType
 from mixpanel_data._literal_types import FunnelMode as FunnelMode
 from mixpanel_data._literal_types import FunnelOrder as FunnelOrder
@@ -7504,7 +7507,7 @@ class Filter:
     _date_unit: FilterDateUnit | None = None
     """Time unit for relative date filters (hour, day, week, month).
 
-    Set by ``in_the_last()`` and ``not_in_the_last()`` factory methods.
+    Set by ``in_the_last()``, ``not_in_the_last()``, and ``in_the_next()`` factory methods.
     Maps to ``filterDateUnit`` in bookmark JSON. ``None`` for non-date
     and absolute date filters.
     """
@@ -8693,6 +8696,9 @@ class CohortCriteria:
                 "aggregation and aggregation_property must both be set or both be None"
             )
 
+        if aggregation_property is not None and not aggregation_property.strip():
+            raise ValueError("aggregation_property must be a non-empty string")
+
         # CD1: Exactly one frequency param required
         freq_params = {
             "at_least": at_least,
@@ -9494,7 +9500,7 @@ class FrequencyFilter:
     value: int | float
     """Threshold value for the comparison."""
 
-    operator: str = "is at least"
+    operator: FrequencyFilterOperator = "is at least"
     """Comparison operator."""
 
     date_range_value: int | None = None

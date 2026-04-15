@@ -747,3 +747,15 @@ class TestDataGroupIdValidationInsights:
         errors = validate_query_args(**_valid_args(data_group_id=-1))
         dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
         assert len(dg_errors) == 1
+
+    def test_data_group_id_true_rejected(self) -> None:
+        """data_group_id=True is rejected (bool is subtype of int)."""
+        errors = validate_query_args(**_valid_args(data_group_id=True))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1
+
+    def test_data_group_id_false_rejected(self) -> None:
+        """data_group_id=False is rejected (bool is subtype of int)."""
+        errors = validate_query_args(**_valid_args(data_group_id=False))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1

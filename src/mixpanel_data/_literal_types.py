@@ -422,6 +422,33 @@ FlowSessionEvent = Literal["start", "end"]
 +--------+----------------------------------------------+
 """
 
+FrequencyFilterOperator = Literal[
+    "is at least",
+    "is at most",
+    "is greater than",
+    "is less than",
+    "is equal to",
+    "is between",
+]
+"""Comparison operator for frequency filters.
+
++------------------+----------------------------------------------+
+| Value            | Meaning                                      |
++==================+==============================================+
+| is at least      | Count >= threshold (default)                 |
++------------------+----------------------------------------------+
+| is at most       | Count <= threshold                           |
++------------------+----------------------------------------------+
+| is greater than  | Count > threshold                            |
++------------------+----------------------------------------------+
+| is less than     | Count < threshold                            |
++------------------+----------------------------------------------+
+| is equal to      | Count == threshold                           |
++------------------+----------------------------------------------+
+| is between       | Count in [low, high] range                   |
++------------------+----------------------------------------------+
+"""
+
 # =============================================================================
 # Flow Types
 # =============================================================================
@@ -533,6 +560,7 @@ __all__ = [
     "TimeComparisonUnit",
     "CohortAggregationType",
     "FlowSessionEvent",
+    "FrequencyFilterOperator",
     # Flow types
     "FlowChartType",
     "FlowConversionWindowUnit",

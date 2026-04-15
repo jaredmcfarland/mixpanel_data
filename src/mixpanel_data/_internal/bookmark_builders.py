@@ -527,6 +527,11 @@ def build_flow_property_filter(
         # ]}
         ```
     """
+    if not filters:
+        raise ValueError(
+            "build_flow_property_filter requires at least one filter; "
+            "caller should check before calling"
+        )
     children: list[dict[str, Any]] = []
     for f in filters:
         entry = build_filter_entry(f)
@@ -588,8 +593,9 @@ def build_flow_cohort_filter(
     for f in filters:
         if f._property != "$cohorts":
             raise ValueError(
-                "query_flow where= only accepts cohort filters "
-                "(Filter.in_cohort/not_in_cohort)"
+                "build_flow_cohort_filter only accepts cohort filters "
+                "(Filter.in_cohort/not_in_cohort); property filters should "
+                "use build_flow_property_filter instead"
             )
 
     if len(filters) > 1:

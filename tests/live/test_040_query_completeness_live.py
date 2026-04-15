@@ -883,7 +883,7 @@ class TestOfflineUS4:
             real_event: Known event name.
             operator: Frequency filter operator.
         """
-        ff = FrequencyFilter(real_event, operator=operator, value=5)
+        ff = FrequencyFilter(real_event, operator=operator, value=5)  # type: ignore[arg-type]
         params = ws.build_params(real_event, where=ff, last=7)
         assert isinstance(params, dict)
 
@@ -1301,7 +1301,7 @@ class TestValidationErrors:
     def test_v12_frequency_filter_invalid_operator(self) -> None:
         """V12 -- FrequencyFilter with invalid operator raises ValueError."""
         with pytest.raises(ValueError, match="operator"):
-            FrequencyFilter("Login", operator="bad op", value=5)
+            FrequencyFilter("Login", operator="bad op", value=5)  # type: ignore[arg-type]
 
     def test_v13_frequency_filter_negative_value(self) -> None:
         """V13 -- FrequencyFilter with negative value raises ValueError."""

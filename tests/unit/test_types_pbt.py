@@ -2629,7 +2629,7 @@ class TestFrequencyFilterProperties:
         self, event: str, operator: str, value: int
     ) -> None:
         """Valid FrequencyFilter construction (no date range) never raises."""
-        ff = FrequencyFilter(event=event, operator=operator, value=value)
+        ff = FrequencyFilter(event=event, operator=operator, value=value)  # type: ignore[arg-type]
         assert ff.event == event
         assert ff.operator == operator
         assert ff.value == value
@@ -2649,7 +2649,7 @@ class TestFrequencyFilterProperties:
         """Valid FrequencyFilter with date range pair never raises."""
         ff = FrequencyFilter(
             event=event,
-            operator=operator,
+            operator=operator,  # type: ignore[arg-type]
             value=value,
             date_range_value=dr_value,
             date_range_unit=dr_unit,  # type: ignore[arg-type]
@@ -2667,7 +2667,7 @@ class TestFrequencyFilterProperties:
     def test_invalid_operator_raises(self, event: str, bad_op: str, value: int) -> None:
         """FF2: invalid operator always raises ValueError."""
         with pytest.raises(ValueError, match="operator must be one of"):
-            FrequencyFilter(event=event, operator=bad_op, value=value)
+            FrequencyFilter(event=event, operator=bad_op, value=value)  # type: ignore[arg-type]
 
     @given(
         event=event_names,
@@ -2679,7 +2679,7 @@ class TestFrequencyFilterProperties:
     ) -> None:
         """FF3: negative value always raises ValueError."""
         with pytest.raises(ValueError, match="non-negative"):
-            FrequencyFilter(event=event, operator=operator, value=bad_value)
+            FrequencyFilter(event=event, operator=operator, value=bad_value)  # type: ignore[arg-type]
 
     @given(
         event=event_names,
@@ -2694,7 +2694,7 @@ class TestFrequencyFilterProperties:
         with pytest.raises(ValueError, match="both be set or both be None"):
             FrequencyFilter(
                 event=event,
-                operator=operator,
+                operator=operator,  # type: ignore[arg-type]
                 value=value,
                 date_range_value=dr_value,
                 date_range_unit=None,
@@ -2713,7 +2713,7 @@ class TestFrequencyFilterProperties:
         with pytest.raises(ValueError, match="both be set or both be None"):
             FrequencyFilter(
                 event=event,
-                operator=operator,
+                operator=operator,  # type: ignore[arg-type]
                 value=value,
                 date_range_value=None,
                 date_range_unit=dr_unit,  # type: ignore[arg-type]
@@ -2733,7 +2733,7 @@ class TestFrequencyFilterProperties:
         with pytest.raises(ValueError, match="positive when set"):
             FrequencyFilter(
                 event=event,
-                operator=operator,
+                operator=operator,  # type: ignore[arg-type]
                 value=value,
                 date_range_value=bad_dr_value,
                 date_range_unit=dr_unit,  # type: ignore[arg-type]
@@ -2749,7 +2749,7 @@ class TestFrequencyFilterProperties:
     ) -> None:
         """FF1: empty event name always raises ValueError."""
         with pytest.raises(ValueError, match="non-empty"):
-            FrequencyFilter(event=bad_event, operator=operator, value=value)
+            FrequencyFilter(event=bad_event, operator=operator, value=value)  # type: ignore[arg-type]
 
     @given(event=event_names)
     def test_frozen_instance(self, event: str) -> None:

@@ -894,3 +894,29 @@ class TestBuildFlowPropertyFilter:
         assert "filterOperator" in child
         assert "filterValue" in child
         assert "propertyName" in child
+
+    def test_custom_property_ref_raises_type_error(self) -> None:
+        """build_flow_property_filter rejects CustomPropertyRef properties."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_property_filter,
+        )
+        from mixpanel_data.types import CustomPropertyRef
+
+        f = Filter(
+            _property=CustomPropertyRef(id=123),
+            _operator="equals",
+            _value=["high"],
+            _property_type="string",
+            _resource_type="events",
+        )
+        with pytest.raises(TypeError, match="custom property refs"):
+            build_flow_property_filter([f])
+
+    def test_empty_list_raises_value_error(self) -> None:
+        """build_flow_property_filter rejects empty filter list."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_property_filter,
+        )
+
+        with pytest.raises(ValueError, match="requires at least one filter"):
+            build_flow_property_filter([])

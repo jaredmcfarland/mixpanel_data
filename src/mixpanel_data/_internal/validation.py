@@ -272,6 +272,15 @@ def _scan_custom_properties(
         filters = list(where) if isinstance(where, (list, tuple)) else [where]
         for i, f in enumerate(filters):
             if isinstance(f, FrequencyFilter):
+                if f.event_filters:
+                    for fi, ef in enumerate(f.event_filters):
+                        if isinstance(
+                            ef._property, (CustomPropertyRef, InlineCustomProperty)
+                        ):
+                            fpath = f"where[{i}].event_filters[{fi}]"
+                            errors.extend(
+                                _validate_custom_property(ef._property, fpath)
+                            )
                 continue
             if isinstance(f._property, (CustomPropertyRef, InlineCustomProperty)):
                 fpath = f"where[{i}]" if len(filters) > 1 else "where"
@@ -1497,9 +1506,10 @@ def validate_flow_args(
 ) -> list[ValidationError]:
     """Validate flow query arguments before bookmark construction (Layer 1).
 
-    Implements flow-specific validation rules FL1-FL10 plus enum checks
-    and reused time validators. Returns all errors found so callers
-    can fix multiple issues in a single pass.
+    Implements flow-specific validation rules FL1-FL10, DG1
+    (data_group_id validation), time_comparison rejection, plus enum
+    checks and reused time validators. Returns all errors found so
+    callers can fix multiple issues in a single pass.
 
     Args:
         steps: List of event names that define the flow anchor points.
