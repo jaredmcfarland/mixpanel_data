@@ -246,13 +246,12 @@ class TestBuildFlowCohortFilter:
         fbc = result["filter_by_cohort"]
         assert fbc["negated"] is False
 
-    def test_flow_non_cohort_filter_raises(self, ws: Workspace) -> None:
-        """Verify non-cohort filter in flow where= raises ValueError."""
-        with pytest.raises(
-            ValueError,
-            match="query_flow where= only accepts cohort filters",
-        ):
-            ws.build_flow_params("Login", where=Filter.equals("country", "US"))
+    def test_flow_property_filter_produces_filter_by_event(self, ws: Workspace) -> None:
+        """Verify property filter in flow where= produces filter_by_event."""
+        result = ws.build_flow_params("Login", where=Filter.equals("country", "US"))
+        assert "filter_by_event" in result
+        assert result["filter_by_event"]["operator"] == "and"
+        assert len(result["filter_by_event"]["children"]) == 1
 
 
 # =============================================================================
@@ -817,13 +816,12 @@ class TestQueryFlowCohortFilter:
         result = ws.build_flow_params("Login")
         assert "filter_by_cohort" not in result
 
-    def test_flow_non_cohort_filter_raises_value_error(self, ws: Workspace) -> None:
-        """Verify non-cohort filter in flow where= raises ValueError."""
-        with pytest.raises(
-            ValueError,
-            match="query_flow where= only accepts cohort filters",
-        ):
-            ws.build_flow_params("Login", where=Filter.equals("country", "US"))
+    def test_flow_property_filter_produces_filter_by_event(self, ws: Workspace) -> None:
+        """Verify property filter in flow where= produces filter_by_event."""
+        result = ws.build_flow_params("Login", where=Filter.equals("country", "US"))
+        assert "filter_by_event" in result
+        assert result["filter_by_event"]["operator"] == "and"
+        assert len(result["filter_by_event"]["children"]) == 1
 
     def test_flow_multiple_cohort_filters_raises_value_error(
         self, ws: Workspace

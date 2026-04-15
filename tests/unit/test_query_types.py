@@ -98,6 +98,12 @@ class TestTypeConstants:
             "custom_percentile",
             "percentile",
             "histogram",
+            # Advanced property-requiring types
+            "unique_values",
+            "most_frequent",
+            "first_value",
+            "multi_attribution",
+            "numeric_summary",
         }
         assert expected == MATH_REQUIRING_PROPERTY
 
@@ -769,3 +775,780 @@ class TestHistogramType:
     def test_histogram_in_requiring_property(self) -> None:
         """'histogram' is in MATH_REQUIRING_PROPERTY."""
         assert "histogram" in MATH_REQUIRING_PROPERTY
+
+
+# =============================================================================
+# T004: New math types — non-property-requiring
+# =============================================================================
+
+
+class TestNewMathTypesNoProperty:
+    """T004: cumulative_unique and sessions math types need no property."""
+
+    @pytest.mark.parametrize("math_type", ["cumulative_unique", "sessions"])
+    def test_new_math_no_property_succeeds(self, math_type: str) -> None:
+        """Metric with math={math_type} succeeds without property."""
+        m = Metric("Login", math=math_type)  # type: ignore[arg-type]
+        assert m.math == math_type
+        assert m.property is None
+
+    @pytest.mark.parametrize("math_type", ["cumulative_unique", "sessions"])
+    def test_new_math_no_property_with_property_also_works(
+        self, math_type: str
+    ) -> None:
+        """Metric with math={math_type} also accepts an optional property."""
+        m = Metric("Login", math=math_type, property="duration")  # type: ignore[arg-type]
+        assert m.math == math_type
+        assert m.property == "duration"
+
+
+# =============================================================================
+# T004: New math types — property-requiring
+# =============================================================================
+
+
+class TestNewMathTypesPropertyRequired:
+    """T004: unique_values, most_frequent, first_value, multi_attribution, numeric_summary require property."""
+
+    @pytest.mark.parametrize(
+        "math_type",
+        [
+            "unique_values",
+            "most_frequent",
+            "first_value",
+            "multi_attribution",
+            "numeric_summary",
+        ],
+    )
+    def test_new_math_with_property_succeeds(self, math_type: str) -> None:
+        """Metric with math={math_type} and property set succeeds."""
+        m = Metric("Login", math=math_type, property="amount")  # type: ignore[arg-type]
+        assert m.math == math_type
+        assert m.property == "amount"
+
+    @pytest.mark.parametrize(
+        "math_type",
+        [
+            "unique_values",
+            "most_frequent",
+            "first_value",
+            "multi_attribution",
+            "numeric_summary",
+        ],
+    )
+    def test_new_math_without_property_raises(self, math_type: str) -> None:
+        """Metric with math={math_type} but no property raises ValueError."""
+        with pytest.raises(ValueError, match="requires a property"):
+            Metric("Login", math=math_type)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize(
+        "math_type",
+        [
+            "unique_values",
+            "most_frequent",
+            "first_value",
+            "multi_attribution",
+            "numeric_summary",
+        ],
+    )
+    def test_new_math_in_requiring_property_set(self, math_type: str) -> None:
+        """New property-requiring math type is in MATH_REQUIRING_PROPERTY."""
+        assert math_type in MATH_REQUIRING_PROPERTY
+
+
+# =============================================================================
+# T008: Metric with segment_method
+# =============================================================================
+
+
+class TestMetricSegmentMethod:
+    """T008: Tests for Metric.segment_method field."""
+
+    def test_segment_method_first_construction(self) -> None:
+        """Metric('evt', segment_method='first') construction succeeds."""
+        m = Metric("evt", segment_method="first")
+        assert m.segment_method == "first"
+
+    def test_segment_method_all_construction(self) -> None:
+        """Metric('evt', segment_method='all') construction succeeds."""
+        m = Metric("evt", segment_method="all")
+        assert m.segment_method == "all"
+
+    def test_segment_method_default_none(self) -> None:
+        """Metric('evt') has segment_method=None by default."""
+        m = Metric("evt")
+        assert m.segment_method is None
+
+    def test_segment_method_immutable(self) -> None:
+        """Metric.segment_method is frozen."""
+        m = Metric("evt", segment_method="first")
+        with pytest.raises(AttributeError):
+            m.segment_method = "all"  # type: ignore[misc]
+
+    def test_segment_method_equality(self) -> None:
+        """Metrics with different segment_method are not equal."""
+        m1 = Metric("evt", segment_method="first")
+        m2 = Metric("evt", segment_method="all")
+        assert m1 != m2
+
+    def test_segment_method_none_vs_unset_equal(self) -> None:
+        """Metric with segment_method=None equals Metric without segment_method."""
+        m1 = Metric("evt", segment_method=None)
+        m2 = Metric("evt")
+        assert m1 == m2
+
+
+# =============================================================================
+# T014: TimeComparison dataclass tests
+# =============================================================================
+
+
+class TestTimeComparison:
+    """Tests for TimeComparison frozen dataclass construction and validation."""
+
+    def test_relative_factory_creates_correct_instance(self) -> None:
+        """TimeComparison.relative('month') creates type='relative', unit='month'."""
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.relative("month")
+        assert tc.type == "relative"
+        assert tc.unit == "month"
+        assert tc.date is None
+
+    def test_absolute_start_factory_creates_correct_instance(self) -> None:
+        """TimeComparison.absolute_start('2026-01-01') creates correct instance."""
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.absolute_start("2026-01-01")
+        assert tc.type == "absolute-start"
+        assert tc.date == "2026-01-01"
+        assert tc.unit is None
+
+    def test_absolute_end_factory_creates_correct_instance(self) -> None:
+        """TimeComparison.absolute_end('2026-12-31') creates correct instance."""
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.absolute_end("2026-12-31")
+        assert tc.type == "absolute-end"
+        assert tc.date == "2026-12-31"
+        assert tc.unit is None
+
+    def test_tc1_relative_requires_unit(self) -> None:
+        """TC1: type='relative' requires unit to be set."""
+        from mixpanel_data.types import TimeComparison
+
+        with pytest.raises(ValueError, match="unit"):
+            TimeComparison(type="relative", unit=None, date=None)
+
+    def test_tc1_relative_rejects_date(self) -> None:
+        """TC1: type='relative' rejects date being set."""
+        from mixpanel_data.types import TimeComparison
+
+        with pytest.raises(ValueError, match="date"):
+            TimeComparison(type="relative", unit="month", date="2026-01-01")
+
+    def test_tc2_absolute_start_requires_date(self) -> None:
+        """TC2: type='absolute-start' requires date to be set."""
+        from mixpanel_data.types import TimeComparison
+
+        with pytest.raises(ValueError, match="date"):
+            TimeComparison(type="absolute-start", unit=None, date=None)
+
+    def test_tc2_absolute_start_rejects_unit(self) -> None:
+        """TC2: type='absolute-start' rejects unit being set."""
+        from mixpanel_data.types import TimeComparison
+
+        with pytest.raises(ValueError, match="unit"):
+            TimeComparison(type="absolute-start", unit="month", date="2026-01-01")
+
+    def test_tc2_absolute_end_requires_date(self) -> None:
+        """TC2: type='absolute-end' requires date to be set."""
+        from mixpanel_data.types import TimeComparison
+
+        with pytest.raises(ValueError, match="date"):
+            TimeComparison(type="absolute-end", unit=None, date=None)
+
+    def test_tc2_absolute_end_rejects_unit(self) -> None:
+        """TC2: type='absolute-end' rejects unit being set."""
+        from mixpanel_data.types import TimeComparison
+
+        with pytest.raises(ValueError, match="unit"):
+            TimeComparison(type="absolute-end", unit="month", date="2026-12-31")
+
+    def test_tc3_invalid_date_format_raises(self) -> None:
+        """TC3: date must match YYYY-MM-DD format."""
+        from mixpanel_data.types import TimeComparison
+
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            TimeComparison.absolute_start("01-01-2026")
+
+    def test_tc3_invalid_date_format_partial(self) -> None:
+        """TC3: date='2026-1-1' (missing leading zeros) is rejected."""
+        from mixpanel_data.types import TimeComparison
+
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            TimeComparison.absolute_start("2026-1-1")
+
+    def test_frozen_immutable(self) -> None:
+        """TimeComparison is frozen and cannot be modified after construction."""
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.relative("month")
+        with pytest.raises(AttributeError):
+            tc.type = "absolute-start"  # type: ignore[misc]
+
+    def test_equality_same_fields(self) -> None:
+        """Two TimeComparisons with identical fields are equal."""
+        from mixpanel_data.types import TimeComparison
+
+        tc1 = TimeComparison.relative("month")
+        tc2 = TimeComparison.relative("month")
+        assert tc1 == tc2
+
+    def test_inequality_different_type(self) -> None:
+        """TimeComparisons with different types are not equal."""
+        from mixpanel_data.types import TimeComparison
+
+        tc1 = TimeComparison.relative("month")
+        tc2 = TimeComparison.absolute_start("2026-01-01")
+        assert tc1 != tc2
+
+    def test_relative_all_valid_units(self) -> None:
+        """All valid TimeComparisonUnit values create successfully."""
+        from mixpanel_data.types import TimeComparison
+
+        for unit in ("day", "week", "month", "quarter", "year"):
+            tc = TimeComparison.relative(unit)  # type: ignore[arg-type]
+            assert tc.unit == unit
+
+
+# =============================================================================
+# T021: FrequencyBreakdown dataclass tests (US4)
+# =============================================================================
+
+
+class TestFrequencyBreakdownConstruction:
+    """Tests for FrequencyBreakdown frozen dataclass construction and defaults."""
+
+    def test_event_only_uses_defaults(self) -> None:
+        """FrequencyBreakdown('Purchase') uses default bucket params."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        assert fb.event == "Purchase"
+        assert fb.bucket_size == 1
+        assert fb.bucket_min == 0
+        assert fb.bucket_max == 10
+        assert fb.label is None
+
+    def test_all_fields_set(self) -> None:
+        """FrequencyBreakdown with all fields explicitly set."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown(
+            "Purchase",
+            bucket_size=5,
+            bucket_min=0,
+            bucket_max=50,
+            label="Purchase Frequency",
+        )
+        assert fb.event == "Purchase"
+        assert fb.bucket_size == 5
+        assert fb.bucket_min == 0
+        assert fb.bucket_max == 50
+        assert fb.label == "Purchase Frequency"
+
+    def test_immutability(self) -> None:
+        """FrequencyBreakdown is frozen and cannot be modified."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        with pytest.raises(AttributeError):
+            fb.event = "Login"  # type: ignore[misc]
+
+    def test_equality_same_fields(self) -> None:
+        """Two FrequencyBreakdowns with identical fields are equal."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb1 = FrequencyBreakdown("Purchase")
+        fb2 = FrequencyBreakdown("Purchase")
+        assert fb1 == fb2
+
+    def test_inequality_different_event(self) -> None:
+        """FrequencyBreakdowns with different events are not equal."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        assert FrequencyBreakdown("Purchase") != FrequencyBreakdown("Login")
+
+
+class TestFrequencyBreakdownValidation:
+    """Tests for FrequencyBreakdown validation rules FB1-FB4."""
+
+    def test_fb1_empty_event_raises(self) -> None:
+        """FB1: event must be non-empty."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        with pytest.raises(ValueError, match="non-empty"):
+            FrequencyBreakdown("")
+
+    def test_fb1_whitespace_event_raises(self) -> None:
+        """FB1: whitespace-only event must be rejected."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        with pytest.raises(ValueError, match="non-empty"):
+            FrequencyBreakdown("   ")
+
+    def test_fb2_zero_bucket_size_raises(self) -> None:
+        """FB2: bucket_size must be positive (> 0)."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        with pytest.raises(ValueError, match="positive"):
+            FrequencyBreakdown("Purchase", bucket_size=0)
+
+    def test_fb2_negative_bucket_size_raises(self) -> None:
+        """FB2: negative bucket_size must be rejected."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        with pytest.raises(ValueError, match="positive"):
+            FrequencyBreakdown("Purchase", bucket_size=-1)
+
+    def test_fb3_bucket_min_equals_max_raises(self) -> None:
+        """FB3: bucket_min must be < bucket_max."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        with pytest.raises(ValueError, match="less than"):
+            FrequencyBreakdown("Purchase", bucket_min=10, bucket_max=10)
+
+    def test_fb3_bucket_min_greater_than_max_raises(self) -> None:
+        """FB3: bucket_min > bucket_max must be rejected."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        with pytest.raises(ValueError, match="less than"):
+            FrequencyBreakdown("Purchase", bucket_min=20, bucket_max=10)
+
+    def test_fb4_negative_bucket_min_raises(self) -> None:
+        """FB4: bucket_min must be >= 0."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        with pytest.raises(ValueError, match="non-negative"):
+            FrequencyBreakdown("Purchase", bucket_min=-1)
+
+
+# =============================================================================
+# T021: FrequencyFilter dataclass tests (US4)
+# =============================================================================
+
+
+class TestFrequencyFilterConstruction:
+    """Tests for FrequencyFilter frozen dataclass construction and defaults."""
+
+    def test_event_and_value_uses_defaults(self) -> None:
+        """FrequencyFilter('Login', value=5) uses default operator."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=5)
+        assert ff.event == "Login"
+        assert ff.operator == "is at least"
+        assert ff.value == 5
+        assert ff.date_range_value is None
+        assert ff.date_range_unit is None
+        assert ff.event_filters is None
+        assert ff.label is None
+
+    def test_all_fields_set(self) -> None:
+        """FrequencyFilter with all fields explicitly set."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter(
+            "Login",
+            operator="is greater than",
+            value=10,
+            date_range_value=30,
+            date_range_unit="day",
+            event_filters=[Filter.equals("country", "US")],
+            label="Active Users",
+        )
+        assert ff.event == "Login"
+        assert ff.operator == "is greater than"
+        assert ff.value == 10
+        assert ff.date_range_value == 30
+        assert ff.date_range_unit == "day"
+        assert ff.event_filters is not None
+        assert len(ff.event_filters) == 1
+        assert ff.label == "Active Users"
+
+    def test_immutability(self) -> None:
+        """FrequencyFilter is frozen and cannot be modified."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=5)
+        with pytest.raises(AttributeError):
+            ff.event = "Signup"  # type: ignore[misc]
+
+    def test_equality_same_fields(self) -> None:
+        """Two FrequencyFilters with identical fields are equal."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff1 = FrequencyFilter("Login", value=5)
+        ff2 = FrequencyFilter("Login", value=5)
+        assert ff1 == ff2
+
+    def test_float_value(self) -> None:
+        """FrequencyFilter value accepts float."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=3.5)
+        assert ff.value == 3.5
+
+    def test_event_filters_list(self) -> None:
+        """FrequencyFilter accepts multiple event_filters."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter(
+            "Purchase",
+            value=1,
+            event_filters=[
+                Filter.equals("country", "US"),
+                Filter.greater_than("amount", 10),
+            ],
+        )
+        assert ff.event_filters is not None
+        assert len(ff.event_filters) == 2
+
+
+class TestFrequencyFilterValidation:
+    """Tests for FrequencyFilter validation rules FF1-FF5."""
+
+    def test_ff1_empty_event_raises(self) -> None:
+        """FF1: event must be non-empty."""
+        from mixpanel_data.types import FrequencyFilter
+
+        with pytest.raises(ValueError, match="non-empty"):
+            FrequencyFilter("", value=5)
+
+    def test_ff1_whitespace_event_raises(self) -> None:
+        """FF1: whitespace-only event must be rejected."""
+        from mixpanel_data.types import FrequencyFilter
+
+        with pytest.raises(ValueError, match="non-empty"):
+            FrequencyFilter("   ", value=5)
+
+    def test_ff2_invalid_operator_raises(self) -> None:
+        """FF2: operator must be in VALID_FREQUENCY_FILTER_OPERATORS."""
+        from mixpanel_data.types import FrequencyFilter
+
+        with pytest.raises(ValueError, match="operator"):
+            FrequencyFilter("Login", operator="invalid_op", value=5)
+
+    def test_ff2_all_valid_operators_accepted(self) -> None:
+        """FF2: all valid operators are accepted."""
+        from mixpanel_data.types import FrequencyFilter
+
+        valid_ops = [
+            "is at least",
+            "is at most",
+            "is greater than",
+            "is less than",
+            "is equal to",
+            "is between",
+        ]
+        for op in valid_ops:
+            ff = FrequencyFilter("Login", operator=op, value=5)
+            assert ff.operator == op
+
+    def test_ff3_negative_value_raises(self) -> None:
+        """FF3: value must be non-negative (>= 0)."""
+        from mixpanel_data.types import FrequencyFilter
+
+        with pytest.raises(ValueError, match="non-negative"):
+            FrequencyFilter("Login", value=-1)
+
+    def test_ff3_zero_value_accepted(self) -> None:
+        """FF3: value=0 is valid."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=0)
+        assert ff.value == 0
+
+    def test_ff4_date_range_value_without_unit_raises(self) -> None:
+        """FF4: date_range_value without date_range_unit raises."""
+        from mixpanel_data.types import FrequencyFilter
+
+        with pytest.raises(ValueError, match="both.*set or both.*None"):
+            FrequencyFilter("Login", value=5, date_range_value=30)
+
+    def test_ff4_date_range_unit_without_value_raises(self) -> None:
+        """FF4: date_range_unit without date_range_value raises."""
+        from mixpanel_data.types import FrequencyFilter
+
+        with pytest.raises(ValueError, match="both.*set or both.*None"):
+            FrequencyFilter("Login", value=5, date_range_unit="day")
+
+    def test_ff4_both_none_accepted(self) -> None:
+        """FF4: both date_range_value and date_range_unit None is valid."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=5)
+        assert ff.date_range_value is None
+        assert ff.date_range_unit is None
+
+    def test_ff4_both_set_accepted(self) -> None:
+        """FF4: both date_range_value and date_range_unit set is valid."""
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter(
+            "Login", value=5, date_range_value=30, date_range_unit="day"
+        )
+        assert ff.date_range_value == 30
+        assert ff.date_range_unit == "day"
+
+    def test_ff5_zero_date_range_value_raises(self) -> None:
+        """FF5: date_range_value must be positive if set."""
+        from mixpanel_data.types import FrequencyFilter
+
+        with pytest.raises(ValueError, match="positive"):
+            FrequencyFilter("Login", value=5, date_range_value=0, date_range_unit="day")
+
+    def test_ff5_negative_date_range_value_raises(self) -> None:
+        """FF5: negative date_range_value must be rejected."""
+        from mixpanel_data.types import FrequencyFilter
+
+        with pytest.raises(ValueError, match="positive"):
+            FrequencyFilter(
+                "Login", value=5, date_range_value=-7, date_range_unit="day"
+            )
+
+
+# =============================================================================
+# T029: New Filter factory methods (US6 — Complete Filter Operator Coverage)
+# =============================================================================
+
+
+class TestNewFilterFactoryMethods:
+    """T029: Tests for 7 new Filter factory methods."""
+
+    # --- not_between ---
+
+    def test_not_between_operator(self) -> None:
+        """Filter.not_between() uses 'not between' operator."""
+        f = Filter.not_between("age", 18, 65)
+        assert f._operator == "not between"
+
+    def test_not_between_property_type(self) -> None:
+        """Filter.not_between() sets property_type to 'number'."""
+        f = Filter.not_between("age", 18, 65)
+        assert f._property_type == "number"
+
+    def test_not_between_value(self) -> None:
+        """Filter.not_between() stores [min, max] as value."""
+        f = Filter.not_between("amount", 10, 100)
+        assert f._value == [10, 100]
+
+    def test_not_between_property(self) -> None:
+        """Filter.not_between() stores property name."""
+        f = Filter.not_between("age", 18, 65)
+        assert f._property == "age"
+
+    def test_not_between_resource_type_default(self) -> None:
+        """Filter.not_between() defaults to resource_type='events'."""
+        f = Filter.not_between("age", 18, 65)
+        assert f._resource_type == "events"
+
+    def test_not_between_resource_type_people(self) -> None:
+        """Filter.not_between() accepts resource_type='people'."""
+        f = Filter.not_between("age", 18, 65, resource_type="people")
+        assert f._resource_type == "people"
+
+    # --- starts_with ---
+
+    def test_starts_with_operator(self) -> None:
+        """Filter.starts_with() uses 'starts with' operator."""
+        f = Filter.starts_with("url", "https://")
+        assert f._operator == "starts with"
+
+    def test_starts_with_property_type(self) -> None:
+        """Filter.starts_with() sets property_type to 'string'."""
+        f = Filter.starts_with("url", "https://")
+        assert f._property_type == "string"
+
+    def test_starts_with_value(self) -> None:
+        """Filter.starts_with() stores prefix as value."""
+        f = Filter.starts_with("url", "https://")
+        assert f._value == "https://"
+
+    def test_starts_with_resource_type_people(self) -> None:
+        """Filter.starts_with() accepts resource_type='people'."""
+        f = Filter.starts_with("email", "admin@", resource_type="people")
+        assert f._resource_type == "people"
+
+    # --- ends_with ---
+
+    def test_ends_with_operator(self) -> None:
+        """Filter.ends_with() uses 'ends with' operator."""
+        f = Filter.ends_with("email", "@example.com")
+        assert f._operator == "ends with"
+
+    def test_ends_with_property_type(self) -> None:
+        """Filter.ends_with() sets property_type to 'string'."""
+        f = Filter.ends_with("email", "@example.com")
+        assert f._property_type == "string"
+
+    def test_ends_with_value(self) -> None:
+        """Filter.ends_with() stores suffix as value."""
+        f = Filter.ends_with("email", "@example.com")
+        assert f._value == "@example.com"
+
+    def test_ends_with_resource_type_people(self) -> None:
+        """Filter.ends_with() accepts resource_type='people'."""
+        f = Filter.ends_with("email", ".edu", resource_type="people")
+        assert f._resource_type == "people"
+
+    # --- date_not_between ---
+
+    def test_date_not_between_operator(self) -> None:
+        """Filter.date_not_between() uses 'was not between' operator."""
+        f = Filter.date_not_between("created", "2024-01-01", "2024-06-30")
+        assert f._operator == "was not between"
+
+    def test_date_not_between_property_type(self) -> None:
+        """Filter.date_not_between() sets property_type to 'datetime'."""
+        f = Filter.date_not_between("created", "2024-01-01", "2024-06-30")
+        assert f._property_type == "datetime"
+
+    def test_date_not_between_value(self) -> None:
+        """Filter.date_not_between() stores [from, to] as value."""
+        f = Filter.date_not_between("created", "2024-01-01", "2024-06-30")
+        assert f._value == ["2024-01-01", "2024-06-30"]
+
+    def test_date_not_between_no_date_unit(self) -> None:
+        """Filter.date_not_between() has no date_unit."""
+        f = Filter.date_not_between("created", "2024-01-01", "2024-06-30")
+        assert f._date_unit is None
+
+    def test_date_not_between_resource_type_people(self) -> None:
+        """Filter.date_not_between() accepts resource_type='people'."""
+        f = Filter.date_not_between(
+            "$created", "2024-01-01", "2024-06-30", resource_type="people"
+        )
+        assert f._resource_type == "people"
+
+    def test_date_not_between_rejects_invalid_from(self) -> None:
+        """Filter.date_not_between() rejects invalid from_date."""
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            Filter.date_not_between("created", "bad", "2024-06-30")
+
+    def test_date_not_between_rejects_invalid_to(self) -> None:
+        """Filter.date_not_between() rejects invalid to_date."""
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            Filter.date_not_between("created", "2024-01-01", "bad")
+
+    def test_date_not_between_rejects_reversed_dates(self) -> None:
+        """Filter.date_not_between() rejects from > to."""
+        with pytest.raises(ValueError, match="must be before"):
+            Filter.date_not_between("created", "2024-12-31", "2024-01-01")
+
+    # --- in_the_next ---
+
+    def test_in_the_next_operator(self) -> None:
+        """Filter.in_the_next() uses 'was in the next' operator."""
+        f = Filter.in_the_next("expires", 7, "day")
+        assert f._operator == "was in the next"
+
+    def test_in_the_next_property_type(self) -> None:
+        """Filter.in_the_next() sets property_type to 'datetime'."""
+        f = Filter.in_the_next("expires", 7, "day")
+        assert f._property_type == "datetime"
+
+    def test_in_the_next_value(self) -> None:
+        """Filter.in_the_next() stores quantity as value."""
+        f = Filter.in_the_next("expires", 7, "day")
+        assert f._value == 7
+
+    def test_in_the_next_date_unit(self) -> None:
+        """Filter.in_the_next() sets _date_unit correctly."""
+        f = Filter.in_the_next("expires", 7, "day")
+        assert f._date_unit == "day"
+
+    def test_in_the_next_hour_unit(self) -> None:
+        """Filter.in_the_next() supports hour unit."""
+        f = Filter.in_the_next("expires", 24, "hour")
+        assert f._date_unit == "hour"
+
+    def test_in_the_next_week_unit(self) -> None:
+        """Filter.in_the_next() supports week unit."""
+        f = Filter.in_the_next("expires", 2, "week")
+        assert f._date_unit == "week"
+
+    def test_in_the_next_month_unit(self) -> None:
+        """Filter.in_the_next() supports month unit."""
+        f = Filter.in_the_next("expires", 3, "month")
+        assert f._date_unit == "month"
+
+    def test_in_the_next_resource_type_people(self) -> None:
+        """Filter.in_the_next() accepts resource_type='people'."""
+        f = Filter.in_the_next("renewal", 30, "day", resource_type="people")
+        assert f._resource_type == "people"
+
+    def test_in_the_next_rejects_zero(self) -> None:
+        """Filter.in_the_next() rejects non-positive quantity."""
+        with pytest.raises(ValueError, match="positive"):
+            Filter.in_the_next("expires", 0, "day")
+
+    def test_in_the_next_rejects_negative(self) -> None:
+        """Filter.in_the_next() rejects negative quantity."""
+        with pytest.raises(ValueError, match="positive"):
+            Filter.in_the_next("expires", -5, "day")
+
+    # --- at_least ---
+
+    def test_at_least_operator(self) -> None:
+        """Filter.at_least() uses 'is at least' operator."""
+        f = Filter.at_least("score", 80)
+        assert f._operator == "is at least"
+
+    def test_at_least_property_type(self) -> None:
+        """Filter.at_least() sets property_type to 'number'."""
+        f = Filter.at_least("score", 80)
+        assert f._property_type == "number"
+
+    def test_at_least_value(self) -> None:
+        """Filter.at_least() stores numeric value."""
+        f = Filter.at_least("score", 80)
+        assert f._value == 80
+
+    def test_at_least_float_value(self) -> None:
+        """Filter.at_least() accepts float value."""
+        f = Filter.at_least("score", 79.5)
+        assert f._value == 79.5
+
+    def test_at_least_resource_type_people(self) -> None:
+        """Filter.at_least() accepts resource_type='people'."""
+        f = Filter.at_least("purchases", 10, resource_type="people")
+        assert f._resource_type == "people"
+
+    # --- at_most ---
+
+    def test_at_most_operator(self) -> None:
+        """Filter.at_most() uses 'is at most' operator."""
+        f = Filter.at_most("errors", 5)
+        assert f._operator == "is at most"
+
+    def test_at_most_property_type(self) -> None:
+        """Filter.at_most() sets property_type to 'number'."""
+        f = Filter.at_most("errors", 5)
+        assert f._property_type == "number"
+
+    def test_at_most_value(self) -> None:
+        """Filter.at_most() stores numeric value."""
+        f = Filter.at_most("errors", 5)
+        assert f._value == 5
+
+    def test_at_most_float_value(self) -> None:
+        """Filter.at_most() accepts float value."""
+        f = Filter.at_most("latency", 99.9)
+        assert f._value == 99.9
+
+    def test_at_most_resource_type_people(self) -> None:
+        """Filter.at_most() accepts resource_type='people'."""
+        f = Filter.at_most("complaints", 3, resource_type="people")
+        assert f._resource_type == "people"

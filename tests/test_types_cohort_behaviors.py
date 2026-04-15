@@ -538,3 +538,123 @@ class TestSanitizeRawCohort:
         _sanitize_raw_cohort(raw)
         # Original should still have selector: None
         assert raw["behaviors"]["b1"]["count"]["event_selector"]["selector"] is None
+
+
+# =============================================================================
+# US5: CohortCriteria.did_event() — aggregation params (T027)
+# =============================================================================
+
+
+class TestCohortCriteriaAggregation:
+    """Tests for aggregation and aggregation_property params on did_event()."""
+
+    def test_aggregation_with_property_succeeds(self) -> None:
+        """did_event with aggregation + aggregation_property creates criteria."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            aggregation="average",
+            aggregation_property="amount",
+            at_least=50,
+            within_days=30,
+        )
+        assert c._behavior is not None
+
+    @pytest.mark.parametrize(
+        "agg_type",
+        ["total", "unique", "average", "min", "max", "median"],
+    )
+    def test_all_six_aggregation_operators_accepted(self, agg_type: Any) -> None:
+        """All 6 CohortAggregationType values are accepted without error."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            aggregation=agg_type,
+            aggregation_property="amount",
+            at_least=1,
+            within_days=30,
+        )
+        assert c._behavior is not None
+
+    def test_ca1_aggregation_without_property_raises(self) -> None:
+        """CA1: aggregation without aggregation_property raises ValueError."""
+        with pytest.raises(
+            ValueError,
+            match="aggregation and aggregation_property must both be set or both be None",
+        ):
+            CohortCriteria.did_event(
+                "Purchase",
+                aggregation="average",
+                at_least=50,
+                within_days=30,
+            )
+
+    def test_ca2_aggregation_property_without_aggregation_raises(self) -> None:
+        """CA2: aggregation_property without aggregation raises ValueError."""
+        with pytest.raises(
+            ValueError,
+            match="aggregation and aggregation_property must both be set or both be None",
+        ):
+            CohortCriteria.did_event(
+                "Purchase",
+                aggregation_property="amount",
+                at_least=50,
+                within_days=30,
+            )
+
+
+class TestCohortCriteriaAggregationSerialization:
+    """Tests for aggregation serialization in behavior dict."""
+
+    def test_serialization_includes_aggregation_operator(self) -> None:
+        """Behavior dict includes aggregationOperator when aggregation is set."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            aggregation="average",
+            aggregation_property="amount",
+            at_least=50,
+            within_days=30,
+        )
+        assert c._behavior is not None
+        count = c._behavior["count"]
+        assert count["aggregationOperator"] == "average"
+
+    def test_serialization_includes_property(self) -> None:
+        """Behavior dict includes property when aggregation_property is set."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            aggregation="total",
+            aggregation_property="revenue",
+            at_least=100,
+            within_days=7,
+        )
+        assert c._behavior is not None
+        count = c._behavior["count"]
+        assert count["property"] == "revenue"
+
+    def test_no_aggregation_behavior_unchanged(self) -> None:
+        """Behavior dict has no aggregationOperator/property when not set."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            at_least=1,
+            within_days=30,
+        )
+        assert c._behavior is not None
+        count = c._behavior["count"]
+        assert "aggregationOperator" not in count
+        assert "property" not in count
+
+    @pytest.mark.parametrize(
+        "agg_type",
+        ["total", "unique", "average", "min", "max", "median"],
+    )
+    def test_all_operators_serialize_correctly(self, agg_type: Any) -> None:
+        """Each aggregation operator serializes as its string value."""
+        c = CohortCriteria.did_event(
+            "Purchase",
+            aggregation=agg_type,
+            aggregation_property="amount",
+            at_least=1,
+            within_days=30,
+        )
+        assert c._behavior is not None
+        assert c._behavior["count"]["aggregationOperator"] == agg_type
+        assert c._behavior["count"]["property"] == "amount"

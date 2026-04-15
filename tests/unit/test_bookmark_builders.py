@@ -262,7 +262,7 @@ class TestBuildGroupSection:
         """Invalid group_by element type raises TypeError."""
         with pytest.raises(
             TypeError,
-            match="group_by elements must be str, GroupBy, or CohortBreakdown",
+            match="group_by elements must be str, GroupBy, CohortBreakdown, or FrequencyBreakdown",
         ):
             build_group_section(123)  # type: ignore[arg-type]
 
@@ -270,7 +270,7 @@ class TestBuildGroupSection:
         """Invalid element inside list raises TypeError."""
         with pytest.raises(
             TypeError,
-            match="group_by elements must be str, GroupBy, or CohortBreakdown",
+            match="group_by elements must be str, GroupBy, CohortBreakdown, or FrequencyBreakdown",
         ):
             build_group_section(["country", 42])  # type: ignore[list-item]
 
@@ -360,6 +360,68 @@ class TestBuildFilterEntry:
         assert entry["dataset"] == "$mixpanel"
 
 
+class TestNewFilterOperatorsInBuilder:
+    """T030: Tests for new filter operators in build_filter_entry() output."""
+
+    def test_not_between_filter_operator(self) -> None:
+        """not_between filter produces 'not between' filterOperator."""
+        f = Filter.not_between("age", 18, 65)
+        entry = build_filter_entry(f)
+        assert entry["filterOperator"] == "not between"
+        assert entry["filterType"] == "number"
+        assert entry["filterValue"] == [18, 65]
+
+    def test_starts_with_filter_operator(self) -> None:
+        """starts_with filter produces 'starts with' filterOperator."""
+        f = Filter.starts_with("url", "https://")
+        entry = build_filter_entry(f)
+        assert entry["filterOperator"] == "starts with"
+        assert entry["filterType"] == "string"
+        assert entry["filterValue"] == "https://"
+
+    def test_ends_with_filter_operator(self) -> None:
+        """ends_with filter produces 'ends with' filterOperator."""
+        f = Filter.ends_with("email", "@example.com")
+        entry = build_filter_entry(f)
+        assert entry["filterOperator"] == "ends with"
+        assert entry["filterType"] == "string"
+        assert entry["filterValue"] == "@example.com"
+
+    def test_date_not_between_filter_operator(self) -> None:
+        """date_not_between filter produces 'was not between' filterOperator."""
+        f = Filter.date_not_between("created", "2024-01-01", "2024-06-30")
+        entry = build_filter_entry(f)
+        assert entry["filterOperator"] == "was not between"
+        assert entry["filterType"] == "datetime"
+        assert entry["filterValue"] == ["2024-01-01", "2024-06-30"]
+        assert "filterDateUnit" not in entry
+
+    def test_in_the_next_filter_operator(self) -> None:
+        """in_the_next filter produces 'was in the next' filterOperator."""
+        f = Filter.in_the_next("expires", 7, "day")
+        entry = build_filter_entry(f)
+        assert entry["filterOperator"] == "was in the next"
+        assert entry["filterType"] == "datetime"
+        assert entry["filterValue"] == 7
+        assert entry["filterDateUnit"] == "day"
+
+    def test_at_least_filter_operator(self) -> None:
+        """at_least filter produces 'is at least' filterOperator."""
+        f = Filter.at_least("score", 80)
+        entry = build_filter_entry(f)
+        assert entry["filterOperator"] == "is at least"
+        assert entry["filterType"] == "number"
+        assert entry["filterValue"] == 80
+
+    def test_at_most_filter_operator(self) -> None:
+        """at_most filter produces 'is at most' filterOperator."""
+        f = Filter.at_most("errors", 5)
+        entry = build_filter_entry(f)
+        assert entry["filterOperator"] == "is at most"
+        assert entry["filterType"] == "number"
+        assert entry["filterValue"] == 5
+
+
 class TestPatchCustomPropertyFiltersForTransform:
     """Tests for the server-compat sentinel injection.
 
@@ -400,3 +462,437 @@ class TestPatchCustomPropertyFiltersForTransform:
     def test_empty_list(self) -> None:
         """Empty list returns empty list."""
         assert patch_custom_property_filters_for_transform([]) == []
+
+
+# =============================================================================
+# T015: build_time_comparison() builder tests
+# =============================================================================
+
+
+class TestBuildTimeComparison:
+    """Tests for build_time_comparison() — timeComparison dict building."""
+
+    def test_relative_produces_correct_dict(self) -> None:
+        """Relative time comparison produces {"type": "relative", "value": unit}."""
+        from mixpanel_data._internal.bookmark_builders import build_time_comparison
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.relative("month")
+        result = build_time_comparison(tc)
+        assert result == {"type": "relative", "value": "month"}
+
+    def test_absolute_start_produces_correct_dict(self) -> None:
+        """Absolute-start produces {"type": "absolute-start", "value": date}."""
+        from mixpanel_data._internal.bookmark_builders import build_time_comparison
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.absolute_start("2026-01-01")
+        result = build_time_comparison(tc)
+        assert result == {"type": "absolute-start", "value": "2026-01-01"}
+
+    def test_absolute_end_produces_correct_dict(self) -> None:
+        """Absolute-end produces {"type": "absolute-end", "value": date}."""
+        from mixpanel_data._internal.bookmark_builders import build_time_comparison
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.absolute_end("2026-12-31")
+        result = build_time_comparison(tc)
+        assert result == {"type": "absolute-end", "value": "2026-12-31"}
+
+    def test_relative_day_unit(self) -> None:
+        """Relative with unit='day' produces correct value."""
+        from mixpanel_data._internal.bookmark_builders import build_time_comparison
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.relative("day")
+        result = build_time_comparison(tc)
+        assert result["value"] == "day"
+
+    def test_relative_year_unit(self) -> None:
+        """Relative with unit='year' produces correct value."""
+        from mixpanel_data._internal.bookmark_builders import build_time_comparison
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.relative("year")
+        result = build_time_comparison(tc)
+        assert result["value"] == "year"
+
+
+# =============================================================================
+# T022: build_frequency_group_entry() builder tests (US4)
+# =============================================================================
+
+
+class TestBuildFrequencyGroupEntry:
+    """Tests for build_frequency_group_entry() — frequency breakdown dict."""
+
+    def test_basic_structure(self) -> None:
+        """FrequencyBreakdown produces correct group entry structure."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        result = build_frequency_group_entry(fb)
+        assert result["resourceType"] == "people"
+        assert result["behaviorType"] == "$frequency"
+        assert "behavior" in result
+        assert result["behavior"]["event"] == "Purchase"
+        assert result["behavior"]["bucket_size"] == 1
+        assert result["behavior"]["bucket_min"] == 0
+        assert result["behavior"]["bucket_max"] == 10
+
+    def test_custom_bucket_values(self) -> None:
+        """Custom bucket params are reflected in output."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase", bucket_size=5, bucket_min=0, bucket_max=50)
+        result = build_frequency_group_entry(fb)
+        assert result["behavior"]["bucket_size"] == 5
+        assert result["behavior"]["bucket_min"] == 0
+        assert result["behavior"]["bucket_max"] == 50
+
+    def test_label_included(self) -> None:
+        """Label is included in output when set."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase", label="Purchase Frequency")
+        result = build_frequency_group_entry(fb)
+        assert result["label"] == "Purchase Frequency"
+
+    def test_label_omitted_when_none(self) -> None:
+        """Label key is omitted when label is None."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        result = build_frequency_group_entry(fb)
+        assert "label" not in result
+
+
+# =============================================================================
+# T022: build_frequency_filter_entry() builder tests (US4)
+# =============================================================================
+
+
+class TestBuildFrequencyFilterEntry:
+    """Tests for build_frequency_filter_entry() — frequency filter dict."""
+
+    def test_basic_structure(self) -> None:
+        """FrequencyFilter produces correct filter entry structure."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=5)
+        result = build_frequency_filter_entry(ff)
+        assert result["resourceType"] == "people"
+        assert result["behaviorType"] == "$frequency"
+        assert "customProperty" in result
+        behavior = result["customProperty"]["behavior"]
+        assert behavior["event"] == "Login"
+        assert behavior["aggregation"] == "total"
+        assert behavior["filterOperator"] == "is at least"
+        assert behavior["filterValue"] == 5
+
+    def test_custom_operator(self) -> None:
+        """Custom operator is reflected in output."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", operator="is greater than", value=10)
+        result = build_frequency_filter_entry(ff)
+        behavior = result["customProperty"]["behavior"]
+        assert behavior["filterOperator"] == "is greater than"
+        assert behavior["filterValue"] == 10
+
+    def test_with_date_range(self) -> None:
+        """Date range is included when set."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter(
+            "Login", value=5, date_range_value=30, date_range_unit="day"
+        )
+        result = build_frequency_filter_entry(ff)
+        behavior = result["customProperty"]["behavior"]
+        assert "dateRange" in behavior
+        assert behavior["dateRange"]["value"] == 30
+        assert behavior["dateRange"]["unit"] == "day"
+
+    def test_without_date_range(self) -> None:
+        """Date range is omitted when not set."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=5)
+        result = build_frequency_filter_entry(ff)
+        behavior = result["customProperty"]["behavior"]
+        assert "dateRange" not in behavior
+
+    def test_with_event_filters(self) -> None:
+        """Event filters are included when set."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter(
+            "Purchase",
+            value=1,
+            event_filters=[Filter.equals("country", "US")],
+        )
+        result = build_frequency_filter_entry(ff)
+        behavior = result["customProperty"]["behavior"]
+        assert "eventFilters" in behavior
+        assert len(behavior["eventFilters"]) == 1
+        assert behavior["eventFilters"][0]["value"] == "country"
+        assert behavior["eventFilters"][0]["filterOperator"] == "equals"
+
+    def test_without_event_filters(self) -> None:
+        """Event filters key is omitted when not set."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=5)
+        result = build_frequency_filter_entry(ff)
+        behavior = result["customProperty"]["behavior"]
+        assert "eventFilters" not in behavior
+
+    def test_label_included(self) -> None:
+        """Label is included in output when set."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=5, label="Active Users")
+        result = build_frequency_filter_entry(ff)
+        assert result["label"] == "Active Users"
+
+    def test_label_omitted_when_none(self) -> None:
+        """Label key is omitted when label is None."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter("Login", value=5)
+        result = build_frequency_filter_entry(ff)
+        assert "label" not in result
+
+    def test_multiple_event_filters(self) -> None:
+        """Multiple event filters each produce a filter entry."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        ff = FrequencyFilter(
+            "Purchase",
+            value=3,
+            event_filters=[
+                Filter.equals("country", "US"),
+                Filter.greater_than("amount", 10),
+            ],
+        )
+        result = build_frequency_filter_entry(ff)
+        behavior = result["customProperty"]["behavior"]
+        assert len(behavior["eventFilters"]) == 2
+        assert behavior["eventFilters"][0]["filterOperator"] == "equals"
+        assert behavior["eventFilters"][1]["filterOperator"] == "is greater than"
+
+
+# =============================================================================
+# T022: build_group_section handles FrequencyBreakdown (US4)
+# =============================================================================
+
+
+class TestBuildGroupSectionFrequency:
+    """Tests for build_group_section() handling FrequencyBreakdown."""
+
+    def test_frequency_breakdown_in_group_section(self) -> None:
+        """FrequencyBreakdown produces frequency group entry in section."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        result = build_group_section(FrequencyBreakdown("Purchase"))
+        assert len(result) == 1
+        assert result[0]["resourceType"] == "people"
+        assert result[0]["behaviorType"] == "$frequency"
+
+    def test_mixed_groupby_and_frequency(self) -> None:
+        """List with GroupBy and FrequencyBreakdown produces correct entries."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        result = build_group_section(
+            ["country", FrequencyBreakdown("Purchase")]  # type: ignore[list-item]
+        )
+        assert len(result) == 2
+        assert result[0]["value"] == "country"
+        assert result[0]["propertyType"] == "string"
+        assert result[1]["resourceType"] == "people"
+        assert result[1]["behaviorType"] == "$frequency"
+
+
+# =============================================================================
+# T022: build_filter_section handles FrequencyFilter (US4)
+# =============================================================================
+
+
+class TestBuildFilterSectionFrequency:
+    """Tests for build_filter_section() handling FrequencyFilter."""
+
+    def test_frequency_filter_in_filter_section(self) -> None:
+        """FrequencyFilter produces frequency filter entry in section."""
+        from mixpanel_data.types import FrequencyFilter
+
+        result = build_filter_section(FrequencyFilter("Login", value=5))  # type: ignore[arg-type]
+        assert len(result) == 1
+        assert result[0]["resourceType"] == "people"
+        assert result[0]["behaviorType"] == "$frequency"
+
+    def test_mixed_filter_and_frequency(self) -> None:
+        """List with Filter and FrequencyFilter produces correct entries."""
+        from mixpanel_data.types import FrequencyFilter
+
+        result = build_filter_section(
+            [Filter.equals("country", "US"), FrequencyFilter("Login", value=5)]  # type: ignore[list-item]
+        )
+        assert len(result) == 2
+        assert result[0]["value"] == "country"
+        assert result[0]["filterOperator"] == "equals"
+        assert result[1]["resourceType"] == "people"
+        assert result[1]["behaviorType"] == "$frequency"
+
+
+# =============================================================================
+# T033: data_group_id threading through builders
+# =============================================================================
+
+
+class TestBuildGroupSectionDataGroupId:
+    """Tests for data_group_id threading through build_group_section (T033)."""
+
+    def test_custom_property_ref_group_with_data_group_id(self) -> None:
+        """GroupBy with CustomPropertyRef and data_group_id=5 produces dataGroupId: 5."""
+        ref = CustomPropertyRef(id=42)
+        gb = GroupBy(property=ref)
+        result = build_group_section(gb, data_group_id=5)
+        assert len(result) == 1
+        assert result[0]["dataGroupId"] == 5
+
+    def test_custom_property_ref_group_without_data_group_id(self) -> None:
+        """GroupBy with CustomPropertyRef without data_group_id produces dataGroupId: None."""
+        ref = CustomPropertyRef(id=42)
+        gb = GroupBy(property=ref)
+        result = build_group_section(gb)
+        assert len(result) == 1
+        assert result[0]["dataGroupId"] is None
+
+    def test_inline_custom_property_group_with_data_group_id(self) -> None:
+        """GroupBy with InlineCustomProperty and data_group_id=3 produces dataGroupId: 3."""
+        prop = InlineCustomProperty(
+            formula="A",
+            inputs={"A": PropertyInput(name="price", resource_type="events")},
+        )
+        gb = GroupBy(property=prop, property_type="number")
+        result = build_group_section(gb, data_group_id=3)
+        assert len(result) == 1
+        assert result[0]["dataGroupId"] == 3
+
+    def test_cohort_breakdown_group_with_data_group_id(self) -> None:
+        """CohortBreakdown with data_group_id=7 threads to both cohort entry and group entry."""
+        cb = CohortBreakdown(123, "Power Users")
+        result = build_group_section(cb, data_group_id=7)
+        assert len(result) == 1
+        # Top-level group entry
+        assert result[0]["dataGroupId"] == 7
+        # Cohort entries inside
+        for cohort in result[0]["cohorts"]:
+            assert cohort["data_group_id"] == 7
+
+    def test_string_group_unaffected_by_data_group_id(self) -> None:
+        """String group_by does not have dataGroupId field (simple property entries)."""
+        result = build_group_section("country", data_group_id=5)
+        assert len(result) == 1
+        # String entries use a simpler format without dataGroupId
+        assert "dataGroupId" not in result[0]
+
+    def test_none_group_returns_empty(self) -> None:
+        """None group_by returns empty list regardless of data_group_id."""
+        result = build_group_section(None, data_group_id=5)
+        assert result == []
+
+
+# =========================================================================
+# T039: build_flow_property_filter — flow property filter builder (US8)
+# =========================================================================
+
+
+class TestBuildFlowPropertyFilter:
+    """Tests for build_flow_property_filter() — filter_by_event structure."""
+
+    def test_single_filter_structure(self) -> None:
+        """Single Filter produces correct filter_by_event structure."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_property_filter,
+        )
+
+        result = build_flow_property_filter([Filter.equals("country", "US")])
+        assert result["operator"] == "and"
+        assert len(result["children"]) == 1
+        child = result["children"][0]
+        assert child["filterOperator"] == "equals"
+        assert child["filterType"] == "string"
+        assert child["propertyName"] == "country"
+        assert child["filterValue"] == ["US"]
+        assert child["resourceType"] == "events"
+
+    def test_multiple_filters_produce_children(self) -> None:
+        """Multiple Filters produce a children array with one entry per filter."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_property_filter,
+        )
+
+        result = build_flow_property_filter(
+            [
+                Filter.equals("country", "US"),
+                Filter.greater_than("age", 18),
+            ]
+        )
+        assert result["operator"] == "and"
+        assert len(result["children"]) == 2
+        assert result["children"][0]["propertyName"] == "country"
+        assert result["children"][1]["propertyName"] == "age"
+
+    def test_filter_entry_uses_build_filter_entry(self) -> None:
+        """Each child uses build_filter_entry structure (resourceType, filterType, etc.)."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_flow_property_filter,
+        )
+
+        result = build_flow_property_filter([Filter.contains("name", "test")])
+        child = result["children"][0]
+        assert "resourceType" in child
+        assert "filterType" in child
+        assert "filterOperator" in child
+        assert "filterValue" in child
+        assert "propertyName" in child

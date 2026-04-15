@@ -909,7 +909,7 @@ class TestGroupByTypeError:
         """Non-str, non-GroupBy group_by element raises TypeError."""
         with pytest.raises(
             TypeError,
-            match="group_by elements must be str, GroupBy, or CohortBreakdown",
+            match="group_by elements must be str, GroupBy, CohortBreakdown, or FrequencyBreakdown",
         ):
             ws._build_query_params(
                 events=["Login"],
@@ -1378,3 +1378,249 @@ class TestHistogramParams:
         m = params["sections"]["show"][0]["measurement"]
         assert m["math"] == "histogram"
         assert m["perUserAggregation"] == "total"
+
+
+# =============================================================================
+# T005: New math types in build_params
+# =============================================================================
+
+
+class TestNewMathTypesInBuildParams:
+    """T005: New math types produce correct measurement blocks in build_params."""
+
+    def test_cumulative_unique_in_build_params(self, ws: Workspace) -> None:
+        """build_params with math='cumulative_unique' produces correct measurement."""
+        params = ws.build_params("Login", math="cumulative_unique")
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["math"] == "cumulative_unique"
+
+    def test_sessions_in_build_params(self, ws: Workspace) -> None:
+        """build_params with math='sessions' produces correct measurement."""
+        params = ws.build_params("Login", math="sessions")
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["math"] == "sessions"
+
+    @pytest.mark.parametrize(
+        "math_type",
+        [
+            "unique_values",
+            "most_frequent",
+            "first_value",
+            "multi_attribution",
+            "numeric_summary",
+        ],
+    )
+    def test_property_requiring_math_in_build_params(
+        self, ws: Workspace, math_type: str
+    ) -> None:
+        """build_params with property-requiring math produces correct measurement."""
+        params = ws.build_params(
+            "Purchase",
+            math=math_type,  # type: ignore[arg-type]
+            math_property="amount",
+        )
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["math"] == math_type
+        assert m["property"]["name"] == "amount"
+
+
+# =============================================================================
+# T009: Metric.segment_method in build_params
+# =============================================================================
+
+
+class TestSegmentMethodInBuildParams:
+    """T009: Metric.segment_method produces segmentMethod in measurement block."""
+
+    def test_segment_method_first_in_measurement(self, ws: Workspace) -> None:
+        """build_params with Metric(event, segment_method='first') produces segmentMethod='first'."""
+        params = ws.build_params(
+            Metric("Login", segment_method="first"),
+        )
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["segmentMethod"] == "first"
+
+    def test_segment_method_all_in_measurement(self, ws: Workspace) -> None:
+        """build_params with Metric(event, segment_method='all') produces segmentMethod='all'."""
+        params = ws.build_params(
+            Metric("Login", segment_method="all"),
+        )
+        m = params["sections"]["show"][0]["measurement"]
+        assert m["segmentMethod"] == "all"
+
+    def test_segment_method_none_omits_key(self, ws: Workspace) -> None:
+        """build_params with Metric(event) omits segmentMethod (backward compat)."""
+        params = ws.build_params(Metric("Login"))
+        m = params["sections"]["show"][0]["measurement"]
+        assert "segmentMethod" not in m
+
+    def test_segment_method_string_event_omits_key(self, ws: Workspace) -> None:
+        """build_params with plain string event omits segmentMethod."""
+        params = ws.build_params("Login")
+        m = params["sections"]["show"][0]["measurement"]
+        assert "segmentMethod" not in m
+
+
+# =============================================================================
+# T023: FrequencyBreakdown in build_params group_by (US4)
+# =============================================================================
+
+
+class TestFrequencyBreakdownInBuildParams:
+    """T023: FrequencyBreakdown accepted in build_params group_by."""
+
+    def test_frequency_breakdown_in_group_section(self, ws: Workspace) -> None:
+        """build_params with FrequencyBreakdown produces frequency group entry."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        params = ws.build_params(
+            "Login",
+            group_by=FrequencyBreakdown("Purchase"),
+        )
+        group = params["sections"]["group"]
+        assert len(group) == 1
+        assert group[0]["resourceType"] == "people"
+        assert group[0]["behaviorType"] == "$frequency"
+        assert group[0]["behavior"]["event"] == "Purchase"
+
+    def test_frequency_breakdown_with_label(self, ws: Workspace) -> None:
+        """build_params with labeled FrequencyBreakdown includes label."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        params = ws.build_params(
+            "Login",
+            group_by=FrequencyBreakdown("Purchase", label="Buy Freq"),
+        )
+        group = params["sections"]["group"]
+        assert group[0]["label"] == "Buy Freq"
+
+    def test_frequency_breakdown_mixed_with_string(self, ws: Workspace) -> None:
+        """build_params with mixed string and FrequencyBreakdown in list."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        params = ws.build_params(
+            "Login",
+            group_by=["country", FrequencyBreakdown("Purchase")],  # type: ignore[list-item]
+        )
+        group = params["sections"]["group"]
+        assert len(group) == 2
+        assert group[0]["value"] == "country"
+        assert group[1]["behaviorType"] == "$frequency"
+
+    def test_existing_groupby_still_works(self, ws: Workspace) -> None:
+        """Backward compat: existing GroupBy usage still works."""
+        params = ws.build_params(
+            "Login",
+            group_by=GroupBy("country"),
+        )
+        group = params["sections"]["group"]
+        assert len(group) == 1
+        assert group[0]["value"] == "country"
+
+
+# =============================================================================
+# T023: FrequencyFilter in build_params where (US4)
+# =============================================================================
+
+
+class TestFrequencyFilterInBuildParams:
+    """T023: FrequencyFilter accepted in build_params where."""
+
+    def test_frequency_filter_in_filter_section(self, ws: Workspace) -> None:
+        """build_params with FrequencyFilter produces frequency filter entry."""
+        from mixpanel_data.types import FrequencyFilter
+
+        params = ws.build_params(
+            "Login",
+            where=FrequencyFilter("Login", value=5),  # type: ignore[arg-type]
+        )
+        filt = params["sections"]["filter"]
+        assert len(filt) == 1
+        assert filt[0]["resourceType"] == "people"
+        assert filt[0]["behaviorType"] == "$frequency"
+
+    def test_frequency_filter_mixed_with_filter(self, ws: Workspace) -> None:
+        """build_params with mixed Filter and FrequencyFilter in list."""
+        from mixpanel_data.types import FrequencyFilter
+
+        params = ws.build_params(
+            "Login",
+            where=[
+                Filter.equals("country", "US"),
+                FrequencyFilter("Login", value=5),
+            ],  # type: ignore[list-item]
+        )
+        filt = params["sections"]["filter"]
+        assert len(filt) == 2
+        assert filt[0]["value"] == "country"
+        assert filt[1]["behaviorType"] == "$frequency"
+
+    def test_existing_filter_still_works(self, ws: Workspace) -> None:
+        """Backward compat: existing Filter usage still works."""
+        params = ws.build_params(
+            "Login",
+            where=Filter.equals("country", "US"),
+        )
+        filt = params["sections"]["filter"]
+        assert len(filt) == 1
+        assert filt[0]["value"] == "country"
+
+
+# =============================================================================
+# T032: data_group_id on insights query engine
+# =============================================================================
+
+
+class TestDataGroupIdInsights:
+    """Tests for data_group_id parameter on insights query engine (T032)."""
+
+    def test_build_params_with_data_group_id(self, ws: Workspace) -> None:
+        """build_params with data_group_id=5 includes dataGroupId: 5 in output."""
+        params = ws.build_params("Login", data_group_id=5)
+        assert params["sections"]["dataGroupId"] == 5
+
+    def test_build_params_without_data_group_id(self, ws: Workspace) -> None:
+        """build_params without data_group_id omits dataGroupId key (backward compat)."""
+        params = ws.build_params("Login")
+        assert "dataGroupId" not in params["sections"]
+
+    def test_build_query_params_with_data_group_id(self, ws: Workspace) -> None:
+        """_build_query_params with data_group_id=3 includes dataGroupId: 3."""
+        params = ws._build_query_params(
+            events=["Login"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+            data_group_id=3,
+        )
+        assert params["sections"]["dataGroupId"] == 3
+
+    def test_build_query_params_default_data_group_id_none(self, ws: Workspace) -> None:
+        """_build_query_params without data_group_id defaults to None."""
+        params = ws._build_query_params(
+            events=["Login"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=None,
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        assert "dataGroupId" not in params["sections"]

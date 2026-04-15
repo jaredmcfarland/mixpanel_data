@@ -26,11 +26,14 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypedDict, TypeVar
 
+from mixpanel_data._literal_types import (
+    CohortAggregationType as CohortAggregationType,
+)
 from mixpanel_data._literal_types import ConversionWindowUnit as ConversionWindowUnit
 from mixpanel_data._literal_types import FilterDateUnit as FilterDateUnit
 from mixpanel_data._literal_types import FilterPropertyType as FilterPropertyType
 from mixpanel_data._literal_types import FiltersCombinator as FiltersCombinator
-from mixpanel_data._literal_types import FlowAnchorType, FlowNodeType
+from mixpanel_data._literal_types import FlowAnchorType, FlowNodeType, FlowSessionEvent
 from mixpanel_data._literal_types import FlowChartType as FlowChartType
 from mixpanel_data._literal_types import (
     FlowConversionWindowUnit as FlowConversionWindowUnit,
@@ -44,6 +47,9 @@ from mixpanel_data._literal_types import PerUserAggregation as PerUserAggregatio
 from mixpanel_data._literal_types import RetentionAlignment as RetentionAlignment
 from mixpanel_data._literal_types import RetentionMathType as RetentionMathType
 from mixpanel_data._literal_types import RetentionMode as RetentionMode
+from mixpanel_data._literal_types import SegmentMethod as SegmentMethod
+from mixpanel_data._literal_types import TimeComparisonType as TimeComparisonType
+from mixpanel_data._literal_types import TimeComparisonUnit as TimeComparisonUnit
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -7127,6 +7133,181 @@ Accepted wherever a property can be specified: ``Metric.property``,
 # Query API Types (Phase 029)
 # =============================================================================
 
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+"""Regex for YYYY-MM-DD date format validation."""
+
+
+@dataclass(frozen=True)
+class TimeComparison:
+    """Overlay a comparison time period on insights, funnel, or retention queries.
+
+    Enables period-over-period analysis by specifying how the comparison
+    window is determined. Three modes are supported:
+
+    - **relative**: Compare against a prior period offset by ``unit``
+      (e.g. previous month, previous week).
+    - **absolute-start**: Compare against a window starting on a fixed
+      date (``date``), running the same duration as the primary range.
+    - **absolute-end**: Compare against a window ending on a fixed date.
+
+    Use the factory class methods rather than constructing directly:
+
+    - ``TimeComparison.relative(unit)``
+    - ``TimeComparison.absolute_start(date)``
+    - ``TimeComparison.absolute_end(date)``
+
+    Attributes:
+        type: Discriminant — ``"relative"``, ``"absolute-start"``, or
+            ``"absolute-end"``.
+        unit: Time unit for relative comparison. Required when
+            ``type="relative"``, must be ``None`` otherwise.
+        date: ISO date (YYYY-MM-DD) for absolute comparison. Required
+            when ``type`` is ``"absolute-start"`` or ``"absolute-end"``,
+            must be ``None`` otherwise.
+
+    Raises:
+        ValueError: If validation rules TC1-TC3 are violated during
+            construction.
+
+    Example:
+        ```python
+        from mixpanel_data.types import TimeComparison
+
+        # Compare against previous month
+        tc = TimeComparison.relative("month")
+
+        # Compare against window starting on a fixed date
+        tc = TimeComparison.absolute_start("2026-01-01")
+
+        # Compare against window ending on a fixed date
+        tc = TimeComparison.absolute_end("2026-12-31")
+        ```
+    """
+
+    type: TimeComparisonType
+    """Discriminant — ``"relative"``, ``"absolute-start"``, or ``"absolute-end"``."""
+
+    unit: TimeComparisonUnit | None = None
+    """Time unit for relative comparison (day, week, month, quarter, year)."""
+
+    date: str | None = None
+    """ISO date (YYYY-MM-DD) for absolute comparison."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments (rules TC1-TC3).
+
+        Raises:
+            ValueError: If type="relative" and unit is None (TC1),
+                or type="relative" and date is set (TC1),
+                or type is absolute and date is None (TC2),
+                or type is absolute and unit is set (TC2),
+                or date does not match YYYY-MM-DD format (TC3).
+        """
+        if self.type == "relative":
+            # TC1: relative requires unit, rejects date
+            if self.unit is None:
+                raise ValueError(
+                    "TimeComparison type='relative' requires unit to be set "
+                    "(e.g., TimeComparison.relative('month'))"
+                )
+            if self.date is not None:
+                raise ValueError(
+                    "TimeComparison type='relative' does not accept date; "
+                    "use absolute-start or absolute-end for date-based comparison"
+                )
+        else:
+            # TC2: absolute-start / absolute-end requires date, rejects unit
+            if self.date is None:
+                raise ValueError(
+                    f"TimeComparison type={self.type!r} requires date to be set "
+                    f"(e.g., TimeComparison.absolute_start('2026-01-01'))"
+                )
+            if self.unit is not None:
+                raise ValueError(
+                    f"TimeComparison type={self.type!r} does not accept unit; "
+                    f"unit is only valid for type='relative'"
+                )
+            # TC3: date must match YYYY-MM-DD format
+            if not _DATE_RE.match(self.date):
+                raise ValueError(
+                    f"TimeComparison date must be in YYYY-MM-DD format, "
+                    f"got {self.date!r}"
+                )
+
+    @classmethod
+    def relative(cls, unit: TimeComparisonUnit) -> TimeComparison:
+        """Create a relative time comparison.
+
+        Compares against a prior period offset by the given unit
+        (e.g. previous month, previous week).
+
+        Args:
+            unit: Time unit for the comparison offset. One of
+                ``"day"``, ``"week"``, ``"month"``, ``"quarter"``,
+                ``"year"``.
+
+        Returns:
+            A ``TimeComparison`` with ``type="relative"`` and the
+            specified ``unit``.
+
+        Example:
+            ```python
+            tc = TimeComparison.relative("month")
+            # type="relative", unit="month", date=None
+            ```
+        """
+        return cls(type="relative", unit=unit)
+
+    @classmethod
+    def absolute_start(cls, date: str) -> TimeComparison:
+        """Create an absolute-start time comparison.
+
+        Compares against a window that starts on the given date,
+        running the same duration as the primary query range.
+
+        Args:
+            date: Start date in YYYY-MM-DD format.
+
+        Returns:
+            A ``TimeComparison`` with ``type="absolute-start"`` and
+            the specified ``date``.
+
+        Raises:
+            ValueError: If date is not in YYYY-MM-DD format (TC3).
+
+        Example:
+            ```python
+            tc = TimeComparison.absolute_start("2026-01-01")
+            # type="absolute-start", unit=None, date="2026-01-01"
+            ```
+        """
+        return cls(type="absolute-start", date=date)
+
+    @classmethod
+    def absolute_end(cls, date: str) -> TimeComparison:
+        """Create an absolute-end time comparison.
+
+        Compares against a window that ends on the given date,
+        running the same duration as the primary query range.
+
+        Args:
+            date: End date in YYYY-MM-DD format.
+
+        Returns:
+            A ``TimeComparison`` with ``type="absolute-end"`` and
+            the specified ``date``.
+
+        Raises:
+            ValueError: If date is not in YYYY-MM-DD format (TC3).
+
+        Example:
+            ```python
+            tc = TimeComparison.absolute_end("2026-12-31")
+            # type="absolute-end", unit=None, date="2026-12-31"
+            ```
+        """
+        return cls(type="absolute-end", date=date)
+
 
 @dataclass(frozen=True)
 class Metric:
@@ -7184,6 +7365,16 @@ class Metric:
 
     filters_combinator: FiltersCombinator = "all"
     """How per-metric filters combine (``"all"`` = AND, ``"any"`` = OR)."""
+
+    segment_method: SegmentMethod | None = None
+    """Segment method for counting qualifying events.
+
+    Controls how events are counted per user: ``"all"`` counts every
+    qualifying event (default server behavior), ``"first"`` counts
+    only the first qualifying event per user.
+
+    Maps to ``segmentMethod`` in the bookmark measurement block.
+    """
 
     def __post_init__(self) -> None:
         """Validate construction arguments.
@@ -7496,6 +7687,101 @@ class Filter:
         )
 
     @classmethod
+    def not_between(
+        cls,
+        property: str | CustomPropertyRef | InlineCustomProperty,
+        min_val: int | float,
+        max_val: int | float,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a not-between (exclusive range) filter.
+
+        Args:
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
+            min_val: Minimum value (exclusive).
+            max_val: Maximum value (exclusive).
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for numeric values outside the range.
+
+        Example:
+            ```python
+            f = Filter.not_between("age", 18, 65)
+            ```
+        """
+        return cls(
+            _property=property,
+            _operator="not between",
+            _value=[min_val, max_val],
+            _property_type="number",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def at_least(
+        cls,
+        property: str | CustomPropertyRef | InlineCustomProperty,
+        value: int | float,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a greater-than-or-equal filter.
+
+        Args:
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
+            value: Numeric threshold (inclusive).
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for numeric greater-than-or-equal.
+
+        Example:
+            ```python
+            f = Filter.at_least("score", 80)
+            ```
+        """
+        return cls(
+            _property=property,
+            _operator="is at least",
+            _value=value,
+            _property_type="number",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def at_most(
+        cls,
+        property: str | CustomPropertyRef | InlineCustomProperty,
+        value: int | float,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a less-than-or-equal filter.
+
+        Args:
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
+            value: Numeric threshold (inclusive).
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for numeric less-than-or-equal.
+
+        Example:
+            ```python
+            f = Filter.at_most("errors", 5)
+            ```
+        """
+        return cls(
+            _property=property,
+            _operator="is at most",
+            _value=value,
+            _property_type="number",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
     def is_set(
         cls,
         property: str | CustomPropertyRef | InlineCustomProperty,
@@ -7539,6 +7825,68 @@ class Filter:
             _property=property,
             _operator="is not set",
             _value=None,
+            _property_type="string",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def starts_with(
+        cls,
+        property: str | CustomPropertyRef | InlineCustomProperty,
+        prefix: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a starts-with (prefix match) filter.
+
+        Args:
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
+            prefix: String prefix to match.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for string prefix matching.
+
+        Example:
+            ```python
+            f = Filter.starts_with("url", "https://")
+            ```
+        """
+        return cls(
+            _property=property,
+            _operator="starts with",
+            _value=prefix,
+            _property_type="string",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def ends_with(
+        cls,
+        property: str | CustomPropertyRef | InlineCustomProperty,
+        suffix: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create an ends-with (suffix match) filter.
+
+        Args:
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
+            suffix: String suffix to match.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for string suffix matching.
+
+        Example:
+            ```python
+            f = Filter.ends_with("email", "@example.com")
+            ```
+        """
+        return cls(
+            _property=property,
+            _operator="ends with",
+            _value=suffix,
             _property_type="string",
             _resource_type=resource_type,
         )
@@ -7958,6 +8306,89 @@ class Filter:
             _resource_type=resource_type,
         )
 
+    @classmethod
+    def date_not_between(
+        cls,
+        property: str | CustomPropertyRef | InlineCustomProperty,
+        from_date: str,
+        to_date: str,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a date exclusion range filter (not between two dates).
+
+        Args:
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
+            from_date: Start date in YYYY-MM-DD format.
+            to_date: End date in YYYY-MM-DD format.
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for dates outside the range.
+
+        Raises:
+            ValueError: If dates are not valid YYYY-MM-DD or
+                from_date is after to_date.
+
+        Example:
+            ```python
+            f = Filter.date_not_between("created", "2024-01-01", "2024-06-30")
+            ```
+        """
+        from_parsed = cls._validate_date(from_date)
+        to_parsed = cls._validate_date(to_date)
+        if from_parsed > to_parsed:
+            raise ValueError(
+                f"from_date must be before to_date (got '{from_date}' > '{to_date}')"
+            )
+        return cls(
+            _property=property,
+            _operator="was not between",
+            _value=[from_date, to_date],
+            _property_type="datetime",
+            _resource_type=resource_type,
+        )
+
+    @classmethod
+    def in_the_next(
+        cls,
+        property: str | CustomPropertyRef | InlineCustomProperty,
+        quantity: int,
+        date_unit: FilterDateUnit,
+        *,
+        resource_type: Literal["events", "people"] = "events",
+    ) -> Filter:
+        """Create a relative date filter (in the next N units).
+
+        Args:
+            property: Property name, CustomPropertyRef, or InlineCustomProperty.
+            quantity: Number of time units (must be positive).
+            date_unit: Time unit (``"hour"``, ``"day"``, ``"week"``,
+                ``"month"``).
+            resource_type: Resource type. Default: ``"events"``.
+
+        Returns:
+            Filter for events within the next N units.
+
+        Raises:
+            ValueError: If quantity is not positive.
+
+        Example:
+            ```python
+            f = Filter.in_the_next("expires", 7, "day")
+            ```
+        """
+        if quantity <= 0:
+            raise ValueError(f"quantity must be a positive integer (got {quantity})")
+        return cls(
+            _property=property,
+            _operator="was in the next",
+            _value=quantity,
+            _property_type="datetime",
+            _resource_type=resource_type,
+            _date_unit=date_unit,
+        )
+
 
 @dataclass(frozen=True)
 class GroupBy:
@@ -8211,6 +8642,8 @@ class CohortCriteria:
         from_date: str | None = None,
         to_date: str | None = None,
         where: Filter | list[Filter] | None = None,
+        aggregation: CohortAggregationType | None = None,
+        aggregation_property: str | None = None,
     ) -> CohortCriteria:
         """Create a behavioral criterion based on event frequency.
 
@@ -8225,6 +8658,11 @@ class CohortCriteria:
             from_date: Absolute start date (YYYY-MM-DD).
             to_date: Absolute end date (YYYY-MM-DD).
             where: Event property filter(s).
+            aggregation: Aggregation operator for property-based thresholds
+                (total, unique, average, min, max, median). Must be paired
+                with ``aggregation_property``.
+            aggregation_property: Event property to aggregate (e.g.,
+                ``"amount"``). Must be paired with ``aggregation``.
 
         Returns:
             CohortCriteria with behavioral selector node and behavior entry.
@@ -8232,11 +8670,19 @@ class CohortCriteria:
         Raises:
             ValueError: If no frequency param or multiple are set, frequency is
                 negative, event name is empty/whitespace, time constraints are
-                missing or conflicting, or dates are malformed/misordered.
+                missing or conflicting, dates are malformed/misordered, or
+                aggregation and aggregation_property are not both set or both
+                None (CA1/CA2).
         """
         # CD4: Event name must be non-empty
         if not event or not event.strip():
             raise ValueError("event name must be non-empty")
+
+        # CA1/CA2: aggregation and aggregation_property must both be set or both None
+        if (aggregation is None) != (aggregation_property is None):
+            raise ValueError(
+                "aggregation and aggregation_property must both be set or both be None"
+            )
 
         # CD1: Exactly one frequency param required
         freq_params = {
@@ -8299,11 +8745,18 @@ class CohortCriteria:
             if where_list:
                 event_selector["selector"] = _build_event_selector(where_list)
 
+        count_dict: dict[str, Any] = {
+            "event_selector": event_selector,
+            "type": "absolute",
+        }
+
+        # Add aggregation fields when set
+        if aggregation is not None and aggregation_property is not None:
+            count_dict["aggregationOperator"] = aggregation
+            count_dict["property"] = aggregation_property
+
         behavior: dict[str, Any] = {
-            "count": {
-                "event_selector": event_selector,
-                "type": "absolute",
-            },
+            "count": count_dict,
         }
 
         if set_rolling:
@@ -8562,6 +9015,12 @@ _MATH_REQUIRING_PROPERTY: frozenset[str] = frozenset(
         "p99",
         "percentile",
         "histogram",
+        # Advanced property-requiring types
+        "unique_values",
+        "most_frequent",
+        "first_value",
+        "multi_attribution",
+        "numeric_summary",
     }
 )
 """Math types that require a measurement property (for Metric.__post_init__)."""
@@ -8893,6 +9352,197 @@ class CohortMetric:
             raise ValueError(
                 "CohortMetric does not support inline CohortDefinition "
                 "(server returns 500). Use a saved cohort ID instead."
+            )
+
+
+@dataclass(frozen=True)
+class FrequencyBreakdown:
+    """Break down query results by how often users performed an event.
+
+    Used with ``Workspace.query()`` / ``build_params()`` in the
+    ``group_by=`` parameter to segment users by event frequency.
+
+    Attributes:
+        event: Event name to count frequency for.
+        bucket_size: Width of each frequency bucket. Default: ``1``.
+        bucket_min: Minimum frequency value. Default: ``0``.
+        bucket_max: Maximum frequency value. Default: ``10``.
+        label: Display label for the breakdown. ``None`` uses
+            the event name.
+
+    Raises:
+        ValueError: If validation rules FB1-FB4 are violated.
+
+    Example:
+        ```python
+        from mixpanel_data import FrequencyBreakdown
+
+        # How often users purchased (0-10 in increments of 1)
+        result = ws.query("Login", group_by=FrequencyBreakdown("Purchase"))
+
+        # Custom buckets: 0-50 in increments of 5
+        result = ws.query(
+            "Login",
+            group_by=FrequencyBreakdown(
+                "Purchase", bucket_size=5, bucket_min=0, bucket_max=50
+            ),
+        )
+        ```
+    """
+
+    event: str
+    """Event name to count frequency for."""
+
+    bucket_size: int = 1
+    """Width of each frequency bucket."""
+
+    bucket_min: int = 0
+    """Minimum frequency value."""
+
+    bucket_max: int = 10
+    """Maximum frequency value."""
+
+    label: str | None = None
+    """Display label for the breakdown."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments (rules FB1-FB4).
+
+        Raises:
+            ValueError: If event is empty (FB1), bucket_size is not
+                positive (FB2), bucket_min >= bucket_max (FB3), or
+                bucket_min is negative (FB4).
+        """
+        # FB1: event must be non-empty
+        if not self.event.strip():
+            raise ValueError("FrequencyBreakdown.event must be a non-empty string")
+        # FB2: bucket_size must be positive
+        if self.bucket_size <= 0:
+            raise ValueError(
+                f"FrequencyBreakdown.bucket_size must be positive, "
+                f"got {self.bucket_size}"
+            )
+        # FB4: bucket_min must be non-negative (check before FB3 for clarity)
+        if self.bucket_min < 0:
+            raise ValueError(
+                f"FrequencyBreakdown.bucket_min must be non-negative, "
+                f"got {self.bucket_min}"
+            )
+        # FB3: bucket_min must be < bucket_max
+        if self.bucket_min >= self.bucket_max:
+            raise ValueError(
+                f"FrequencyBreakdown.bucket_min ({self.bucket_min}) must be "
+                f"less than bucket_max ({self.bucket_max})"
+            )
+
+
+@dataclass(frozen=True)
+class FrequencyFilter:
+    """Filter query results by how often users performed an event.
+
+    Used with ``Workspace.query()`` / ``build_params()`` in the
+    ``where=`` parameter to restrict results to users meeting a
+    frequency threshold.
+
+    Attributes:
+        event: Event name to count frequency for.
+        operator: Comparison operator. Default: ``"is at least"``.
+        value: Threshold value for the comparison.
+        date_range_value: Lookback window size. Must be paired with
+            ``date_range_unit``.
+        date_range_unit: Lookback window unit (``"day"``, ``"week"``,
+            ``"month"``). Must be paired with ``date_range_value``.
+        event_filters: Property filters applied to the frequency event
+            before counting.
+        label: Display label for the filter.
+
+    Raises:
+        ValueError: If validation rules FF1-FF5 are violated.
+
+    Example:
+        ```python
+        from mixpanel_data import FrequencyFilter
+
+        # Users who logged in at least 5 times
+        result = ws.query("Purchase", where=FrequencyFilter("Login", value=5))
+
+        # Users who purchased 3+ times in the last 30 days
+        result = ws.query(
+            "Login",
+            where=FrequencyFilter(
+                "Purchase",
+                value=3,
+                date_range_value=30,
+                date_range_unit="day",
+            ),
+        )
+        ```
+    """
+
+    event: str
+    """Event name to count frequency for."""
+
+    value: int | float
+    """Threshold value for the comparison."""
+
+    operator: str = "is at least"
+    """Comparison operator."""
+
+    date_range_value: int | None = None
+    """Lookback window size."""
+
+    date_range_unit: Literal["day", "week", "month"] | None = None
+    """Lookback window unit."""
+
+    event_filters: list[Filter] | None = None
+    """Property filters applied to the frequency event."""
+
+    label: str | None = None
+    """Display label for the filter."""
+
+    def __post_init__(self) -> None:
+        """Validate construction arguments (rules FF1-FF5).
+
+        Raises:
+            ValueError: If event is empty (FF1), operator is invalid
+                (FF2), value is negative (FF3), date_range_value and
+                date_range_unit are not both set or both None (FF4),
+                or date_range_value is not positive when set (FF5).
+        """
+        from mixpanel_data._internal.bookmark_enums import (
+            VALID_FREQUENCY_FILTER_OPERATORS,
+        )
+
+        # FF1: event must be non-empty
+        if not self.event.strip():
+            raise ValueError("FrequencyFilter.event must be a non-empty string")
+        # FF2: operator must be valid
+        if self.operator not in VALID_FREQUENCY_FILTER_OPERATORS:
+            valid = ", ".join(sorted(VALID_FREQUENCY_FILTER_OPERATORS))
+            raise ValueError(
+                f"FrequencyFilter.operator must be one of: {valid}; "
+                f"got {self.operator!r}"
+            )
+        # FF3: value must be non-negative
+        if self.value < 0:
+            raise ValueError(
+                f"FrequencyFilter.value must be non-negative, got {self.value}"
+            )
+        # FF4: date_range_value and date_range_unit must both be set or both None
+        has_value = self.date_range_value is not None
+        has_unit = self.date_range_unit is not None
+        if has_value != has_unit:
+            raise ValueError(
+                "FrequencyFilter.date_range_value and date_range_unit must "
+                "both be set or both be None; got date_range_value="
+                f"{self.date_range_value!r}, date_range_unit="
+                f"{self.date_range_unit!r}"
+            )
+        # FF5: date_range_value must be positive if set
+        if self.date_range_value is not None and self.date_range_value <= 0:
+            raise ValueError(
+                f"FrequencyFilter.date_range_value must be positive when set, "
+                f"got {self.date_range_value}"
             )
 
 
@@ -9755,6 +10405,11 @@ class FlowStep:
         filters_combinator: How to combine multiple filters — ``"all"``
             requires every filter to match (AND), ``"any"`` requires at
             least one (OR). Defaults to ``"all"``.
+        session_event: Optional session anchor type — ``"start"`` or
+            ``"end"``. When set, the ``event`` field must match the
+            corresponding session event name (``"$session_start"`` or
+            ``"$session_end"``). ``None`` means this is a regular event
+            step. Default: ``None``.
 
     Example:
         ```python
@@ -9766,6 +10421,12 @@ class FlowStep:
             filters=[Filter.equals("country", "US")],
             filters_combinator="all",
         )
+
+        # Session anchor step
+        session_step = FlowStep(
+            "$session_start",
+            session_event="start",
+        )
         ```
     """
 
@@ -9775,13 +10436,15 @@ class FlowStep:
     label: str | None = None
     filters: list[Filter] | None = None
     filters_combinator: FiltersCombinator = "all"
+    session_event: FlowSessionEvent | None = None
 
     def __post_init__(self) -> None:
         """Validate construction arguments.
 
         Raises:
             ValueError: If event is empty or contains control characters
-                (FL1), or forward/reverse is outside 0-5 range (FL2).
+                (FL1), forward/reverse is outside 0-5 range (FL2), or
+                session_event conflicts with event name (FS1).
         """
         _validate_event_name(self.event, "FlowStep")
         if self.forward is not None and not 0 <= self.forward <= 5:
@@ -9792,6 +10455,16 @@ class FlowStep:
             raise ValueError(
                 f"FlowStep.reverse must be in range 0-5, got {self.reverse}"
             )
+        # FS1: Validate session_event / event consistency
+        if self.session_event is not None:
+            expected_event = (
+                "$session_start" if self.session_event == "start" else "$session_end"
+            )
+            if self.event != expected_event:
+                raise ValueError(
+                    f"FlowStep.session_event={self.session_event!r} requires "
+                    f"event={expected_event!r}, got {self.event!r}"
+                )
 
 
 @dataclass(frozen=True)

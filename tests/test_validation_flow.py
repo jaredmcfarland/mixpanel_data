@@ -996,3 +996,71 @@ class TestValidateFlowBookmarkDefaults:
         """Default valid bookmark params must produce no errors."""
         errors = validate_flow_bookmark(_valid_flow_bookmark())
         assert errors == []
+
+
+# =============================================================================
+# T016: time_comparison validation for flows
+# =============================================================================
+
+
+class TestValidateFlowArgsTimeComparison:
+    """Tests that validate_flow_args rejects time_comparison for flows."""
+
+    def test_time_comparison_set_produces_error(self) -> None:
+        """validate_flow_args() with time_comparison set produces a validation error."""
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.relative("month")
+        args = _valid_flow_args(time_comparison=tc)
+        errors = validate_flow_args(**args)
+        assert any(e.code == "FL_TIME_COMPARISON_NOT_SUPPORTED" for e in errors), (
+            f"Expected FL_TIME_COMPARISON_NOT_SUPPORTED error, got: {errors}"
+        )
+
+    def test_time_comparison_none_no_error(self) -> None:
+        """validate_flow_args() with time_comparison=None produces no error for it."""
+        args = _valid_flow_args(time_comparison=None)
+        errors = validate_flow_args(**args)
+        assert not any(e.code == "FL_TIME_COMPARISON_NOT_SUPPORTED" for e in errors)
+
+    def test_time_comparison_error_path(self) -> None:
+        """The FL_TIME_COMPARISON_NOT_SUPPORTED error path points to 'time_comparison'."""
+        from mixpanel_data.types import TimeComparison
+
+        tc = TimeComparison.relative("month")
+        args = _valid_flow_args(time_comparison=tc)
+        errors = validate_flow_args(**args)
+        tc_errors = [e for e in errors if e.code == "FL_TIME_COMPARISON_NOT_SUPPORTED"]
+        assert len(tc_errors) == 1
+        assert tc_errors[0].path == "time_comparison"
+
+
+# =============================================================================
+# T036: data_group_id validation for flows
+# =============================================================================
+
+
+class TestDataGroupIdValidationFlow:
+    """Tests for data_group_id validation in validate_flow_args (T036)."""
+
+    def test_valid_data_group_id(self) -> None:
+        """Positive integer data_group_id passes flow validation."""
+        errors = validate_flow_args(**_valid_flow_args(data_group_id=5))
+        assert not any(e.code == "DG1_INVALID_DATA_GROUP_ID" for e in errors)
+
+    def test_none_data_group_id(self) -> None:
+        """None data_group_id passes flow validation."""
+        errors = validate_flow_args(**_valid_flow_args(data_group_id=None))
+        assert not any(e.code == "DG1_INVALID_DATA_GROUP_ID" for e in errors)
+
+    def test_zero_data_group_id(self) -> None:
+        """data_group_id=0 fails flow validation."""
+        errors = validate_flow_args(**_valid_flow_args(data_group_id=0))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1
+
+    def test_negative_data_group_id(self) -> None:
+        """Negative data_group_id fails flow validation."""
+        errors = validate_flow_args(**_valid_flow_args(data_group_id=-1))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1

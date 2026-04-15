@@ -9,6 +9,7 @@ These are internal helpers — import from ``mixpanel_data._internal.bookmark_bu
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 from typing import Any
 
@@ -17,9 +18,12 @@ from mixpanel_data.types import (
     CohortBreakdown,
     CustomPropertyRef,
     Filter,
+    FrequencyBreakdown,
+    FrequencyFilter,
     GroupBy,
     InlineCustomProperty,
     PropertyInput,
+    TimeComparison,
     _sanitize_raw_cohort,
 )
 
@@ -166,17 +170,18 @@ def build_date_range(
 
 
 def build_filter_section(
-    where: Filter | list[Filter] | None,
+    where: Filter | FrequencyFilter | Sequence[Filter | FrequencyFilter] | None,
 ) -> list[dict[str, Any]]:
     """Build the ``sections.filter`` array for bookmark params.
 
-    Converts ``None``, a single ``Filter``, or a list of ``Filter`` objects
-    into the list-of-dicts format expected by the Mixpanel bookmark API.
+    Converts ``None``, a single ``Filter`` or ``FrequencyFilter``, or a
+    list of ``Filter`` / ``FrequencyFilter`` objects into the list-of-dicts
+    format expected by the Mixpanel bookmark API.
 
     Args:
         where: Filter specification. ``None`` means no filters,
-            a single ``Filter`` is wrapped in a list, a list is
-            processed element-by-element.
+            a single ``Filter`` or ``FrequencyFilter`` is wrapped in a
+            list, a list is processed element-by-element.
 
     Returns:
         List of filter entry dicts (may be empty).
@@ -190,7 +195,13 @@ def build_filter_section(
     if where is None:
         return []
     filters_list = where if isinstance(where, list) else [where]
-    return [build_filter_entry(f) for f in filters_list]
+    result: list[dict[str, Any]] = []
+    for f in filters_list:
+        if isinstance(f, FrequencyFilter):
+            result.append(build_frequency_filter_entry(f))
+        else:
+            result.append(build_filter_entry(f))
+    return result
 
 
 def patch_custom_property_filters_for_transform(
@@ -231,29 +242,38 @@ def build_group_section(
     group_by: str
     | GroupBy
     | CohortBreakdown
-    | list[str | GroupBy | CohortBreakdown]
+    | FrequencyBreakdown
+    | Sequence[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
     | None,
+    *,
+    data_group_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Build the ``sections.group`` array for bookmark params.
 
     Converts group-by specifications into the list-of-dicts format
     expected by the Mixpanel bookmark API. Supports strings (simple
     property name), ``GroupBy`` objects (with optional bucketing),
-    ``CohortBreakdown`` objects (cohort-based segmentation), and
-    lists mixing all three.
+    ``CohortBreakdown`` objects (cohort-based segmentation),
+    ``FrequencyBreakdown`` objects (event frequency segmentation),
+    and lists mixing all four.
 
     Args:
         group_by: Group-by specification. ``None`` means no grouping.
             Strings produce default string-typed entries. ``GroupBy``
             objects allow custom property types and numeric bucketing.
             ``CohortBreakdown`` objects produce cohort group entries.
+            ``FrequencyBreakdown`` objects produce frequency group entries.
+        data_group_id: Optional data group ID for group-level analytics.
+            Threads into ``dataGroupId`` fields within group entries
+            that support it (custom property refs, inline custom
+            properties, cohort breakdowns). Default: ``None``.
 
     Returns:
         List of group entry dicts (may be empty).
 
     Raises:
-        TypeError: If any element is not ``str``, ``GroupBy``, or
-            ``CohortBreakdown``.
+        TypeError: If any element is not ``str``, ``GroupBy``,
+            ``CohortBreakdown``, or ``FrequencyBreakdown``.
 
     Example:
         ```python
@@ -279,6 +299,8 @@ def build_group_section(
                     "propertyDefaultType": "string",
                 }
             )
+        elif isinstance(g, FrequencyBreakdown):
+            group_section.append(build_frequency_group_entry(g))
         elif isinstance(g, GroupBy):
             prop = g.property
             if isinstance(prop, CustomPropertyRef):
@@ -288,7 +310,7 @@ def build_group_section(
                     "resourceType": "events",
                     "profileType": None,
                     "search": "",
-                    "dataGroupId": None,
+                    "dataGroupId": data_group_id,
                     "dataset": "$mixpanel",
                     "propertyType": g.property_type,
                     "typeCast": None,
@@ -315,7 +337,7 @@ def build_group_section(
                     "resourceType": prop.resource_type,
                     "profileType": None,
                     "search": "",
-                    "dataGroupId": None,
+                    "dataGroupId": data_group_id,
                     "dataset": "$mixpanel",
                     "propertyType": effective_type,
                     "typeCast": None,
@@ -340,17 +362,23 @@ def build_group_section(
                     group_entry["customBucket"]["max"] = g.bucket_max
             group_section.append(group_entry)
         elif isinstance(g, CohortBreakdown):
-            group_section.append(_build_cohort_group_entry(g))
+            group_section.append(
+                _build_cohort_group_entry(g, data_group_id=data_group_id)
+            )
         else:
             raise TypeError(
-                f"group_by elements must be str, GroupBy, or CohortBreakdown, "
-                f"got {type(g).__name__}: {g!r}"
+                f"group_by elements must be str, GroupBy, CohortBreakdown, "
+                f"or FrequencyBreakdown, got {type(g).__name__}: {g!r}"
             )
 
     return group_section
 
 
-def _build_cohort_group_entry(cb: CohortBreakdown) -> dict[str, Any]:
+def _build_cohort_group_entry(
+    cb: CohortBreakdown,
+    *,
+    data_group_id: int | None = None,
+) -> dict[str, Any]:
     """Build a single cohort group entry for sections.group[].
 
     Produces the cohort-specific group dict with ``cohorts`` array
@@ -359,6 +387,10 @@ def _build_cohort_group_entry(cb: CohortBreakdown) -> dict[str, Any]:
 
     Args:
         cb: CohortBreakdown specification.
+        data_group_id: Optional data group ID for group-level analytics.
+            Threads into ``data_group_id`` in cohort entries and
+            ``dataGroupId`` in the top-level group entry.
+            Default: ``None``.
 
     Returns:
         Group entry dict with ``cohorts`` array.
@@ -377,7 +409,7 @@ def _build_cohort_group_entry(cb: CohortBreakdown) -> dict[str, Any]:
     base_cohort: dict[str, Any] = {
         "name": name,
         "negated": False,
-        "data_group_id": None,
+        "data_group_id": data_group_id,
     }
     if isinstance(cb.cohort, int):
         base_cohort["id"] = cb.cohort
@@ -397,7 +429,7 @@ def _build_cohort_group_entry(cb: CohortBreakdown) -> dict[str, Any]:
         "resourceType": "events",
         "profileType": None,
         "search": "",
-        "dataGroupId": None,
+        "dataGroupId": data_group_id,
         "propertyType": None,
         "typeCast": None,
         "cohorts": cohorts,
@@ -465,6 +497,53 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
     if f._date_unit is not None:
         entry["filterDateUnit"] = f._date_unit
     return entry
+
+
+def build_flow_property_filter(
+    filters: list[Filter],
+) -> dict[str, Any]:
+    """Build the ``filter_by_event`` dict for flow bookmark params.
+
+    Flows accept global property filters via a ``filter_by_event``
+    top-level key containing an ``operator`` (always ``"and"``) and
+    a ``children`` array of filter entries. Each child is produced
+    by :func:`build_filter_entry` with an added ``propertyName`` key.
+
+    Args:
+        filters: List of property ``Filter`` objects. Must not be
+            empty — caller should check before calling.
+
+    Returns:
+        Dict with ``operator`` and ``children`` keys suitable for
+        the ``filter_by_event`` bookmark key.
+
+    Example:
+        ```python
+        fbe = build_flow_property_filter([Filter.equals("country", "US")])
+        # {"operator": "and", "children": [
+        #   {"filterOperator": "equals", "filterType": "string",
+        #    "propertyName": "country", "filterValue": ["US"],
+        #    "resourceType": "events"}
+        # ]}
+        ```
+    """
+    children: list[dict[str, Any]] = []
+    for f in filters:
+        entry = build_filter_entry(f)
+        # Add propertyName from the entry's value key (the property name)
+        prop = f._property
+        if isinstance(prop, str):
+            entry["propertyName"] = prop
+        # Remove the "value" key since flow filters use propertyName instead
+        entry.pop("value", None)
+        # Remove defaultType — flow filters don't use it
+        entry.pop("defaultType", None)
+        children.append(entry)
+
+    return {
+        "operator": "and",
+        "children": children,
+    }
 
 
 def build_flow_cohort_filter(
@@ -545,3 +624,139 @@ def build_flow_cohort_filter(
     if "raw_cohort" in cohort_data:
         result["raw_cohort"] = cohort_data["raw_cohort"]
     return result
+
+
+def build_frequency_group_entry(fb: FrequencyBreakdown) -> dict[str, Any]:
+    """Build a single frequency group entry for sections.group[].
+
+    Produces the frequency-specific group dict with ``behaviorType``
+    set to ``"$frequency"`` and ``resourceType`` set to ``"people"``.
+
+    Args:
+        fb: FrequencyBreakdown specification.
+
+    Returns:
+        Group entry dict with ``behavior`` sub-dict containing the
+        frequency event and bucket configuration.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        entry = build_frequency_group_entry(FrequencyBreakdown("Purchase"))
+        # {"resourceType": "people", "behaviorType": "$frequency",
+        #  "behavior": {"event": "Purchase", ...}}
+        ```
+    """
+    entry: dict[str, Any] = {
+        "resourceType": "people",
+        "behaviorType": "$frequency",
+        "behavior": {
+            "event": fb.event,
+            "bucket_size": fb.bucket_size,
+            "bucket_min": fb.bucket_min,
+            "bucket_max": fb.bucket_max,
+        },
+    }
+    if fb.label is not None:
+        entry["label"] = fb.label
+    return entry
+
+
+def build_frequency_filter_entry(ff: FrequencyFilter) -> dict[str, Any]:
+    """Build a single frequency filter entry for sections.filter[].
+
+    Produces the frequency-specific filter dict with ``behaviorType``
+    set to ``"$frequency"`` and ``resourceType`` set to ``"people"``.
+
+    Args:
+        ff: FrequencyFilter specification.
+
+    Returns:
+        Filter entry dict with ``customProperty.behavior`` sub-dict
+        containing the frequency event, operator, and threshold.
+        Optionally includes ``dateRange`` and ``eventFilters``.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_filter_entry,
+        )
+        from mixpanel_data.types import FrequencyFilter
+
+        entry = build_frequency_filter_entry(
+            FrequencyFilter("Login", value=5)
+        )
+        # {"resourceType": "people", "behaviorType": "$frequency",
+        #  "customProperty": {"behavior": {"event": "Login", ...}}}
+        ```
+    """
+    behavior: dict[str, Any] = {
+        "event": ff.event,
+        "aggregation": "total",
+        "filterOperator": ff.operator,
+        "filterValue": ff.value,
+    }
+    if ff.date_range_value is not None and ff.date_range_unit is not None:
+        behavior["dateRange"] = {
+            "value": ff.date_range_value,
+            "unit": ff.date_range_unit,
+        }
+    if ff.event_filters is not None:
+        behavior["eventFilters"] = [build_filter_entry(f) for f in ff.event_filters]
+    entry: dict[str, Any] = {
+        "resourceType": "people",
+        "behaviorType": "$frequency",
+        "customProperty": {
+            "behavior": behavior,
+        },
+    }
+    if ff.label is not None:
+        entry["label"] = ff.label
+    return entry
+
+
+def build_time_comparison(tc: TimeComparison) -> dict[str, str]:
+    """Build the ``timeComparison`` dict for ``displayOptions``.
+
+    Converts a ``TimeComparison`` dataclass into the JSON dict format
+    expected by the Mixpanel bookmark API inside
+    ``displayOptions.timeComparison``.
+
+    The output format is ``{"type": <type>, "value": <unit_or_date>}``:
+
+    - For ``type="relative"``: value is the comparison unit
+      (day, week, month, quarter, year).
+    - For ``type="absolute-start"`` or ``"absolute-end"``: value is
+      the ISO date string (YYYY-MM-DD).
+
+    Args:
+        tc: A validated ``TimeComparison`` dataclass instance.
+
+    Returns:
+        Dict with ``type`` and ``value`` keys, both strings.
+
+    Example:
+        ```python
+        from mixpanel_data._internal.bookmark_builders import (
+            build_time_comparison,
+        )
+        from mixpanel_data.types import TimeComparison
+
+        result = build_time_comparison(TimeComparison.relative("month"))
+        # {"type": "relative", "value": "month"}
+        ```
+    """
+    value: str
+    if tc.type == "relative":
+        # tc.unit is guaranteed non-None by TimeComparison.__post_init__
+        assert tc.unit is not None  # for mypy
+        value = tc.unit
+    else:
+        # tc.date is guaranteed non-None by TimeComparison.__post_init__
+        assert tc.date is not None  # for mypy
+        value = tc.date
+    return {"type": tc.type, "value": value}

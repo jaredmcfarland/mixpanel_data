@@ -243,7 +243,7 @@ class TestExtendedMathFunnels:
         assert property_agg <= VALID_MATH_FUNNELS
 
     def test_all_expected_values(self) -> None:
-        """VALID_MATH_FUNNELS contains exactly 16 expected values."""
+        """VALID_MATH_FUNNELS contains exactly 17 expected values."""
         expected = {
             "general",
             "unique",
@@ -261,6 +261,7 @@ class TestExtendedMathFunnels:
             "p75",
             "p90",
             "p99",
+            "histogram",
         }
         assert expected == VALID_MATH_FUNNELS
 

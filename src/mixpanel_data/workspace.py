@@ -54,7 +54,9 @@ from mixpanel_data._internal.bookmark_builders import (
     build_filter_entry,
     build_filter_section,
     build_flow_cohort_filter,
+    build_flow_property_filter,
     build_group_section,
+    build_time_comparison,
     build_time_section,
     patch_custom_property_filters_for_transform,
 )
@@ -88,8 +90,10 @@ from mixpanel_data._literal_types import (
     FlowCountType,
     FunnelMode,
     FunnelOrder,
+    FunnelReentryMode,
     InsightsMode,
     QueryTimeUnit,
+    RetentionUnboundedMode,
     TimeUnit,
 )
 from mixpanel_data.exceptions import (
@@ -171,6 +175,8 @@ from mixpanel_data.types import (
     FlowsResult,
     FlowStep,
     Formula,
+    FrequencyBreakdown,
+    FrequencyFilter,
     FrequencyResult,
     FunnelInfo,
     FunnelMathType,
@@ -215,6 +221,7 @@ from mixpanel_data.types import (
     SchemaEntry,
     SegmentationResult,
     SetTestUsersParams,
+    TimeComparison,
     TopEvent,
     UpdateAlertParams,
     UpdateAnnotationParams,
@@ -2078,13 +2085,16 @@ class Workspace:
         group_by: str
         | GroupBy
         | CohortBreakdown
-        | list[str | GroupBy | CohortBreakdown]
+        | FrequencyBreakdown
+        | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
         | None,
-        where: Filter | list[Filter] | None,
+        where: Filter | FrequencyFilter | list[Filter | FrequencyFilter] | None,
         formulas: Sequence[Formula],
         rolling: int | None,
         cumulative: bool,
         mode: str,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Build bookmark params dict from typed arguments.
 
@@ -2106,6 +2116,10 @@ class Workspace:
             rolling: Rolling window size.
             cumulative: Cumulative analysis mode.
             mode: Result mode (timeseries, total, table).
+            time_comparison: Optional period-over-period comparison.
+                Adds ``timeComparison`` to ``displayOptions``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Default: ``None``.
 
         Returns:
             Bookmark params dict ready for insights query API.
@@ -2155,6 +2169,7 @@ class Workspace:
                 item_percentile = item.percentile_value
                 item_filters = item.filters
                 item_filters_combinator = item.filters_combinator
+                item_segment_method = item.segment_method
             else:
                 event_name = item
                 item_math = math
@@ -2163,6 +2178,7 @@ class Workspace:
                 item_percentile = percentile_value
                 item_filters = None
                 item_filters_combinator = "all"
+                item_segment_method = None
 
             # Map user-facing "percentile" to bookmark "custom_percentile"
             bookmark_math = (
@@ -2205,6 +2221,8 @@ class Workspace:
                 measurement["perUserAggregation"] = item_per_user
             if item_percentile is not None:
                 measurement["percentile"] = item_percentile
+            if item_segment_method is not None:
+                measurement["segmentMethod"] = item_segment_method
 
             # Build behavior block with optional per-metric filters
             behavior_filters: list[dict[str, Any]] = []
@@ -2253,7 +2271,7 @@ class Workspace:
         filter_section = build_filter_section(where)
 
         # --- Build sections.group[] ---
-        group_section = build_group_section(group_by)
+        group_section = build_group_section(group_by, data_group_id=data_group_id)
 
         # --- Build displayOptions ---
         chart_type_map = {
@@ -2272,6 +2290,9 @@ class Workspace:
         elif cumulative:
             display_options["analysis"] = "cumulative"
 
+        if time_comparison is not None:
+            display_options["timeComparison"] = build_time_comparison(time_comparison)
+
         # --- Assemble bookmark params ---
         sections: dict[str, Any] = {
             "show": show,
@@ -2279,6 +2300,8 @@ class Workspace:
             "filter": filter_section,
             "group": group_section,
         }
+        if data_group_id is not None:
+            sections["dataGroupId"] = data_group_id
 
         return {
             "sections": sections,
@@ -2304,14 +2327,17 @@ class Workspace:
         group_by: str
         | GroupBy
         | CohortBreakdown
-        | list[str | GroupBy | CohortBreakdown]
+        | FrequencyBreakdown
+        | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
         | None = None,
-        where: Filter | list[Filter] | None = None,
+        where: Filter | FrequencyFilter | list[Filter | FrequencyFilter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
         rolling: int | None = None,
         cumulative: bool = False,
         mode: Literal["timeseries", "total", "table"] = "timeseries",
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> QueryResult:
         """Run a typed insights query against the Mixpanel API.
 
@@ -2358,6 +2384,13 @@ class Workspace:
             mode: Result shape. ``"timeseries"`` returns per-period data,
                 ``"total"`` returns a single aggregate, ``"table"`` returns
                 tabular data. Default: ``"timeseries"``.
+            time_comparison: Optional period-over-period comparison.
+                Use ``TimeComparison.relative("month")`` for previous
+                month, ``TimeComparison.absolute_start("2026-01-01")``
+                for a fixed start date, etc. Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Scopes the query to a specific data group.
+                Default: ``None``.
 
         Returns:
             QueryResult with series data, DataFrame, and metadata.
@@ -2412,6 +2445,8 @@ class Workspace:
             rolling=rolling,
             cumulative=cumulative,
             mode=mode,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
         # Delegate to service — _live_query_service calls _require_api_client
@@ -2446,14 +2481,17 @@ class Workspace:
         group_by: str
         | GroupBy
         | CohortBreakdown
-        | list[str | GroupBy | CohortBreakdown]
+        | FrequencyBreakdown
+        | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
         | None = None,
-        where: Filter | list[Filter] | None = None,
+        where: Filter | FrequencyFilter | list[Filter | FrequencyFilter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
         rolling: int | None = None,
         cumulative: bool = False,
         mode: Literal["timeseries", "total", "table"] = "timeseries",
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Build validated bookmark params without executing the API call.
 
@@ -2486,6 +2524,12 @@ class Workspace:
             rolling: Rolling window size in periods.
             cumulative: Enable cumulative analysis mode.
             mode: Result shape. Default: ``"timeseries"``.
+            time_comparison: Optional period-over-period comparison.
+                Use ``TimeComparison.relative("month")`` for previous
+                month, etc. Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Scopes the query to a specific data group.
+                Default: ``None``.
 
         Returns:
             Bookmark params dict with ``sections`` and ``displayOptions``
@@ -2529,6 +2573,8 @@ class Workspace:
             rolling=rolling,
             cumulative=cumulative,
             mode=mode,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
     def _resolve_and_build_params(
@@ -2550,14 +2596,17 @@ class Workspace:
         group_by: str
         | GroupBy
         | CohortBreakdown
-        | list[str | GroupBy | CohortBreakdown]
+        | FrequencyBreakdown
+        | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
         | None = None,
-        where: Filter | list[Filter] | None = None,
+        where: Filter | FrequencyFilter | list[Filter | FrequencyFilter] | None = None,
         formula: str | None = None,
         formula_label: str | None = None,
         rolling: int | None = None,
         cumulative: bool = False,
         mode: InsightsMode = "timeseries",
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Normalize, validate, and build bookmark params.
 
@@ -2586,6 +2635,9 @@ class Workspace:
             rolling: Rolling window size.
             cumulative: Cumulative analysis mode.
             mode: Result shape.
+            time_comparison: Optional period-over-period comparison.
+            data_group_id: Optional data group ID for group-level
+                analytics. Default: ``None``.
 
         Returns:
             Validated bookmark params dict.
@@ -2608,14 +2660,14 @@ class Workspace:
                 ]
             )
 
-        # Type guard: where must be Filter or list of Filters
-        if where is not None and not isinstance(where, (Filter, list)):
+        # Type guard: where must be Filter, FrequencyFilter, or list
+        if where is not None and not isinstance(where, (Filter, FrequencyFilter, list)):
             raise BookmarkValidationError(
                 [
                     ValidationError(
                         path="where",
                         message=(
-                            f"where must be a Filter or list of Filters, "
+                            f"where must be a Filter, FrequencyFilter, or list, "
                             f"got {type(where).__name__}"
                         ),
                         code="V25_INVALID_FILTER_TYPE",
@@ -2686,6 +2738,7 @@ class Workspace:
             cumulative=cumulative,
             group_by=group_by,
             formulas=resolved_formulas,
+            data_group_id=data_group_id,
         )
         # CP1-CP6: Custom property validation for where filters
         arg_errors.extend(_scan_custom_properties(where=where))
@@ -2709,6 +2762,8 @@ class Workspace:
             rolling=rolling,
             cumulative=cumulative,
             mode=mode,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
         # Layer 2: Bookmark structure validation
@@ -2744,6 +2799,9 @@ class Workspace:
         exclusions: list[Exclusion],
         holding_constant: list[HoldingConstant],
         mode: str,
+        reentry_mode: FunnelReentryMode | None = None,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Build funnel bookmark params dict from typed arguments.
 
@@ -2767,6 +2825,14 @@ class Workspace:
             exclusions: Normalized Exclusion objects.
             holding_constant: Normalized HoldingConstant objects.
             mode: Display mode (steps, trends, table).
+            reentry_mode: Funnel reentry mode controlling how users
+                re-enter the funnel after conversion. Maps to
+                ``funnelReentryMode`` in the behavior block.
+                Default: ``None`` (omitted from bookmark).
+            time_comparison: Optional period-over-period comparison.
+                Adds ``timeComparison`` to ``displayOptions``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Default: ``None``.
 
         Returns:
             Bookmark params dict ready for insights query API.
@@ -2828,6 +2894,8 @@ class Workspace:
             "aggregateBy": aggregate_by,
             "filter": [],
         }
+        if reentry_mode is not None:
+            behavior["funnelReentryMode"] = reentry_mode
 
         # Build measurement
         measurement: dict[str, Any] = {
@@ -2863,7 +2931,7 @@ class Workspace:
         filter_section = patch_custom_property_filters_for_transform(
             build_filter_section(where)
         )
-        group_section = build_group_section(group_by)
+        group_section = build_group_section(group_by, data_group_id=data_group_id)
 
         # Chart type mapping
         chart_type_map = {
@@ -2872,17 +2940,25 @@ class Workspace:
             "table": "table",
         }
 
+        display_options: dict[str, Any] = {
+            "chartType": chart_type_map.get(mode, "funnel-steps"),
+        }
+        if time_comparison is not None:
+            display_options["timeComparison"] = build_time_comparison(time_comparison)
+
+        sections: dict[str, Any] = {
+            "show": show,
+            "time": time_section,
+            "filter": filter_section,
+            "group": group_section,
+            "formula": [],
+        }
+        if data_group_id is not None:
+            sections["dataGroupId"] = data_group_id
+
         return {
-            "sections": {
-                "show": show,
-                "time": time_section,
-                "filter": filter_section,
-                "group": group_section,
-                "formula": [],
-            },
-            "displayOptions": {
-                "chartType": chart_type_map.get(mode, "funnel-steps"),
-            },
+            "sections": sections,
+            "displayOptions": display_options,
         }
 
     def _resolve_and_build_funnel_params(
@@ -2907,6 +2983,9 @@ class Workspace:
         exclusions: list[str | Exclusion] | None,
         holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None,
         mode: FunnelMode,
+        reentry_mode: FunnelReentryMode | None = None,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Normalize, validate, and build funnel bookmark params.
 
@@ -2933,6 +3012,11 @@ class Workspace:
             exclusions: Events to exclude, or None.
             holding_constant: Properties to hold constant, or None.
             mode: Display mode.
+            reentry_mode: Funnel reentry mode controlling how users
+                re-enter the funnel. Default: ``None`` (omitted).
+            time_comparison: Optional period-over-period comparison.
+            data_group_id: Optional data group ID for group-level
+                analytics. Default: ``None``.
 
         Returns:
             Validated bookmark params dict.
@@ -2974,6 +3058,8 @@ class Workspace:
             to_date=to_date,
             last=last,
             group_by=group_by,
+            reentry_mode=reentry_mode,
+            data_group_id=data_group_id,
         )
         # CP1-CP6: Custom property validation for where filters
         arg_errors.extend(_scan_custom_properties(where=where))
@@ -2997,6 +3083,9 @@ class Workspace:
             exclusions=normalized_exclusions,
             holding_constant=normalized_hc,
             mode=mode,
+            reentry_mode=reentry_mode,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
         # Layer 2: Bookmark structure validation
@@ -3032,6 +3121,9 @@ class Workspace:
             str | HoldingConstant | list[str | HoldingConstant] | None
         ) = None,
         mode: Literal["steps", "trends", "table"] = "steps",
+        reentry_mode: FunnelReentryMode | None = None,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> FunnelQueryResult:
         """Run a typed funnel query against the Mixpanel API.
 
@@ -3075,6 +3167,16 @@ class Workspace:
                 data, ``"trends"`` shows conversion over time,
                 ``"table"`` shows tabular breakdown. Default:
                 ``"steps"``.
+            reentry_mode: Funnel reentry mode controlling how users
+                re-enter the funnel after conversion. One of
+                ``"default"``, ``"basic"``, ``"aggressive"``, or
+                ``"optimized"``. Default: ``None`` (server default).
+            time_comparison: Optional period-over-period comparison.
+                Use ``TimeComparison.relative("month")`` for previous
+                month, etc. Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Scopes the query to a specific data group.
+                Default: ``None``.
 
         Returns:
             FunnelQueryResult with step data, DataFrame, and metadata.
@@ -3121,6 +3223,9 @@ class Workspace:
             exclusions=exclusions,
             holding_constant=holding_constant,
             mode=mode,
+            reentry_mode=reentry_mode,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
         credentials = self._credentials
@@ -3160,6 +3265,9 @@ class Workspace:
             str | HoldingConstant | list[str | HoldingConstant] | None
         ) = None,
         mode: Literal["steps", "trends", "table"] = "steps",
+        reentry_mode: FunnelReentryMode | None = None,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Build validated funnel bookmark params without executing.
 
@@ -3189,6 +3297,16 @@ class Workspace:
             exclusions: Events to exclude between steps.
             holding_constant: Properties to hold constant.
             mode: Display mode. Default: ``"steps"``.
+            reentry_mode: Funnel reentry mode controlling how users
+                re-enter the funnel after conversion. One of
+                ``"default"``, ``"basic"``, ``"aggressive"``, or
+                ``"optimized"``. Default: ``None`` (server default).
+            time_comparison: Optional period-over-period comparison.
+                Use ``TimeComparison.relative("month")`` for previous
+                month, etc. Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Scopes the query to a specific data group.
+                Default: ``None``.
 
         Returns:
             Bookmark params dict with ``sections`` and
@@ -3231,6 +3349,9 @@ class Workspace:
             exclusions=exclusions,
             holding_constant=holding_constant,
             mode=mode,
+            reentry_mode=reentry_mode,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
     # =========================================================================
@@ -3257,6 +3378,10 @@ class Workspace:
         | None,
         where: Filter | list[Filter] | None,
         mode: RetentionMode,
+        unbounded_mode: RetentionUnboundedMode | None = None,
+        retention_cumulative: bool = False,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Build retention bookmark params dict from typed arguments.
 
@@ -3277,6 +3402,17 @@ class Workspace:
             group_by: Breakdown specification.
             where: Filter conditions.
             mode: Display mode (curve, trends, table).
+            unbounded_mode: Retention unbounded mode controlling how
+                retention is counted in unbounded periods. Maps to
+                ``retentionUnboundedMode`` in the behavior block.
+                Default: ``None`` (omitted from bookmark).
+            retention_cumulative: Whether to use cumulative retention
+                counting. Maps to ``retentionCumulative`` in the
+                measurement block. Default: ``False``.
+            time_comparison: Optional period-over-period comparison.
+                Adds ``timeComparison`` to ``displayOptions``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Default: ``None``.
 
         Returns:
             Bookmark params dict ready for insights query API.
@@ -3306,11 +3442,15 @@ class Workspace:
             "retentionCustomBucketSizes": list(bucket_sizes) if bucket_sizes else [],
             "filter": [],
         }
+        if unbounded_mode is not None:
+            behavior["retentionUnboundedMode"] = unbounded_mode
 
         # Build measurement
         measurement: dict[str, Any] = {
             "math": math,
         }
+        if retention_cumulative:
+            measurement["retentionCumulative"] = True
 
         # Build show clause
         show: list[dict[str, Any]] = [
@@ -3331,7 +3471,7 @@ class Workspace:
         filter_section = patch_custom_property_filters_for_transform(
             build_filter_section(where)
         )
-        group_section = build_group_section(group_by)
+        group_section = build_group_section(group_by, data_group_id=data_group_id)
 
         # Chart type mapping
         chart_type_map = {
@@ -3340,17 +3480,25 @@ class Workspace:
             "table": "table",
         }
 
+        display_options: dict[str, Any] = {
+            "chartType": chart_type_map.get(mode, "retention-curve"),
+        }
+        if time_comparison is not None:
+            display_options["timeComparison"] = build_time_comparison(time_comparison)
+
+        sections: dict[str, Any] = {
+            "show": show,
+            "time": time_section,
+            "filter": filter_section,
+            "group": group_section,
+            "formula": [],
+        }
+        if data_group_id is not None:
+            sections["dataGroupId"] = data_group_id
+
         return {
-            "sections": {
-                "show": show,
-                "time": time_section,
-                "filter": filter_section,
-                "group": group_section,
-                "formula": [],
-            },
-            "displayOptions": {
-                "chartType": chart_type_map.get(mode, "retention-curve"),
-            },
+            "sections": sections,
+            "displayOptions": display_options,
             "sorting": {
                 "bar": {"colSortAttrs": [], "sortBy": "column"},
                 "line": {
@@ -3397,6 +3545,14 @@ class Workspace:
         hidden_events: list[str] | None,
         mode: str,
         where: Filter | list[Filter] | None = None,
+        data_group_id: int | None = None,
+        segments: str
+        | GroupBy
+        | CohortBreakdown
+        | FrequencyBreakdown
+        | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
+        | None = None,
+        exclusions: list[str] | None = None,
     ) -> dict[str, Any]:
         """Build a flat flow bookmark params dict from typed arguments.
 
@@ -3420,9 +3576,18 @@ class Workspace:
                 events.
             hidden_events: Events to hide from the flow visualization.
             mode: Display mode (``"sankey"``, ``"paths"``, or ``"tree"``).
-            where: Filter results by cohort membership. Only
-                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
-                are accepted. Default: ``None``.
+            where: Filter results by cohort membership or property
+                conditions. Cohort filters (``Filter.in_cohort`` /
+                ``Filter.not_in_cohort``) produce ``filter_by_cohort``.
+                Property filters produce ``filter_by_event``.
+                Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Default: ``None``.
+            segments: Segment (breakdown) specification for flow
+                results. Accepts a string, ``GroupBy``, or list of
+                strings/``GroupBy`` objects. Default: ``None``.
+            exclusions: List of event names to exclude from flow
+                paths. Default: ``None``.
 
         Returns:
             Flat bookmark params dict ready for API submission.
@@ -3444,20 +3609,25 @@ class Workspace:
             )
             ```
         """
+        # Build step dicts, including session_event when present
+        step_dicts: list[dict[str, Any]] = []
+        for step in steps:
+            step_dict: dict[str, Any] = {
+                "event": step.event,
+                "step_label": step.label or step.event,
+                "forward": step.forward if step.forward is not None else 0,
+                "reverse": step.reverse if step.reverse is not None else 0,
+                "bool_op": ("or" if step.filters_combinator == "any" else "and"),
+                "property_filter_params_list": [
+                    build_segfilter_entry(f) for f in (step.filters or [])
+                ],
+            }
+            if step.session_event is not None:
+                step_dict["session_event"] = step.session_event
+            step_dicts.append(step_dict)
+
         params: dict[str, Any] = {
-            "steps": [
-                {
-                    "event": step.event,
-                    "step_label": step.label or step.event,
-                    "forward": step.forward if step.forward is not None else 0,
-                    "reverse": step.reverse if step.reverse is not None else 0,
-                    "bool_op": ("or" if step.filters_combinator == "any" else "and"),
-                    "property_filter_params_list": [
-                        build_segfilter_entry(f) for f in (step.filters or [])
-                    ],
-                }
-                for step in steps
-            ],
+            "steps": step_dicts,
             "date_range": build_date_range(
                 from_date=from_date, to_date=to_date, last=last
             ),
@@ -3476,14 +3646,27 @@ class Workspace:
             "collapse_repeated": collapse_repeated,
             "show_custom_events": True,
             "hidden_events": hidden_events or [],
-            "exclusions": [],
+            "exclusions": exclusions if exclusions is not None else [],
+            "data_group_id": data_group_id,
         }
 
-        # Add cohort filter if present
+        # Add filters if present — route cohort vs property filters
         if where is not None:
-            cohort_filter = build_flow_cohort_filter(where)
-            if cohort_filter is not None:
-                params["filter_by_cohort"] = cohort_filter
+            filter_list = where if isinstance(where, list) else [where]
+            cohort_filters = [f for f in filter_list if f._property == "$cohorts"]
+            property_filters = [f for f in filter_list if f._property != "$cohorts"]
+
+            if cohort_filters:
+                cohort_filter = build_flow_cohort_filter(cohort_filters)
+                if cohort_filter is not None:
+                    params["filter_by_cohort"] = cohort_filter
+
+            if property_filters:
+                params["filter_by_event"] = build_flow_property_filter(property_filters)
+
+        # Add segments if present
+        if segments is not None:
+            params["segments"] = build_group_section(segments)
 
         return params
 
@@ -3504,6 +3687,14 @@ class Workspace:
         hidden_events: list[str] | None,
         mode: FlowChartType,
         where: Filter | list[Filter] | None = None,
+        data_group_id: int | None = None,
+        segments: str
+        | GroupBy
+        | CohortBreakdown
+        | FrequencyBreakdown
+        | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
+        | None = None,
+        exclusions: list[str] | None = None,
     ) -> dict[str, Any]:
         """Normalize, validate, and build flow bookmark params.
 
@@ -3528,9 +3719,16 @@ class Workspace:
                 events.
             hidden_events: Events to hide from visualization.
             mode: Display mode.
-            where: Filter results by cohort membership. Only
-                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
-                are accepted. Default: ``None``.
+            where: Filter results by cohort membership or property
+                conditions. Cohort filters produce ``filter_by_cohort``,
+                property filters produce ``filter_by_event``.
+                Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Default: ``None``.
+            segments: Segment (breakdown) specification for flow
+                results. Default: ``None``.
+            exclusions: List of event names to exclude from flow
+                paths. Default: ``None``.
 
         Returns:
             Validated flow bookmark params dict.
@@ -3559,6 +3757,7 @@ class Workspace:
                 label=s.label,
                 filters=s.filters,
                 filters_combinator=s.filters_combinator,
+                session_event=s.session_event,
             )
             for s in steps
         ]
@@ -3655,6 +3854,7 @@ class Workspace:
             from_date=from_date,
             to_date=to_date,
             last=last,
+            data_group_id=data_group_id,
         )
         # CP1-CP6: Custom property validation for flow step filters
         arg_errors.extend(_scan_custom_properties(flow_steps=steps))
@@ -3675,6 +3875,9 @@ class Workspace:
             hidden_events=hidden_events,
             mode=mode,
             where=where,
+            data_group_id=data_group_id,
+            segments=segments,
+            exclusions=exclusions,
         )
 
         # Layer 2: Bookmark structure validation
@@ -3701,6 +3904,14 @@ class Workspace:
         hidden_events: list[str] | None = None,
         mode: Literal["sankey", "paths", "tree"] = "sankey",
         where: Filter | list[Filter] | None = None,
+        data_group_id: int | None = None,
+        segments: str
+        | GroupBy
+        | CohortBreakdown
+        | FrequencyBreakdown
+        | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
+        | None = None,
+        exclusions: list[str] | None = None,
     ) -> FlowQueryResult:
         """Run a typed flow query against the Mixpanel API.
 
@@ -3735,11 +3946,19 @@ class Workspace:
             hidden_events: Events to hide from the flow visualization.
                 Default: ``None``.
             mode: Flow visualization mode. Default: ``"sankey"``.
-            where: Filter results by cohort membership. Only
-                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
-                are accepted; non-cohort filters raise ``ValueError``.
-                Flows support a single cohort filter (the first is
-                used if multiple are provided). Default: ``None``.
+            where: Filter results by cohort membership or property
+                conditions. Cohort filters (``Filter.in_cohort`` /
+                ``Filter.not_in_cohort``) produce ``filter_by_cohort``.
+                Property filters (``Filter.equals``, etc.) produce
+                ``filter_by_event``. Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Scopes the query to a specific data group.
+                Default: ``None``.
+            segments: Segment (breakdown) specification for flow
+                results. Accepts a string, ``GroupBy``, or list of
+                strings/``GroupBy`` objects. Default: ``None``.
+            exclusions: List of event names to exclude from flow
+                paths. Default: ``None``.
 
         Returns:
             FlowQueryResult with steps, flows, breakdowns, and
@@ -3748,7 +3967,6 @@ class Workspace:
         Raises:
             BookmarkValidationError: If arguments violate validation
                 rules (before API call).
-            ValueError: If ``where`` contains non-cohort filters.
             ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials.
             QueryError: Invalid query parameters.
@@ -3769,6 +3987,14 @@ class Workspace:
                 last=90,
             )
             print(result.df)
+
+            # With property filter and segments
+            result = ws.query_flow(
+                "Login",
+                where=Filter.equals("country", "US"),
+                segments=GroupBy("platform"),
+                exclusions=["Error Event"],
+            )
             ```
         """
         params = self._resolve_and_build_flow_params(
@@ -3786,6 +4012,9 @@ class Workspace:
             hidden_events=hidden_events,
             mode=mode,
             where=where,
+            data_group_id=data_group_id,
+            segments=segments,
+            exclusions=exclusions,
         )
 
         credentials = self._credentials
@@ -3817,6 +4046,14 @@ class Workspace:
         hidden_events: list[str] | None = None,
         mode: Literal["sankey", "paths", "tree"] = "sankey",
         where: Filter | list[Filter] | None = None,
+        data_group_id: int | None = None,
+        segments: str
+        | GroupBy
+        | CohortBreakdown
+        | FrequencyBreakdown
+        | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
+        | None = None,
+        exclusions: list[str] | None = None,
     ) -> dict[str, Any]:
         """Build validated flow bookmark params without executing.
 
@@ -3842,10 +4079,18 @@ class Workspace:
             collapse_repeated: Merge repeated events. Default: ``False``.
             hidden_events: Events to hide. Default: ``None``.
             mode: Display mode. Default: ``"sankey"``.
-            where: Filter results by cohort membership. Only
-                ``Filter.in_cohort()`` and ``Filter.not_in_cohort()``
-                are accepted; non-cohort filters raise ``ValueError``.
-                Flows support a single cohort filter. Default: ``None``.
+            where: Filter results by cohort membership or property
+                conditions. Cohort filters produce ``filter_by_cohort``,
+                property filters produce ``filter_by_event``.
+                Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Scopes the query to a specific data group.
+                Default: ``None``.
+            segments: Segment (breakdown) specification for flow
+                results. Accepts a string, ``GroupBy``, or list of
+                strings/``GroupBy`` objects. Default: ``None``.
+            exclusions: List of event names to exclude from flow
+                paths. Default: ``None``.
 
         Returns:
             Flat bookmark params dict with ``steps``, ``date_range``,
@@ -3863,13 +4108,13 @@ class Workspace:
             params = ws.build_flow_params("Login")
             print(json.dumps(params, indent=2))
 
-            # Save as a report (dashboard_id required)
-            ws.create_bookmark(CreateBookmarkParams(
-                name="Login Flow",
-                bookmark_type="flows",
-                params=params,
-                dashboard_id=12345,
-            ))
+            # With segments and exclusions
+            params = ws.build_flow_params(
+                "Login",
+                segments=GroupBy("country"),
+                exclusions=["Error Event"],
+                where=Filter.equals("platform", "iOS"),
+            )
             ```
         """
         return self._resolve_and_build_flow_params(
@@ -3887,6 +4132,9 @@ class Workspace:
             hidden_events=hidden_events,
             mode=mode,
             where=where,
+            data_group_id=data_group_id,
+            segments=segments,
+            exclusions=exclusions,
         )
 
     # =========================================================================
@@ -3913,6 +4161,10 @@ class Workspace:
         | None,
         where: Filter | list[Filter] | None,
         mode: RetentionMode,
+        unbounded_mode: RetentionUnboundedMode | None = None,
+        retention_cumulative: bool = False,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Normalize, validate, and build retention bookmark params.
 
@@ -3936,6 +4188,12 @@ class Workspace:
             group_by: Breakdown specification.
             where: Filter conditions.
             mode: Display mode.
+            unbounded_mode: Retention unbounded mode. Default: ``None``.
+            retention_cumulative: Cumulative retention counting.
+                Default: ``False``.
+            time_comparison: Optional period-over-period comparison.
+            data_group_id: Optional data group ID for group-level
+                analytics. Default: ``None``.
 
         Returns:
             Validated bookmark params dict.
@@ -3967,6 +4225,8 @@ class Workspace:
             to_date=to_date,
             last=last,
             group_by=group_by,
+            unbounded_mode=unbounded_mode,
+            data_group_id=data_group_id,
         )
         # CP1-CP6: Custom property validation for where and event filters
         arg_errors.extend(
@@ -3993,6 +4253,10 @@ class Workspace:
             group_by=group_by,
             where=where,
             mode=mode,
+            unbounded_mode=unbounded_mode,
+            retention_cumulative=retention_cumulative,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
         # Layer 2: Bookmark structure validation
@@ -4022,6 +4286,10 @@ class Workspace:
         | None = None,
         where: Filter | list[Filter] | None = None,
         mode: RetentionMode = "curve",
+        unbounded_mode: RetentionUnboundedMode | None = None,
+        retention_cumulative: bool = False,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> RetentionQueryResult:
         """Run a typed retention query against the Mixpanel API.
 
@@ -4053,6 +4321,19 @@ class Workspace:
                 ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             mode: Result display mode. Default: ``"curve"``.
+            unbounded_mode: Retention unbounded mode controlling how
+                retention is counted in unbounded periods. One of
+                ``"none"``, ``"carry_back"``, ``"carry_forward"``, or
+                ``"consecutive_forward"``. Default: ``None``
+                (server default).
+            retention_cumulative: Whether to use cumulative retention
+                counting. Default: ``False``.
+            time_comparison: Optional period-over-period comparison.
+                Use ``TimeComparison.relative("month")`` for previous
+                month, etc. Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Scopes the query to a specific data group.
+                Default: ``None``.
 
         Returns:
             RetentionQueryResult with cohort data, DataFrame, and
@@ -4098,6 +4379,10 @@ class Workspace:
             group_by=group_by,
             where=where,
             mode=mode,
+            unbounded_mode=unbounded_mode,
+            retention_cumulative=retention_cumulative,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
         credentials = self._credentials
@@ -4131,6 +4416,10 @@ class Workspace:
         | None = None,
         where: Filter | list[Filter] | None = None,
         mode: RetentionMode = "curve",
+        unbounded_mode: RetentionUnboundedMode | None = None,
+        retention_cumulative: bool = False,
+        time_comparison: TimeComparison | None = None,
+        data_group_id: int | None = None,
     ) -> dict[str, Any]:
         """Build validated retention bookmark params without executing.
 
@@ -4159,6 +4448,19 @@ class Workspace:
                 ``CohortBreakdown``, or list of any mix.
             where: Filter results by conditions.
             mode: Display mode. Default: ``"curve"``.
+            unbounded_mode: Retention unbounded mode controlling how
+                retention is counted in unbounded periods. One of
+                ``"none"``, ``"carry_back"``, ``"carry_forward"``, or
+                ``"consecutive_forward"``. Default: ``None``
+                (server default).
+            retention_cumulative: Whether to use cumulative retention
+                counting. Default: ``False``.
+            time_comparison: Optional period-over-period comparison.
+                Use ``TimeComparison.relative("month")`` for previous
+                month, etc. Default: ``None``.
+            data_group_id: Optional data group ID for group-level
+                analytics. Scopes the query to a specific data group.
+                Default: ``None``.
 
         Returns:
             Bookmark params dict with ``sections`` and
@@ -4199,6 +4501,10 @@ class Workspace:
             group_by=group_by,
             where=where,
             mode=mode,
+            unbounded_mode=unbounded_mode,
+            retention_cumulative=retention_cumulative,
+            time_comparison=time_comparison,
+            data_group_id=data_group_id,
         )
 
     # =========================================================================

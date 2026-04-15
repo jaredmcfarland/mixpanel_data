@@ -21,11 +21,15 @@ import dataclasses
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import get_args
 
 import pandas as pd
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from mixpanel_data._internal.bookmark_enums import VALID_FREQUENCY_FILTER_OPERATORS
+from mixpanel_data._literal_types import MathType, TimeComparisonUnit
 from mixpanel_data.types import (
     ActivityFeedResult,
     BookmarkInfo,
@@ -36,11 +40,14 @@ from mixpanel_data.types import (
     EngagementDistributionResult,
     EventCountsResult,
     FlowsResult,
+    FrequencyBreakdown,
+    FrequencyFilter,
     FrequencyResult,
     FunnelInfo,
     FunnelResult,
     FunnelResultStep,
     JQLResult,
+    Metric,
     NumericAverageResult,
     NumericBucketResult,
     NumericPropertySummaryResult,
@@ -55,6 +62,7 @@ from mixpanel_data.types import (
     SavedCohort,
     SavedReportResult,
     SegmentationResult,
+    TimeComparison,
     TopEvent,
     UserEvent,
 )
@@ -2429,3 +2437,405 @@ class TestOAuthTokensRoundTripPBT:
         assert loaded.access_token.get_secret_value() == access_token
         assert loaded.scope == scope
         assert loaded.project_id == project_id
+
+
+# =============================================================================
+# TimeComparison Property Tests (Phase 040)
+# =============================================================================
+
+# Strategies for TimeComparison
+time_comparison_units = st.sampled_from(list(get_args(TimeComparisonUnit)))
+
+
+class TestTimeComparisonProperties:
+    """Property-based tests for TimeComparison factory methods and validation."""
+
+    @given(unit=time_comparison_units)
+    def test_relative_factory_always_valid(self, unit: str) -> None:
+        """TimeComparison.relative() with any valid unit never raises."""
+        tc = TimeComparison.relative(unit)  # type: ignore[arg-type]
+        assert tc.type == "relative"
+        assert tc.unit == unit
+        assert tc.date is None
+
+    @given(date=date_strings)
+    def test_absolute_start_factory_always_valid(self, date: str) -> None:
+        """TimeComparison.absolute_start() with YYYY-MM-DD date never raises."""
+        tc = TimeComparison.absolute_start(date)
+        assert tc.type == "absolute-start"
+        assert tc.date == date
+        assert tc.unit is None
+
+    @given(date=date_strings)
+    def test_absolute_end_factory_always_valid(self, date: str) -> None:
+        """TimeComparison.absolute_end() with YYYY-MM-DD date never raises."""
+        tc = TimeComparison.absolute_end(date)
+        assert tc.type == "absolute-end"
+        assert tc.date == date
+        assert tc.unit is None
+
+    @given(unit=time_comparison_units, date=date_strings)
+    def test_relative_with_date_raises(self, unit: str, date: str) -> None:
+        """TC1: type='relative' with date set always raises ValueError."""
+        with pytest.raises(ValueError, match="does not accept date"):
+            TimeComparison(type="relative", unit=unit, date=date)  # type: ignore[arg-type]
+
+    @given(
+        tc_type=st.sampled_from(["absolute-start", "absolute-end"]),
+        unit=time_comparison_units,
+        date=date_strings,
+    )
+    def test_absolute_with_unit_raises(
+        self, tc_type: str, unit: str, date: str
+    ) -> None:
+        """TC2: absolute types with unit set always raises ValueError."""
+        with pytest.raises(ValueError, match="does not accept unit"):
+            TimeComparison(type=tc_type, unit=unit, date=date)  # type: ignore[arg-type]
+
+    def test_relative_without_unit_raises(self) -> None:
+        """TC1: type='relative' without unit always raises ValueError."""
+        with pytest.raises(ValueError, match="requires unit"):
+            TimeComparison(type="relative")
+
+    @given(tc_type=st.sampled_from(["absolute-start", "absolute-end"]))
+    def test_absolute_without_date_raises(self, tc_type: str) -> None:
+        """TC2: absolute types without date always raises ValueError."""
+        with pytest.raises(ValueError, match="requires date"):
+            TimeComparison(type=tc_type)  # type: ignore[arg-type]
+
+    @given(
+        tc_type=st.sampled_from(["absolute-start", "absolute-end"]),
+        bad_date=st.text(min_size=1, max_size=20).filter(
+            lambda s: not __import__("re").match(r"^\d{4}-\d{2}-\d{2}$", s)
+        ),
+    )
+    def test_absolute_with_bad_date_format_raises(
+        self, tc_type: str, bad_date: str
+    ) -> None:
+        """TC3: absolute types with non-YYYY-MM-DD date always raises ValueError."""
+        with pytest.raises(ValueError, match="YYYY-MM-DD"):
+            TimeComparison(type=tc_type, date=bad_date)  # type: ignore[arg-type]
+
+    @given(unit=time_comparison_units)
+    def test_relative_is_frozen(self, unit: str) -> None:
+        """TimeComparison instances are immutable (frozen dataclass)."""
+        tc = TimeComparison.relative(unit)  # type: ignore[arg-type]
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            tc.unit = "day"  # type: ignore[misc]
+
+
+# =============================================================================
+# FrequencyBreakdown Property Tests (Phase 040)
+# =============================================================================
+
+
+class TestFrequencyBreakdownProperties:
+    """Property-based tests for FrequencyBreakdown construction and validation."""
+
+    @given(
+        event=event_names,
+        bucket_size=st.integers(min_value=1, max_value=1000),
+        bucket_max=st.integers(min_value=2, max_value=10000),
+    )
+    def test_valid_construction_never_raises(
+        self, event: str, bucket_size: int, bucket_max: int
+    ) -> None:
+        """Valid FrequencyBreakdown construction never raises.
+
+        Uses bucket_min=0 (default) and ensures bucket_max > 0.
+        """
+        fb = FrequencyBreakdown(
+            event=event, bucket_size=bucket_size, bucket_min=0, bucket_max=bucket_max
+        )
+        assert fb.event == event
+        assert fb.bucket_size == bucket_size
+        assert fb.bucket_min < fb.bucket_max
+
+    @given(
+        event=event_names,
+        bucket_min=st.integers(min_value=0, max_value=100),
+        gap=st.integers(min_value=1, max_value=1000),
+    )
+    def test_bucket_min_always_less_than_max(
+        self, event: str, bucket_min: int, gap: int
+    ) -> None:
+        """For any valid FrequencyBreakdown, bucket_min < bucket_max holds."""
+        bucket_max = bucket_min + gap
+        fb = FrequencyBreakdown(
+            event=event, bucket_min=bucket_min, bucket_max=bucket_max
+        )
+        assert fb.bucket_min < fb.bucket_max
+
+    @given(
+        bad_event=st.just(""),
+        bucket_size=st.integers(min_value=1, max_value=100),
+    )
+    def test_empty_event_raises(self, bad_event: str, bucket_size: int) -> None:
+        """FB1: empty event name always raises ValueError."""
+        with pytest.raises(ValueError, match="non-empty"):
+            FrequencyBreakdown(event=bad_event, bucket_size=bucket_size)
+
+    @given(
+        event=event_names,
+        bad_size=st.integers(min_value=-100, max_value=0),
+    )
+    def test_non_positive_bucket_size_raises(self, event: str, bad_size: int) -> None:
+        """FB2: non-positive bucket_size always raises ValueError."""
+        with pytest.raises(ValueError, match="bucket_size must be positive"):
+            FrequencyBreakdown(event=event, bucket_size=bad_size)
+
+    @given(
+        event=event_names,
+        same_val=st.integers(min_value=0, max_value=1000),
+    )
+    def test_bucket_min_equals_max_raises(self, event: str, same_val: int) -> None:
+        """FB3: bucket_min == bucket_max always raises ValueError."""
+        with pytest.raises(ValueError, match="less than bucket_max"):
+            FrequencyBreakdown(event=event, bucket_min=same_val, bucket_max=same_val)
+
+    @given(
+        event=event_names,
+        bad_min=st.integers(min_value=-1000, max_value=-1),
+    )
+    def test_negative_bucket_min_raises(self, event: str, bad_min: int) -> None:
+        """FB4: negative bucket_min always raises ValueError."""
+        with pytest.raises(ValueError, match="non-negative"):
+            FrequencyBreakdown(event=event, bucket_min=bad_min, bucket_max=bad_min + 10)
+
+    @given(event=event_names)
+    def test_frozen_instance(self, event: str) -> None:
+        """FrequencyBreakdown instances are immutable (frozen dataclass)."""
+        fb = FrequencyBreakdown(event=event)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            fb.event = "other"  # type: ignore[misc]
+
+
+# =============================================================================
+# FrequencyFilter Property Tests (Phase 040)
+# =============================================================================
+
+valid_ff_operators = st.sampled_from(sorted(VALID_FREQUENCY_FILTER_OPERATORS))
+
+
+class TestFrequencyFilterProperties:
+    """Property-based tests for FrequencyFilter construction and validation."""
+
+    @given(
+        event=event_names,
+        operator=valid_ff_operators,
+        value=st.integers(min_value=0, max_value=10000),
+    )
+    def test_valid_construction_never_raises(
+        self, event: str, operator: str, value: int
+    ) -> None:
+        """Valid FrequencyFilter construction (no date range) never raises."""
+        ff = FrequencyFilter(event=event, operator=operator, value=value)
+        assert ff.event == event
+        assert ff.operator == operator
+        assert ff.value == value
+        assert ff.date_range_value is None
+        assert ff.date_range_unit is None
+
+    @given(
+        event=event_names,
+        operator=valid_ff_operators,
+        value=st.integers(min_value=0, max_value=10000),
+        dr_value=st.integers(min_value=1, max_value=365),
+        dr_unit=st.sampled_from(["day", "week", "month"]),
+    )
+    def test_valid_with_date_range_never_raises(
+        self, event: str, operator: str, value: int, dr_value: int, dr_unit: str
+    ) -> None:
+        """Valid FrequencyFilter with date range pair never raises."""
+        ff = FrequencyFilter(
+            event=event,
+            operator=operator,
+            value=value,
+            date_range_value=dr_value,
+            date_range_unit=dr_unit,  # type: ignore[arg-type]
+        )
+        assert ff.date_range_value == dr_value
+        assert ff.date_range_unit == dr_unit
+
+    @given(
+        event=event_names,
+        bad_op=st.text(min_size=1, max_size=30).filter(
+            lambda s: s not in VALID_FREQUENCY_FILTER_OPERATORS
+        ),
+        value=st.integers(min_value=0, max_value=100),
+    )
+    def test_invalid_operator_raises(self, event: str, bad_op: str, value: int) -> None:
+        """FF2: invalid operator always raises ValueError."""
+        with pytest.raises(ValueError, match="operator must be one of"):
+            FrequencyFilter(event=event, operator=bad_op, value=value)
+
+    @given(
+        event=event_names,
+        operator=valid_ff_operators,
+        bad_value=st.integers(min_value=-10000, max_value=-1),
+    )
+    def test_negative_value_raises(
+        self, event: str, operator: str, bad_value: int
+    ) -> None:
+        """FF3: negative value always raises ValueError."""
+        with pytest.raises(ValueError, match="non-negative"):
+            FrequencyFilter(event=event, operator=operator, value=bad_value)
+
+    @given(
+        event=event_names,
+        operator=valid_ff_operators,
+        value=st.integers(min_value=0, max_value=100),
+        dr_value=st.integers(min_value=1, max_value=365),
+    )
+    def test_date_range_value_without_unit_raises(
+        self, event: str, operator: str, value: int, dr_value: int
+    ) -> None:
+        """FF4: date_range_value without date_range_unit always raises."""
+        with pytest.raises(ValueError, match="both be set or both be None"):
+            FrequencyFilter(
+                event=event,
+                operator=operator,
+                value=value,
+                date_range_value=dr_value,
+                date_range_unit=None,
+            )
+
+    @given(
+        event=event_names,
+        operator=valid_ff_operators,
+        value=st.integers(min_value=0, max_value=100),
+        dr_unit=st.sampled_from(["day", "week", "month"]),
+    )
+    def test_date_range_unit_without_value_raises(
+        self, event: str, operator: str, value: int, dr_unit: str
+    ) -> None:
+        """FF4: date_range_unit without date_range_value always raises."""
+        with pytest.raises(ValueError, match="both be set or both be None"):
+            FrequencyFilter(
+                event=event,
+                operator=operator,
+                value=value,
+                date_range_value=None,
+                date_range_unit=dr_unit,  # type: ignore[arg-type]
+            )
+
+    @given(
+        event=event_names,
+        operator=valid_ff_operators,
+        value=st.integers(min_value=0, max_value=100),
+        bad_dr_value=st.integers(min_value=-100, max_value=0),
+        dr_unit=st.sampled_from(["day", "week", "month"]),
+    )
+    def test_non_positive_date_range_value_raises(
+        self, event: str, operator: str, value: int, bad_dr_value: int, dr_unit: str
+    ) -> None:
+        """FF5: non-positive date_range_value always raises ValueError."""
+        with pytest.raises(ValueError, match="positive when set"):
+            FrequencyFilter(
+                event=event,
+                operator=operator,
+                value=value,
+                date_range_value=bad_dr_value,
+                date_range_unit=dr_unit,  # type: ignore[arg-type]
+            )
+
+    @given(
+        bad_event=st.just(""),
+        operator=valid_ff_operators,
+        value=st.integers(min_value=0, max_value=100),
+    )
+    def test_empty_event_raises(
+        self, bad_event: str, operator: str, value: int
+    ) -> None:
+        """FF1: empty event name always raises ValueError."""
+        with pytest.raises(ValueError, match="non-empty"):
+            FrequencyFilter(event=bad_event, operator=operator, value=value)
+
+    @given(event=event_names)
+    def test_frozen_instance(self, event: str) -> None:
+        """FrequencyFilter instances are immutable (frozen dataclass)."""
+        ff = FrequencyFilter(event=event, value=1)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            ff.value = 99  # type: ignore[misc]
+
+
+# =============================================================================
+# MathType / Metric Exhaustive Property Tests (Phase 040)
+# =============================================================================
+
+# Math types that require a property argument
+_MATH_REQUIRING_PROPERTY: frozenset[str] = frozenset(
+    {
+        "average",
+        "median",
+        "min",
+        "max",
+        "p25",
+        "p75",
+        "p90",
+        "p99",
+        "percentile",
+        "histogram",
+        "unique_values",
+        "most_frequent",
+        "first_value",
+        "multi_attribution",
+        "numeric_summary",
+    }
+)
+
+# All 22 MathType values from the Literal definition
+_ALL_MATH_TYPES: tuple[str, ...] = get_args(MathType)
+
+
+class TestMathTypeMetricProperties:
+    """Property-based tests verifying all MathType values are accepted by Metric."""
+
+    @given(math=st.sampled_from(_ALL_MATH_TYPES))
+    def test_all_math_types_accepted_by_metric(self, math: str) -> None:
+        """Every MathType value produces a valid Metric when property requirements are met.
+
+        For math types requiring a property, passes property="test_prop".
+        For math="percentile", also passes percentile_value=50.
+        """
+        kwargs: dict[str, object] = {"event": "TestEvent", "math": math}
+        if math in _MATH_REQUIRING_PROPERTY:
+            kwargs["property"] = "test_prop"
+        if math == "percentile":
+            kwargs["percentile_value"] = 50
+        m = Metric(**kwargs)  # type: ignore[arg-type]
+        assert m.math == math
+        assert m.event == "TestEvent"
+
+    @given(
+        math=st.sampled_from(
+            [m for m in _ALL_MATH_TYPES if m in _MATH_REQUIRING_PROPERTY]
+        )
+    )
+    def test_property_required_math_without_property_raises(self, math: str) -> None:
+        """Math types requiring a property raise ValueError when property is None."""
+        kwargs: dict[str, object] = {"event": "TestEvent", "math": math}
+        if math == "percentile":
+            kwargs["percentile_value"] = 50
+        with pytest.raises(ValueError, match="requires a property"):
+            Metric(**kwargs)  # type: ignore[arg-type]
+
+    @given(
+        math=st.sampled_from(
+            [m for m in _ALL_MATH_TYPES if m not in _MATH_REQUIRING_PROPERTY]
+        )
+    )
+    def test_non_property_math_without_property_succeeds(self, math: str) -> None:
+        """Math types not requiring a property succeed without one."""
+        m = Metric(event="TestEvent", math=math)  # type: ignore[arg-type]
+        assert m.math == math
+        assert m.property is None
+
+    def test_percentile_without_value_raises(self) -> None:
+        """math='percentile' without percentile_value raises ValueError."""
+        with pytest.raises(ValueError, match="percentile_value"):
+            Metric(event="TestEvent", math="percentile", property="amount")
+
+    def test_math_type_count_is_22(self) -> None:
+        """Verify MathType has exactly 22 values (guard against drift)."""
+        assert len(_ALL_MATH_TYPES) == 22

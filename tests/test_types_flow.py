@@ -792,3 +792,50 @@ class TestSafeInt:
     def test_negative_string(self) -> None:
         """Negative string '-5' is parsed correctly."""
         assert _safe_int("-5") == -5
+
+
+# =============================================================================
+# T037: FlowStep with session_event (US8 — Advanced Flow Features)
+# =============================================================================
+
+
+class TestFlowStepSessionEvent:
+    """Tests for FlowStep.session_event field (FS1)."""
+
+    def test_session_start_succeeds(self) -> None:
+        """FlowStep with session_event='start' and event='$session_start' succeeds."""
+        step = FlowStep(event="$session_start", session_event="start")
+        assert step.session_event == "start"
+        assert step.event == "$session_start"
+
+    def test_session_end_succeeds(self) -> None:
+        """FlowStep with session_event='end' and event='$session_end' succeeds."""
+        step = FlowStep(event="$session_end", session_event="end")
+        assert step.session_event == "end"
+        assert step.event == "$session_end"
+
+    def test_default_session_event_is_none(self) -> None:
+        """FlowStep without session_event has session_event=None."""
+        step = FlowStep("Login")
+        assert step.session_event is None
+
+    def test_regular_event_with_session_event_raises(self) -> None:
+        """FlowStep with a regular event name and session_event raises ValueError."""
+        with pytest.raises(ValueError, match="session_event"):
+            FlowStep(event="Login", session_event="start")
+
+    def test_session_start_wrong_event_raises(self) -> None:
+        """FlowStep with session_event='start' but event='$session_end' raises."""
+        with pytest.raises(ValueError, match="session_event"):
+            FlowStep(event="$session_end", session_event="start")
+
+    def test_session_end_wrong_event_raises(self) -> None:
+        """FlowStep with session_event='end' but event='$session_start' raises."""
+        with pytest.raises(ValueError, match="session_event"):
+            FlowStep(event="$session_start", session_event="end")
+
+    def test_session_event_immutable(self) -> None:
+        """session_event cannot be set on a frozen instance."""
+        step = FlowStep(event="$session_start", session_event="start")
+        with pytest.raises(AttributeError):
+            step.session_event = "end"  # type: ignore[misc]

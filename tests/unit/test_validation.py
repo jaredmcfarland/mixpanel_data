@@ -650,7 +650,7 @@ class TestValidateMeasurementFunnelContext:
 
     def test_insights_only_math_rejected_in_funnel_context(self) -> None:
         """Insights-only math types are rejected when bookmark_type='funnels'."""
-        insights_only = ["dau", "wau", "mau", "cumulative_unique", "histogram"]
+        insights_only = ["dau", "wau", "mau", "cumulative_unique"]
         for math_type in insights_only:
             bm = _minimal_funnel_bookmark(math=math_type)
             errors = validate_bookmark(bm, bookmark_type="funnels")
@@ -715,3 +715,35 @@ def _minimal_funnel_bookmark(
             "chartType": "funnel-steps",
         },
     }
+
+
+# =============================================================================
+# T036: data_group_id validation for insights
+# =============================================================================
+
+
+class TestDataGroupIdValidationInsights:
+    """Tests for data_group_id validation in validate_query_args (T036)."""
+
+    def test_valid_data_group_id(self) -> None:
+        """Positive integer data_group_id passes validation."""
+        errors = validate_query_args(**_valid_args(data_group_id=5))
+        assert not any(e.code == "DG1_INVALID_DATA_GROUP_ID" for e in errors)
+
+    def test_none_data_group_id(self) -> None:
+        """None data_group_id passes validation (optional parameter)."""
+        errors = validate_query_args(**_valid_args(data_group_id=None))
+        assert not any(e.code == "DG1_INVALID_DATA_GROUP_ID" for e in errors)
+
+    def test_zero_data_group_id(self) -> None:
+        """data_group_id=0 fails validation (must be positive)."""
+        errors = validate_query_args(**_valid_args(data_group_id=0))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1
+        assert dg_errors[0].path == "data_group_id"
+
+    def test_negative_data_group_id(self) -> None:
+        """Negative data_group_id fails validation."""
+        errors = validate_query_args(**_valid_args(data_group_id=-1))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1
