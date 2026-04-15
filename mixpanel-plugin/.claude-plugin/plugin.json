@@ -1,6 +1,6 @@
 {
   "name": "mixpanel-data",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Query and analyze Mixpanel data with Python. Provides the mixpanel_data API surface (5 query engines, discovery, entity CRUD) with a live documentation system (help.py) for method signatures, type lookup, fuzzy search, and hosted docs.",
   "author": {
     "name": "Jared McFarland",
