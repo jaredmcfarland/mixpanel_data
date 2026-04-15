@@ -2,7 +2,7 @@
 
 Deep reference for flow queries in `mixpanel_data`. Flows show user paths before and after anchor events -- graph traversal of sequential behavior across the user base.
 
-_Flows use Filter for per-step filtering (see [insights-reference.md](insights-reference.md) §Filter Deep Reference) but do not support GroupBy, CohortBreakdown, or CohortMetric._
+_Flows use Filter for per-step filtering (see [insights-reference.md](insights-reference.md) §Filter Deep Reference). Flows support property filters and cohort filters in `where=`, plus `segments` for breakdowns. `CohortMetric` is not supported._
 
 ## Complete Signature
 
@@ -22,6 +22,10 @@ ws.query_flow(
     collapse_repeated: bool = False,
     hidden_events: list[str] | None = None,
     mode: Literal["sankey", "paths", "tree"] = "sankey",
+    where: Filter | list[Filter] | None = None,     # property AND cohort filters
+    data_group_id: int | None = None,                # data group scope
+    segments: str | GroupBy | CohortBreakdown | FrequencyBreakdown | list[...] | None = None,
+    exclusions: list[str] | None = None,             # events to exclude from flow
 ) -> FlowQueryResult
 ```
 
@@ -84,6 +88,7 @@ class FlowStep:
     label: str | None = None                           # display label (None = event name)
     filters: list[Filter] | None = None                # per-step filters
     filters_combinator: Literal["all", "any"] = "all"  # AND/OR for filters
+    session_event: Literal["start", "end"] | None = None  # session anchor type
 ```
 
 ### `forward` / `reverse` -- Direction Controls
@@ -878,22 +883,72 @@ _For cross-engine workflows that combine flows with funnels/retention/insights, 
 
 ---
 
-## Cohort Filters in Flows
+## Filtering in Flows
 
-Flows support cohort filters via the `where=` parameter, restricting path analysis to users in a specific cohort:
+Flows support both property filters and cohort filters via the `where=` parameter:
 
 ```python
 from mixpanel_data import Filter
 
-# Paths taken by power users after purchase
-result = ws.query_flow(
-    "Purchase", forward=3,
-    where=Filter.in_cohort(123, "Power Users"),
-    last=30,
-)
+# Property filter (new in v0.6)
+result = ws.query_flow("Purchase", forward=3,
+    where=Filter.equals("platform", "iOS"), last=30)
+
+# Cohort filter (existing)
+result = ws.query_flow("Purchase", forward=3,
+    where=Filter.in_cohort(123, "Power Users"), last=30)
 ```
 
-**Note**: `CohortBreakdown` and `CohortMetric` are NOT supported for flows. Use cohort filters (`where=`) only.
+**Note**: Flows support both property filters and cohort filters via `where=`. `CohortBreakdown` and `CohortMetric` are NOT supported — use `segments=` for breakdowns or cohort filters (`where=`) for filtering.
+
+---
+
+## Flow Segments
+
+Break flow results by a property, cohort, or frequency using the `segments` parameter:
+
+```python
+# Segment by platform
+result = ws.query_flow("Purchase", segments="platform", last=30)
+
+# Segment by cohort
+from mixpanel_data import CohortBreakdown
+result = ws.query_flow("Purchase",
+    segments=CohortBreakdown(123, "Power Users"), last=30)
+```
+
+Accepts: `str`, `GroupBy`, `CohortBreakdown`, `FrequencyBreakdown`, or a list.
+
+---
+
+## Flow Exclusions
+
+Hide specific events from flow paths:
+
+```python
+result = ws.query_flow("Purchase",
+    exclusions=["Page View", "Session Start"],
+    forward=3, last=30)
+```
+
+Excluded events won't appear as nodes or edges in the flow graph.
+
+---
+
+## Session Events
+
+Anchor a flow step to a session boundary:
+
+```python
+from mixpanel_data import FlowStep
+
+# What happens after a session starts?
+result = ws.query_flow(
+    FlowStep(event="Session Start", session_event="start"),
+    forward=5, last=30)
+```
+
+`FlowSessionEvent = Literal["start", "end"]`
 
 ---
 

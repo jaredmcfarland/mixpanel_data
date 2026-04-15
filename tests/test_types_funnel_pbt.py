@@ -495,7 +495,7 @@ class TestFunnelQueryResultProperties:
 class TestFunnelMathTypeProperties:
     """Property-based tests for FunnelMathType Literal type.
 
-    Verifies the exact set of 13 valid values and membership invariants.
+    Verifies the exact set of 14 valid values and membership invariants.
     """
 
     EXPECTED_VALUES: frozenset[str] = frozenset(
@@ -513,16 +513,17 @@ class TestFunnelMathTypeProperties:
             "p75",
             "p90",
             "p99",
+            "histogram",
         ]
     )
 
-    def test_exactly_13_valid_values(self) -> None:
-        """FunnelMathType has exactly 13 valid values."""
+    def test_exactly_14_valid_values(self) -> None:
+        """FunnelMathType has exactly 14 valid values."""
         actual = set(get_args(FunnelMathType))
-        assert len(actual) == 13
+        assert len(actual) == 14
 
     def test_exact_set_of_values(self) -> None:
-        """FunnelMathType contains exactly the expected 13 values."""
+        """FunnelMathType contains exactly the expected 14 values."""
         actual = set(get_args(FunnelMathType))
         assert actual == self.EXPECTED_VALUES
 

@@ -25,6 +25,9 @@ Workspace.query_funnel(
     exclusions: list[str | Exclusion] | None = None,
     holding_constant: str | HoldingConstant | list[str | HoldingConstant] | None = None,
     mode: Literal["steps", "trends", "table"] = "steps",
+    reentry_mode: FunnelReentryMode | None = None,  # funnel reentry behavior
+    time_comparison: TimeComparison | None = None,   # period-over-period comparison
+    data_group_id: int | None = None,                # data group scope
 ) -> FunnelQueryResult
 ```
 
@@ -319,6 +322,7 @@ FunnelMathType = Literal[
     "p75",                      # 75th percentile per step
     "p90",                      # 90th percentile per step
     "p99",                      # 99th percentile per step
+    "histogram",                # Distribution of a numeric property per step
 ]
 ```
 
@@ -347,6 +351,7 @@ All require `math_property` to be set (F10):
 | `median` | Median of property at each step | Median order value |
 | `min` / `max` | Extremes | Smallest/largest order per step |
 | `p25` / `p75` / `p90` / `p99` | Percentiles | Revenue distribution per step |
+| `histogram` | Distribution of property values at each step | Revenue distribution per step |
 
 ```python
 # Measure average revenue at each funnel step
@@ -385,6 +390,58 @@ ws.query_funnel(
     ["View Product", "Add to Wishlist", "Add to Cart"],
     order="any",
 )
+```
+
+---
+
+## Reentry Mode
+
+Controls how users re-enter the funnel after completing all steps.
+
+`FunnelReentryMode = Literal["default", "basic", "aggressive", "optimized"]`
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `default` | Server default behavior | General analysis |
+| `basic` | Re-enter after conversion window expires | Standard repeat measurement |
+| `aggressive` | Re-enter as soon as they convert | High-frequency funnels (e-commerce) |
+| `optimized` | Server-optimized reentry | Best for most repeat-conversion funnels |
+
+```python
+# Aggressive reentry for repeat purchase analysis
+result = ws.query_funnel(
+    ["Browse", "Add to Cart", "Purchase"],
+    reentry_mode="aggressive",
+    last=30,
+)
+```
+
+---
+
+## Period-over-Period Comparison
+
+_(→ [insights-reference.md](insights-reference.md) §TimeComparison for factory methods and validation rules)_
+
+```python
+from mixpanel_data import TimeComparison
+
+# Compare this week's funnel against last week
+result = ws.query_funnel(
+    ["Signup", "Purchase"],
+    time_comparison=TimeComparison.relative("week"),
+    last=7,
+)
+```
+
+---
+
+## Data Group Scope
+
+Scope a funnel query to a specific data group:
+
+```python
+# Scope to a data group
+result = ws.query_funnel(["Signup", "Purchase"], data_group_id=42)
 ```
 
 ---

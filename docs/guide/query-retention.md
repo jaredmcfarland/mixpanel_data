@@ -205,6 +205,10 @@ The `math` parameter controls what metric is computed:
 |---|---|
 | `"retention_rate"` (default) | Percentage of cohort retained per bucket (0.0–1.0) |
 | `"unique"` | Raw unique user count per bucket |
+| `"total"` | Total event count per retention bucket |
+| `"average"` | Average of a numeric property per bucket (requires `math_property`) |
+
+`RetentionMathType = Literal["retention_rate", "unique", "total", "average"]`
 
 ```python
 # Retention rate (default)
@@ -212,6 +216,16 @@ result = ws.query_retention("Signup", "Login", math="retention_rate")
 
 # Raw unique user counts
 result = ws.query_retention("Signup", "Login", math="unique")
+
+# Total login events per retention bucket (not just unique users)
+result = ws.query_retention("Signup", "Login", math="total")
+
+# Average session duration per retention bucket
+result = ws.query_retention(
+    "Signup", "Login",
+    math="average",
+    math_property="session_duration",
+)
 ```
 
 ## Filters
@@ -417,6 +431,77 @@ result = ws.query_retention(
 result = ws.query_retention("Signup", "Login", mode="table")
 ```
 
+## Unbounded Mode
+
+Control how users who perform the return event outside their retention bucket are counted using `unbounded_mode`:
+
+| Mode | Behavior |
+|---|---|
+| `"none"` | Standard counting — only count in the exact bucket (default) |
+| `"carry_back"` | If a user returns in bucket N, also count them in all prior buckets |
+| `"carry_forward"` | If a user returns in bucket N, also count them in all subsequent buckets |
+| `"consecutive_forward"` | Count forward from the last bucket where the user was active |
+
+```python
+# Carry-forward: once a user returns, count them as retained in all later buckets
+result = ws.query_retention(
+    "Signup", "Login",
+    unbounded_mode="carry_forward",
+    retention_unit="week",
+    last=90,
+)
+
+# Carry-back: if a user returns in W4, also count them in W1-W3
+result = ws.query_retention(
+    "Signup", "Login",
+    unbounded_mode="carry_back",
+    retention_unit="week",
+    last=90,
+)
+```
+
+!!! tip
+    Unbounded modes are useful for products where engagement is irregular. `carry_forward` gives an optimistic view, `carry_back` fills gaps.
+
+## Cumulative Retention
+
+Enable cumulative counting with `retention_cumulative=True`. In cumulative mode, each bucket shows the total number of users who returned at least once up to that bucket, rather than the count for that specific bucket.
+
+```python
+# Cumulative: bucket N = users who returned at least once in buckets 0..N
+result = ws.query_retention(
+    "Signup", "Login",
+    retention_cumulative=True,
+    retention_unit="week",
+    last=90,
+)
+```
+
+## Period-over-Period Comparison
+
+Compare retention curves against a previous period using `TimeComparison`:
+
+```python
+from mixpanel_data import TimeComparison
+
+# Compare this month's retention against last month
+result = ws.query_retention(
+    "Signup", "Login",
+    time_comparison=TimeComparison.relative("month"),
+    retention_unit="week",
+    last=30,
+)
+```
+
+See [Insights > Period-over-Period Comparison](query.md#period-over-period-comparison) for all `TimeComparison` factory methods.
+
+## Data Group Scoping
+
+```python
+# Scope retention to a data group
+result = ws.query_retention("Signup", "Login", data_group_id=42)
+```
+
 ## Working with Results
 
 ### `RetentionQueryResult`
@@ -518,7 +603,7 @@ print(json.dumps(result.params, indent=2))
 | Buckets not ascending | `R6_BUCKET_SIZES_ASCENDING` | Bucket sizes must be in strictly ascending order |
 | Invalid retention unit | `R7_INVALID_RETENTION_UNIT` | Must be one of: day, week, month |
 | Invalid alignment | `R8_INVALID_ALIGNMENT` | Must be one of: birth, interval_start |
-| Invalid math | `R9_INVALID_MATH` | Must be one of: retention_rate, unique |
+| Invalid math | `R9_INVALID_MATH` | Must be one of: retention_rate, unique, total, average |
 | Invalid mode | `R10_INVALID_MODE` | Must be one of: curve, trends, table |
 | Invalid unit | `R11_INVALID_UNIT` | Must be one of: day, week, month |
 

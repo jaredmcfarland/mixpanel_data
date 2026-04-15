@@ -92,6 +92,25 @@ Types for using saved or inline custom properties as property references in quer
       show_root_heading: true
       show_root_toc_entry: true
 
+## Advanced Query Types
+
+Types for advanced query features — period-over-period comparison, frequency analysis, and frequency filtering across query engines.
+
+::: mixpanel_data.TimeComparison
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FrequencyBreakdown
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.FrequencyFilter
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## Cohort Definition Types
 
 Types for building inline cohort definitions programmatically — used with `Filter.in_cohort()`, `CohortBreakdown`, and `CohortMetric`.

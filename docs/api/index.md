@@ -31,6 +31,9 @@ from mixpanel_data import (
     CohortDefinition, CohortCriteria,
 )
 
+# Advanced Query types (cross-engine)
+from mixpanel_data import TimeComparison, FrequencyBreakdown, FrequencyFilter
+
 # Retention Query types
 from mixpanel_data import RetentionEvent, RetentionQueryResult
 
@@ -122,6 +125,7 @@ Typed results for all operations:
 - **QueryResult** — Insights query results (from `query()`)
 - **Metric**, **Filter**, **Formula**, **GroupBy** — Query building blocks
 - **CohortBreakdown**, **CohortMetric** — Cohort-scoped query types (cross-engine)
+- **TimeComparison**, **FrequencyBreakdown**, **FrequencyFilter** — Advanced cross-engine query types
 - **CohortDefinition**, **CohortCriteria** — Inline cohort definition builder
 - **FunnelQueryResult**, **FunnelStep**, **Exclusion** — Typed funnel results
 - **RetentionQueryResult**, **RetentionEvent**, **RetentionAlignment**, **RetentionMode**, **RetentionMathType** — Typed retention results

@@ -327,3 +327,136 @@ class TestBuildRetentionParamsMode:
         """mode='table' must produce chartType 'table'."""
         result = ws.build_retention_params("Signup", "Login", mode="table")
         assert result["displayOptions"]["chartType"] == "table"
+
+
+# =============================================================================
+# T005: New retention math types
+# =============================================================================
+
+
+class TestBuildRetentionParamsNewMathTypes:
+    """T005: New retention math types total and average are accepted."""
+
+    def test_math_total_accepted(self, ws: Workspace) -> None:
+        """build_retention_params accepts math='total' and sets measurement correctly."""
+        result = ws.build_retention_params("Signup", "Login", math="total")
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["math"] == "total"
+
+    def test_math_average_accepted(self, ws: Workspace) -> None:
+        """build_retention_params accepts math='average' and sets measurement correctly."""
+        result = ws.build_retention_params("Signup", "Login", math="average")
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["math"] == "average"
+
+
+# =============================================================================
+# T009: Retention unbounded_mode and retention_cumulative parameters
+# =============================================================================
+
+
+class TestBuildRetentionParamsUnboundedMode:
+    """T009: Tests for unbounded_mode parameter in build_retention_params."""
+
+    def test_unbounded_mode_carry_forward(self, ws: Workspace) -> None:
+        """build_retention_params with unbounded_mode='carry_forward' produces retentionUnboundedMode."""
+        result = ws.build_retention_params(
+            "Signup",
+            "Login",
+            unbounded_mode="carry_forward",
+        )
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert behavior["retentionUnboundedMode"] == "carry_forward"
+
+    def test_unbounded_mode_carry_back(self, ws: Workspace) -> None:
+        """build_retention_params with unbounded_mode='carry_back' produces retentionUnboundedMode."""
+        result = ws.build_retention_params(
+            "Signup",
+            "Login",
+            unbounded_mode="carry_back",
+        )
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert behavior["retentionUnboundedMode"] == "carry_back"
+
+    def test_unbounded_mode_none_value(self, ws: Workspace) -> None:
+        """build_retention_params with unbounded_mode='none' produces retentionUnboundedMode."""
+        result = ws.build_retention_params(
+            "Signup",
+            "Login",
+            unbounded_mode="none",
+        )
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert behavior["retentionUnboundedMode"] == "none"
+
+    def test_unbounded_mode_consecutive_forward(self, ws: Workspace) -> None:
+        """build_retention_params with unbounded_mode='consecutive_forward' produces retentionUnboundedMode."""
+        result = ws.build_retention_params(
+            "Signup",
+            "Login",
+            unbounded_mode="consecutive_forward",
+        )
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert behavior["retentionUnboundedMode"] == "consecutive_forward"
+
+    def test_no_unbounded_mode_omits_key(self, ws: Workspace) -> None:
+        """build_retention_params without unbounded_mode omits retentionUnboundedMode (backward compat)."""
+        result = ws.build_retention_params("Signup", "Login")
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert "retentionUnboundedMode" not in behavior
+
+
+class TestBuildRetentionParamsCumulative:
+    """T009: Tests for retention_cumulative parameter in build_retention_params."""
+
+    def test_retention_cumulative_true(self, ws: Workspace) -> None:
+        """build_retention_params with retention_cumulative=True produces retentionCumulative."""
+        result = ws.build_retention_params(
+            "Signup",
+            "Login",
+            retention_cumulative=True,
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["retentionCumulative"] is True
+
+    def test_retention_cumulative_false_omits_key(self, ws: Workspace) -> None:
+        """build_retention_params with retention_cumulative=False omits retentionCumulative (backward compat)."""
+        result = ws.build_retention_params("Signup", "Login")
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert "retentionCumulative" not in measurement
+
+    def test_retention_cumulative_explicit_false_omits_key(self, ws: Workspace) -> None:
+        """build_retention_params with explicit retention_cumulative=False omits retentionCumulative."""
+        result = ws.build_retention_params(
+            "Signup",
+            "Login",
+            retention_cumulative=False,
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert "retentionCumulative" not in measurement
+
+    def test_no_new_params_backward_compat(self, ws: Workspace) -> None:
+        """build_retention_params without new params produces NO retentionUnboundedMode or retentionCumulative."""
+        result = ws.build_retention_params("Signup", "Login")
+        behavior = result["sections"]["show"][0]["behavior"]
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert "retentionUnboundedMode" not in behavior
+        assert "retentionCumulative" not in measurement
+
+
+# =============================================================================
+# T032: data_group_id on retention query engine
+# =============================================================================
+
+
+class TestDataGroupIdRetention:
+    """Tests for data_group_id parameter on retention query engine (T032)."""
+
+    def test_build_retention_params_with_data_group_id(self, ws: Workspace) -> None:
+        """build_retention_params with data_group_id=5 includes dataGroupId: 5 in sections."""
+        result = ws.build_retention_params("Signup", "Login", data_group_id=5)
+        assert result["sections"]["dataGroupId"] == 5
+
+    def test_build_retention_params_without_data_group_id(self, ws: Workspace) -> None:
+        """build_retention_params without data_group_id omits dataGroupId key (backward compat)."""
+        result = ws.build_retention_params("Signup", "Login")
+        assert "dataGroupId" not in result["sections"]

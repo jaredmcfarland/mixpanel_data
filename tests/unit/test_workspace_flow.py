@@ -16,7 +16,7 @@ from pydantic import SecretStr
 from mixpanel_data import Workspace
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.exceptions import BookmarkValidationError, ConfigError
-from mixpanel_data.types import Filter, FlowQueryResult, FlowStep, FlowTreeNode
+from mixpanel_data.types import Filter, FlowQueryResult, FlowStep, FlowTreeNode, GroupBy
 
 # =========================================================================
 # Fixtures
@@ -992,5 +992,269 @@ class TestQueryFlowTreeIntegration:
             assert len(at_roots) == 1
             assert at_roots[0].event == "Login"
             assert len(at_roots[0].children) == 1
+        finally:
+            ws.close()
+
+
+# =========================================================================
+# T032: data_group_id on flow query engine
+# =========================================================================
+
+
+class TestDataGroupIdFlow:
+    """Tests for data_group_id parameter on flow query engine (T032)."""
+
+    def test_build_flow_params_with_data_group_id(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with data_group_id=5 includes data_group_id: 5 (snake_case for flows)."""
+        ws = workspace_factory()
+        result = ws.build_flow_params("Login", data_group_id=5)
+        assert result["data_group_id"] == 5
+
+    def test_build_flow_params_without_data_group_id(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params without data_group_id omits the key entirely."""
+        ws = workspace_factory()
+        result = ws.build_flow_params("Login")
+        assert "data_group_id" not in result
+
+
+# =========================================================================
+# T038: Advanced Flow Features — session_event, segments, exclusions, where
+# =========================================================================
+
+
+class TestFlowSessionEvent:
+    """Tests for session_event in built flow params (T038)."""
+
+    def test_session_event_in_step_output(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with session_event='start' emits session_event in step dict."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                FlowStep(event="$session_start", session_event="start"),
+            )
+            step = params["steps"][0]
+            assert step["session_event"] == "start"
+        finally:
+            ws.close()
+
+    def test_session_event_end_in_step_output(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with session_event='end' emits session_event in step dict."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                FlowStep(event="$session_end", session_event="end"),
+            )
+            step = params["steps"][0]
+            assert step["session_event"] == "end"
+        finally:
+            ws.close()
+
+    def test_no_session_event_omitted_from_step(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Regular FlowStep does not include session_event key in step dict."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params("Login")
+            step = params["steps"][0]
+            assert "session_event" not in step
+        finally:
+            ws.close()
+
+
+class TestFlowSegments:
+    """Tests for segments parameter on flow queries (T038)."""
+
+    def test_segments_single_groupby(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with segments=GroupBy('country') produces segments in output."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                "Login",
+                segments=GroupBy("country"),
+            )
+            assert "segments" in params
+            assert isinstance(params["segments"], list)
+            assert len(params["segments"]) == 1
+            assert params["segments"][0]["value"] == "country"
+        finally:
+            ws.close()
+
+    def test_segments_string_shorthand(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with segments='country' produces segments in output."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                "Login",
+                segments="country",
+            )
+            assert "segments" in params
+            assert len(params["segments"]) == 1
+        finally:
+            ws.close()
+
+    def test_segments_list_of_groupby(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with list of GroupBy produces multiple segments."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                "Login",
+                segments=[GroupBy("country"), GroupBy("platform")],
+            )
+            assert len(params["segments"]) == 2
+        finally:
+            ws.close()
+
+    def test_segments_none_not_in_output(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params without segments does not include segments key."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params("Login")
+            assert "segments" not in params
+        finally:
+            ws.close()
+
+
+class TestFlowExclusions:
+    """Tests for exclusions parameter on flow queries (T038)."""
+
+    def test_exclusions_single_event(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with exclusions=['Error'] produces exclusions list."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                "Login",
+                exclusions=["Error Event"],
+            )
+            assert params["exclusions"] == ["Error Event"]
+        finally:
+            ws.close()
+
+    def test_exclusions_multiple_events(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with multiple exclusions produces them all."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                "Login",
+                exclusions=["Error", "Debug", "Test"],
+            )
+            assert params["exclusions"] == ["Error", "Debug", "Test"]
+        finally:
+            ws.close()
+
+    def test_exclusions_none_produces_empty_list(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params without exclusions produces empty exclusions list (default)."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params("Login")
+            assert params["exclusions"] == []
+        finally:
+            ws.close()
+
+
+class TestFlowPropertyFilters:
+    """Tests for property filters (filter_by_event) on flow queries (T038)."""
+
+    def test_property_filter_produces_filter_by_event(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with where=Filter.equals produces filter_by_event."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                "Login",
+                where=Filter.equals("country", "US"),
+            )
+            assert "filter_by_event" in params
+            fbe = params["filter_by_event"]
+            assert fbe["operator"] == "and"
+            assert len(fbe["children"]) == 1
+            child = fbe["children"][0]
+            assert child["filterOperator"] == "equals"
+            assert child["propertyName"] == "country"
+            assert child["filterValue"] == ["US"]
+        finally:
+            ws.close()
+
+    def test_multiple_property_filters(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with list of property filters produces children array."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                "Login",
+                where=[
+                    Filter.equals("country", "US"),
+                    Filter.greater_than("age", 18),
+                ],
+            )
+            fbe = params["filter_by_event"]
+            assert len(fbe["children"]) == 2
+        finally:
+            ws.close()
+
+    def test_cohort_filter_still_produces_filter_by_cohort(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params with cohort filter still produces filter_by_cohort."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params(
+                "Login",
+                where=Filter.in_cohort(123, "Power Users"),
+            )
+            assert "filter_by_cohort" in params
+            assert "filter_by_event" not in params
+        finally:
+            ws.close()
+
+    def test_no_where_no_filter_keys(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """build_flow_params without where has no filter_by_event or filter_by_cohort."""
+        ws = workspace_factory()
+        try:
+            params = ws.build_flow_params("Login")
+            assert "filter_by_event" not in params
+            assert "filter_by_cohort" not in params
         finally:
             ws.close()

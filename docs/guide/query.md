@@ -78,6 +78,8 @@ result = ws.query(
 | `"dau"` | Daily active users |
 | `"wau"` | Weekly active users |
 | `"mau"` | Monthly active users |
+| `"cumulative_unique"` | Running count of distinct users over time |
+| `"sessions"` | Session count (not events or users) |
 
 ```python
 # DAU over the last 90 days
@@ -85,6 +87,15 @@ result = ws.query("Login", math="dau", last=90)
 
 # Monthly active users
 result = ws.query("Login", math="mau", last=6, unit="month")
+
+# Cumulative unique users over time
+result = ws.query("Login", math="cumulative_unique", last=90)
+
+# Count sessions instead of events
+result = ws.query("Login", math="sessions", last=30)
+
+# Distinct values of a property
+result = ws.query("Purchase", math="unique_values", math_property="product_id")
 ```
 
 ### Property Aggregation
@@ -100,6 +111,11 @@ Aggregate a numeric property across events. Requires `math_property`:
 | `"p25"` / `"p75"` / `"p90"` / `"p99"` | Percentiles |
 | `"percentile"` + `percentile_value` | Custom percentile (e.g. p95) |
 | `"histogram"` | Distribution of property values |
+| `"unique_values"` | Count of distinct values of a property |
+| `"most_frequent"` | Most commonly occurring property value |
+| `"first_value"` | First observed value per user |
+| `"multi_attribution"` | Multi-touch attribution across a property |
+| `"numeric_summary"` | Summary stats (count, mean, variance) |
 
 ```python
 # Average purchase amount per day
@@ -144,6 +160,20 @@ Valid `per_user` values: `"unique_values"`, `"total"`, `"average"`, `"min"`, `"m
 
 !!! note
     `per_user` is incompatible with `dau`, `wau`, `mau`, and `unique` math types.
+
+### Segment Method
+
+Control how events are counted per user with `Metric.segment_method`:
+
+- `"all"` (default) — count every qualifying event
+- `"first"` — count only the first qualifying event per user
+
+```python
+from mixpanel_data import Metric
+
+# Only count each user's first purchase
+result = ws.query(Metric("Purchase", segment_method="first"), last=30)
+```
 
 ### The `Metric` Class
 
@@ -221,6 +251,8 @@ Filter.equals("browser", ["Chrome", "Firefox"])  # equals any in list
 Filter.not_equals("browser", "Safari")        # does not equal
 Filter.contains("email", "@company.com")      # contains substring
 Filter.not_contains("url", "staging")         # does not contain
+Filter.starts_with("email", "admin")          # prefix match
+Filter.ends_with("email", "@company.com")     # suffix match
 ```
 
 **Numeric filters:**
@@ -229,6 +261,9 @@ Filter.not_contains("url", "staging")         # does not contain
 Filter.greater_than("amount", 100)            # > 100
 Filter.less_than("age", 65)                   # < 65
 Filter.between("amount", 10, 100)             # 10 <= x <= 100
+Filter.not_between("age", 18, 65)             # outside a range
+Filter.at_least("score", 80)                  # >= 80
+Filter.at_most("errors", 5)                   # <= 5
 ```
 
 **Existence filters:**
@@ -295,6 +330,8 @@ Filter.date_between("created", "2025-01-01", "2025-06-30")  # date range
 Filter.in_the_last("created", 30, "day")         # last 30 days
 Filter.in_the_last("last_seen", 2, "week")       # last 2 weeks
 Filter.not_in_the_last("created", 90, "day")     # NOT in last 90 days
+Filter.date_not_between("created", "2025-01-01", "2025-06-30")  # dates outside a range
+Filter.in_the_next("renewal_date", 30, "day")    # relative future date
 ```
 
 The relative date methods accept a `FilterDateUnit`: `"hour"`, `"day"`, `"week"`, or `"month"`.
@@ -506,6 +543,119 @@ total = result.df["count"].iloc[0]
 
 !!! warning "Mode affects aggregation"
     `mode="total"` with `math="unique"` deduplicates users across the **entire date range**. `mode="timeseries"` with `math="unique"` counts unique users **per period** (not additive across periods). This is not just a display difference — it changes the numbers.
+
+## Period-over-Period Comparison
+
+Compare the current time range against a previous period using `TimeComparison`:
+
+```python
+from mixpanel_data import TimeComparison
+
+# Compare against previous week
+result = ws.query("Login", time_comparison=TimeComparison.relative("week"), last=7)
+
+# Compare against window starting on a fixed date
+result = ws.query(
+    "Purchase",
+    time_comparison=TimeComparison.absolute_start("2025-01-01"),
+    from_date="2026-01-01",
+    to_date="2026-01-31",
+)
+
+# Compare against window ending on a fixed date
+result = ws.query(
+    "Purchase",
+    time_comparison=TimeComparison.absolute_end("2025-12-31"),
+    from_date="2026-01-01",
+    to_date="2026-01-31",
+)
+```
+
+Three factory methods:
+
+| Method | What it compares against |
+|---|---|
+| `TimeComparison.relative(unit)` | Previous period offset by unit (day, week, month, quarter, year) |
+| `TimeComparison.absolute_start(date)` | Window starting on a fixed date, same duration |
+| `TimeComparison.absolute_end(date)` | Window ending on a fixed date, same duration |
+
+`TimeComparison` also works with `query_funnel()` and `query_retention()`.
+
+## Frequency Analysis
+
+### Frequency Breakdown
+
+Break down results by how often users performed an event using `FrequencyBreakdown`:
+
+```python
+from mixpanel_data import FrequencyBreakdown
+
+# How are logins distributed by purchase frequency?
+result = ws.query(
+    "Login",
+    group_by=FrequencyBreakdown(
+        event="Purchase",
+        bucket_size=1,
+        bucket_min=0,
+        bucket_max=10,
+    ),
+    last=30,
+)
+```
+
+Parameters:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `event` | `str` | required | Event to count frequency for |
+| `bucket_size` | `int` | `1` | Width of each frequency bucket |
+| `bucket_min` | `int` | `0` | Minimum frequency value |
+| `bucket_max` | `int` | `10` | Maximum frequency value |
+| `label` | `str \| None` | `None` | Display label |
+
+### Frequency Filter
+
+Filter to users who performed an event a certain number of times using `FrequencyFilter`:
+
+```python
+from mixpanel_data import FrequencyFilter
+
+# Only users who purchased at least 3 times
+result = ws.query(
+    "Login",
+    where=FrequencyFilter(
+        event="Purchase",
+        value=3,
+        operator="is at least",
+    ),
+    last=30,
+)
+
+# With a lookback window — purchased at least 3 times in the last 30 days
+result = ws.query(
+    "Login",
+    where=FrequencyFilter(
+        event="Purchase",
+        value=3,
+        operator="is at least",
+        date_range_value=30,
+        date_range_unit="day",
+    ),
+    last=90,
+)
+```
+
+Operators: `"is at least"`, `"is at most"`, `"is greater than"`, `"is less than"`, `"is equal to"`.
+
+## Data Groups
+
+Scope a query to a specific data group for group-level analytics:
+
+```python
+result = ws.query("Login", data_group_id=42, last=30)
+```
+
+`data_group_id` is available on all query engines: `query()`, `query_funnel()`, `query_retention()`, and `query_flow()`.
 
 ## Working with Results
 

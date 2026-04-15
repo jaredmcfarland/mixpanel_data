@@ -186,42 +186,41 @@ class TestQueryFlowWhere:
         finally:
             ws.close()
 
-    def test_non_cohort_filter_raises_value_error(
+    def test_property_filter_produces_filter_by_event(
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """T007: Non-cohort filter in flow where= raises ValueError."""
+        """T007: Property filter in flow where= produces filter_by_event."""
         ws = workspace_factory()
         try:
-            with pytest.raises(
-                ValueError,
-                match="query_flow where= only accepts cohort filters",
-            ):
-                ws.build_flow_params(
-                    "Login",
-                    where=Filter.equals("country", "US"),
-                )
+            result = ws.build_flow_params(
+                "Login",
+                where=Filter.equals("country", "US"),
+            )
+            assert "filter_by_event" in result
+            assert result["filter_by_event"]["operator"] == "and"
+            assert len(result["filter_by_event"]["children"]) == 1
         finally:
             ws.close()
 
-    def test_property_filter_in_list_raises_value_error(
+    def test_mixed_cohort_and_property_filters(
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """T007: Property filter in list with cohort filter raises ValueError."""
+        """T007: Mixed cohort + property filters produce both filter keys."""
         ws = workspace_factory()
         try:
-            with pytest.raises(
-                ValueError,
-                match="query_flow where= only accepts cohort filters",
-            ):
-                ws.build_flow_params(
-                    "Login",
-                    where=[
-                        Filter.in_cohort(123, "PU"),
-                        Filter.equals("country", "US"),
-                    ],
-                )
+            result = ws.build_flow_params(
+                "Login",
+                where=[
+                    Filter.in_cohort(123, "PU"),
+                    Filter.equals("country", "US"),
+                ],
+            )
+            assert "filter_by_cohort" in result
+            assert "filter_by_event" in result
+            assert result["filter_by_cohort"]["name"] == "PU"
+            assert len(result["filter_by_event"]["children"]) == 1
         finally:
             ws.close()
 

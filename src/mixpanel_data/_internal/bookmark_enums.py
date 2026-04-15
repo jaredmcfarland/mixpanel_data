@@ -107,6 +107,7 @@ VALID_MATH_FUNNELS: frozenset[str] = frozenset(
         "p75",
         "p90",
         "p99",
+        "histogram",
     }
 )
 """Valid math types for funnel context.
@@ -138,6 +139,12 @@ MATH_REQUIRING_PROPERTY: frozenset[str] = frozenset(
         "custom_percentile",
         "percentile",
         "histogram",
+        # Advanced
+        "unique_values",
+        "most_frequent",
+        "first_value",
+        "multi_attribution",
+        "numeric_summary",
     }
 )
 """Math types that require a measurement property to be specified."""
@@ -287,6 +294,8 @@ VALID_FILTER_OPERATORS: frozenset[str] = frozenset(
         "equals",
         "does not equal",
         "is equal to",
+        "starts with",
+        "ends with",
         # Existence operators
         "is set",
         "is not set",
@@ -457,4 +466,51 @@ VALID_FLOWS_CONVERSION_WINDOW_UNITS: frozenset[str] = frozenset(
 
 Includes ``"session"`` for session-based counting
 (requires ``count_type="session"`` and ``conversion_window=1``).
+"""
+
+# =============================================================================
+# Advanced Query Mode Constants
+# =============================================================================
+
+VALID_FUNNEL_REENTRY_MODES: frozenset[str] = frozenset(
+    {"default", "basic", "aggressive", "optimized"}
+)
+"""Valid funnel reentry modes for behavior.funnelReentryMode."""
+
+VALID_RETENTION_UNBOUNDED_MODES: frozenset[str] = frozenset(
+    {"none", "carry_back", "carry_forward", "consecutive_forward"}
+)
+"""Valid retention unbounded modes for behavior.retentionUnboundedMode."""
+
+VALID_SEGMENT_METHODS: frozenset[str] = frozenset({"all", "first"})
+"""Valid segment method values for measurement.segmentMethod."""
+
+VALID_TIME_COMPARISON_TYPES: frozenset[str] = frozenset(
+    {"relative", "absolute-start", "absolute-end"}
+)
+"""Valid time comparison type values for displayOptions.timeComparison."""
+
+VALID_TIME_COMPARISON_UNITS: frozenset[str] = frozenset(
+    {"day", "week", "month", "quarter", "year"}
+)
+"""Valid time comparison unit values for relative time comparisons."""
+
+VALID_COHORT_AGGREGATION_OPERATORS: frozenset[str] = frozenset(
+    {"total", "unique", "average", "min", "max", "median"}
+)
+"""Valid cohort aggregation operators for behavioral cohort conditions."""
+
+VALID_FREQUENCY_FILTER_OPERATORS: frozenset[str] = frozenset(
+    {
+        "is at least",
+        "is at most",
+        "is greater than",
+        "is less than",
+        "is equal to",
+    }
+)
+"""Valid operators for frequency-based filters.
+
+Note: ``"is between"`` excluded — ``FrequencyFilter.value`` is a single
+scalar and cannot represent the two-bound range that "between" requires.
 """

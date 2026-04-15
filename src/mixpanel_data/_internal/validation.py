@@ -34,6 +34,7 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_FLOWS_CONVERSION_WINDOW_UNITS,
     VALID_FLOWS_COUNT_TYPES,
     VALID_FLOWS_MODES,
+    VALID_FUNNEL_REENTRY_MODES,
     VALID_MATH_FUNNELS,
     VALID_MATH_INSIGHTS,
     VALID_MATH_RETENTION,
@@ -42,6 +43,7 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_PROPERTY_TYPES,
     VALID_RESOURCE_TYPES,
     VALID_RETENTION_ALIGNMENT,
+    VALID_RETENTION_UNBOUNDED_MODES,
     VALID_RETENTION_UNITS,
     VALID_TIME_UNITS,
 )
@@ -69,6 +71,8 @@ from mixpanel_data.types import (
     Filter,
     FlowStep,
     Formula,
+    FrequencyBreakdown,
+    FrequencyFilter,
     FunnelStep,
     GroupBy,
     HoldingConstant,
@@ -211,9 +215,10 @@ def _scan_custom_properties(
     group_by: str
     | GroupBy
     | CohortBreakdown
-    | list[str | GroupBy | CohortBreakdown]
+    | FrequencyBreakdown
+    | Sequence[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
     | None = None,
-    where: Filter | list[Filter] | None = None,
+    where: Filter | FrequencyFilter | Sequence[Filter | FrequencyFilter] | None = None,
     events: Sequence[str | Metric | CohortMetric] | None = None,
     funnel_steps: Sequence[str | FunnelStep] | None = None,
     flow_steps: Sequence[FlowStep] | None = None,
@@ -254,7 +259,7 @@ def _scan_custom_properties(
 
     # Scan group_by
     if group_by is not None:
-        groups = group_by if isinstance(group_by, list) else [group_by]
+        groups = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
         for i, g in enumerate(groups):
             if isinstance(g, GroupBy) and isinstance(
                 g.property, (CustomPropertyRef, InlineCustomProperty)
@@ -262,10 +267,21 @@ def _scan_custom_properties(
                 gpath = f"group_by[{i}]" if len(groups) > 1 else "group_by"
                 errors.extend(_validate_custom_property(g.property, gpath))
 
-    # Scan where (filters)
+    # Scan where (filters) — skip FrequencyFilter instances (no _property)
     if where is not None:
-        filters = where if isinstance(where, list) else [where]
+        filters = list(where) if isinstance(where, (list, tuple)) else [where]
         for i, f in enumerate(filters):
+            if isinstance(f, FrequencyFilter):
+                if f.event_filters:
+                    for fi, ef in enumerate(f.event_filters):
+                        if isinstance(
+                            ef._property, (CustomPropertyRef, InlineCustomProperty)
+                        ):
+                            fpath = f"where[{i}].event_filters[{fi}]"
+                            errors.extend(
+                                _validate_custom_property(ef._property, fpath)
+                            )
+                continue
             if isinstance(f._property, (CustomPropertyRef, InlineCustomProperty)):
                 fpath = f"where[{i}]" if len(filters) > 1 else "where"
                 errors.extend(_validate_custom_property(f._property, fpath))
@@ -442,8 +458,47 @@ def _enum_error(
 
 
 # =============================================================================
-# Reusable sub-validators (time, group-by)
+# Reusable sub-validators (data_group_id, time, group-by)
 # =============================================================================
+
+
+def _validate_data_group_id(
+    data_group_id: int | None,
+) -> list[ValidationError]:
+    """Validate data_group_id parameter if provided.
+
+    When ``data_group_id`` is not ``None``, it must be a positive
+    integer (> 0). Returns a list containing at most one error.
+
+    Args:
+        data_group_id: Data group ID to validate, or ``None``.
+
+    Returns:
+        List with one ``ValidationError`` if invalid, empty otherwise.
+    """
+    if data_group_id is not None:
+        if isinstance(data_group_id, bool) or not isinstance(data_group_id, int):
+            return [
+                ValidationError(
+                    path="data_group_id",
+                    message=(
+                        f"data_group_id must be a positive integer, "
+                        f"got {type(data_group_id).__name__}"
+                    ),
+                    code="DG1_INVALID_DATA_GROUP_ID",
+                )
+            ]
+        if data_group_id <= 0:
+            return [
+                ValidationError(
+                    path="data_group_id",
+                    message=(
+                        f"data_group_id must be a positive integer (got {data_group_id})"
+                    ),
+                    code="DG1_INVALID_DATA_GROUP_ID",
+                )
+            ]
+    return []
 
 
 def validate_time_args(
@@ -590,7 +645,8 @@ def validate_group_by_args(
     group_by: str
     | GroupBy
     | CohortBreakdown
-    | list[str | GroupBy | CohortBreakdown]
+    | FrequencyBreakdown
+    | Sequence[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
     | None,
 ) -> list[ValidationError]:
     """Validate group-by arguments (rules V11-V12, V18, V24).
@@ -631,7 +687,7 @@ def validate_group_by_args(
     if group_by is None:
         return errors
 
-    groups = group_by if isinstance(group_by, list) else [group_by]
+    groups = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
     for i, g in enumerate(groups):
         if isinstance(g, GroupBy):
             gpath = f"group_by[{i}]" if len(groups) > 1 else "group_by"
@@ -730,10 +786,12 @@ def validate_funnel_args(
     | CohortBreakdown
     | list[str | GroupBy | CohortBreakdown]
     | None,
+    reentry_mode: str | None = None,
+    data_group_id: int | None = None,
 ) -> list[ValidationError]:
     """Validate funnel query arguments before bookmark construction (Layer 1).
 
-    Implements funnel-specific validation rules F1-F11 plus reused
+    Implements funnel-specific validation rules F1-F12 plus reused
     time and group-by validators. Returns all errors found so callers
     can fix multiple issues in a single pass.
 
@@ -755,6 +813,11 @@ def validate_funnel_args(
         to_date: End date (YYYY-MM-DD) or ``None``.
         last: Number of days for relative date range.
         group_by: Breakdown specification.
+        reentry_mode: Funnel reentry mode. Must be one of:
+            default, basic, aggressive, optimized, or ``None``.
+            Default: ``None``.
+        data_group_id: Optional data group ID for group-level analytics.
+            Must be a positive integer if provided. Default: ``None``.
 
     Returns:
         List of validation errors. Empty list means all arguments are valid.
@@ -776,6 +839,9 @@ def validate_funnel_args(
         ```
     """
     errors: list[ValidationError] = []
+
+    # DG1: data_group_id must be positive if provided
+    errors.extend(_validate_data_group_id(data_group_id))
 
     # F1: At least 2 steps required
     if len(steps) < 2:
@@ -1064,6 +1130,21 @@ def validate_funnel_args(
     # CP1-CP6: Custom property validation (group_by and per-step filters)
     errors.extend(_scan_custom_properties(group_by=group_by, funnel_steps=steps))
 
+    # F12: reentry_mode validation
+    if reentry_mode is not None and reentry_mode not in VALID_FUNNEL_REENTRY_MODES:
+        suggestion = _suggest(reentry_mode, VALID_FUNNEL_REENTRY_MODES)
+        errors.append(
+            ValidationError(
+                path="reentry_mode",
+                message=(
+                    f"Invalid reentry_mode '{reentry_mode}'; "
+                    f"valid values: {sorted(VALID_FUNNEL_REENTRY_MODES)}"
+                ),
+                code="F12_INVALID_REENTRY_MODE",
+                suggestion=suggestion,
+            )
+        )
+
     return errors
 
 
@@ -1071,11 +1152,14 @@ def validate_funnel_args(
 # Retention argument validation (R1-R12)
 # =============================================================================
 
-_VALID_RETENTION_MATH_PUBLIC: frozenset[str] = frozenset({"retention_rate", "unique"})
+_VALID_RETENTION_MATH_PUBLIC: frozenset[str] = frozenset(
+    {"retention_rate", "unique", "total", "average"}
+)
 """Public-facing retention math types (Layer 1).
 
-The L2 validator uses ``VALID_MATH_RETENTION`` which also includes
-``"total"`` and ``"average"`` for internal bookmark params.
+Expanded in Phase 040 to include ``"total"`` and ``"average"`` — previously
+L1 incorrectly rejected these even though L2 (via ``VALID_MATH_RETENTION``
+in bookmark_enums.py) accepted them. Now L1 and L2 use the same set.
 """
 
 _VALID_RETENTION_MODES: frozenset[str] = frozenset({"curve", "trends", "table"})
@@ -1103,10 +1187,12 @@ def validate_retention_args(
     | CohortBreakdown
     | list[str | GroupBy | CohortBreakdown]
     | None = None,
+    unbounded_mode: str | None = None,
+    data_group_id: int | None = None,
 ) -> list[ValidationError]:
     """Validate retention query arguments before bookmark construction (Layer 1).
 
-    Implements retention-specific validation rules R1-R12 plus reused
+    Implements retention-specific validation rules R1-R13 plus reused
     time and group-by validators. Returns all errors found so callers
     can fix multiple issues in a single pass.
 
@@ -1129,6 +1215,11 @@ def validate_retention_args(
         to_date: End date (YYYY-MM-DD) or ``None``.
         last: Number of days for relative date range.
         group_by: Breakdown specification.
+        unbounded_mode: Retention unbounded mode. Must be one of:
+            none, carry_back, carry_forward, consecutive_forward,
+            or ``None``. Default: ``None``.
+        data_group_id: Optional data group ID for group-level analytics.
+            Must be a positive integer if provided. Default: ``None``.
 
     Returns:
         List of validation errors. Empty list means all arguments are valid.
@@ -1145,6 +1236,9 @@ def validate_retention_args(
         ```
     """
     errors: list[ValidationError] = []
+
+    # DG1: data_group_id must be positive if provided
+    errors.extend(_validate_data_group_id(data_group_id))
 
     # R1: born_event must be non-empty string
     if not born_event.strip():
@@ -1355,6 +1449,24 @@ def validate_retention_args(
     # CP1-CP6: Custom property validation
     errors.extend(_scan_custom_properties(group_by=group_by))
 
+    # R13: unbounded_mode validation
+    if (
+        unbounded_mode is not None
+        and unbounded_mode not in VALID_RETENTION_UNBOUNDED_MODES
+    ):
+        suggestion = _suggest(unbounded_mode, VALID_RETENTION_UNBOUNDED_MODES)
+        errors.append(
+            ValidationError(
+                path="unbounded_mode",
+                message=(
+                    f"Invalid unbounded_mode '{unbounded_mode}'; "
+                    f"valid values: {sorted(VALID_RETENTION_UNBOUNDED_MODES)}"
+                ),
+                code="R13_INVALID_UNBOUNDED_MODE",
+                suggestion=suggestion,
+            )
+        )
+
     return errors
 
 
@@ -1389,12 +1501,15 @@ def validate_flow_args(
     from_date: str | None = None,
     to_date: str | None = None,
     last: int = 30,
+    time_comparison: object | None = None,
+    data_group_id: int | None = None,
 ) -> list[ValidationError]:
     """Validate flow query arguments before bookmark construction (Layer 1).
 
-    Implements flow-specific validation rules FL1-FL10 plus enum checks
-    and reused time validators. Returns all errors found so callers
-    can fix multiple issues in a single pass.
+    Implements flow-specific validation rules FL1-FL10, DG1
+    (data_group_id validation), time_comparison rejection, plus enum
+    checks and reused time validators. Returns all errors found so
+    callers can fix multiple issues in a single pass.
 
     Args:
         steps: List of event names that define the flow anchor points.
@@ -1416,6 +1531,11 @@ def validate_flow_args(
         from_date: Start date (YYYY-MM-DD) or ``None``.
         to_date: End date (YYYY-MM-DD) or ``None``.
         last: Number of days for relative date range. Default: ``30``.
+        time_comparison: Time comparison object. Must be ``None`` for
+            flows — flows do not support period-over-period comparison.
+            Default: ``None``.
+        data_group_id: Optional data group ID for group-level analytics.
+            Must be a positive integer if provided. Default: ``None``.
 
     Returns:
         List of validation errors. Empty list means all arguments are valid.
@@ -1433,6 +1553,22 @@ def validate_flow_args(
         ```
     """
     errors: list[ValidationError] = []
+
+    # DG1: data_group_id must be positive if provided
+    errors.extend(_validate_data_group_id(data_group_id))
+
+    # Flows do not support time comparison
+    if time_comparison is not None:
+        errors.append(
+            ValidationError(
+                path="time_comparison",
+                message=(
+                    "Flows do not support time comparison; "
+                    "remove the time_comparison parameter"
+                ),
+                code="FL_TIME_COMPARISON_NOT_SUPPORTED",
+            )
+        )
 
     # FL1: steps must be non-empty
     if len(steps) == 0:
@@ -1755,9 +1891,11 @@ def validate_query_args(
     group_by: str
     | GroupBy
     | CohortBreakdown
-    | list[str | GroupBy | CohortBreakdown]
+    | FrequencyBreakdown
+    | Sequence[str | GroupBy | CohortBreakdown | FrequencyBreakdown]
     | None,
     formulas: Sequence[Any] | None = None,
+    data_group_id: int | None = None,
 ) -> list[ValidationError]:
     """Validate query arguments before bookmark construction (Layer 1).
 
@@ -1779,11 +1917,16 @@ def validate_query_args(
         cumulative: Cumulative analysis mode.
         group_by: Breakdown specification.
         formulas: Resolved Formula objects (for expression validation).
+        data_group_id: Optional data group ID for group-level analytics.
+            Must be a positive integer if provided. Default: ``None``.
 
     Returns:
         List of validation errors. Empty list means all arguments are valid.
     """
     errors: list[ValidationError] = []
+
+    # DG1: data_group_id must be positive if provided
+    errors.extend(_validate_data_group_id(data_group_id))
 
     # V0: At least one event required
     if not events:

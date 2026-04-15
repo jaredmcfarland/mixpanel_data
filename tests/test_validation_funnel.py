@@ -1246,6 +1246,52 @@ class TestValidateFunnelArgsF11MathRejectsProperty:
 # =============================================================================
 
 
+# =============================================================================
+# T010: F12 — reentry_mode validation
+# =============================================================================
+
+
+class TestValidateFunnelArgsF12ReentryMode:
+    """Tests for F12: reentry_mode validation."""
+
+    def test_valid_reentry_mode_default_no_error(self) -> None:
+        """reentry_mode='default' must not produce F12 error."""
+        errors = validate_funnel_args(**_valid_funnel_args(reentry_mode="default"))
+        assert "F12_INVALID_REENTRY_MODE" not in _codes(errors)
+
+    def test_valid_reentry_mode_basic_no_error(self) -> None:
+        """reentry_mode='basic' must not produce F12 error."""
+        errors = validate_funnel_args(**_valid_funnel_args(reentry_mode="basic"))
+        assert "F12_INVALID_REENTRY_MODE" not in _codes(errors)
+
+    def test_valid_reentry_mode_aggressive_no_error(self) -> None:
+        """reentry_mode='aggressive' must not produce F12 error."""
+        errors = validate_funnel_args(**_valid_funnel_args(reentry_mode="aggressive"))
+        assert "F12_INVALID_REENTRY_MODE" not in _codes(errors)
+
+    def test_valid_reentry_mode_optimized_no_error(self) -> None:
+        """reentry_mode='optimized' must not produce F12 error."""
+        errors = validate_funnel_args(**_valid_funnel_args(reentry_mode="optimized"))
+        assert "F12_INVALID_REENTRY_MODE" not in _codes(errors)
+
+    def test_none_reentry_mode_no_error(self) -> None:
+        """reentry_mode=None must not produce F12 error."""
+        errors = validate_funnel_args(**_valid_funnel_args(reentry_mode=None))
+        assert "F12_INVALID_REENTRY_MODE" not in _codes(errors)
+
+    def test_invalid_reentry_mode_returns_f12_error(self) -> None:
+        """reentry_mode='invalid' must produce F12_INVALID_REENTRY_MODE error."""
+        errors = validate_funnel_args(**_valid_funnel_args(reentry_mode="invalid"))
+        assert "F12_INVALID_REENTRY_MODE" in _codes(errors)
+
+    def test_f12_error_path_is_reentry_mode(self) -> None:
+        """The F12 error path must point to 'reentry_mode'."""
+        errors = validate_funnel_args(**_valid_funnel_args(reentry_mode="bad"))
+        f12 = [e for e in errors if e.code == "F12_INVALID_REENTRY_MODE"]
+        assert len(f12) == 1
+        assert f12[0].path == "reentry_mode"
+
+
 class TestF8bHoldingConstantPropertyValidation:
     """Tests for F8b: empty holding constant property names."""
 
@@ -1294,3 +1340,34 @@ class TestF8bHoldingConstantPropertyValidation:
             ValueError, match="HoldingConstant.property must be a non-empty string"
         ):
             HoldingConstant("")
+
+
+# =============================================================================
+# T036: data_group_id validation for funnels
+# =============================================================================
+
+
+class TestDataGroupIdValidationFunnel:
+    """Tests for data_group_id validation in validate_funnel_args (T036)."""
+
+    def test_valid_data_group_id(self) -> None:
+        """Positive integer data_group_id passes funnel validation."""
+        errors = validate_funnel_args(**_valid_funnel_args(data_group_id=5))
+        assert not any(e.code == "DG1_INVALID_DATA_GROUP_ID" for e in errors)
+
+    def test_none_data_group_id(self) -> None:
+        """None data_group_id passes funnel validation."""
+        errors = validate_funnel_args(**_valid_funnel_args(data_group_id=None))
+        assert not any(e.code == "DG1_INVALID_DATA_GROUP_ID" for e in errors)
+
+    def test_zero_data_group_id(self) -> None:
+        """data_group_id=0 fails funnel validation."""
+        errors = validate_funnel_args(**_valid_funnel_args(data_group_id=0))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1
+
+    def test_negative_data_group_id(self) -> None:
+        """Negative data_group_id fails funnel validation."""
+        errors = validate_funnel_args(**_valid_funnel_args(data_group_id=-3))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1

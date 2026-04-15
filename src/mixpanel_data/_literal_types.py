@@ -59,42 +59,63 @@ MathType = Literal[
     "p99",
     "percentile",
     "histogram",
+    "cumulative_unique",
+    "sessions",
+    "unique_values",
+    "most_frequent",
+    "first_value",
+    "multi_attribution",
+    "numeric_summary",
 ]
 """Aggregation function for query metrics.
 
-+-----------+------------------------------------------------------------------+--------------------+
-| Value     | Meaning                                                          | Requires property? |
-+===========+==================================================================+====================+
-| total     | Count events, or sum a numeric property if ``property`` is set   | Optional           |
-+-----------+------------------------------------------------------------------+--------------------+
-| unique    | Count distinct users                                             | No                 |
-+-----------+------------------------------------------------------------------+--------------------+
-| dau       | Daily Active Users (unique users per day)                        | No                 |
-+-----------+------------------------------------------------------------------+--------------------+
-| wau       | Weekly Active Users (unique users per 7-day window)              | No                 |
-+-----------+------------------------------------------------------------------+--------------------+
-| mau       | Monthly Active Users (unique users per 28-day window)            | No                 |
-+-----------+------------------------------------------------------------------+--------------------+
-| average   | Mean of a numeric property's values                              | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| median    | Median (50th percentile) of a numeric property                   | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| min       | Minimum value of a numeric property                              | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| max       | Maximum value of a numeric property                              | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| p25       | 25th percentile of a numeric property                            | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| p75       | 75th percentile of a numeric property                            | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| p90       | 90th percentile of a numeric property                            | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| p99       | 99th percentile of a numeric property                            | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| percentile| Custom percentile (requires ``percentile_value``)                | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
-| histogram | Distribution of a numeric property's values                      | Yes                |
-+-----------+------------------------------------------------------------------+--------------------+
++-------------------+------------------------------------------------------------------+--------------------+
+| Value             | Meaning                                                          | Requires property? |
++===================+==================================================================+====================+
+| total             | Count events, or sum a numeric property if ``property`` is set   | Optional           |
++-------------------+------------------------------------------------------------------+--------------------+
+| unique            | Count distinct users                                             | No                 |
++-------------------+------------------------------------------------------------------+--------------------+
+| dau               | Daily Active Users (unique users per day)                        | No                 |
++-------------------+------------------------------------------------------------------+--------------------+
+| wau               | Weekly Active Users (unique users per 7-day window)              | No                 |
++-------------------+------------------------------------------------------------------+--------------------+
+| mau               | Monthly Active Users (unique users per 28-day window)            | No                 |
++-------------------+------------------------------------------------------------------+--------------------+
+| average           | Mean of a numeric property's values                              | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| median            | Median (50th percentile) of a numeric property                   | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| min               | Minimum value of a numeric property                              | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| max               | Maximum value of a numeric property                              | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| p25               | 25th percentile of a numeric property                            | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| p75               | 75th percentile of a numeric property                            | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| p90               | 90th percentile of a numeric property                            | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| p99               | 99th percentile of a numeric property                            | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| percentile        | Custom percentile (requires ``percentile_value``)                | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| histogram         | Distribution of a numeric property's values                      | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| cumulative_unique | Running count of distinct users over time                        | No                 |
++-------------------+------------------------------------------------------------------+--------------------+
+| sessions          | Count sessions (not events or users)                             | No                 |
++-------------------+------------------------------------------------------------------+--------------------+
+| unique_values     | Count of distinct values of a property                           | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| most_frequent     | Most commonly occurring value of a property                      | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| first_value       | First observed value of a property per user                      | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| multi_attribution | Multi-touch attribution across a property                        | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
+| numeric_summary   | Summary stats (count, mean, variance) of a property              | Yes                |
++-------------------+------------------------------------------------------------------+--------------------+
 
 Note: Mixpanel has no ``"sum"`` math type. Use ``math="total"`` with
 a ``property`` to sum a numeric property's values.
@@ -147,40 +168,43 @@ FunnelMathType = Literal[
     "p75",
     "p90",
     "p99",
+    "histogram",
 ]
 """Aggregation function for funnel query metrics.
 
-+---------------------------+------------------------------------------------------+
-| Value                     | Meaning                                              |
-+===========================+======================================================+
-| conversion_rate_unique    | Unique-user conversion rate (default)                |
-+---------------------------+------------------------------------------------------+
-| conversion_rate_total     | Total-event conversion rate                          |
-+---------------------------+------------------------------------------------------+
-| conversion_rate_session   | Session-based conversion rate                        |
-+---------------------------+------------------------------------------------------+
-| unique                    | Raw count of unique users per step                   |
-+---------------------------+------------------------------------------------------+
-| total                     | Raw total event count per step                       |
-+---------------------------+------------------------------------------------------+
-| average                   | Mean of a numeric property per step                  |
-+---------------------------+------------------------------------------------------+
-| median                    | Median of a numeric property per step                |
-+---------------------------+------------------------------------------------------+
-| min                       | Minimum of a numeric property per step               |
-+---------------------------+------------------------------------------------------+
-| max                       | Maximum of a numeric property per step               |
-+---------------------------+------------------------------------------------------+
-| p25                       | 25th percentile of a numeric property per step       |
-+---------------------------+------------------------------------------------------+
-| p75                       | 75th percentile of a numeric property per step       |
-+---------------------------+------------------------------------------------------+
-| p90                       | 90th percentile of a numeric property per step       |
-+---------------------------+------------------------------------------------------+
-| p99                       | 99th percentile of a numeric property per step       |
-+---------------------------+------------------------------------------------------+
++---------------------------+------------------------------------------------------+--------------------+
+| Value                     | Meaning                                              | Requires property? |
++===========================+======================================================+====================+
+| conversion_rate_unique    | Unique-user conversion rate (default)                | No                 |
++---------------------------+------------------------------------------------------+--------------------+
+| conversion_rate_total     | Total-event conversion rate                          | No                 |
++---------------------------+------------------------------------------------------+--------------------+
+| conversion_rate_session   | Session-based conversion rate                        | No                 |
++---------------------------+------------------------------------------------------+--------------------+
+| unique                    | Raw count of unique users per step                   | No                 |
++---------------------------+------------------------------------------------------+--------------------+
+| total                     | Raw total event count per step                       | No                 |
++---------------------------+------------------------------------------------------+--------------------+
+| average                   | Mean of a numeric property per step                  | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
+| median                    | Median of a numeric property per step                | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
+| min                       | Minimum of a numeric property per step               | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
+| max                       | Maximum of a numeric property per step               | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
+| p25                       | 25th percentile of a numeric property per step       | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
+| p75                       | 75th percentile of a numeric property per step       | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
+| p90                       | 90th percentile of a numeric property per step       | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
+| p99                       | 99th percentile of a numeric property per step       | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
+| histogram                 | Distribution of a numeric property per step          | Yes                |
++---------------------------+------------------------------------------------------+--------------------+
 
-These 13 values are the public-facing funnel math types. The Mixpanel API
+These 14 values are the public-facing funnel math types. The Mixpanel API
 also accepts internal aliases (``"general"``, ``"session"``,
 ``"conversion_rate"``) but those are not exposed in the public API.
 """
@@ -266,7 +290,7 @@ RetentionMode = Literal["curve", "trends", "table"]
 +--------+----------------------------------------------+
 """
 
-RetentionMathType = Literal["retention_rate", "unique"]
+RetentionMathType = Literal["retention_rate", "unique", "total", "average"]
 """Aggregation function for retention query metrics.
 
 +----------------+----------------------------------------------+
@@ -276,8 +300,154 @@ RetentionMathType = Literal["retention_rate", "unique"]
 +----------------+----------------------------------------------+
 | unique         | Raw count of retained users                  |
 +----------------+----------------------------------------------+
+| total          | Total event count per retention bucket       |
++----------------+----------------------------------------------+
+| average        | Average of a numeric property per bucket     |
++----------------+----------------------------------------------+
 
 Maps directly to the ``measurement.math`` field in bookmark JSON.
+"""
+
+# =============================================================================
+# Advanced Query Types
+# =============================================================================
+
+SegmentMethod = Literal["all", "first"]
+"""Method for counting qualifying events in segmentation.
+
++--------+------------------------------------------------------+
+| Value  | Meaning                                              |
++========+======================================================+
+| all    | Count all qualifying events (default)                |
++--------+------------------------------------------------------+
+| first  | Count only the first qualifying event per user       |
++--------+------------------------------------------------------+
+"""
+
+FunnelReentryMode = Literal["default", "basic", "aggressive", "optimized"]
+"""Re-entry mode for funnel queries.
+
++------------+------------------------------------------------------+
+| Value      | Meaning                                              |
++============+======================================================+
+| default    | Server default behavior                              |
++------------+------------------------------------------------------+
+| basic      | Users re-enter at steps after first                  |
++------------+------------------------------------------------------+
+| aggressive | Each re-entry generates additional conversion        |
++------------+------------------------------------------------------+
+| optimized  | Optimized re-entry counting                          |
++------------+------------------------------------------------------+
+"""
+
+RetentionUnboundedMode = Literal[
+    "none", "carry_back", "carry_forward", "consecutive_forward"
+]
+"""Unbounded retention mode for retention queries.
+
++----------------------+------------------------------------------------------+
+| Value                | Meaning                                              |
++======================+======================================================+
+| none                 | No unbounded retention (default)                     |
++----------------------+------------------------------------------------------+
+| carry_back           | Count users in all prior buckets                     |
++----------------------+------------------------------------------------------+
+| carry_forward        | Count users in all subsequent buckets                |
++----------------------+------------------------------------------------------+
+| consecutive_forward  | Count users in consecutive subsequent buckets        |
++----------------------+------------------------------------------------------+
+"""
+
+TimeComparisonType = Literal["relative", "absolute-start", "absolute-end"]
+"""Type of time comparison for query results.
+
++----------------+------------------------------------------------------+
+| Value          | Meaning                                              |
++================+======================================================+
+| relative       | Compare against previous period of same length       |
++----------------+------------------------------------------------------+
+| absolute-start | Compare against period starting from a specific date |
++----------------+------------------------------------------------------+
+| absolute-end   | Compare against period ending at a specific date     |
++----------------+------------------------------------------------------+
+"""
+
+TimeComparisonUnit = Literal["day", "week", "month", "quarter", "year"]
+"""Time unit for period-over-period comparisons.
+
++---------+----------------------------------------------+
+| Value   | Meaning                                      |
++=========+==============================================+
+| day     | Compare against previous day                 |
++---------+----------------------------------------------+
+| week    | Compare against previous week                |
++---------+----------------------------------------------+
+| month   | Compare against previous month               |
++---------+----------------------------------------------+
+| quarter | Compare against previous quarter             |
++---------+----------------------------------------------+
+| year    | Compare against previous year                |
++---------+----------------------------------------------+
+"""
+
+CohortAggregationType = Literal["total", "unique", "average", "min", "max", "median"]
+"""Aggregation type for cohort behavior criteria.
+
++---------+----------------------------------------------+
+| Value   | Meaning                                      |
++=========+==============================================+
+| total   | Sum of property values                       |
++---------+----------------------------------------------+
+| unique  | Count of distinct property values            |
++---------+----------------------------------------------+
+| average | Mean of property values                      |
++---------+----------------------------------------------+
+| min     | Minimum property value                       |
++---------+----------------------------------------------+
+| max     | Maximum property value                       |
++---------+----------------------------------------------+
+| median  | Median property value                        |
++---------+----------------------------------------------+
+"""
+
+FlowSessionEvent = Literal["start", "end"]
+"""Session anchor event type for flow queries.
+
++--------+----------------------------------------------+
+| Value  | Meaning                                      |
++========+==============================================+
+| start  | Session start anchor ($session_start)        |
++--------+----------------------------------------------+
+| end    | Session end anchor ($session_end)            |
++--------+----------------------------------------------+
+"""
+
+FrequencyFilterOperator = Literal[
+    "is at least",
+    "is at most",
+    "is greater than",
+    "is less than",
+    "is equal to",
+]
+"""Comparison operator for frequency filters.
+
++------------------+----------------------------------------------+
+| Value            | Meaning                                      |
++==================+==============================================+
+| is at least      | Count >= threshold (default)                 |
++------------------+----------------------------------------------+
+| is at most       | Count <= threshold                           |
++------------------+----------------------------------------------+
+| is greater than  | Count > threshold                            |
++------------------+----------------------------------------------+
+| is less than     | Count < threshold                            |
++------------------+----------------------------------------------+
+| is equal to      | Count == threshold                           |
++------------------+----------------------------------------------+
+
+Note: ``"is between"`` is excluded because ``FrequencyFilter.value``
+is typed as ``int | float`` (single scalar) and cannot represent
+the two-bound range that "between" requires.
 """
 
 # =============================================================================
@@ -383,6 +553,15 @@ __all__ = [
     "RetentionAlignment",
     "RetentionMode",
     "RetentionMathType",
+    # Advanced query types
+    "SegmentMethod",
+    "FunnelReentryMode",
+    "RetentionUnboundedMode",
+    "TimeComparisonType",
+    "TimeComparisonUnit",
+    "CohortAggregationType",
+    "FlowSessionEvent",
+    "FrequencyFilterOperator",
     # Flow types
     "FlowChartType",
     "FlowConversionWindowUnit",

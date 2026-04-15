@@ -316,6 +316,8 @@ Task(subagent_type="mixpanel-data:synthesizer", prompt="...")
 - Python 3.10+ (mypy --strict compliant) + Pydantic v2 (validation/models), httpx (HTTP client), Typer (CLI), Rich (output), tomli/tomli_w (TOML read/write) (038-auth-project-workspace-redesign)
 - TOML config file (`~/.mp/config.toml`), JSON cache files (`~/.mp/oauth/me_{region}.json`), JSON OAuth token files (`~/.mp/oauth/tokens_{region}.json`) (038-auth-project-workspace-redesign)
 - Python 3.10+ (mypy --strict) + httpx (HTTP), Pydantic v2 (validation), pandas (DataFrames), Hypothesis (PBT) (039-query-user-engine)
+- Python 3.10+ + httpx, Pydantic v2, Typer, Rich, pandas, Hypothesis (040-query-engine-completeness)
+- N/A — query parameter types only, no persistence (040-query-engine-completeness)
 
 ## Recent Changes
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)

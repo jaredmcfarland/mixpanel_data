@@ -833,6 +833,60 @@ class TestValidateRetentionR12:
 # =============================================================================
 
 
+# =============================================================================
+# T010: R13 — unbounded_mode validation
+# =============================================================================
+
+
+class TestValidateRetentionR13UnboundedMode:
+    """Tests for R13: unbounded_mode validation."""
+
+    def test_valid_unbounded_mode_none_no_error(self) -> None:
+        """unbounded_mode='none' must not produce R13 error."""
+        errors = validate_retention_args(**_valid_retention_args(unbounded_mode="none"))
+        assert "R13_INVALID_UNBOUNDED_MODE" not in _codes(errors)
+
+    def test_valid_unbounded_mode_carry_back_no_error(self) -> None:
+        """unbounded_mode='carry_back' must not produce R13 error."""
+        errors = validate_retention_args(
+            **_valid_retention_args(unbounded_mode="carry_back")
+        )
+        assert "R13_INVALID_UNBOUNDED_MODE" not in _codes(errors)
+
+    def test_valid_unbounded_mode_carry_forward_no_error(self) -> None:
+        """unbounded_mode='carry_forward' must not produce R13 error."""
+        errors = validate_retention_args(
+            **_valid_retention_args(unbounded_mode="carry_forward")
+        )
+        assert "R13_INVALID_UNBOUNDED_MODE" not in _codes(errors)
+
+    def test_valid_unbounded_mode_consecutive_forward_no_error(self) -> None:
+        """unbounded_mode='consecutive_forward' must not produce R13 error."""
+        errors = validate_retention_args(
+            **_valid_retention_args(unbounded_mode="consecutive_forward")
+        )
+        assert "R13_INVALID_UNBOUNDED_MODE" not in _codes(errors)
+
+    def test_none_unbounded_mode_no_error(self) -> None:
+        """unbounded_mode=None (default) must not produce R13 error."""
+        errors = validate_retention_args(**_valid_retention_args(unbounded_mode=None))
+        assert "R13_INVALID_UNBOUNDED_MODE" not in _codes(errors)
+
+    def test_invalid_unbounded_mode_returns_r13_error(self) -> None:
+        """unbounded_mode='invalid' must produce R13_INVALID_UNBOUNDED_MODE error."""
+        errors = validate_retention_args(
+            **_valid_retention_args(unbounded_mode="invalid")
+        )
+        assert "R13_INVALID_UNBOUNDED_MODE" in _codes(errors)
+
+    def test_r13_error_path_is_unbounded_mode(self) -> None:
+        """The R13 error path must point to 'unbounded_mode'."""
+        errors = validate_retention_args(**_valid_retention_args(unbounded_mode="bad"))
+        r13 = [e for e in errors if e.code == "R13_INVALID_UNBOUNDED_MODE"]
+        assert len(r13) == 1
+        assert r13[0].path == "unbounded_mode"
+
+
 class TestValidateRetentionR5Boolean:
     """Tests for R5: boolean values in bucket_sizes are rejected.
 
@@ -1000,3 +1054,34 @@ class TestValidateBookmarkRetentionB9MathDispatch:
         }
         errors = validate_bookmark(bookmark, bookmark_type="retention")
         assert not any(e.code == "B9_INVALID_MATH" for e in errors)
+
+
+# =============================================================================
+# T036: data_group_id validation for retention
+# =============================================================================
+
+
+class TestDataGroupIdValidationRetention:
+    """Tests for data_group_id validation in validate_retention_args (T036)."""
+
+    def test_valid_data_group_id(self) -> None:
+        """Positive integer data_group_id passes retention validation."""
+        errors = validate_retention_args(**_valid_retention_args(data_group_id=5))
+        assert not any(e.code == "DG1_INVALID_DATA_GROUP_ID" for e in errors)
+
+    def test_none_data_group_id(self) -> None:
+        """None data_group_id passes retention validation."""
+        errors = validate_retention_args(**_valid_retention_args(data_group_id=None))
+        assert not any(e.code == "DG1_INVALID_DATA_GROUP_ID" for e in errors)
+
+    def test_zero_data_group_id(self) -> None:
+        """data_group_id=0 fails retention validation."""
+        errors = validate_retention_args(**_valid_retention_args(data_group_id=0))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1
+
+    def test_negative_data_group_id(self) -> None:
+        """Negative data_group_id fails retention validation."""
+        errors = validate_retention_args(**_valid_retention_args(data_group_id=-2))
+        dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
+        assert len(dg_errors) == 1

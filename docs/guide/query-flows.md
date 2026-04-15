@@ -155,18 +155,25 @@ result = ws.query_flow(
 
 See [Insights Queries — Filters](query.md#filters) for the full list of `Filter` factory methods.
 
-### Cohort Filters
+### Filtering with `where=`
 
-Restrict flow analysis to users in a cohort using the `where=` parameter:
+Restrict flow analysis to a subset of users using the `where=` parameter. Flows support both cohort filters and property filters:
 
 ```python
 from mixpanel_data import Filter, CohortCriteria, CohortDefinition
 
-# What do power users do after purchasing?
+# Cohort filter — what do power users do after purchasing?
 result = ws.query_flow(
     "Purchase",
     forward=3,
     where=Filter.in_cohort(123, "Power Users"),
+)
+
+# Property filter — iOS users only
+result = ws.query_flow(
+    "Purchase",
+    where=Filter.equals("platform", "iOS"),
+    last=30,
 )
 
 # Inline cohort — what paths do frequent buyers take?
@@ -180,9 +187,9 @@ result = ws.query_flow(
 ```
 
 !!! note
-    Flows only support cohort filters (`Filter.in_cohort` / `Filter.not_in_cohort`), not property filters. Cohort breakdowns (`CohortBreakdown`) and custom properties (`CustomPropertyRef`, `InlineCustomProperty`) are not supported in flows.
+    Cohort breakdowns (`CohortBreakdown`) and custom properties (`CustomPropertyRef`, `InlineCustomProperty`) are not supported in flows.
 
-See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full cohort filter reference.
+See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full cohort filter reference and [Insights Queries — Filters](query.md#filters) for all `Filter` factory methods.
 
 ## Direction
 
@@ -301,6 +308,15 @@ result = ws.query_flow("Purchase", count_type="session")
 ```
 
 ## Additional Options
+
+### Data Group
+
+Scope flow analysis to a specific data group:
+
+```python
+# Scope to a data group
+result = ws.query_flow("Purchase", data_group_id=42, last=30)
+```
 
 ### Cardinality
 
@@ -836,6 +852,73 @@ ws.create_bookmark(CreateBookmarkParams(
     params=params,
 ))
 ```
+
+## Flow Segments
+
+Break flow results down by a property, cohort, or frequency using the `segments` parameter:
+
+```python
+# Break down paths by platform
+result = ws.query_flow("Purchase", segments="platform", last=30)
+
+# Segment by a GroupBy with bucketing
+from mixpanel_data import GroupBy
+result = ws.query_flow(
+    "Purchase",
+    segments=GroupBy("revenue", property_type="number", bucket_size=50),
+    last=30,
+)
+
+# Segment by cohort membership
+from mixpanel_data import CohortBreakdown
+result = ws.query_flow(
+    "Purchase",
+    segments=CohortBreakdown(cohort_id=123, name="Power Users"),
+    last=30,
+)
+```
+
+`segments` accepts a string (property name), `GroupBy`, `CohortBreakdown`, `FrequencyBreakdown`, or a list of these.
+
+## Flow Exclusions
+
+Hide specific events from flow paths using the `exclusions` parameter:
+
+```python
+# Exclude noisy events from the flow
+result = ws.query_flow(
+    "Purchase",
+    exclusions=["Page View", "Session Start"],
+    forward=3,
+    last=30,
+)
+```
+
+Excluded events are removed from the flow graph — they won't appear as nodes or edges, making it easier to see meaningful user paths.
+
+## Session Events
+
+Anchor a flow step to a session boundary using `FlowStep.session_event`:
+
+```python
+from mixpanel_data import FlowStep
+
+# What happens after a session starts?
+result = ws.query_flow(
+    FlowStep(event="Session Start", session_event="start"),
+    forward=5,
+    last=30,
+)
+
+# What leads up to a session ending?
+result = ws.query_flow(
+    FlowStep(event="Session End", session_event="end"),
+    reverse=3,
+    last=30,
+)
+```
+
+Values: `"start"` (session start anchor) or `"end"` (session end anchor).
 
 ## Next Steps
 

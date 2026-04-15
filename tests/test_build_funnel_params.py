@@ -794,3 +794,93 @@ class TestBuildFunnelParamsHoldingConstant:
         result = ws.build_funnel_params(["A", "B"])
         behavior = result["sections"]["show"][0]["behavior"]
         assert behavior["aggregateBy"] == []
+
+
+# =============================================================================
+# T005: New funnel math types
+# =============================================================================
+
+
+class TestBuildFunnelParamsNewMathTypes:
+    """T005: New funnel math type histogram is accepted."""
+
+    def test_math_histogram_accepted(self, ws: Workspace) -> None:
+        """build_funnel_params accepts math='histogram' and sets measurement correctly."""
+        result = ws.build_funnel_params(
+            ["Signup", "Purchase"],
+            math="histogram",
+            math_property="amount",
+        )
+        measurement = result["sections"]["show"][0]["measurement"]
+        assert measurement["math"] == "histogram"
+        assert measurement["property"]["name"] == "amount"
+
+
+# =============================================================================
+# T009: Funnel reentry_mode parameter
+# =============================================================================
+
+
+class TestBuildFunnelParamsReentryMode:
+    """T009: Tests for reentry_mode parameter in build_funnel_params."""
+
+    def test_reentry_mode_aggressive(self, ws: Workspace) -> None:
+        """build_funnel_params with reentry_mode='aggressive' produces funnelReentryMode."""
+        result = ws.build_funnel_params(
+            ["Signup", "Purchase"],
+            reentry_mode="aggressive",
+        )
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert behavior["funnelReentryMode"] == "aggressive"
+
+    def test_reentry_mode_default(self, ws: Workspace) -> None:
+        """build_funnel_params with reentry_mode='default' produces funnelReentryMode."""
+        result = ws.build_funnel_params(
+            ["Signup", "Purchase"],
+            reentry_mode="default",
+        )
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert behavior["funnelReentryMode"] == "default"
+
+    def test_reentry_mode_basic(self, ws: Workspace) -> None:
+        """build_funnel_params with reentry_mode='basic' produces funnelReentryMode."""
+        result = ws.build_funnel_params(
+            ["Signup", "Purchase"],
+            reentry_mode="basic",
+        )
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert behavior["funnelReentryMode"] == "basic"
+
+    def test_reentry_mode_optimized(self, ws: Workspace) -> None:
+        """build_funnel_params with reentry_mode='optimized' produces funnelReentryMode."""
+        result = ws.build_funnel_params(
+            ["Signup", "Purchase"],
+            reentry_mode="optimized",
+        )
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert behavior["funnelReentryMode"] == "optimized"
+
+    def test_no_reentry_mode_omits_key(self, ws: Workspace) -> None:
+        """build_funnel_params without reentry_mode omits funnelReentryMode (backward compat)."""
+        result = ws.build_funnel_params(["Signup", "Purchase"])
+        behavior = result["sections"]["show"][0]["behavior"]
+        assert "funnelReentryMode" not in behavior
+
+
+# =============================================================================
+# T032: data_group_id on funnel query engine
+# =============================================================================
+
+
+class TestDataGroupIdFunnel:
+    """Tests for data_group_id parameter on funnel query engine (T032)."""
+
+    def test_build_funnel_params_with_data_group_id(self, ws: Workspace) -> None:
+        """build_funnel_params with data_group_id=5 includes dataGroupId: 5 in sections."""
+        result = ws.build_funnel_params(["Signup", "Purchase"], data_group_id=5)
+        assert result["sections"]["dataGroupId"] == 5
+
+    def test_build_funnel_params_without_data_group_id(self, ws: Workspace) -> None:
+        """build_funnel_params without data_group_id omits dataGroupId key (backward compat)."""
+        result = ws.build_funnel_params(["Signup", "Purchase"])
+        assert "dataGroupId" not in result["sections"]

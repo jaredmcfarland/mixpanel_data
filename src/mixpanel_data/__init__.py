@@ -13,6 +13,7 @@ from mixpanel_data._internal.auth_credential import (
 )
 from mixpanel_data._internal.validation import validate_bookmark
 from mixpanel_data._literal_types import (
+    CohortAggregationType,
     ConversionWindowUnit,
     CountType,
     FilterDateUnit,
@@ -23,9 +24,12 @@ from mixpanel_data._literal_types import (
     FlowConversionWindowUnit,
     FlowCountType,
     FlowNodeType,
+    FlowSessionEvent,
+    FrequencyFilterOperator,
     FunnelMathType,
     FunnelMode,
     FunnelOrder,
+    FunnelReentryMode,
     HourDayUnit,
     InsightsMode,
     MathType,
@@ -34,6 +38,10 @@ from mixpanel_data._literal_types import (
     RetentionAlignment,
     RetentionMathType,
     RetentionMode,
+    RetentionUnboundedMode,
+    SegmentMethod,
+    TimeComparisonType,
+    TimeComparisonUnit,
     TimeUnit,
 )
 from mixpanel_data.exceptions import (
@@ -160,6 +168,8 @@ from mixpanel_data.types import (
     FlowStepNode,
     FlowTreeNode,
     Formula,
+    FrequencyBreakdown,
+    FrequencyFilter,
     FrequencyResult,
     FunnelInfo,
     FunnelQueryResult,
@@ -215,6 +225,7 @@ from mixpanel_data.types import (
     SegmentationResult,
     ServingMethod,
     SetTestUsersParams,
+    TimeComparison,
     TopEvent,
     UpdateAlertParams,
     UpdateAnnotationParams,
@@ -287,6 +298,15 @@ __all__ = [
     "FilterPropertyType",
     "FilterDateUnit",
     "FiltersCombinator",
+    # Type aliases — advanced query types
+    "SegmentMethod",
+    "FunnelReentryMode",
+    "RetentionUnboundedMode",
+    "TimeComparisonType",
+    "TimeComparisonUnit",
+    "CohortAggregationType",
+    "FlowSessionEvent",
+    "FrequencyFilterOperator",
     # Result structure TypedDicts
     "QueryMeta",
     "FunnelStepData",
@@ -519,4 +539,7 @@ __all__ = [
     "FlowQueryResult",
     # User query types (Phase 039)
     "UserQueryResult",
+    "TimeComparison",
+    "FrequencyBreakdown",
+    "FrequencyFilter",
 ]

@@ -29,6 +29,8 @@ result = ws.query(
     where=Filter.equals("country", "US"),  # filter
     group_by="platform",                    # breakdown
     last=90,                                # time range
+    time_comparison="previous_period",      # compare periods
+    data_group_id=42,                       # data group scope
 )
 
 result = ws.query_funnel(
@@ -36,6 +38,8 @@ result = ws.query_funnel(
     where=Filter.equals("country", "US"),  # same
     group_by="platform",                    # same
     last=90,                                # same
+    time_comparison="previous_period",      # same
+    data_group_id=42,                       # same
 )
 
 result = ws.query_retention(
@@ -43,17 +47,19 @@ result = ws.query_retention(
     where=Filter.equals("country", "US"),  # same
     group_by="platform",                    # same
     last=90,                                # same
+    time_comparison="previous_period",      # same
+    data_group_id=42,                       # same
 )
 
 result = ws.query_flow(
     "Purchase",
-    # flows only support cohort filters in where=
-    where=Filter.in_cohort(123, "Power Users"),
-    last=90,
+    where=Filter.equals("country", "US"),  # property filters supported
+    last=90,                                # same
+    data_group_id=42,                       # same
 )
 ```
 
-Learn `Filter`, `GroupBy`, `where=`, `group_by=`, and `last=` once. Use them across engines (flows has some restrictions — see below).
+Learn `Filter`, `GroupBy`, `where=`, `group_by=`, `last=`, `time_comparison=`, and `data_group_id=` once. Use them across engines (flows has some restrictions — see below).
 
 ---
 
@@ -115,7 +121,7 @@ ws.query_flow(
 
 Mix freely. Strings and objects can appear in the same query.
 
-**Note:** `FlowStep.filters` accepts any `Filter` type. The query-level `where=` parameter on `query_flow()` is more restricted — it only accepts cohort filters (`Filter.in_cohort` / `Filter.not_in_cohort`).
+**Note:** `FlowStep.filters` accepts any `Filter` type for per-step filtering. The query-level `where=` parameter on `query_flow()` accepts both cohort filters (`Filter.in_cohort` / `Filter.not_in_cohort`) and property filters (`Filter.equals()`, `Filter.greater_than()`, etc.).
 
 ---
 
@@ -165,7 +171,7 @@ result = ws.query("Purchase", where=[
 ])
 ```
 
-Filters work identically across `query()`, `query_funnel()`, `query_retention()`, and `query_flow()` (flows: cohort filters only).
+Filters work identically across `query()`, `query_funnel()`, `query_retention()`, and `query_flow()`.
 
 ---
 
@@ -573,6 +579,16 @@ print(f"Users with email: {count.value}")
 ## Cross-cutting capabilities
 
 These features work across multiple engines through the same parameters.
+
+### Recent additions
+
+| Feature | Engines | Description |
+|---|---|---|
+| `time_comparison=` | Insights, Funnels, Retention | Compare the current period against a previous period |
+| `data_group_id=` | Insights, Funnels, Retention, Flows | Scope queries to a specific data group |
+| Property filters in `where=` | Flows | Flows now support property filters (e.g., `Filter.equals()`) in addition to cohort filters |
+| `segments=` | Flows | Break down flow paths by property, cohort, or frequency |
+| `exclusions=` | Flows | Hide specific events from flow paths |
 
 ### Cohort scoping
 
@@ -1145,12 +1161,14 @@ Each has a matching `build_*_params()` that returns the validated params dict wi
 
 | Parameter | Type | Default | Engines |
 |---|---|---|---|
-| `where=` | `Filter \| list[Filter]` | `None` | All (flows: cohort only) |
+| `where=` | `Filter \| list[Filter]` | `None` | All |
 | `group_by=` | `str \| GroupBy \| CohortBreakdown` | `None` | I, F, R |
 | `last=` | `int` | `30` | I, F, R, Fl |
 | `from_date=` | `str` (YYYY-MM-DD) | `None` | I, F, R, Fl |
 | `to_date=` | `str` (YYYY-MM-DD) | `None` | I, F, R, Fl |
 | `unit=` | `"day" \| "week" \| "month"` | `"day"` | I, F, R |
+| `time_comparison=` | `str` | `None` | I, F, R |
+| `data_group_id=` | `int` | `None` | I, F, R, Fl |
 | `mode=` | engine-specific | varies | All |
 | `math=` | engine-specific | varies | I, F, R |
 | `math_property=` | `str` | `None` | I, F |
@@ -1164,7 +1182,7 @@ I = Insights, F = Funnels, R = Retention
 | **Insights** | `per_user`, `percentile_value`, `formula`, `formula_label`, `rolling`, `cumulative` |
 | **Funnels** | `conversion_window`, `conversion_window_unit`, `order`, `exclusions`, `holding_constant` |
 | **Retention** | `retention_unit`, `alignment`, `bucket_sizes` |
-| **Flows** | `forward`, `reverse`, `count_type`, `cardinality`, `collapse_repeated`, `hidden_events` |
+| **Flows** | `forward`, `reverse`, `count_type`, `cardinality`, `collapse_repeated`, `hidden_events`, `segments`, `exclusions` |
 | **Users** | `properties`, `sort_by`, `sort_order`, `limit`, `mode`, `aggregate`, `aggregate_property`, `percentile`, `segment_by`, `parallel`, `workers` |
 
 ### Result types

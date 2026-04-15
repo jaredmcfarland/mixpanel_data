@@ -44,6 +44,19 @@ Prefer writing and executing Python code using the `mixpanel_data` library. When
 
 _Expands the 7-step diagnosis methodology from [analytical-frameworks.md](../skills/mixpanelyst/references/analytical-frameworks.md) §Diagnosis Methodology. For ready-to-run diagnostic templates, see [cross-query-synthesis.md](../skills/mixpanelyst/references/cross-query-synthesis.md) §Template 1: Revenue Drop Diagnosis._
 
+### Period-over-Period Comparison
+
+Use `TimeComparison` to compare the current period against a previous one across engines — ideal for Step 1 (QUANTIFY):
+
+```python
+from mixpanel_data import TimeComparison
+
+# Compare current week vs previous week across engines
+tc = TimeComparison.relative("week")
+trend = ws.query("Signup", math="unique", time_comparison=tc, last=7)
+funnel = ws.query_funnel(["Signup", "Purchase"], time_comparison=tc, last=7)
+```
+
 ### Step 1: QUANTIFY (Insights)
 
 Establish the baseline and magnitude of the change.

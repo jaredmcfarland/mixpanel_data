@@ -349,7 +349,33 @@ with ThreadPoolExecutor(max_workers=5) as pool:
 
 ---
 
-## Join Strategy 7: Profile Enrichment Join
+## Join Strategy 7: Period-over-Period Cross-Engine
+
+**Use when**: Comparing current vs previous period across multiple engines.
+
+**Join key**: `TimeComparison` applied consistently across engines.
+
+```python
+import mixpanel_data as mp
+from mixpanel_data import TimeComparison
+
+ws = mp.Workspace()
+tc = TimeComparison.relative("month")
+
+# Same comparison period across all engines
+signups = ws.query("Signup", math="unique", time_comparison=tc, last=30)
+funnel = ws.query_funnel(["Signup", "Purchase"], time_comparison=tc, last=30)
+retention = ws.query_retention("Signup", "Login", time_comparison=tc, last=30)
+
+# Each result now includes comparison period data
+# Analyze trends, conversion, and retention changes together
+```
+
+Use `TimeComparison.relative("week")` for WoW analysis, `"month"` for MoM, `"quarter"` for QoQ. All three engines return comparison data in the same response.
+
+---
+
+## Join Strategy 8: Profile Enrichment Join
 
 **Use when**: You have identified interesting users via a behavioral engine (insights, funnels, retention, flows) and want to understand WHO they are -- their demographics, plan, company size, or other profile attributes.
 
