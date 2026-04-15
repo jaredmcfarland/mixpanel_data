@@ -742,9 +742,7 @@ class TestBuildGroupSectionFrequency:
         """List with GroupBy and FrequencyBreakdown produces correct entries."""
         from mixpanel_data.types import FrequencyBreakdown
 
-        result = build_group_section(
-            ["country", FrequencyBreakdown("Purchase")]  # type: ignore[list-item]
-        )
+        result = build_group_section(["country", FrequencyBreakdown("Purchase")])
         assert len(result) == 2
         assert result[0]["value"] == "country"
         assert result[0]["propertyType"] == "string"
@@ -764,7 +762,7 @@ class TestBuildFilterSectionFrequency:
         """FrequencyFilter produces frequency filter entry in section."""
         from mixpanel_data.types import FrequencyFilter
 
-        result = build_filter_section(FrequencyFilter("Login", value=5))  # type: ignore[arg-type]
+        result = build_filter_section(FrequencyFilter("Login", value=5))
         assert len(result) == 1
         assert result[0]["resourceType"] == "people"
         assert result[0]["behaviorType"] == "$frequency"
@@ -774,7 +772,7 @@ class TestBuildFilterSectionFrequency:
         from mixpanel_data.types import FrequencyFilter
 
         result = build_filter_section(
-            [Filter.equals("country", "US"), FrequencyFilter("Login", value=5)]  # type: ignore[list-item]
+            [Filter.equals("country", "US"), FrequencyFilter("Login", value=5)]
         )
         assert len(result) == 2
         assert result[0]["value"] == "country"
@@ -811,7 +809,7 @@ class TestBuildGroupSectionDataGroupId:
         """GroupBy with InlineCustomProperty and data_group_id=3 produces dataGroupId: 3."""
         prop = InlineCustomProperty(
             formula="A",
-            inputs={"A": PropertyInput(name="price", resource_type="events")},
+            inputs={"A": PropertyInput(name="price", resource_type="event")},
         )
         gb = GroupBy(property=prop, property_type="number")
         result = build_group_section(gb, data_group_id=3)

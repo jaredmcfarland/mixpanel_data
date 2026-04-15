@@ -1500,7 +1500,7 @@ class TestFrequencyBreakdownInBuildParams:
 
         params = ws.build_params(
             "Login",
-            group_by=["country", FrequencyBreakdown("Purchase")],  # type: ignore[list-item]
+            group_by=["country", FrequencyBreakdown("Purchase")],
         )
         group = params["sections"]["group"]
         assert len(group) == 2
@@ -1532,7 +1532,7 @@ class TestFrequencyFilterInBuildParams:
 
         params = ws.build_params(
             "Login",
-            where=FrequencyFilter("Login", value=5),  # type: ignore[arg-type]
+            where=FrequencyFilter("Login", value=5),
         )
         filt = params["sections"]["filter"]
         assert len(filt) == 1
@@ -1548,7 +1548,7 @@ class TestFrequencyFilterInBuildParams:
             where=[
                 Filter.equals("country", "US"),
                 FrequencyFilter("Login", value=5),
-            ],  # type: ignore[list-item]
+            ],
         )
         filt = params["sections"]["filter"]
         assert len(filt) == 2

@@ -1018,7 +1018,7 @@ class TestTimeComparison:
         from mixpanel_data.types import TimeComparison
 
         for unit in ("day", "week", "month", "quarter", "year"):
-            tc = TimeComparison.relative(unit)  # type: ignore[arg-type]
+            tc = TimeComparison.relative(unit)
             assert tc.unit == unit
 
 
