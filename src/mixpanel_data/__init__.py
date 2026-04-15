@@ -167,7 +167,6 @@ from mixpanel_data.types import (
     FlowStepNode,
     FlowTreeNode,
     Formula,
-    # Frequency Analysis types (Phase 040 US4)
     FrequencyBreakdown,
     FrequencyFilter,
     FrequencyResult,
@@ -538,9 +537,7 @@ __all__ = [
     "FlowQueryResult",
     # User query types (Phase 039)
     "UserQueryResult",
-    # Time Comparison (Phase 040)
     "TimeComparison",
-    # Frequency Analysis types (Phase 040 US4)
     "FrequencyBreakdown",
     "FrequencyFilter",
 ]

@@ -530,10 +530,16 @@ def build_flow_property_filter(
     children: list[dict[str, Any]] = []
     for f in filters:
         entry = build_filter_entry(f)
-        # Add propertyName from the entry's value key (the property name)
+        # Add propertyName — flow filters only support string property names
         prop = f._property
         if isinstance(prop, str):
             entry["propertyName"] = prop
+        else:
+            raise TypeError(
+                f"build_flow_property_filter only supports string property "
+                f"filters; got {type(prop).__name__} — custom property refs "
+                f"are not supported in flow filters"
+            )
         # Remove the "value" key since flow filters use propertyName instead
         entry.pop("value", None)
         # Remove defaultType — flow filters don't use it
@@ -752,11 +758,17 @@ def build_time_comparison(tc: TimeComparison) -> dict[str, str]:
     """
     value: str
     if tc.type == "relative":
-        # tc.unit is guaranteed non-None by TimeComparison.__post_init__
-        assert tc.unit is not None  # for mypy
+        # tc.unit guaranteed non-None by __post_init__ TC1
+        if tc.unit is None:  # pragma: no cover — guarded by TC1
+            raise AssertionError(
+                "unreachable: TC1 guarantees unit when type='relative'"
+            )
         value = tc.unit
     else:
-        # tc.date is guaranteed non-None by TimeComparison.__post_init__
-        assert tc.date is not None  # for mypy
+        # tc.date guaranteed non-None by __post_init__ TC2
+        if tc.date is None:  # pragma: no cover — guarded by TC2
+            raise AssertionError(
+                "unreachable: TC2 guarantees date when type='absolute-*'"
+            )
         value = tc.date
     return {"type": tc.type, "value": value}

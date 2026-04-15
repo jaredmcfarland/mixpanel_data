@@ -236,8 +236,9 @@ class FlowStep:
 ## Backward Compatibility Guarantees
 
 1. All new parameters default to `None` or `False` — existing calls produce identical output
-6. All new public methods, fields, and classes include docstrings per constitution Principle I
 2. No existing parameter types are narrowed — all existing valid inputs remain valid
 3. No existing method is removed or renamed
 4. No existing return type changes
+5. Existing tests pass without modification
+6. All new public methods, fields, and classes include docstrings per constitution Principle I
 5. Existing tests pass without modification

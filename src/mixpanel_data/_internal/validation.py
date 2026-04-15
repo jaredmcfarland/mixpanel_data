@@ -1148,7 +1148,9 @@ _VALID_RETENTION_MATH_PUBLIC: frozenset[str] = frozenset(
 )
 """Public-facing retention math types (Layer 1).
 
-Matches ``VALID_MATH_RETENTION`` in bookmark_enums.py.
+Expanded in Phase 040 to include ``"total"`` and ``"average"`` — previously
+L1 incorrectly rejected these even though L2 (via ``VALID_MATH_RETENTION``
+in bookmark_enums.py) accepted them. Now L1 and L2 use the same set.
 """
 
 _VALID_RETENTION_MODES: frozenset[str] = frozenset({"curve", "trends", "table"})
@@ -1490,7 +1492,7 @@ def validate_flow_args(
     from_date: str | None = None,
     to_date: str | None = None,
     last: int = 30,
-    time_comparison: Any | None = None,
+    time_comparison: object | None = None,
     data_group_id: int | None = None,
 ) -> list[ValidationError]:
     """Validate flow query arguments before bookmark construction (Layer 1).

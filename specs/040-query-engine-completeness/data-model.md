@@ -165,8 +165,7 @@ Validation:
 | `session_event` | `FlowSessionEvent \| None` | `None` |
 
 Validation:
-- FS1: session_event and event are mutually exclusive — set one or the other, not both
-- FS2: When session_event is set, event should be a sentinel like "$session_start" or "$session_end"
+- FS1: When session_event is set, event must be the corresponding session sentinel ("start" requires "$session_start", "end" requires "$session_end"). Regular event names with session_event are rejected.
 
 ### Flow Segments (parameter type)
 
