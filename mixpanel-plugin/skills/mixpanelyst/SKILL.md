@@ -492,6 +492,44 @@ Full reference: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/ap
 | `FunnelMathType` | `query_funnel()` | conversion_rate_unique, conversion_rate_total, average, median |
 | `RetentionMathType` | `query_retention()` | retention_rate, retention_count |
 
+## Statistical Analysis — numpy, scipy
+
+All query results produce pandas DataFrames, which integrate directly with numpy and scipy:
+
+```python
+import numpy as np
+from scipy import stats
+
+# Compare two segments
+a = result.df[result.df["platform"] == "iOS"]["count"]
+b = result.df[result.df["platform"] == "Android"]["count"]
+t_stat, p_value = stats.ttest_ind(a, b)
+cohens_d = (a.mean() - b.mean()) / np.sqrt((a.std()**2 + b.std()**2) / 2)
+
+# Useful scipy.stats tests: ttest_ind, mannwhitneyu, chi2_contingency, pearsonr, spearmanr
+# Useful numpy: np.percentile, np.corrcoef, np.polyfit (trend lines)
+```
+
+## Visualization — matplotlib, seaborn
+
+Save charts to files for the user. Always use a non-interactive backend:
+
+```python
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+fig, ax = plt.subplots(figsize=(10, 5))
+result.df.plot(x="date", y="count", ax=ax)
+ax.set_title("Daily Logins")
+fig.savefig("chart.png", dpi=150, bbox_inches="tight")
+plt.close(fig)
+
+# seaborn: sns.lineplot, sns.barplot, sns.heatmap (for retention matrices)
+# Multi-panel: fig, axes = plt.subplots(2, 2) for dashboard-style layouts
+```
+
 ## Exceptions
 
 Full reference: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/api/exceptions/index.md")`
