@@ -259,12 +259,20 @@ result = ws.query_funnel(["Signup", "Purchase"], math="unique")
 | `"median"` | Median value |
 | `"min"` / `"max"` | Extremes |
 | `"p25"` / `"p75"` / `"p90"` / `"p99"` | Percentiles |
+| `"histogram"` | Distribution of a numeric property per step |
 
 ```python
 # Average purchase amount at each step
 result = ws.query_funnel(
     ["Signup", "Purchase"],
     math="average",
+    math_property="amount",
+)
+
+# Distribution of purchase amounts at each funnel step
+result = ws.query_funnel(
+    ["Browse", "Add to Cart", "Purchase"],
+    math="histogram",
     math_property="amount",
 )
 ```
@@ -539,6 +547,53 @@ result = ws.query_funnel(
     last=90,
     unit="week",
 )
+```
+
+## Reentry Mode
+
+Control how users re-enter the funnel after conversion using the `reentry_mode` parameter:
+
+| Mode | Behavior |
+|---|---|
+| `"default"` | Server default reentry behavior |
+| `"basic"` | Users can re-enter after their conversion window expires |
+| `"aggressive"` | Users can re-enter as soon as they convert |
+| `"optimized"` | Server-optimized reentry (best for most use cases) |
+
+```python
+# Allow aggressive re-entry for repeat purchase funnels
+result = ws.query_funnel(
+    ["Browse", "Add to Cart", "Purchase"],
+    reentry_mode="aggressive",
+    last=30,
+)
+```
+
+!!! note
+    Reentry mode only matters for funnels where the same user can convert multiple times.
+
+## Period-over-Period Comparison
+
+Compare funnel conversion against a previous period using `TimeComparison`:
+
+```python
+from mixpanel_data import TimeComparison
+
+# Compare this week's funnel against last week
+result = ws.query_funnel(
+    ["Signup", "Activate", "Purchase"],
+    time_comparison=TimeComparison.relative("week"),
+    last=7,
+)
+```
+
+See [Insights > Period-over-Period Comparison](query.md#period-over-period-comparison) for all `TimeComparison` factory methods.
+
+## Data Group Scoping
+
+```python
+# Scope funnel to a data group
+result = ws.query_funnel(["Signup", "Purchase"], data_group_id=42)
 ```
 
 ## Working with Results

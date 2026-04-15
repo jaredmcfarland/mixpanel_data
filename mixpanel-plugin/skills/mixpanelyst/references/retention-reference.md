@@ -22,6 +22,10 @@ Workspace.query_retention(
     group_by: str | GroupBy | CohortBreakdown | list[str | GroupBy | CohortBreakdown] | None = None,
     where: Filter | list[Filter] | None = None,
     mode: RetentionMode = "curve",              # "curve", "trends", "table"
+    unbounded_mode: RetentionUnboundedMode | None = None,  # unbounded retention counting
+    retention_cumulative: bool = False,                     # cumulative retention mode
+    time_comparison: TimeComparison | None = None,          # period-over-period comparison
+    data_group_id: int | None = None,                       # data group scope
 ) -> RetentionQueryResult
 ```
 
@@ -211,14 +215,71 @@ ws.query_retention("Signup", "Login", bucket_sizes=[1, 3, 7, 14, 30])
 
 ---
 
+## Unbounded Mode
+
+`RetentionUnboundedMode = Literal["none", "carry_back", "carry_forward", "consecutive_forward"]`
+
+Controls how users who return outside their exact retention bucket are counted:
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `none` | Standard counting — only count in the exact bucket (default) | Standard retention analysis |
+| `carry_back` | If a user returns in bucket N, also count in all prior buckets | Fill gaps for irregular engagement |
+| `carry_forward` | If a user returns in bucket N, count in all subsequent buckets | Optimistic retention view |
+| `consecutive_forward` | Count forward from the last bucket where the user was active | Streak-based retention |
+
+```python
+# Carry-forward: once a user returns, count them as retained in all later buckets
+result = ws.query_retention(
+    "Signup", "Login",
+    unbounded_mode="carry_forward",
+    retention_unit="week", last=90,
+)
+```
+
+---
+
+## Cumulative Retention
+
+Enable cumulative counting — each bucket shows the total number of users who returned at least once up to that point:
+
+```python
+result = ws.query_retention(
+    "Signup", "Login",
+    retention_cumulative=True,
+    retention_unit="week", last=90,
+)
+```
+
+---
+
+## Period-over-Period Comparison
+
+_(→ [insights-reference.md](insights-reference.md) §TimeComparison for factory methods and validation rules)_
+
+```python
+from mixpanel_data import TimeComparison
+
+# Compare this month's retention against last month
+result = ws.query_retention(
+    "Signup", "Login",
+    time_comparison=TimeComparison.relative("month"),
+    retention_unit="week", last=30,
+)
+```
+
+---
+
 ## RetentionMathType
 
-`RetentionMathType = Literal["retention_rate", "unique"]`
+`RetentionMathType = Literal["retention_rate", "unique", "total", "average"]`
 
 | Type | Returns | Value Range | When to Use |
 |------|---------|-------------|-------------|
 | `retention_rate` | Percentage of cohort retained | 0.0 to 1.0 | Default. Compare retention across cohorts and segments. |
 | `unique` | Raw count of unique users retained | 0 to cohort size | When absolute numbers matter (volume analysis). |
+| `total` | Total event count per retention bucket | 0+ | When absolute event volume matters, not just unique users. |
+| `average` | Average of a numeric property per bucket | float | Property-based retention (requires `math_property`). |
 
 ```python
 # Percentage (default)
@@ -228,6 +289,12 @@ rates = ws.query_retention("Signup", "Login", math="retention_rate")
 # Raw counts
 counts = ws.query_retention("Signup", "Login", math="unique")
 # counts.cohorts["2025-01-06"]["counts"] = [500, 225, 160, 140, ...]
+
+# Total login events per bucket
+result = ws.query_retention("Signup", "Login", math="total")
+
+# Average session duration per bucket
+result = ws.query_retention("Signup", "Login", math="average", math_property="session_duration")
 ```
 
 ---
@@ -643,7 +710,7 @@ _For retention benchmarks by industry (Consumer Mobile, SaaS, E-commerce), see [
 3. **bucket_sizes values must be integers** — `[1.0, 3.0, 7.0]` fails. Use `[1, 3, 7]`.
 4. **bucket_sizes values must be positive** — `[0, 1, 7]` fails. Start from 1.
 5. **born_event = return_event measures stickiness** — This is a valid and common pattern, not a mistake.
-6. **RetentionMathType is limited** — Only `"retention_rate"` and `"unique"` are valid. The internal API supports `"total"` and `"average"` but these are not exposed publicly.
+6. **RetentionMathType has four values** — `"retention_rate"`, `"unique"`, `"total"`, and `"average"`. The `"average"` type requires `math_property` to be set.
 7. **Segmented results use .segments** — When `group_by` is used, per-segment data is in `result.segments`, not `result.cohorts` (which has the $overall aggregate).
 8. **Bucket 0 is always 100%** — The first bucket represents the born event itself, so its retention rate is always 1.0.
 9. **alignment affects interpretation** — With `"birth"` alignment, each user's W1 starts from their signup date. With `"interval_start"`, W1 is the same calendar week for all users in that cohort.

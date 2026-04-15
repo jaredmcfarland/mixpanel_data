@@ -40,6 +40,9 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`) remain avai
 | "distribution", "histogram" | "Revenue distribution?" | `math="histogram", math_property="revenue", per_user="total"` |
 | "week over week", "WoW" | "WoW signup change?" | Two queries, different date ranges |
 | "filtered by", "only where" | "Purchases where amount > 50?" | `where=Filter.greater_than("amount", 50)` |
+| "compare periods", "WoW", "MoM", "YoY" | "Week-over-week signup change?" | `time_comparison=TimeComparison.relative("week")` |
+| "how often", "frequency", "power users" | "How often do users purchase?" | `group_by=FrequencyBreakdown(event="Purchase")` |
+| "first event", "first touch" | "Count only each user's first purchase" | `Metric("Purchase", segment_method="first")` |
 
 ### Funnel Engine Signals (ws.query_funnel)
 
@@ -56,6 +59,7 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`) remain avai
 | "funnel trend over time" | "How is conversion trending?" | `mode="trends"` |
 | "session-based conversion" | "Within-session conversion?" | `conversion_window_unit="session", math="conversion_rate_session"` |
 | "A/B funnel comparison" | "Funnel by experiment group?" | `group_by="experiment_group"` |
+| "reentry", "re-enter funnel" | "Allow funnel re-entry" | `reentry_mode="aggressive"` |
 
 ### Retention Engine Signals (ws.query_retention)
 
@@ -74,6 +78,8 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`) remain avai
 | "birth alignment" | "Align to user's first event?" | `alignment="birth"` |
 | "calendar alignment" | "Align to calendar week?" | `alignment="interval_start"` |
 | "raw counts vs rates" | "How many users retained?" | `math="unique"` vs `math="retention_rate"` |
+| "cumulative retention" | "Show cumulative retention curve" | `retention_cumulative=True` |
+| "unbounded retention" | "Carry forward retained users" | `unbounded_mode="carry_forward"` |
 
 ### Flow Engine Signals (ws.query_flow)
 
@@ -86,6 +92,8 @@ Additionally, legacy methods (`segmentation`, `funnel`, `retention`) remain avai
 | "top paths" | "Top 10 paths after onboarding?" | `mode="paths", cardinality=10` |
 | "drop-off paths" | "Where do users go after dropping?" | Forward flow from drop-off event |
 | "bidirectional" | "Activity around the purchase event?" | `forward=3, reverse=2` |
+| "exclude events", "hide events" | "Flow without page views" | `exclusions=["Page View"]` |
+| "flow by platform", "segment flow" | "User paths by platform" | `segments="platform"` |
 
 ### Users Engine Signals (ws.query_user)
 
@@ -265,7 +273,7 @@ _(→ [analytical-frameworks.md](analytical-frameworks.md) §Retention for indus
 
 ## Join Strategies
 
-_For full code implementations of each join strategy with pandas merge patterns, see [cross-query-synthesis.md](cross-query-synthesis.md) §Join Strategy 1-6._
+_For full code implementations of each join strategy with pandas merge patterns, see [cross-query-synthesis.md](cross-query-synthesis.md) §Join Strategy 1-8._
 
 ### Time-Aligned Join
 

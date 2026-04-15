@@ -64,6 +64,15 @@ Prefer writing and executing Python code using the `mixpanel_data` library. When
 | **Flows** | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
 | **Users** | `ws.query_user()` | Who are they? What do they look like? | `UserQueryResult` |
 
+### Cross-Engine Features (v0.6)
+
+- **TimeComparison**: Period-over-period analysis on Insights, Funnels, and Retention — `TimeComparison.relative("week")` for WoW, etc.
+- **FrequencyBreakdown / FrequencyFilter**: Break down or filter by event frequency in Insights
+- **New MathTypes**: `cumulative_unique`, `sessions`, `unique_values`, `most_frequent`, `first_value`, `multi_attribution`, `numeric_summary`
+- **Flow enhancements**: `segments`, `exclusions`, property filters in `where=`, `FlowStep.session_event`
+- **Funnel reentry**: `reentry_mode` parameter
+- **Retention modes**: `unbounded_mode`, `retention_cumulative`, `RetentionMathType` now includes `total` and `average`
+
 ## Routing Decision Tree
 
 Map the user's question to the right engine:

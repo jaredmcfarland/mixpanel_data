@@ -20,6 +20,16 @@ Turn Claude into a senior data analyst and Mixpanel product analytics expert. In
 | Funnels | `ws.query_funnel()` | Do users convert through a sequence? | `FunnelQueryResult` |
 | Retention | `ws.query_retention()` | Do users come back? | `RetentionQueryResult` |
 | Flows | `ws.query_flow()` | What paths do users take? | `FlowQueryResult` |
+| Users | `ws.query_user()` | Who are they? What do they look like? | `UserQueryResult` |
+
+### Recent Additions
+
+- **TimeComparison**: Period-over-period analysis across Insights, Funnels, and Retention
+- **FrequencyBreakdown / FrequencyFilter**: Frequency-based breakdowns and filters
+- **7 new MathTypes**: `cumulative_unique`, `sessions`, `unique_values`, `most_frequent`, `first_value`, `multi_attribution`, `numeric_summary`
+- **Flow enhancements**: `segments`, `exclusions`, property filters, `FlowStep.session_event`
+- **Funnel reentry**: `reentry_mode` parameter with 4 modes
+- **Retention modes**: `unbounded_mode`, `retention_cumulative`, expanded `RetentionMathType`
 
 When you ask a question, Claude writes Python using the appropriate engine:
 

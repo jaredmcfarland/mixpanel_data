@@ -74,20 +74,28 @@ User says...                              → Use...
 "per user", "average per user"            → Insights (per_user=...)
 "compare events", "formula"               → Insights (formula=...)
 "rolling average", "cumulative"           → Insights (rolling/cumulative)
+"compare periods", "WoW", "MoM", "YoY"   → Insights (time_comparison)
+"how often", "frequency"                  → Insights (FrequencyBreakdown)
+"first event only", "first touch"         → Insights (segment_method="first")
 ─────────────────────────────────────────────────────
 "conversion", "funnel", "from X to Y"     → Funnels
 "drop-off", "where do users leave"        → Funnels
 "checkout/signup/onboarding completion"   → Funnels
 "time to convert", "conversion window"    → Funnels
+"funnel reentry", "re-enter"              → Funnels (reentry_mode)
 ─────────────────────────────────────────────────────
 "retention", "come back", "return rate"   → Retention
 "D1/D7/D30", "churn", "stickiness"       → Retention
 "cohort", "do they keep using"            → Retention
+"cumulative retention"                    → Retention (retention_cumulative)
+"unbounded", "carry forward"              → Retention (unbounded_mode)
 ─────────────────────────────────────────────────────
 "path", "flow", "journey"                → Flows
 "what happens after X", "next steps"      → Flows (forward)
 "what led to X", "how did they get to"    → Flows (reverse)
 "user paths", "navigation patterns"       → Flows
+"exclude events from flow"                → Flows (exclusions)
+"flow by segment", "segment paths"        → Flows (segments)
 ─────────────────────────────────────────────────────
 "who are these users", "user properties"      → Users
 "how many users have X", "user count"         → Users (mode="aggregate")
@@ -185,17 +193,19 @@ result = ws.query(
     math_property=None,  # required for property-based math
     per_user=None,       # unique_values | total | average | min | max
     percentile_value=None, # int for math="percentile"
-    group_by=None,       # str | GroupBy | list[str | GroupBy]
-    where=None,          # Filter | list[Filter]
+    group_by=None,       # str | GroupBy | FrequencyBreakdown | list[str | GroupBy]
+    where=None,          # Filter | FrequencyFilter | list[Filter]
     formula=None,        # "(B / A) * 100" (requires 2+ events)
     formula_label=None,
     rolling=None,        # rolling window periods
     cumulative=False,    # mutually exclusive with rolling
+    time_comparison=None,  # TimeComparison for period-over-period
+    data_group_id=None,    # int for data group scope
     mode="timeseries",   # timeseries | total | table
 ) # → QueryResult
 ```
 
-**MathType** (14 values):
+**MathType** (21 values):
 
 | Math | What it measures | Requires math_property? |
 |------|-----------------|------------------------|
@@ -206,6 +216,13 @@ result = ws.query(
 | `p25` / `p75` / `p90` / `p99` | Property percentiles | Yes |
 | `percentile` | Custom percentile (set percentile_value) | Yes |
 | `histogram` | Property value distribution | Yes |
+| `cumulative_unique` | Running distinct user count over time | No |
+| `sessions` | Session count | No |
+| `unique_values` | Distinct values of a property | Yes |
+| `most_frequent` | Most common property value | Yes |
+| `first_value` | First observed value per user | Yes |
+| `multi_attribution` | Multi-touch attribution | Yes |
+| `numeric_summary` | Summary stats (count, mean, variance) | Yes |
 
 _Complete parameter reference → [insights-reference.md](references/insights-reference.md)_
 
@@ -237,6 +254,9 @@ result = ws.query_funnel(
     group_by=None, where=None,
     exclusions=None,          # list[str | Exclusion]
     holding_constant=None,    # str | HoldingConstant | list
+    reentry_mode=None,        # default | basic | aggressive | optimized
+    time_comparison=None,     # TimeComparison for period-over-period
+    data_group_id=None,       # int for data group scope
     mode="steps",             # steps | trends | table
 ) # → FunnelQueryResult
 ```
@@ -247,7 +267,7 @@ result = ws.query_funnel(
 
 _Complete parameter reference → [funnels-reference.md](references/funnels-reference.md)_
 
-**FunnelMathType**: `conversion_rate_unique` (default) · `conversion_rate_total` · `conversion_rate_session` · `unique` · `total` · `average` · `median` · `min` · `max` · `p25` · `p75` · `p90` · `p99`
+**FunnelMathType**: `conversion_rate_unique` (default) · `conversion_rate_total` · `conversion_rate_session` · `unique` · `total` · `average` · `median` · `min` · `max` · `p25` · `p75` · `p90` · `p99` · `histogram`
 
 **Result**: `result.overall_conversion_rate` · `result.df` (step, event, count, step_conv_ratio, overall_conv_ratio, avg_time) · `result.params`
 
@@ -273,8 +293,12 @@ result = ws.query_retention(
     alignment="birth",    # birth | interval_start
     bucket_sizes=None,    # list[int] ascending, max 730
     from_date=None, to_date=None, last=30, unit="day",
-    math="retention_rate",  # retention_rate | unique
+    math="retention_rate",  # retention_rate | unique | total | average
     group_by=None, where=None,
+    unbounded_mode=None,       # none | carry_back | carry_forward | consecutive_forward
+    retention_cumulative=False, # cumulative retention counting
+    time_comparison=None,      # TimeComparison for period-over-period
+    data_group_id=None,        # int for data group scope
     mode="curve",         # curve | trends | table
 ) # → RetentionQueryResult
 ```
@@ -282,6 +306,8 @@ result = ws.query_retention(
 **RetentionEvent**: `RetentionEvent(event, filters=None, filters_combinator="all")`
 
 _Complete parameter reference → [retention-reference.md](references/retention-reference.md)_
+
+**RetentionMathType**: `retention_rate` (default) · `unique` · `total` · `average`
 
 **Alignment**: `"birth"` (user's clock starts at born event) vs `"interval_start"` (calendar boundaries)
 
@@ -314,11 +340,15 @@ result = ws.query_flow(
     cardinality=3,        # 1-50 events per step position
     collapse_repeated=False,
     hidden_events=None,   # list[str]
+    where=None,           # Filter | list[Filter] — property AND cohort filters
+    data_group_id=None,   # int for data group scope
+    segments=None,        # str | GroupBy | CohortBreakdown | FrequencyBreakdown
+    exclusions=None,      # list[str] — events to hide from flow
     mode="sankey",        # sankey | paths | tree
 ) # → FlowQueryResult
 ```
 
-**FlowStep**: `FlowStep(event, forward=None, reverse=None, label=None, filters=None, filters_combinator="all")`
+**FlowStep**: `FlowStep(event, forward=None, reverse=None, label=None, filters=None, filters_combinator="all", session_event=None)`
 
 _Complete parameter reference → [flows-reference.md](references/flows-reference.md)_
 
@@ -366,11 +396,16 @@ Filter.equals("platform", "iOS")              # or multi-value: ["iOS", "Android
 Filter.not_equals("country", "US")
 Filter.contains("email", "@company.com")
 Filter.not_contains("page", "admin")
+Filter.starts_with("email", "admin")      # prefix match
+Filter.ends_with("email", "@company.com") # suffix match
 
 # Numeric
 Filter.greater_than("revenue", 100)
 Filter.less_than("age", 18)
 Filter.between("age", 18, 65)              # inclusive range
+Filter.not_between("age", 18, 65)          # values outside range
+Filter.at_least("score", 80)              # >= (greater than or equal)
+Filter.at_most("errors", 5)               # <= (less than or equal)
 
 # Existence & Boolean
 Filter.is_set("email")
@@ -384,6 +419,8 @@ Filter.before("created", "2025-01-01")
 Filter.since("created", "2025-01-01")
 Filter.in_the_last("created", 30, "day")
 Filter.date_between("created", "2025-01-01", "2025-06-30")  # date range
+Filter.date_not_between("created", "2025-01-01", "2025-06-30")  # dates outside range
+Filter.in_the_next("renewal", 30, "day")                         # relative future date
 
 # Cohort membership
 Filter.in_cohort(123, "Power Users")                 # users in saved cohort

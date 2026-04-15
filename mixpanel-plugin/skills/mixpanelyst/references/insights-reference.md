@@ -12,17 +12,19 @@ Workspace.query(
     to_date: str | None = None,            # "YYYY-MM-DD"; defaults to today
     last: int = 30,                        # relative window in units; ignored if from_date set
     unit: QueryTimeUnit = "day",           # "hour", "day", "week", "month", "quarter"
-    math: MathType = "total",              # aggregate function (14 types)
+    math: MathType = "total",              # aggregate function (21 types)
     math_property: str | None = None,      # required for property-based math
     per_user: PerUserAggregation | None = None,  # per-user pre-aggregation
     percentile_value: int | float | None = None,  # required when math="percentile"
-    group_by: str | GroupBy | CohortBreakdown | list[str | GroupBy | CohortBreakdown] | None = None,
-    where: Filter | list[Filter] | None = None,
+    group_by: str | GroupBy | CohortBreakdown | FrequencyBreakdown | list[str | GroupBy | CohortBreakdown | FrequencyBreakdown] | None = None,
+    where: Filter | FrequencyFilter | list[Filter | FrequencyFilter] | None = None,
     formula: str | None = None,            # e.g. "(A / B) * 100"
     formula_label: str | None = None,
     rolling: int | None = None,            # rolling window size
     cumulative: bool = False,
     mode: Literal["timeseries", "total", "table"] = "timeseries",
+    time_comparison: TimeComparison | None = None,  # period-over-period comparison
+    data_group_id: int | None = None,               # data group scope
 ) -> QueryResult
 ```
 
@@ -34,7 +36,7 @@ Workspace.query(
 
 _Funnels use a subset of these types — see [funnels-reference.md](funnels-reference.md) §FunnelMathType for funnel-specific math._
 
-`MathType = Literal["total", "unique", "dau", "wau", "mau", "average", "median", "min", "max", "p25", "p75", "p90", "p99", "percentile", "histogram"]`
+`MathType = Literal["total", "unique", "dau", "wau", "mau", "average", "median", "min", "max", "p25", "p75", "p90", "p99", "percentile", "histogram", "cumulative_unique", "sessions", "unique_values", "most_frequent", "first_value", "multi_attribution", "numeric_summary"]`
 
 ### Counting Types (no math_property required)
 
@@ -42,6 +44,8 @@ _Funnels use a subset of these types — see [funnels-reference.md](funnels-refe
 |------|---------------|----------|---------|
 | `total` | Event occurrences | Volume metrics, page views | Without `math_property`, counts events. With `math_property`, **sums** the property. There is no `"sum"` math type. |
 | `unique` | Distinct users who triggered the event | User counts, reach | Incompatible with `per_user` |
+| `cumulative_unique` | Running count of distinct users over time | Cumulative reach, total unique visitors | Grows monotonically over time |
+| `sessions` | Number of sessions | Session volume, session-based analysis | Counts sessions, not events or users |
 
 ### Active User Types (no math_property required)
 
@@ -70,6 +74,16 @@ _Funnels use a subset of these types — see [funnels-reference.md](funnels-refe
 |------|-------------|----------------------|
 | `percentile` | Custom percentile | Requires `percentile_value` (e.g. `95` for p95). Maps to `custom_percentile` in bookmark JSON. |
 | `histogram` | Property value distribution | Requires `per_user` (e.g. `per_user="total"`). Shows how the property values are distributed across users. |
+
+### Advanced Property Types (math_property REQUIRED)
+
+| Type | What It Does | Use Case |
+|------|-------------|----------|
+| `unique_values` | Count of distinct values of a property | Product diversity, SKU count |
+| `most_frequent` | Most commonly occurring property value | Top browser, most popular item |
+| `first_value` | First observed value per user | Attribution, first-touch analysis |
+| `multi_attribution` | Multi-touch attribution across a property | Marketing attribution |
+| `numeric_summary` | Summary stats (count, mean, variance) | Quick statistical overview |
 
 ### Common Mistakes
 
@@ -156,6 +170,8 @@ ws.query("Purchase", math="average", per_user="unique_values", math_property="pr
 | `Filter.not_equals(prop, val)` | `"does not equal"` | `str \| list[str]` | `Filter.not_equals("status", "inactive")` |
 | `Filter.contains(prop, val)` | `"contains"` | `str` | `Filter.contains("email", "@gmail")` |
 | `Filter.not_contains(prop, val)` | `"does not contain"` | `str` | `Filter.not_contains("url", "test")` |
+| `Filter.starts_with(prop, prefix)` | `"starts with"` | `str` | `Filter.starts_with("email", "admin")` |
+| `Filter.ends_with(prop, suffix)` | `"ends with"` | `str` | `Filter.ends_with("email", "@company.com")` |
 
 Multi-value equals: `Filter.equals("country", ["US", "UK", "CA"])` matches any of the values.
 
@@ -166,8 +182,11 @@ Multi-value equals: `Filter.equals("country", ["US", "UK", "CA"])` matches any o
 | `Filter.greater_than(prop, val)` | `"is greater than"` | `int \| float` | `Filter.greater_than("age", 18)` |
 | `Filter.less_than(prop, val)` | `"is less than"` | `int \| float` | `Filter.less_than("price", 100)` |
 | `Filter.between(prop, min, max)` | `"is between"` | Two `int \| float` | `Filter.between("amount", 10, 500)` |
+| `Filter.not_between(prop, min, max)` | `"not between"` | Two `int \| float` | `Filter.not_between("age", 18, 65)` |
+| `Filter.at_least(prop, val)` | `"is at least"` | `int \| float` | `Filter.at_least("score", 80)` |
+| `Filter.at_most(prop, val)` | `"is at most"` | `int \| float` | `Filter.at_most("errors", 5)` |
 
-Note: There are no `greater_than_or_equal` or `less_than_or_equal` factory methods on the `Filter` class. The bookmark API supports these operators internally but they are not exposed as convenience methods.
+Note: Use `Filter.at_least()` for greater-than-or-equal and `Filter.at_most()` for less-than-or-equal comparisons.
 
 ### Existence Filters
 
@@ -194,6 +213,8 @@ Note: There are no `greater_than_or_equal` or `less_than_or_equal` factory metho
 | `Filter.in_the_last(prop, qty, unit)` | `"was in the"` | `int` + `FilterDateUnit` | `Filter.in_the_last("signup_date", 30, "day")` |
 | `Filter.not_in_the_last(prop, qty, unit)` | `"was not in the"` | `int` + `FilterDateUnit` | `Filter.not_in_the_last("last_login", 90, "day")` |
 | `Filter.date_between(prop, from, to)` | `"was between"` | Two `"YYYY-MM-DD"` | `Filter.date_between("created", "2025-01-01", "2025-03-31")` |
+| `Filter.date_not_between(prop, from, to)` | `"was not between"` | Two `"YYYY-MM-DD"` | `Filter.date_not_between("created", "2025-01-01", "2025-06-30")` |
+| `Filter.in_the_next(prop, qty, unit)` | `"was in the next"` | `int` + `FilterDateUnit` | `Filter.in_the_next("renewal", 30, "day")` |
 
 `FilterDateUnit = Literal["hour", "day", "week", "month"]`
 
@@ -450,6 +471,17 @@ Metric("Purchase", math="total",
 
 **Important**: Top-level `math_property=` only accepts strings. Custom property measurement requires wrapping the event in a `Metric` object.
 
+### Segment Method
+
+Control how events are counted per user:
+
+```python
+# Only count each user's first purchase
+result = ws.query(Metric("Purchase", segment_method="first"), last=30)
+```
+
+`SegmentMethod = Literal["all", "first"]` — `"all"` counts every qualifying event (default), `"first"` counts only the first per user. Maps to `segmentMethod` in bookmark JSON.
+
 ---
 
 ## Time Range Patterns
@@ -521,6 +553,103 @@ Rolling and cumulative cannot be used together (V5).
 # WRONG — V5 error
 ws.query("Signup", rolling=7, cumulative=True)
 ```
+
+---
+
+## TimeComparison
+
+Overlay a comparison period on any query for period-over-period analysis.
+
+```python
+from mixpanel_data import TimeComparison
+
+# Compare against previous week
+result = ws.query("Login", time_comparison=TimeComparison.relative("week"), last=7)
+
+# Compare against window starting on a fixed date
+result = ws.query("Login",
+    time_comparison=TimeComparison.absolute_start("2025-01-01"),
+    from_date="2026-01-01", to_date="2026-01-31")
+
+# Compare against window ending on a fixed date
+result = ws.query("Login",
+    time_comparison=TimeComparison.absolute_end("2025-12-31"),
+    from_date="2026-01-01", to_date="2026-01-31")
+```
+
+### Factory Methods
+
+| Method | What it compares against | Required Args |
+|---|---|---|
+| `TimeComparison.relative(unit)` | Previous period offset by unit | `unit`: day, week, month, quarter, year |
+| `TimeComparison.absolute_start(date)` | Window starting on a fixed date | `date`: YYYY-MM-DD |
+| `TimeComparison.absolute_end(date)` | Window ending on a fixed date | `date`: YYYY-MM-DD |
+
+### Validation Rules
+
+| Rule | Check |
+|------|-------|
+| TC0 | `type` must be "relative", "absolute-start", or "absolute-end" |
+| TC1 | `type="relative"` requires `unit`, rejects `date` |
+| TC2 | Absolute types require `date`, reject `unit` |
+| TC3 | `date` must be valid YYYY-MM-DD calendar date |
+
+`TimeComparison` also works with `query_funnel()` and `query_retention()`.
+
+---
+
+## Frequency Analysis
+
+### FrequencyBreakdown
+
+Break down results by how often users performed an event. Pass as `group_by`:
+
+```python
+from mixpanel_data import FrequencyBreakdown
+
+result = ws.query("Login",
+    group_by=FrequencyBreakdown(
+        event="Purchase",
+        bucket_size=1,
+        bucket_min=0,
+        bucket_max=10,
+    ), last=30)
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `event` | `str` | required | Event to count frequency for |
+| `bucket_size` | `int` | `1` | Width of each frequency bucket |
+| `bucket_min` | `int` | `0` | Minimum frequency value |
+| `bucket_max` | `int` | `10` | Maximum frequency value |
+| `label` | `str \| None` | `None` | Display label |
+
+### FrequencyFilter
+
+Filter to users who performed an event a certain number of times. Pass as `where`:
+
+```python
+from mixpanel_data import FrequencyFilter
+
+result = ws.query("Login",
+    where=FrequencyFilter(
+        event="Purchase",
+        value=3,
+        operator="is at least",
+    ), last=30)
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `event` | `str` | required | Event to count frequency for |
+| `value` | `int \| float` | required | Threshold value |
+| `operator` | `FrequencyFilterOperator` | `"is at least"` | Comparison operator |
+| `date_range_value` | `int \| None` | `None` | Lookback window size |
+| `date_range_unit` | `Literal["day", "week", "month"] \| None` | `None` | Lookback window unit |
+| `event_filters` | `list[Filter] \| None` | `None` | Filters for the frequency event |
+| `label` | `str \| None` | `None` | Display label |
+
+`FrequencyFilterOperator = Literal["is at least", "is at most", "is greater than", "is less than", "is equal to"]`
 
 ---
 
