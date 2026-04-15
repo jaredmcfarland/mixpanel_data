@@ -468,11 +468,14 @@ def _validate_data_group_id(
         List with one ``ValidationError`` if invalid, empty otherwise.
     """
     if data_group_id is not None:
-        if isinstance(data_group_id, bool):
+        if isinstance(data_group_id, bool) or not isinstance(data_group_id, int):
             return [
                 ValidationError(
                     path="data_group_id",
-                    message="data_group_id must be an integer, not a boolean",
+                    message=(
+                        f"data_group_id must be a positive integer, "
+                        f"got {type(data_group_id).__name__}"
+                    ),
                     code="DG1_INVALID_DATA_GROUP_ID",
                 )
             ]

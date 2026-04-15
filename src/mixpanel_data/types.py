@@ -7227,12 +7227,21 @@ class TimeComparison:
                     f"TimeComparison type={self.type!r} does not accept unit; "
                     f"unit is only valid for type='relative'"
                 )
-            # TC3: date must match YYYY-MM-DD format
+            # TC3: date must be a valid YYYY-MM-DD calendar date
             if not _DATE_RE.match(self.date):
                 raise ValueError(
                     f"TimeComparison date must be in YYYY-MM-DD format, "
                     f"got {self.date!r}"
                 )
+            # TC3b: verify it's a real calendar date (e.g. reject 2026-02-30)
+            try:
+                import datetime
+
+                datetime.date.fromisoformat(self.date)
+            except ValueError:
+                raise ValueError(
+                    f"TimeComparison date is not a valid calendar date: {self.date!r}"
+                ) from None
 
     @classmethod
     def relative(cls, unit: TimeComparisonUnit) -> TimeComparison:
