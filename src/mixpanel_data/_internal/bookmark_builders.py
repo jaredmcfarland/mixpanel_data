@@ -194,7 +194,7 @@ def build_filter_section(
     """
     if where is None:
         return []
-    filters_list = where if isinstance(where, list) else [where]
+    filters_list = list(where) if isinstance(where, (list, tuple)) else [where]
     result: list[dict[str, Any]] = []
     for f in filters_list:
         if isinstance(f, FrequencyFilter):
@@ -285,7 +285,7 @@ def build_group_section(
     if group_by is None:
         return []
 
-    groups = group_by if isinstance(group_by, list) else [group_by]
+    groups = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
     group_section: list[dict[str, Any]] = []
 
     for g in groups:

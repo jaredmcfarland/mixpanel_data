@@ -544,12 +544,4 @@ __all__ = [
     "FilterPropertyType",
     "FilterDateUnit",
     "FiltersCombinator",
-    # Advanced query types
-    "SegmentMethod",
-    "FunnelReentryMode",
-    "RetentionUnboundedMode",
-    "TimeComparisonType",
-    "TimeComparisonUnit",
-    "CohortAggregationType",
-    "FlowSessionEvent",
 ]

@@ -39,7 +39,7 @@ property_names: st.SearchStrategy[str] = st.text(
 )
 
 # String values for filter comparisons.
-# Restricted to printable alphanumeric + common punctuation to avoid generating
+# Restricted to letters, numbers, and spaces to avoid generating
 # operator-like substrings (e.g. "==", "!=", " or ", " and ") that would break
 # selector-counting assertions in multi-value filter tests.
 string_values: st.SearchStrategy[str] = st.text(

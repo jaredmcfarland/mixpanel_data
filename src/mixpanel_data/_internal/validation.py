@@ -259,7 +259,7 @@ def _scan_custom_properties(
 
     # Scan group_by
     if group_by is not None:
-        groups = group_by if isinstance(group_by, list) else [group_by]
+        groups = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
         for i, g in enumerate(groups):
             if isinstance(g, GroupBy) and isinstance(
                 g.property, (CustomPropertyRef, InlineCustomProperty)
@@ -269,7 +269,7 @@ def _scan_custom_properties(
 
     # Scan where (filters) — skip FrequencyFilter instances (no _property)
     if where is not None:
-        filters = where if isinstance(where, list) else [where]
+        filters = list(where) if isinstance(where, (list, tuple)) else [where]
         for i, f in enumerate(filters):
             if isinstance(f, FrequencyFilter):
                 continue
@@ -467,16 +467,25 @@ def _validate_data_group_id(
     Returns:
         List with one ``ValidationError`` if invalid, empty otherwise.
     """
-    if data_group_id is not None and data_group_id <= 0:
-        return [
-            ValidationError(
-                path="data_group_id",
-                message=(
-                    f"data_group_id must be a positive integer (got {data_group_id})"
-                ),
-                code="DG1_INVALID_DATA_GROUP_ID",
-            )
-        ]
+    if data_group_id is not None:
+        if isinstance(data_group_id, bool):
+            return [
+                ValidationError(
+                    path="data_group_id",
+                    message="data_group_id must be an integer, not a boolean",
+                    code="DG1_INVALID_DATA_GROUP_ID",
+                )
+            ]
+        if data_group_id <= 0:
+            return [
+                ValidationError(
+                    path="data_group_id",
+                    message=(
+                        f"data_group_id must be a positive integer (got {data_group_id})"
+                    ),
+                    code="DG1_INVALID_DATA_GROUP_ID",
+                )
+            ]
     return []
 
 
@@ -666,7 +675,7 @@ def validate_group_by_args(
     if group_by is None:
         return errors
 
-    groups = group_by if isinstance(group_by, list) else [group_by]
+    groups = list(group_by) if isinstance(group_by, (list, tuple)) else [group_by]
     for i, g in enumerate(groups):
         if isinstance(g, GroupBy):
             gpath = f"group_by[{i}]" if len(groups) > 1 else "group_by"

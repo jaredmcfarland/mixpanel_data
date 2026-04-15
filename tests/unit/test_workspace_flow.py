@@ -1017,10 +1017,10 @@ class TestDataGroupIdFlow:
         self,
         workspace_factory: Callable[..., Workspace],
     ) -> None:
-        """build_flow_params without data_group_id produces data_group_id: None (backward compat)."""
+        """build_flow_params without data_group_id omits the key entirely."""
         ws = workspace_factory()
         result = ws.build_flow_params("Login")
-        assert result["data_group_id"] is None
+        assert "data_group_id" not in result
 
 
 # =========================================================================

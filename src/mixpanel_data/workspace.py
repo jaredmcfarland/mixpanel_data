@@ -3647,8 +3647,10 @@ class Workspace:
             "show_custom_events": True,
             "hidden_events": hidden_events or [],
             "exclusions": exclusions if exclusions is not None else [],
-            "data_group_id": data_group_id,
         }
+
+        if data_group_id is not None:
+            params["data_group_id"] = data_group_id
 
         # Add filters if present — route cohort vs property filters
         if where is not None:
@@ -3857,7 +3859,7 @@ class Workspace:
             data_group_id=data_group_id,
         )
         # CP1-CP6: Custom property validation for flow step filters
-        arg_errors.extend(_scan_custom_properties(flow_steps=steps))
+        arg_errors.extend(_scan_custom_properties(flow_steps=steps, where=where))
         if any(e.severity == "error" for e in arg_errors):
             raise BookmarkValidationError(arg_errors)
 
