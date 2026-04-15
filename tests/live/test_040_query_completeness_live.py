@@ -870,7 +870,6 @@ class TestOfflineUS4:
             "is greater than",
             "is less than",
             "is equal to",
-            "is between",
         ],
     )
     def test_m27_frequency_filter_operators(

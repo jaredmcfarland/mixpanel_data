@@ -1250,7 +1250,6 @@ class TestFrequencyFilterValidation:
             "is greater than",
             "is less than",
             "is equal to",
-            "is between",
         ]
         for op in valid_ops:
             ff = FrequencyFilter("Login", operator=op, value=5)  # type: ignore[arg-type]

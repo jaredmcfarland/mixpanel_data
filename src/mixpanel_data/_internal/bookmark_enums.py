@@ -507,7 +507,10 @@ VALID_FREQUENCY_FILTER_OPERATORS: frozenset[str] = frozenset(
         "is greater than",
         "is less than",
         "is equal to",
-        "is between",
     }
 )
-"""Valid operators for frequency-based filters."""
+"""Valid operators for frequency-based filters.
+
+Note: ``"is between"`` excluded — ``FrequencyFilter.value`` is a single
+scalar and cannot represent the two-bound range that "between" requires.
+"""

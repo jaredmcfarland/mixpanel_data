@@ -7206,12 +7206,26 @@ class TimeComparison:
                 or type is absolute and unit is set (TC2),
                 or date does not match YYYY-MM-DD format (TC3).
         """
+        # TC0: type must be a valid TimeComparisonType
+        valid_types = {"relative", "absolute-start", "absolute-end"}
+        if self.type not in valid_types:
+            raise ValueError(
+                f"TimeComparison type must be one of {sorted(valid_types)}, "
+                f"got {self.type!r}"
+            )
         if self.type == "relative":
             # TC1: relative requires unit, rejects date
             if self.unit is None:
                 raise ValueError(
                     "TimeComparison type='relative' requires unit to be set "
                     "(e.g., TimeComparison.relative('month'))"
+                )
+            # TC1b: unit must be a valid TimeComparisonUnit
+            valid_units = {"day", "week", "month", "quarter", "year"}
+            if self.unit not in valid_units:
+                raise ValueError(
+                    f"TimeComparison unit must be one of {sorted(valid_units)}, "
+                    f"got {self.unit!r}"
                 )
             if self.date is not None:
                 raise ValueError(
@@ -7408,6 +7422,14 @@ class Metric:
                 'Metric math="percentile" requires percentile_value '
                 "(e.g., Metric(event, math='percentile', percentile_value=95))"
             )
+        # M4: segment_method must be valid if set
+        if self.segment_method is not None:
+            valid_segments = {"all", "first"}
+            if self.segment_method not in valid_segments:
+                raise ValueError(
+                    f"Metric segment_method must be one of {sorted(valid_segments)}, "
+                    f"got {self.segment_method!r}"
+                )
 
 
 @dataclass(frozen=True)

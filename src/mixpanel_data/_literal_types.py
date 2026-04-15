@@ -428,7 +428,6 @@ FrequencyFilterOperator = Literal[
     "is greater than",
     "is less than",
     "is equal to",
-    "is between",
 ]
 """Comparison operator for frequency filters.
 
@@ -445,8 +444,10 @@ FrequencyFilterOperator = Literal[
 +------------------+----------------------------------------------+
 | is equal to      | Count == threshold                           |
 +------------------+----------------------------------------------+
-| is between       | Count in [low, high] range                   |
-+------------------+----------------------------------------------+
+
+Note: ``"is between"`` is excluded because ``FrequencyFilter.value``
+is typed as ``int | float`` (single scalar) and cannot represent
+the two-bound range that "between" requires.
 """
 
 # =============================================================================
