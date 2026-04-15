@@ -1,6 +1,6 @@
 # mixpanel-data — CodeMode Analyst Plugin
 
-Turn Claude into a senior data analyst and Mixpanel product analytics expert. Claude writes Python code using `mixpanel_data`'s five typed query engines plus `pandas`, `networkx`, and `anytree` for sophisticated multi-engine analysis. Ask questions in natural language — Claude autonomously writes and executes Python to answer them.
+Query and analyze Mixpanel data with Python. Provides the `mixpanel_data` API surface (5 query engines, discovery, entity CRUD) with a live documentation system (`help.py`) for method signatures, type lookup, fuzzy search, and hosted docs. Ask questions in natural language — Claude writes and executes Python to answer them.
 
 ## Quick Start
 
