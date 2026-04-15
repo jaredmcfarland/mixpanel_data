@@ -17,6 +17,7 @@ import difflib
 import enum
 import importlib
 import inspect
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -376,7 +377,7 @@ def _show_referenced_types(obj: Any) -> None:
         val = getattr(mod, name)
         if not isinstance(val, type):
             continue
-        if name in sig_text:
+        if re.search(rf"\b{re.escape(name)}\b", sig_text):
             doc = inspect.getdoc(val) or ""
             first_line = doc.split("\n")[0] if doc else ""
             found.append((name, first_line))
@@ -700,7 +701,7 @@ def _show_reference_hints(query: str) -> None:
         print(
             "\n---\n"
             "Tip: For complete method signatures organized by domain,\n"
-            f"     WebFetch {_DOCS_BASE}/api/workspace/index.md"
+            f'     WebFetch(url="{_DOCS_BASE}/api/workspace/index.md")'
         )
         return
 
@@ -712,7 +713,7 @@ def _show_reference_hints(query: str) -> None:
             print(
                 f"\n---\n"
                 f"Tip: For tutorials and examples ({description}),\n"
-                f"     WebFetch {_DOCS_BASE}/{docs_path}"
+                f'     WebFetch(url="{_DOCS_BASE}/{docs_path}")'
             )
             return
 
