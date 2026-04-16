@@ -282,7 +282,9 @@ def _scan_custom_properties(
                                 _validate_custom_property(ef._property, fpath)
                             )
                 continue
-            if isinstance(f._property, (CustomPropertyRef, InlineCustomProperty)):
+            if isinstance(f, Filter) and isinstance(
+                f._property, (CustomPropertyRef, InlineCustomProperty)
+            ):
                 fpath = f"where[{i}]" if len(filters) > 1 else "where"
                 errors.extend(_validate_custom_property(f._property, fpath))
 

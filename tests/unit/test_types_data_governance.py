@@ -919,12 +919,17 @@ class TestCreateCustomPropertyParams:
             behavior={"type": "count"},
         )
         data = params.model_dump(exclude_none=True)
-        assert "description" not in data
+        # Fields with non-None defaults are present
+        assert data["description"] == ""
+        assert data["property_type"] == "string"
+        assert data["example_value"] == ""
+        # None-defaulted fields are excluded
         assert "display_formula" not in data
         assert "composed_properties" not in data
         assert "is_locked" not in data
         assert "is_visible" not in data
         assert "data_group_id" not in data
+        # Required fields are present
         assert "name" in data
         assert "resource_type" in data
 

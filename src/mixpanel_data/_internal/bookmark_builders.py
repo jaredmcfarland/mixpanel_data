@@ -199,7 +199,7 @@ def build_filter_section(
     for f in filters_list:
         if isinstance(f, FrequencyFilter):
             result.append(build_frequency_filter_entry(f))
-        else:
+        elif isinstance(f, Filter):
             result.append(build_filter_entry(f))
     return result
 

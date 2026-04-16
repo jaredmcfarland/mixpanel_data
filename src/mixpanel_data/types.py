@@ -11593,7 +11593,7 @@ class UserQueryResult(ResultWithDataFrame):
         ordered: list[str] = [c for c in priority if c in cols]
         remaining = sorted(c for c in cols if c not in priority)
         ordered.extend(remaining)
-        return result_df[ordered]
+        return pd.DataFrame(result_df[ordered])
 
     @property
     def distinct_ids(self) -> list[str]:
