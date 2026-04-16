@@ -279,6 +279,108 @@ class TestAppRequest:
         assert captured_urls[0].startswith(ENDPOINTS["eu"]["app"])
 
 
+class TestAppRequestFormBody:
+    """Test app_request() with form_body= for application/x-www-form-urlencoded.
+
+    Some Mixpanel App API endpoints (notably ``custom_events/`` and
+    ``data-definitions/lookup-tables/``) require form-encoded bodies rather
+    than JSON. ``form_body=`` plumbs those callers through the same retry
+    and error-wrapping path as JSON callers instead of forcing them to
+    bypass ``app_request`` and lose those protections.
+    """
+
+    def test_form_body_sent_as_form_encoded(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """form_body= produces application/x-www-form-urlencoded with the fields."""
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture the outgoing request."""
+            captured.append(request)
+            return httpx.Response(200, json={"status": "ok", "results": {"id": 1}})
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            client.app_request(
+                "POST",
+                "/projects/12345/custom_events/",
+                form_body={"name": "X", "alternatives": '[{"event": "Y"}]'},
+            )
+
+        from urllib.parse import parse_qs
+
+        req = captured[0]
+        assert req.method == "POST"
+        assert req.headers["content-type"].startswith(
+            "application/x-www-form-urlencoded"
+        )
+        decoded = parse_qs(req.content.decode())
+        assert decoded["name"] == ["X"]
+        assert decoded["alternatives"] == ['[{"event": "Y"}]']
+
+    def test_form_body_retries_on_429(self, oauth_credentials: Credentials) -> None:
+        """form_body= callers go through the same 429 retry path as json_body=."""
+        attempts: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return 429 once, then 200."""
+            attempts.append(1)
+            if len(attempts) == 1:
+                return httpx.Response(
+                    429,
+                    headers={"Retry-After": "0"},
+                    json={"error": "rate limited"},
+                )
+            return httpx.Response(200, json={"status": "ok", "results": {"id": 1}})
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.app_request(
+                "POST",
+                "/projects/12345/custom_events/",
+                form_body={"name": "X", "alternatives": "[]"},
+            )
+
+        assert len(attempts) == 2  # one retry then success
+        assert result == {"id": 1}
+
+    def test_form_body_wraps_httpx_transport_error(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """form_body= callers surface httpx.HTTPError as MixpanelDataError."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Raise a transport-level ConnectError."""
+            raise httpx.ConnectError("connection refused")
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError):
+            client.app_request(
+                "POST",
+                "/projects/12345/custom_events/",
+                form_body={"name": "X", "alternatives": "[]"},
+            )
+
+    def test_form_body_and_json_body_mutually_exclusive(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """Passing both form_body and json_body raises ValueError."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Should never be called — error fires before request."""
+            return httpx.Response(200, json={"status": "ok"})
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(ValueError, match="form_body"):
+            client.app_request(
+                "POST",
+                "/projects/12345/custom_events/",
+                json_body={"a": 1},
+                form_body={"b": "2"},
+            )
+
+
 # =============================================================================
 # T027: Workspace scoping tests
 # =============================================================================

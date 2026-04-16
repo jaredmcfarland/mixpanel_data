@@ -1720,6 +1720,42 @@ class TestCreateCustomEvent:
         with client, pytest.raises(MixpanelDataError):
             client.create_custom_event({"name": "X", "alternatives": "[]"})
 
+    def test_retries_on_429(self, oauth_credentials: Credentials) -> None:
+        """create_custom_event() retries through app_request on 429."""
+        attempts: list[int] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return 429 once, then 200."""
+            attempts.append(1)
+            if len(attempts) == 1:
+                return httpx.Response(
+                    429,
+                    headers={"Retry-After": "0"},
+                    json={"error": "rate limited"},
+                )
+            return httpx.Response(
+                200,
+                json={"custom_event": {"id": 1, "name": "X", "alternatives": []}},
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.create_custom_event({"name": "X", "alternatives": "[]"})
+
+        assert len(attempts) == 2  # one retry then success
+        assert result["id"] == 1
+
+    def test_wraps_httpx_transport_error(self, oauth_credentials: Credentials) -> None:
+        """create_custom_event() surfaces httpx.HTTPError as MixpanelDataError."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Raise a transport-level ConnectError."""
+            raise httpx.ConnectError("connection refused")
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError):
+            client.create_custom_event({"name": "X", "alternatives": "[]"})
+
 
 class TestMarkLookupTableReady:
     """Tests for mark_lookup_table_ready() API client method."""

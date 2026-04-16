@@ -304,3 +304,26 @@ class TestCustomEventsCreate:
         """Omitting --alternative causes a non-zero exit (Pydantic validation error)."""
         result = runner.invoke(app, ["custom-events", "create", "--name", "X"])
         assert result.exit_code != 0
+
+    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    def test_create_empty_name_surfaces_as_input_error_not_api_error(
+        self, mock_get_ws: MagicMock
+    ) -> None:
+        """Empty --name violates Pydantic min_length and reports as INPUT error.
+
+        Regression: previously the ValidationError raised by
+        ``CreateCustomEventParams(name="", ...)`` was caught by the
+        ``handle_errors`` decorator and printed as
+        "API response parsing error: unexpected data format from Mixpanel API",
+        which is misleading — the user gave bad input, the API never saw it.
+        """
+        mock_get_ws.return_value = MagicMock()  # no workspace call should happen
+
+        result = runner.invoke(
+            app,
+            ["custom-events", "create", "--name", "", "--alternative", "X"],
+        )
+
+        assert result.exit_code != 0
+        combined_output = (result.stdout or "") + (result.stderr or "")
+        assert "API response parsing error" not in combined_output

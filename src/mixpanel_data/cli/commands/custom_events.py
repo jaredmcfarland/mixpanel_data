@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 import typer
+from pydantic import ValidationError
 
 from mixpanel_data.cli.options import FormatOption, JqOption
 from mixpanel_data.cli.utils import (
@@ -95,7 +96,13 @@ def custom_events_create(
     """
     from mixpanel_data.types import CreateCustomEventParams
 
-    params = CreateCustomEventParams(name=name, alternatives=alternative)
+    try:
+        params = CreateCustomEventParams(name=name, alternatives=alternative)
+    except ValidationError as e:
+        # Surface user-input validation as a Typer-style argument error
+        # rather than handle_errors's "API response parsing error", which
+        # is misleading for client-side input that never reached the API.
+        raise typer.BadParameter(str(e)) from e
     workspace = get_workspace(ctx)
     with status_spinner(ctx, "Creating custom event..."):
         result = workspace.create_custom_event(params)
@@ -177,20 +184,33 @@ def custom_events_update(
     if verified is not None:
         kwargs["verified"] = verified
 
-    params = UpdateEventDefinitionParams(**kwargs)
+    try:
+        params = UpdateEventDefinitionParams(**kwargs)
+    except ValidationError as e:
+        # Surface user-input validation as a Typer-style argument error
+        # rather than handle_errors's "API response parsing error", which
+        # is misleading for client-side input that never reached the API.
+        raise typer.BadParameter(str(e)) from e
     workspace = get_workspace(ctx)
 
     if custom_event_id is None:
         with status_spinner(ctx, f"Resolving custom event {name!r}..."):
+            # Filter on `> 0` (not just truthiness) because customEventId=0
+            # is Mixpanel's sentinel for orphan / auto-derived lexicon
+            # entries — never a valid custom event id.
             matches = [
                 e
                 for e in workspace.list_custom_events()
-                if e.name == name and e.custom_event_id
+                if e.name == name
+                and e.custom_event_id is not None
+                and e.custom_event_id > 0
             ]
         if not matches:
             raise typer.BadParameter(f"No custom event found with name {name!r}.")
         if len(matches) > 1:
-            ids = sorted(e.custom_event_id for e in matches if e.custom_event_id)
+            ids = sorted(
+                e.custom_event_id for e in matches if e.custom_event_id is not None
+            )
             raise typer.BadParameter(
                 f"Multiple custom events named {name!r} (ids: {ids}). "
                 f"Use --id to disambiguate."

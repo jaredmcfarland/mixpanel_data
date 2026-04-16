@@ -369,7 +369,14 @@ class MixpanelAPIClient:
         response.raise_for_status()
         if response_body is not None and isinstance(response_body, dict | list):
             return response_body
-        return response.json()
+        try:
+            return response.json()
+        except json.JSONDecodeError as e:
+            raise MixpanelDataError(
+                f"Non-JSON response from {request_method} {request_url} "
+                f"(status {response.status_code}): {response.text[:500]}",
+                code="INVALID_RESPONSE",
+            ) from e
 
     def _calculate_backoff(self, attempt: int) -> float:
         """Calculate exponential backoff delay with jitter.
@@ -679,6 +686,7 @@ class MixpanelAPIClient:
         *,
         params: dict[str, str] | None = None,
         json_body: dict[str, Any] | None = None,
+        form_body: dict[str, str] | None = None,
         _raw: bool = False,
     ) -> Any:
         """Make an authenticated request to the Mixpanel App API.
@@ -691,7 +699,12 @@ class MixpanelAPIClient:
             method: HTTP method (GET, POST, PATCH, DELETE, etc.).
             path: API path (e.g., ``/projects/12345/dashboards``).
             params: Optional query parameters.
-            json_body: Optional JSON request body.
+            json_body: Optional JSON request body. Mutually exclusive with
+                ``form_body``.
+            form_body: Optional ``application/x-www-form-urlencoded`` request
+                body. Used by endpoints like ``custom_events/`` and
+                ``data-definitions/lookup-tables/`` that don't accept JSON.
+                Mutually exclusive with ``json_body``.
             _raw: If True, return the full response dict without unwrapping
                 the ``results`` field. Useful for endpoints that include
                 pagination metadata alongside results.
@@ -703,6 +716,7 @@ class MixpanelAPIClient:
             response dict is returned without unwrapping ``results``.
 
         Raises:
+            ValueError: Both ``json_body`` and ``form_body`` were provided.
             AuthenticationError: Invalid credentials (401).
             RateLimitError: Rate limit exceeded after max retries (429).
             QueryError: Invalid parameters or resource not found (400, 404, 422).
@@ -716,8 +730,19 @@ class MixpanelAPIClient:
                 dashboards = client.app_request(
                     "GET", "/projects/12345/dashboards"
                 )
+                # form-encoded POST
+                ce = client.app_request(
+                    "POST",
+                    "/projects/12345/custom_events/",
+                    form_body={"name": "X", "alternatives": '[{"event": "Y"}]'},
+                )
             ```
         """
+        if json_body is not None and form_body is not None:
+            raise ValueError(
+                "app_request: json_body and form_body are mutually exclusive"
+            )
+
         url = self._build_url("app", path)
         auth_header = self._credentials.auth_header()
         headers = {"Authorization": auth_header}
@@ -730,16 +755,30 @@ class MixpanelAPIClient:
         if params:
             request_params.update(params)
 
+        request_body: dict[str, Any] | dict[str, str] | None = (
+            form_body if form_body is not None else json_body
+        )
+
         for attempt in range(self._max_retries + 1):
             try:
-                response = client.request(
-                    method,
-                    url,
-                    params=request_params,
-                    json=json_body,
-                    headers=headers,
-                    timeout=self._timeout,
-                )
+                if form_body is not None:
+                    response = client.request(
+                        method,
+                        url,
+                        params=request_params,
+                        data=form_body,
+                        headers=headers,
+                        timeout=self._timeout,
+                    )
+                else:
+                    response = client.request(
+                        method,
+                        url,
+                        params=request_params,
+                        json=json_body,
+                        headers=headers,
+                        timeout=self._timeout,
+                    )
 
                 # Handle 204 No Content
                 if response.status_code == 204:
@@ -794,7 +833,7 @@ class MixpanelAPIClient:
                         response_body=err_body,
                         request_method=method,
                         request_url=url,
-                        request_body=json_body,
+                        request_body=request_body,
                     )
 
                 # Delegate other error codes to _handle_response
@@ -803,7 +842,7 @@ class MixpanelAPIClient:
                     request_method=method,
                     request_url=url,
                     request_params=request_params,
-                    request_body=json_body,
+                    request_body=request_body,
                 )
 
                 # Unwrap results field if present (unless _raw requested)
@@ -6983,12 +7022,10 @@ class MixpanelAPIClient:
         """Create a new custom event.
 
         Calls ``POST /api/app/projects/{pid}/custom_events/`` (optionally
-        workspace-scoped) with a form-encoded body. Unwraps the
-        ``{custom_event: ...}`` envelope (and the optional outer ``results``
-        wrapper) before returning the inner custom event dict.
-
-        Note that this endpoint uses ``application/x-www-form-urlencoded``
-        rather than JSON, so the request bypasses :meth:`app_request`.
+        workspace-scoped) with a form-encoded body via :meth:`app_request`,
+        so it inherits the same 429 retry, ``httpx.HTTPError`` wrapping, and
+        error mapping as JSON callsites. Unwraps the ``{custom_event: ...}``
+        envelope before returning the inner custom event dict.
 
         Args:
             body: Form-encoded fields. Must include ``name`` (the custom
@@ -7002,11 +7039,11 @@ class MixpanelAPIClient:
 
         Raises:
             AuthenticationError: Invalid credentials (401).
-            QueryError: Validation error (400) — for example, duplicate
+            RateLimitError: Rate limit exceeded after max retries (429).
+            QueryError: Validation error (400, 422) — for example, duplicate
                 custom event name or unknown underlying event.
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network failure, non-JSON response, or
-                unexpected response shape.
+            MixpanelDataError: Network failure or unexpected response shape.
 
         Example:
             ```python
@@ -7018,34 +7055,10 @@ class MixpanelAPIClient:
             ```
         """
         path = self.maybe_scoped_path("custom_events/")
-        url = self._build_url("app", path)
-        auth_header = self._credentials.auth_header()
-        client = self._ensure_client()
-        response = client.request(
-            "POST",
-            url,
-            data=body,
-            headers={"Authorization": auth_header},
-            timeout=self._timeout,
-        )
-        if response.status_code >= 400:
-            self._handle_response(
-                response,
-                request_method="POST",
-                request_url=url,
-                request_params=None,
-                request_body=body,
-            )
-        try:
-            payload: Any = response.json()
-        except json.JSONDecodeError as e:
-            raise MixpanelDataError(
-                f"create_custom_event returned non-JSON response "
-                f"(status {response.status_code}): {response.text[:500]}",
-                code="INVALID_RESPONSE",
-            ) from e
-        if isinstance(payload, dict) and "results" in payload:
-            payload = payload["results"]
+        payload: Any = self.app_request("POST", path, form_body=body)
+        # The /custom_events/ endpoint nests the entity under {custom_event: ...}
+        # inside the standard {results: ...} envelope that app_request already
+        # unwrapped — peel the inner wrapper here.
         if isinstance(payload, dict) and "custom_event" in payload:
             payload = payload["custom_event"]
         if not isinstance(payload, dict):
