@@ -919,19 +919,33 @@ class TestCreateCustomPropertyParams:
             behavior={"type": "count"},
         )
         data = params.model_dump(exclude_none=True)
-        # Fields with non-None defaults are present
-        assert data["description"] == ""
-        assert data["property_type"] == "string"
-        assert data["example_value"] == ""
-        # None-defaulted fields are excluded
+        assert "description" not in data
         assert "display_formula" not in data
         assert "composed_properties" not in data
         assert "is_locked" not in data
         assert "is_visible" not in data
         assert "data_group_id" not in data
-        # Required fields are present
+        assert "property_type" not in data
+        assert "example_value" not in data
         assert "name" in data
         assert "resource_type" in data
+
+    def test_json_serialization_mode(self) -> None:
+        """CreateCustomPropertyParams serializes enums correctly with mode='json'."""
+        params = CreateCustomPropertyParams(
+            name="Revenue",
+            resource_type="events",
+            description="Revenue metric",
+            display_formula='number(properties["amount"])',
+            composed_properties={
+                "amount": ComposedPropertyValue(resource_type="events", type="number"),
+            },
+        )
+        data = params.model_dump(exclude_none=True, by_alias=True, mode="json")
+        assert isinstance(data["resourceType"], str)
+        assert data["resourceType"] == "events"
+        assert data["name"] == "Revenue"
+        assert "displayFormula" in data
 
     def test_missing_required_raises(self) -> None:
         """CreateCustomPropertyParams raises ValidationError when required fields missing."""

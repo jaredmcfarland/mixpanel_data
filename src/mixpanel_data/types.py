@@ -30,6 +30,7 @@ from mixpanel_data._literal_types import (
     CohortAggregationType as CohortAggregationType,
 )
 from mixpanel_data._literal_types import ConversionWindowUnit as ConversionWindowUnit
+from mixpanel_data._literal_types import CustomPropertyType as CustomPropertyType
 from mixpanel_data._literal_types import FilterDateUnit as FilterDateUnit
 from mixpanel_data._literal_types import FilterPropertyType as FilterPropertyType
 from mixpanel_data._literal_types import FiltersCombinator as FiltersCombinator
@@ -5776,7 +5777,7 @@ class ComposedPropertyValue(BaseModel):
     label: str | None = None
     """Human-readable label for the property (e.g. ``"Deal Name"``)."""
 
-    property_default_type: str | None = None
+    property_default_type: CustomPropertyType | None = None
     """Default property type hint (e.g. ``"string"``, ``"number"``)."""
 
     behavior: Any | None = (
@@ -5897,7 +5898,7 @@ class CreateCustomPropertyParams(BaseModel):
     resource_type: CustomPropertyResourceType
     """Resource type (events, people, group_profiles)."""
 
-    description: str = ""
+    description: str | None = None
     """Property description."""
 
     display_formula: str | None = None
@@ -5912,11 +5913,11 @@ class CreateCustomPropertyParams(BaseModel):
     is_visible: bool | None = None
     """Whether the property is visible."""
 
-    property_type: str | None = "string"
+    property_type: CustomPropertyType | None = None
     """Output type of the custom property (string, number, boolean, datetime).
-    Defaults to string. Auto-inferred by the API from the formula if not set."""
+    Auto-inferred by the API from the formula if not set."""
 
-    example_value: str | None = ""
+    example_value: str | None = None
     """Example output value for documentation purposes."""
 
     data_group_id: str | None = None
