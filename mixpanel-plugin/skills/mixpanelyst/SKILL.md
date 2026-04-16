@@ -220,9 +220,13 @@ LET(x, A * B, IFS(x < 50, "low", x < 200, "mid", TRUE, "high"))
 - **Backreferences work** — `$1`, `$2` capture groups and `$0` whole-match all work in `REGEX_REPLACE` replacements
 - **`{n,m}` quantifiers conflict with formula syntax** — curly braces are parsed as formula constructs. Use repeated character classes instead (e.g., `[0-9][0-9][0-9][0-9]` instead of `[0-9]{4}`)
 - **`\d`, `\w` shorthand classes don't work** — use `[0-9]`, `[A-Za-z0-9_]` explicitly
-- **Zero-width assertions match at every position** — pure lookahead/lookbehind replacements insert at every character boundary. Use consuming patterns instead
+- **Escape backslashes carefully** — in formula strings, `\\\\` may be needed for a literal `\` depending on how the formula is constructed (Python string → JSON → regex engine)
 
-**CamelCase splitting:** `REGEX_REPLACE(A, "(?-i)([a-z])([A-Z])", "$1 $2")` inserts space between camelCase boundaries.
+**CamelCase splitting** — insert space between lowercase→uppercase boundaries:
+```
+REGEX_REPLACE(text, "(?-i)([a-z])([A-Z])", "$1 $2")
+// ChickenSundaysApril → Chicken Sundays April
+```
 
 **Practical multi-step cleanup example** (campaign names from Braze):
 ```
