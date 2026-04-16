@@ -372,7 +372,10 @@ class Workspace:
         path instead of the legacy ``resolve_credentials()`` path.
 
         Args:
-            account: Named account from config file to use (v1 path).
+            account: Named account from config file. Selects credentials
+                in both v1 (resolve_credentials) and v2 (resolve_session)
+                configs. For migrated v2 configs, also resolves project
+                aliases.
             project_id: Override project ID from credentials.
             region: Override region from credentials (us, eu, in).
             workspace_id: Optional workspace ID for scoped App API requests.

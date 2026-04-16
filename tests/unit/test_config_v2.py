@@ -604,6 +604,119 @@ class TestWorkspaceCredentialParam:
         assert ws._credentials is not None
         assert ws._credentials.project_id == "12345"
 
+    def test_workspace_v2_with_account_uses_resolve_session(
+        self,
+    ) -> None:
+        """Test Workspace(account=...) uses resolve_session on v2 config."""
+        from unittest.mock import MagicMock
+
+        from mixpanel_data._internal.auth_credential import CredentialType
+
+        mock_cm = MagicMock()
+        mock_cm.config_version.return_value = 2
+        mock_session = MagicMock()
+        mock_session.project_id = "3713224"
+        mock_session.region = "us"
+        mock_session.auth.type = CredentialType.service_account
+        mock_session.auth.username = "user"
+        mock_session.auth.secret = SecretStr("secret")
+        mock_session.auth.oauth_access_token = None
+        mock_cm.resolve_session.return_value = mock_session
+
+        from mixpanel_data.workspace import Workspace
+
+        ws = Workspace(account="prod", _config_manager=mock_cm)
+        mock_cm.resolve_session.assert_called_once_with(
+            credential="prod",
+            project_id=None,
+            workspace_id=None,
+        )
+        assert ws._credentials is not None
+        assert ws._credentials.project_id == "3713224"
+
+    def test_resolve_session_project_alias_fallback(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test resolve_session falls back to project aliases for credential lookup."""
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.delenv("MP_PROJECT_ID", raising=False)
+        monkeypatch.delenv("MP_REGION", raising=False)
+        monkeypatch.delenv("MP_AUTH_FILE", raising=False)
+
+        import tomli_w
+
+        config_path = tmp_path / ".mp" / "config.toml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config: dict[str, object] = {
+            "config_version": 2,
+            "credentials": {
+                "main-sa": {
+                    "type": "service_account",
+                    "username": "user",
+                    "secret": "secret",
+                    "region": "us",
+                },
+            },
+            "projects": {
+                "prod": {
+                    "credential": "main-sa",
+                    "project_id": "222",
+                },
+            },
+            "active": {},
+        }
+        with config_path.open("wb") as f:
+            tomli_w.dump(config, f)
+
+        cm = ConfigManager(config_path=config_path)
+        session = cm.resolve_session(credential="prod")
+        assert session.project_id == "222"
+        assert session.auth.username == "user"
+
+    def test_resolve_session_project_alias_explicit_project_id_wins(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Test explicit project_id overrides alias project_id."""
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.delenv("MP_PROJECT_ID", raising=False)
+        monkeypatch.delenv("MP_REGION", raising=False)
+        monkeypatch.delenv("MP_AUTH_FILE", raising=False)
+
+        import tomli_w
+
+        config_path = tmp_path / ".mp" / "config.toml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config: dict[str, object] = {
+            "config_version": 2,
+            "credentials": {
+                "main-sa": {
+                    "type": "service_account",
+                    "username": "user",
+                    "secret": "secret",
+                    "region": "us",
+                },
+            },
+            "projects": {
+                "prod": {
+                    "credential": "main-sa",
+                    "project_id": "222",
+                },
+            },
+            "active": {},
+        }
+        with config_path.open("wb") as f:
+            tomli_w.dump(config, f)
+
+        cm = ConfigManager(config_path=config_path)
+        session = cm.resolve_session(credential="prod", project_id="999")
+        assert session.project_id == "999"
+
 
 # ── T088-T089: OAuth credential resolution via resolve_session() ─────
 
