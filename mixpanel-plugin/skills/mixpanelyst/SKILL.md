@@ -38,7 +38,7 @@ Guessing event names causes silent empty results. Guessing API parameters causes
 
 ```python
 import mixpanel_data as mp
-from mixpanel_data import Filter, FunnelStep, GroupBy, Metric
+from mixpanel_data import Filter, GroupBy, Metric
 ws = mp.Workspace()
 
 # 1. Find real event names
@@ -215,15 +215,23 @@ LET(x, A * B, IFS(x < 50, "low", x < 200, "mid", TRUE, "high"))
 - `REGEX_EXTRACT(haystack, pattern, capture_group)` — returns match or capture group
 - `REGEX_REPLACE(haystack, pattern, replacement)` — replaces all matches
 
-**Regex tips:**
-- Backreferences work: `REGEX_REPLACE(A, "([a-z])([A-Z])", "$1 $2")` inserts space between camelCase
-- Case-sensitive flag: `(?-i)` switches to case-sensitive within the pattern
-- Nest `REGEX_REPLACE` calls with `LET` for multi-step cleanup:
+**Regex engine quirks (Mixpanel-specific):**
+- **Case-insensitive by default** — use `(?-i)` to switch to case-sensitive matching within a pattern
+- **Backreferences work** — `$1`, `$2` capture groups and `$0` whole-match all work in `REGEX_REPLACE` replacements
+- **`{n,m}` quantifiers conflict with formula syntax** — curly braces are parsed as formula constructs. Use repeated character classes instead (e.g., `[0-9][0-9][0-9][0-9]` instead of `[0-9]{4}`)
+- **`\d`, `\w` shorthand classes don't work** — use `[0-9]`, `[A-Za-z0-9_]` explicitly
+- **Zero-width assertions match at every position** — pure lookahead/lookbehind replacements insert at every character boundary. Use consuming patterns instead
+
+**CamelCase splitting:** `REGEX_REPLACE(A, "(?-i)([a-z])([A-Z])", "$1 $2")` inserts space between camelCase boundaries.
+
+**Practical multi-step cleanup example** (campaign names from Braze):
 ```
-LET(step1, REGEX_REPLACE(A, "^[0-9]{4,6}_", ""),
-LET(step2, REGEX_REPLACE(step1, "_Email_.*$", ""),
-  REGEX_REPLACE(step2, "([a-z])([A-Z])", "$1 $2")
-))
+LET(s1, REGEX_REPLACE(A, "^[0-9][0-9][0-9][0-9][0-9]*_", ""),
+LET(s2, REGEX_REPLACE(s1, "^(NW|TARGETED|REGIONAL|NTL)_", ""),
+LET(s3, REGEX_REPLACE(s2, "_(Push|Email|NotificationCenter|ModalInAppMessage)_.*$", ""),
+LET(s4, REGEX_REPLACE(s3, "_", " "),
+  REGEX_REPLACE(s4, " +", " ")
+))))
 ```
 
 **Type functions:** `STRING(x)`, `NUMBER(x)`, `BOOLEAN(x)`, `DEFINED(x)`
@@ -505,7 +513,6 @@ Every query engine has parameters that look like simple settings but are actuall
 When a single breakdown shows a difference, verify it holds across dimensions:
 
 ```python
-event = 'Purchase'  # use a real event name
 # Step 1: Find the interesting segment
 result = ws.query(event, math='average', math_property='order_total',
                    group_by='deal_sweet_spot', last=90, mode='total')
@@ -564,7 +571,6 @@ Funnel queries return time data in step metadata columns (`avg_time`, `avg_time_
 **Choosing a window:** Match it to the user journey being measured. Short funnels (ordering food, adding to cart) need tight windows — hours, not days. Long funnels (onboarding, subscription purchase) need wider windows — days or weeks. When unsure, experiment:
 
 ```python
-steps = [FunnelStep("Signup"), FunnelStep("Add to Cart"), FunnelStep("Purchase")]
 # Try progressively tighter windows to find where signal emerges
 for window, unit in [(14, 'day'), (7, 'day'), (1, 'day'), (12, 'hour'), (6, 'hour')]:
     result = ws.query_funnel(steps, last=90,
@@ -600,9 +606,9 @@ android = ws.query_funnel(steps, where=Filter.equals('platform', 'Android'),
 
 ```python
 # order='loose' vs 'any' — same steps, fundamentally different questions
-for order_mode in ['loose', 'any']:
-    result = ws.query_funnel(steps, last=90, order=order_mode)
-    print(f"order={order_mode}: {result.overall_conversion_rate:.3f}")
+for ord in ['loose', 'any']:
+    result = ws.query_funnel(steps, last=90, order=ord)
+    print(f"order={ord}: {result.overall_conversion_rate:.3f}")
 # If 'any' >> 'loose', users are completing all steps but not in the expected order
 # This often reveals UX issues — users accomplish the goal but not via the designed path
 ```
@@ -780,7 +786,6 @@ result = ws.query("Login", group_by=CohortBreakdown(power_users, "Power Users"),
 # Use inline cohort as a filter in user queries
 result = ws.query_user(cohort=power_users, mode='aggregate', aggregate='count')
 
-saved_cohort_id = 12345  # ID from ws.cohorts()
 # Track saved cohort size over time alongside event metrics
 result = ws.query(
     [Metric("Login", math="unique"), CohortMetric(saved_cohort_id, "Power Users")],
