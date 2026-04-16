@@ -5770,6 +5770,15 @@ class ComposedPropertyValue(BaseModel):
     Mixpanel API composed property schema — distinct from
     ``CustomPropertyResourceType`` which uses plural form."""
 
+    value: str | None = None
+    """Property name in the project (e.g. ``"deal_name"``)."""
+
+    label: str | None = None
+    """Human-readable label for the property (e.g. ``"Deal Name"``)."""
+
+    property_default_type: str | None = None
+    """Default property type hint (e.g. ``"string"``, ``"number"``)."""
+
     behavior: Any | None = (
         None  # Any justified: API behavior spec varies by resource type
     )
@@ -5888,7 +5897,7 @@ class CreateCustomPropertyParams(BaseModel):
     resource_type: CustomPropertyResourceType
     """Resource type (events, people, group_profiles)."""
 
-    description: str | None = None
+    description: str = ""
     """Property description."""
 
     display_formula: str | None = None
@@ -5902,6 +5911,13 @@ class CreateCustomPropertyParams(BaseModel):
 
     is_visible: bool | None = None
     """Whether the property is visible."""
+
+    property_type: str | None = "string"
+    """Output type of the custom property (string, number, boolean, datetime).
+    Defaults to string. Auto-inferred by the API from the formula if not set."""
+
+    example_value: str | None = ""
+    """Example output value for documentation purposes."""
 
     data_group_id: str | None = None
     """Data group identifier."""

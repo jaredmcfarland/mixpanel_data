@@ -408,9 +408,9 @@ class Workspace:
             self._credentials = self._session_to_credentials(session)
         else:
             if self._config_manager.config_version() >= 2:
-                # v2 config detected — use resolve_session with defaults
+                # v2 config detected — use resolve_session
                 session = self._config_manager.resolve_session(
-                    credential=None,
+                    credential=account,
                     project_id=project_id,
                     workspace_id=workspace_id,
                 )
@@ -7556,7 +7556,7 @@ class Workspace:
             ```
         """
         client = self._require_api_client()
-        body = params.model_dump(exclude_none=True, by_alias=True)
+        body = params.model_dump(exclude_none=True, by_alias=True, mode="json")
         raw = client.create_custom_property(body)
         return CustomProperty.model_validate(raw)
 
