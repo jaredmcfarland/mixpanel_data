@@ -9404,8 +9404,8 @@ class FrequencyBreakdown:
         bucket_size: Width of each frequency bucket. Default: ``1``.
         bucket_min: Minimum frequency value. Default: ``0``.
         bucket_max: Maximum frequency value. Default: ``10``.
-        label: Display label for the breakdown. ``None`` uses
-            the event name.
+        label: Display label for the breakdown. ``None`` generates
+            ``"<event> Frequency"`` (e.g., ``"Purchase Frequency"``).
 
     Raises:
         ValueError: If validation rules FB1-FB4 are violated.

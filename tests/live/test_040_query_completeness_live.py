@@ -793,7 +793,7 @@ class TestOfflineUS4:
     def test_m23_frequency_breakdown_has_behavior_type(
         self, ws: Workspace, real_event: str
     ) -> None:
-        """M23 -- FrequencyBreakdown group entry has behaviorType=$frequency.
+        """M23 -- FrequencyBreakdown group entry has behavior.behaviorType=$frequency.
 
         Args:
             ws: Workspace fixture.
@@ -803,11 +803,12 @@ class TestOfflineUS4:
         params = ws.build_params(real_event, group_by=fb, last=7)
         group = _dig(params, "sections", "group")
         assert group is not None
-        # Find the frequency group entry
+        # Find the frequency group entry (behaviorType is inside behavior dict)
         freq_entries = [
             g
             for g in group
-            if isinstance(g, dict) and g.get("behaviorType") == "$frequency"
+            if isinstance(g, dict)
+            and g.get("behavior", {}).get("behaviorType") == "$frequency"
         ]
         assert len(freq_entries) > 0
 
@@ -827,7 +828,8 @@ class TestOfflineUS4:
         freq_entries = [
             g
             for g in group
-            if isinstance(g, dict) and g.get("behaviorType") == "$frequency"
+            if isinstance(g, dict)
+            and g.get("behavior", {}).get("behaviorType") == "$frequency"
         ]
         assert len(freq_entries) > 0
         assert freq_entries[0].get("resourceType") == "people"
