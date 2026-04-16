@@ -331,9 +331,9 @@ Key design features:
 
 ## Claude Code Plugin
 
-This project includes a Claude Code plugin (v3.0) that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_data` + `pandas` rather than calling CLI commands or MCP tools.
+This project includes a Claude Code plugin (v4.0) that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_data` + `pandas` rather than calling CLI commands or MCP tools.
 
-The plugin is built around the 5-engine query taxonomy — `query()`, `query_funnel()`, `query_retention()`, `query_flow()`, and `query_user()` — with full cohort-scoped query support. Agents translate natural language analytics questions into typed query calls with filters, breakdowns, formulas, cohort definitions, and aggregations, then interpret results as DataFrames.
+The plugin is built around the 5-engine query taxonomy — `query()`, `query_funnel()`, `query_retention()`, `query_flow()`, and `query_user()` — with full cohort-scoped query support. Claude translates natural language analytics questions into typed query calls with filters, breakdowns, formulas, cohort definitions, and aggregations, then interprets results as DataFrames.
 
 **Installation:**
 
@@ -341,16 +341,12 @@ Add the plugin from the `mixpanel-plugin/` directory, then restart Claude Code.
 
 **What you get:**
 
-- **Command**: `/mp-auth` — Secure credential management with account switching
+- **Command**: `/mixpanel-data:auth` — Manage credentials, accounts, OAuth login, project discovery
 - **Skills**:
   - `setup` — Install dependencies and verify authentication
-  - `mixpanelyst` — Auto-triggered on analytics questions; teaches query API patterns, 5-engine taxonomy, cohort-scoped queries, typed filters, AARRR frameworks, and progressive reference docs
-- **5 specialist agents** (auto-invoked via Task tool):
-  - `analyst` — General-purpose orchestrator for multi-step analytics investigations
-  - `explorer` — Schema discovery, hypothesis generation, GQM decomposition for vague questions
-  - `diagnostician` — Root cause analysis: segments metric changes across dimensions using typed queries + `Filter`
-  - `narrator` — Executive summaries pulling DAU, revenue, retention, and engagement via typed queries
-  - `synthesizer` — Multi-engine analysis: pandas joins, NetworkX graph analysis, scipy statistical testing
+  - `mixpanelyst` — Auto-triggered on analytics questions; teaches 5-engine query patterns, analytical methodology (parameter sensitivity, statistical traps, counting modes), inline custom properties, cohort definitions, frequency analysis, and live API docs via `help.py`
+  - `dashboard-expert` — Auto-triggered on dashboard requests; full CRUD for Mixpanel dashboards with layout system, text cards, report arrangement, and 9 design templates
+- **Scripts**: `help.py` (live API documentation with fuzzy search) and `auth_manager.py` (programmatic credential management)
 - **Secure by design**: Credentials managed outside conversation context
 
 Learn more: [Plugin Documentation](mixpanel-plugin/README.md)
