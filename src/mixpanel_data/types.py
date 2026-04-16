@@ -17,6 +17,7 @@ without recomputation.
 from __future__ import annotations
 
 import copy
+import json
 import math
 import re
 import warnings
@@ -5385,6 +5386,112 @@ class UpdateEventDefinitionParams(BaseModel):
 
     description: str | None = None
     """Event description."""
+
+
+class CustomEventAlternative(BaseModel):
+    """An underlying event aliased by a custom event.
+
+    A Mixpanel custom event groups one or more underlying events under a single
+    name. Each ``CustomEventAlternative`` names one such underlying event.
+
+    Attributes:
+        event: Name of the underlying event being aliased.
+
+    Example:
+        ```python
+        CustomEventAlternative(event="Home Page Viewed")
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow", populate_by_name=True)
+
+    event: str
+    """Name of the underlying event being aliased."""
+
+
+class CustomEvent(BaseModel):
+    """A Mixpanel custom event composed of one or more underlying events.
+
+    Returned by the ``/custom_events/`` endpoint family (e.g. by
+    :meth:`Workspace.create_custom_event`). Distinct from
+    :class:`EventDefinition`, which represents the lexicon (governance) view
+    of an event.
+
+    Attributes:
+        id: Server-assigned custom event ID.
+        name: Display name shown in the Mixpanel UI and queries.
+        alternatives: Underlying events aliased by this custom event.
+
+    Example:
+        ```python
+        ce = CustomEvent(
+            id=42,
+            name="Page View",
+            alternatives=[CustomEventAlternative(event="Home Viewed")],
+        )
+        ```
+    """
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="allow",
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+    id: int
+    """Server-assigned custom event ID."""
+
+    name: str
+    """Display name shown in the Mixpanel UI and queries."""
+
+    alternatives: list[CustomEventAlternative] = Field(default_factory=list)
+    """Underlying events aliased by this custom event."""
+
+
+class CreateCustomEventParams(BaseModel):
+    """Parameters for creating a custom event.
+
+    The ``alternatives`` field accepts a list of bare event names for
+    ergonomics; :meth:`to_form_body` serializes them to the
+    ``[{"event": <name>}, ...]`` shape the Mixpanel API expects.
+
+    Attributes:
+        name: Display name for the custom event (must be non-empty).
+        alternatives: Underlying event names to alias (must be non-empty).
+
+    Example:
+        ```python
+        params = CreateCustomEventParams(
+            name="Metric Tree Opened",
+            alternatives=["Enter room"],
+        )
+        ws.create_custom_event(params)
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1)
+    """Display name for the custom event (must be non-empty)."""
+
+    alternatives: list[str] = Field(min_length=1)
+    """Underlying event names to alias (must be non-empty)."""
+
+    def to_form_body(self) -> dict[str, str]:
+        """Serialize to the form-encoded body the Mixpanel API expects.
+
+        Returns:
+            A dict with two string fields:
+
+            - ``name``: the custom event display name.
+            - ``alternatives``: a JSON-encoded list of ``{"event": <name>}``
+              dicts, one per underlying event.
+        """
+        return {
+            "name": self.name,
+            "alternatives": json.dumps([{"event": e} for e in self.alternatives]),
+        }
 
 
 class UpdatePropertyDefinitionParams(BaseModel):

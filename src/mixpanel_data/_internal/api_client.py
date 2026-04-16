@@ -6979,6 +6979,82 @@ class MixpanelAPIClient:
     # Data Governance — Custom Events (Phase 027)
     # =============================================================================
 
+    def create_custom_event(self, body: dict[str, str]) -> dict[str, Any]:
+        """Create a new custom event.
+
+        Calls ``POST /api/app/projects/{pid}/custom_events/`` (optionally
+        workspace-scoped) with a form-encoded body. Unwraps the
+        ``{custom_event: ...}`` envelope (and the optional outer ``results``
+        wrapper) before returning the inner custom event dict.
+
+        Note that this endpoint uses ``application/x-www-form-urlencoded``
+        rather than JSON, so the request bypasses :meth:`app_request`.
+
+        Args:
+            body: Form-encoded fields. Must include ``name`` (the custom
+                event display name) and ``alternatives`` (a JSON-encoded
+                list of ``{"event": <name>}`` dicts naming the underlying
+                events to alias).
+
+        Returns:
+            Dictionary representing the created custom event (``id``,
+            ``name``, ``alternatives``, plus any server-side fields).
+
+        Raises:
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400) — for example, duplicate
+                custom event name or unknown underlying event.
+            ServerError: Server-side errors (5xx).
+            MixpanelDataError: Network failure, non-JSON response, or
+                unexpected response shape.
+
+        Example:
+            ```python
+            with MixpanelAPIClient(creds) as client:
+                ce = client.create_custom_event({
+                    "name": "Page View",
+                    "alternatives": '[{"event": "Home Viewed"}]',
+                })
+            ```
+        """
+        path = self.maybe_scoped_path("custom_events/")
+        url = self._build_url("app", path)
+        auth_header = self._credentials.auth_header()
+        client = self._ensure_client()
+        response = client.request(
+            "POST",
+            url,
+            data=body,
+            headers={"Authorization": auth_header},
+            timeout=self._timeout,
+        )
+        if response.status_code >= 400:
+            self._handle_response(
+                response,
+                request_method="POST",
+                request_url=url,
+                request_params=None,
+                request_body=body,
+            )
+        try:
+            payload: Any = response.json()
+        except json.JSONDecodeError as e:
+            raise MixpanelDataError(
+                f"create_custom_event returned non-JSON response "
+                f"(status {response.status_code}): {response.text[:500]}",
+                code="INVALID_RESPONSE",
+            ) from e
+        if isinstance(payload, dict) and "results" in payload:
+            payload = payload["results"]
+        if isinstance(payload, dict) and "custom_event" in payload:
+            payload = payload["custom_event"]
+        if not isinstance(payload, dict):
+            raise MixpanelDataError(
+                f"Unexpected response from create_custom_event: "
+                f"expected dict, got {type(payload).__name__}",
+            )
+        return payload
+
     def list_custom_events(self) -> list[dict[str, Any]]:
         """List custom events for the current project.
 
@@ -7009,18 +7085,27 @@ class MixpanelAPIClient:
             )
         return result
 
-    def update_custom_event(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
-        """Update a custom event definition.
+    def update_custom_event(
+        self, custom_event_id: int, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a custom event's lexicon entry.
 
         Calls ``PATCH /api/app/projects/{pid}/data-definitions/events/``
-        (optionally workspace-scoped).
+        (optionally workspace-scoped). The endpoint matches the entry to
+        update by the most specific identifier in the body; for custom
+        events that's ``customEventId``. Sending only ``name`` would create
+        an orphan lexicon entry rather than updating the existing one.
 
         Args:
-            name: Custom event name.
-            body: Fields to update.
+            custom_event_id: Server-assigned custom event ID (the
+                ``custom_event_id`` field on a custom event's lexicon entry,
+                or the ``id`` field on the ``CustomEvent`` returned by
+                :meth:`create_custom_event`).
+            body: Fields to update (description, verified, tags, hidden,
+                dropped, merged).
 
         Returns:
-            Dictionary representing the updated custom event.
+            Dictionary representing the updated lexicon entry.
 
         Raises:
             AuthenticationError: Invalid credentials (401).
@@ -7032,12 +7117,12 @@ class MixpanelAPIClient:
             ```python
             with MixpanelAPIClient(credentials) as client:
                 updated = client.update_custom_event(
-                    "MyCustomEvent", {"hidden": True}
+                    2044168, {"hidden": True}
                 )
             ```
         """
         path = self.maybe_scoped_path("data-definitions/events/")
-        payload = {**body, "name": name}
+        payload = {**body, "customEventId": custom_event_id}
         result = self.app_request("PATCH", path, json_body=payload)
         if not isinstance(result, dict):
             raise MixpanelDataError(

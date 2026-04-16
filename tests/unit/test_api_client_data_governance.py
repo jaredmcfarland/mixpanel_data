@@ -20,7 +20,7 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, Credentials
-from mixpanel_data.exceptions import MixpanelDataError
+from mixpanel_data.exceptions import MixpanelDataError, QueryError
 
 # =============================================================================
 # Fixtures
@@ -1543,6 +1543,182 @@ class TestRegisterLookupTable:
             client.register_lookup_table({"name": "X"})
 
         assert "/data-definitions/lookup-tables/" in captured_urls[0]
+
+
+# =============================================================================
+# Custom Events — create
+# =============================================================================
+
+
+class TestCreateCustomEvent:
+    """Tests for create_custom_event() API client method."""
+
+    def test_posts_form_encoded_body(self, oauth_credentials: Credentials) -> None:
+        """create_custom_event() POSTs an application/x-www-form-urlencoded body."""
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture the request, return a custom_event envelope."""
+            captured.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "custom_event": {
+                        "id": 99,
+                        "name": "Page View",
+                        "alternatives": [{"event": "Home"}],
+                    }
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.create_custom_event(
+                {"name": "Page View", "alternatives": '[{"event": "Home"}]'}
+            )
+
+        from urllib.parse import parse_qs
+
+        req = captured[0]
+        assert req.method == "POST"
+        assert req.url.path.endswith("/custom_events/")
+        assert req.headers["content-type"].startswith(
+            "application/x-www-form-urlencoded"
+        )
+        body = parse_qs(req.content.decode())
+        assert body["name"] == ["Page View"]
+        assert json.loads(body["alternatives"][0]) == [{"event": "Home"}]
+        assert result["id"] == 99
+        assert result["name"] == "Page View"
+
+    def test_unwraps_custom_event_envelope(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """create_custom_event() unwraps {custom_event: {...}} into the inner dict."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a {custom_event: ...} envelope."""
+            return httpx.Response(
+                200,
+                json={
+                    "custom_event": {
+                        "id": 1,
+                        "name": "X",
+                        "alternatives": [],
+                    }
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.create_custom_event({"name": "X", "alternatives": "[]"})
+
+        assert result == {"id": 1, "name": "X", "alternatives": []}
+
+    def test_unwraps_results_then_custom_event_envelope(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """create_custom_event() unwraps both {results: ...} and {custom_event: ...}."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a doubly-wrapped envelope."""
+            return httpx.Response(
+                200,
+                json={
+                    "results": {
+                        "custom_event": {
+                            "id": 2,
+                            "name": "Y",
+                            "alternatives": [],
+                        }
+                    }
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            result = client.create_custom_event({"name": "Y", "alternatives": "[]"})
+
+        assert result["id"] == 2
+        assert result["name"] == "Y"
+
+    def test_uses_maybe_scoped_path_project_default(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """create_custom_event() uses project-scoped path by default."""
+        captured_urls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture the URL."""
+            captured_urls.append(str(request.url))
+            return httpx.Response(
+                200,
+                json={"custom_event": {"id": 1, "name": "X", "alternatives": []}},
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            client.create_custom_event({"name": "X", "alternatives": "[]"})
+
+        assert "/projects/12345/custom_events/" in captured_urls[0]
+
+    def test_workspace_scoped_path_when_workspace_id_set(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """create_custom_event() honors workspace ID when set on the client."""
+        captured_urls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture the URL."""
+            captured_urls.append(str(request.url))
+            return httpx.Response(
+                200,
+                json={"custom_event": {"id": 1, "name": "X", "alternatives": []}},
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        client.set_workspace_id(77)
+        with client:
+            client.create_custom_event({"name": "X", "alternatives": "[]"})
+
+        assert "/workspaces/77/custom_events/" in captured_urls[0]
+
+    def test_400_raises_query_error(self, oauth_credentials: Credentials) -> None:
+        """create_custom_event() raises QueryError on 400 (e.g. duplicate name)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a 400 error."""
+            return httpx.Response(400, json={"error": "duplicate name"})
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(QueryError):
+            client.create_custom_event({"name": "X", "alternatives": "[]"})
+
+    def test_non_dict_response_raises_mixpanel_data_error(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """create_custom_event() raises MixpanelDataError if response isn't a dict."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a non-dict JSON response."""
+            return httpx.Response(200, json=[1, 2, 3])
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError):
+            client.create_custom_event({"name": "X", "alternatives": "[]"})
+
+    def test_non_json_response_raises_mixpanel_data_error(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """create_custom_event() raises MixpanelDataError if response isn't JSON."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a 200 with non-JSON body."""
+            return httpx.Response(200, content=b"not json at all")
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client, pytest.raises(MixpanelDataError):
+            client.create_custom_event({"name": "X", "alternatives": "[]"})
 
 
 class TestMarkLookupTableReady:

@@ -3,6 +3,7 @@
 This module provides commands for managing Mixpanel custom events:
 
 - list: List all custom events
+- create: Create a new custom event aliasing one or more underlying events
 - update: Update a custom event definition
 - delete: Delete a custom event
 """
@@ -56,14 +57,73 @@ def custom_events_list(
     )
 
 
+@custom_events_app.command("create")
+@handle_errors
+def custom_events_create(
+    ctx: typer.Context,
+    name: Annotated[
+        str,
+        typer.Option("--name", help="Display name for the new custom event."),
+    ],
+    alternative: Annotated[
+        list[str],
+        typer.Option(
+            "--alternative",
+            help=(
+                "Underlying event name to alias. Pass --alternative "
+                "multiple times to alias more than one event."
+            ),
+        ),
+    ],
+    format: FormatOption = "json",
+    jq_filter: JqOption = None,
+) -> None:
+    """Create a new custom event.
+
+    A custom event aliases one or more underlying events under a single
+    display name. For example::
+
+        mp custom-events create --name "Page View" \\
+            --alternative "Home Viewed" --alternative "Product Viewed"
+
+    Args:
+        ctx: Typer context with global options.
+        name: Display name for the new custom event.
+        alternative: Underlying event names to alias. Repeatable.
+        format: Output format.
+        jq_filter: Optional jq filter expression.
+    """
+    from mixpanel_data.types import CreateCustomEventParams
+
+    params = CreateCustomEventParams(name=name, alternatives=alternative)
+    workspace = get_workspace(ctx)
+    with status_spinner(ctx, "Creating custom event..."):
+        result = workspace.create_custom_event(params)
+    output_result(ctx, result.model_dump(), format=format, jq_filter=jq_filter)
+
+
 @custom_events_app.command("update")
 @handle_errors
 def custom_events_update(
     ctx: typer.Context,
+    custom_event_id: Annotated[
+        int | None,
+        typer.Option(
+            "--id",
+            "--custom-event-id",
+            help="Custom event ID. Use this OR --name. Prefer --id when known.",
+        ),
+    ] = None,
     name: Annotated[
-        str,
-        typer.Option("--name", help="Custom event name (required)."),
-    ],
+        str | None,
+        typer.Option(
+            "--name",
+            help=(
+                "Custom event name. Resolved to an ID via list_custom_events; "
+                "errors if zero or multiple custom events share the name."
+            ),
+        ),
+    ] = None,
     hidden: Annotated[
         bool | None,
         typer.Option("--hidden/--no-hidden", help="Hide or show the event."),
@@ -76,23 +136,36 @@ def custom_events_update(
         str | None,
         typer.Option("--description", help="New event description."),
     ] = None,
+    verified: Annotated[
+        bool | None,
+        typer.Option("--verified/--no-verified", help="Mark as verified or not."),
+    ] = None,
     format: FormatOption = "json",
     jq_filter: JqOption = None,
 ) -> None:
-    """Update a custom event definition.
+    """Update a custom event's lexicon entry.
 
-    Updates the specified custom event. Only provided fields are changed.
+    Identify the custom event by either ``--id`` (preferred) or ``--name``.
+    Name lookup uses :meth:`Workspace.list_custom_events` and errors if the
+    name is ambiguous or unknown.
 
     Args:
         ctx: Typer context with global options.
-        name: Custom event name.
+        custom_event_id: Custom event ID. Mutually exclusive with name.
+        name: Custom event name. Resolved to an ID via list_custom_events.
         hidden: Hide or show the event.
         dropped: Drop or undrop the event.
         description: New event description.
+        verified: Mark as verified or not.
         format: Output format.
         jq_filter: Optional jq filter expression.
     """
     from mixpanel_data.types import UpdateEventDefinitionParams
+
+    if custom_event_id is None and name is None:
+        raise typer.BadParameter("Must specify --id or --name.")
+    if custom_event_id is not None and name is not None:
+        raise typer.BadParameter("Specify --id or --name, not both.")
 
     kwargs: dict[str, Any] = {}
     if hidden is not None:
@@ -101,11 +174,33 @@ def custom_events_update(
         kwargs["dropped"] = dropped
     if description is not None:
         kwargs["description"] = description
+    if verified is not None:
+        kwargs["verified"] = verified
 
     params = UpdateEventDefinitionParams(**kwargs)
     workspace = get_workspace(ctx)
+
+    if custom_event_id is None:
+        with status_spinner(ctx, f"Resolving custom event {name!r}..."):
+            matches = [
+                e
+                for e in workspace.list_custom_events()
+                if e.name == name and e.custom_event_id
+            ]
+        if not matches:
+            raise typer.BadParameter(f"No custom event found with name {name!r}.")
+        if len(matches) > 1:
+            ids = sorted(e.custom_event_id for e in matches if e.custom_event_id)
+            raise typer.BadParameter(
+                f"Multiple custom events named {name!r} (ids: {ids}). "
+                f"Use --id to disambiguate."
+            )
+        resolved_id = matches[0].custom_event_id
+        assert resolved_id is not None  # narrowed by filter above
+        custom_event_id = resolved_id
+
     with status_spinner(ctx, "Updating custom event..."):
-        result = workspace.update_custom_event(name, params)
+        result = workspace.update_custom_event(custom_event_id, params)
     output_result(ctx, result.model_dump(), format=format, jq_filter=jq_filter)
 
 

@@ -1745,7 +1745,7 @@ class TestCustomEventsCRUD:
         """
         try:
             result = ws.update_custom_event(
-                "QA-027-fake-custom-event",
+                999_999_999,  # ID that should not exist
                 UpdateEventDefinitionParams(description="should fail"),
             )
             # API accepted the update silently — that's fine
