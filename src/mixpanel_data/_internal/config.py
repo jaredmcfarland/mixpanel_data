@@ -1634,6 +1634,17 @@ class ConfigManager:
         if not cred_name and credentials:
             cred_name = next(iter(credentials.keys()))
 
+        # Fallback: check if name is a project alias (e.g. migrated v1 account)
+        if cred_name and cred_name not in credentials:
+            projects = config.get("projects", {})
+            if cred_name in projects:
+                alias = projects[cred_name]
+                alias_cred = alias.get("credential")
+                if alias_cred and alias_cred in credentials:
+                    if project_id is None:
+                        project_id = alias.get("project_id")
+                    cred_name = alias_cred
+
         if not cred_name or cred_name not in credentials:
             raise ConfigError(
                 "No credentials configured. "

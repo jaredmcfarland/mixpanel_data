@@ -513,6 +513,13 @@ Datetime factory methods (``Filter.on``, ``Filter.before``, etc.)
 produce filters with ``filterType="datetime"``.
 """
 
+CustomPropertyType = Literal["string", "number", "boolean", "datetime"]
+"""Output type for custom property definitions.
+
+Unlike ``FilterPropertyType``, excludes ``"list"`` which is not valid
+for custom property output types.
+"""
+
 FilterDateUnit = Literal["hour", "day", "week", "month"]
 """Time unit for relative date filters.
 

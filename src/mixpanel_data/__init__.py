@@ -16,6 +16,7 @@ from mixpanel_data._literal_types import (
     CohortAggregationType,
     ConversionWindowUnit,
     CountType,
+    CustomPropertyType,
     FilterDateUnit,
     FilterPropertyType,
     FiltersCombinator,
@@ -257,7 +258,7 @@ from mixpanel_data.types import (
 )
 from mixpanel_data.workspace import Workspace
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = [
     # Core
@@ -295,6 +296,7 @@ __all__ = [
     # Type aliases — insights
     "InsightsMode",
     # Type aliases — filter types
+    "CustomPropertyType",
     "FilterPropertyType",
     "FilterDateUnit",
     "FiltersCombinator",
@@ -499,6 +501,7 @@ __all__ = [
     "Filter",
     "Formula",
     "GroupBy",
+    "CustomPropertyType",
     "FilterDateUnit",
     "FilterPropertyType",
     "QueryResult",

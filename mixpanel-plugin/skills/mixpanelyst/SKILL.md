@@ -215,15 +215,27 @@ LET(x, A * B, IFS(x < 50, "low", x < 200, "mid", TRUE, "high"))
 - `REGEX_EXTRACT(haystack, pattern, capture_group)` — returns match or capture group
 - `REGEX_REPLACE(haystack, pattern, replacement)` — replaces all matches
 
-**Regex tips:**
-- Backreferences work: `REGEX_REPLACE(A, "([a-z])([A-Z])", "$1 $2")` inserts space between camelCase
-- Case-sensitive flag: `(?-i)` switches to case-sensitive within the pattern
-- Nest `REGEX_REPLACE` calls with `LET` for multi-step cleanup:
+**Regex engine quirks (Mixpanel-specific):**
+- **Case-insensitive by default** — use `(?-i)` to switch to case-sensitive matching within a pattern
+- **Backreferences work** — `$1`, `$2` capture groups and `$0` whole-match all work in `REGEX_REPLACE` replacements
+- **`{n,m}` quantifiers conflict with formula syntax** — curly braces are parsed as formula constructs. Use repeated character classes instead (e.g., `[0-9][0-9][0-9][0-9]` instead of `[0-9]{4}`)
+- **`\d`, `\w` shorthand classes don't work** — use `[0-9]`, `[A-Za-z0-9_]` explicitly
+- **Escape backslashes carefully** — in formula strings, `\\\\` may be needed for a literal `\` depending on how the formula is constructed (Python string → JSON → regex engine)
+
+**CamelCase splitting** — insert space between lowercase→uppercase boundaries:
 ```
-LET(step1, REGEX_REPLACE(A, "^[0-9]{4,6}_", ""),
-LET(step2, REGEX_REPLACE(step1, "_Email_.*$", ""),
-  REGEX_REPLACE(step2, "([a-z])([A-Z])", "$1 $2")
-))
+REGEX_REPLACE(text, "(?-i)([a-z])([A-Z])", "$1 $2")
+// ChickenSundaysApril → Chicken Sundays April
+```
+
+**Practical multi-step cleanup example** (campaign names from Braze):
+```
+LET(s1, REGEX_REPLACE(A, "^[0-9][0-9][0-9][0-9][0-9]*_", ""),
+LET(s2, REGEX_REPLACE(s1, "^(NW|TARGETED|REGIONAL|NTL)_", ""),
+LET(s3, REGEX_REPLACE(s2, "_(Push|Email|NotificationCenter|ModalInAppMessage)_.*$", ""),
+LET(s4, REGEX_REPLACE(s3, "_", " "),
+  REGEX_REPLACE(s4, " +", " ")
+))))
 ```
 
 **Type functions:** `STRING(x)`, `NUMBER(x)`, `BOOLEAN(x)`, `DEFINED(x)`
