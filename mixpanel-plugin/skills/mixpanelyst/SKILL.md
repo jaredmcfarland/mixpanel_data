@@ -38,7 +38,7 @@ Guessing event names causes silent empty results. Guessing API parameters causes
 
 ```python
 import mixpanel_data as mp
-from mixpanel_data import Filter, GroupBy, Metric
+from mixpanel_data import Filter, FunnelStep, GroupBy, Metric
 ws = mp.Workspace()
 
 # 1. Find real event names
@@ -505,6 +505,7 @@ Every query engine has parameters that look like simple settings but are actuall
 When a single breakdown shows a difference, verify it holds across dimensions:
 
 ```python
+event = 'Purchase'  # use a real event name
 # Step 1: Find the interesting segment
 result = ws.query(event, math='average', math_property='order_total',
                    group_by='deal_sweet_spot', last=90, mode='total')
@@ -563,6 +564,7 @@ Funnel queries return time data in step metadata columns (`avg_time`, `avg_time_
 **Choosing a window:** Match it to the user journey being measured. Short funnels (ordering food, adding to cart) need tight windows — hours, not days. Long funnels (onboarding, subscription purchase) need wider windows — days or weeks. When unsure, experiment:
 
 ```python
+steps = [FunnelStep("Signup"), FunnelStep("Add to Cart"), FunnelStep("Purchase")]
 # Try progressively tighter windows to find where signal emerges
 for window, unit in [(14, 'day'), (7, 'day'), (1, 'day'), (12, 'hour'), (6, 'hour')]:
     result = ws.query_funnel(steps, last=90,
@@ -598,9 +600,9 @@ android = ws.query_funnel(steps, where=Filter.equals('platform', 'Android'),
 
 ```python
 # order='loose' vs 'any' — same steps, fundamentally different questions
-for ord in ['loose', 'any']:
-    result = ws.query_funnel(steps, last=90, order=ord)
-    print(f"order={ord}: {result.overall_conversion_rate:.3f}")
+for order_mode in ['loose', 'any']:
+    result = ws.query_funnel(steps, last=90, order=order_mode)
+    print(f"order={order_mode}: {result.overall_conversion_rate:.3f}")
 # If 'any' >> 'loose', users are completing all steps but not in the expected order
 # This often reveals UX issues — users accomplish the goal but not via the designed path
 ```
@@ -778,6 +780,7 @@ result = ws.query("Login", group_by=CohortBreakdown(power_users, "Power Users"),
 # Use inline cohort as a filter in user queries
 result = ws.query_user(cohort=power_users, mode='aggregate', aggregate='count')
 
+saved_cohort_id = 12345  # ID from ws.cohorts()
 # Track saved cohort size over time alongside event metrics
 result = ws.query(
     [Metric("Login", math="unique"), CohortMetric(saved_cohort_id, "Power Users")],
