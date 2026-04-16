@@ -300,7 +300,9 @@ def build_group_section(
                 }
             )
         elif isinstance(g, FrequencyBreakdown):
-            group_section.append(build_frequency_group_entry(g))
+            group_section.append(
+                build_frequency_group_entry(g, data_group_id=data_group_id)
+            )
         elif isinstance(g, GroupBy):
             prop = g.property
             if isinstance(prop, CustomPropertyRef):
@@ -638,7 +640,11 @@ def build_flow_cohort_filter(
     return result
 
 
-def build_frequency_group_entry(fb: FrequencyBreakdown) -> dict[str, Any]:
+def build_frequency_group_entry(
+    fb: FrequencyBreakdown,
+    *,
+    data_group_id: int | None = None,
+) -> dict[str, Any]:
     """Build a single frequency group entry for sections.group[].
 
     Produces the frequency-specific group dict matching the Mixpanel
@@ -648,6 +654,7 @@ def build_frequency_group_entry(fb: FrequencyBreakdown) -> dict[str, Any]:
 
     Args:
         fb: FrequencyBreakdown specification.
+        data_group_id: Optional data group ID for group-level analytics.
 
     Returns:
         Group entry dict matching the Mixpanel bookmark API schema:
@@ -687,7 +694,7 @@ def build_frequency_group_entry(fb: FrequencyBreakdown) -> dict[str, Any]:
         "value": display_label,
         "resourceType": "people",
         "propertyType": "number",
-        "dataGroupId": None,
+        "dataGroupId": data_group_id,
         "customBucket": {
             "bucketSize": fb.bucket_size,
             "min": fb.bucket_min,

@@ -683,6 +683,28 @@ class TestBuildFrequencyGroupEntry:
         }
         assert result["value"] == "Buy Count"
 
+    def test_data_group_id_default_none(self) -> None:
+        """dataGroupId defaults to None when not specified."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        result = build_frequency_group_entry(fb)
+        assert result["dataGroupId"] is None
+
+    def test_data_group_id_threaded(self) -> None:
+        """dataGroupId is threaded when passed explicitly."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase")
+        result = build_frequency_group_entry(fb, data_group_id=5)
+        assert result["dataGroupId"] == 5
+
 
 # =============================================================================
 # T022: build_frequency_filter_entry() builder tests (US4)
@@ -853,6 +875,13 @@ class TestBuildGroupSectionFrequency:
         assert result[0]["propertyType"] == "string"
         assert result[1]["resourceType"] == "people"
         assert result[1]["behavior"]["behaviorType"] == "$frequency"
+
+    def test_data_group_id_threaded_to_frequency(self) -> None:
+        """data_group_id is threaded into frequency group entries."""
+        from mixpanel_data.types import FrequencyBreakdown
+
+        result = build_group_section(FrequencyBreakdown("Purchase"), data_group_id=5)
+        assert result[0]["dataGroupId"] == 5
 
 
 # =============================================================================
