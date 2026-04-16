@@ -654,6 +654,35 @@ class TestBuildFrequencyGroupEntry:
         result = build_frequency_group_entry(fb)
         assert "label" not in result
 
+    def test_no_snake_case_bucket_keys_in_behavior(self) -> None:
+        """Old snake_case bucket keys must not appear in behavior dict."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase", bucket_size=5, bucket_min=0, bucket_max=50)
+        result = build_frequency_group_entry(fb)
+        behavior = result["behavior"]
+        assert "bucket_size" not in behavior
+        assert "bucket_min" not in behavior
+        assert "bucket_max" not in behavior
+
+    def test_event_object_uses_event_name_not_display_label(self) -> None:
+        """Event object label/value must use raw event name, not display label."""
+        from mixpanel_data._internal.bookmark_builders import (
+            build_frequency_group_entry,
+        )
+        from mixpanel_data.types import FrequencyBreakdown
+
+        fb = FrequencyBreakdown("Purchase", label="Buy Count")
+        result = build_frequency_group_entry(fb)
+        assert result["behavior"]["event"] == {
+            "label": "Purchase",
+            "value": "Purchase",
+        }
+        assert result["value"] == "Buy Count"
+
 
 # =============================================================================
 # T022: build_frequency_filter_entry() builder tests (US4)
