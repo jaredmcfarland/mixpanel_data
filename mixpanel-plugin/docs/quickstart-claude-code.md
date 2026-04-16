@@ -60,6 +60,8 @@ Claude will walk you through it step by step:
 
 Your secret is never visible in the conversation.
 
+> If your account has access to multiple projects, you can switch later with `/mixpanel-data:auth switch-project <id>`. Run `/mixpanel-data:auth projects` to see what's available.
+
 ### Option B: OAuth Login (Browser-Based)
 
 ```
@@ -167,6 +169,12 @@ You never need to write this yourself, but it's helpful to know what's possible.
 /mixpanel-data:auth switch production
 ```
 
+### See full context (active credential, project, workspace)
+
+```
+/mixpanel-data:auth context
+```
+
 ### Discover accessible projects
 
 ```
@@ -177,6 +185,18 @@ You never need to write this yourself, but it's helpful to know what's possible.
 
 ```
 /mixpanel-data:auth switch-project 67890
+```
+
+### Remove an account
+
+```
+/mixpanel-data:auth remove my-old-project
+```
+
+### Revoke OAuth tokens
+
+```
+/mixpanel-data:auth logout
 ```
 
 ### Upgrade to v2 config (enables project switching)
@@ -199,6 +219,10 @@ Run `/mixpanel-data:auth add my-project` and follow the prompts, or `/mixpanel-d
 - Verify your project ID matches the project the service account has access to
 - Make sure the region matches your project's data residency
 - Run `/mixpanel-data:auth test` for detailed error information
+
+### "OAuth token expired" or OAuth login stopped working
+
+Run `/mixpanel-data:auth login` again to refresh your tokens. If you switch to a service account instead, run `/mixpanel-data:auth add <name>` — service account credentials don't expire.
 
 ### Plugin not appearing
 
