@@ -5403,10 +5403,10 @@ class CustomEventAlternative(BaseModel):
         ```
     """
 
-    model_config = ConfigDict(frozen=True, extra="allow", populate_by_name=True)
+    model_config = ConfigDict(frozen=True, extra="allow")
 
-    event: str
-    """Name of the underlying event being aliased."""
+    event: str = Field(min_length=1)
+    """Name of the underlying event being aliased (must be non-empty)."""
 
 
 class CustomEvent(BaseModel):
@@ -5432,12 +5432,7 @@ class CustomEvent(BaseModel):
         ```
     """
 
-    model_config = ConfigDict(
-        frozen=True,
-        extra="allow",
-        alias_generator=to_camel,
-        populate_by_name=True,
-    )
+    model_config = ConfigDict(frozen=True, extra="allow")
 
     id: int
     """Server-assigned custom event ID."""
@@ -5458,7 +5453,9 @@ class CreateCustomEventParams(BaseModel):
 
     Attributes:
         name: Display name for the custom event (must be non-empty).
-        alternatives: Underlying event names to alias (must be non-empty).
+        alternatives: Underlying event names to alias. Must be non-empty,
+            contain no empty/whitespace-only entries, and contain no
+            duplicates.
 
     Example:
         ```python
@@ -5477,6 +5474,28 @@ class CreateCustomEventParams(BaseModel):
 
     alternatives: list[str] = Field(min_length=1)
     """Underlying event names to alias (must be non-empty)."""
+
+    @field_validator("alternatives")
+    @classmethod
+    def _validate_alternatives(cls, v: list[str]) -> list[str]:
+        """Reject empty/whitespace-only entries and duplicates.
+
+        Args:
+            v: List of alternative event names supplied by the caller.
+
+        Returns:
+            The validated list, unchanged.
+
+        Raises:
+            ValueError: An entry is empty, whitespace-only, or duplicated.
+        """
+        if any(not s or not s.strip() for s in v):
+            raise ValueError(
+                "alternatives must not contain empty or whitespace-only strings"
+            )
+        if len(set(v)) != len(v):
+            raise ValueError("alternatives must be unique")
+        return v
 
     def to_form_body(self) -> dict[str, str]:
         """Serialize to the form-encoded body the Mixpanel API expects.

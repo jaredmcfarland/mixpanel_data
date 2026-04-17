@@ -1028,15 +1028,15 @@ class TestCreateCustomEventParamsProperties:
 
     @given(
         name=_non_empty_text,
-        alternatives=st.lists(_non_empty_text, min_size=1, max_size=20),
+        alternatives=st.lists(_non_empty_text, min_size=1, max_size=20, unique=True),
     )
     @settings(max_examples=50)
     def test_construction_invariant(self, name: str, alternatives: list[str]) -> None:
-        """Any valid (non-empty name, non-empty alternatives) round-trips through fields.
+        """Any valid (non-empty name, non-empty unique alternatives) round-trips.
 
         Args:
             name: Display name for the custom event.
-            alternatives: Underlying event names to alias.
+            alternatives: Unique underlying event names to alias.
         """
         params = CreateCustomEventParams(name=name, alternatives=alternatives)
         assert params.name == name
@@ -1044,7 +1044,7 @@ class TestCreateCustomEventParamsProperties:
 
     @given(
         name=_non_empty_text,
-        alternatives=st.lists(_non_empty_text, min_size=1, max_size=10),
+        alternatives=st.lists(_non_empty_text, min_size=1, max_size=10, unique=True),
     )
     @settings(max_examples=50)
     def test_form_body_alternatives_round_trip_to_event_dicts(
@@ -1054,7 +1054,7 @@ class TestCreateCustomEventParamsProperties:
 
         Args:
             name: Display name for the custom event.
-            alternatives: Underlying event names.
+            alternatives: Unique underlying event names.
         """
         body = CreateCustomEventParams(
             name=name, alternatives=alternatives
@@ -1065,7 +1065,7 @@ class TestCreateCustomEventParamsProperties:
 
     @given(
         name=_non_empty_text,
-        alternatives=st.lists(_non_empty_text, min_size=1, max_size=10),
+        alternatives=st.lists(_non_empty_text, min_size=1, max_size=10, unique=True),
     )
     @settings(max_examples=50)
     def test_form_body_values_are_strings(
@@ -1075,7 +1075,7 @@ class TestCreateCustomEventParamsProperties:
 
         Args:
             name: Display name for the custom event.
-            alternatives: Underlying event names.
+            alternatives: Unique underlying event names.
         """
         body = CreateCustomEventParams(
             name=name, alternatives=alternatives

@@ -674,15 +674,21 @@ Identify the custom event by its `custom_event_id` (returned by `create_custom_e
 
 ### Delete a Custom Event
 
+Identify the custom event by its `custom_event_id` for the same reason as `update_custom_event` — a name-only DELETE against the data-definitions endpoint is ambiguous when display names collide and may delete the wrong row, an orphan lexicon entry, or no-op silently while reporting success.
+
 === "Python"
 
     ```python
-    ws.delete_custom_event("My Custom Event")
+    ws.delete_custom_event(2044168)
     ```
 
 === "CLI"
 
     ```bash
+    # Preferred: target by ID
+    mp custom-events delete --id 2044168
+
+    # Convenience: target by name (errors if name is ambiguous)
     mp custom-events delete --name "My Custom Event"
     ```
 

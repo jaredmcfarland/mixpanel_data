@@ -7114,23 +7114,28 @@ class MixpanelAPIClient:
                 ``custom_event_id`` field on a custom event's lexicon entry,
                 or the ``id`` field on the ``CustomEvent`` returned by
                 :meth:`create_custom_event`).
-            body: Fields to update (description, verified, tags, hidden,
-                dropped, merged).
+            body: Fields to update. See
+                :class:`mixpanel_data.types.UpdateEventDefinitionParams`
+                for the full list of supported fields.
 
         Returns:
             Dictionary representing the updated lexicon entry.
 
         Raises:
             AuthenticationError: Invalid credentials (401).
-            QueryError: Event not found (404) or validation error (400).
+            QueryError: Event not found (404) or validation error (400, 422).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelDataError: Network/connection errors, or the server
+                returned an entry with a different ``customEventId`` than
+                the one requested (``code="UPDATE_TARGET_MISMATCH"``) —
+                indicates the lexicon entry may have been created instead
+                of updated.
 
         Example:
             ```python
             with MixpanelAPIClient(credentials) as client:
                 updated = client.update_custom_event(
-                    2044168, {"hidden": True}
+                    42, {"hidden": True}
                 )
             ```
         """
@@ -7142,16 +7147,39 @@ class MixpanelAPIClient:
                 f"Unexpected response from update_custom_event: "
                 f"expected dict, got {type(result).__name__}",
             )
+        # Defense-in-depth: the data-definitions endpoint has a known
+        # silent-write history (responding 200 with a freshly-created entry
+        # when given the wrong identifier). If the server echoes back a
+        # different customEventId than we requested, treat it as a failure
+        # rather than silently returning an unrelated entity.
+        returned_id = result.get("customEventId")
+        if returned_id is not None and returned_id != custom_event_id:
+            raise MixpanelDataError(
+                f"update_custom_event: server returned customEventId="
+                f"{returned_id!r} but {custom_event_id} was requested. "
+                f"The lexicon entry may have been created instead of "
+                f"updated.",
+                code="UPDATE_TARGET_MISMATCH",
+            )
         return result
 
-    def delete_custom_event(self, name: str) -> None:
+    def delete_custom_event(self, custom_event_id: int) -> None:
         """Delete a custom event definition.
 
         Calls ``DELETE /api/app/projects/{pid}/data-definitions/events/``
-        (optionally workspace-scoped).
+        (optionally workspace-scoped). Identifies the entry by
+        ``customEventId`` (not name) for the same reason
+        :meth:`update_custom_event` does: the data-definitions endpoint
+        matches by the most specific identifier, and a name-only DELETE
+        is ambiguous when multiple entries share a display name (it may
+        delete the wrong row, an auto-derived orphan, or no-op silently
+        while reporting success).
 
         Args:
-            name: Custom event name.
+            custom_event_id: Server-assigned custom event ID (the
+                ``custom_event_id`` field on a custom event's lexicon entry,
+                or the ``id`` field on the ``CustomEvent`` returned by
+                :meth:`create_custom_event`).
 
         Raises:
             AuthenticationError: Invalid credentials (401).
@@ -7162,11 +7190,11 @@ class MixpanelAPIClient:
         Example:
             ```python
             with MixpanelAPIClient(credentials) as client:
-                client.delete_custom_event("MyCustomEvent")
+                client.delete_custom_event(42)
             ```
         """
         path = self.maybe_scoped_path("data-definitions/events/")
-        self.app_request("DELETE", path, json_body={"name": name})
+        self.app_request("DELETE", path, json_body={"customEventId": custom_event_id})
 
     # =========================================================================
     # Schema Enforcement (Phase 028)

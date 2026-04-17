@@ -147,7 +147,7 @@ class TestCustomEventsUpdate:
 
     @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
     def test_update_errors_when_name_not_found(self, mock_get_ws: MagicMock) -> None:
-        """--name with no matching custom event errors out."""
+        """--name with no matching custom event errors out and names the query."""
         mock_ws = MagicMock()
         mock_ws.list_custom_events.return_value = []
         mock_get_ws.return_value = mock_ws
@@ -157,10 +157,12 @@ class TestCustomEventsUpdate:
             ["custom-events", "update", "--name", "Nonexistent", "--hidden"],
         )
         assert result.exit_code != 0
+        combined = (result.stdout or "") + (result.stderr or "")
+        assert "Nonexistent" in combined
 
     @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
     def test_update_errors_when_name_is_ambiguous(self, mock_get_ws: MagicMock) -> None:
-        """--name matching multiple real custom events errors out."""
+        """--name matching multiple real custom events lists the colliding ids."""
         from mixpanel_data.types import EventDefinition
 
         mock_ws = MagicMock()
@@ -175,6 +177,71 @@ class TestCustomEventsUpdate:
             ["custom-events", "update", "--name", "Duplicate", "--hidden"],
         )
         assert result.exit_code != 0
+        combined = (result.stdout or "") + (result.stderr or "")
+        assert "111" in combined
+        assert "222" in combined
+        assert "--id" in combined
+
+    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    def test_update_errors_when_name_only_matches_orphans(
+        self, mock_get_ws: MagicMock
+    ) -> None:
+        """--name matching only orphan entries errors with an orphan-aware hint."""
+        from mixpanel_data.types import EventDefinition
+
+        mock_ws = MagicMock()
+        mock_ws.list_custom_events.return_value = [
+            EventDefinition(id=999, name="OrphanOnly", custom_event_id=0),
+            EventDefinition(id=998, name="OrphanOnly", custom_event_id=None),
+        ]
+        mock_get_ws.return_value = mock_ws
+
+        result = runner.invoke(
+            app,
+            ["custom-events", "update", "--name", "OrphanOnly", "--hidden"],
+        )
+        assert result.exit_code != 0
+        combined = (result.stdout or "") + (result.stderr or "")
+        assert "orphan" in combined.lower()
+        assert "--id" in combined
+
+    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    def test_update_with_no_verified_passes_false(self, mock_get_ws: MagicMock) -> None:
+        """--no-verified passes verified=False (not omitted)."""
+        mock_ws = MagicMock()
+        mock_ws.update_custom_event.return_value = MagicMock(
+            model_dump=lambda: {"name": "Activated", "verified": False}
+        )
+        mock_get_ws.return_value = mock_ws
+
+        result = runner.invoke(
+            app,
+            ["custom-events", "update", "--id", "2044168", "--no-verified"],
+        )
+        assert result.exit_code == 0
+        _, called_params = mock_ws.update_custom_event.call_args[0]
+        assert called_params.verified is False
+
+    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    def test_update_without_verified_flag_omits_field(
+        self, mock_get_ws: MagicMock
+    ) -> None:
+        """Omitting --verified leaves verified unset (None) in params."""
+        mock_ws = MagicMock()
+        mock_ws.update_custom_event.return_value = MagicMock(
+            model_dump=lambda: {"name": "Activated", "hidden": True}
+        )
+        mock_get_ws.return_value = mock_ws
+
+        result = runner.invoke(
+            app,
+            ["custom-events", "update", "--id", "2044168", "--hidden"],
+        )
+        assert result.exit_code == 0
+        _, called_params = mock_ws.update_custom_event.call_args[0]
+        assert called_params.verified is None
+        # And it must drop out of the API body when serialized
+        assert "verified" not in called_params.model_dump(exclude_none=True)
 
     def test_update_errors_when_neither_id_nor_name(self) -> None:
         """Update without --id and without --name errors out."""
@@ -202,25 +269,102 @@ class TestCustomEventsDelete:
     """Tests for mp custom-events delete."""
 
     @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
-    def test_delete_succeeds(self, mock_get_ws: MagicMock) -> None:
-        """Successful delete exits with code 0."""
+    def test_delete_by_id_succeeds(self, mock_get_ws: MagicMock) -> None:
+        """--id delete passes the int id straight to workspace.delete_custom_event."""
         mock_ws = MagicMock()
+        mock_ws.delete_custom_event.return_value = None
+        mock_get_ws.return_value = mock_ws
+
+        result = runner.invoke(app, ["custom-events", "delete", "--id", "2044168"])
+        assert result.exit_code == 0
+        mock_ws.delete_custom_event.assert_called_once_with(2044168)
+        mock_ws.list_custom_events.assert_not_called()
+
+    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    def test_delete_by_name_resolves_to_id(self, mock_get_ws: MagicMock) -> None:
+        """--name resolves to the unique custom_event_id and deletes by id."""
+        from mixpanel_data.types import EventDefinition
+
+        mock_ws = MagicMock()
+        mock_ws.list_custom_events.return_value = [
+            EventDefinition(id=999, name="OldEvent", custom_event_id=0),  # orphan
+            EventDefinition(id=0, name="OldEvent", custom_event_id=2044168),
+        ]
         mock_ws.delete_custom_event.return_value = None
         mock_get_ws.return_value = mock_ws
 
         result = runner.invoke(app, ["custom-events", "delete", "--name", "OldEvent"])
         assert result.exit_code == 0
-        mock_ws.delete_custom_event.assert_called_once_with("OldEvent")
+        mock_ws.delete_custom_event.assert_called_once_with(2044168)
 
     @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
-    def test_delete_calls_workspace(self, mock_get_ws: MagicMock) -> None:
-        """Delete command invokes workspace.delete_custom_event with the name."""
+    def test_delete_errors_when_name_not_found(self, mock_get_ws: MagicMock) -> None:
+        """--name with no matching custom event errors out, doesn't delete."""
         mock_ws = MagicMock()
-        mock_ws.delete_custom_event.return_value = None
+        mock_ws.list_custom_events.return_value = []
         mock_get_ws.return_value = mock_ws
 
-        runner.invoke(app, ["custom-events", "delete", "--name", "TestEvent"])
-        mock_ws.delete_custom_event.assert_called_once_with("TestEvent")
+        result = runner.invoke(
+            app, ["custom-events", "delete", "--name", "Nonexistent"]
+        )
+        assert result.exit_code != 0
+        mock_ws.delete_custom_event.assert_not_called()
+        combined = (result.stdout or "") + (result.stderr or "")
+        assert "Nonexistent" in combined
+
+    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    def test_delete_errors_when_name_is_ambiguous(self, mock_get_ws: MagicMock) -> None:
+        """--name matching multiple real custom events lists colliding ids and aborts."""
+        from mixpanel_data.types import EventDefinition
+
+        mock_ws = MagicMock()
+        mock_ws.list_custom_events.return_value = [
+            EventDefinition(id=0, name="Duplicate", custom_event_id=111),
+            EventDefinition(id=0, name="Duplicate", custom_event_id=222),
+        ]
+        mock_get_ws.return_value = mock_ws
+
+        result = runner.invoke(app, ["custom-events", "delete", "--name", "Duplicate"])
+        assert result.exit_code != 0
+        mock_ws.delete_custom_event.assert_not_called()
+        combined = (result.stdout or "") + (result.stderr or "")
+        assert "111" in combined
+        assert "222" in combined
+        assert "--id" in combined
+
+    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    def test_delete_errors_when_name_only_matches_orphans(
+        self, mock_get_ws: MagicMock
+    ) -> None:
+        """--name matching only orphans aborts with an orphan-aware hint."""
+        from mixpanel_data.types import EventDefinition
+
+        mock_ws = MagicMock()
+        mock_ws.list_custom_events.return_value = [
+            EventDefinition(id=999, name="OrphanOnly", custom_event_id=0),
+            EventDefinition(id=998, name="OrphanOnly", custom_event_id=None),
+        ]
+        mock_get_ws.return_value = mock_ws
+
+        result = runner.invoke(app, ["custom-events", "delete", "--name", "OrphanOnly"])
+        assert result.exit_code != 0
+        mock_ws.delete_custom_event.assert_not_called()
+        combined = (result.stdout or "") + (result.stderr or "")
+        assert "orphan" in combined.lower()
+        assert "--id" in combined
+
+    def test_delete_errors_when_neither_id_nor_name(self) -> None:
+        """Delete without --id and without --name errors out."""
+        result = runner.invoke(app, ["custom-events", "delete"])
+        assert result.exit_code != 0
+
+    def test_delete_errors_when_both_id_and_name(self) -> None:
+        """Delete with both --id and --name errors out."""
+        result = runner.invoke(
+            app,
+            ["custom-events", "delete", "--id", "123", "--name", "X"],
+        )
+        assert result.exit_code != 0
 
 
 class TestCustomEventsCreate:
@@ -311,11 +455,11 @@ class TestCustomEventsCreate:
     ) -> None:
         """Empty --name violates Pydantic min_length and reports as INPUT error.
 
-        Regression: previously the ValidationError raised by
-        ``CreateCustomEventParams(name="", ...)`` was caught by the
-        ``handle_errors`` decorator and printed as
-        "API response parsing error: unexpected data format from Mixpanel API",
-        which is misleading — the user gave bad input, the API never saw it.
+        Empty ``--name`` violates ``CreateCustomEventParams.name`` ``min_length=1``
+        and must surface as a CLI input error, not as "API response parsing
+        error" — the latter would falsely imply the request reached the
+        server. The error message must mention the offending field so the
+        user can correct it.
         """
         mock_get_ws.return_value = MagicMock()  # no workspace call should happen
 
@@ -327,3 +471,4 @@ class TestCustomEventsCreate:
         assert result.exit_code != 0
         combined_output = (result.stdout or "") + (result.stderr or "")
         assert "API response parsing error" not in combined_output
+        assert "name" in combined_output.lower()

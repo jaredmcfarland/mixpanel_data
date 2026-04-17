@@ -324,6 +324,11 @@ class TestCustomEventAlternative:
         with pytest.raises(ValidationError):
             CustomEventAlternative()  # type: ignore[call-arg]
 
+    def test_empty_event_rejected(self) -> None:
+        """CustomEventAlternative rejects empty event names."""
+        with pytest.raises(ValidationError):
+            CustomEventAlternative(event="")
+
 
 # =============================================================================
 # CustomEvent Tests
@@ -379,11 +384,12 @@ class TestCustomEventModel:
         assert ce.id == 1
         assert ce.name == "X"
 
-    def test_camel_case_alias_for_id(self) -> None:
-        """CustomEvent supports camelCase aliases for forward compatibility."""
-        # The {custom_event: ...} envelope sometimes uses camelCase keys.
+    def test_model_validate_from_snake_case_dict(self) -> None:
+        """CustomEvent.model_validate parses the snake_case API response shape."""
         ce = CustomEvent.model_validate({"id": 5, "name": "Y", "alternatives": []})
         assert ce.id == 5
+        assert ce.name == "Y"
+        assert ce.alternatives == []
 
     def test_frozen_immutable(self) -> None:
         """CustomEvent is frozen (cannot mutate after construction)."""
@@ -450,6 +456,27 @@ class TestCreateCustomEventParams:
         """CreateCustomEventParams rejects empty alternative lists."""
         with pytest.raises(ValidationError):
             CreateCustomEventParams(name="X", alternatives=[])
+
+    def test_empty_string_alternative_rejected(self) -> None:
+        """CreateCustomEventParams rejects empty-string alternatives."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateCustomEventParams(name="X", alternatives=[""])
+        assert "empty" in str(exc_info.value).lower()
+
+    def test_whitespace_only_alternative_rejected(self) -> None:
+        """CreateCustomEventParams rejects whitespace-only alternatives."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateCustomEventParams(name="X", alternatives=["   "])
+        assert (
+            "empty" in str(exc_info.value).lower()
+            or "whitespace" in str(exc_info.value).lower()
+        )
+
+    def test_duplicate_alternatives_rejected(self) -> None:
+        """CreateCustomEventParams rejects duplicate alternative entries."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateCustomEventParams(name="X", alternatives=["A", "A"])
+        assert "unique" in str(exc_info.value).lower()
 
     def test_frozen_immutable(self) -> None:
         """CreateCustomEventParams is frozen (cannot mutate after construction)."""

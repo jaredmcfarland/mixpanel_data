@@ -29,7 +29,7 @@ from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
-from mixpanel_data.exceptions import AuthenticationError
+from mixpanel_data.exceptions import AuthenticationError, MixpanelDataError
 from mixpanel_data.types import (
     BulkEventUpdate,
     BulkPropertyUpdate,
@@ -1115,6 +1115,40 @@ class TestUpdateCustomEvent:
         assert body["description"] == "Updated"
         assert body["verified"] is True
 
+    def test_raises_when_server_returns_different_custom_event_id(
+        self, temp_dir: Path
+    ) -> None:
+        """update_custom_event() raises if server echoes a different id.
+
+        Defense-in-depth check against the data-definitions endpoint's
+        history of silently fabricating a new lexicon entry instead of
+        updating the requested one. If the server's response says
+        ``customEventId=other`` when we requested ``custom_event_id=ours``,
+        treat it as a failed write rather than returning an unrelated
+        entity to the caller.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a response with a *different* customEventId."""
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {
+                        **_event_def_json(1, "CustomEvent1"),
+                        "customEventId": 99999,  # mismatched on purpose
+                    },
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        params = UpdateEventDefinitionParams(description="Updated")
+        with pytest.raises(MixpanelDataError) as exc_info:
+            ws.update_custom_event(2044168, params)
+        assert exc_info.value.code == "UPDATE_TARGET_MISMATCH"
+        assert "99999" in str(exc_info.value)
+        assert "2044168" in str(exc_info.value)
+
 
 class TestDeleteCustomEvent:
     """Tests for Workspace.delete_custom_event()."""
@@ -1127,7 +1161,32 @@ class TestDeleteCustomEvent:
             return httpx.Response(200, json={"status": "ok"})
 
         ws = _make_workspace(temp_dir, handler)
-        ws.delete_custom_event("CustomEvent1")  # Should not raise
+        ws.delete_custom_event(2044168)  # Should not raise
+
+    def test_delete_body_uses_custom_event_id_not_name(self, temp_dir: Path) -> None:
+        """delete_custom_event() must send customEventId in the DELETE body.
+
+        The Mixpanel data-definitions endpoint matches by the most specific
+        identifier; sending only ``name`` is ambiguous when multiple lexicon
+        rows share a display name and may delete the wrong row, an
+        auto-derived orphan, or no-op silently while reporting success.
+        Mirrors the same precedence rule that drives ``update_custom_event``.
+        """
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture request, return success."""
+            captured.append(request)
+            return httpx.Response(200, json={"status": "ok"})
+
+        ws = _make_workspace(temp_dir, handler)
+        ws.delete_custom_event(2044168)
+
+        import json as _json
+
+        body = _json.loads(captured[0].content.decode())
+        assert body["customEventId"] == 2044168
+        assert "name" not in body
 
 
 # =============================================================================

@@ -8157,8 +8157,9 @@ class Workspace:
 
         Args:
             custom_event_id: Server-assigned custom event ID.
-            params: Fields to update (description, verified, tags, hidden,
-                dropped, merged).
+            params: Fields to update. See
+                :class:`UpdateEventDefinitionParams` for the full list of
+                supported fields.
 
         Returns:
             The updated ``EventDefinition`` (lexicon view of the custom
@@ -8169,6 +8170,9 @@ class Workspace:
             AuthenticationError: Invalid credentials (401).
             QueryError: Event not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
+            MixpanelDataError: Server returned an entry with a different
+                ``customEventId`` than requested
+                (``code="UPDATE_TARGET_MISMATCH"``).
 
         Example:
             ```python
@@ -8190,11 +8194,22 @@ class Workspace:
         raw = client.update_custom_event(custom_event_id, body)
         return EventDefinition.model_validate(raw)
 
-    def delete_custom_event(self, event_name: str) -> None:
+    def delete_custom_event(self, custom_event_id: int) -> None:
         """Delete a custom event.
 
+        Identifies the entry by ``custom_event_id`` (not name) for the
+        same reason :meth:`update_custom_event` does: a name-only DELETE
+        against the data-definitions endpoint is ambiguous when multiple
+        entries share a display name and may silently delete the wrong row,
+        an auto-derived orphan lexicon entry, or no-op while still
+        reporting success.
+
+        Get the id from :meth:`create_custom_event`'s return value
+        (``CustomEvent.id``) or from the ``custom_event_id`` field on
+        entries returned by :meth:`list_custom_events`.
+
         Args:
-            event_name: Name of the custom event to delete.
+            custom_event_id: Server-assigned custom event ID.
 
         Raises:
             ConfigError: If credentials are not available.
@@ -8205,11 +8220,11 @@ class Workspace:
         Example:
             ```python
             ws = Workspace()
-            ws.delete_custom_event("My Custom Event")
+            ws.delete_custom_event(42)
             ```
         """
         client = self._require_api_client()
-        client.delete_custom_event(event_name)
+        client.delete_custom_event(custom_event_id)
 
     # =============================================================================
     # Data Governance — Tracking & History (Phase 027)

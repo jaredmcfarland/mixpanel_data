@@ -10,7 +10,7 @@ This module provides commands for managing Mixpanel custom events:
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 from pydantic import ValidationError
@@ -24,11 +24,63 @@ from mixpanel_data.cli.utils import (
     status_spinner,
 )
 
+if TYPE_CHECKING:
+    from mixpanel_data.workspace import Workspace
+
 custom_events_app = typer.Typer(
     name="custom-events",
     help="Manage custom events.",
     no_args_is_help=True,
 )
+
+
+def _resolve_custom_event_id_from_name(workspace: Workspace, name: str) -> int:
+    """Resolve a custom event display name to its ``custom_event_id``.
+
+    Loads the custom-event lexicon via :meth:`Workspace.list_custom_events`
+    and filters by ``name``, ignoring auto-derived orphan entries
+    (``custom_event_id is None`` or ``== 0`` — Mixpanel's sentinel for
+    entries that don't link back to a real custom event).
+
+    Args:
+        workspace: Workspace to query.
+        name: Display name of the custom event.
+
+    Returns:
+        The unique ``custom_event_id`` for the named custom event.
+
+    Raises:
+        typer.BadParameter: Zero matches, all matches are orphan entries,
+            or multiple distinct custom events share the name.
+    """
+    all_named = [e for e in workspace.list_custom_events() if e.name == name]
+    # Filter on `> 0` (not just truthiness) because customEventId=0 is
+    # Mixpanel's sentinel for orphan / auto-derived lexicon entries — never
+    # a valid custom event id.
+    matches = [
+        e for e in all_named if e.custom_event_id is not None and e.custom_event_id > 0
+    ]
+    if not matches:
+        if all_named:
+            count = len(all_named)
+            noun = "entry" if count == 1 else "entries"
+            raise typer.BadParameter(
+                f"Found {count} lexicon {noun} named {name!r} but none have "
+                f"a valid custom_event_id (likely orphan / auto-derived "
+                f"entries). Use --id with the desired entry's id directly."
+            )
+        raise typer.BadParameter(f"No custom event found with name {name!r}.")
+    if len(matches) > 1:
+        ids = sorted(
+            e.custom_event_id for e in matches if e.custom_event_id is not None
+        )
+        raise typer.BadParameter(
+            f"Multiple custom events named {name!r} (ids: {ids}). "
+            f"Use --id to disambiguate."
+        )
+    resolved_id = matches[0].custom_event_id
+    assert resolved_id is not None  # narrowed by filter above
+    return resolved_id
 
 
 @custom_events_app.command("list")
@@ -194,30 +246,9 @@ def custom_events_update(
     workspace = get_workspace(ctx)
 
     if custom_event_id is None:
+        assert name is not None  # narrowed by mutual-exclusion check above
         with status_spinner(ctx, f"Resolving custom event {name!r}..."):
-            # Filter on `> 0` (not just truthiness) because customEventId=0
-            # is Mixpanel's sentinel for orphan / auto-derived lexicon
-            # entries — never a valid custom event id.
-            matches = [
-                e
-                for e in workspace.list_custom_events()
-                if e.name == name
-                and e.custom_event_id is not None
-                and e.custom_event_id > 0
-            ]
-        if not matches:
-            raise typer.BadParameter(f"No custom event found with name {name!r}.")
-        if len(matches) > 1:
-            ids = sorted(
-                e.custom_event_id for e in matches if e.custom_event_id is not None
-            )
-            raise typer.BadParameter(
-                f"Multiple custom events named {name!r} (ids: {ids}). "
-                f"Use --id to disambiguate."
-            )
-        resolved_id = matches[0].custom_event_id
-        assert resolved_id is not None  # narrowed by filter above
-        custom_event_id = resolved_id
+            custom_event_id = _resolve_custom_event_id_from_name(workspace, name)
 
     with status_spinner(ctx, "Updating custom event..."):
         result = workspace.update_custom_event(custom_event_id, params)
@@ -228,20 +259,52 @@ def custom_events_update(
 @handle_errors
 def custom_events_delete(
     ctx: typer.Context,
+    custom_event_id: Annotated[
+        int | None,
+        typer.Option(
+            "--id",
+            "--custom-event-id",
+            help="Custom event ID. Use this OR --name. Prefer --id when known.",
+        ),
+    ] = None,
     name: Annotated[
-        str,
-        typer.Option("--name", help="Custom event name (required)."),
-    ],
+        str | None,
+        typer.Option(
+            "--name",
+            help=(
+                "Custom event name. Resolved to an ID via list_custom_events; "
+                "errors if zero or multiple custom events share the name."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Delete a custom event.
 
-    Permanently deletes a custom event by name. This action cannot be undone.
+    Identify the custom event by either ``--id`` (preferred) or ``--name``.
+    Name lookup uses :meth:`Workspace.list_custom_events` and errors if the
+    name is ambiguous or unknown. The DELETE always targets the resolved
+    ``custom_event_id`` so the data-definitions endpoint cannot silently
+    delete the wrong entry or a stray orphan lexicon row.
+
+    Permanently deletes a custom event. This action cannot be undone.
 
     Args:
         ctx: Typer context with global options.
-        name: Custom event name.
+        custom_event_id: Custom event ID. Mutually exclusive with name.
+        name: Custom event name. Resolved to an ID via list_custom_events.
     """
+    if custom_event_id is None and name is None:
+        raise typer.BadParameter("Must specify --id or --name.")
+    if custom_event_id is not None and name is not None:
+        raise typer.BadParameter("Specify --id or --name, not both.")
+
     workspace = get_workspace(ctx)
+
+    if custom_event_id is None:
+        assert name is not None  # narrowed by mutual-exclusion check above
+        with status_spinner(ctx, f"Resolving custom event {name!r}..."):
+            custom_event_id = _resolve_custom_event_id_from_name(workspace, name)
+
     with status_spinner(ctx, "Deleting custom event..."):
-        workspace.delete_custom_event(name)
-    err_console.print(f"[green]Deleted custom event '{name}'.[/green]")
+        workspace.delete_custom_event(custom_event_id)
+    err_console.print(f"[green]Deleted custom event id={custom_event_id}.[/green]")
