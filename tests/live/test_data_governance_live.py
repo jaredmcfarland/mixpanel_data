@@ -1745,7 +1745,7 @@ class TestCustomEventsCRUD:
         """
         try:
             result = ws.update_custom_event(
-                "QA-027-fake-custom-event",
+                999_999_999,  # ID that should not exist
                 UpdateEventDefinitionParams(description="should fail"),
             )
             # API accepted the update silently — that's fine
@@ -1760,7 +1760,7 @@ class TestCustomEventsCRUD:
             ws: Workspace fixture.
         """
         with pytest.raises(QueryError):
-            ws.delete_custom_event("QA-027-fake-custom-event")
+            ws.delete_custom_event(999_999_999)
 
 
 class TestCustomEventsCLI:
@@ -1816,7 +1816,8 @@ class TestCustomEventsCLI:
         r = _mp(
             "custom-events",
             "update",
-            "QA-027-fake-custom-event",
+            "--id",
+            "999999999",
             "--description",
             "should fail",
         )
@@ -1828,7 +1829,7 @@ class TestCustomEventsCLI:
         Returns:
             None.
         """
-        r = _mp("custom-events", "delete", "QA-027-fake-custom-event")
+        r = _mp("custom-events", "delete", "--id", "999999999")
         assert r.returncode != 0
 
     def test_help_shows_commands(self) -> None:

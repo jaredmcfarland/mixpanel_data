@@ -19,9 +19,12 @@ from mixpanel_data.types import (
     BulkUpdateEventsParams,
     BulkUpdatePropertiesParams,
     ComposedPropertyValue,
+    CreateCustomEventParams,
     CreateCustomPropertyParams,
     CreateDropFilterParams,
     CreateTagParams,
+    CustomEvent,
+    CustomEventAlternative,
     CustomProperty,
     CustomPropertyResourceType,
     DropFilter,
@@ -283,6 +286,203 @@ class TestUpdateEventDefinitionParams:
         assert data["hidden"] is True
         assert data["verified"] is True
         assert data["description"] == "Updated description"
+
+
+# =============================================================================
+# CustomEventAlternative Tests
+# =============================================================================
+
+
+class TestCustomEventAlternative:
+    """Tests for the CustomEventAlternative Pydantic model."""
+
+    def test_construction_with_event_name(self) -> None:
+        """CustomEventAlternative stores the underlying event name."""
+        alt = CustomEventAlternative(event="Login")
+        assert alt.event == "Login"
+
+    def test_serialization_round_trip(self) -> None:
+        """CustomEventAlternative serializes to the API's {event: ...} shape."""
+        alt = CustomEventAlternative(event="Login")
+        assert alt.model_dump() == {"event": "Login"}
+
+    def test_extra_fields_allowed_for_forward_compat(self) -> None:
+        """CustomEventAlternative tolerates unknown fields from server."""
+        alt = CustomEventAlternative.model_validate(
+            {"event": "X", "selector": {"foo": "bar"}}
+        )
+        assert alt.event == "X"
+
+    def test_frozen_immutable(self) -> None:
+        """CustomEventAlternative is frozen (cannot mutate after construction)."""
+        alt = CustomEventAlternative(event="X")
+        with pytest.raises(ValidationError):
+            alt.event = "Y"  # type: ignore[misc]
+
+    def test_missing_event_rejected(self) -> None:
+        """CustomEventAlternative requires the event field."""
+        with pytest.raises(ValidationError):
+            CustomEventAlternative()  # type: ignore[call-arg]
+
+    def test_empty_event_rejected(self) -> None:
+        """CustomEventAlternative rejects empty event names."""
+        with pytest.raises(ValidationError):
+            CustomEventAlternative(event="")
+
+
+# =============================================================================
+# CustomEvent Tests
+# =============================================================================
+
+
+class TestCustomEventModel:
+    """Tests for the CustomEvent Pydantic model."""
+
+    def test_construction_with_required_fields(self) -> None:
+        """CustomEvent stores id, name, and alternatives."""
+        ce = CustomEvent(
+            id=42,
+            name="Page View",
+            alternatives=[
+                CustomEventAlternative(event="Home Viewed"),
+                CustomEventAlternative(event="Product Viewed"),
+            ],
+        )
+        assert ce.id == 42
+        assert ce.name == "Page View"
+        assert len(ce.alternatives) == 2
+        assert ce.alternatives[0].event == "Home Viewed"
+
+    def test_alternatives_default_empty(self) -> None:
+        """CustomEvent allows construction without alternatives (default empty list)."""
+        ce = CustomEvent(id=1, name="X")
+        assert ce.alternatives == []
+
+    def test_alternatives_parse_from_dict_form(self) -> None:
+        """CustomEvent parses alternatives from the [{event: ...}] dict shape."""
+        ce = CustomEvent.model_validate(
+            {
+                "id": 1,
+                "name": "X",
+                "alternatives": [{"event": "Y"}, {"event": "Z"}],
+            }
+        )
+        assert [a.event for a in ce.alternatives] == ["Y", "Z"]
+
+    def test_accepts_extra_fields_for_forward_compatibility(self) -> None:
+        """CustomEvent tolerates extra server-side fields without breaking."""
+        ce = CustomEvent.model_validate(
+            {
+                "id": 1,
+                "name": "X",
+                "alternatives": [{"event": "Y"}],
+                "creator_id": 99,
+                "created": "2024-01-01",
+                "description": "test",
+            }
+        )
+        assert ce.id == 1
+        assert ce.name == "X"
+
+    def test_model_validate_from_snake_case_dict(self) -> None:
+        """CustomEvent.model_validate parses the snake_case API response shape."""
+        ce = CustomEvent.model_validate({"id": 5, "name": "Y", "alternatives": []})
+        assert ce.id == 5
+        assert ce.name == "Y"
+        assert ce.alternatives == []
+
+    def test_frozen_immutable(self) -> None:
+        """CustomEvent is frozen (cannot mutate after construction)."""
+        ce = CustomEvent(id=1, name="X")
+        with pytest.raises(ValidationError):
+            ce.name = "Y"  # type: ignore[misc]
+
+    def test_missing_id_rejected(self) -> None:
+        """CustomEvent requires the id field."""
+        with pytest.raises(ValidationError):
+            CustomEvent(name="X")  # type: ignore[call-arg]
+
+    def test_missing_name_rejected(self) -> None:
+        """CustomEvent requires the name field."""
+        with pytest.raises(ValidationError):
+            CustomEvent(id=1)  # type: ignore[call-arg]
+
+
+# =============================================================================
+# CreateCustomEventParams Tests
+# =============================================================================
+
+
+class TestCreateCustomEventParams:
+    """Tests for the CreateCustomEventParams Pydantic model."""
+
+    def test_construction_with_string_alternatives(self) -> None:
+        """CreateCustomEventParams accepts a list of bare event names."""
+        p = CreateCustomEventParams(
+            name="Page View", alternatives=["Home Viewed", "Product Viewed"]
+        )
+        assert p.name == "Page View"
+        assert p.alternatives == ["Home Viewed", "Product Viewed"]
+
+    def test_to_form_body_serializes_alternatives_as_json(self) -> None:
+        """to_form_body() emits alternatives as JSON list of {event: name} dicts."""
+        import json as _json
+
+        p = CreateCustomEventParams(name="Page View", alternatives=["A", "B"])
+        body = p.to_form_body()
+        assert body["name"] == "Page View"
+        decoded = _json.loads(body["alternatives"])
+        assert decoded == [{"event": "A"}, {"event": "B"}]
+
+    def test_to_form_body_returns_strings_only(self) -> None:
+        """to_form_body() values must be strings (form-encoding requirement)."""
+        body = CreateCustomEventParams(name="X", alternatives=["A"]).to_form_body()
+        assert all(isinstance(v, str) for v in body.values())
+
+    def test_to_form_body_preserves_alternative_order(self) -> None:
+        """to_form_body() preserves the order of alternatives."""
+        import json as _json
+
+        p = CreateCustomEventParams(name="X", alternatives=["C", "A", "B"])
+        decoded = _json.loads(p.to_form_body()["alternatives"])
+        assert [d["event"] for d in decoded] == ["C", "A", "B"]
+
+    def test_empty_name_rejected(self) -> None:
+        """CreateCustomEventParams rejects empty names."""
+        with pytest.raises(ValidationError):
+            CreateCustomEventParams(name="", alternatives=["A"])
+
+    def test_empty_alternatives_rejected(self) -> None:
+        """CreateCustomEventParams rejects empty alternative lists."""
+        with pytest.raises(ValidationError):
+            CreateCustomEventParams(name="X", alternatives=[])
+
+    def test_empty_string_alternative_rejected(self) -> None:
+        """CreateCustomEventParams rejects empty-string alternatives."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateCustomEventParams(name="X", alternatives=[""])
+        assert "empty" in str(exc_info.value).lower()
+
+    def test_whitespace_only_alternative_rejected(self) -> None:
+        """CreateCustomEventParams rejects whitespace-only alternatives."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateCustomEventParams(name="X", alternatives=["   "])
+        assert (
+            "empty" in str(exc_info.value).lower()
+            or "whitespace" in str(exc_info.value).lower()
+        )
+
+    def test_duplicate_alternatives_rejected(self) -> None:
+        """CreateCustomEventParams rejects duplicate alternative entries."""
+        with pytest.raises(ValidationError) as exc_info:
+            CreateCustomEventParams(name="X", alternatives=["A", "A"])
+        assert "unique" in str(exc_info.value).lower()
+
+    def test_frozen_immutable(self) -> None:
+        """CreateCustomEventParams is frozen (cannot mutate after construction)."""
+        p = CreateCustomEventParams(name="X", alternatives=["A"])
+        with pytest.raises(ValidationError):
+            p.name = "Y"  # type: ignore[misc]
 
 
 # =============================================================================

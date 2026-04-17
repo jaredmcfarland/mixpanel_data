@@ -585,7 +585,9 @@ Check whether a custom property definition is valid before creating it:
 
 ## Custom Events
 
-Custom events are composite events built from combinations of existing events. They share the same `EventDefinition` type as regular events.
+Custom events are composite aliases that group one or more underlying events under a single display name. They appear alongside regular events in queries and dashboards but resolve to the union of their underlying events at query time.
+
+The `/custom_events/` endpoints (used by `create_custom_event`) return the typed `CustomEvent` model — distinct from `EventDefinition`, which is the lexicon (governance) view returned by `list_custom_events`, `update_custom_event`, and the rest of the `/data-definitions/events/` family.
 
 ### List Custom Events
 
@@ -608,13 +610,49 @@ Custom events are composite events built from combinations of existing events. T
     mp custom-events list --format table
     ```
 
-### Update a Custom Event
+### Create a Custom Event
+
+Create a new custom event by giving it a display name and the list of underlying event names it should alias. The `alternatives` field accepts bare event names (strings) and is serialized internally to the format the Mixpanel API expects.
 
 === "Python"
 
     ```python
+    import mixpanel_data as mp
+
+    ws = mp.Workspace()
+
+    ce = ws.create_custom_event(
+        mp.CreateCustomEventParams(
+            name="Page View",
+            alternatives=["Home Viewed", "Product Viewed", "Checkout Viewed"],
+        )
+    )
+    print(ce.id, ce.name, [a.event for a in ce.alternatives])
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp custom-events create --name "Page View" \
+        --alternative "Home Viewed" \
+        --alternative "Product Viewed" \
+        --alternative "Checkout Viewed"
+    ```
+
+The CLI's `--alternative` option is repeatable — pass it once per underlying event.
+
+### Update a Custom Event
+
+Identify the custom event by its `custom_event_id` (returned by `create_custom_event` or available on entries from `list_custom_events`). Updating by name alone would create an orphan lexicon entry — the Mixpanel API needs the id to disambiguate.
+
+=== "Python"
+
+    ```python
+    ce = ws.create_custom_event(
+        mp.CreateCustomEventParams(name="My Custom Event", alternatives=["Foo"])
+    )
     event = ws.update_custom_event(
-        "My Custom Event",
+        ce.id,
         mp.UpdateEventDefinitionParams(
             description="Updated description",
             verified=True,
@@ -625,21 +663,32 @@ Custom events are composite events built from combinations of existing events. T
 === "CLI"
 
     ```bash
+    # Preferred: target by ID
+    mp custom-events update --id 2044168 \
+        --description "Updated description" --verified
+
+    # Convenience: target by name (errors if name is ambiguous)
     mp custom-events update --name "My Custom Event" \
         --description "Updated description" --verified
     ```
 
 ### Delete a Custom Event
 
+Identify the custom event by its `custom_event_id` for the same reason as `update_custom_event` — a name-only DELETE against the data-definitions endpoint is ambiguous when display names collide and may delete the wrong row, an orphan lexicon entry, or no-op silently while reporting success.
+
 === "Python"
 
     ```python
-    ws.delete_custom_event("My Custom Event")
+    ws.delete_custom_event(2044168)
     ```
 
 === "CLI"
 
     ```bash
+    # Preferred: target by ID
+    mp custom-events delete --id 2044168
+
+    # Convenience: target by name (errors if name is ambiguous)
     mp custom-events delete --name "My Custom Event"
     ```
 

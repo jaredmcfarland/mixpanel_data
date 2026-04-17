@@ -79,7 +79,7 @@ with Workspace() as ws:
 
 **Data Governance — Lookup Tables**: `list_lookup_tables()`, `upload_lookup_table()`, `mark_lookup_table_ready()`, `get_lookup_upload_url()`, `get_lookup_upload_status()`, `update_lookup_table()`, `delete_lookup_tables()`, `download_lookup_table()`, `get_lookup_download_url()`
 
-**Data Governance — Custom Events**: `list_custom_events()`, `update_custom_event()`, `delete_custom_event()`
+**Data Governance — Custom Events**: `list_custom_events()`, `create_custom_event()`, `update_custom_event()`, `delete_custom_event()`
 
 **Escape Hatches**: `api` (MixpanelAPIClient)
 

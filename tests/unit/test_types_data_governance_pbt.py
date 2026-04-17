@@ -27,14 +27,19 @@ Usage:
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from mixpanel_data.types import (
     ComposedPropertyValue,
+    CreateCustomEventParams,
     CreateDropFilterParams,
     CreateTagParams,
+    CustomEvent,
+    CustomEventAlternative,
     CustomProperty,
     CustomPropertyResourceType,
     DropFilter,
@@ -1011,3 +1016,124 @@ class TestUpdateDropFilterParamsProperties:
             assert restored.event_name == event_name
         if active is not None:
             assert restored.active == active
+
+
+# =============================================================================
+# CreateCustomEventParams Property Tests
+# =============================================================================
+
+
+class TestCreateCustomEventParamsProperties:
+    """Property-based tests for CreateCustomEventParams."""
+
+    @given(
+        name=_non_empty_text,
+        alternatives=st.lists(_non_empty_text, min_size=1, max_size=20, unique=True),
+    )
+    @settings(max_examples=50)
+    def test_construction_invariant(self, name: str, alternatives: list[str]) -> None:
+        """Any valid (non-empty name, non-empty unique alternatives) round-trips.
+
+        Args:
+            name: Display name for the custom event.
+            alternatives: Unique underlying event names to alias.
+        """
+        params = CreateCustomEventParams(name=name, alternatives=alternatives)
+        assert params.name == name
+        assert params.alternatives == alternatives
+
+    @given(
+        name=_non_empty_text,
+        alternatives=st.lists(_non_empty_text, min_size=1, max_size=10, unique=True),
+    )
+    @settings(max_examples=50)
+    def test_form_body_alternatives_round_trip_to_event_dicts(
+        self, name: str, alternatives: list[str]
+    ) -> None:
+        """to_form_body() always emits a JSON list of {event: name} dicts.
+
+        Args:
+            name: Display name for the custom event.
+            alternatives: Unique underlying event names.
+        """
+        body = CreateCustomEventParams(
+            name=name, alternatives=alternatives
+        ).to_form_body()
+        decoded = json.loads(body["alternatives"])
+        assert decoded == [{"event": e} for e in alternatives]
+        assert body["name"] == name
+
+    @given(
+        name=_non_empty_text,
+        alternatives=st.lists(_non_empty_text, min_size=1, max_size=10, unique=True),
+    )
+    @settings(max_examples=50)
+    def test_form_body_values_are_strings(
+        self, name: str, alternatives: list[str]
+    ) -> None:
+        """All values in the form body are strings (form-encoding requirement).
+
+        Args:
+            name: Display name for the custom event.
+            alternatives: Unique underlying event names.
+        """
+        body = CreateCustomEventParams(
+            name=name, alternatives=alternatives
+        ).to_form_body()
+        assert all(isinstance(v, str) for v in body.values())
+
+
+# =============================================================================
+# CustomEvent Property Tests
+# =============================================================================
+
+
+class TestCustomEventProperties:
+    """Property-based tests for CustomEvent."""
+
+    @given(
+        ce_id=_positive_ints,
+        name=_non_empty_text,
+        alts=st.lists(_non_empty_text, min_size=0, max_size=20),
+    )
+    @settings(max_examples=50)
+    def test_round_trip_via_model_dump(
+        self, ce_id: int, name: str, alts: list[str]
+    ) -> None:
+        """CustomEvent round-trips through model_dump / model_validate.
+
+        Args:
+            ce_id: Server-assigned custom event ID.
+            name: Display name.
+            alts: Alternative event names.
+        """
+        original = CustomEvent(
+            id=ce_id,
+            name=name,
+            alternatives=[CustomEventAlternative(event=e) for e in alts],
+        )
+        rebuilt = CustomEvent.model_validate(original.model_dump())
+        assert rebuilt == original
+
+    @given(
+        ce_id=_positive_ints,
+        name=_non_empty_text,
+        alts=st.lists(_non_empty_text, min_size=0, max_size=10),
+    )
+    @settings(max_examples=50)
+    def test_alternatives_preserve_order(
+        self, ce_id: int, name: str, alts: list[str]
+    ) -> None:
+        """CustomEvent preserves the order of alternatives across construction.
+
+        Args:
+            ce_id: Server-assigned custom event ID.
+            name: Display name.
+            alts: Alternative event names whose order must survive.
+        """
+        ce = CustomEvent(
+            id=ce_id,
+            name=name,
+            alternatives=[CustomEventAlternative(event=e) for e in alts],
+        )
+        assert [a.event for a in ce.alternatives] == alts

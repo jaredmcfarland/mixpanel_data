@@ -24,19 +24,23 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
+from mixpanel_data.exceptions import AuthenticationError, MixpanelDataError
 from mixpanel_data.types import (
     BulkEventUpdate,
     BulkPropertyUpdate,
     BulkUpdateEventsParams,
     BulkUpdatePropertiesParams,
     ComposedPropertyValue,
+    CreateCustomEventParams,
     CreateCustomPropertyParams,
     CreateDropFilterParams,
     CreateTagParams,
+    CustomEvent,
     CustomProperty,
     DropFilter,
     DropFilterLimitsResponse,
@@ -939,6 +943,83 @@ class TestValidateCustomProperty:
 # =============================================================================
 
 
+class TestCreateCustomEvent:
+    """Tests for Workspace.create_custom_event()."""
+
+    def test_returns_custom_event(self, temp_dir: Path) -> None:
+        """create_custom_event() returns a typed CustomEvent built from the API response."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a successful create response."""
+            return httpx.Response(
+                200,
+                json={
+                    "custom_event": {
+                        "id": 42,
+                        "name": "Page View",
+                        "alternatives": [
+                            {"event": "Home"},
+                            {"event": "Product"},
+                        ],
+                    }
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        result = ws.create_custom_event(
+            CreateCustomEventParams(name="Page View", alternatives=["Home", "Product"])
+        )
+
+        assert isinstance(result, CustomEvent)
+        assert result.id == 42
+        assert result.name == "Page View"
+        assert [a.event for a in result.alternatives] == ["Home", "Product"]
+
+    def test_serializes_params_to_form_body(self, temp_dir: Path) -> None:
+        """create_custom_event() POSTs alternatives as JSON list of {event:...} dicts."""
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture the request and return a minimal envelope."""
+            captured.append(request)
+            return httpx.Response(
+                200,
+                json={"custom_event": {"id": 1, "name": "X", "alternatives": []}},
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        ws.create_custom_event(
+            CreateCustomEventParams(name="X", alternatives=["A", "B"])
+        )
+
+        from urllib.parse import parse_qs
+
+        body = parse_qs(captured[0].content.decode())
+        import json as _json
+
+        decoded = _json.loads(body["alternatives"][0])
+        assert decoded == [{"event": "A"}, {"event": "B"}]
+        assert body["name"] == ["X"]
+        assert (
+            captured[0]
+            .headers["content-type"]
+            .startswith("application/x-www-form-urlencoded")
+        )
+
+    def test_propagates_auth_error(self, temp_dir: Path) -> None:
+        """create_custom_event() surfaces 401 as AuthenticationError."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a 401 unauthorized."""
+            return httpx.Response(401, json={"error": "unauthorized"})
+
+        ws = _make_workspace(temp_dir, handler)
+        with pytest.raises(AuthenticationError):
+            ws.create_custom_event(
+                CreateCustomEventParams(name="X", alternatives=["A"])
+            )
+
+
 class TestListCustomEvents:
     """Tests for Workspace.list_custom_events()."""
 
@@ -996,10 +1077,77 @@ class TestUpdateCustomEvent:
 
         ws = _make_workspace(temp_dir, handler)
         params = UpdateEventDefinitionParams(description="Updated")
-        result = ws.update_custom_event("CustomEvent1", params)
+        result = ws.update_custom_event(2044168, params)
 
         assert isinstance(result, EventDefinition)
         assert result.name == "CustomEvent1"
+
+    def test_patch_body_uses_custom_event_id_not_name(self, temp_dir: Path) -> None:
+        """update_custom_event() must send customEventId in the PATCH body.
+
+        The Mixpanel data-definitions endpoint matches updates by the most
+        specific identifier; for custom events that's customEventId. Sending
+        only ``name`` creates an orphan lexicon entry rather than updating
+        the existing one. Mirrors the webapp's buildUpdatePayload precedence.
+        """
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture request, return updated event."""
+            captured.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": _event_def_json(1, "CustomEvent1"),
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        params = UpdateEventDefinitionParams(description="Updated", verified=True)
+        ws.update_custom_event(2044168, params)
+
+        import json as _json
+
+        body = _json.loads(captured[0].content.decode())
+        assert body["customEventId"] == 2044168
+        assert "name" not in body
+        assert body["description"] == "Updated"
+        assert body["verified"] is True
+
+    def test_raises_when_server_returns_different_custom_event_id(
+        self, temp_dir: Path
+    ) -> None:
+        """update_custom_event() raises if server echoes a different id.
+
+        Defense-in-depth check against the data-definitions endpoint's
+        history of silently fabricating a new lexicon entry instead of
+        updating the requested one. If the server's response says
+        ``customEventId=other`` when we requested ``custom_event_id=ours``,
+        treat it as a failed write rather than returning an unrelated
+        entity to the caller.
+        """
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a response with a *different* customEventId."""
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": {
+                        **_event_def_json(1, "CustomEvent1"),
+                        "customEventId": 99999,  # mismatched on purpose
+                    },
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        params = UpdateEventDefinitionParams(description="Updated")
+        with pytest.raises(MixpanelDataError) as exc_info:
+            ws.update_custom_event(2044168, params)
+        assert exc_info.value.code == "UPDATE_TARGET_MISMATCH"
+        assert "99999" in str(exc_info.value)
+        assert "2044168" in str(exc_info.value)
 
 
 class TestDeleteCustomEvent:
@@ -1013,7 +1161,32 @@ class TestDeleteCustomEvent:
             return httpx.Response(200, json={"status": "ok"})
 
         ws = _make_workspace(temp_dir, handler)
-        ws.delete_custom_event("CustomEvent1")  # Should not raise
+        ws.delete_custom_event(2044168)  # Should not raise
+
+    def test_delete_body_uses_custom_event_id_not_name(self, temp_dir: Path) -> None:
+        """delete_custom_event() must send customEventId in the DELETE body.
+
+        The Mixpanel data-definitions endpoint matches by the most specific
+        identifier; sending only ``name`` is ambiguous when multiple lexicon
+        rows share a display name and may delete the wrong row, an
+        auto-derived orphan, or no-op silently while reporting success.
+        Mirrors the same precedence rule that drives ``update_custom_event``.
+        """
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture request, return success."""
+            captured.append(request)
+            return httpx.Response(200, json={"status": "ok"})
+
+        ws = _make_workspace(temp_dir, handler)
+        ws.delete_custom_event(2044168)
+
+        import json as _json
+
+        body = _json.loads(captured[0].content.decode())
+        assert body["customEventId"] == 2044168
+        assert "name" not in body
 
 
 # =============================================================================

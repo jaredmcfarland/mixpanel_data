@@ -139,6 +139,7 @@ from mixpanel_data.types import (
     CreateAnnotationTagParams,
     CreateBookmarkParams,
     CreateCohortParams,
+    CreateCustomEventParams,
     CreateCustomPropertyParams,
     CreateDashboardParams,
     CreateDeletionRequestParams,
@@ -149,6 +150,7 @@ from mixpanel_data.types import (
     CreateTagParams,
     CreateWebhookParams,
     CustomAlert,
+    CustomEvent,
     CustomProperty,
     CustomPropertyRef,
     DailyCountsResult,
@@ -8074,6 +8076,47 @@ class Workspace:
     # Data Governance — Custom Events (Phase 027)
     # =============================================================================
 
+    def create_custom_event(self, params: CreateCustomEventParams) -> CustomEvent:
+        """Create a new custom event.
+
+        A custom event is a composite alias that groups one or more underlying
+        events under a single name (e.g. a "Page View" custom event aliasing
+        "Home Viewed", "Product Viewed", "Checkout Viewed"). Custom events
+        appear alongside regular events in queries and dashboards but resolve
+        to the union of their underlying events at query time.
+
+        Args:
+            params: Custom event creation parameters. Must include a non-empty
+                ``name`` and a non-empty list of underlying event names in
+                ``alternatives``.
+
+        Returns:
+            The created :class:`CustomEvent`, including its server-assigned
+            ``id``, ``name``, and ``alternatives``.
+
+        Raises:
+            ConfigError: If credentials are not available.
+            AuthenticationError: Invalid credentials (401).
+            QueryError: Validation error (400) — for example, duplicate
+                custom event name or unknown underlying event.
+            ServerError: Server-side errors (5xx).
+
+        Example:
+            ```python
+            ws = Workspace()
+            ce = ws.create_custom_event(
+                CreateCustomEventParams(
+                    name="Metric Tree Opened",
+                    alternatives=["Enter room"],
+                )
+            )
+            print(ce.id, ce.name)
+            ```
+        """
+        client = self._require_api_client()
+        raw = client.create_custom_event(params.to_form_body())
+        return CustomEvent.model_validate(raw)
+
     def list_custom_events(self) -> list[EventDefinition]:
         """List all custom events.
 
@@ -8098,42 +8141,75 @@ class Workspace:
         return [EventDefinition.model_validate(x) for x in raw_list]
 
     def update_custom_event(
-        self, event_name: str, params: UpdateEventDefinitionParams
+        self, custom_event_id: int, params: UpdateEventDefinitionParams
     ) -> EventDefinition:
-        """Update a custom event definition.
+        """Update a custom event's lexicon entry (description, tags, etc.).
+
+        The Mixpanel ``data-definitions/events/`` endpoint matches updates by
+        the most specific identifier; for custom events that's the
+        ``customEventId``. This SDK method requires the id (rather than the
+        display name) to avoid creating orphan lexicon entries — passing a
+        name alone causes the server to fabricate a new, unlinked entry.
+
+        Get the id from :meth:`create_custom_event`'s return value
+        (``CustomEvent.id``) or from the ``custom_event_id`` field on entries
+        returned by :meth:`list_custom_events`.
 
         Args:
-            event_name: Name of the custom event to update.
-            params: Fields to update (description, display_name, etc.).
+            custom_event_id: Server-assigned custom event ID.
+            params: Fields to update. See
+                :class:`UpdateEventDefinitionParams` for the full list of
+                supported fields.
 
         Returns:
-            The updated ``EventDefinition``.
+            The updated ``EventDefinition`` (lexicon view of the custom
+            event, with ``custom_event_id`` populated).
 
         Raises:
             ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials (401).
             QueryError: Event not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
+            MixpanelDataError: Server returned an entry with a different
+                ``customEventId`` than requested
+                (``code="UPDATE_TARGET_MISMATCH"``).
 
         Example:
             ```python
             ws = Workspace()
+            ce = ws.create_custom_event(CreateCustomEventParams(
+                name="Metric Tree Opened", alternatives=["Enter room"],
+            ))
             event = ws.update_custom_event(
-                "My Custom Event",
-                UpdateEventDefinitionParams(description="Updated desc"),
+                ce.id,
+                UpdateEventDefinitionParams(
+                    description="Fires when a user opens a metric tree canvas.",
+                    verified=True,
+                ),
             )
             ```
         """
         client = self._require_api_client()
         body = params.model_dump(exclude_none=True)
-        raw = client.update_custom_event(event_name, body)
+        raw = client.update_custom_event(custom_event_id, body)
         return EventDefinition.model_validate(raw)
 
-    def delete_custom_event(self, event_name: str) -> None:
+    def delete_custom_event(self, custom_event_id: int) -> None:
         """Delete a custom event.
 
+        Identifies the entry by ``custom_event_id`` (not name) for the
+        same reason :meth:`update_custom_event` does: a name-only DELETE
+        against the data-definitions endpoint is ambiguous when multiple
+        entries share a display name and may silently delete the wrong row,
+        an auto-derived orphan lexicon entry, or no-op while still
+        reporting success.
+
+        Get the id from :meth:`create_custom_event`'s return value
+        (``CustomEvent.id``) or from the ``custom_event_id`` field on
+        entries returned by :meth:`list_custom_events`.
+
         Args:
-            event_name: Name of the custom event to delete.
+            custom_event_id: Server-assigned custom event ID.
 
         Raises:
             ConfigError: If credentials are not available.
@@ -8144,11 +8220,11 @@ class Workspace:
         Example:
             ```python
             ws = Workspace()
-            ws.delete_custom_event("My Custom Event")
+            ws.delete_custom_event(42)
             ```
         """
         client = self._require_api_client()
-        client.delete_custom_event(event_name)
+        client.delete_custom_event(custom_event_id)
 
     # =============================================================================
     # Data Governance — Tracking & History (Phase 027)

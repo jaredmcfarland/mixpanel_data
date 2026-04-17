@@ -1951,3 +1951,33 @@ class TestProfilePageResultPagination:
         assert d["total"] == 5000
         assert d["page_size"] == 1000
         assert d["num_pages"] == 5
+
+
+class TestCustomEventExports:
+    """Custom event types must be importable from the top-level package."""
+
+    def test_create_custom_event_params_importable(self) -> None:
+        """CreateCustomEventParams is reachable via the top-level package."""
+        from mixpanel_data import CreateCustomEventParams
+
+        assert CreateCustomEventParams.__name__ == "CreateCustomEventParams"
+
+    def test_custom_event_importable(self) -> None:
+        """CustomEvent is reachable via the top-level package."""
+        from mixpanel_data import CustomEvent
+
+        assert CustomEvent.__name__ == "CustomEvent"
+
+    def test_custom_event_alternative_importable(self) -> None:
+        """CustomEventAlternative is reachable via the top-level package."""
+        from mixpanel_data import CustomEventAlternative
+
+        assert CustomEventAlternative.__name__ == "CustomEventAlternative"
+
+    def test_listed_in_dunder_all(self) -> None:
+        """All three custom event types are advertised in mixpanel_data.__all__."""
+        import mixpanel_data
+
+        assert "CreateCustomEventParams" in mixpanel_data.__all__
+        assert "CustomEvent" in mixpanel_data.__all__
+        assert "CustomEventAlternative" in mixpanel_data.__all__
