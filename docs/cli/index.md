@@ -460,6 +460,7 @@ mp inspect events --format plain | wc -l
 |----------|-------------|
 | `MP_USERNAME` | Service account username |
 | `MP_SECRET` | Service account secret |
+| `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account; requires `MP_PROJECT_ID` + `MP_REGION`; ignored when the full service-account env-var set is also present) |
 | `MP_PROJECT_ID` | Project ID |
 | `MP_REGION` | Data residency region |
 | `MP_WORKSPACE_ID` | Workspace ID for App API operations |

@@ -65,6 +65,20 @@ Immutable container for authentication credentials. Supports both Basic Auth (se
 **Key methods:**
 
 - `auth_header()` — Returns the appropriate `Authorization` header value (`"Basic <base64>"` or `"Bearer <token>"`)
+- `from_oauth_token(token, project_id, region)` — Class method factory for building OAuth-method `Credentials` from a pre-obtained bearer token (skips the PKCE browser flow). Strips surrounding whitespace defensively and rejects tokens containing control characters.
+
+```python
+from mixpanel_data.auth import Credentials
+
+creds = Credentials.from_oauth_token(
+    token="my-bearer-token",
+    project_id="12345",
+    region="us",
+)
+assert creds.auth_header() == "Bearer my-bearer-token"
+```
+
+To drive a `Workspace` with these credentials, set the corresponding `MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION` env vars and let `Workspace()` resolve them — see [Configuration → Raw OAuth Bearer Token](../getting-started/configuration.md#raw-oauth-bearer-token).
 
 ::: mixpanel_data.auth.Credentials
     options:

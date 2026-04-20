@@ -60,6 +60,18 @@ echo "$SECRET" | mp auth add production --username sa_xxx --project 12345 --secr
 
 Or set all credentials as environment variables: `MP_USERNAME`, `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION`
 
+**Option C: Raw OAuth Bearer Token (CI / agents)**
+
+If a managed OAuth client (e.g., a Claude Code plugin or CI pipeline) already gave you an access token, inject it via env vars without going through the browser flow:
+
+```bash
+export MP_OAUTH_TOKEN="<bearer-token>"
+export MP_PROJECT_ID="12345"
+export MP_REGION="us"  # or "eu", "in"
+```
+
+The full service-account env-var set (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) takes precedence when both sets are complete, so this is safe to add to a shell that already exports the service-account vars.
+
 ### 2. Explore Your Data
 
 ```bash

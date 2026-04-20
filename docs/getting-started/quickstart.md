@@ -63,6 +63,18 @@ mp auth status
 
 OAuth tokens are stored locally at `~/.mp/oauth/` and automatically refreshed when expired. See [Configuration](configuration.md#oauth-authentication) for details.
 
+### Option D: Raw OAuth Bearer Token (CI / Agents)
+
+If a managed OAuth client (e.g., a Claude Code plugin or CI pipeline) hands you a pre-obtained access token, inject it via env vars without going through the browser flow:
+
+```bash
+export MP_OAUTH_TOKEN="<bearer-token>"
+export MP_PROJECT_ID="12345"
+export MP_REGION="us"  # or "eu", "in"
+```
+
+The library sends `Authorization: Bearer <token>` on every Mixpanel endpoint. Tokens injected this way are not persisted (no refresh — pass a fresh token when the previous one expires). See [Configuration → Raw OAuth Bearer Token](configuration.md#raw-oauth-bearer-token) for precedence rules.
+
 ## Step 2: Test Your Connection
 
 Verify credentials are working:
