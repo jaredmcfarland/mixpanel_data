@@ -46,7 +46,7 @@ Tell the user to run `/mp-auth add` for a step-by-step walkthrough that securely
 
 Tell the user to run `/mp-auth login` for browser-based authentication (no service account needed).
 
-### Alternative: Environment Variables (temporary)
+### Alternative: Service-Account Environment Variables (temporary)
 
 For quick testing, set all four variables in the shell:
 
@@ -56,6 +56,20 @@ export MP_SECRET="service-account-secret"
 export MP_PROJECT_ID="12345"
 export MP_REGION="us"  # or "eu", "in"
 ```
+
+### Alternative: Raw OAuth Bearer Token (best for agents / CI)
+
+If the user has an OAuth 2.0 access token from another source, they can use
+it directly without the PKCE browser flow:
+
+```bash
+export MP_OAUTH_TOKEN="<bearer-token>"
+export MP_PROJECT_ID="12345"
+export MP_REGION="us"  # or "eu", "in"
+```
+
+This is the recommended mode for non-interactive contexts. Service-account
+env vars take precedence if both are set.
 
 ## Cowork Environment
 

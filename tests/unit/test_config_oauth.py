@@ -281,3 +281,191 @@ class TestCredentialResolutionRegression:
 
         with pytest.raises(ConfigError, match="Invalid MP_REGION"):
             config_manager.resolve_credentials()
+
+
+class TestCredentialsFromOAuthToken:
+    """Tests for the ``Credentials.from_oauth_token`` factory method."""
+
+    def test_factory_constructs_oauth_credentials(self) -> None:
+        """``from_oauth_token`` populates OAuth fields and clears Basic-Auth fields."""
+        creds = Credentials.from_oauth_token(
+            token="my-bearer-token",
+            project_id="12345",
+            region="us",
+        )
+
+        assert creds.auth_method == AuthMethod.oauth
+        assert creds.oauth_access_token is not None
+        assert creds.oauth_access_token.get_secret_value() == "my-bearer-token"
+        assert creds.project_id == "12345"
+        assert creds.region == "us"
+        assert creds.username == ""
+        assert creds.secret.get_secret_value() == ""
+
+    def test_factory_auth_header_is_bearer(self) -> None:
+        """``from_oauth_token`` credentials must produce a Bearer header."""
+        creds = Credentials.from_oauth_token(
+            token="abc123", project_id="1", region="us"
+        )
+        assert creds.auth_header() == "Bearer abc123"
+
+    def test_factory_normalizes_region(self) -> None:
+        """Region should be lowercased like the model validator does."""
+        creds = Credentials.from_oauth_token(
+            token="t",
+            project_id="1",
+            region="EU",  # type: ignore[arg-type]
+        )
+        assert creds.region == "eu"
+
+    def test_factory_rejects_empty_token(self) -> None:
+        """Empty token should be rejected by the model validator."""
+        with pytest.raises(ValueError, match="oauth_access_token"):
+            Credentials.from_oauth_token(token="", project_id="1", region="us")
+
+    def test_factory_rejects_empty_project_id(self) -> None:
+        """Empty project_id should be rejected by the model validator."""
+        with pytest.raises(ValueError, match="project_id"):
+            Credentials.from_oauth_token(token="t", project_id="", region="us")
+
+    def test_factory_rejects_invalid_region(self) -> None:
+        """Invalid region should be rejected by the model validator."""
+        with pytest.raises(ValueError, match="Region must be one of"):
+            Credentials.from_oauth_token(
+                token="t",
+                project_id="1",
+                region="mars",  # type: ignore[arg-type]
+            )
+
+    def test_factory_secret_redacted(self) -> None:
+        """Token must not appear in repr/str output."""
+        creds = Credentials.from_oauth_token(
+            token="super-secret-bearer", project_id="1", region="us"
+        )
+        assert "super-secret-bearer" not in repr(creds)
+        assert "super-secret-bearer" not in str(creds)
+
+
+class TestEnvOAuthTokenResolution:
+    """Tests for ``_resolve_from_env`` handling of ``MP_OAUTH_TOKEN``."""
+
+    def test_resolve_from_oauth_token_env(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+    ) -> None:
+        """``MP_OAUTH_TOKEN`` + project_id + region produces OAuth credentials."""
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "env-bearer-token")
+        monkeypatch.setenv("MP_PROJECT_ID", "9999")
+        monkeypatch.setenv("MP_REGION", "us")
+
+        creds = config_manager.resolve_credentials(
+            _oauth_storage_dir=temp_dir / "oauth",
+        )
+
+        assert creds.auth_method == AuthMethod.oauth
+        assert creds.oauth_access_token is not None
+        assert (
+            creds.oauth_access_token.get_secret_value() == "env-bearer-token"
+        )
+        assert creds.project_id == "9999"
+        assert creds.region == "us"
+        assert creds.auth_header() == "Bearer env-bearer-token"
+
+    def test_service_account_env_wins_over_oauth_token_env(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When both env triples are set, the service-account triple wins."""
+        monkeypatch.setenv("MP_USERNAME", "sa_user")
+        monkeypatch.setenv("MP_SECRET", "sa_secret")
+        monkeypatch.setenv("MP_PROJECT_ID", "111")
+        monkeypatch.setenv("MP_REGION", "us")
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "should-be-ignored")
+
+        creds = config_manager.resolve_credentials()
+
+        assert creds.auth_method == AuthMethod.basic
+        assert creds.username == "sa_user"
+        assert creds.secret.get_secret_value() == "sa_secret"
+
+    def test_oauth_token_env_requires_project_id(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+    ) -> None:
+        """``MP_OAUTH_TOKEN`` alone (no project/region) is ignored."""
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.delenv("MP_PROJECT_ID", raising=False)
+        monkeypatch.delenv("MP_REGION", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "lonely-token")
+
+        with pytest.raises(ConfigError, match="No credentials configured"):
+            config_manager.resolve_credentials(
+                _oauth_storage_dir=temp_dir / "oauth",
+            )
+
+    def test_oauth_token_env_invalid_region_raises(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Invalid ``MP_REGION`` raises even on the OAuth path."""
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "t")
+        monkeypatch.setenv("MP_PROJECT_ID", "1")
+        monkeypatch.setenv("MP_REGION", "moon")
+
+        with pytest.raises(ConfigError, match="Invalid MP_REGION"):
+            config_manager.resolve_credentials()
+
+    @pytest.mark.parametrize(
+        "region_input,expected",
+        [("US", "us"), ("Eu", "eu"), ("IN", "in")],
+    )
+    def test_oauth_token_env_region_case_insensitive(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+        region_input: str,
+        expected: str,
+    ) -> None:
+        """``MP_REGION`` should be case-insensitive on the OAuth path too."""
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "t")
+        monkeypatch.setenv("MP_PROJECT_ID", "1")
+        monkeypatch.setenv("MP_REGION", region_input)
+
+        creds = config_manager.resolve_credentials(
+            _oauth_storage_dir=temp_dir / "oauth",
+        )
+
+        assert creds.region == expected
+        assert creds.auth_method == AuthMethod.oauth
+
+    def test_oauth_token_env_short_circuits_other_sources(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+    ) -> None:
+        """OAuth env triple resolves with empty config and missing OAuth storage dir."""
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "t")
+        monkeypatch.setenv("MP_PROJECT_ID", "1")
+        monkeypatch.setenv("MP_REGION", "us")
+
+        creds = config_manager.resolve_credentials(
+            _oauth_storage_dir=temp_dir / "does-not-exist",
+        )
+        assert creds.auth_method == AuthMethod.oauth

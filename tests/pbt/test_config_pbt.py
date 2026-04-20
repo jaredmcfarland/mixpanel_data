@@ -10,12 +10,14 @@ Uses Hypothesis with profiles configured in tests/conftest.py.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import tomli_w
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.config import ConfigManager
+from mixpanel_data._internal.auth_credential import RegionType
+from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
 
 # ── Strategies ────────────────────────────────────────────────────────
 
@@ -233,3 +235,38 @@ class TestConfigV2RoundTrip:
             assert len(aliases) == 1
             assert aliases[0].name == alias_name
             assert aliases[0].project_id == project_id
+
+
+# ── Credentials.from_oauth_token ──────────────────────────────────────
+
+
+# Strategy for OAuth bearer tokens — printable ASCII without whitespace,
+# bounded length to keep examples reasonable.
+oauth_token_st = st.from_regex(r"[A-Za-z0-9._\-]{1,64}", fullmatch=True)
+
+
+class TestFromOAuthTokenProperties:
+    """Property-based tests for ``Credentials.from_oauth_token``."""
+
+    @given(token=oauth_token_st, project_id=project_id_st, region=region_st)
+    @settings(max_examples=50)
+    def test_auth_header_is_bearer_token(
+        self,
+        token: str,
+        project_id: str,
+        region: str,
+    ) -> None:
+        """For any valid token, ``auth_header`` must equal ``f"Bearer {token}"``.
+
+        Args:
+            token: A non-empty bearer token.
+            project_id: A valid Mixpanel project ID.
+            region: A valid Mixpanel region.
+        """
+        creds = Credentials.from_oauth_token(
+            token=token,
+            project_id=project_id,
+            region=cast(RegionType, region),
+        )
+        assert creds.auth_header() == f"Bearer {token}"
+        assert creds.auth_method == AuthMethod.oauth

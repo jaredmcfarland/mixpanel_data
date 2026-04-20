@@ -25,11 +25,27 @@ Parse `$ARGUMENTS` and route to the appropriate operation:
 Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py status`
 
 Present the result conversationally:
-- If `active_method` is not `"none"`: Show a brief confirmation with the active method, account name, project ID, and region. If multiple accounts/credentials exist, mention `/mp-auth list`.
-- If `active_method` is `"none"`: Diagnose what's missing. Suggest `/mp-auth add` (service account) or `/mp-auth login` (OAuth).
-- If `env_vars.partial` is true: Show which variables are set and which are missing.
+- If `active_method` is not `"none"`: Show a brief confirmation with the active method, account name, project ID, and region. If multiple accounts/credentials exist, mention `/mp-auth list`. The possible `active_method` values are:
+  - `env_vars` — service-account env vars (`MP_USERNAME`/`MP_SECRET`/`MP_PROJECT_ID`/`MP_REGION`)
+  - `oauth_token_env` — raw OAuth bearer-token env vars (`MP_OAUTH_TOKEN`/`MP_PROJECT_ID`/`MP_REGION`)
+  - `oauth` — OAuth tokens from PKCE storage or v2 OAuth credentials
+  - `service_account` — stored service-account credentials
+- If `active_method` is `"none"`: Diagnose what's missing. Suggest `/mp-auth add` (service account), `/mp-auth login` (OAuth PKCE browser flow), or `MP_OAUTH_TOKEN` env var (raw bearer token — best for non-interactive contexts like CI or agents).
+- If `env_vars.partial` is true: Show which variables are set and which are missing for the service-account triple. Also check `env_vars.oauth_token` for the raw-bearer triple — if either is `partial`, surface the missing vars.
 - If `config_version` is `1`: Mention that `/mp-auth migrate` can upgrade to v2 for project switching.
 - If `config_version` is `2`: Show active context (credential + project + workspace) and mention project aliases if any exist.
+
+#### Raw OAuth bearer-token env vars (`MP_OAUTH_TOKEN`)
+
+For non-interactive contexts (CI, agents, ephemeral environments) where the PKCE browser flow isn't viable, set:
+
+```
+export MP_OAUTH_TOKEN=<bearer-token>
+export MP_PROJECT_ID=<project-id>
+export MP_REGION=<us|eu|in>
+```
+
+The library builds an `Authorization: Bearer <token>` header for every Mixpanel endpoint. Service-account env vars (`MP_USERNAME`/`MP_SECRET`) take precedence when both triples are set, so this is safe to add to a shell that already exports the service-account vars.
 
 ### "list"
 
