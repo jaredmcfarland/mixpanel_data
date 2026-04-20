@@ -1,6 +1,6 @@
 # Configuration
 
-mixpanel_data supports two authentication methods: **Service Accounts** (Basic Auth) for server-side automation and **OAuth 2.0** for interactive use. Both methods support multiple configuration approaches.
+mixpanel_data supports three authentication methods: **Service Accounts** (Basic Auth) for server-side automation, **OAuth 2.0 PKCE** for interactive browser login, and **raw OAuth bearer tokens** for non-interactive contexts like CI or AI agents. All three integrate with the same credential resolution chain.
 
 !!! tip "Explore on DeepWiki"
     🤖 **[Authentication Setup →](https://deepwiki.com/jaredmcfarland/mixpanel_data/2.2-authentication-setup)**
@@ -13,24 +13,26 @@ mixpanel_data supports two authentication methods: **Service Accounts** (Basic A
 |--------|----------|--------------|
 | **Service Account** (Basic Auth) | Scripts, CI/CD, automation | Username + secret from env vars or config file |
 | **OAuth 2.0** (PKCE) | Interactive use, personal access | Browser-based login, tokens stored locally |
+| **Raw OAuth Bearer Token** | CI, agents, ephemeral environments | Pre-obtained access token injected via env vars; no browser, no local storage |
 
-Service accounts are the default and work everywhere. OAuth is ideal when you want to authenticate as yourself without managing service account credentials.
+Service accounts are the default and work everywhere. OAuth PKCE is ideal when you want to authenticate as yourself without managing service account credentials. Raw bearer tokens are the right choice when a managed OAuth client (e.g., a Claude Code plugin or CI pipeline) hands you a token and you cannot run the browser flow.
 
 ## Environment Variables
 
-Set these environment variables to configure service account credentials:
+Set these environment variables to configure credentials:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `MP_USERNAME` | Service account username | Yes (Basic Auth) |
 | `MP_SECRET` | Service account secret | Yes (Basic Auth) |
+| `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account) | Yes (Bearer) |
 | `MP_PROJECT_ID` | Mixpanel project ID | Yes |
 | `MP_REGION` | Data residency region (`us`, `eu`, `in`) | No (default: `us`) |
 | `MP_WORKSPACE_ID` | Workspace ID for App API operations | No |
 | `MP_CONFIG_PATH` | Override config file location | No |
 | `MP_ACCOUNT` | Account name to use from config file | No |
 
-Example:
+### Service Account (Basic Auth)
 
 ```bash
 export MP_USERNAME="sa_abc123..."
@@ -38,6 +40,21 @@ export MP_SECRET="your-secret-here"
 export MP_PROJECT_ID="12345"
 export MP_REGION="us"
 ```
+
+### Raw OAuth Bearer Token
+
+For non-interactive contexts (CI, agents) that already hold an OAuth 2.0 access token:
+
+```bash
+export MP_OAUTH_TOKEN="<bearer-token>"
+export MP_PROJECT_ID="12345"
+export MP_REGION="us"  # or "eu", "in"
+```
+
+The library sends `Authorization: Bearer <token>` on every Mixpanel endpoint. Tokens injected this way are not persisted (no refresh capability — pass a fresh token when the previous one expires).
+
+!!! note "Precedence when both are set"
+    The full service-account env-var set (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) takes precedence when both sets are complete, so adding `MP_OAUTH_TOKEN` to a shell that already exports the service-account vars is safe — the bearer token is silently ignored and a debug-level log records the choice.
 
 ## Config File
 
@@ -204,29 +221,24 @@ Tokens are automatically refreshed when expired. The client registration is cach
 
 When creating a Workspace, credentials are resolved in this order:
 
-1. **Environment variables** — `MP_USERNAME`, `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION` (all four required)
-2. **OAuth tokens** — Valid (non-expired) tokens from `~/.mp/oauth/`
-3. **Named account** — `Workspace(account="staging")` or `MP_ACCOUNT=staging`
-4. **Default account** — The account marked as `default` in config.toml
+1. **Environment variables** — either the service-account quad (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) or the OAuth-token triple (`MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION`). The service-account quad takes precedence when both sets are complete.
+2. **Auth bridge file** — `MP_AUTH_FILE` or `~/.claude/mixpanel/auth.json` (for Claude Cowork environments).
+3. **OAuth tokens from local storage** — Valid (non-expired) tokens from `~/.mp/oauth/`, populated by `mp auth login`.
+4. **Named account** — `Workspace(account="staging")` or `MP_ACCOUNT=staging`.
+5. **Default account** — The account marked as `default` in `config.toml`.
 
-If environment variables provide all four values, they take priority. Otherwise, the system checks for a valid OAuth token before falling back to config file accounts.
+If a complete env-var set is present, it always wins. Otherwise the chain falls through bridge file → stored OAuth tokens → named or default config account.
 
 Example showing resolution:
 
 ```python
 import mixpanel_data as mp
 
-# Uses explicit arguments
-ws = mp.Workspace(
-    username="sa_...",
-    secret="...",
-    project_id="12345"
-)
-
-# Uses environment variables (if set), then OAuth, then config
+# Uses environment variables (either set), then bridge file, then
+# stored OAuth tokens, then config file
 ws = mp.Workspace()
 
-# Uses named account from config file
+# Uses named account from config file (skips OAuth and bridge)
 ws = mp.Workspace(account="staging")
 ```
 

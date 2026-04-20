@@ -60,6 +60,18 @@ echo "$SECRET" | mp auth add production --username sa_xxx --project 12345 --secr
 
 Or set all credentials as environment variables: `MP_USERNAME`, `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION`
 
+**Option C: Raw OAuth Bearer Token (CI / agents)**
+
+If a managed OAuth client (e.g., a Claude Code plugin or CI pipeline) already gave you an access token, inject it via env vars without going through the browser flow:
+
+```bash
+export MP_OAUTH_TOKEN="<bearer-token>"
+export MP_PROJECT_ID="12345"
+export MP_REGION="us"  # or "eu", "in"
+```
+
+The full service-account env-var set (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) takes precedence when both sets are complete, so this is safe to add to a shell that already exports the service-account vars.
+
 ### 2. Explore Your Data
 
 ```bash
@@ -331,7 +343,7 @@ Key design features:
 
 ## Claude Code Plugin
 
-This project includes a Claude Code plugin (v4.0) that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_data` + `pandas` rather than calling CLI commands or MCP tools.
+This project includes a Claude Code plugin (v4.1) that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_data` + `pandas` rather than calling CLI commands or MCP tools.
 
 The plugin is built around the 5-engine query taxonomy — `query()`, `query_funnel()`, `query_retention()`, `query_flow()`, and `query_user()` — with full cohort-scoped query support. Claude translates natural language analytics questions into typed query calls with filters, breakdowns, formulas, cohort definitions, and aggregations, then interprets results as DataFrames.
 

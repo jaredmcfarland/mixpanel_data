@@ -10,12 +10,15 @@ Uses Hypothesis with profiles configured in tests/conftest.py.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
+import pytest
 import tomli_w
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.config import ConfigManager
+from mixpanel_data._internal.auth_credential import RegionType
+from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
 
 # ── Strategies ────────────────────────────────────────────────────────
 
@@ -233,3 +236,148 @@ class TestConfigV2RoundTrip:
             assert len(aliases) == 1
             assert aliases[0].name == alias_name
             assert aliases[0].project_id == project_id
+
+
+# ── Credentials.from_oauth_token ──────────────────────────────────────
+
+
+# Strategy for OAuth bearer tokens — printable ASCII covering RFC 6750
+# token68 syntax (alphanumerics + - . _ ~ + / =). The `[A-Za-z._\-~+/=]`
+# prefix forces a non-digit first character, which both matches realistic
+# token shapes and prevents accidental substring collisions with the
+# all-digit ``project_id_st`` strategy in redaction assertions.
+oauth_token_st = st.from_regex(
+    r"[A-Za-z._\-~+/=][A-Za-z0-9._\-~+/=]{7,63}", fullmatch=True
+)
+
+# Whitespace strategy for edge-stripping property — ASCII whitespace only,
+# avoiding control chars that would correctly be rejected by the validator.
+edge_ws_st = st.text(alphabet=" \t\n\r", min_size=0, max_size=4)
+
+# Strategy for control characters (0x00-0x1F + 0x7F). Used to assert
+# rejection — any token with one of these bytes embedded must raise.
+control_char_st = st.sampled_from([chr(c) for c in list(range(0x20)) + [0x7F]])
+
+
+class TestFromOAuthTokenProperties:
+    """Property-based tests for ``Credentials.from_oauth_token``."""
+
+    @given(token=oauth_token_st, project_id=project_id_st, region=region_st)
+    @settings(max_examples=50)
+    def test_auth_header_is_bearer_token(
+        self,
+        token: str,
+        project_id: str,
+        region: str,
+    ) -> None:
+        """For any valid token, ``auth_header`` must equal ``f"Bearer {token}"``.
+
+        Args:
+            token: A non-empty bearer token.
+            project_id: A valid Mixpanel project ID.
+            region: A valid Mixpanel region.
+        """
+        creds = Credentials.from_oauth_token(
+            token=token,
+            project_id=project_id,
+            region=cast(RegionType, region),
+        )
+        assert creds.auth_header() == f"Bearer {token}"
+        assert creds.auth_method == AuthMethod.oauth
+
+    @given(token=oauth_token_st, project_id=project_id_st, region=region_st)
+    @settings(max_examples=50)
+    def test_token_redacted_in_repr(
+        self,
+        token: str,
+        project_id: str,
+        region: str,
+    ) -> None:
+        """The token must never appear in ``repr``/``str`` output.
+
+        Args:
+            token: A non-empty bearer token.
+            project_id: A valid Mixpanel project ID.
+            region: A valid Mixpanel region.
+        """
+        creds = Credentials.from_oauth_token(
+            token=token,
+            project_id=project_id,
+            region=cast(RegionType, region),
+        )
+        assert token not in repr(creds)
+        assert token not in str(creds)
+
+    @given(
+        leading_ws=edge_ws_st,
+        token=oauth_token_st,
+        trailing_ws=edge_ws_st,
+        project_id=project_id_st,
+        region=region_st,
+    )
+    @settings(max_examples=50)
+    def test_edge_whitespace_is_stripped(
+        self,
+        leading_ws: str,
+        token: str,
+        trailing_ws: str,
+        project_id: str,
+        region: str,
+    ) -> None:
+        """Surrounding whitespace must be stripped before the Bearer header.
+
+        Args:
+            leading_ws: Whitespace prepended to the token.
+            token: Core bearer token.
+            trailing_ws: Whitespace appended to the token.
+            project_id: A valid Mixpanel project ID.
+            region: A valid Mixpanel region.
+        """
+        padded = f"{leading_ws}{token}{trailing_ws}"
+        creds = Credentials.from_oauth_token(
+            token=padded,
+            project_id=project_id,
+            region=cast(RegionType, region),
+        )
+        assert creds.auth_header() == f"Bearer {token}"
+
+    @given(
+        prefix=oauth_token_st,
+        bad_char=control_char_st,
+        suffix=oauth_token_st,
+        project_id=project_id_st,
+        region=region_st,
+    )
+    @settings(max_examples=50)
+    def test_control_char_token_rejected(
+        self,
+        prefix: str,
+        bad_char: str,
+        suffix: str,
+        project_id: str,
+        region: str,
+    ) -> None:
+        """Any embedded control character must be rejected with ValueError.
+
+        Whitespace-only embedded control chars (``\\n``, ``\\t``, ``\\r``)
+        are stripped at the edges by ``from_oauth_token`` but survive in
+        the middle of a token, where they would corrupt the
+        ``Authorization: Bearer`` header.
+
+        Args:
+            prefix: Token characters before the control char.
+            bad_char: A single control character (0x00-0x1F or 0x7F).
+            suffix: Token characters after the control char.
+            project_id: A valid Mixpanel project ID.
+            region: A valid Mixpanel region.
+        """
+        token = f"{prefix}{bad_char}{suffix}"
+        # If the bad char survives stripping (i.e. it's not whitespace at
+        # an edge), the validator must reject. We assert rejection for the
+        # general case where prefix/suffix are non-empty.
+        with pytest.raises(ValueError):
+            Credentials.from_oauth_token(
+                token=token,
+                project_id=project_id,
+                region=cast(RegionType, region),
+            )

@@ -136,8 +136,14 @@ class Credentials(BaseModel):
                 raise ValueError(
                     "oauth_access_token is required when auth_method is oauth"
                 )
-            if not self.oauth_access_token.get_secret_value():
+            token_value = self.oauth_access_token.get_secret_value()
+            if not token_value:
                 raise ValueError("oauth_access_token cannot be empty for oauth auth")
+            if any(ord(c) < 0x20 or ord(c) == 0x7F for c in token_value):
+                raise ValueError(
+                    "oauth_access_token contains control characters "
+                    "(check for embedded newlines, tabs, or other non-printable bytes)"
+                )
         return self
 
     def auth_header(self) -> str:
@@ -175,6 +181,60 @@ class Credentials(BaseModel):
         raw = f"{self.username}:{self.secret.get_secret_value()}"
         encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
         return f"Basic {encoded}"
+
+    @classmethod
+    def from_oauth_token(
+        cls,
+        token: str,
+        project_id: str,
+        region: RegionType,
+    ) -> Credentials:
+        """Build OAuth-method ``Credentials`` from a pre-obtained bearer token.
+
+        Skips the PKCE browser flow — for callers who already hold an
+        OAuth 2.0 access token.
+
+        Args:
+            token: The OAuth 2.0 bearer token.
+            project_id: Mixpanel project identifier.
+            region: Data residency region (``"us"``, ``"eu"``, or ``"in"``).
+
+        Returns:
+            Immutable OAuth-method ``Credentials``.
+
+        Raises:
+            ValueError: If ``token`` or ``project_id`` is empty, or
+                ``region`` is invalid.
+
+        Example:
+            ```python
+            from mixpanel_data.auth import Credentials
+
+            creds = Credentials.from_oauth_token(
+                token="my-bearer-token",
+                project_id="12345",
+                region="us",
+            )
+            assert creds.auth_header() == "Bearer my-bearer-token"
+
+            # To drive Workspace with these credentials, set the
+            # corresponding env vars and let Workspace() resolve them:
+            #   export MP_OAUTH_TOKEN="my-bearer-token"
+            #   export MP_PROJECT_ID="12345"
+            #   export MP_REGION="us"
+            #   ws = Workspace()
+            ```
+        """
+        # Strip whitespace defensively — shell exports / copy-paste often
+        # introduce trailing newlines that would corrupt the Bearer header.
+        return cls(
+            username="",
+            secret=SecretStr(""),
+            project_id=project_id,
+            region=region,
+            auth_method=AuthMethod.oauth,
+            oauth_access_token=SecretStr(token.strip()),
+        )
 
     def to_resolved_session(self, workspace_id: int | None = None) -> ResolvedSession:
         """Convert legacy Credentials to a ResolvedSession.
@@ -433,14 +493,18 @@ class ConfigManager:
 
         Resolution order when ``account`` is None:
 
-        1. Environment variables (MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION)
+        1. Environment variables — either the service-account env vars
+           (``MP_USERNAME`` + ``MP_SECRET`` + ``MP_PROJECT_ID`` + ``MP_REGION``)
+           or the OAuth-token env vars (``MP_OAUTH_TOKEN`` + ``MP_PROJECT_ID``
+           + ``MP_REGION``). Service-account env vars take precedence when
+           both sets are complete.
         2. Auth bridge file (MP_AUTH_FILE or ~/.claude/mixpanel/auth.json)
         3. OAuth tokens from local storage (if valid and not expired)
         4. Default account from config file
 
         Resolution order when ``account`` is provided:
 
-        1. Environment variables (all four must be set)
+        1. Environment variables (one complete set must be present)
         2. Named account from config file (bridge and OAuth are skipped)
 
         For OAuth resolution, the region and project_id are determined from:
@@ -474,7 +538,7 @@ class ConfigManager:
         # they should be available regardless of which resolution path succeeds.
         self.apply_config_custom_header()
 
-        # Priority 1: Environment variables (all four must be set)
+        # Priority 1: Environment variables (SA quad or OAuth triple)
         env_creds = self._resolve_from_env()
         if env_creds is not None:
             return env_creds
@@ -502,8 +566,9 @@ class ConfigManager:
             raise ConfigError(
                 "No credentials configured. "
                 "Run 'mp auth login' to authenticate via OAuth, "
-                "or set MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION "
-                "environment variables."
+                "set MP_USERNAME + MP_SECRET + MP_PROJECT_ID + MP_REGION "
+                "for service-account auth, or set MP_OAUTH_TOKEN + "
+                "MP_PROJECT_ID + MP_REGION to use a pre-obtained bearer token."
             )
 
         # Determine which account to use
@@ -762,28 +827,68 @@ class ConfigManager:
     def _resolve_from_env(self) -> Credentials | None:
         """Attempt to resolve credentials from environment variables.
 
+        Accepts either the service-account env vars (``MP_USERNAME`` +
+        ``MP_SECRET`` + ``MP_PROJECT_ID`` + ``MP_REGION``) or the OAuth
+        env vars (``MP_OAUTH_TOKEN`` + ``MP_PROJECT_ID`` + ``MP_REGION``).
+        Service-account wins when both sets are complete.
+
         Returns:
-            Credentials if all env vars are set, None otherwise.
+            Credentials if either set is complete, ``None`` otherwise.
+
+        Raises:
+            ConfigError: If a complete env-var set is present and
+                ``MP_REGION`` is invalid. ``MP_REGION`` is only validated
+                when the rest of its set is also present.
         """
         username = os.environ.get("MP_USERNAME")
         secret = os.environ.get("MP_SECRET")
         project_id = os.environ.get("MP_PROJECT_ID")
         region = os.environ.get("MP_REGION")
+        oauth_token = os.environ.get("MP_OAUTH_TOKEN")
 
-        # All four must be set to use env vars
         if username and secret and project_id and region:
-            region = region.lower()
-            if region not in VALID_REGIONS:
-                raise ConfigError(
-                    f"Invalid MP_REGION: '{region}'. Must be 'us', 'eu', or 'in'."
+            if oauth_token:
+                logger.info(
+                    "MP_USERNAME/MP_SECRET present; ignoring MP_OAUTH_TOKEN. "
+                    "Unset MP_USERNAME and MP_SECRET to use bearer-token auth."
                 )
+            normalized_region = self._validate_env_region(region)
             return Credentials(
                 username=username,
                 secret=SecretStr(secret),
                 project_id=project_id,
-                region=cast(RegionType, region),
+                region=cast(RegionType, normalized_region),
+            )
+
+        if oauth_token and project_id and region:
+            normalized_region = self._validate_env_region(region)
+            return Credentials.from_oauth_token(
+                token=oauth_token,
+                project_id=project_id,
+                region=cast(RegionType, normalized_region),
             )
         return None
+
+    @staticmethod
+    def _validate_env_region(region: str) -> str:
+        """Strip whitespace, normalize to lowercase, and validate the region.
+
+        Args:
+            region: Raw ``MP_REGION`` env-var value (may carry surrounding
+                whitespace from shell exports — e.g. ``" us\\n"``).
+
+        Returns:
+            The stripped, lowercased region string.
+
+        Raises:
+            ConfigError: If the region is not one of ``us``, ``eu``, ``in``.
+        """
+        normalized = region.strip().lower()
+        if normalized not in VALID_REGIONS:
+            raise ConfigError(
+                f"Invalid MP_REGION: '{normalized}'. Must be 'us', 'eu', or 'in'."
+            )
+        return normalized
 
     def list_accounts(self) -> list[AccountInfo]:
         """List all configured accounts.
@@ -1465,7 +1570,10 @@ class ConfigManager:
         """Resolve a complete session using the v2 priority chain.
 
         Priority order:
-        1. ENV VARS (MP_USERNAME + MP_SECRET + MP_PROJECT_ID + MP_REGION)
+        1. ENV VARS — service-account env vars (MP_USERNAME + MP_SECRET +
+           MP_PROJECT_ID + MP_REGION) OR OAuth-token env vars
+           (MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION). Service-account
+           wins when both sets are complete.
         2. AUTH BRIDGE FILE (MP_AUTH_FILE or ~/.claude/mixpanel/auth.json)
         3. EXPLICIT PARAMS (credential + project_id + workspace_id)
         4. ACTIVE CONTEXT (config [active] section)
@@ -1649,8 +1757,9 @@ class ConfigManager:
             raise ConfigError(
                 "No credentials configured. "
                 "Run 'mp auth login' to authenticate via OAuth, "
-                "or set MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION "
-                "environment variables.",
+                "set MP_USERNAME + MP_SECRET + MP_PROJECT_ID + MP_REGION "
+                "for service-account auth, or set MP_OAUTH_TOKEN + "
+                "MP_PROJECT_ID + MP_REGION to use a pre-obtained bearer token.",
             )
 
         cred_data = credentials[cred_name]

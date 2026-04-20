@@ -62,6 +62,31 @@ if TYPE_CHECKING:
     from mixpanel_data._internal.config import ConfigManager, Credentials
 
 
+_MP_ENV_VARS = (
+    "MP_USERNAME",
+    "MP_SECRET",
+    "MP_PROJECT_ID",
+    "MP_REGION",
+    "MP_OAUTH_TOKEN",
+    "MP_AUTH_FILE",
+    "MP_WORKSPACE_ID",
+)
+
+
+@pytest.fixture(autouse=True)
+def _clean_mp_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hermetic test isolation: scrub all MP_* env vars before each test.
+
+    Tests that depend on env-var resolution behavior must opt-in by
+    re-setting the vars they need via ``monkeypatch.setenv``. Without this
+    fixture, a developer who exports ``MP_OAUTH_TOKEN`` (or any service-
+    account var) in their shell would silently fail credential-resolution
+    tests that expect "no credentials configured".
+    """
+    for var in _MP_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+
+
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
     """Create a temporary directory for test files."""

@@ -110,7 +110,7 @@ try:
                 print(f'  {len(aliases)} project alias(es) configured')
         else:
             print('⚠ Config v2 but no credentials configured.')
-            print('  Run /mp-auth add (service account) or /mp-auth login (OAuth)')
+            print('  Run /mixpanel-data:auth add (service account) or /mixpanel-data:auth login (OAuth)')
     else:
         # v1 config: account-based
         accounts = cm.list_accounts()
@@ -120,10 +120,10 @@ try:
             default = next((a.name for a in accounts if a.is_default), None)
             if default:
                 print(f'  Default: {default}')
-            print(f'  Tip: Run /mp-auth migrate to upgrade to v2 for project switching')
+            print(f'  Tip: Run /mixpanel-data:auth migrate to upgrade to v2 for project switching')
         else:
             print('⚠ No accounts configured yet.')
-            print('  Run /mp-auth add (service account) or /mp-auth login (OAuth)')
+            print('  Run /mixpanel-data:auth add (service account) or /mixpanel-data:auth login (OAuth)')
 except Exception as e:
     print(f'⚠ Could not check config file credentials: {e}')
     print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')

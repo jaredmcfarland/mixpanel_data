@@ -188,6 +188,7 @@ just mutate-check        # Check score meets 80% threshold
 |----------|---------|
 | `MP_USERNAME` | Service account username |
 | `MP_SECRET` | Service account secret |
+| `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account; requires `MP_PROJECT_ID` + `MP_REGION`; ignored only when the full service-account env-var set — `MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION` — is also present) |
 | `MP_PROJECT_ID` | Project ID |
 | `MP_REGION` | Data residency (us, eu, in) |
 | `MP_WORKSPACE_ID` | Workspace ID for App API operations |
@@ -267,7 +268,7 @@ Design documents in `context/`:
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
 
-## mixpanel-data Plugin (v4.0 — Distilled API Surface + Live Docs)
+## mixpanel-data Plugin (v4.1 — Distilled API Surface + Live Docs)
 
 This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin provides the `mixpanel_data` API surface and a live documentation system (`help.py`) for querying and analyzing Mixpanel data with Python.
 
@@ -314,4 +315,5 @@ python help.py Filter                  # type fields + construction patterns + r
 - N/A — query parameter types only, no persistence (040-query-engine-completeness)
 
 ## Recent Changes
+- PR #125: Added `MP_OAUTH_TOKEN` env-var auth path for non-interactive bearer-token authentication (agents, CI). Service-account env quad takes precedence when both sets are complete. Public `Credentials.from_oauth_token()` factory exposes the same path to SDK callers.
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)

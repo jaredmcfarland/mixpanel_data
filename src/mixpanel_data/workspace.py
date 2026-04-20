@@ -365,7 +365,10 @@ class Workspace:
         """Create a new Workspace with credentials.
 
         Credentials are resolved in priority order:
-        1. Environment variables (MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION)
+        1. Environment variables — either the service-account env vars
+           (MP_USERNAME + MP_SECRET + MP_PROJECT_ID + MP_REGION) or the
+           OAuth-token env vars (MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION).
+           Service-account env vars take precedence when both sets are complete.
         2. OAuth tokens from local storage (if available and not expired)
         3. Named account from config file (if account parameter specified)
         4. Default account from config file
