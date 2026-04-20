@@ -345,6 +345,24 @@ class TestCredentialsFromOAuthToken:
         assert "super-secret-bearer" not in repr(creds)
         assert "super-secret-bearer" not in str(creds)
 
+    def test_factory_strips_token_whitespace(self) -> None:
+        """Surrounding whitespace on the token must be stripped.
+
+        Shell exports and copy-paste commonly introduce trailing newlines
+        that would otherwise corrupt the ``Authorization: Bearer`` header.
+        """
+        creds = Credentials.from_oauth_token(
+            token="  abc123\n", project_id="1", region="us"
+        )
+        assert creds.auth_header() == "Bearer abc123"
+
+    def test_factory_rejects_whitespace_only_token(self) -> None:
+        """A whitespace-only token strips to empty and is rejected."""
+        with pytest.raises(ValueError, match="oauth_access_token"):
+            Credentials.from_oauth_token(
+                token="   ", project_id="1", region="us"
+            )
+
 
 class TestEnvOAuthTokenResolution:
     """Tests for ``_resolve_from_env`` handling of ``MP_OAUTH_TOKEN``."""
@@ -380,7 +398,7 @@ class TestEnvOAuthTokenResolution:
         config_manager: ConfigManager,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """When both env triples are set, the service-account triple wins."""
+        """When both env-var sets are complete, the service-account set wins."""
         monkeypatch.setenv("MP_USERNAME", "sa_user")
         monkeypatch.setenv("MP_SECRET", "sa_secret")
         monkeypatch.setenv("MP_PROJECT_ID", "111")
@@ -451,6 +469,25 @@ class TestEnvOAuthTokenResolution:
 
         assert creds.region == expected
         assert creds.auth_method == AuthMethod.oauth
+
+    def test_oauth_token_env_strips_whitespace(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+    ) -> None:
+        """Whitespace around MP_OAUTH_TOKEN and MP_REGION is stripped."""
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "  abc123\n")
+        monkeypatch.setenv("MP_PROJECT_ID", "1")
+        monkeypatch.setenv("MP_REGION", " US ")
+
+        creds = config_manager.resolve_credentials(
+            _oauth_storage_dir=temp_dir / "oauth",
+        )
+        assert creds.auth_header() == "Bearer abc123"
+        assert creds.region == "us"
 
     def test_oauth_token_env_short_circuits_other_sources(
         self,

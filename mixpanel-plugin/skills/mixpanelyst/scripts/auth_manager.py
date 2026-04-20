@@ -258,6 +258,10 @@ def _generate_suggestion(
 
     sa_env = env.get("service_account", env)
     oauth_env = env.get("oauth_token", {})
+    # Env vars complete but auth still resolved to "none" — the values are
+    # syntactically present but produced a ConfigError (e.g., bad MP_REGION).
+    if sa_env.get("configured") or oauth_env.get("configured"):
+        return "Auth env vars are set but credentials could not be resolved (likely an invalid value such as MP_REGION). Run /mp-auth test for details."
     if sa_env.get("partial"):
         return f"Partial service-account env config — missing: {', '.join(sa_env['missing'])}. Set the rest, switch to MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION, or run /mp-auth add."
     if oauth_env.get("partial"):

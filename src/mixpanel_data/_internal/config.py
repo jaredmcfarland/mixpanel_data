@@ -213,13 +213,15 @@ class Credentials(BaseModel):
             ws = Workspace(credentials=creds)
             ```
         """
+        # Strip whitespace defensively — shell exports / copy-paste often
+        # introduce trailing newlines that would corrupt the Bearer header.
         return cls(
             username="",
             secret=SecretStr(""),
             project_id=project_id,
             region=region,
             auth_method=AuthMethod.oauth,
-            oauth_access_token=SecretStr(token),
+            oauth_access_token=SecretStr(token.strip()),
         )
 
     def to_resolved_session(self, workspace_id: int | None = None) -> ResolvedSession:
@@ -479,18 +481,18 @@ class ConfigManager:
 
         Resolution order when ``account`` is None:
 
-        1. Environment variables — either the service-account triple
+        1. Environment variables — either the service-account env vars
            (``MP_USERNAME`` + ``MP_SECRET`` + ``MP_PROJECT_ID`` + ``MP_REGION``)
-           or the OAuth-token triple (``MP_OAUTH_TOKEN`` + ``MP_PROJECT_ID``
+           or the OAuth-token env vars (``MP_OAUTH_TOKEN`` + ``MP_PROJECT_ID``
            + ``MP_REGION``). Service-account env vars take precedence when
-           both are set.
+           both sets are complete.
         2. Auth bridge file (MP_AUTH_FILE or ~/.claude/mixpanel/auth.json)
         3. OAuth tokens from local storage (if valid and not expired)
         4. Default account from config file
 
         Resolution order when ``account`` is provided:
 
-        1. Environment variables (one complete triple must be set)
+        1. Environment variables (one complete set must be present)
         2. Named account from config file (bridge and OAuth are skipped)
 
         For OAuth resolution, the region and project_id are determined from:
@@ -813,16 +815,18 @@ class ConfigManager:
     def _resolve_from_env(self) -> Credentials | None:
         """Attempt to resolve credentials from environment variables.
 
-        Accepts either the service-account triple (``MP_USERNAME`` +
+        Accepts either the service-account env vars (``MP_USERNAME`` +
         ``MP_SECRET`` + ``MP_PROJECT_ID`` + ``MP_REGION``) or the OAuth
-        triple (``MP_OAUTH_TOKEN`` + ``MP_PROJECT_ID`` + ``MP_REGION``).
-        Service-account wins when both are complete.
+        env vars (``MP_OAUTH_TOKEN`` + ``MP_PROJECT_ID`` + ``MP_REGION``).
+        Service-account wins when both sets are complete.
 
         Returns:
-            Credentials if either triple is complete, ``None`` otherwise.
+            Credentials if either set is complete, ``None`` otherwise.
 
         Raises:
-            ConfigError: If ``MP_REGION`` is set but invalid.
+            ConfigError: If a complete env-var set is present and
+                ``MP_REGION`` is invalid. ``MP_REGION`` is only validated
+                when the rest of its set is also present.
         """
         username = os.environ.get("MP_USERNAME")
         secret = os.environ.get("MP_SECRET")
@@ -861,7 +865,7 @@ class ConfigManager:
         Raises:
             ConfigError: If the region is not one of ``us``, ``eu``, ``in``.
         """
-        normalized = region.lower()
+        normalized = region.strip().lower()
         if normalized not in VALID_REGIONS:
             raise ConfigError(
                 f"Invalid MP_REGION: '{normalized}'. Must be 'us', 'eu', or 'in'."
@@ -1548,10 +1552,10 @@ class ConfigManager:
         """Resolve a complete session using the v2 priority chain.
 
         Priority order:
-        1. ENV VARS — service-account triple (MP_USERNAME + MP_SECRET +
-           MP_PROJECT_ID + MP_REGION) OR OAuth-token triple (MP_OAUTH_TOKEN
-           + MP_PROJECT_ID + MP_REGION). Service-account wins when both
-           are set.
+        1. ENV VARS — service-account env vars (MP_USERNAME + MP_SECRET +
+           MP_PROJECT_ID + MP_REGION) OR OAuth-token env vars
+           (MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION). Service-account
+           wins when both sets are complete.
         2. AUTH BRIDGE FILE (MP_AUTH_FILE or ~/.claude/mixpanel/auth.json)
         3. EXPLICIT PARAMS (credential + project_id + workspace_id)
         4. ACTIVE CONTEXT (config [active] section)
