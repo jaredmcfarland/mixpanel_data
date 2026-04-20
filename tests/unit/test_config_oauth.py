@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr, ValidationError
 
+from mixpanel_data._internal.auth_credential import CredentialType
 from mixpanel_data._internal.config import (
     AuthMethod,
     ConfigManager,
@@ -282,6 +283,26 @@ class TestCredentialResolutionRegression:
         with pytest.raises(ConfigError, match="Invalid MP_REGION"):
             config_manager.resolve_credentials()
 
+    def test_sa_env_region_strips_whitespace(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """SA-path MP_REGION tolerates surrounding whitespace.
+
+        Symmetric with ``test_oauth_token_env_strips_whitespace`` — both
+        paths route through ``_validate_env_region`` which strips before
+        validating.
+        """
+        monkeypatch.setenv("MP_USERNAME", "user")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        monkeypatch.setenv("MP_PROJECT_ID", "123")
+        monkeypatch.setenv("MP_REGION", " US ")
+
+        creds = config_manager.resolve_credentials()
+        assert creds.region == "us"
+        assert creds.auth_method == AuthMethod.basic
+
 
 class TestCredentialsFromOAuthToken:
     """Tests for the ``Credentials.from_oauth_token`` factory method."""
@@ -359,9 +380,7 @@ class TestCredentialsFromOAuthToken:
     def test_factory_rejects_whitespace_only_token(self) -> None:
         """A whitespace-only token strips to empty and is rejected."""
         with pytest.raises(ValueError, match="oauth_access_token"):
-            Credentials.from_oauth_token(
-                token="   ", project_id="1", region="us"
-            )
+            Credentials.from_oauth_token(token="   ", project_id="1", region="us")
 
 
 class TestEnvOAuthTokenResolution:
@@ -386,9 +405,7 @@ class TestEnvOAuthTokenResolution:
 
         assert creds.auth_method == AuthMethod.oauth
         assert creds.oauth_access_token is not None
-        assert (
-            creds.oauth_access_token.get_secret_value() == "env-bearer-token"
-        )
+        assert creds.oauth_access_token.get_secret_value() == "env-bearer-token"
         assert creds.project_id == "9999"
         assert creds.region == "us"
         assert creds.auth_header() == "Bearer env-bearer-token"
@@ -489,13 +506,19 @@ class TestEnvOAuthTokenResolution:
         assert creds.auth_header() == "Bearer abc123"
         assert creds.region == "us"
 
-    def test_oauth_token_env_short_circuits_other_sources(
+    def test_oauth_token_env_works_with_no_other_sources(
         self,
         config_manager: ConfigManager,
         monkeypatch: pytest.MonkeyPatch,
         temp_dir: Path,
     ) -> None:
-        """OAuth env triple resolves with empty config and missing OAuth storage dir."""
+        """OAuth env triple resolves with empty config and unreadable OAuth storage.
+
+        Pointing ``_oauth_storage_dir`` at a non-existent path proves the
+        env-var path short-circuits before any OAuth storage I/O — if the
+        env path didn't take precedence, this test would either crash on
+        the missing dir or silently miss the env credentials.
+        """
         monkeypatch.delenv("MP_USERNAME", raising=False)
         monkeypatch.delenv("MP_SECRET", raising=False)
         monkeypatch.setenv("MP_OAUTH_TOKEN", "t")
@@ -506,3 +529,109 @@ class TestEnvOAuthTokenResolution:
             _oauth_storage_dir=temp_dir / "does-not-exist",
         )
         assert creds.auth_method == AuthMethod.oauth
+
+    def test_oauth_token_env_wins_over_config_account(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+    ) -> None:
+        """OAuth env triple takes precedence over a default account in config."""
+        config_manager.add_account(
+            name="default",
+            username="cfg_user",
+            secret="cfg_secret",
+            project_id="cfg_pid",
+            region="us",
+        )
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "env-wins-token")
+        monkeypatch.setenv("MP_PROJECT_ID", "env-pid")
+        monkeypatch.setenv("MP_REGION", "us")
+
+        creds = config_manager.resolve_credentials(
+            _oauth_storage_dir=temp_dir / "oauth",
+        )
+        assert creds.auth_method == AuthMethod.oauth
+        assert creds.project_id == "env-pid"
+        assert creds.auth_header() == "Bearer env-wins-token"
+
+    def test_partial_sa_env_falls_through_to_oauth(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+    ) -> None:
+        """Partial SA env vars do not block the OAuth env path.
+
+        Pins the ``if/if`` (not ``if/elif``) structure in
+        ``_resolve_from_env`` — switching to ``elif`` would change behavior
+        so a partial SA quad would suppress the complete OAuth triple.
+        """
+        monkeypatch.setenv("MP_USERNAME", "partial_user")
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "fallback-bearer")
+        monkeypatch.setenv("MP_PROJECT_ID", "111")
+        monkeypatch.setenv("MP_REGION", "us")
+
+        creds = config_manager.resolve_credentials(
+            _oauth_storage_dir=temp_dir / "oauth",
+        )
+        assert creds.auth_method == AuthMethod.oauth
+        assert creds.auth_header() == "Bearer fallback-bearer"
+
+    def test_no_credentials_error_mentions_oauth_token_env(
+        self,
+        config_manager: ConfigManager,
+        temp_dir: Path,
+    ) -> None:
+        """The 'no credentials' error must mention MP_OAUTH_TOKEN guidance."""
+        with pytest.raises(ConfigError, match="MP_OAUTH_TOKEN"):
+            config_manager.resolve_credentials(
+                _oauth_storage_dir=temp_dir / "oauth",
+            )
+
+    def test_v2_no_credentials_error_mentions_oauth_token_env(
+        self,
+        config_path: Path,
+        temp_dir: Path,
+    ) -> None:
+        """The v2 'no credentials' error must mention MP_OAUTH_TOKEN guidance."""
+        import tomli_w
+
+        with config_path.open("wb") as f:
+            tomli_w.dump({"config_version": 2}, f)
+
+        cm = ConfigManager(config_path=config_path)
+        with pytest.raises(ConfigError, match="MP_OAUTH_TOKEN"):
+            cm.resolve_session(_oauth_storage_dir=temp_dir / "oauth")
+
+    def test_resolve_session_with_oauth_token_env(
+        self,
+        config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        temp_dir: Path,
+    ) -> None:
+        """``resolve_session()`` honors MP_OAUTH_TOKEN and returns OAuth-typed session.
+
+        Pins both the ``_resolve_from_env`` short-circuit in
+        ``resolve_session`` and the OAuth branch in
+        ``Credentials.to_resolved_session`` — including the literal
+        ``name="oauth"`` fallback when ``username`` is empty.
+        """
+        monkeypatch.delenv("MP_USERNAME", raising=False)
+        monkeypatch.delenv("MP_SECRET", raising=False)
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "session-bearer-token")
+        monkeypatch.setenv("MP_PROJECT_ID", "9999")
+        monkeypatch.setenv("MP_REGION", "eu")
+
+        session = config_manager.resolve_session(
+            _oauth_storage_dir=temp_dir / "oauth",
+        )
+        assert session.auth.type == CredentialType.oauth
+        assert session.auth.region == "eu"
+        assert session.project_id == "9999"
+        assert session.auth_header() == "Bearer session-bearer-token"
+        # Pin the literal — catches refactors that drop the `or "oauth"` fallback
+        assert session.auth.name == "oauth"

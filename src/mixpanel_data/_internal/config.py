@@ -136,8 +136,14 @@ class Credentials(BaseModel):
                 raise ValueError(
                     "oauth_access_token is required when auth_method is oauth"
                 )
-            if not self.oauth_access_token.get_secret_value():
+            token_value = self.oauth_access_token.get_secret_value()
+            if not token_value:
                 raise ValueError("oauth_access_token cannot be empty for oauth auth")
+            if any(ord(c) < 0x20 or ord(c) == 0x7F for c in token_value):
+                raise ValueError(
+                    "oauth_access_token contains control characters "
+                    "(check for embedded newlines, tabs, or other non-printable bytes)"
+                )
         return self
 
     def auth_header(self) -> str:
@@ -202,7 +208,6 @@ class Credentials(BaseModel):
 
         Example:
             ```python
-            from mixpanel_data import Workspace
             from mixpanel_data.auth import Credentials
 
             creds = Credentials.from_oauth_token(
@@ -210,7 +215,14 @@ class Credentials(BaseModel):
                 project_id="12345",
                 region="us",
             )
-            ws = Workspace(credentials=creds)
+            assert creds.auth_header() == "Bearer my-bearer-token"
+
+            # To drive Workspace with these credentials, set the
+            # corresponding env vars and let Workspace() resolve them:
+            #   export MP_OAUTH_TOKEN="my-bearer-token"
+            #   export MP_PROJECT_ID="12345"
+            #   export MP_REGION="us"
+            #   ws = Workspace()
             ```
         """
         # Strip whitespace defensively — shell exports / copy-paste often
@@ -526,7 +538,7 @@ class ConfigManager:
         # they should be available regardless of which resolution path succeeds.
         self.apply_config_custom_header()
 
-        # Priority 1: Environment variables (all four must be set)
+        # Priority 1: Environment variables (SA quad or OAuth triple)
         env_creds = self._resolve_from_env()
         if env_creds is not None:
             return env_creds
@@ -835,6 +847,11 @@ class ConfigManager:
         oauth_token = os.environ.get("MP_OAUTH_TOKEN")
 
         if username and secret and project_id and region:
+            if oauth_token:
+                logger.info(
+                    "MP_USERNAME/MP_SECRET present; ignoring MP_OAUTH_TOKEN. "
+                    "Unset MP_USERNAME and MP_SECRET to use bearer-token auth."
+                )
             normalized_region = self._validate_env_region(region)
             return Credentials(
                 username=username,
@@ -854,13 +871,14 @@ class ConfigManager:
 
     @staticmethod
     def _validate_env_region(region: str) -> str:
-        """Normalize ``MP_REGION`` to lowercase and validate the value.
+        """Strip whitespace, normalize to lowercase, and validate the region.
 
         Args:
-            region: Raw ``MP_REGION`` env-var value.
+            region: Raw ``MP_REGION`` env-var value (may carry surrounding
+                whitespace from shell exports — e.g. ``" us\\n"``).
 
         Returns:
-            The lowercased region string.
+            The stripped, lowercased region string.
 
         Raises:
             ConfigError: If the region is not one of ``us``, ``eu``, ``in``.

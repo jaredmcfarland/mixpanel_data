@@ -25,14 +25,14 @@ Parse `$ARGUMENTS` and route to the appropriate operation:
 Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py status`
 
 Present the result conversationally:
-- If `active_method` is not `"none"`: Show a brief confirmation with the active method, account name, project ID, and region. If multiple accounts/credentials exist, mention `/mp-auth list`. The possible `active_method` values are:
+- If `active_method` is not `"none"`: Show a brief confirmation with the active method, account name, project ID, and region. If multiple accounts/credentials exist, mention `/mixpanel-data:auth list`. The possible `active_method` values are:
   - `env_vars` — service-account env vars (`MP_USERNAME`/`MP_SECRET`/`MP_PROJECT_ID`/`MP_REGION`)
   - `oauth_token_env` — raw OAuth bearer-token env vars (`MP_OAUTH_TOKEN`/`MP_PROJECT_ID`/`MP_REGION`)
   - `oauth` — OAuth tokens from PKCE storage or v2 OAuth credentials
   - `service_account` — stored service-account credentials
-- If `active_method` is `"none"`: Diagnose what's missing. Suggest `/mp-auth add` (service account), `/mp-auth login` (OAuth PKCE browser flow), or `MP_OAUTH_TOKEN` env var (raw bearer token — best for non-interactive contexts like CI or agents).
-- If `env_vars.partial` is true: Show which variables are set and which are missing for the service-account triple. Also check `env_vars.oauth_token` for the raw-bearer triple — if either is `partial`, surface the missing vars.
-- If `config_version` is `1`: Mention that `/mp-auth migrate` can upgrade to v2 for project switching.
+- If `active_method` is `"none"`: Diagnose what's missing. Suggest `/mixpanel-data:auth add` (service account), `/mixpanel-data:auth login` (OAuth PKCE browser flow), or `MP_OAUTH_TOKEN` env var (raw bearer token — best for non-interactive contexts like CI or agents).
+- If `env_vars.partial` is true: Show which variables are set and which are missing for the four service-account env vars. Also check `env_vars.oauth_token` for the OAuth-token triple — if either is `partial`, surface the missing vars.
+- If `config_version` is `1`: Mention that `/mixpanel-data:auth migrate` can upgrade to v2 for project switching.
 - If `config_version` is `2`: Show active context (credential + project + workspace) and mention project aliases if any exist.
 
 #### Raw OAuth bearer-token env vars (`MP_OAUTH_TOKEN`)
@@ -45,7 +45,7 @@ export MP_PROJECT_ID=<project-id>
 export MP_REGION=<us|eu|in>
 ```
 
-The library builds an `Authorization: Bearer <token>` header for every Mixpanel endpoint. Service-account env vars (`MP_USERNAME`/`MP_SECRET`) take precedence when both triples are set, so this is safe to add to a shell that already exports the service-account vars.
+The library builds an `Authorization: Bearer <token>` header for every Mixpanel endpoint. The full service-account env-var set (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) takes precedence when both sets are complete, so this is safe to add to a shell that already exports the service-account vars.
 
 ### "list"
 
@@ -96,8 +96,8 @@ Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py t
 On success: "Connected! Found N events in project P (region R)."
 On failure: Diagnose the specific error and suggest remediation:
 - `AuthenticationError` → "Credentials are invalid. Check your username and secret."
-- `AccountNotFoundError` → "Account not found. Run `/mp-auth list` to see available accounts."
-- `ConfigError` → "No credentials configured. Run `/mp-auth add` to set up."
+- `AccountNotFoundError` → "Account not found. Run `/mixpanel-data:auth list` to see available accounts."
+- `ConfigError` → "No credentials configured. Run `/mixpanel-data:auth add` to set up."
 
 ### "login" or "login --region <R>"
 
@@ -144,7 +144,7 @@ If already v2: Tell the user no migration is needed.
 
 Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py projects`
 
-Present accessible projects as a table: organization, project name, project ID, timezone. Suggest `/mp-auth switch-project <ID>` to switch.
+Present accessible projects as a table: organization, project name, project ID, timezone. Suggest `/mixpanel-data:auth switch-project <ID>` to switch.
 
 ### "context"
 
@@ -159,7 +159,7 @@ If no project_id: run `projects` first, then ask which to switch to.
 Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py switch-project <PROJECT_ID> [--workspace-id <WS_ID>]`
 
 On success: Confirm the active project was changed.
-If v1 config: Error suggests running `/mp-auth migrate` first.
+If v1 config: Error suggests running `/mixpanel-data:auth migrate` first.
 
 ### "cowork-setup"
 

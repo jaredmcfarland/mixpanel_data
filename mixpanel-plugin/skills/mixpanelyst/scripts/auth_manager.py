@@ -2,7 +2,7 @@
 """Mixpanel authentication manager for the Claude Code plugin.
 
 Provides JSON-formatted output for all auth operations, designed
-to be called by the /mp-auth command and setup skill.
+to be called by the /mixpanel-data:auth command and setup skill.
 
 Supports both v1 (account-based) and v2 (credential + project context)
 config schemas. Detects the active schema version automatically.
@@ -80,9 +80,7 @@ def _check_env_vars() -> dict[str, Any]:
     the service-account block for backward compatibility with consumers of
     this JSON.
     """
-    sa_block = _env_status(
-        ["MP_USERNAME", "MP_SECRET", "MP_PROJECT_ID", "MP_REGION"]
-    )
+    sa_block = _env_status(["MP_USERNAME", "MP_SECRET", "MP_PROJECT_ID", "MP_REGION"])
     oauth_block = _env_status(["MP_OAUTH_TOKEN", "MP_PROJECT_ID", "MP_REGION"])
     return {**sa_block, "service_account": sa_block, "oauth_token": oauth_block}
 
@@ -185,10 +183,14 @@ def _check_oauth() -> list[dict[str, Any]]:
 def _resolve_active(cm: Any, version: int) -> dict[str, Any]:
     """Determine the active authentication method.
 
-    Returns one of: ``env_vars`` (service-account env triple),
+    Returns one of: ``env_vars`` (the four service-account env vars),
     ``oauth_token_env`` (``MP_OAUTH_TOKEN`` env triple), ``oauth`` (PKCE
     storage or v2 OAuth credential), or ``service_account`` (stored
     service-account credential).
+
+    On failure, returns ``active_method == "none"`` plus a
+    ``resolution_error`` field carrying ``f"{type(e).__name__}: {e}"``
+    so callers can surface the underlying reason instead of guessing.
     """
     try:
         creds = cm.resolve_credentials()
@@ -199,8 +201,7 @@ def _resolve_active(cm: Any, version: int) -> dict[str, Any]:
             for v in ["MP_USERNAME", "MP_SECRET", "MP_PROJECT_ID", "MP_REGION"]
         )
         oauth_env_complete = all(
-            os.environ.get(v)
-            for v in ["MP_OAUTH_TOKEN", "MP_PROJECT_ID", "MP_REGION"]
+            os.environ.get(v) for v in ["MP_OAUTH_TOKEN", "MP_PROJECT_ID", "MP_REGION"]
         )
 
         if sa_env_complete:
@@ -229,12 +230,13 @@ def _resolve_active(cm: Any, version: int) -> dict[str, Any]:
             "active_project_id": creds.project_id,
             "active_region": creds.region,
         }
-    except Exception:
+    except Exception as e:
         return {
             "active_method": "none",
             "active_account": None,
             "active_project_id": None,
             "active_region": None,
+            "resolution_error": f"{type(e).__name__}: {e}",
         }
 
 
@@ -253,7 +255,7 @@ def _generate_suggestion(
         }.get(active["active_method"], active["active_method"])
         msg = f"Authenticated via {method_label} (project {active['active_project_id']}, {active['active_region']} region)."
         if version == 1:
-            msg += " Config is v1 — run /mp-auth migrate to upgrade to v2 for project switching."
+            msg += " Config is v1 — run /mixpanel-data:auth migrate to upgrade to v2 for project switching."
         return msg
 
     sa_env = env.get("service_account", env)
@@ -261,13 +263,16 @@ def _generate_suggestion(
     # Env vars complete but auth still resolved to "none" — the values are
     # syntactically present but produced a ConfigError (e.g., bad MP_REGION).
     if sa_env.get("configured") or oauth_env.get("configured"):
-        return "Auth env vars are set but credentials could not be resolved (likely an invalid value such as MP_REGION). Run /mp-auth test for details."
+        err = active.get("resolution_error")
+        if err:
+            return f"Auth env vars are set but credentials could not be resolved: {err}"
+        return "Auth env vars are set but credentials could not be resolved (likely an invalid value such as MP_REGION). Run /mixpanel-data:auth test for details."
     if sa_env.get("partial"):
-        return f"Partial service-account env config — missing: {', '.join(sa_env['missing'])}. Set the rest, switch to MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION, or run /mp-auth add."
+        return f"Partial service-account env config — missing: {', '.join(sa_env['missing'])}. Set the rest, switch to MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION, or run /mixpanel-data:auth add."
     if oauth_env.get("partial"):
-        return f"Partial OAuth-token env config — missing: {', '.join(oauth_env['missing'])}. Set the remaining variables or use /mp-auth add / login."
+        return f"Partial OAuth-token env config — missing: {', '.join(oauth_env['missing'])}. Set the remaining variables or use /mixpanel-data:auth add / login."
 
-    return "No credentials configured. Run /mp-auth add (service account), /mp-auth login (OAuth PKCE), or set MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION for bearer-token auth."
+    return "No credentials configured. Run /mixpanel-data:auth add (service account), /mixpanel-data:auth login (OAuth PKCE), or set MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION for bearer-token auth."
 
 
 # --- Subcommand handlers ---
@@ -540,7 +545,7 @@ def cmd_context(_args: argparse.Namespace) -> None:
                 "operation": "context",
                 "config_version": version,
                 **active,
-                "suggestion": "Config is v1. Run /mp-auth migrate to upgrade to v2 for project switching.",
+                "suggestion": "Config is v1. Run /mixpanel-data:auth migrate to upgrade to v2 for project switching.",
             }
         )
         return
@@ -565,7 +570,7 @@ def cmd_switch_project(args: argparse.Namespace) -> None:
     if version < 2:
         _json_error(
             "ConfigError",
-            "Project switching requires v2 config. Run /mp-auth migrate first.",
+            "Project switching requires v2 config. Run /mixpanel-data:auth migrate first.",
         )
         return
 

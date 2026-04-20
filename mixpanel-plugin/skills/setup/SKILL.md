@@ -31,7 +31,7 @@ python3 ${CLAUDE_SKILL_DIR}/../mixpanelyst/scripts/auth_manager.py status
 
 Parse the JSON result:
 - If `active_method` is not `"none"`, credentials are configured — proceed to verification.
-- If `config_version` is `1`, suggest `/mp-auth migrate` to upgrade to v2 for project switching.
+- If `config_version` is `1`, suggest `/mixpanel-data:auth migrate` to upgrade to v2 for project switching.
 - If `config_version` is `2`, show the active credential and project context.
 
 ## If Credentials Are Missing
@@ -40,11 +40,11 @@ If no credentials are configured, guide the user to one of these methods:
 
 ### Recommended: Guided Setup
 
-Tell the user to run `/mp-auth add` for a step-by-step walkthrough that securely collects credentials.
+Tell the user to run `/mixpanel-data:auth add` for a step-by-step walkthrough that securely collects credentials.
 
 ### Alternative: OAuth Login
 
-Tell the user to run `/mp-auth login` for browser-based authentication (no service account needed).
+Tell the user to run `/mixpanel-data:auth login` for browser-based authentication (no service account needed).
 
 ### Alternative: Service-Account Environment Variables (temporary)
 
@@ -68,8 +68,9 @@ export MP_PROJECT_ID="12345"
 export MP_REGION="us"  # or "eu", "in"
 ```
 
-This is the recommended mode for non-interactive contexts. Service-account
-env vars take precedence if both are set.
+This is the recommended mode for non-interactive contexts. The full
+service-account env-var set (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID`
++ `MP_REGION`) takes precedence when both sets are complete.
 
 ## Cowork Environment
 
@@ -93,7 +94,7 @@ Tell the user:
 > 
 > Then **start a new Cowork session** — credentials will be available automatically.
 
-Do NOT suggest `/mp-auth login`, `/mp-auth add`, or environment variables — these won't work inside Cowork.
+Do NOT suggest `/mixpanel-data:auth login`, `/mixpanel-data:auth add`, or environment variables — these won't work inside Cowork.
 
 ### If Bridge File Found But Token Expired
 
@@ -115,15 +116,15 @@ python3 ${CLAUDE_SKILL_DIR}/../mixpanelyst/scripts/auth_manager.py test
 
 If the result shows `"success": true`, setup is complete. The user can now ask questions about their Mixpanel data.
 
-If verification fails, suggest `/mp-auth test` for detailed diagnostics.
+If verification fails, suggest `/mixpanel-data:auth test` for detailed diagnostics.
 
 ## Post-Setup: Explore Your Data
 
 Once authenticated, these commands help orient the user:
 
-- `/mp-auth projects` — discover all accessible projects via the /me API
-- `/mp-auth context` — see the active credential + project + workspace
-- `/mp-auth switch-project <ID>` — switch to a different project (v2 config only)
+- `/mixpanel-data:auth projects` — discover all accessible projects via the /me API
+- `/mixpanel-data:auth context` — see the active credential + project + workspace
+- `/mixpanel-data:auth switch-project <ID>` — switch to a different project (v2 config only)
 
 The user can also construct a Workspace targeting a specific credential or project:
 

@@ -32,9 +32,13 @@ Private infrastructure powering mixpanel_data's complete programmable interface 
 
 ## Credential Resolution Order
 
-1. Environment variables: `MP_USERNAME`, `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION`
-2. Named account (if `account` parameter specified)
-3. Default account from config file
+1. Environment variables — either service-account vars (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) or OAuth-token vars (`MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION`); service-account wins when both sets are complete
+2. Auth bridge file (`MP_AUTH_FILE` or `~/.claude/mixpanel/auth.json`)
+3. OAuth tokens from local storage (`~/.mp/oauth/`) — only when no `account` requested
+4. Named account (if `account` parameter specified)
+5. Default account from config file
+
+See `ConfigManager.resolve_credentials` for the authoritative chain.
 
 ## Error Handling
 

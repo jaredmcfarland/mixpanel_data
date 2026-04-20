@@ -188,7 +188,7 @@ just mutate-check        # Check score meets 80% threshold
 |----------|---------|
 | `MP_USERNAME` | Service account username |
 | `MP_SECRET` | Service account secret |
-| `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account; requires `MP_PROJECT_ID` + `MP_REGION`; ignored when `MP_USERNAME`/`MP_SECRET` are also set) |
+| `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account; requires `MP_PROJECT_ID` + `MP_REGION`; ignored only when the full service-account env-var set — `MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION` — is also present) |
 | `MP_PROJECT_ID` | Project ID |
 | `MP_REGION` | Data residency (us, eu, in) |
 | `MP_WORKSPACE_ID` | Workspace ID for App API operations |
