@@ -268,7 +268,7 @@ Design documents in `context/`:
 - [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
 - [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
 
-## mixpanel-data Plugin (v4.0 — Distilled API Surface + Live Docs)
+## mixpanel-data Plugin (v4.1 — Distilled API Surface + Live Docs)
 
 This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin provides the `mixpanel_data` API surface and a live documentation system (`help.py`) for querying and analyzing Mixpanel data with Python.
 
