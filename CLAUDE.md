@@ -317,3 +317,8 @@ python help.py Filter                  # type fields + construction patterns + r
 ## Recent Changes
 - PR #125: Added `MP_OAUTH_TOKEN` env-var auth path for non-interactive bearer-token authentication (agents, CI). Service-account env quad takes precedence when both sets are complete. Public `Credentials.from_oauth_token()` factory exposes the same path to SDK callers.
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
