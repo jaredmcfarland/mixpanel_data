@@ -320,5 +320,6 @@ python help.py Filter                  # type fields + construction patterns + r
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan:
+[specs/042-auth-architecture-redesign/plan.md](specs/042-auth-architecture-redesign/plan.md)
 <!-- SPECKIT END -->
