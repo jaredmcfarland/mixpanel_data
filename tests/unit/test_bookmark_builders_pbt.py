@@ -15,6 +15,8 @@ from hypothesis import strategies as st
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.bookmark_builders import (
     build_filter_section,
     build_group_section,
@@ -22,6 +24,18 @@ from mixpanel_data._internal.bookmark_builders import (
 )
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.types import Filter, GroupBy
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 # =============================================================================
 # Strategies
@@ -55,7 +69,7 @@ def _make_workspace() -> Workspace:
     mgr = MagicMock(spec=ConfigManager)
     mgr.config_version.return_value = 1
     mgr.resolve_credentials.return_value = creds
-    return Workspace(_config_manager=mgr)
+    return Workspace(session=_TEST_SESSION)
 
 
 # =============================================================================

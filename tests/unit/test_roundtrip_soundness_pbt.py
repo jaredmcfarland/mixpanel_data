@@ -19,6 +19,8 @@ from pydantic import SecretStr
 
 from mixpanel_data import Workspace
 from mixpanel_data._internal.api_client import MixpanelAPIClient
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.types import (
     Formula,
@@ -26,6 +28,18 @@ from mixpanel_data.types import (
     Metric,
     PerUserAggregation,
     RetentionMathType,
+)
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
 )
 
 # =============================================================================
@@ -163,7 +177,7 @@ def _make_workspace() -> Workspace:
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()
     return Workspace(
-        _config_manager=manager,
+        session=_TEST_SESSION,
         _api_client=client,
     )
 

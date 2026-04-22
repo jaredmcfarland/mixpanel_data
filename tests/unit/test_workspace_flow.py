@@ -14,9 +14,23 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data.exceptions import BookmarkValidationError, ConfigError
+from mixpanel_data.exceptions import BookmarkValidationError
 from mixpanel_data.types import Filter, FlowQueryResult, FlowStep, FlowTreeNode, GroupBy
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 # =========================================================================
 # Fixtures
@@ -62,7 +76,7 @@ def workspace_factory(
 
     def factory(**kwargs: Any) -> Workspace:
         defaults: dict[str, Any] = {
-            "_config_manager": mock_config_manager,
+            "session": _TEST_SESSION,
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)
@@ -541,20 +555,9 @@ class TestWorkspaceFlowPublicMethods:
         finally:
             ws.close()
 
-    def test_query_flow_raises_on_no_credentials(
-        self,
-    ) -> None:
-        """query_flow() raises ConfigError when no credentials available."""
-        mock_mgr = MagicMock(spec=ConfigManager)
-        mock_mgr.config_version.return_value = 1
-        mock_mgr.resolve_credentials.return_value = None
-
-        ws = Workspace(_config_manager=mock_mgr)
-        try:
-            with pytest.raises(ConfigError):
-                ws.query_flow("Login")
-        finally:
-            ws.close()
+    # test_query_flow_raises_on_no_credentials removed in B1 (Fix 10):
+    # Workspace.__init__ now always populates _credentials via the v3
+    # session shim, so the "no credentials" branch is unreachable.
 
     def test_query_flow_with_flow_step(
         self,

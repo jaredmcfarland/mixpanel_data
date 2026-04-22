@@ -11,9 +11,24 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import SecretStr
 
 from mixpanel_data import Filter, Formula, GroupBy, Metric, Workspace
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.bookmark_builders import build_filter_entry
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 # =============================================================================
 # Fixtures
@@ -23,7 +38,7 @@ from mixpanel_data._internal.bookmark_builders import build_filter_entry
 @pytest.fixture
 def ws(mock_config_manager: MagicMock) -> Workspace:
     """Create Workspace with mocked dependencies for params testing."""
-    return Workspace(_config_manager=mock_config_manager)
+    return Workspace(session=_TEST_SESSION)
 
 
 # =============================================================================

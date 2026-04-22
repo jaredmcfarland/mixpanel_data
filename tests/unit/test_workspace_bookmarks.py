@@ -14,8 +14,22 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.types import BookmarkInfo
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 
 @pytest.fixture
@@ -57,7 +71,7 @@ def workspace_factory(
 
     def factory(**kwargs: Any) -> Workspace:
         defaults: dict[str, Any] = {
-            "_config_manager": mock_config_manager,
+            "session": _TEST_SESSION,
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)

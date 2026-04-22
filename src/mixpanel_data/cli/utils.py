@@ -272,16 +272,9 @@ def get_workspace(ctx: typer.Context) -> Workspace:
     """Get or create workspace from context.
 
     Lazily initializes a Workspace instance, respecting the ``--account``,
-    ``--credential``, ``--project``, ``--workspace`` / ``--workspace-id``,
-    and ``--target`` global options. The workspace is cached in the
-    context for reuse.
-
-    Routing:
-    - ``--credential`` → v2 path via ``ConfigManager.resolve_session()``.
-    - ``--target`` set OR a v3 config on disk → 042-redesign path; the
-      globals are passed through the v3 axis kwargs (``project=``,
-      ``workspace=``, ``target=``) so the v3 resolver actually sees them.
-    - Otherwise → legacy v1 path via ``project_id=`` / ``workspace_id=``.
+    ``--project``, ``--workspace`` (alias ``--workspace-id``), and
+    ``--target`` global options. The workspace is cached in the context
+    for reuse.
 
     Args:
         ctx: Typer context with global options in obj dict.
@@ -297,37 +290,16 @@ def get_workspace(ctx: typer.Context) -> Workspace:
 
     if "workspace" not in ctx.obj or ctx.obj["workspace"] is None:
         account = ctx.obj.get("account")
-        credential = ctx.obj.get("credential")
         project = ctx.obj.get("project")
         workspace_id: int | None = ctx.obj.get("workspace_id")
         target = ctx.obj.get("target")
 
-        if credential is not None:
-            # v2 path: use resolve_session via credential param
-            ctx.obj["workspace"] = Workspace(
-                credential=credential,
-                project_id=project,
-                workspace_id=workspace_id,
-            )
-        elif target is not None or Workspace._has_v3_config():
-            # path: pass globals through the v3 axis kwargs
-            # so `--target`, `--project`, and `--workspace` actually
-            # drive the v3 resolver. Without this, the legacy resolver
-            # would try to read v3 account blocks and miss `--target`
-            # entirely.
-            ctx.obj["workspace"] = Workspace(
-                account=account,
-                project=project,
-                workspace=workspace_id,
-                target=target,
-            )
-        else:
-            # Legacy v1 path: use account with optional project override
-            ctx.obj["workspace"] = Workspace(
-                account=account,
-                project_id=project,
-                workspace_id=workspace_id,
-            )
+        ctx.obj["workspace"] = Workspace(
+            account=account,
+            project=project,
+            workspace=workspace_id,
+            target=target,
+        )
     workspace: Workspace = ctx.obj["workspace"]
     return workspace
 

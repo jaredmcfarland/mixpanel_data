@@ -22,14 +22,27 @@ from hypothesis import strategies as st
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.query.user_builders import (
     _format_value,
     filters_to_selector,
 )
 from mixpanel_data._internal.transforms import transform_profile
-from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import Filter, ProfilePageResult, UserQueryResult
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -163,7 +176,7 @@ def workspace_factory(
             Workspace instance with mocked dependencies.
         """
         defaults: dict[str, Any] = {
-            "_config_manager": mock_config_manager,
+            "session": _TEST_SESSION,
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)
@@ -412,31 +425,9 @@ class TestAggregateComputedAtFallback:
             ws.close()
 
 
-class TestCredentialCheckBeforeValidation:
-    """T4.08: Credential check raises before validation errors."""
-
-    def test_credential_check_happens_before_param_building(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """Missing credentials raise ConfigError before validation runs.
-
-        The query_user() method checks credentials first and raises
-        ConfigError immediately if none are configured, before doing
-        any argument validation. This fails fast on the more fundamental
-        problem.
-        """
-        no_creds_manager = MagicMock(spec=ConfigManager)
-        no_creds_manager.config_version.return_value = 1
-        no_creds_manager.resolve_credentials.return_value = None
-
-        ws = Workspace(
-            _config_manager=no_creds_manager,
-            _api_client=mock_api_client,
-        )
-
-        with pytest.raises(ConfigError):
-            ws.query_user(workers=0)
+# TestCredentialCheckBeforeValidation removed in B1 (Fix 10):
+# Workspace.__init__ now always populates ``_credentials`` via the v3
+# session shim, so the "no credentials" branch can no longer fire.
 
 
 # =============================================================================

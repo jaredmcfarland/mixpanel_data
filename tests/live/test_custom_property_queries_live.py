@@ -47,7 +47,7 @@ def ws() -> Workspace:
     Returns:
         Workspace connected to ecommerce-demo, workspace 3536632.
     """
-    return Workspace(account="ecommerce-demo", workspace_id=3536632)
+    return Workspace(account="ecommerce-demo", workspace=3536632)
 
 
 @pytest.fixture(scope="module")

@@ -85,15 +85,6 @@ def main(
             envvar="MP_ACCOUNT",
         ),
     ] = None,
-    credential: Annotated[
-        str | None,
-        typer.Option(
-            "--credential",
-            "-c",
-            help="Credential name to use (v2 config).",
-            envvar="MP_CREDENTIAL",
-        ),
-    ] = None,
     project: Annotated[
         str | None,
         typer.Option(
@@ -103,20 +94,13 @@ def main(
             envvar="MP_PROJECT_ID",
         ),
     ] = None,
-    workspace_id: Annotated[
-        int | None,
-        typer.Option(
-            "--workspace-id",
-            envvar="MP_WORKSPACE_ID",
-            help="Workspace ID for App API operations (LEGACY; use --workspace).",
-        ),
-    ] = None,
     workspace: Annotated[
         int | None,
         typer.Option(
             "--workspace",
             "-w",
-            help="Workspace ID (global override).",
+            envvar="MP_WORKSPACE_ID",
+            help="Workspace ID for this command.",
         ),
     ] = None,
     target: Annotated[
@@ -161,11 +145,6 @@ def main(
     """
     ctx.ensure_object(dict)
 
-    if account is not None and credential is not None:
-        err_console.print(
-            "[red]--account and --credential are mutually exclusive.[/red]"
-        )
-        raise typer.Exit(3)
     if target is not None and (
         account is not None or project is not None or workspace is not None
     ):
@@ -174,13 +153,9 @@ def main(
         )
         raise typer.Exit(3)
 
-    # Prefer the new --workspace global; fall back to the legacy --workspace-id.
-    effective_workspace = workspace if workspace is not None else workspace_id
-
     ctx.obj["account"] = account
-    ctx.obj["credential"] = credential
     ctx.obj["project"] = project
-    ctx.obj["workspace_id"] = effective_workspace
+    ctx.obj["workspace_id"] = workspace
     ctx.obj["target"] = target
     ctx.obj["quiet"] = quiet
     ctx.obj["verbose"] = verbose

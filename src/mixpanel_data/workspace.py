@@ -43,7 +43,6 @@ if TYPE_CHECKING:
     from mixpanel_data._internal.auth_credential import (
         AuthCredential,
         ProjectContext,
-        ResolvedSession,
     )
     from mixpanel_data._internal.me import MeProjectInfo, MeService, MeWorkspaceInfo
 
@@ -375,233 +374,46 @@ class Workspace:
 
     def __init__(
         self,
-        account: str | None = None,
-        project_id: str | None = None,
-        region: str | None = None,
-        workspace_id: int | None = None,
-        credential: str | None = None,
         *,
-        # keyword-only kwargs (additive — coexists with legacy).
+        account: str | None = None,
         project: str | None = None,
         workspace: int | None = None,
         target: str | None = None,
         session: _SessionV3 | None = None,
-        # Dependency injection for testing
-        _config_manager: ConfigManager | None = None,
         _api_client: MixpanelAPIClient | None = None,
     ) -> None:
-        """Create a new Workspace with credentials.
+        """Create a new Workspace bound to a resolved :class:`Session`.
 
-        Credentials are resolved in priority order:
-        1. Environment variables — either the service-account env vars
-           (MP_USERNAME + MP_SECRET + MP_PROJECT_ID + MP_REGION) or the
-           OAuth-token env vars (MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION).
-           Service-account env vars take precedence when both sets are complete.
-        2. OAuth tokens from local storage (if available and not expired)
-        3. Named account from config file (if account parameter specified)
-        4. Default account from config file
-
-        When ``credential`` is provided, uses the v2 ``resolve_session()``
-        path instead of the legacy ``resolve_credentials()`` path.
-
-        042 redesign: when any of ``project``, ``workspace``, ``target``, or
-        ``session`` keyword-only kwargs is supplied, OR when no positional
-        args are given AND a v3 config is on disk, the new
-        :func:`~mixpanel_data._internal.auth.resolver.resolve_session`
-        pathway is used instead. The legacy path remains for v1/v2
-        configs and explicit positional callers.
+        Resolution priority follows FR-017: env vars > kwargs > target >
+        bridge > ``[active]`` > ``Account.default_project``. Pass
+        ``session=`` to bypass the resolver and use a pre-built
+        :class:`Session` directly.
 
         Args:
-            account: Named account from config file (legacy + v3 — same name).
-            project_id: Override project ID from credentials (LEGACY kwarg).
-            region: Override region from credentials (LEGACY kwarg).
-            workspace_id: Optional workspace ID for scoped App API requests
-                (LEGACY kwarg).
-            credential: Credential name (v2 config path; LEGACY kwarg).
-            project: Project ID (kwarg; mutually exclusive with
-                ``target``).
-            workspace: Workspace ID (kwarg; mutually exclusive
-                with ``target``).
-            target: Apply this target's three axes (kwarg;
-                mutually exclusive with ``account``/``project``/``workspace``).
-            session: Pre-built Session (full bypass of the
-                resolver).
-            _config_manager: Injected ConfigManager for testing (legacy path).
-            _api_client: Injected MixpanelAPIClient for testing.
+            account: Named account from ``~/.mp/config.toml``.
+            project: Project ID override (digit string).
+            workspace: Workspace ID override (positive int).
+            target: Apply all three axes from ``[targets.NAME]``. Mutually
+                exclusive with ``account``/``project``/``workspace``.
+            session: Pre-built :class:`Session` (full resolver bypass).
+            _api_client: Injected :class:`MixpanelAPIClient` for testing.
 
         Raises:
             ValueError: ``target=`` combined with any axis kwarg.
-            ConfigError: If no credentials can be resolved.
-            AccountNotFoundError: If named account doesn't exist.
+            ConfigError: Account or project axis cannot be resolved.
+            OAuthError: Auth header construction fails.
         """
-        # path: triggered by any new kwarg OR a v3 config on disk.
-        v3_kwargs_set = (
-            session is not None
-            or project is not None
-            or workspace is not None
-            or target is not None
-        )
-        legacy_kwargs_set = (
-            project_id is not None
-            or region is not None
-            or workspace_id is not None
-            or credential is not None
-            or _config_manager is not None
-        )
-        if v3_kwargs_set or (not legacy_kwargs_set and self._has_v3_config()):
-            # Don't catch ConfigError here: when the v3 path is chosen
-            # (explicit v3 kwargs OR a v3 config on disk), falling through
-            # to the legacy resolver would try to read v3 account blocks
-            # via the legacy schema (v3 accounts have `default_project`,
-            # not `project_id`), masking the actionable FR-024 message
-            # with a misleading KeyError. The error must surface as-is.
-            self._init_v3(
-                account=account,
-                project=project,
-                workspace=workspace,
-                target=target,
-                session=session,
-                _api_client=_api_client,
+        if target is not None and (
+            account is not None or project is not None or workspace is not None
+        ):
+            raise ValueError(
+                "`target=` is mutually exclusive with "
+                "`account=`/`project=`/`workspace=`."
             )
-            return
 
-        # Store injected or create default ConfigManager
-        self._config_manager = _config_manager or ConfigManager()
-
-        # Resolve credentials
-        self._credentials: Credentials | None = None
-        self._account_name: str | None = account
-        self._resolved_session: ResolvedSession | None = None
-
-        if credential is not None:
-            # v2 path: use resolve_session
-            v2_session = self._config_manager.resolve_session(
-                credential=credential,
-                project_id=project_id,
-                workspace_id=workspace_id,
-            )
-            self._resolved_session = v2_session
-
-            # Build legacy Credentials from session for backward compat
-            self._credentials = self._session_to_credentials(v2_session)
-        else:
-            if self._config_manager.config_version() >= 2:
-                # v2 config detected — use resolve_session
-                v2_session = self._config_manager.resolve_session(
-                    credential=account,
-                    project_id=project_id,
-                    workspace_id=workspace_id,
-                )
-                self._resolved_session = v2_session
-                self._credentials = self._session_to_credentials(v2_session)
-            else:
-                # Legacy v1 path: use resolve_credentials
-                self._credentials = self._config_manager.resolve_credentials(account)
-
-                # Apply overrides if provided
-                if project_id or region:
-                    from typing import cast
-
-                    from pydantic import SecretStr
-
-                    from mixpanel_data._internal.auth_credential import RegionType
-
-                    resolved_region = region or self._credentials.region
-                    self._credentials = Credentials(
-                        username=self._credentials.username,
-                        secret=SecretStr(self._credentials.secret.get_secret_value()),
-                        project_id=project_id or self._credentials.project_id,
-                        region=cast(RegionType, resolved_region),
-                        auth_method=self._credentials.auth_method,
-                        oauth_access_token=self._credentials.oauth_access_token,
-                    )
-
-        # Lazy-initialized services (None until first use)
-        self._api_client: MixpanelAPIClient | None = _api_client
         self._discovery: DiscoveryService | None = None
         self._live_query: LiveQueryService | None = None
         self._me_service: MeService | None = None
-
-        # Resolve effective workspace_id: explicit param > session > None
-        effective_workspace_id = workspace_id
-        if effective_workspace_id is None and self._resolved_session is not None:
-            effective_workspace_id = self._resolved_session.workspace_id
-
-        self._initial_workspace_id = effective_workspace_id
-        if effective_workspace_id is not None and self._api_client is not None:
-            self._api_client.set_workspace_id(effective_workspace_id)
-
-    # =========================================================================
-    # 042 redesign: v3 path (additive — coexists with legacy path above)
-    # =========================================================================
-
-    @staticmethod
-    def _has_v3_config() -> bool:
-        """Return True if v3 resolution should be attempted at the current paths.
-
-        Returns ``True`` when EITHER:
-        - ``ConfigManager_v3`` can read the file with at least one account
-          or an explicit ``[active].account``, OR
-        - a v2 bridge file is loadable from ``MP_AUTH_FILE`` or the default
-          search paths (the bridge is a self-contained synthetic config
-          source for the v3 resolver).
-
-        Returns:
-            ``True`` if the v3 path should be attempted.
-        """
-        try:
-            cm = _ConfigManagerV3()
-            accounts = cm.list_accounts()
-            if accounts or cm.get_active().account:
-                return True
-        except ConfigError:
-            pass
-        # Check the bridge file as a synthetic v3 config source.
-        try:
-            from mixpanel_data._internal.auth.bridge import load_bridge
-
-            return load_bridge() is not None
-        except ConfigError:
-            # A malformed bridge file at the resolved path — let v3 path
-            # surface the error rather than silently falling back to legacy.
-            return True
-
-    def _init_v3(
-        self,
-        *,
-        account: str | None,
-        project: str | None,
-        workspace: int | None,
-        target: str | None,
-        session: _SessionV3 | None,
-        _api_client: MixpanelAPIClient | None,
-    ) -> None:
-        """Initialize the v3 code path.
-
-        Either consumes a pre-built ``Session`` (full bypass) or routes
-        through :func:`resolve_session` to build one from per-axis inputs.
-        Wires a session-aware :class:`MixpanelAPIClient`.
-
-        Args:
-            account: Account name override.
-            project: Project ID override.
-            workspace: Workspace ID override.
-            target: Target name (mutually exclusive with account/project/workspace).
-            session: Pre-built Session (full bypass).
-            _api_client: Optional injected client (testing).
-
-        Raises:
-            ValueError: ``target`` combined with any axis kwarg.
-            ConfigError: Resolution failure.
-        """
-        # Common book-keeping shared by both legacy and v3 paths.
-        self._config_manager = ConfigManager()
-        self._credentials = None
-        self._account_name = account
-        self._resolved_session = None
-        self._discovery = None
-        self._live_query = None
-        self._me_service = None
 
         if session is not None:
             sess = session
@@ -652,11 +464,14 @@ class Workspace:
                 bridge=br,
             )
         self._v3_session = sess
-        # Build a Credentials shim so legacy attribute reads keep working.
-        self._credentials = session_to_credentials(sess)
+        self._account_name: str = sess.account.name
+        # Credentials shim built from the v3 Session keeps legacy attribute
+        # reads (``_credentials.region``, ``_credentials.project_id``, …)
+        # working across the legacy methods scheduled for B2 deletion.
+        self._credentials: Credentials = session_to_credentials(sess)
         self._initial_workspace_id = sess.workspace.id if sess.workspace else None
         if _api_client is not None:
-            self._api_client = _api_client
+            self._api_client: MixpanelAPIClient | None = _api_client
         else:
             self._api_client = MixpanelAPIClient(session=sess)
 
@@ -664,49 +479,22 @@ class Workspace:
 
     @property
     def account(self) -> _AccountUnion:
-        """Return the resolved :class:`Account` for the current session.
-
-        Returns:
-            The active ``Account`` discriminated union variant.
-
-        Raises:
-            RuntimeError: If this Workspace was constructed via the legacy
-                path (no v3 Session is bound).
-        """
-        if not hasattr(self, "_v3_session") or self._v3_session is None:
-            raise RuntimeError(
-                "Workspace.account is only available when constructed via the "
-                "path (pass project=, target=, or session=, or "
-                "use a v3 ~/.mp/config.toml)."
-            )
+        """Return the resolved :class:`Account` for the current session."""
         return self._v3_session.account
 
     @property
     def project(self) -> _ProjectV3:
-        """Return the resolved :class:`Project` for the current session.
-
-        Returns:
-            The session's :class:`Project` value.
-
-        Raises:
-            RuntimeError: If constructed via the legacy path.
-        """
-        if not hasattr(self, "_v3_session") or self._v3_session is None:
-            raise RuntimeError("Workspace.project is only available via the path.")
+        """Return the resolved :class:`Project` for the current session."""
         return self._v3_session.project
 
     @property
     def workspace(self) -> _WorkspaceRefV3 | None:
-        """Return the resolved :class:`WorkspaceRef` (or None for lazy)."""
-        if not hasattr(self, "_v3_session") or self._v3_session is None:
-            raise RuntimeError("Workspace.workspace is only available via the path.")
+        """Return the resolved :class:`WorkspaceRef` (or ``None`` for lazy)."""
         return self._v3_session.workspace
 
     @property
     def session(self) -> _SessionV3:
         """Return the bound :class:`Session`."""
-        if not hasattr(self, "_v3_session") or self._v3_session is None:
-            raise RuntimeError("Workspace.session is only available via the path.")
         return self._v3_session
 
     # ---- v3 in-session switching --------------------------------------
@@ -758,19 +546,6 @@ class Workspace:
             raise ValueError(
                 "`target=` is mutually exclusive with `account=`/`project=`/`workspace=`."
             )
-        if not hasattr(self, "_v3_session") or self._v3_session is None:
-            # First call promotes this Workspace into the v3 path.
-            self._init_v3(
-                account=account,
-                project=project,
-                workspace=workspace,
-                target=target,
-                session=None,
-                _api_client=None,
-            )
-            if persist:
-                self._persist_active()
-            return self
 
         cm = _ConfigManagerV3()
         new_account_obj: _AccountUnion | None = None
@@ -884,42 +659,6 @@ class Workspace:
         cm.update_account(
             self._v3_session.account.name,
             default_project=self._v3_session.project.id,
-        )
-
-    @staticmethod
-    def _session_to_credentials(session: ResolvedSession) -> Credentials:
-        """Convert a ResolvedSession to legacy Credentials.
-
-        Bridges the v2 auth model to the v1 Credentials used by the
-        API client.
-
-        Args:
-            session: A ResolvedSession instance.
-
-        Returns:
-            Legacy Credentials instance.
-        """
-        from pydantic import SecretStr
-
-        from mixpanel_data._internal.auth_credential import CredentialType
-        from mixpanel_data._internal.config import AuthMethod
-
-        auth = session.auth
-        secret = SecretStr(auth.secret.get_secret_value() if auth.secret else "")
-        if auth.type == CredentialType.oauth:
-            return Credentials(
-                username=auth.username or "",
-                secret=secret,
-                project_id=session.project_id,
-                region=session.region,
-                auth_method=AuthMethod.oauth,
-                oauth_access_token=auth.oauth_access_token,
-            )
-        return Credentials(
-            username=auth.username or "",
-            secret=secret,
-            project_id=session.project_id,
-            region=session.region,
         )
 
     def __enter__(self) -> Workspace:
@@ -1074,7 +813,7 @@ class Workspace:
 
         Example:
             ```python
-            ws = Workspace(workspace_id=42)
+            ws = Workspace().use(workspace=42)
             assert ws.workspace_id == 42
 
             ws2 = Workspace()
@@ -1278,7 +1017,7 @@ class Workspace:
 
         Example:
             ```python
-            ws = Workspace(credential="demo-sa", project_id="111")
+            ws = Workspace(account="demo-sa", project="111")
             ws.switch_project("222", workspace_id=42)
             # Subsequent calls now target project 222
             ```
@@ -1288,21 +1027,6 @@ class Workspace:
         self._api_client = new_client
         self._credentials = new_client._credentials
         self._initial_workspace_id = workspace_id
-
-        # Rebuild resolved session with updated project context
-        if self._resolved_session is not None:
-            from mixpanel_data._internal.auth_credential import (
-                ProjectContext,
-                ResolvedSession,
-            )
-
-            self._resolved_session = ResolvedSession(
-                auth=self._resolved_session.auth,
-                project=ProjectContext(
-                    project_id=project_id,
-                    workspace_id=workspace_id,
-                ),
-            )
 
         # Clear cached services so they rebuild against new project
         self._discovery = None
@@ -1320,7 +1044,7 @@ class Workspace:
 
         Example:
             ```python
-            ws = Workspace(credential="demo-sa", project_id="111")
+            ws = Workspace(account="demo-sa", project="111")
             ws.switch_workspace(3448413)
             assert ws.workspace_id == 3448413
             ```
@@ -1331,29 +1055,15 @@ class Workspace:
     def current_project(self) -> ProjectContext:
         """Return the current project context as a ``ProjectContext``.
 
-        Provides a structured snapshot of the active project ID, workspace
-        ID, and (when available) human-readable names from the /me cache.
+        Scheduled for deletion in B2 (T050) — prefer :attr:`project` and
+        :attr:`workspace` directly.
 
         Returns:
             ``ProjectContext`` with the active project and workspace info.
-
-        Raises:
-            ConfigError: If no credentials are available.
-
-        Example:
-            ```python
-            ws = Workspace(credential="demo-sa", project_id="111")
-            ctx = ws.current_project
-            print(ctx.project_id, ctx.workspace_id)
-            ```
         """
         from mixpanel_data._internal.auth_credential import ProjectContext
 
-        creds = self._credentials
-        if creds is None:
-            raise ConfigError("No credentials available.")
-
-        pid = creds.project_id
+        pid = self._credentials.project_id
         wid = self.workspace_id
 
         # Try to enrich with human-readable names from /me cache
@@ -1385,50 +1095,28 @@ class Workspace:
     def current_credential(self) -> AuthCredential:
         """Return the current authentication credential as an ``AuthCredential``.
 
-        Provides a read-only view of the active credential identity. For
-        v2 sessions this returns the ``AuthCredential`` from the resolved
-        session. For legacy v1 sessions a synthetic ``AuthCredential`` is
-        built from the ``Credentials`` object.
+        Synthesizes the value from the bound :class:`Session`. Scheduled
+        for deletion in B2 (T050) — prefer :attr:`account` directly.
 
         Returns:
             ``AuthCredential`` describing the active identity.
-
-        Raises:
-            ConfigError: If no credentials are available.
-
-        Example:
-            ```python
-            ws = Workspace(credential="demo-sa", project_id="111")
-            cred = ws.current_credential
-            print(cred.name, cred.type, cred.region)
-            ```
         """
         from mixpanel_data._internal.auth_credential import (
             AuthCredential,
             CredentialType,
         )
-
-        # v2 path: return the stored AuthCredential
-        if self._resolved_session is not None:
-            auth: AuthCredential = self._resolved_session.auth
-            return auth
-
-        # Legacy path: synthesize from Credentials
-        creds = self._credentials
-        if creds is None:
-            raise ConfigError("No credentials available.")
-
         from mixpanel_data._internal.config import AuthMethod
 
+        creds = self._credentials
         if creds.auth_method == AuthMethod.oauth:
             return AuthCredential(
-                name=self._account_name or "default",
+                name=self._account_name,
                 type=CredentialType.oauth,
                 region=creds.region,
                 oauth_access_token=creds.oauth_access_token,
             )
         return AuthCredential(
-            name=self._account_name or "default",
+            name=self._account_name,
             type=CredentialType.service_account,
             region=creds.region,
             username=creds.username,

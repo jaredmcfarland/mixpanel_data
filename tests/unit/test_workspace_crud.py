@@ -22,6 +22,8 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
 from mixpanel_data.exceptions import MixpanelDataError
 from mixpanel_data.types import (
@@ -39,6 +41,18 @@ from mixpanel_data.types import (
     UpdateDashboardParams,
 )
 from mixpanel_data.workspace import Workspace
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 # =============================================================================
 # Helpers
@@ -98,7 +112,7 @@ def _make_workspace(
     transport = httpx.MockTransport(handler)
     client = MixpanelAPIClient(creds, _transport=transport)
     return Workspace(
-        _config_manager=_setup_config_with_account(temp_dir),
+        session=_TEST_SESSION,
         _api_client=client,
     )
 

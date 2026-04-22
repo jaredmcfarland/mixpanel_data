@@ -24,8 +24,22 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data import BookmarkValidationError, Workspace
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.types import UserQueryResult
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -83,7 +97,7 @@ def workspace_factory(
             Workspace instance with mocked dependencies.
         """
         defaults: dict[str, Any] = {
-            "_config_manager": mock_config_manager,
+            "session": _TEST_SESSION,
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)
@@ -1220,24 +1234,6 @@ class TestAggregateResultMetadata:
 # =============================================================================
 
 
-class TestAggregateConfigError:
-    """Tests for aggregate mode when credentials are missing."""
-
-    def test_no_credentials_raises_config_error(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """Aggregate mode raises ConfigError when credentials are None."""
-        from mixpanel_data.exceptions import ConfigError
-
-        no_creds_manager = MagicMock(spec=ConfigManager)
-        no_creds_manager.config_version.return_value = 1
-        no_creds_manager.resolve_credentials.return_value = None
-
-        ws = Workspace(
-            _config_manager=no_creds_manager,
-            _api_client=mock_api_client,
-        )
-
-        with pytest.raises(ConfigError, match="credentials"):
-            ws.query_user(mode="aggregate", aggregate="count")
+# TestAggregateConfigError removed in B1 (Fix 10): Workspace.__init__
+# now always populates ``_credentials`` via the v3 session shim, so the
+# "no credentials" path is unreachable.
