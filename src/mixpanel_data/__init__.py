@@ -6,19 +6,6 @@ run live analytics, stream data, and manage entities via the App API.
 """
 
 from mixpanel_data import accounts, session, targets
-from mixpanel_data._internal.auth.account import (
-    Account,
-    AccountType,
-    OAuthBrowserAccount,
-    OAuthTokenAccount,
-    Region,
-    ServiceAccount,
-)
-from mixpanel_data._internal.auth.session import (
-    Project,
-    Session,
-    WorkspaceRef,
-)
 from mixpanel_data._internal.validation import validate_bookmark
 from mixpanel_data._literal_types import (
     CohortAggregationType,
@@ -52,6 +39,17 @@ from mixpanel_data._literal_types import (
     TimeComparisonType,
     TimeComparisonUnit,
     TimeUnit,
+)
+from mixpanel_data.auth_types import (
+    Account,
+    AccountType,
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
+    Project,
+    Region,
+    ServiceAccount,
+    Session,
+    WorkspaceRef,
 )
 from mixpanel_data.exceptions import (
     AccountExistsError,

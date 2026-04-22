@@ -56,6 +56,7 @@ from mixpanel_data._literal_types import RetentionMode as RetentionMode
 from mixpanel_data._literal_types import SegmentMethod as SegmentMethod
 from mixpanel_data._literal_types import TimeComparisonType as TimeComparisonType
 from mixpanel_data._literal_types import TimeComparisonUnit as TimeComparisonUnit
+from mixpanel_data.auth_types import AccountType, Region
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -11811,14 +11812,9 @@ class UserQueryResult(ResultWithDataFrame):
 # src/mixpanel_data/_internal/auth/.
 
 
-_AccountTypeLiteral = Literal["service_account", "oauth_browser", "oauth_token"]
-"""Discriminator literal mirroring ``mixpanel_data._internal.auth.account.AccountType``.
-
-Mirrored locally to avoid an import cycle from ``types.py`` into ``_internal``.
-"""
-
-_RegionLiteral = Literal["us", "eu", "in"]
-"""Region literal mirroring ``mixpanel_data._internal.auth.account.Region``."""
+# ``AccountType`` and ``Region`` are imported above from ``auth_types`` —
+# the canonical source of truth. The legacy ``_AccountTypeLiteral`` /
+# ``_RegionLiteral`` mirrors that lived here are gone (B3 / Fix 27).
 
 
 class AccountSummary(BaseModel):
@@ -11843,10 +11839,10 @@ class AccountSummary(BaseModel):
     name: str
     """Local config name (matches the TOML block key)."""
 
-    type: _AccountTypeLiteral
+    type: AccountType
     """Discriminator value of the underlying ``Account`` variant."""
 
-    region: _RegionLiteral
+    region: Region
     """Mixpanel region — ``us``, ``eu``, or ``in``."""
 
     status: Literal["ok", "needs_login", "needs_token", "untested"] = "untested"
