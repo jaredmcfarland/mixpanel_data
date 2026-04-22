@@ -822,13 +822,10 @@ class Workspace:
             from mixpanel_data._internal.me import MeCache
             from mixpanel_data._internal.me import MeService as _MeService
 
-            credential_name = ""
-            region = "us"
-            if self._credentials is not None:
-                region = self._credentials.region
-                credential_name = self._credentials.username or ""
-            cache = MeCache(credential_name=credential_name)
-            self._me_service = _MeService(self._require_api_client(), cache, region)
+            cache = MeCache(account_name=self._account_name)
+            self._me_service = _MeService(
+                self._require_api_client(), cache, self._v3_session.account.region
+            )
         return self._me_service
 
     def me(self, *, force_refresh: bool = False) -> Any:

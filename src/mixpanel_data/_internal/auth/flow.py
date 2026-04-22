@@ -154,7 +154,7 @@ class OAuthFlow:
         self._storage.save_tokens(new_tokens, region=region)
         return new_tokens.access_token.get_secret_value()
 
-    def login(self, *, persist: bool = True) -> OAuthTokens:
+    def login(self, *, persist: bool = False) -> OAuthTokens:
         """Execute the full interactive OAuth PKCE login flow.
 
         Performs the following steps:
@@ -167,12 +167,13 @@ class OAuthFlow:
         7. Save tokens to local storage (when ``persist`` is True)
 
         Args:
-            persist: When True (default), the resulting :class:`OAuthTokens`
-                are written to the configured :class:`OAuthStorage` at
-                ``~/.mp/oauth/tokens_{region}.json``. v3 callers
-                (``mp.accounts.login``) opt out and persist to the
-                per-account ``~/.mp/accounts/{name}/tokens.json`` path
-                themselves.
+            persist: When True, the resulting :class:`OAuthTokens` are
+                written to the configured :class:`OAuthStorage` at
+                ``~/.mp/oauth/tokens_{region}.json`` (legacy v2 layout).
+                Defaults to ``False`` because the v3 caller
+                (``mp.accounts.login``) writes to the per-account
+                ``~/.mp/accounts/{name}/tokens.json`` path itself —
+                there is no remaining v2 caller after the B1 cleanup.
 
         Returns:
             The obtained OAuthTokens with access and optional refresh tokens.

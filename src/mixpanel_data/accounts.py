@@ -325,7 +325,7 @@ def login(
     try:
         me_svc = MeService(
             api_client=api_client,
-            cache=MeCache(),
+            cache=MeCache(account_name=name),
             region=account.region,
         )
         try:
