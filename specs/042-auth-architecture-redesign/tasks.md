@@ -11,7 +11,7 @@ description: "Task list for Authentication Architecture Redesign (042)"
 **Branch**: `042-auth-architecture-redesign`
 **Supersedes**: 038-auth-project-workspace-redesign
 
-## Status (as of 2026-04-22 — post B3 cluster `f18f1aa`; PR #126 review plan complete)
+## Status (as of 2026-04-22 — post A2 cluster `478160f`; plugin rewrite complete, 4 of 5 main clusters done)
 
 | Phase | Status | Tests | Notes |
 |-------|--------|-------|-------|
@@ -23,13 +23,13 @@ description: "Task list for Authentication Architecture Redesign (042)"
 | 6 — Targets (US6) | ✅ DONE (`5a6b876`) | +10 | `mp target add/use/list/show/remove` + 10 smoke tests |
 | 7 — Cross-cutting iteration (US7) | ⬜ PENDING (Cluster C1) | — | integration tests for cross-project / cross-account / parallel-snapshot — capability is live, dedicated tests deferred |
 | 8 — Cowork bridge (US8) | ⚠️ PARTIAL — read path live, **export side pending (Cluster C2)** | live F1.01 | `BridgeFile` v2 loader integrated into resolver; `mp account export-bridge` / `remove-bridge` writers still TODO |
-| 9 — Plugin / agent surface (US9) | ⬜ PENDING (Cluster A2) — now unblocked by A1 + B2 | — | `auth_manager.py` rewrite; plugin v5.0.0 — A1 made the public Python API final (no more `NotImplementedError` stubs) and B2 finalized the `mixpanel_data` module shape |
+| 9 — Plugin / agent surface (US9) | ✅ DONE (`478160f`) — Cluster A2 landed | +15 | `auth_manager.py` 727 → 257 LoC, zero `version >= 2` branches; plugin bumped to 5.0.0; new subprocess-based `tests/integration/test_plugin_auth_manager.py` covers every subcommand + LoC + version-branch guards. Slash command `/mixpanel-data:auth` and setup skill rewritten around the JSON contract. |
 | 10 — Conversion script (US10) | ❌ DROPPED (alpha "free to break") | — | Legacy detection deleted in `5a6b876`; legacy `ConfigManager` + `AccountInfo` + v1 `AuthBridgeFile` + `auth_credential.py` fully removed in B1 / B2; no migration path needed |
-| 11 — Polish & cleanup (Cluster D) | ⚠️ MOSTLY DONE in `5a6b876` + `f18f1aa` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard, public `mixpanel_data.auth_types` module); **still pending**: Phase 11 release polish (CLAUDE.md sweeps, version bumps, release notes, LoC budget enforcement, mutation score, security audit) | — | docs, mutation tests, version bump |
+| 11 — Polish & cleanup (Cluster D) | ⚠️ MOSTLY DONE in `5a6b876` + `f18f1aa` + `478160f` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard, public `mixpanel_data.auth_types` module, plugin v5.0.0 bump); **still pending**: Phase 11 release polish (CLAUDE.md sweeps, library version bump to 0.4.0, release notes, LoC budget enforcement, mutation score, security audit) | — | docs, mutation tests, library version bump |
 
-**Full test suite (HEAD `f18f1aa`)**: 5,906 passed @ 90.85% coverage; mypy --strict + ruff clean. (B3 added 7 unit tests pinning the new ``mixpanel_data.auth_types`` re-export contract.)
-**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `f18f1aa`.
-**Net diff for B1+A1+B2+B3**: +2,749 / −12,494 across ~157 files (9 commits — B1×3 / A1 / B2×4 / B3).
+**Full test suite (HEAD `478160f`)**: 5,921 passed @ 91.37% coverage; mypy --strict + ruff clean. (A2 added 15 subprocess-based plugin integration tests pinning the JSON contract + static LoC / version-branch guards.)
+**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `478160f`.
+**Net diff for B1+A1+B2+B3+A2**: +3,583 / −13,323 across ~163 files (10 commits — B1×3 / A1 / B2×4 / B3 / A2).
 
 ### Pragmatic deviation from the original phase plan (history)
 
@@ -304,16 +304,16 @@ Beyond these, the open clusters are A2 (plugin rewrite — Phase 9 / US9), B3 (`
 
 ### Tests for US9 (TDD — write FIRST)
 
-- [ ] T094 [P] [US9] Write `tests/integration/test_plugin_auth_manager.py` (subprocess-based) per [contracts/plugin-auth-manager.md §9](contracts/plugin-auth-manager.md): for each subcommand and each fixture config, run `python mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py <subcommand>`, parse stdout as JSON, assert response shape matches the contract. Use snapshot fixtures in `tests/fixtures/auth_manager_outputs/`. Tests MUST fail.
+- [X] T094 [P] [US9] Wrote `tests/integration/test_plugin_auth_manager.py` (subprocess-based, 15 tests across `session` / `account list/add/use` / `target list/add/use` / `bridge status` plus static `test_loc_budget_at_or_below_300` and `test_zero_version_branches` guards). Asserts contract invariants P1 (`schema_version == 1`), P2 (state in the four-element discriminated set), P5 (account fields), and P6 (project fields).
 
 ### Implementation for US9
 
-- [ ] T095 [US9] Rewrite `mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py` from scratch (~250 lines target): top-level dispatch on `sys.argv[1]` to subcommands `session`, `account`, `project`, `workspace`, `target`, `bridge`. Each subcommand calls into `mixpanel_data.accounts/.targets/.session` and emits JSON to stdout with `schema_version: 1` plus state-discriminated shape per [contracts/plugin-auth-manager.md](contracts/plugin-auth-manager.md). Errors emit `state="error"` JSON, never raw tracebacks. NO `if version >= 2` branches anywhere.
-- [ ] T096 [P] [US9] Rewrite `mixpanel-plugin/commands/auth.md` slash command (Phase 5 of source design): no v1/v2 conditional routing; calls `python auth_manager.py session`; switches on `state` field; produces a 1–2 line summary plus a single suggested next action. Preserve the existing security rule ("never ask for secrets in conversation").
-- [ ] T097 [P] [US9] Rewrite `mixpanel-plugin/skills/setup/SKILL.md`: fresh-install walkthrough using new commands (`mp account add` → `mp account login` → `mp project list` → `mp project use <id>`); NO migration step; NO references to `mp auth` or `mp projects` etc.
-- [ ] T098 [P] [US9] Update `mixpanel-plugin/README.md` and `mixpanel-plugin/plugin.json`: bump version to `5.0.0`; update command/skill descriptions to use new vocabulary (account / project / workspace / target / session); add a "Breaking changes from 4.x" section pointing to `mp config convert`.
-- [ ] T099 [P] [US9] Update `mixpanel-plugin/skills/mixpanelyst/SKILL.md` and `mixpanel-plugin/skills/dashboard-expert/SKILL.md` to reference new vocabulary where they touch auth (mostly the mixpanelyst skill).
-- [ ] T100 [US9] Verify line count: `wc -l mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py` ≤ 300. Verify no version conditionals: `grep -c "config_version\|version >= 2\|if version >=" mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py` returns 0. Run `pytest tests/integration/test_plugin_auth_manager.py -v` and confirm all subcommand tests pass.
+- [X] T095 [US9] Rewrote `mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py` (727 → 257 LoC, A2 cluster `478160f`). Two-level argparse tree (group → action) dispatched through a `(group, action) → handler` dict; lambdas factor the simple `account/project/workspace/target use` patterns; `_do(fn, *args, project_override=)` and `_with_workspace(extractor)` collapse the repeated active-block + Workspace-lifecycle boilerplate. Module-level `mixpanel_data` imports keep the body short. Zero `config_version` / `version >= 2` branches.
+- [X] T096 [P] [US9] Rewrote `mixpanel-plugin/commands/auth.md` around the discriminated `state` schema; routing per `account / project / workspace / target / bridge` subcommand groups. Security rule preserved ("NEVER ask for secrets in conversation").
+- [X] T097 [P] [US9] Rewrote `mixpanel-plugin/skills/setup/SKILL.md`: fresh-install walkthrough now `mp account add` → `mp account login` → `mp project use`. Cowork section points to `mp account export-bridge`. No migration / no `mp auth ...` references remain.
+- [X] T098 [P] [US9] Updated `mixpanel-plugin/.claude-plugin/plugin.json` (4.1.0 → 5.0.0) + `mixpanel-plugin/README.md` (components table + "Breaking changes from 4.x" section).
+- [-] T099 [P] [US9] DEFERRED — `mixpanelyst/SKILL.md` and `dashboard-expert/SKILL.md` don't currently reference legacy `mp auth ...` vocabulary; nothing to rewrite. Recheck during the Cluster D doc sweep.
+- [X] T100 [US9] Verified `wc -l auth_manager.py == 257` (≤ 300 budget) and `grep -c "config_version\|version >= 2\|if version >=" == 0` via the static guards in `test_plugin_auth_manager.py::TestStaticGuards`. All 15 subprocess tests pass.
 
 **Checkpoint**: Plugin surface uses new vocabulary; agent slash command and setup skill updated; US9 confirmed.
 

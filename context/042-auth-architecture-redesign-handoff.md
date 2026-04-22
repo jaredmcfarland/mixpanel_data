@@ -1,16 +1,16 @@
 # Session Handoff: 042 Auth Architecture Redesign
 
-**Branch:** `042-auth-architecture-redesign` · **Last commit:** `f18f1aa` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
-**Suite:** 5,906 pass / 90.85% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
-**Generated:** 2026-04-22 (post-B3 — PR #126 review plan complete)
+**Branch:** `042-auth-architecture-redesign` · **Last commit:** `478160f` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
+**Suite:** 5,921 pass / 91.37% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
+**Generated:** 2026-04-22 (post-A2 — plugin rewrite + JSON contract complete)
 
 ---
 
 ## TL;DR for the next session
 
-🎉 **The PR #126 review plan is complete.** All 35 of 35 review fixes have landed across B1 (Workspace flatten + bridge/config legacy deletion), A1 (OAuth wiring trio — refresh + `mp account login` + per-request bearer), B2 (Phase 4 deferred deletions — T043 / T044 / T045 / T047 / T048 / T050), and B3 (Fix 27 — public `mixpanel_data.auth_types` module). The auth subsystem is at its target shape and ready for the remaining 1.0 polish.
+🎉 **PR #126 review plan + A2 plugin rewrite are complete.** All 35 of 35 review fixes plus the plugin / agent surface (Phase 9 / US9) have landed across B1 (Workspace flatten + bridge/config legacy deletion), A1 (OAuth wiring trio — refresh + `mp account login` + per-request bearer), B2 (Phase 4 deferred deletions — T043 / T044 / T045 / T047 / T048 / T050), B3 (Fix 27 — public `mixpanel_data.auth_types` module), and **A2 (`478160f`) — `auth_manager.py` 727 → 257 LoC, plugin v5.0.0, JSON contract `schema_version: 1`**. The auth subsystem and its plugin surface are at target shape.
 
-Open spec-level workstreams (not part of the PR #126 review): **A2** (plugin rewrite — Phase 9 / US9), **C1** (cross-cutting iteration tests — Phase 7 / US7), **C2** (bridge writer — Phase 8 / US8), and **D** (Phase 11 release polish — CLAUDE.md sweeps, version bumps, release notes, mutation testing, security audit). Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
+Open spec-level workstreams (not part of the PR #126 review): **C1** (cross-cutting iteration tests — Phase 7 / US7), **C2** (bridge writer — Phase 8 / US8), and **D** (Phase 11 release polish — CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit). Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
 
 ---
 
@@ -38,6 +38,9 @@ Open spec-level workstreams (not part of the PR #126 review): **A2** (plugin rew
 ## What landed (recent commits, newest first)
 
 ```
+478160f feat(042): rewrite plugin auth_manager + bump v5.0.0 (A2 / Phase 9 / US9)
+d20630e docs(042): fix mkdocs-strict build — replace removed AccountInfo with v3 Account types
+07d55cf docs(042): refresh trackers — PR #126 review plan complete (B3 / Fix 27 done)
 f18f1aa feat(042): add public mixpanel_data.auth_types module (B3 / Fix 27)
 86e56d7 docs(042): refresh trackers for B2 cluster (T043/T044/T045/T047/T048/T050 done)
 50ccd9d feat(042): delete auth_credential.py + thin auth.py re-export (B2 T047 / T048)
@@ -54,6 +57,13 @@ cd044b7 docs(042): refresh trackers for A1 cluster (Fix 16 / 17 / 18 done)
 93e3081 fix(042): align live auth tests with tightened PR #126 behavior
 5a6b876 feat(042): execute PR #126 review plan — 28 of 35 fixes (P0 + P1)
 ```
+
+A2 cluster (`478160f`, +834 / −829 across 6 files):
+- **T095 / T100 — `mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py`** rewritten 727 → **257 LoC**. Two-level argparse (group → action) dispatched through a `_DISPATCH: dict[(str, str | None), Handler]`; `_do(fn, *args, project_override=)` and `_with_workspace(extractor)` factor the repeated patterns; module-level `from mixpanel_data import Workspace, accounts, session as sess, targets` + `# fmt: skip` on a few dict literals keep the body inside the LoC budget. Zero `config_version` / `version >= 2` branches. JSON output exactly per `contracts/plugin-auth-manager.md` (`schema_version: 1` + state-discriminated `ok` / `needs_account` / `needs_project` / `error`); errors emit JSON to stdout with exit 0 so the slash command can `json.loads` unconditionally.
+- **T094 — `tests/integration/test_plugin_auth_manager.py`** (15 subprocess-based tests). Covers `session` (3 states), `account list/add/use` (4 cases including missing-account error path), `target list/add/use` (3 cases — empty, populated, atomic apply), `bridge status` (absent + present), plus `TestStaticGuards` enforcing `wc -l ≤ 300` and zero version-branch tokens. Hermetic `_run()` helper sets a near-empty env (PATH + HOME + MP_CONFIG_PATH + PYTHONPATH + venv vars) so MP_* leakage from the developer shell can't pollute the subprocess.
+- **T096 — `mixpanel-plugin/commands/auth.md`** rewritten around the discriminated `state` schema; routing per `account / project / workspace / target / bridge` subcommand groups. Security rule preserved (NEVER ask for secrets in conversation).
+- **T097 — `mixpanel-plugin/skills/setup/SKILL.md`**: fresh-install walkthrough now `mp account add` → `mp account login` → `mp project use`. Cowork section points to `mp account export-bridge`.
+- **T098 — `.claude-plugin/plugin.json` 4.1.0 → 5.0.0** + README "Breaking changes from 4.x" callout listing the slash-command vocabulary change, the JSON `schema_version: 1` contract, and the v2 bridge file format.
 
 B3 cluster (`f18f1aa`, +165 / −23 across 4 files):
 - New ``src/mixpanel_data/auth_types.py`` consolidates the v3 auth surface into one canonical re-export module: ``Account`` / variants / ``Region`` / ``Session`` / ``Project`` / ``WorkspaceRef`` / ``ActiveSession`` / ``OAuthTokens`` / ``OAuthClientInfo`` / ``TokenResolver`` / ``OnDiskTokenResolver`` / ``BridgeFile`` / ``load_bridge``.
@@ -101,13 +111,15 @@ Landed in `4d21c3e`. `oauth_browser` is no longer degraded:
 
 `tests/live/conftest_042.py:copy_user_oauth_tokens_to_account` is no longer the only way to seed v3 OAuth tokens — `mp account login` works on a clean install. The helper remains as a non-interactive convenience for live tests (avoids triggering a browser per test run).
 
-#### A2. Plugin rewrite (Phase 9 / US9, T094–T100)
-- Rewrite `mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py` from ~727 → ≤300 lines, zero `if version >= 2` branches, JSON output per `contracts/plugin-auth-manager.md`
-- Update `mixpanel-plugin/commands/auth.md`, `mixpanel-plugin/skills/setup/SKILL.md`, `mixpanel-plugin/README.md`, `mixpanel-plugin/plugin.json` (bump → 5.0.0)
-- New integration test: `tests/integration/test_plugin_auth_manager.py` (subprocess-based)
-- Verification gates: `wc -l auth_manager.py ≤ 300` and `grep -c "config_version\|version >= 2" == 0`
+#### A2. Plugin rewrite (Phase 9 / US9, T094–T100) — ✅ DONE
 
-Estimated: ~1 day. Should land AFTER A1 + B3 so the public Python surface is final.
+Landed in `478160f`. See the "What landed" A2 cluster breakdown above. Verification gates met:
+- `wc -l mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py == 257` (≤ 300 budget).
+- `grep -c "config_version\|version >= 2\|if version >=" mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py == 0`.
+- `tests/integration/test_plugin_auth_manager.py` — 15 / 15 pass.
+- Plugin manifest at v5.0.0 with explicit "Breaking changes from 4.x" callout in README.
+
+T099 (`mixpanelyst/SKILL.md` + `dashboard-expert/SKILL.md` vocabulary refresh) was deferred — neither file currently references legacy `mp auth ...` vocabulary, so there is nothing to rewrite. Recheck during the Cluster D doc sweep.
 
 ### Cluster B — Architectural cleanup
 
@@ -189,12 +201,12 @@ Necessary for Cowork VM users to export credentials from host → guest. Estimat
 2. ~~**A1 — OAuth wiring trio**~~ ✅ DONE (`4d21c3e`, +645 LoC, +8 unit tests)
 3. ~~**B2 — Phase 4 deferred deletions**~~ ✅ DONE (4 commits, −2,100 LoC)
 4. ~~**B3 — auth_types public module**~~ ✅ DONE (`f18f1aa`, +165 LoC, +7 unit tests)
-5. **A2 — plugin / auth_manager rewrite** ← **next workstream** (Phase 9 / US9 — `mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py` from ~727 → ≤300 LoC; plugin v5.0.0 bump)
-6. **C2 — bridge writer** (small, well-specified — `mp account export-bridge` writers)
-7. **C1 — cross-cutting iteration tests** (pure test additions)
-8. **D — Phase 11 polish** (CLAUDE.md sweeps, version bumps, release notes, mutation testing, security audit)
+5. ~~**A2 — plugin / auth_manager rewrite**~~ ✅ DONE (`478160f`, 727 → 257 LoC, +15 subprocess tests, plugin v5.0.0)
+6. **C2 — bridge writer** ← **next workstream** (small, well-specified — `mp account export-bridge` / `remove-bridge` writers; CLI wiring already in place as Phase 8 stubs)
+7. **C1 — cross-cutting iteration tests** (pure test additions — capability is already live)
+8. **D — Phase 11 polish** (CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit)
 
-**Remaining estimate:** ~2 focused days to 1.0-ready.
+**Remaining estimate:** ~1.5 focused days to 1.0-ready.
 
 ---
 
@@ -203,7 +215,7 @@ Necessary for Cowork VM users to export credentials from host → guest. Estimat
 ```bash
 # Confirm branch + HEAD
 git status                    # should show branch=042-auth-architecture-redesign, clean tree
-git log --oneline -12         # top should be f18f1aa / 86e56d7 / 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291 / 12471c6
+git log --oneline -14         # top should be 478160f (A2) / d20630e / 07d55cf / f18f1aa / 86e56d7 / 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291
 
 # Confirm test suite green (slow — ~3-5 min)
 just check
