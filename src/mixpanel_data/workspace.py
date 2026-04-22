@@ -37,13 +37,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-import pydantic
-
 if TYPE_CHECKING:
-    from mixpanel_data._internal.auth_credential import (
-        AuthCredential,
-        ProjectContext,
-    )
     from mixpanel_data._internal.me import MeProjectInfo, MeService, MeWorkspaceInfo
 
 from mixpanel_data._internal.api_client import (
@@ -760,29 +754,7 @@ class Workspace:
         client = self._get_api_client()
         return client.workspace_id
 
-    def set_workspace_id(self, workspace_id: int | None) -> None:
-        """Set or clear the workspace ID for scoped App API requests.
-
-        When set, App API requests that use ``maybe_scoped_path()`` or
-        ``require_scoped_path()`` will target the specified workspace.
-        Setting to ``None`` clears the workspace scope.
-
-        Args:
-            workspace_id: Workspace ID to use, or ``None`` to clear.
-
-        Example:
-            ```python
-            ws = Workspace()
-            ws.set_workspace_id(789)
-            assert ws.workspace_id == 789
-
-            ws.set_workspace_id(None)
-            assert ws.workspace_id is None
-            ```
-        """
-        self._initial_workspace_id = workspace_id
-        client = self._get_api_client()
-        client.set_workspace_id(workspace_id)
+    # set_workspace_id removed in B2 (T050 / FR-038): use ``ws.use(workspace=N)``.
 
     def list_workspaces(self) -> list[PublicWorkspace]:
         """List all public workspaces for the current project.
@@ -938,127 +910,12 @@ class Workspace:
         result: list[MeWorkspaceInfo] = self._me_svc.list_workspaces(project_id=pid)
         return result
 
-    def switch_project(self, project_id: str, workspace_id: int | None = None) -> None:
-        """Switch to a different project in-session.
-
-        Creates a new API client targeting ``project_id`` while keeping the
-        same authentication credentials and HTTP transport. Clears the
-        discovery cache and /me service so subsequent calls use the new
-        project context.
-
-        Args:
-            project_id: The project ID to switch to.
-            workspace_id: Optional workspace ID within the new project.
-                If ``None`` and the project has workspaces, the default
-                workspace will be auto-discovered on demand.
-
-        Example:
-            ```python
-            ws = Workspace(account="demo-sa", project="111")
-            ws.switch_project("222", workspace_id=42)
-            # Subsequent calls now target project 222
-            ```
-        """
-        old_client = self._require_api_client()
-        new_client = old_client.with_project(project_id, workspace_id=workspace_id)
-        self._api_client = new_client
-        self._credentials = new_client._credentials
-        self._initial_workspace_id = workspace_id
-
-        # Clear cached services so they rebuild against new project
-        self._discovery = None
-        self._live_query = None
-        self._me_service = None
-
-    def switch_workspace(self, workspace_id: int) -> None:
-        """Switch workspace within the current project.
-
-        Updates the workspace ID on the existing API client without
-        changing the project binding.
-
-        Args:
-            workspace_id: Workspace ID to switch to. Must be positive.
-
-        Example:
-            ```python
-            ws = Workspace(account="demo-sa", project="111")
-            ws.switch_workspace(3448413)
-            assert ws.workspace_id == 3448413
-            ```
-        """
-        self.set_workspace_id(workspace_id)
-
-    @property
-    def current_project(self) -> ProjectContext:
-        """Return the current project context as a ``ProjectContext``.
-
-        Scheduled for deletion in B2 (T050) — prefer :attr:`project` and
-        :attr:`workspace` directly.
-
-        Returns:
-            ``ProjectContext`` with the active project and workspace info.
-        """
-        from mixpanel_data._internal.auth_credential import ProjectContext
-
-        pid = self._credentials.project_id
-        wid = self.workspace_id
-
-        # Try to enrich with human-readable names from /me cache
-        project_name: str | None = None
-        workspace_name: str | None = None
-        try:
-            proj_info = self._me_svc.find_project(pid)
-            if proj_info is not None:
-                project_name = proj_info.name
-            if wid is not None:
-                for ws_info in self._me_svc.list_workspaces(project_id=pid):
-                    if ws_info.id == wid:
-                        workspace_name = ws_info.name
-                        break
-        except ConfigError:
-            # /me not available for this credential type; names are best-effort.
-            pass
-        except (MixpanelDataError, pydantic.ValidationError) as e:
-            logger.debug("Could not enrich project context with /me names: %s", e)
-
-        return ProjectContext(
-            project_id=pid,
-            workspace_id=wid,
-            project_name=project_name,
-            workspace_name=workspace_name,
-        )
-
-    @property
-    def current_credential(self) -> AuthCredential:
-        """Return the current authentication credential as an ``AuthCredential``.
-
-        Synthesizes the value from the bound :class:`Session`. Scheduled
-        for deletion in B2 (T050) — prefer :attr:`account` directly.
-
-        Returns:
-            ``AuthCredential`` describing the active identity.
-        """
-        from mixpanel_data._internal.auth_credential import (
-            AuthCredential,
-            CredentialType,
-        )
-        from mixpanel_data._internal.config import AuthMethod
-
-        creds = self._credentials
-        if creds.auth_method == AuthMethod.oauth:
-            return AuthCredential(
-                name=self._account_name,
-                type=CredentialType.oauth,
-                region=creds.region,
-                oauth_access_token=creds.oauth_access_token,
-            )
-        return AuthCredential(
-            name=self._account_name,
-            type=CredentialType.service_account,
-            region=creds.region,
-            username=creds.username,
-            secret=creds.secret,
-        )
+    # switch_project / switch_workspace / current_project / current_credential
+    # removed in B2 (T050 / FR-038):
+    #   - switch_project(P, workspace_id=W)  → ws.use(project=P, workspace=W)
+    #   - switch_workspace(W)                 → ws.use(workspace=W)
+    #   - ws.current_project                  → ws.project / ws.workspace
+    #   - ws.current_credential               → ws.account
 
     @property
     def _discovery_service(self) -> DiscoveryService:
