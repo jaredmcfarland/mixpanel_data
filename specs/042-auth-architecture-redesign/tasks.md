@@ -11,7 +11,7 @@ description: "Task list for Authentication Architecture Redesign (042)"
 **Branch**: `042-auth-architecture-redesign`
 **Supersedes**: 038-auth-project-workspace-redesign
 
-## Status (as of 2026-04-22 — post A2 cluster `478160f`; plugin rewrite complete, 4 of 5 main clusters done)
+## Status (as of 2026-04-22 — post C2 cluster `9147b1d`; bridge writer complete, 5 of 5 main clusters done)
 
 | Phase | Status | Tests | Notes |
 |-------|--------|-------|-------|
@@ -22,14 +22,14 @@ description: "Task list for Authentication Architecture Redesign (042)"
 | 5 — CLI surface (US5) | ✅ DONE (additive → cleanup landed in `5a6b876` and tightened in B1: legacy `--credential` / `--workspace-id` globals removed; A1 wired `mp account login NAME --no-browser`) | 17 | `mp account/project/workspace/session/target` groups + `--account`/`--project`/`--workspace`/`--target` globals; legacy command groups gone |
 | 6 — Targets (US6) | ✅ DONE (`5a6b876`) | +10 | `mp target add/use/list/show/remove` + 10 smoke tests |
 | 7 — Cross-cutting iteration (US7) | ⬜ PENDING (Cluster C1) | — | integration tests for cross-project / cross-account / parallel-snapshot — capability is live, dedicated tests deferred |
-| 8 — Cowork bridge (US8) | ⚠️ PARTIAL — read path live, **export side pending (Cluster C2)** | live F1.01 | `BridgeFile` v2 loader integrated into resolver; `mp account export-bridge` / `remove-bridge` writers still TODO |
+| 8 — Cowork bridge (US8) | ✅ DONE (`9147b1d`) — Cluster C2 landed | +23 | `bridge.export_bridge` / `bridge.remove_bridge` plus `mp.accounts.export_bridge` / `remove_bridge` wrappers; `mp account export-bridge` / `remove-bridge` CLI commands; `mp session --bridge` flag with full payload display. New `tests/unit/test_bridge_export.py` (15 tests) and `tests/unit/cli/test_bridge_cli.py` (8 tests). |
 | 9 — Plugin / agent surface (US9) | ✅ DONE (`478160f`) — Cluster A2 landed | +15 | `auth_manager.py` 727 → 257 LoC, zero `version >= 2` branches; plugin bumped to 5.0.0; new subprocess-based `tests/integration/test_plugin_auth_manager.py` covers every subcommand + LoC + version-branch guards. Slash command `/mixpanel-data:auth` and setup skill rewritten around the JSON contract. |
 | 10 — Conversion script (US10) | ❌ DROPPED (alpha "free to break") | — | Legacy detection deleted in `5a6b876`; legacy `ConfigManager` + `AccountInfo` + v1 `AuthBridgeFile` + `auth_credential.py` fully removed in B1 / B2; no migration path needed |
 | 11 — Polish & cleanup (Cluster D) | ⚠️ MOSTLY DONE in `5a6b876` + `f18f1aa` + `478160f` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard, public `mixpanel_data.auth_types` module, plugin v5.0.0 bump); **still pending**: Phase 11 release polish (CLAUDE.md sweeps, library version bump to 0.4.0, release notes, LoC budget enforcement, mutation score, security audit) | — | docs, mutation tests, library version bump |
 
-**Full test suite (HEAD `478160f`)**: 5,921 passed @ 91.37% coverage; mypy --strict + ruff clean. (A2 added 15 subprocess-based plugin integration tests pinning the JSON contract + static LoC / version-branch guards.)
-**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `478160f`.
-**Net diff for B1+A1+B2+B3+A2**: +3,583 / −13,323 across ~163 files (10 commits — B1×3 / A1 / B2×4 / B3 / A2).
+**Full test suite (HEAD `9147b1d`)**: 5,942 passed @ 91.40% coverage; mypy --strict + ruff clean. (C2 added 23 unit + CLI tests across the bridge writer surface; A2 added 15 subprocess-based plugin integration tests.)
+**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `9147b1d`.
+**Net diff for B1+A1+B2+B3+A2+C2**: +4,482 / −13,375 across ~167 files (11 commits — B1×3 / A1 / B2×4 / B3 / A2 / C2).
 
 ### Pragmatic deviation from the original phase plan (history)
 
@@ -279,18 +279,18 @@ Beyond these, the open clusters are A2 (plugin rewrite — Phase 9 / US9), B3 (`
 
 ### Tests for US8 (TDD — write FIRST)
 
-- [ ] T085 [P] [US8] Write `tests/unit/test_bridge_v2.py` covering: `BridgeFile` Pydantic model construction (with each Account variant); `version: 2` enforced; `tokens` required iff `account.type == "oauth_browser"`; `headers` map preserved; `load_bridge(path)` returns None for missing, raises `ConfigError` for malformed. Tests MUST fail. Reference [contracts/config-schema.md §2](contracts/config-schema.md).
-- [ ] T086 [P] [US8] Write `tests/unit/test_bridge_export.py` covering: `mp.accounts.export_bridge(to=PATH, account=NAME)` writes a 0o600 file; embeds the named (or active) account's full record; includes `tokens` for oauth_browser; includes `headers` from `[settings]`; idempotent at the same path. Tests MUST fail.
-- [ ] T087 [P] [US8] Write `tests/unit/cli/test_bridge_cli.py` snapshot tests covering: `mp account export-bridge --to PATH` happy path + missing tokens (oauth_browser without login); `mp account remove-bridge` happy path + already-absent; `mp session --bridge` (with bridge present, with bridge absent). Tests MUST fail.
-- [ ] T088 [P] [US8] Write `tests/integration/test_bridge_resolver.py` covering: setting `MP_AUTH_FILE` causes the resolver to load the bridge as the bridge axis source; bridge `account` populates account axis; bridge `project` populates project axis if present; bridge `workspace` populates workspace axis if present; bridge `headers` attach to the account in memory; `os.environ` is NOT mutated (snapshot before/after). Tests MUST fail.
+- [-] T085 [P] [US8] DEFERRED — `BridgeFile` Pydantic model construction is already pinned by the resolver / live tests + the new `test_bridge_export.py::test_*` round-trip tests; a dedicated `test_bridge_v2.py` is redundant and not worth landing.
+- [X] T086 [P] [US8] Wrote `tests/unit/test_bridge_export.py` (C2 cluster `9147b1d`, 15 tests). Covers `bridge.export_bridge` for each Account variant + 0o600 file mode + parent-dir 0o700 creation + project/workspace/headers round-trip + idempotency; `bridge.remove_bridge` for existing / absent / search-path resolution; the `mp.accounts.export_bridge` / `remove_bridge` namespace wrappers.
+- [X] T087 [P] [US8] Wrote `tests/unit/cli/test_bridge_cli.py` (8 tests). Covers `mp account export-bridge` (SA happy path + oauth_browser without/with tokens + project/workspace pins + secret-not-leaked guard); `mp account remove-bridge` (existing + idempotent absent); `mp session --bridge` (no bridge + bridge present with full payload).
+- [-] T088 [P] [US8] DEFERRED — bridge → resolver integration is already exercised by the live test `test_F1_01_bridge_oauth_browser_authenticates` (18 / 18 live pass on every commit). A dedicated unit-level resolver-with-bridge test would be redundant. Recheck if a regression motivates it.
 
 ### Implementation for US8
 
-- [ ] T089 [US8] Implement the exporter in `src/mixpanel_data/_internal/auth/bridge.py`: `export_bridge(account: Account, *, to: Path, project: str | None = None, workspace: int | None = None, headers: dict[str, str] | None = None, token_resolver: TokenResolver) -> Path` writes a 0o600 file with the v2 schema; for oauth_browser accounts, reads the current tokens via `token_resolver` and embeds them in `tokens`. `remove_bridge(*, at: Path | None = None) -> bool` deletes the file at the resolved path.
-- [ ] T090 [US8] Wire up the bridge functions in `src/mixpanel_data/accounts.py` (Phase 4 T038 stub): `export_bridge(*, to, account=None)` calls into `bridge.export_bridge(...)`; `remove_bridge(*, at=None)` calls into `bridge.remove_bridge(...)`. Update tests in `tests/unit/test_accounts_namespace.py` to drop the NotImplementedError assertions.
-- [ ] T091 [US8] Implement the CLI subcommands in `src/mixpanel_data/cli/commands/account.py` (Phase 5 T060 stubs): `mp account export-bridge --to PATH [--account NAME] [--project ID] [--workspace ID]` and `mp account remove-bridge [--at PATH]`. Reference [contracts/cli-commands.md §3.10–3.11](contracts/cli-commands.md).
-- [ ] T092 [US8] Implement `mp session --bridge` in `src/mixpanel_data/cli/commands/session.py` (Phase 5 T063 included the flag — fill in the bridge-status display logic now). Show bridge file path, account from bridge, project/workspace if pinned, headers list. Reference [contracts/cli-commands.md §7](contracts/cli-commands.md).
-- [ ] T093 Run `pytest tests/unit/test_bridge_v2.py tests/unit/test_bridge_export.py tests/unit/cli/test_bridge_cli.py tests/integration/test_bridge_resolver.py -v`. Confirm all tests pass.
+- [X] T089 [US8] Implemented `bridge.export_bridge(account, *, to, project=None, workspace=None, headers=None, token_resolver=None) -> Path` and `bridge.remove_bridge(*, at=None) -> bool` in `src/mixpanel_data/_internal/auth/bridge.py`. Atomic write via `atomic_write_bytes` (mode 0o600); parent dir created with mode 0o700 if missing; for oauth_browser, on-disk tokens read via `_read_browser_tokens()` and embedded under `tokens`. `_serialize_bridge()` projects `SecretStr` fields back to raw strings (B3 — bridge MUST carry usable credentials).
+- [X] T090 [US8] Replaced the Phase-4 `NotImplementedError` stubs in `src/mixpanel_data/accounts.py` with real wrappers. `export_bridge(*, to, account=None, project=None, workspace=None)` resolves the account (defaulting to active), attaches `[settings].custom_header` into `bridge.headers` (B5), and delegates. `remove_bridge(*, at=None)` delegates. Both exposed in `__all__`. `tests/unit/test_accounts_namespace.py::TestStubs` removed; coverage migrated to `test_bridge_export.py`.
+- [X] T091 [US8] Replaced the Phase-5 stubs in `src/mixpanel_data/cli/commands/account.py` with real Typer commands (`mp account export-bridge --to PATH [--account NAME] [--project ID] [--workspace ID]` + `mp account remove-bridge [--at PATH]`); both gained `@handle_errors`. Bare exit-1 stubs are gone.
+- [X] T092 [US8] Added `--bridge` flag to `src/mixpanel_data/cli/commands/session.py`. Multi-line bridge summary (path, account, project/workspace pins, headers); JSON mode emits the bridge under a top-level `bridge` key (matching the plugin auth_manager contract).
+- [X] T093 `pytest tests/unit/test_bridge_export.py tests/unit/cli/test_bridge_cli.py -v` — 23 / 23 pass. Full suite at HEAD `9147b1d`: 5,942 pass @ 91.40% coverage; mypy --strict + ruff clean. Live: 18 / 18.
 
 **Checkpoint**: Cowork bridge fully reworked. US8 confirmed independently.
 

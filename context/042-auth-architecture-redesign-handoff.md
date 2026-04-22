@@ -1,16 +1,16 @@
 # Session Handoff: 042 Auth Architecture Redesign
 
-**Branch:** `042-auth-architecture-redesign` · **Last commit:** `478160f` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
-**Suite:** 5,921 pass / 91.37% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
-**Generated:** 2026-04-22 (post-A2 — plugin rewrite + JSON contract complete)
+**Branch:** `042-auth-architecture-redesign` · **Last commit:** `9147b1d` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
+**Suite:** 5,942 pass / 91.40% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
+**Generated:** 2026-04-22 (post-C2 — bridge writer + CLI complete)
 
 ---
 
 ## TL;DR for the next session
 
-🎉 **PR #126 review plan + A2 plugin rewrite are complete.** All 35 of 35 review fixes plus the plugin / agent surface (Phase 9 / US9) have landed across B1 (Workspace flatten + bridge/config legacy deletion), A1 (OAuth wiring trio — refresh + `mp account login` + per-request bearer), B2 (Phase 4 deferred deletions — T043 / T044 / T045 / T047 / T048 / T050), B3 (Fix 27 — public `mixpanel_data.auth_types` module), and **A2 (`478160f`) — `auth_manager.py` 727 → 257 LoC, plugin v5.0.0, JSON contract `schema_version: 1`**. The auth subsystem and its plugin surface are at target shape.
+🎉 **PR #126 review plan + A2 plugin rewrite + C2 bridge writer are complete.** All 35 of 35 review fixes plus the plugin / agent surface (Phase 9 / US9) plus the Cowork bridge writer (Phase 8 / US8) have landed across B1 (Workspace flatten + bridge/config legacy deletion), A1 (OAuth wiring trio — refresh + `mp account login` + per-request bearer), B2 (Phase 4 deferred deletions — T043 / T044 / T045 / T047 / T048 / T050), B3 (Fix 27 — public `mixpanel_data.auth_types` module), A2 (`478160f`) — `auth_manager.py` 727 → 257 LoC, plugin v5.0.0, JSON contract `schema_version: 1`, and **C2 (`9147b1d`) — `bridge.export_bridge` / `bridge.remove_bridge` + `mp account export-bridge` / `remove-bridge` CLI + `mp session --bridge` flag**. The auth subsystem, its plugin surface, and the Cowork courier story are all at target shape.
 
-Open spec-level workstreams (not part of the PR #126 review): **C1** (cross-cutting iteration tests — Phase 7 / US7), **C2** (bridge writer — Phase 8 / US8), and **D** (Phase 11 release polish — CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit). Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
+Open spec-level workstreams (not part of the PR #126 review): **C1** (cross-cutting iteration tests — Phase 7 / US7) and **D** (Phase 11 release polish — CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit). Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
 
 ---
 
@@ -38,6 +38,8 @@ Open spec-level workstreams (not part of the PR #126 review): **C1** (cross-cutt
 ## What landed (recent commits, newest first)
 
 ```
+9147b1d feat(042): bridge writer + mp account export-bridge / remove-bridge (C2 / Phase 8)
+668ceb4 docs(042): refresh trackers — A2 cluster (plugin rewrite) done
 478160f feat(042): rewrite plugin auth_manager + bump v5.0.0 (A2 / Phase 9 / US9)
 d20630e docs(042): fix mkdocs-strict build — replace removed AccountInfo with v3 Account types
 07d55cf docs(042): refresh trackers — PR #126 review plan complete (B3 / Fix 27 done)
@@ -57,6 +59,15 @@ cd044b7 docs(042): refresh trackers for A1 cluster (Fix 16 / 17 / 18 done)
 93e3081 fix(042): align live auth tests with tightened PR #126 behavior
 5a6b876 feat(042): execute PR #126 review plan — 28 of 35 fixes (P0 + P1)
 ```
+
+C2 cluster (`9147b1d`, +899 / −52 across 7 files):
+- **T089 — `_internal/auth/bridge.py`** gained `export_bridge(account, *, to, project=None, workspace=None, headers=None, token_resolver=None) -> Path` (atomic 0o600 write via `atomic_write_bytes`; parent dir auto-created at 0o700; for `oauth_browser`, on-disk tokens read via `_read_browser_tokens()` and embedded under `tokens`) and `remove_bridge(*, at=None) -> bool` (resolves path the same way as `load_bridge`; returns False when already absent — idempotent). Private `_serialize_bridge()` projects `SecretStr` fields back to raw strings (B3 — bridge MUST carry usable credentials, redacted output would defeat the courier purpose).
+- **T090 — `accounts.py`** wrappers replace the Phase-4 `NotImplementedError` stubs. `export_bridge(*, to, account=None, project=None, workspace=None)` resolves the account (defaults to active), pulls `[settings].custom_header` into `bridge.headers` (B5), and delegates. `remove_bridge(*, at=None)` delegates. Both exposed in `__all__`.
+- **T091 — `cli/commands/account.py`** `mp account export-bridge` and `mp account remove-bridge` are now real Typer commands gained `@handle_errors`; the prior bare exit-1 stubs are gone.
+- **T092 — `cli/commands/session.py`** added `--bridge` flag. Multi-line summary (path / account / project pin / workspace pin / headers) for text mode; JSON mode emits the bridge under a top-level `bridge` key (matches the plugin auth_manager contract for re-use by the slash command).
+- **T086 — `tests/unit/test_bridge_export.py`** (15 tests). `bridge.export_bridge` for each Account variant + 0o600 file mode + parent-dir 0o700 creation + project/workspace/headers round-trip + idempotency; `bridge.remove_bridge` for existing / absent / search-path resolution; `mp.accounts` namespace wrappers (named / active / settings header propagation / removal).
+- **T087 — `tests/unit/cli/test_bridge_cli.py`** (8 tests). `mp account export-bridge` (SA happy path + oauth_browser without/with tokens + project/workspace pins + secret-not-in-stdout guard); `mp account remove-bridge` (existing + idempotent absent); `mp session --bridge` (no bridge + bridge-present with full payload).
+- **`tests/unit/test_accounts_namespace.py`** dropped the `TestStubs` class — coverage migrated to `test_bridge_export.py`.
 
 A2 cluster (`478160f`, +834 / −829 across 6 files):
 - **T095 / T100 — `mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py`** rewritten 727 → **257 LoC**. Two-level argparse (group → action) dispatched through a `_DISPATCH: dict[(str, str | None), Handler]`; `_do(fn, *args, project_override=)` and `_with_workspace(extractor)` factor the repeated patterns; module-level `from mixpanel_data import Workspace, accounts, session as sess, targets` + `# fmt: skip` on a few dict literals keep the body inside the LoC budget. Zero `config_version` / `version >= 2` branches. JSON output exactly per `contracts/plugin-auth-manager.md` (`schema_version: 1` + state-discriminated `ok` / `needs_account` / `needs_project` / `error`); errors emit JSON to stdout with exit 0 so the slash command can `json.loads` unconditionally.
@@ -157,16 +168,14 @@ Standalone refactor, can land any time after B1. Estimated: ~half day.
 
 Pure test additions. Land any time. Estimated: ~half day.
 
-#### C2. Cowork bridge WRITER (Phase 8 / US8, T089–T093) — P2
+#### C2. Cowork bridge WRITER (Phase 8 / US8, T089–T093) — ✅ DONE
 
-**Read path ✅ done** (resolver + live test F1.01). Missing the export side:
-- `_internal/auth/bridge.py:export_bridge(account, *, to, project=None, workspace=None, headers=None, token_resolver) -> Path` — writes 0o600 v2 schema; for `oauth_browser`, reads tokens via resolver and embeds them
-- `_internal/auth/bridge.py:remove_bridge(*, at=None) -> bool`
-- Wire into `mp.accounts.export_bridge()` / `remove_bridge()` (currently `NotImplementedError` stubs in `accounts.py`)
-- CLI commands: `mp account export-bridge --to PATH [--account NAME] [--project ID] [--workspace ID]`, `mp account remove-bridge [--at PATH]`
-- `mp session --bridge` flag display logic in `cli/commands/session.py`
-
-Necessary for Cowork VM users to export credentials from host → guest. Estimated: ~half day.
+Landed in `9147b1d`. See the "What landed" C2 cluster breakdown above. Verification:
+- `bridge.export_bridge` writes a v2 bridge file (0o600) embedding the full Account record; for `oauth_browser`, on-disk OAuth tokens are read directly and embedded under `tokens` so the bridge consumer authenticates without a fresh PKCE round.
+- `bridge.remove_bridge` is idempotent (returns False on absent, never raises).
+- `mp account export-bridge --to PATH [--account NAME] [--project ID] [--workspace ID]` and `mp account remove-bridge [--at PATH]` are wired through `@handle_errors`.
+- `mp session --bridge` shows the bridge file source (path + account + project/workspace pins + headers) when present; "No bridge file found" otherwise. JSON mode matches the plugin contract.
+- Tests: 15 unit (`test_bridge_export.py`) + 8 CLI (`test_bridge_cli.py`); the live test `F1_01_bridge_oauth_browser_authenticates` exercises the read path against a real bridge file.
 
 #### C3. Phase 5 leftover polish
 - T058a: help-examples snapshot tests
@@ -202,11 +211,11 @@ Necessary for Cowork VM users to export credentials from host → guest. Estimat
 3. ~~**B2 — Phase 4 deferred deletions**~~ ✅ DONE (4 commits, −2,100 LoC)
 4. ~~**B3 — auth_types public module**~~ ✅ DONE (`f18f1aa`, +165 LoC, +7 unit tests)
 5. ~~**A2 — plugin / auth_manager rewrite**~~ ✅ DONE (`478160f`, 727 → 257 LoC, +15 subprocess tests, plugin v5.0.0)
-6. **C2 — bridge writer** ← **next workstream** (small, well-specified — `mp account export-bridge` / `remove-bridge` writers; CLI wiring already in place as Phase 8 stubs)
-7. **C1 — cross-cutting iteration tests** (pure test additions — capability is already live)
+6. ~~**C2 — bridge writer**~~ ✅ DONE (`9147b1d`, +899 / −52 across 7 files, +23 tests)
+7. **C1 — cross-cutting iteration tests** ← **next workstream** (pure test additions — capability is already live; just covering cross-project, cross-account, parallel-snapshot, and CLI shell-loop scenarios)
 8. **D — Phase 11 polish** (CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit)
 
-**Remaining estimate:** ~1.5 focused days to 1.0-ready.
+**Remaining estimate:** ~1 focused day to 1.0-ready.
 
 ---
 
@@ -215,7 +224,7 @@ Necessary for Cowork VM users to export credentials from host → guest. Estimat
 ```bash
 # Confirm branch + HEAD
 git status                    # should show branch=042-auth-architecture-redesign, clean tree
-git log --oneline -14         # top should be 478160f (A2) / d20630e / 07d55cf / f18f1aa / 86e56d7 / 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291
+git log --oneline -16         # top should be 9147b1d (C2) / 668ceb4 / 478160f (A2) / d20630e / 07d55cf / f18f1aa / 86e56d7 / 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291
 
 # Confirm test suite green (slow — ~3-5 min)
 just check
