@@ -101,7 +101,7 @@ def get_user_active_project_id() -> str | None:
         if sys.version_info >= (3, 11):
             import tomllib
         else:  # pragma: no cover
-            import tomli as tomllib  # type: ignore[import-not-found]
+            import tomli as tomllib  # type: ignore[import-not-found, unused-ignore]
         raw: dict[str, Any] = tomllib.loads(
             LEGACY_CONFIG_PATH.read_text(encoding="utf-8")
         )
