@@ -11,25 +11,25 @@ description: "Task list for Authentication Architecture Redesign (042)"
 **Branch**: `042-auth-architecture-redesign`
 **Supersedes**: 038-auth-project-workspace-redesign
 
-## Status (as of 2026-04-22 — post A1 cluster `4d21c3e`)
+## Status (as of 2026-04-22 — post B2 cluster `50ccd9d`)
 
 | Phase | Status | Tests | Notes |
 |-------|--------|-------|-------|
 | 1 — Setup | ✅ DONE (5/5) | infra | branch, fixtures, conftest, just recipe |
 | 2 — Foundational types | ✅ DONE (13/13) | 89 | Account union, Session, Project, WorkspaceRef, TokenResolver, OnDiskTokenResolver |
 | 3 — Schema + Resolver (US2 + US3) | ✅ DONE (12/12) | 79 | `_internal/config.py` (formerly `config_v3.py`) + `_internal/auth/resolver.py` + `BridgeFile` v2 |
-| 4 — Account model + Workspace.use (US1 + US4) | ✅ MOSTLY DONE (B1 cleared the dual-init blocker; A1 wired the OAuth trio) | 71 | mp.accounts/.targets/.session namespaces; Workspace.use() chain; api_client session support; `mp.accounts.login` end-to-end PKCE; OAuth refresh in OnDiskTokenResolver; per-request bearer in api_client. **B2 sweeps remaining** (T043 / T044 / T045 / T047 / T048 / T050 / T053a): per-account `me.json` paths, `OAuthTokens.project_id` removal, `auth.py` thin re-export, deprecated `Workspace` methods (`switch_project`, `switch_workspace`, `set_workspace_id`, `current_credential`, `current_project`), `auth_credential.py` deletion. |
+| 4 — Account model + Workspace.use (US1 + US4) | ✅ DONE — B1 flattened the dual-init, A1 wired OAuth, B2 swept the deferred deletions (T043 / T044 / T045 / T047 / T048 / T050) | 71 | mp.accounts/.targets/.session namespaces; Workspace.use() chain; api_client session support; `mp.accounts.login` end-to-end PKCE; OAuth refresh in OnDiskTokenResolver; per-request bearer in api_client; per-account `me.json` cache; `auth_credential.py` gone; deprecated `Workspace` methods (`switch_*`, `current_*`, `set_workspace_id`) gone. |
 | 5 — CLI surface (US5) | ✅ DONE (additive → cleanup landed in `5a6b876` and tightened in B1: legacy `--credential` / `--workspace-id` globals removed; A1 wired `mp account login NAME --no-browser`) | 17 | `mp account/project/workspace/session/target` groups + `--account`/`--project`/`--workspace`/`--target` globals; legacy command groups gone |
 | 6 — Targets (US6) | ✅ DONE (`5a6b876`) | +10 | `mp target add/use/list/show/remove` + 10 smoke tests |
 | 7 — Cross-cutting iteration (US7) | ⬜ PENDING (Cluster C1) | — | integration tests for cross-project / cross-account / parallel-snapshot — capability is live, dedicated tests deferred |
 | 8 — Cowork bridge (US8) | ⚠️ PARTIAL — read path live, **export side pending (Cluster C2)** | live F1.01 | `BridgeFile` v2 loader integrated into resolver; `mp account export-bridge` / `remove-bridge` writers still TODO |
-| 9 — Plugin / agent surface (US9) | ⬜ PENDING (Cluster A2) — now unblocked by A1 | — | `auth_manager.py` rewrite; plugin v5.0.0 — A1 made the public Python API final (no more `NotImplementedError` stubs) |
-| 10 — Conversion script (US10) | ❌ DROPPED (alpha "free to break") | — | Legacy detection deleted in `5a6b876`; legacy `ConfigManager` + `AccountInfo` + v1 `AuthBridgeFile` fully removed in B1 (`18283b4` / `024a291`); no migration path needed |
+| 9 — Plugin / agent surface (US9) | ⬜ PENDING (Cluster A2) — now unblocked by A1 + B2 | — | `auth_manager.py` rewrite; plugin v5.0.0 — A1 made the public Python API final (no more `NotImplementedError` stubs) and B2 finalized the `mixpanel_data` module shape |
+| 10 — Conversion script (US10) | ❌ DROPPED (alpha "free to break") | — | Legacy detection deleted in `5a6b876`; legacy `ConfigManager` + `AccountInfo` + v1 `AuthBridgeFile` + `auth_credential.py` fully removed in B1 / B2; no migration path needed |
 | 11 — Polish & cleanup (Cluster D) | ⚠️ MOSTLY DONE in `5a6b876` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard); **still pending**: B3 (`mixpanel_data.auth_types` public module — Fix 27), Phase 11 release polish — see `pr-126-review-plan.md` § Execution Status | — | docs, mutation tests, version bump |
 
-**Full test suite (HEAD `4d21c3e`)**: 5,956 passed @ 90.85% coverage; mypy --strict + ruff clean. (B1 dropped from 6,261 to 5,948 by removing dead legacy tests; A1 added 8 unit tests covering refresh / login / per-request bearer.)
-**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `4d21c3e`.
-**Net diff for B1+A1**: +2,472 / −11,619 across 141 files (4 commits — Fix 10 / Fix 14 / Fix 9 / Fix 16+17+18).
+**Full test suite (HEAD `50ccd9d`)**: 5,899 passed @ 90.85% coverage; mypy --strict + ruff clean. (B2 trimmed legacy tests further: TestSwitch/Current* gone, TestOAuthTokensProjectId gone, TestMeCache rewritten for per-account layout.)
+**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `50ccd9d`.
+**Net diff for B1+A1+B2**: +2,584 / −12,471 across ~155 files (8 commits — B1×3 / A1 / B2×4).
 
 ### Pragmatic deviation from the original phase plan (history)
 
@@ -41,21 +41,15 @@ Phases 4-5 originally landed **additively** (new code beside legacy code) so the
 - `MixpanelAPIClient` still accepts either `credentials=` (built by the v3 shim `session_to_credentials(sess)`) or `session=` directly — Cluster A1 (Fix 18) finishes that consolidation.
 - The legacy `mp auth` / `mp projects` / `mp workspaces` / `mp context` CLI groups were already deleted in `5a6b876`; B1 also retired the `--credential` and `--workspace-id` global flags.
 
-### Remaining `[-]` deferred tasks (post-B1)
+### Remaining `[-]` deferred tasks (post-B2)
 
-The B1 cluster cleared Fix 9 / 10 / 14 outright. These T-IDs are still deferred and form the **B2 sweep** (Cluster B2 in the handoff doc):
+B1 cleared Fix 9 / 10 / 14 outright; A1 cleared Fix 16 / 17 / 18; B2 cleared the Phase-4 sweep (T043 / T044 / T045 / T047 / T048 / T050). Residual:
 
-- T043, T044, T045 — `me.py` per-account `me.json`, `OAuthTokens.project_id` removal, per-account paths for `flow.py` / `client_registration.py`.
-- T047 — Rewrite `src/mixpanel_data/auth.py` as a thin re-export module.
-- T048 — DELETE `src/mixpanel_data/_internal/auth_credential.py`.
-- T049 — DELETE deprecated public types (`AccountInfo` / `CredentialInfo` / `ProjectAlias` / `MigrationResult` / `ActiveContext`) — **already done in B1 Fix 9**, this T-ID is a no-op now.
-- T050 — DELETE deprecated `Workspace` methods (`switch_project`, `switch_workspace`, `set_workspace_id`, `current_credential`, `current_project`).
-- T051 / T052 — DELETE v1/v2 stubs in ConfigManager + `_resolve_session_v1` / `_v2` — **already done in B1 Fix 9**, T-IDs are no-ops now.
-- T053a — DELETE obsolete unit tests left over from legacy paths — **mostly done in B1**; sweep again after T050.
-- T058a — help-examples snapshot tests.
-- T066-T069 — `cli/utils.py` `get_workspace()` formatter polish, `cli/CLAUDE.md`.
+- T053a — final dead-test sweep (mostly done; pick up stragglers as future work touches them).
+- T058a — help-examples snapshot tests (Cluster C3 / Phase-5 polish).
+- T066-T069 — `cli/utils.py` `get_workspace()` formatter polish, `cli/CLAUDE.md` (Cluster C3 / Phase-5 polish).
 
-Beyond B2 the open clusters are A1 (OAuth wiring trio — Fix 16 / 17 / 18), A2 (plugin rewrite), B3 (`mixpanel_data.auth_types` public module — Fix 27), C1 (cross-cutting iteration tests), C2 (bridge writer), and D (Phase 11 release polish).
+Beyond these, the open clusters are A2 (plugin rewrite — Phase 9 / US9), B3 (`mixpanel_data.auth_types` public module — Fix 27), C1 (cross-cutting iteration tests — Phase 7 / US7), C2 (bridge writer — Phase 8 / US8), and D (Phase 11 release polish).
 
 **Tests**: This project enforces strict TDD per `CLAUDE.md` and the constitution. **Tests are MANDATORY** — every implementation task must have a failing test in place first. The phases below interleave test tasks ahead of the implementation tasks they cover.
 

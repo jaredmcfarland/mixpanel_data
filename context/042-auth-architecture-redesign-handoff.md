@@ -1,14 +1,14 @@
 # Session Handoff: 042 Auth Architecture Redesign
 
-**Branch:** `042-auth-architecture-redesign` · **Last commit:** `4d21c3e` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
-**Suite:** 5,956 pass / 90.85% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
-**Generated:** 2026-04-22 (post-A1)
+**Branch:** `042-auth-architecture-redesign` · **Last commit:** `50ccd9d` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
+**Suite:** 5,899 pass / 90.85% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
+**Generated:** 2026-04-22 (post-B2)
 
 ---
 
 ## TL;DR for the next session
 
-The 042 auth-redesign feature is **~93% done**. **B1** (Workspace flatten + bridge/config legacy deletion) and **A1** (OAuth wiring trio — refresh + `mp account login` + per-request bearer) both landed. `oauth_browser` now works end-to-end on a clean install: `mp account add personal --type oauth_browser --region us` → `mp account login personal` → tokens persisted to `~/.mp/accounts/personal/tokens.json`, refresh wired, `_get_auth_header` calls the resolver per request. **One PR #126 fix remains** (Fix 27 — public `mixpanel_data.auth_types` module) plus **B2 sweeps**, **A2 plugin rewrite**, **C1 cross-cutting tests**, **C2 bridge writer**, **D Phase 11 release polish**. Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
+The 042 auth-redesign feature is **~96% done**. **B1** (Workspace flatten + bridge/config legacy deletion), **A1** (OAuth wiring trio — refresh + `mp account login` + per-request bearer), and **B2** (Phase 4 deferred deletions — T043 / T044 / T045 / T047 / T048 / T050) all landed. The auth subsystem is at its target shape: one `_internal/config.py` module, no v2 ResolvedSession types, no deprecated `Workspace` methods, per-account `me.json` + `tokens.json` layout. **One PR #126 fix remains** (Fix 27 — public `mixpanel_data.auth_types` module). Open clusters: **B3** (Fix 27 — small standalone), **A2** (plugin rewrite — gated on B3), **C1** (cross-cutting tests), **C2** (bridge writer), **D** (Phase 11 release polish). Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
 
 ---
 
@@ -36,6 +36,11 @@ The 042 auth-redesign feature is **~93% done**. **B1** (Workspace flatten + brid
 ## What landed (recent commits, newest first)
 
 ```
+50ccd9d feat(042): delete auth_credential.py + thin auth.py re-export (B2 T047 / T048)
+b1c7a74 feat(042): per-account me.json + flow.login persist=False default (B2 T043 / T045)
+651bf66 feat(042): drop OAuthTokens.project_id legacy field (B2 T044)
+3f74cd7 feat(042): delete deprecated Workspace methods (B2 T050 / FR-038)
+cd044b7 docs(042): refresh trackers for A1 cluster (Fix 16 / 17 / 18 done)
 4d21c3e feat(042): wire OAuth refresh + mp account login + per-request bearer (A1)
 62befd1 docs(042): refresh trackers for B1 cluster (Fix 9 / 10 / 14 done)
 18283b4 feat(042): merge legacy + v3 config modules into one (Fix 9)
@@ -44,9 +49,13 @@ The 042 auth-redesign feature is **~93% done**. **B1** (Workspace flatten + brid
 787feea docs(042): refresh tracker docs to reflect post-5a6b876 reality
 93e3081 fix(042): align live auth tests with tightened PR #126 behavior
 5a6b876 feat(042): execute PR #126 review plan — 28 of 35 fixes (P0 + P1)
-41645d4 fix(042): address second Codex review — auto-detect, use(), OAuth atomicity, CLI globals
-dbe10a1 fix(042): address Codex review — workspace pin, Session.headers, persist clear, Target.workspace
 ```
+
+B2 cluster (4 commits, ~+650 / −2,100 across ~20 files):
+- **T050 (`3f74cd7`)** — Deleted deprecated `Workspace` methods: `set_workspace_id`, `switch_project`, `switch_workspace`, `current_credential`, `current_project` (per FR-038 / `contracts/python-api.md` §2/§4). Replacements: `ws.use(...)`, `ws.account/project/workspace`. ~310 LoC of test classes deleted with tombstone comments.
+- **T044 (`651bf66`)** — Dropped `OAuthTokens.project_id` legacy field. The v3 layout binds tokens to `Account.default_project` via the per-account `~/.mp/accounts/{name}/tokens.json` path; threading project_id through the token model was dead weight risking drift. Cascades through `OAuthFlow.login` / `exchange_code` / `_post_token_request` and `OAuthStorage.save_tokens` / `load_tokens` signatures.
+- **T043 + T045 (`b1c7a74`)** — `MeCache` is now per-account: `~/.mp/accounts/{name}/me.json`. API simplified — `MeCache(*, account_name, storage_dir=None, ttl_seconds=...)` with `get() / put(response) / invalidate()` (region kwarg dropped). `OAuthFlow.login` flipped default to `persist=False` since no v2 caller remains.
+- **T047 + T048 (`50ccd9d`)** — Deleted `_internal/auth_credential.py` (the v2 `AuthCredential` / `CredentialType` / `ProjectContext` / `ResolvedSession` types are no longer reachable after T050). `RegionType` / `VALID_REGIONS` constants moved into `_internal/config.py`. `mixpanel_data.auth` is now a thin re-export of v3 surface (`ConfigManager`, `Credentials`, `AuthMethod`, `BridgeFile`, `load_bridge`).
 
 A1 cluster (`4d21c3e`, +645 / −42 across 8 files):
 - **Fix 16** — `OnDiskTokenResolver._refresh_and_persist`: when an on-disk token is within the 30s expiry buffer AND a refresh token is present, call `OAuthFlow.refresh_tokens(...)` and atomic-write the new payload back to `~/.mp/accounts/{name}/tokens.json`. Missing DCR client info surfaces `OAUTH_REFRESH_ERROR`. Previously this branch raised "refresh is not yet wired up".
@@ -96,21 +105,9 @@ Estimated: ~1 day. Should land AFTER A1 + B3 so the public Python surface is fin
 
 Landed in three commits, B1 cluster (`12471c6` → `024a291` → `18283b4`). See "What landed" above for the full breakdown. Net −9,750 LoC.
 
-#### B2. Phase 4 deferred deletions (T043–T053a) — partially absorbed by B1; rest still open
+#### B2. Phase 4 deferred deletions (T043–T053a) — ✅ DONE
 
-| T-ID | Status | Description |
-|------|--------|-------------|
-| T043 | ⬜ pending | `MeService` cache path: `~/.mp/oauth/me_{region}_{name}.json` → `~/.mp/accounts/{name}/me.json` |
-| T044 | ⬜ pending | Remove `OAuthTokens.project_id` legacy field (`src/mixpanel_data/_internal/auth/token.py:~60`) |
-| T045 | ⬜ pending | Update `flow.py` / `client_registration.py` / `storage.py` for per-account paths |
-| T047 | ⬜ pending | Rewrite `src/mixpanel_data/auth.py` as thin re-export module (currently still re-exports the legacy `Credentials` / `AuthMethod` shim — Fix 18 will retire those) |
-| T048 | ⬜ pending | DELETE `src/mixpanel_data/_internal/auth_credential.py` |
-| T049 | ✅ done in B1 (`18283b4`) | `AccountInfo` / `CredentialInfo` / `ProjectAlias` / `MigrationResult` / `ActiveContext` already gone |
-| T050 | ⬜ pending | DELETE deprecated `Workspace` methods (`switch_project`, `switch_workspace`, `set_workspace_id`, `current_credential`, `current_project`) |
-| T051 / T052 | ✅ done in B1 (`18283b4`) | v1/v2 ConfigManager stubs already gone |
-| T053a | ⚠️ partial — B1 deleted ~14 dead-legacy test files | Final sweep needed once T050 lands |
-
-Estimated remaining: ~half day.
+Landed in four commits, B2 cluster (`3f74cd7` → `651bf66` → `b1c7a74` → `50ccd9d`). See "What landed" above for the per-T breakdown. T049 / T051 / T052 were absorbed by B1 already. T053a is mostly done; remaining fragments are picked up as future cleanup touches them.
 
 #### B3. Public auth-types module (Fix 27)
 - Create `src/mixpanel_data/auth_types.py` (or extend `types.py` if it stays sub-2000 lines)
@@ -176,14 +173,14 @@ Necessary for Cowork VM users to export credentials from host → guest. Estimat
 
 1. ~~**B1 — Workspace flatten cluster**~~ ✅ DONE (3 commits, −9,750 LoC)
 2. ~~**A1 — OAuth wiring trio**~~ ✅ DONE (`4d21c3e`, +645 LoC, +8 unit tests)
-3. **B2 — Phase 4 deferred deletions** ← **next workstream** (mechanical sweeps; T049 / T051 / T052 already absorbed by B1)
-4. **B3 — auth_types public module** (small standalone refactor)
-5. **A2 — plugin / auth_manager rewrite** (now unblocked — public Python API is final)
+3. ~~**B2 — Phase 4 deferred deletions**~~ ✅ DONE (4 commits, −2,100 LoC)
+4. **B3 — auth_types public module** ← **next workstream** (small standalone refactor)
+5. **A2 — plugin / auth_manager rewrite** (now unblocked — public Python API + module shape are both final)
 6. **C2 — bridge writer** (small, well-specified)
 7. **C1 — cross-cutting iteration tests** (pure test additions)
 8. **D — Phase 11 polish** (last; depends on everything above)
 
-**Remaining estimate:** ~2–4 focused days to 1.0-ready.
+**Remaining estimate:** ~2–3 focused days to 1.0-ready.
 
 ---
 
@@ -192,7 +189,7 @@ Necessary for Cowork VM users to export credentials from host → guest. Estimat
 ```bash
 # Confirm branch + HEAD
 git status                    # should show branch=042-auth-architecture-redesign, clean tree
-git log --oneline -5          # top should be 4d21c3e / 62befd1 / 18283b4 / 024a291 / 12471c6
+git log --oneline -10         # top should be 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291 / 12471c6
 
 # Confirm test suite green (slow — ~3-5 min)
 just check

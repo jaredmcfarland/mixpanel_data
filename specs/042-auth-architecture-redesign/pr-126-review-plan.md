@@ -1,10 +1,10 @@
 # PR #126 Review Re-Assessment & 1.0-Readiness Plan
 
-**Branch:** `042-auth-architecture-redesign` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126) · **HEAD:** `4d21c3e` · **Coverage:** 90.85% (5,956 tests + 18 / 18 live) · **mypy --strict + ruff:** clean
+**Branch:** `042-auth-architecture-redesign` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126) · **HEAD:** `50ccd9d` · **Coverage:** 90.85% (5,899 tests + 18 / 18 live) · **mypy --strict + ruff:** clean
 
 ## Execution Status (as of 2026-04-22)
 
-**34 of 35 fixes landed.** B1 cluster (Fix 9 / 10 / 14) executed in three commits (`12471c6`, `024a291`, `18283b4`); A1 cluster (Fix 16 / 17 / 18) executed in `4d21c3e`. Only **Fix 27** (Cluster B3 — public auth-types module) remains from the original PR #126 plan. Cluster B2 (Phase 4 deferred deletions T043-T053a, of which T049/T051/T052 were absorbed by B1) is the residual cleanup workstream.
+**34 of 35 fixes landed.** B1 cluster (Fix 9 / 10 / 14) executed in three commits (`12471c6`, `024a291`, `18283b4`); A1 cluster (Fix 16 / 17 / 18) executed in `4d21c3e`; **B2 cluster (T043 / T044 / T045 / T047 / T048 / T050)** executed in four commits (`3f74cd7` / `651bf66` / `b1c7a74` / `50ccd9d`). Only **Fix 27** (Cluster B3 — public auth-types module) remains from the original PR #126 plan.
 
 | Group | Done | Notes |
 |-------|------|-------|
@@ -16,9 +16,9 @@
 | F — public-API surface design | ⚠️ 3 / 4 | Account.match() exhaustiveness, AccountTestResult/OAuthLoginResult tightening, promoted resolver helpers; **deferred**: Fix 27 (`mixpanel_data.auth_types` public module) — small standalone refactor, can land any time. |
 | G — test/doc hygiene | ✅ 5 / 5 | Comment-rot scrub, `current_auth_header` docstring, ConfigManager + Session PBT, atomic-write resilience tests, real-`~/.mp/` write guard fixture |
 
-**Remaining 1 deferred fix:** Fix 27 (Cluster B3 — public auth-types module). Cluster B2 (Phase 4 deferred deletions T043 / T044 / T045 / T047 / T048 / T050 / T053a) is the other open structural workstream alongside Phase 9 plugin rewrite (Cluster A2) and Phase 11 release polish (Cluster D).
+**Remaining 1 deferred fix:** Fix 27 (Cluster B3 — public `mixpanel_data.auth_types` module). Cluster A2 (plugin rewrite) and Cluster D (Phase 11 release polish) are the other open workstreams; the optional Cluster C1 (cross-cutting iteration tests) and C2 (bridge writer) round out the leftover.
 
-**Live QA**: `tests/live/test_042_auth_redesign_live.py` (18 scenarios across SA / oauth_browser / oauth_token / cross-mode switching / bridge file / CLI / edge cases) — 18 / 18 pass against the real Mixpanel API at HEAD `4d21c3e`.
+**Live QA**: `tests/live/test_042_auth_redesign_live.py` (18 scenarios across SA / oauth_browser / oauth_token / cross-mode switching / bridge file / CLI / edge cases) — 18 / 18 pass against the real Mixpanel API at HEAD `50ccd9d`.
 
 ---
 
