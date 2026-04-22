@@ -19,12 +19,6 @@ from mixpanel_data._internal.auth.session import (
     Session,
     WorkspaceRef,
 )
-from mixpanel_data._internal.auth_credential import (
-    AuthCredential,
-    CredentialType,
-    ProjectContext,
-    ResolvedSession,
-)
 from mixpanel_data._internal.validation import validate_bookmark
 from mixpanel_data._literal_types import (
     CohortAggregationType,
@@ -306,11 +300,6 @@ __all__ = [
     "targets",
     # Auth redesign (042) exceptions
     "AccountInUseError",
-    # Auth v2 types
-    "AuthCredential",
-    "CredentialType",
-    "ProjectContext",
-    "ResolvedSession",
     # Validation
     "validate_bookmark",
     # Type aliases — time units

@@ -58,7 +58,6 @@ from mixpanel_data._internal.auth.account import (
     ServiceAccount,
 )
 from mixpanel_data._internal.auth.session import ActiveSession
-from mixpanel_data._internal.auth_credential import VALID_REGIONS, RegionType
 from mixpanel_data._internal.io_utils import atomic_write_bytes
 from mixpanel_data.exceptions import (
     AccountInUseError,
@@ -69,6 +68,15 @@ from mixpanel_data.types import AccountSummary, Target
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG_PATH = Path.home() / ".mp" / "config.toml"
+
+# Region constraint shared between the legacy ``Credentials`` validator
+# and the v3 ``Region`` Literal in ``_internal/auth/account.py``. The
+# Literal is the single source of truth in v3; this tuple just enables
+# the runtime ``in`` check used by the field validator below. (Inlined
+# here in B2 / T048 when the legacy ``_internal/auth_credential.py``
+# module — the prior home of these constants — was deleted.)
+RegionType = Region
+VALID_REGIONS: tuple[Region, ...] = ("us", "eu", "in")
 
 
 # =============================================================================
