@@ -196,6 +196,27 @@ class TestPersist:
         ws.use(account="other", persist=True)
         assert two_accounts.get_active().account == "other"
 
+    def test_persist_clears_stale_workspace_when_session_workspace_is_none(
+        self, two_accounts: ConfigManager
+    ) -> None:
+        """``persist=True`` with cleared workspace MUST drop ``[active].workspace``.
+
+        Regression: ``set_active(workspace=None)`` is treated as "do not
+        touch" (per FR-016 axis-independence). A ``ws.use(account=…,
+        persist=True)`` that cleared the workspace previously left the
+        prior ``[active].workspace`` on disk, so a fresh ``Workspace()``
+        resolved against the wrong workspace.
+        """
+        # Pre-populate [active].workspace so we can prove the clear works.
+        two_accounts.set_active(workspace=42)
+        assert two_accounts.get_active().workspace == 42
+        ws = Workspace(account="team", project="3713224")
+        # Account swap clears the in-session workspace per FR-033.
+        ws.use(account="other", persist=True)
+        assert ws.workspace is None
+        # And [active].workspace must also be cleared on disk.
+        assert two_accounts.get_active().workspace is None
+
 
 class TestUseAccountEnvVarPriority:
     """``use(account=A)`` re-resolves project/workspace per FR-017.

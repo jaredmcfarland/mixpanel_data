@@ -11905,8 +11905,11 @@ class Target(BaseModel):
     project: Annotated[str, Field(min_length=1, pattern=r"^\d+$")]
     """Numeric project ID (Mixpanel's wire format)."""
 
-    workspace: int | None = None
-    """Optional workspace ID; ``None`` defers to lazy resolution."""
+    workspace: Annotated[int, Field(gt=0)] | None = None
+    """Optional workspace ID (must be a positive integer when set);
+    ``None`` defers to lazy resolution. Mirrors ``WorkspaceRef.id``'s
+    ``PositiveInt`` constraint so bad values fail at construction rather
+    than corrupting downstream config."""
 
 
 class OAuthLoginResult(BaseModel):

@@ -864,12 +864,15 @@ class Workspace:
         if self._v3_session is None:
             return
         cm = _ConfigManagerV3()
-        cm.set_active(
-            account=self._v3_session.account.name,
-            workspace=(
-                self._v3_session.workspace.id if self._v3_session.workspace else None
-            ),
-        )
+        cm.set_active(account=self._v3_session.account.name)
+        # `set_active(workspace=None)` is "do not touch" per FR-016 axis
+        # independence; to actually drop a stale `[active].workspace` when
+        # the in-session workspace was cleared (e.g., after `use(account=…)`
+        # cleared it), call `clear_active(workspace=True)` explicitly.
+        if self._v3_session.workspace is not None:
+            cm.set_active(workspace=self._v3_session.workspace.id)
+        else:
+            cm.clear_active(workspace=True)
         # Sync the account's default_project with the session's project so
         # the next process that reads the config gets the same project.
         cm.update_account(

@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 if sys.version_info >= (3, 11):
     import tomllib
-else:  # pragma: no cover - py3.10 fallback
+else:  # pragma: no cover - py3.10 fallback (tomllib added in 3.11)
     # On py3.10, tomli is installed and import succeeds — `import-not-found`
     # is a no-op there but is needed when mypy is run on py3.11+ where the
     # `python_version < '3.11'` extra dep isn't pulled in. `unused-ignore`

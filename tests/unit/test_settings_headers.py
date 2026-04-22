@@ -3,7 +3,8 @@
 FR-014 + FR-052: custom HTTP headers configured in ``[settings].custom_header``
 or ``bridge.headers`` attach to the resolved Session in memory at resolution
 time. The resolver MUST NOT mutate ``os.environ`` (no implicit env-var
-contracts between modules).
+contracts between modules). The API client MUST attach those headers to
+every outbound request.
 
 Reference: specs/042-auth-architecture-redesign/contracts/config-schema.md §1.2.
 """
@@ -15,10 +16,14 @@ import os
 import stat
 from pathlib import Path
 
+import httpx
 import pytest
 from pydantic import SecretStr
 
+from mixpanel_data._internal.api_client import MixpanelAPIClient
+from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.resolver import resolve_session
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.config_v3 import ConfigManager
 
 
@@ -146,3 +151,86 @@ class TestBridgeHeaderAttachment:
         resolve_session(config=cm_with_account_active)
         after = dict(os.environ)
         assert before == after
+
+
+class TestSessionHeadersOnOutboundRequests:
+    """``Session.headers`` MUST ride along on every API request.
+
+    Regression: the v3 ``session=`` constructor path stored ``Session.headers``
+    in memory (per FR-014) but never wired them into the underlying
+    ``httpx.Client`` defaults. Custom headers from ``[settings].custom_header``
+    and ``bridge.headers`` were silently dropped at request time, breaking
+    environments that route via ``X-Mixpanel-Cluster`` or similar.
+    """
+
+    def test_session_headers_included_in_outbound_request(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A Session with custom headers attaches them to every request."""
+        # Pre-clear any leaked legacy env headers so we observe ONLY the
+        # session-attached contribution.
+        monkeypatch.delenv("MP_CUSTOM_HEADER_NAME", raising=False)
+        monkeypatch.delenv("MP_CUSTOM_HEADER_VALUE", raising=False)
+
+        captured: list[httpx.Headers] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request.headers)
+            return httpx.Response(200, json={"status": "ok", "results": []})
+
+        session = Session(
+            account=ServiceAccount(
+                name="team",
+                region="us",
+                username="team.sa",
+                secret=SecretStr("team-secret"),
+            ),
+            project=Project(id="3713224"),
+            headers={"X-Mixpanel-Cluster": "internal-1", "X-Tenant": "acme"},
+        )
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(session=session, _transport=transport)
+        with client:
+            client.app_request("GET", "/dashboards")
+
+        assert captured, "request was not captured"
+        assert captured[0].get("X-Mixpanel-Cluster") == "internal-1"
+        assert captured[0].get("X-Tenant") == "acme"
+
+    def test_session_headers_take_precedence_over_env_on_collision(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When env-var header and Session.headers collide, session wins.
+
+        The resolver attaches the env contribution to ``Session.headers`` at
+        construction; later Session.headers updates (e.g., from a bridge)
+        override it. The client should reflect the final session state, not
+        re-read env at request time.
+        """
+        monkeypatch.setenv("MP_CUSTOM_HEADER_NAME", "X-Cluster")
+        monkeypatch.setenv("MP_CUSTOM_HEADER_VALUE", "from-env")
+
+        captured: list[httpx.Headers] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request.headers)
+            return httpx.Response(200, json={"status": "ok", "results": []})
+
+        session = Session(
+            account=ServiceAccount(
+                name="team",
+                region="us",
+                username="team.sa",
+                secret=SecretStr("team-secret"),
+            ),
+            project=Project(id="3713224"),
+            headers={"X-Cluster": "from-session"},
+        )
+        transport = httpx.MockTransport(handler)
+        client = MixpanelAPIClient(session=session, _transport=transport)
+        with client:
+            client.app_request("GET", "/dashboards")
+
+        assert captured[0].get("X-Cluster") == "from-session"

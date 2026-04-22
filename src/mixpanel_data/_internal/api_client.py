@@ -320,6 +320,13 @@ class MixpanelAPIClient:
             custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
             if custom_name and custom_value:
                 headers[custom_name] = custom_value
+            # v3 path: Session.headers (populated from `[settings].custom_header`
+            # and bridge.headers per FR-014) MUST ride along on every request.
+            # Session contributions take precedence over env-var headers on
+            # collision — the resolver had a chance to merge env earlier and
+            # the final session state is authoritative at request time.
+            if self._session is not None:
+                headers.update(self._session.headers)
             self._client = httpx.Client(
                 timeout=self._timeout,
                 transport=self._transport,
@@ -870,6 +877,13 @@ class MixpanelAPIClient:
         if account is not None or project is not None:
             self._resolved_workspace = new_session.workspace
             self._cached_workspace_id = None
+            # Sync the int-id pin with the new session — without this,
+            # `maybe_scoped_path()` keeps emitting `/workspaces/<old>/…`
+            # and routes requests to a workspace that may not exist under
+            # the new project / account.
+            self._workspace_id = (
+                new_session.workspace.id if new_session.workspace else None
+            )
         if workspace_obj is not None:
             self._workspace_id = workspace_obj.id
             self._resolved_workspace = workspace_obj

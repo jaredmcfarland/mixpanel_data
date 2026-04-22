@@ -119,3 +119,45 @@ class TestTransportPreservation:
         before = id(client._http)  # noqa: SLF001
         client.use(account=session_other.account)
         assert id(client._http) == before
+
+
+class TestUseClearsStaleWorkspaceId:
+    """``use(account=...)`` and ``use(project=...)`` MUST drop ``_workspace_id``.
+
+    Regression: ``use()`` previously cleared ``_resolved_workspace`` and
+    ``_cached_workspace_id`` on account/project swap but left
+    ``self._workspace_id`` (the explicit pin) untouched. Subsequent calls
+    to ``maybe_scoped_path()`` still emitted ``/workspaces/<old>/…``,
+    routing requests to a workspace that may not exist under the new
+    project/account.
+    """
+
+    def test_account_swap_clears_workspace_id(
+        self, session_team: Session, session_other: Session
+    ) -> None:
+        """Pin a workspace via Session, swap account; the pin must drop."""
+        team_with_ws = session_team.replace(workspace=WorkspaceRef(id=42))
+        client = MixpanelAPIClient(session=team_with_ws)
+        assert client._workspace_id == 42  # noqa: SLF001
+        client.use(account=session_other.account)
+        assert client._workspace_id is None  # noqa: SLF001
+
+    def test_project_swap_clears_workspace_id(self, session_team: Session) -> None:
+        """Pin a workspace via Session, swap project; the pin must drop."""
+        team_with_ws = session_team.replace(workspace=WorkspaceRef(id=42))
+        client = MixpanelAPIClient(session=team_with_ws)
+        assert client._workspace_id == 42  # noqa: SLF001
+        client.use(project=Project(id="11111"))
+        assert client._workspace_id is None  # noqa: SLF001
+
+    def test_account_swap_then_scoped_path_does_not_leak_old_workspace(
+        self, session_team: Session, session_other: Session
+    ) -> None:
+        """End-to-end: scoped paths after account swap must not reference old ws."""
+        team_with_ws = session_team.replace(workspace=WorkspaceRef(id=42))
+        client = MixpanelAPIClient(session=team_with_ws)
+        client.use(account=session_other.account)
+        path = client.maybe_scoped_path("dashboards")
+        assert "/workspaces/42/" not in path
+        # Project-scoped (not workspace-scoped) is the expected fallback.
+        assert path.startswith("/projects/")

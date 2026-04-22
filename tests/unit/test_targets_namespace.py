@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from mixpanel_data import accounts as accounts_ns
 from mixpanel_data import targets as targets_ns
@@ -57,6 +57,42 @@ class TestAdd:
         """Referencing a non-existent account raises ConfigError."""
         with pytest.raises(ConfigError):
             targets_ns.add("ecom", account="ghost", project="3018488")
+
+
+class TestTargetWorkspaceValidation:
+    """``Target.workspace`` MUST require a positive integer (FR-012 parity).
+
+    Mirrors the constraint on ``WorkspaceRef.id`` (``PositiveInt``). Without
+    this guard, ``add_target(workspace=0)`` or ``-1`` corrupts the stored
+    config — ``apply_target`` then writes the invalid value into ``[active]``
+    bypassing the resolver's validator, and the failure surfaces far from
+    the original input.
+    """
+
+    def test_target_workspace_zero_rejected(self) -> None:
+        """``Target(workspace=0)`` raises at construction."""
+        with pytest.raises(ValidationError):
+            Target(name="t", account="x", project="3018488", workspace=0)
+
+    def test_target_workspace_negative_rejected(self) -> None:
+        """``Target(workspace=-5)`` raises at construction."""
+        with pytest.raises(ValidationError):
+            Target(name="t", account="x", project="3018488", workspace=-5)
+
+    def test_target_workspace_positive_accepted(self) -> None:
+        """``Target(workspace=42)`` succeeds."""
+        t = Target(name="t", account="x", project="3018488", workspace=42)
+        assert t.workspace == 42
+
+    def test_target_workspace_none_accepted(self) -> None:
+        """``Target(workspace=None)`` succeeds (lazy-resolve later)."""
+        t = Target(name="t", account="x", project="3018488", workspace=None)
+        assert t.workspace is None
+
+    def test_add_target_workspace_zero_rejected(self, cm: ConfigManager) -> None:
+        """``mp.targets.add(..., workspace=0)`` raises before persisting."""
+        with pytest.raises((ValidationError, ConfigError)):
+            targets_ns.add("ecom", account="x", project="3018488", workspace=0)
 
 
 class TestList:
