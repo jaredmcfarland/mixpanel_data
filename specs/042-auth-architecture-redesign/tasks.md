@@ -11,7 +11,7 @@ description: "Task list for Authentication Architecture Redesign (042)"
 **Branch**: `042-auth-architecture-redesign`
 **Supersedes**: 038-auth-project-workspace-redesign
 
-## Status (as of 2026-04-22 — post B2 cluster `50ccd9d`)
+## Status (as of 2026-04-22 — post B3 cluster `f18f1aa`; PR #126 review plan complete)
 
 | Phase | Status | Tests | Notes |
 |-------|--------|-------|-------|
@@ -25,11 +25,11 @@ description: "Task list for Authentication Architecture Redesign (042)"
 | 8 — Cowork bridge (US8) | ⚠️ PARTIAL — read path live, **export side pending (Cluster C2)** | live F1.01 | `BridgeFile` v2 loader integrated into resolver; `mp account export-bridge` / `remove-bridge` writers still TODO |
 | 9 — Plugin / agent surface (US9) | ⬜ PENDING (Cluster A2) — now unblocked by A1 + B2 | — | `auth_manager.py` rewrite; plugin v5.0.0 — A1 made the public Python API final (no more `NotImplementedError` stubs) and B2 finalized the `mixpanel_data` module shape |
 | 10 — Conversion script (US10) | ❌ DROPPED (alpha "free to break") | — | Legacy detection deleted in `5a6b876`; legacy `ConfigManager` + `AccountInfo` + v1 `AuthBridgeFile` + `auth_credential.py` fully removed in B1 / B2; no migration path needed |
-| 11 — Polish & cleanup (Cluster D) | ⚠️ MOSTLY DONE in `5a6b876` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard); **still pending**: B3 (`mixpanel_data.auth_types` public module — Fix 27), Phase 11 release polish — see `pr-126-review-plan.md` § Execution Status | — | docs, mutation tests, version bump |
+| 11 — Polish & cleanup (Cluster D) | ⚠️ MOSTLY DONE in `5a6b876` + `f18f1aa` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard, public `mixpanel_data.auth_types` module); **still pending**: Phase 11 release polish (CLAUDE.md sweeps, version bumps, release notes, LoC budget enforcement, mutation score, security audit) | — | docs, mutation tests, version bump |
 
-**Full test suite (HEAD `50ccd9d`)**: 5,899 passed @ 90.85% coverage; mypy --strict + ruff clean. (B2 trimmed legacy tests further: TestSwitch/Current* gone, TestOAuthTokensProjectId gone, TestMeCache rewritten for per-account layout.)
-**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `50ccd9d`.
-**Net diff for B1+A1+B2**: +2,584 / −12,471 across ~155 files (8 commits — B1×3 / A1 / B2×4).
+**Full test suite (HEAD `f18f1aa`)**: 5,906 passed @ 90.85% coverage; mypy --strict + ruff clean. (B3 added 7 unit tests pinning the new ``mixpanel_data.auth_types`` re-export contract.)
+**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `f18f1aa`.
+**Net diff for B1+A1+B2+B3**: +2,749 / −12,494 across ~157 files (9 commits — B1×3 / A1 / B2×4 / B3).
 
 ### Pragmatic deviation from the original phase plan (history)
 
