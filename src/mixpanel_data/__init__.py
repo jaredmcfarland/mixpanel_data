@@ -273,7 +273,7 @@ from mixpanel_data.types import (
 )
 from mixpanel_data.workspace import Workspace
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     # Core

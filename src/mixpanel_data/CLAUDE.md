@@ -26,22 +26,76 @@ Public API for the Mixpanel data library. Import from here, not from `_internal`
 | `_internal/` | Private implementation (do not import directly) |
 | `cli/` | Command-line interface |
 
+## Auth Mental Model — Account → Project → Workspace
+
+The 042 redesign organizes auth around three independent axes:
+
+- **Account** — *who* is authenticating. Three types managed through one
+  surface: `service_account` (Basic Auth), `oauth_browser` (PKCE flow,
+  tokens auto-refreshed), `oauth_token` (static bearer for CI/agents).
+  Add via `mp account add NAME --type {...} --region {us|eu|in} ...`.
+- **Project** — *which Mixpanel project* the calls run against. Lives on
+  the active account as `default_project`; can be overridden per-call
+  via `Workspace(project="...")` or `--project`.
+- **Workspace** — *which workspace inside the project*. Optional;
+  lazy-resolves to the project's default workspace on first
+  workspace-scoped call.
+
+**Switching is a one-line operation:** `Workspace.use(account=...,
+project=..., workspace=..., target=...)` returns `self` for chaining.
+The underlying `httpx.Client` and per-account `/me` cache are preserved
+across switches, so cross-project / cross-account iteration is O(1) per
+turn (see `examples/cross_project.py`).
+
+Persisted (account, project, workspace?) bundles are called **targets**
+and act as named cursor positions:
+`mp target add ecom --account team --project 3018488` then
+`mp target use ecom`.
+
 ## Primary Entry Point
 
 ```python
-from mixpanel_data import Workspace
+import mixpanel_data as mp
 
-# Standard usage (credentials from env/config)
-ws = Workspace()
-events = ws.list_events()
+# Default — resolves the active account/project/workspace from
+# `~/.mp/config.toml [active]` + the active account's default_project.
+ws = mp.Workspace()
+
+# Override per Workspace (env > param > target > bridge > config)
+ws = mp.Workspace(account="team", project="3713224")
+ws = mp.Workspace(target="ecom")
+ws = mp.Workspace(session=mp.Session(account=..., project=..., workspace=...))
+
+# In-session switching — fluent, O(1), no re-auth on project swap
+ws.use(project="3018488").events()
+ws.use(account="personal").events()    # rebuilds auth header; preserves _http
+ws.use(target="ecom").events()         # applies all three axes atomically
+ws.use(workspace=3448414).events()
+
+# Standard usage
+events = ws.events()
 result = ws.segmentation(event="Login", from_date="2025-01-01", to_date="2025-01-31")
 ws.close()
 
 # Context manager (auto-cleanup)
-with Workspace() as ws:
+with mp.Workspace() as ws:
     for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
         process(event)
 ```
+
+## Functional Namespaces
+
+- `mp.accounts.add(name, *, type, region, ...)` — register a new account
+- `mp.accounts.list()` — `list[AccountSummary]`
+- `mp.accounts.use(name)` — set active account (clears workspace)
+- `mp.accounts.login(name)` — run PKCE flow for an oauth_browser account
+- `mp.accounts.test(name)` — probe `/me` and return `AccountTestResult`
+- `mp.accounts.export_bridge(*, to, account=None)` — write a v2 Cowork bridge file
+- `mp.accounts.remove_bridge(*, at=None)` — idempotent bridge removal
+- `mp.targets.add(name, *, account, project, workspace=None)` — saved cursor
+- `mp.targets.use(name)` — atomic apply (writes all three [active] axes in one save)
+- `mp.session.show()` — read the persisted `[active]` block as `ActiveSession`
+- `mp.session.use(account=, project=, workspace=, target=)` — write to `[active]`
 
 ## Workspace Methods
 

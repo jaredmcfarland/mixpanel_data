@@ -35,29 +35,41 @@ Infrastructure           → ConfigManager, MixpanelAPIClient
 
 ```
 src/mixpanel_data/
-├── __init__.py              # Public API exports
-├── workspace.py             # Workspace facade class
-├── auth.py                  # Public auth module
-├── exceptions.py            # Exception hierarchy
-├── types.py                 # Result types (SegmentationResult, FunnelResult, etc.)
+├── __init__.py              # Public API exports (incl. v3 auth surface)
+├── workspace.py             # Workspace facade — `use(account=, project=, workspace=, target=)`
+├── auth_types.py            # v3 auth surface (Account union, Session, Region, OAuthTokens, …)
+├── auth.py                  # Thin re-export of legacy auth (ConfigManager, Credentials shim)
+├── accounts.py              # `mp.accounts` — add/list/use/login/test/export-bridge/...
+├── session.py               # `mp.session` — show/use the persisted [active] block
+├── targets.py               # `mp.targets` — saved (account, project, workspace?) cursors
+├── exceptions.py            # Exception hierarchy (incl. AccountInUseError, WorkspaceScopeError)
+├── types.py                 # Result types (SegmentationResult, AccountSummary, …)
 ├── _internal/               # Private implementation (do not import directly)
-│   ├── config.py            # ConfigManager, Credentials, AuthMethod
-│   ├── api_client.py        # MixpanelAPIClient (Basic Auth + OAuth Bearer)
+│   ├── config.py            # ConfigManager (TOML-backed), Credentials shim
+│   ├── api_client.py        # MixpanelAPIClient (Session-bound; per-request OAuth bearer)
+│   ├── me.py                # MeService + per-account MeCache (~/.mp/accounts/{name}/me.json)
 │   ├── pagination.py        # Cursor-based App API pagination
-│   ├── auth/                # OAuth 2.0 PKCE authentication
-│   │   ├── flow.py          # OAuthFlow orchestrator
-│   │   ├── token.py         # OAuthTokens, OAuthClientInfo models
-│   │   ├── storage.py       # OAuthStorage (~/.mp/oauth/)
+│   ├── auth/                # v3 auth subsystem
+│   │   ├── account.py       # Account discriminated union + TokenResolver protocol
+│   │   ├── session.py       # Session, Project, WorkspaceRef, ActiveSession
+│   │   ├── resolver.py      # resolve_session(...) — env > param > target > bridge > config
+│   │   ├── token_resolver.py # OnDiskTokenResolver (refresh + per-account paths)
+│   │   ├── token.py         # OAuthTokens, OAuthClientInfo
+│   │   ├── flow.py          # OAuthFlow (PKCE + callback)
+│   │   ├── bridge.py        # BridgeFile v2 + load_bridge / export_bridge / remove_bridge
+│   │   ├── storage.py       # account_dir + ensure_account_dir + atomic writes
 │   │   ├── pkce.py          # PKCE challenge generation (RFC 7636)
-│   │   ├── callback_server.py  # Local HTTP callback server
-│   │   └── client_registration.py  # Dynamic Client Registration (RFC 7591)
+│   │   ├── callback_server.py # Local HTTP callback server
+│   │   └── client_registration.py # Dynamic Client Registration (RFC 7591)
 │   ├── query/               # Query engine builders and validators
-│   │   ├── user_builders.py       # Filter→selector translation for Engage API
-│   │   └── user_validators.py     # Validation rules U1-U25, UP1-UP4
 │   └── services/            # Discovery, LiveQuery services
 └── cli/
-    ├── main.py              # Typer app entry point
-    ├── commands/            # auth, query, inspect, dashboards, reports, cohorts, flags, experiments, alerts, annotations, webhooks, lexicon, drop-filters, custom-properties, custom-events, lookup-tables, schemas command groups
+    ├── main.py              # Typer entry point + global flags (-a / -p / -w / -t)
+    ├── commands/            # account / project / workspace / target / session
+    │                        # + query, inspect, dashboards, reports, cohorts, flags,
+    │                        # experiments, alerts, annotations, webhooks, lexicon,
+    │                        # drop-filters, custom-properties, custom-events,
+    │                        # lookup-tables, schemas
     ├── formatters.py        # JSON, JSONL, Table, CSV, Plain output
     └── utils.py             # Error handling, console helpers
 ```
@@ -178,9 +190,11 @@ just mutate-check        # Check score meets 80% threshold
 ## Key Design Decisions
 
 - **Streaming data access**: API returns iterators for memory-efficient processing of large datasets
-- **Dual authentication**: Service accounts (Basic Auth) and OAuth 2.0 PKCE with automatic credential resolution
-- **Immutable credentials**: Resolved once at Workspace construction
-- **Dependency injection**: Services accept dependencies as constructor arguments for testing
+- **Account → Project → Workspace hierarchy** (042 redesign): every CLI verb and Python namespace maps to one of those three axes; `Workspace.use(account=, project=, workspace=)` is the single in-session switching method.
+- **Three first-class account types**: `service_account` (Basic Auth), `oauth_browser` (PKCE, tokens auto-refreshed), `oauth_token` (static bearer for CI/agents). All managed through one unified surface.
+- **Single resolver**: `resolve_session(...)` consults env → param → target → bridge → config in priority order; no silent cross-axis fallback.
+- **Connection-pool preservation**: `ws.use(account=...)` rebuilds the auth header but reuses the underlying `httpx.Client` (same Python instance — verified by `id()` equality in `tests/integration/test_cross_project_iteration.py`).
+- **Dependency injection**: Services accept dependencies as constructor arguments for testing.
 
 ## Environment Variables
 
@@ -192,12 +206,18 @@ just mutate-check        # Check score meets 80% threshold
 | `MP_PROJECT_ID` | Project ID |
 | `MP_REGION` | Data residency (us, eu, in) |
 | `MP_WORKSPACE_ID` | Workspace ID for App API operations |
-| `MP_CUSTOM_HEADER_NAME` | Custom HTTP header name (both NAME and VALUE must be set) |
-| `MP_CUSTOM_HEADER_VALUE` | Custom HTTP header value (both NAME and VALUE must be set) |
+| `MP_AUTH_FILE` | Override path to the v2 Cowork bridge file |
 | `MP_CONFIG_PATH` | Override config file location |
 
 Config file: `~/.mp/config.toml`
-OAuth tokens: `~/.mp/oauth/tokens_{region}.json`
+OAuth browser tokens: `~/.mp/accounts/{account_name}/tokens.json` (per-account, atomic 0o600 writes)
+OAuth client metadata: `~/.mp/oauth/client_{region}.json` (DCR — one client per region)
+Cowork bridge: `~/.claude/mixpanel/auth.json` (default) or `$MP_AUTH_FILE`
+
+> **Breaking change from 0.3.x:** legacy v1 / v2 configs no longer load. There is no
+> `mp config convert`. To upgrade: delete `~/.mp/config.toml` and re-add accounts via
+> `mp account add NAME --type {service_account|oauth_browser|oauth_token} ...`.
+> Full migration walkthrough in `RELEASE_NOTES_0.4.0.md`.
 
 ## Development
 
@@ -325,7 +345,7 @@ python help.py Filter                  # type fields + construction patterns + r
 - N/A — query parameter types only, no persistence (040-query-engine-completeness)
 
 ## Recent Changes
-- PR #125: Added `MP_OAUTH_TOKEN` env-var auth path for non-interactive bearer-token authentication (agents, CI). Service-account env quad takes precedence when both sets are complete. Public `Credentials.from_oauth_token()` factory exposes the same path to SDK callers.
+- **0.4.0 (042-auth-architecture-redesign)**: Hard rewrite of the auth subsystem. Single schema, single resolver, three first-class account types (`service_account` / `oauth_browser` / `oauth_token`). New CLI groups: `mp account`, `mp project`, `mp workspace`, `mp target`, `mp session`. New globals: `--account` / `--project` / `--workspace` / `--target`. `Workspace.use(...)` is the single in-session switching method. `MP_OAUTH_TOKEN` env path (PR #125) preserved as the recommended non-interactive mode. Plugin bumped to 5.0.0 with stable JSON contract (`schema_version: 1`). **Breaking**: legacy v1 / v2 configs no longer load — wipe `~/.mp/config.toml` and re-add accounts. Full migration walkthrough in [`RELEASE_NOTES_0.4.0.md`](RELEASE_NOTES_0.4.0.md).
 - 029-insights-query-api: Added Python 3.10+ with full type hints (mypy --strict) + httpx (HTTP client), Pydantic v2 (validation), pandas (DataFrames)
 
 <!-- SPECKIT START -->
