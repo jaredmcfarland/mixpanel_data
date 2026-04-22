@@ -272,18 +272,34 @@ class MixpanelAPIClient:
         )
 
     def _get_auth_header(self) -> str:
-        """Generate the Authorization header value.
+        """Generate the Authorization header value, resolving per request.
 
-        Delegates to ``Credentials.auth_header()`` which returns
-        ``"Bearer <token>"`` for OAuth or ``"Basic <encoded>"`` for
-        service accounts.
+        For session-bound OAuth accounts (browser or static token), delegates
+        to the bound :class:`TokenResolver` on every call so a refreshed
+        bearer (Fix 16) is picked up without rebuilding the API client.
+        Service accounts and the legacy ``credentials=`` path keep using
+        the cached :class:`Credentials.auth_header()` since Basic Auth has
+        no analogous freshness concern.
 
         Returns:
             Authorization header value appropriate for the auth method.
 
         Raises:
-            ValueError: If OAuth credentials are missing an access token.
+            OAuthError: An OAuth account's token cannot be re-resolved
+                (e.g. on-disk tokens deleted or refresh failed).
+            ValueError: Cached OAuth credentials are missing an access
+                token (legacy ``credentials=`` callers only).
         """
+        if self._session is not None:
+            account = self._session.account
+            if isinstance(account, OAuthBrowserAccount):
+                token = self._token_resolver.get_browser_token(
+                    account.name, account.region
+                )
+                return f"Bearer {token}"
+            if isinstance(account, OAuthTokenAccount):
+                token = self._token_resolver.get_static_token(account)
+                return f"Bearer {token}"
         return self._credentials.auth_header()
 
     def _build_url(self, api_type: str, path: str) -> str:
@@ -828,16 +844,17 @@ class MixpanelAPIClient:
     def current_auth_header(self) -> str:
         """Return the current ``Authorization`` header value.
 
-        The value is computed from the current ``Credentials`` shim on
-        every access — there is no caching at this level. For
-        ``service_account`` it is a ``Basic`` header derived from
-        username/secret; for OAuth it is a ``Bearer`` header.
+        The value is computed on every access — there is no caching at
+        this level. Session-bound OAuth accounts re-resolve via the
+        :class:`TokenResolver` (so a refreshed bearer surfaces here
+        immediately); service accounts return ``Basic`` derived from
+        the cached username/secret.
 
         Returns:
             The header value (``Basic ...`` or ``Bearer ...``) that
             every per-request header set carries.
         """
-        return self._credentials.auth_header()
+        return self._get_auth_header()
 
     @property
     def _http(self) -> httpx.Client:

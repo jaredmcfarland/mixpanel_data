@@ -154,7 +154,9 @@ class OAuthFlow:
         self._storage.save_tokens(new_tokens, region=region)
         return new_tokens.access_token.get_secret_value()
 
-    def login(self, project_id: str | None = None) -> OAuthTokens:
+    def login(
+        self, project_id: str | None = None, *, persist: bool = True
+    ) -> OAuthTokens:
         """Execute the full interactive OAuth PKCE login flow.
 
         Performs the following steps:
@@ -164,10 +166,16 @@ class OAuthFlow:
         4. Open browser to Mixpanel authorization URL
         5. Wait for callback with authorization code
         6. Exchange code for tokens
-        7. Save tokens to local storage
+        7. Save tokens to local storage (when ``persist`` is True)
 
         Args:
             project_id: Optional Mixpanel project ID to associate with tokens.
+            persist: When True (default), the resulting :class:`OAuthTokens`
+                are written to the configured :class:`OAuthStorage` at
+                ``~/.mp/oauth/tokens_{region}.json``. v3 callers
+                (``mp.accounts.login``) opt out and persist to the
+                per-account ``~/.mp/accounts/{name}/tokens.json`` path
+                themselves.
 
         Returns:
             The obtained OAuthTokens with access and optional refresh tokens.
@@ -272,8 +280,9 @@ class OAuthFlow:
             project_id=project_id,
         )
 
-        # Step 8: Save tokens
-        self._storage.save_tokens(tokens, region=self._region)
+        # Step 8: Save tokens (v2 layout) when the caller opts in.
+        if persist:
+            self._storage.save_tokens(tokens, region=self._region)
 
         return tokens
 

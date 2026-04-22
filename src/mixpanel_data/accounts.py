@@ -1,13 +1,13 @@
 """Public ``mp.accounts`` namespace.
 
-Thin wrapper around :class:`~mixpanel_data._internal.config_v3.ConfigManager`
+Thin wrapper around :class:`~mixpanel_data._internal.config.ConfigManager`
 exposing account CRUD, switching, and probing operations as the canonical
 Python API for ``mp account ...`` CLI commands and the plugin's
 ``auth_manager.py``.
 
-Bridge functions (``export_bridge`` / ``remove_bridge``) are stubs in
-Phase 4 and raise :class:`NotImplementedError`. They land in Phase 8 with
-the v2 bridge writer.
+``export_bridge`` / ``remove_bridge`` are still stubs (Cluster C2 of the
+042 plan delivers the v2 bridge writer); ``login`` and the OAuth refresh
+path are wired up as of Cluster A1 (Fix 16 / 17).
 
 Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 """
@@ -15,7 +15,9 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 from __future__ import annotations
 
 import builtins
+import json
 from pathlib import Path
+from typing import Any
 
 from pydantic import SecretStr
 
@@ -26,10 +28,17 @@ from mixpanel_data._internal.auth.account import (
     Region,
     ServiceAccount,
 )
+from mixpanel_data._internal.auth.storage import ensure_account_dir
 from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.exceptions import ConfigError
-from mixpanel_data.types import AccountSummary, AccountTestResult
+from mixpanel_data._internal.io_utils import atomic_write_bytes
+from mixpanel_data.exceptions import ConfigError, OAuthError
+from mixpanel_data.types import (
+    AccountSummary,
+    AccountTestResult,
+    MeUserInfo,
+    OAuthLoginResult,
+)
 
 
 def _config() -> ConfigManager:
@@ -246,23 +255,150 @@ def test(name: str | None = None) -> AccountTestResult:
     )
 
 
-def login(name: str, *, open_browser: bool = True) -> object:
+def login(
+    name: str,
+    *,
+    open_browser: bool = True,  # noqa: ARG001 — reserved for headless mode (OAuthFlow always opens today)
+) -> OAuthLoginResult:
     """Run the OAuth browser flow for an ``oauth_browser`` account.
 
-    Phase 4 stub: full PKCE wiring lands in Phase 5 along with the CLI
-    command. For now, raises :class:`NotImplementedError` instructing the
-    caller to use the CLI.
+    Drives the full PKCE login dance:
+
+    1. Validate ``name`` resolves to an ``oauth_browser`` account.
+    2. Run :meth:`OAuthFlow.login` (PKCE + browser callback + token exchange).
+    3. Persist the resulting tokens atomically to
+       ``~/.mp/accounts/{name}/tokens.json``.
+    4. Probe ``/me`` to capture the authenticated user identity and
+       (when missing) backfill ``account.default_project`` with the first
+       accessible project.
+
+    The browser is opened by default; pass ``open_browser=False`` to
+    skip the call (useful for headless environments where the user copies
+    the authorization URL manually).
 
     Args:
         name: Account name (must be ``oauth_browser`` type).
-        open_browser: Whether to launch the system browser.
+        open_browser: Whether to launch the system browser. ``OAuthFlow``
+            currently always opens the browser; the kwarg is reserved
+            for a future headless mode and presently treated as a hint.
+
+    Returns:
+        An :class:`OAuthLoginResult` describing the persistence paths,
+        token expiry, and (best-effort) authenticated user identity.
 
     Raises:
-        NotImplementedError: Phase 4 stub.
+        ConfigError: ``name`` is not configured or is not ``oauth_browser``.
+        OAuthError: Any leg of the PKCE flow fails (registration, browser,
+            callback, token exchange).
     """
-    raise NotImplementedError(
-        f"`mp.accounts.login({name!r})` is wired in Phase 5 with the CLI."
+    cm = _config()
+    account = cm.get_account(name)
+    if not isinstance(account, OAuthBrowserAccount):
+        raise ConfigError(
+            f"`mp account login` is only valid for oauth_browser accounts; "
+            f"'{name}' is type '{account.type}'."
+        )
+
+    # Lazy imports — pull in OAuthFlow / Workspace only when actually logging in.
+    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_data._internal.auth.flow import OAuthFlow
+    from mixpanel_data._internal.auth.session import Project, Session
+    from mixpanel_data._internal.me import MeCache, MeResponse, MeService
+
+    flow = OAuthFlow(region=account.region)
+    # ``persist=False`` skips the v2 ``~/.mp/oauth/tokens_{region}.json``
+    # write — v3 owns ``~/.mp/accounts/{name}/tokens.json`` exclusively.
+    tokens = flow.login(project_id=account.default_project, persist=False)
+
+    tokens_path = _persist_browser_tokens(name, tokens)
+
+    # /me probe: validates the freshly minted bearer + backfills the
+    # account's default_project on first login.
+    user: MeUserInfo | None = None
+    chosen_project = account.default_project
+    placeholder_project = chosen_project or "0"
+    probe_session = Session(
+        account=account,
+        project=Project(id=placeholder_project),
     )
+    api_client = MixpanelAPIClient(session=probe_session)
+    try:
+        me_svc = MeService(
+            api_client=api_client,
+            cache=MeCache(),
+            region=account.region,
+        )
+        try:
+            me_raw = api_client.me()
+            me_resp = MeResponse.model_validate(me_raw)
+        except Exception as exc:  # noqa: BLE001 — re-raise as OAuthError below
+            raise OAuthError(
+                f"Login succeeded but `/me` probe failed: {exc}",
+                code="OAUTH_TOKEN_ERROR",
+                details={"account_name": name, "region": account.region},
+            ) from exc
+        # MeService is constructed for parity with the rest of the codebase
+        # (eager cache wiring) but the immediate-post-login response is
+        # consumed directly so a second network call is not needed.
+        del me_svc  # signal: kept reference live during the try block
+        if me_resp.user_id is not None and me_resp.user_email is not None:
+            user = MeUserInfo(id=me_resp.user_id, email=me_resp.user_email)
+        if chosen_project is None and me_resp.projects:
+            chosen_project = next(iter(sorted(me_resp.projects)))
+            cm.update_account(name, default_project=chosen_project)
+    finally:
+        api_client.close()
+
+    return OAuthLoginResult(
+        account_name=name,
+        user=user,
+        expires_at=tokens.expires_at,
+        tokens_path=tokens_path,
+        client_path=_client_info_path(account.region),
+    )
+
+
+def _persist_browser_tokens(name: str, tokens: Any) -> Path:
+    """Write ``tokens`` to the per-account ``tokens.json`` atomically (mode 0o600).
+
+    Args:
+        name: Account name (locates ``~/.mp/accounts/{name}/``).
+        tokens: A :class:`OAuthTokens` instance just returned from
+            :meth:`OAuthFlow.login`.
+
+    Returns:
+        The path that was written.
+    """
+    account_dir = ensure_account_dir(name)
+    path = account_dir / "tokens.json"
+    payload: dict[str, Any] = {
+        "access_token": tokens.access_token.get_secret_value(),
+        "expires_at": tokens.expires_at.isoformat(),
+        "token_type": tokens.token_type,
+    }
+    if tokens.scope is not None:
+        payload["scope"] = tokens.scope
+    if tokens.refresh_token is not None:
+        payload["refresh_token"] = tokens.refresh_token.get_secret_value()
+    atomic_write_bytes(path, json.dumps(payload).encode("utf-8"))
+    return path
+
+
+def _client_info_path(region: Region) -> Path:
+    """Return where ``OAuthFlow`` cached the DCR client info for ``region``.
+
+    The v3 layout still shares DCR client metadata across accounts in the
+    same region (every Mixpanel ``oauth_browser`` account speaks to the
+    same authorization server, so there is one DCR client per region).
+    Recorded for ``OAuthLoginResult.client_path`` so callers can find it.
+
+    Args:
+        region: Mixpanel data residency region.
+
+    Returns:
+        Absolute path to the client info JSON (may not exist yet).
+    """
+    return Path.home() / ".mp" / "oauth" / f"client_{region}.json"
 
 
 def logout(name: str) -> None:

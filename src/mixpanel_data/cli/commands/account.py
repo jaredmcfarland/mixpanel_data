@@ -467,14 +467,33 @@ def test_account(
 
 
 @account_app.command("login")
+@handle_errors
 def login_account(
+    ctx: typer.Context,
     name: Annotated[str, typer.Argument(help="OAuth browser account name.")],
+    no_browser: Annotated[
+        bool,
+        typer.Option(
+            "--no-browser",
+            help="Skip launching the system browser (headless / SSH).",
+        ),
+    ] = False,
 ) -> None:
-    """Run the OAuth browser flow (Phase 5+ wiring — currently a stub)."""
-    err_console.print(
-        "[yellow]`mp account login` is a stub in Phase 5; OAuth wiring lands later.[/yellow]"
-    )
-    raise typer.Exit(ExitCode.GENERAL_ERROR)
+    """Run the OAuth browser flow for an ``oauth_browser`` account.
+
+    Drives the PKCE login dance, persists tokens to
+    ``~/.mp/accounts/{name}/tokens.json``, and probes ``/me`` to backfill
+    the account's ``default_project`` on first login. Prints a JSON
+    :class:`OAuthLoginResult` so scripts and the plugin can consume the
+    structured outcome.
+
+    Args:
+        ctx: Typer context.
+        name: Account name (must be ``oauth_browser`` type).
+        no_browser: Skip browser launch (manual URL copy).
+    """
+    result = accounts_ns.login(name, open_browser=not no_browser)
+    console.print(_json.dumps(result.model_dump(mode="json"), indent=2))
 
 
 @account_app.command("logout")

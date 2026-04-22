@@ -168,6 +168,101 @@ class TestAuthHeader:
         assert decoded == "test_user:test_secret"
         client.close()
 
+    def test_oauth_session_resolves_bearer_per_request(self) -> None:
+        """Fix 18: session-bound OAuth re-resolves the bearer on each call.
+
+        With a fresh-token-on-every-call resolver stub, two consecutive
+        ``_get_auth_header()`` calls return DIFFERENT bearers — proving
+        the bearer is not cached at construction time.
+        """
+        from mixpanel_data._internal.auth.account import (
+            OAuthBrowserAccount,
+            Region,
+            TokenResolver,
+        )
+        from mixpanel_data._internal.auth.session import Project, Session
+
+        class _CountingResolver(TokenResolver):
+            """Returns a new bearer on each call so we can assert per-request resolution."""
+
+            def __init__(self) -> None:
+                """Track call count starting at 0."""
+                self.calls = 0
+
+            def get_browser_token(self, name: str, region: Region) -> str:
+                """Return ``tok-N`` where N increments on each call."""
+                self.calls += 1
+                return f"tok-{self.calls}"
+
+            def get_static_token(self, account: object) -> str:  # pragma: no cover
+                """Not exercised in this test."""
+                raise AssertionError("static token path should not be hit")
+
+        account: OAuthBrowserAccount = OAuthBrowserAccount(
+            name="alice",
+            region="us",
+            default_project="12345",
+        )
+        session = Session(account=account, project=Project(id="12345"))
+        resolver = _CountingResolver()
+        client = MixpanelAPIClient(session=session, token_resolver=resolver)
+        try:
+            # session_to_credentials eagerly resolves once at construction so
+            # missing-tokens fail at Workspace() rather than at the first API
+            # call (early-failure UX). After that, every _get_auth_header
+            # call hits the resolver again — a refreshed bearer (Fix 16)
+            # surfaces immediately.
+            assert resolver.calls == 1
+            first = client._get_auth_header()
+            second = client._get_auth_header()
+            assert first == "Bearer tok-2"
+            assert second == "Bearer tok-3"
+            assert resolver.calls == 3
+            # current_auth_header (public) routes through the same per-request path.
+            assert client.current_auth_header == "Bearer tok-4"
+            assert resolver.calls == 4
+        finally:
+            client.close()
+
+    def test_service_account_session_uses_basic_auth_no_resolver_call(self) -> None:
+        """Service-account session keeps Basic auth + no per-request resolver call."""
+        from mixpanel_data._internal.auth.account import (
+            Region,
+            ServiceAccount,
+            TokenResolver,
+        )
+        from mixpanel_data._internal.auth.session import Project, Session
+
+        class _NeverCalledResolver(TokenResolver):
+            """Asserts neither token method is called for service-account sessions."""
+
+            def get_browser_token(
+                self, name: str, region: Region
+            ) -> str:  # pragma: no cover
+                """Should never run — service accounts are Basic auth."""
+                raise AssertionError("browser token path should not run for SA")
+
+            def get_static_token(self, account: object) -> str:  # pragma: no cover
+                """Should never run — service accounts are Basic auth."""
+                raise AssertionError("static token path should not run for SA")
+
+        sa = ServiceAccount(
+            name="team",
+            region="us",
+            username="sa-user",
+            secret=SecretStr("sa-secret"),
+            default_project="12345",
+        )
+        session = Session(account=sa, project=Project(id="12345"))
+        client = MixpanelAPIClient(
+            session=session, token_resolver=_NeverCalledResolver()
+        )
+        try:
+            header = client._get_auth_header()
+            assert header.startswith("Basic ")
+        finally:
+            client.close()
+
 
 class TestBuildUrl:
     """Test URL building."""

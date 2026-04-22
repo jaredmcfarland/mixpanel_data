@@ -206,6 +206,155 @@ class TestBrowserToken:
         assert resolver.get_browser_token("me", "us") == "brw-tok-comfortable"
 
 
+class TestBrowserTokenRefresh:
+    """Coverage for Fix 16: expired-but-refreshable browser tokens auto-refresh."""
+
+    def test_expired_with_refresh_token_calls_oauth_flow(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """An expired token with a refresh token routes through ``OAuthFlow.refresh_tokens``."""
+        from mixpanel_data._internal.auth import flow as flow_mod
+        from mixpanel_data._internal.auth import storage as storage_mod
+        from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        path = _write_tokens_file(
+            isolated_home,
+            name="me",
+            access_token="brw-tok-old",
+            expires_at=past,
+            refresh_token="brw-refresh-1",
+        )
+
+        # Stub OAuthStorage.load_client_info — return a fake DCR registration.
+        def _fake_load_client_info(self: object, *, region: str) -> OAuthClientInfo:
+            """Return canned client info regardless of region."""
+            return OAuthClientInfo(
+                client_id="dcr-client-1",
+                region=region,
+                redirect_uri="http://localhost:19284/callback",
+                scope="read:project",
+                created_at=datetime.now(timezone.utc),
+            )
+
+        monkeypatch.setattr(
+            storage_mod.OAuthStorage, "load_client_info", _fake_load_client_info
+        )
+
+        # Stub OAuthFlow.refresh_tokens — capture the call args, return new tokens.
+        captured: dict[str, object] = {}
+        new_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        def _fake_refresh(
+            self: object, *, tokens: OAuthTokens, client_id: str
+        ) -> OAuthTokens:
+            """Return refreshed tokens; record the inputs for assertions."""
+            captured["client_id"] = client_id
+            captured["refresh_token_in"] = (
+                tokens.refresh_token.get_secret_value()
+                if tokens.refresh_token
+                else None
+            )
+            return OAuthTokens(
+                access_token=SecretStr("brw-tok-new"),
+                refresh_token=SecretStr("brw-refresh-2"),
+                expires_at=new_expires,
+                scope="read:project",
+                token_type="Bearer",
+            )
+
+        monkeypatch.setattr(flow_mod.OAuthFlow, "refresh_tokens", _fake_refresh)
+
+        resolver = OnDiskTokenResolver()
+        result = resolver.get_browser_token("me", "us")
+
+        assert result == "brw-tok-new"
+        assert captured["client_id"] == "dcr-client-1"
+        assert captured["refresh_token_in"] == "brw-refresh-1"
+        # Per-account file is rewritten with the new payload.
+        new_payload = json.loads(path.read_text(encoding="utf-8"))
+        assert new_payload["access_token"] == "brw-tok-new"
+        assert new_payload["refresh_token"] == "brw-refresh-2"
+        assert new_payload["expires_at"] == new_expires.isoformat()
+        # File mode preserved at 0o600.
+        assert (path.stat().st_mode & 0o777) == 0o600
+
+    def test_refresh_response_without_new_refresh_keeps_existing(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """If the IdP omits a rotated refresh token the existing one is preserved."""
+        from mixpanel_data._internal.auth import flow as flow_mod
+        from mixpanel_data._internal.auth import storage as storage_mod
+        from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        path = _write_tokens_file(
+            isolated_home,
+            name="me",
+            access_token="brw-tok-old",
+            expires_at=past,
+            refresh_token="long-lived-refresh",
+        )
+        monkeypatch.setattr(
+            storage_mod.OAuthStorage,
+            "load_client_info",
+            lambda _self, *, region: OAuthClientInfo(
+                client_id="c1",
+                region=region,
+                redirect_uri="http://localhost:19284/callback",
+                scope="read:project",
+                created_at=datetime.now(timezone.utc),
+            ),
+        )
+        monkeypatch.setattr(
+            flow_mod.OAuthFlow,
+            "refresh_tokens",
+            lambda _self, *, tokens, client_id: OAuthTokens(  # noqa: ARG005
+                access_token=SecretStr("brw-tok-new"),
+                refresh_token=None,  # IdP didn't rotate
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                scope="read:project",
+                token_type="Bearer",
+            ),
+        )
+
+        resolver = OnDiskTokenResolver()
+        assert resolver.get_browser_token("me", "us") == "brw-tok-new"
+        new_payload = json.loads(path.read_text(encoding="utf-8"))
+        assert new_payload["refresh_token"] == "long-lived-refresh"
+
+    def test_refresh_without_client_info_raises_oauth_refresh_error(
+        self,
+        isolated_home: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Missing DCR client info surfaces an actionable ``OAUTH_REFRESH_ERROR``."""
+        from mixpanel_data._internal.auth import storage as storage_mod
+
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        _write_tokens_file(
+            isolated_home,
+            name="me",
+            access_token="brw-tok-old",
+            expires_at=past,
+            refresh_token="r1",
+        )
+        monkeypatch.setattr(
+            storage_mod.OAuthStorage,
+            "load_client_info",
+            lambda _self, *, region: None,  # noqa: ARG005
+        )
+
+        resolver = OnDiskTokenResolver()
+        with pytest.raises(OAuthError) as exc_info:
+            resolver.get_browser_token("me", "us")
+        assert exc_info.value.code == "OAUTH_REFRESH_ERROR"
+
+
 class TestPathLayout:
     """File system layout invariants per contracts/filesystem-layout.md §3."""
 

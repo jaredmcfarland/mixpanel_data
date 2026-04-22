@@ -7,10 +7,10 @@ where and how to fetch the bearer). This module ships
 browser tokens from ``~/.mp/accounts/{name}/tokens.json`` and static
 tokens from inline ``SecretStr`` fields or environment variables.
 
-Refresh logic for browser tokens delegates to existing
-:class:`mixpanel_data._internal.auth.flow.OAuthFlow` machinery (deferred —
-filled in during Phase 4 of the rollout). For now, an expired browser
-token without a refresh token raises :class:`OAuthError` directly.
+Browser-token refresh delegates to
+:meth:`mixpanel_data._internal.auth.flow.OAuthFlow.refresh_tokens` and
+persists the new payload back to the per-account path atomically (Fix 16
+of the 042 plan).
 
 Reference: ``specs/042-auth-architecture-redesign/data-model.md``,
 ``contracts/python-api.md`` §5.
@@ -22,12 +22,16 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
+
+from pydantic import SecretStr
 
 from mixpanel_data._internal.auth.account import (
     OAuthTokenAccount,
     Region,
     TokenResolver,
 )
+from mixpanel_data._internal.io_utils import atomic_write_bytes
 from mixpanel_data.exceptions import OAuthError
 
 
@@ -153,12 +157,68 @@ class OnDiskTokenResolver(TokenResolver):
                         "path": str(path),
                     },
                 )
-            # Refresh path — delegated to OAuthFlow in a later phase.
+            return self._refresh_and_persist(
+                name=name,
+                region=region,
+                path=path,
+                payload=payload,
+                refresh_token=refresh,
+                expires_at=expires_at,
+            )
+
+        return access_token
+
+    def _refresh_and_persist(
+        self,
+        *,
+        name: str,
+        region: Region,
+        path: Path,
+        payload: dict[str, Any],
+        refresh_token: str,
+        expires_at: datetime,
+    ) -> str:
+        """Refresh an expired browser token and rewrite the per-account file atomically.
+
+        Loads the cached DCR client info for ``region`` (shared with the
+        legacy v2 OAuth layout — same client across accounts), POSTs the
+        refresh request via :class:`OAuthFlow`, and writes the new
+        payload back to ``path`` with mode ``0o600``. The refreshed
+        access token is returned so the in-flight HTTP request can use it.
+
+        Args:
+            name: Account name (for error messages and the account dir).
+            region: Mixpanel region (selects the DCR base URL).
+            path: Per-account ``tokens.json`` to rewrite on success.
+            payload: Currently-on-disk payload (used to preserve scope /
+                token_type if the refresh response omits them).
+            refresh_token: The (still-valid) refresh token to spend.
+            expires_at: Stale ``expires_at`` from disk, included on the
+                outbound :class:`OAuthTokens` so :func:`refresh_tokens`
+                has a complete model to pass.
+
+        Returns:
+            The freshly minted access token (no ``Bearer`` prefix).
+
+        Raises:
+            OAuthError: ``OAUTH_REFRESH_ERROR`` for any leg of the
+                refresh — missing client info, network failure,
+                malformed response.
+        """
+        # Lazy imports so this module stays cheap to import at
+        # collection time (OAuthFlow pulls in httpx + threading).
+        from mixpanel_data._internal.auth.flow import OAuthFlow
+        from mixpanel_data._internal.auth.storage import OAuthStorage
+        from mixpanel_data._internal.auth.token import OAuthTokens
+
+        storage = OAuthStorage()
+        client_info = storage.load_client_info(region=region)
+        if client_info is None:
             raise OAuthError(
                 (
-                    f"OAuth access token for account '{name}' has "
-                    f"expired. Token refresh is not yet wired up; re-run "
-                    f"`mp account login {name}` to obtain a fresh token."
+                    f"OAuth client info for region '{region}' is missing; "
+                    f"cannot refresh tokens for account '{name}'. "
+                    f"Re-run `mp account login {name}`."
                 ),
                 code="OAUTH_REFRESH_ERROR",
                 details={
@@ -168,7 +228,34 @@ class OnDiskTokenResolver(TokenResolver):
                 },
             )
 
-        return access_token
+        current = OAuthTokens(
+            access_token=SecretStr(payload["access_token"]),
+            refresh_token=SecretStr(refresh_token),
+            expires_at=expires_at,
+            scope=payload.get("scope"),
+            token_type=payload.get("token_type", "Bearer"),
+        )
+        flow = OAuthFlow(region=region, storage=storage)
+        new_tokens = flow.refresh_tokens(
+            tokens=current, client_id=client_info.client_id
+        )
+
+        new_payload: dict[str, Any] = {
+            "access_token": new_tokens.access_token.get_secret_value(),
+            "expires_at": new_tokens.expires_at.isoformat(),
+            "token_type": new_tokens.token_type,
+        }
+        if new_tokens.scope is not None:
+            new_payload["scope"] = new_tokens.scope
+        # Refresh tokens may rotate; if the IdP returns no new refresh token
+        # we keep the existing one to preserve future refresh capability.
+        if new_tokens.refresh_token is not None:
+            new_payload["refresh_token"] = new_tokens.refresh_token.get_secret_value()
+        else:
+            new_payload["refresh_token"] = refresh_token
+
+        atomic_write_bytes(path, json.dumps(new_payload).encode("utf-8"))
+        return new_tokens.access_token.get_secret_value()
 
     def get_static_token(self, account: OAuthTokenAccount) -> str:
         """Return the static bearer for an :class:`OAuthTokenAccount`.

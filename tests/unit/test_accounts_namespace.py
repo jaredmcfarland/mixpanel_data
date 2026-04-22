@@ -12,6 +12,7 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -379,3 +380,93 @@ class TestStubs:
         """``remove_bridge`` is a stub until Phase 8."""
         with pytest.raises(NotImplementedError):
             accounts_ns.remove_bridge()
+
+
+class TestLogin:
+    """Coverage for Fix 17 — ``mp.accounts.login(name)``."""
+
+    def test_login_rejects_non_oauth_browser_account(self, cm: ConfigManager) -> None:
+        """``login`` raises ConfigError for service_account / oauth_token types."""
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        with pytest.raises(ConfigError, match="oauth_browser"):
+            accounts_ns.login("team")
+
+    def test_login_missing_account_raises(self, cm: ConfigManager) -> None:
+        """``login`` raises ConfigError if the account is not configured."""
+        with pytest.raises(ConfigError, match="not found"):
+            accounts_ns.login("ghost")
+
+    def test_login_persists_tokens_and_backfills_default_project(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        cm: ConfigManager,
+    ) -> None:
+        """Successful PKCE flow writes per-account tokens.json and backfills default_project."""
+        from datetime import datetime, timedelta, timezone
+
+        from mixpanel_data._internal.auth import flow as flow_mod
+        from mixpanel_data._internal.auth.token import OAuthTokens
+
+        accounts_ns.add("personal", type="oauth_browser", region="us")
+
+        new_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        captured: dict[str, object] = {}
+
+        def _fake_login(
+            self: object, project_id: str | None = None, *, persist: bool = True
+        ) -> OAuthTokens:
+            """Stub OAuthFlow.login — record the persist kwarg, return tokens."""
+            captured["project_id"] = project_id
+            captured["persist"] = persist
+            return OAuthTokens(
+                access_token=SecretStr("brw-tok-fresh"),
+                refresh_token=SecretStr("brw-refresh-fresh"),
+                expires_at=new_expires,
+                scope="read:project",
+                token_type="Bearer",
+            )
+
+        monkeypatch.setattr(flow_mod.OAuthFlow, "login", _fake_login)
+
+        # Stub the /me probe to return a single project.
+        from mixpanel_data._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            """Return canned /me payload with one project + a user."""
+            return {
+                "user_id": 7,
+                "user_email": "alice@example.com",
+                "projects": {"3713224": {"name": "Demo", "organization_id": 1}},
+            }
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+
+        result = accounts_ns.login("personal")
+
+        assert captured["persist"] is False
+        assert captured["project_id"] is None  # account had no default_project
+        # Tokens persisted to per-account v3 path
+        tokens_path = tmp_path / ".mp" / "accounts" / "personal" / "tokens.json"
+        assert tokens_path.exists()
+        payload = json.loads(tokens_path.read_text(encoding="utf-8"))
+        assert payload["access_token"] == "brw-tok-fresh"
+        assert payload["refresh_token"] == "brw-refresh-fresh"
+        # File mode preserved at 0o600.
+        assert (tokens_path.stat().st_mode & 0o777) == 0o600
+        # default_project backfilled from /me probe
+        refreshed = cm.get_account("personal")
+        assert refreshed.default_project == "3713224"
+        # OAuthLoginResult shape
+        assert result.account_name == "personal"
+        assert result.user is not None
+        assert result.user.email == "alice@example.com"
+        assert result.expires_at == new_expires
+        assert result.tokens_path == tokens_path
