@@ -10,7 +10,6 @@ Example:
     tokens = OAuthTokens.from_token_response(
         {"access_token": "abc", "refresh_token": "def", "expires_in": 3600,
          "scope": "read", "token_type": "Bearer"},
-        project_id="12345",
     )
     if tokens.is_expired():
         print("Token needs refresh")
@@ -37,7 +36,6 @@ class OAuthTokens(BaseModel):
         expires_at: UTC datetime when the access token expires.
         scope: Space-separated list of granted scopes.
         token_type: Token type, typically ``"Bearer"``.
-        project_id: Associated Mixpanel project ID, if known.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -61,9 +59,6 @@ class OAuthTokens(BaseModel):
 
     token_type: str
     """Token type, typically ``'Bearer'``."""
-
-    project_id: str | None = None
-    """Associated Mixpanel project ID, if known."""
 
     @field_validator("expires_at")
     @classmethod
@@ -109,11 +104,7 @@ class OAuthTokens(BaseModel):
         return datetime.now(timezone.utc) + timedelta(seconds=30) >= self.expires_at
 
     @classmethod
-    def from_token_response(
-        cls,
-        data: dict[str, object],
-        project_id: str | None = None,
-    ) -> OAuthTokens:
+    def from_token_response(cls, data: dict[str, object]) -> OAuthTokens:
         """Create an OAuthTokens instance from a raw token endpoint response.
 
         Computes ``expires_at`` by adding the ``expires_in`` value (in seconds)
@@ -123,7 +114,6 @@ class OAuthTokens(BaseModel):
             data: Raw JSON response from the token endpoint. Must contain
                 ``access_token``, ``expires_in``, ``scope``, and ``token_type``.
                 May contain ``refresh_token``.
-            project_id: Optional Mixpanel project ID to associate with the tokens.
 
         Returns:
             A new frozen OAuthTokens instance.
@@ -141,7 +131,7 @@ class OAuthTokens(BaseModel):
                 "scope": "read:project",
                 "token_type": "Bearer",
             }
-            tokens = OAuthTokens.from_token_response(response, project_id="123")
+            tokens = OAuthTokens.from_token_response(response)
             ```
         """
         expires_in_raw = data["expires_in"]
@@ -159,7 +149,6 @@ class OAuthTokens(BaseModel):
             expires_at=expires_at,
             scope=str(data.get("scope", "")),
             token_type=str(data["token_type"]),
-            project_id=project_id,
         )
 
 

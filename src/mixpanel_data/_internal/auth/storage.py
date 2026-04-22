@@ -376,7 +376,6 @@ class OAuthStorage:
             "expires_at": tokens.expires_at.isoformat(),
             "scope": tokens.scope,
             "token_type": tokens.token_type,
-            "project_id": tokens.project_id,
         }
         if tokens.refresh_token is not None:
             data["refresh_token"] = tokens.refresh_token.get_secret_value()
@@ -420,7 +419,6 @@ class OAuthStorage:
                 expires_at=data["expires_at"],
                 scope=str(data["scope"]),
                 token_type=str(data["token_type"]),
-                project_id=data.get("project_id"),
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning(

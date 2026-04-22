@@ -13,7 +13,7 @@ Example:
     from mixpanel_data._internal.auth.flow import OAuthFlow
 
     flow = OAuthFlow(region="us")
-    tokens = flow.login(project_id="12345")
+    tokens = flow.login()
     print(f"Access token: {tokens.access_token.get_secret_value()[:8]}...")
     ```
 """
@@ -154,9 +154,7 @@ class OAuthFlow:
         self._storage.save_tokens(new_tokens, region=region)
         return new_tokens.access_token.get_secret_value()
 
-    def login(
-        self, project_id: str | None = None, *, persist: bool = True
-    ) -> OAuthTokens:
+    def login(self, *, persist: bool = True) -> OAuthTokens:
         """Execute the full interactive OAuth PKCE login flow.
 
         Performs the following steps:
@@ -169,7 +167,6 @@ class OAuthFlow:
         7. Save tokens to local storage (when ``persist`` is True)
 
         Args:
-            project_id: Optional Mixpanel project ID to associate with tokens.
             persist: When True (default), the resulting :class:`OAuthTokens`
                 are written to the configured :class:`OAuthStorage` at
                 ``~/.mp/oauth/tokens_{region}.json``. v3 callers
@@ -187,7 +184,7 @@ class OAuthFlow:
         Example:
             ```python
             flow = OAuthFlow(region="us")
-            tokens = flow.login(project_id="12345")
+            tokens = flow.login()
             print(tokens.access_token.get_secret_value()[:8])
             ```
         """
@@ -277,7 +274,6 @@ class OAuthFlow:
             verifier=pkce.verifier,
             client_id=client_info.client_id,
             redirect_uri=redirect_uri,
-            project_id=project_id,
         )
 
         # Step 8: Save tokens (v2 layout) when the caller opts in.
@@ -292,7 +288,6 @@ class OAuthFlow:
         verifier: str,
         client_id: str,
         redirect_uri: str,
-        project_id: str | None = None,
     ) -> OAuthTokens:
         """Exchange an authorization code for OAuth tokens.
 
@@ -304,7 +299,6 @@ class OAuthFlow:
             verifier: The PKCE code verifier.
             client_id: The registered OAuth client ID.
             redirect_uri: The redirect URI used in the authorization request.
-            project_id: Optional Mixpanel project ID to associate with tokens.
 
         Returns:
             The obtained OAuthTokens.
@@ -333,7 +327,6 @@ class OAuthFlow:
             form_data,
             operation="Token exchange",
             error_code="OAUTH_TOKEN_ERROR",
-            project_id=project_id,
         )
 
     def refresh_tokens(
@@ -377,7 +370,6 @@ class OAuthFlow:
             form_data,
             operation="Token refresh",
             error_code="OAUTH_REFRESH_ERROR",
-            project_id=tokens.project_id,
         )
 
     def _post_token_request(
@@ -386,7 +378,6 @@ class OAuthFlow:
         *,
         operation: str,
         error_code: str,
-        project_id: str | None = None,
     ) -> OAuthTokens:
         """POST form data to the token endpoint and parse the response.
 
@@ -398,7 +389,6 @@ class OAuthFlow:
             operation: Human-readable name for error messages
                 (e.g., ``"Token exchange"`` or ``"Token refresh"``).
             error_code: OAuthError code to use on failure.
-            project_id: Optional project ID to attach to the returned tokens.
 
         Returns:
             Parsed OAuthTokens from the token endpoint response.
@@ -440,7 +430,7 @@ class OAuthFlow:
             ) from exc
 
         try:
-            return OAuthTokens.from_token_response(data, project_id=project_id)
+            return OAuthTokens.from_token_response(data)
         except (KeyError, TypeError, ValueError) as exc:
             raise OAuthError(
                 f"{operation} response missing required fields: {exc}",

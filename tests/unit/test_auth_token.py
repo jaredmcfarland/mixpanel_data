@@ -36,7 +36,6 @@ def _make_tokens(
     expires_at: datetime | None = None,
     scope: str = "projects analysis",
     token_type: str = "Bearer",
-    project_id: str | None = "12345",
 ) -> OAuthTokens:
     """Create an OAuthTokens instance with sensible defaults for testing.
 
@@ -46,7 +45,6 @@ def _make_tokens(
         expires_at: Token expiry datetime. Defaults to 1 hour from now.
         scope: OAuth scope string.
         token_type: Token type (typically 'Bearer').
-        project_id: Associated Mixpanel project ID.
 
     Returns:
         Configured OAuthTokens instance.
@@ -62,7 +60,6 @@ def _make_tokens(
         expires_at=expires_at,
         scope=scope,
         token_type=token_type,
-        project_id=project_id,
     )
 
 
@@ -85,11 +82,9 @@ class TestOAuthTokensImmutability:
         with pytest.raises(ValidationError):
             tokens.scope = "different_scope"  # type: ignore[misc]
 
-    def test_frozen_cannot_modify_project_id(self) -> None:
-        """Verify that project_id cannot be modified after construction."""
-        tokens = _make_tokens()
-        with pytest.raises(ValidationError):
-            tokens.project_id = "99999"  # type: ignore[misc]
+    # test_frozen_cannot_modify_project_id removed in B2 (T044): the
+    # ``project_id`` field is gone — project_id lives on
+    # ``Account.default_project`` in v3.
 
 
 class TestOAuthTokensExpiry:
@@ -204,7 +199,6 @@ class TestOAuthTokensSerialization:
             expires_at=expires,
             scope="projects analysis events",
             token_type="Bearer",
-            project_id="54321",
         )
 
         # Use model_dump with mode="json" to get JSON-serializable dict,
@@ -225,7 +219,6 @@ class TestOAuthTokensSerialization:
         assert restored.refresh_token.get_secret_value() == "rt_refresh"
         assert restored.scope == "projects analysis events"
         assert restored.token_type == "Bearer"
-        assert restored.project_id == "54321"
         # Datetime comparison (may lose sub-microsecond precision in JSON)
         assert abs((restored.expires_at - original.expires_at).total_seconds()) < 1
 
@@ -242,39 +235,10 @@ class TestOAuthTokensSerialization:
 
         assert restored.refresh_token is None
 
-    def test_json_round_trip_without_project_id(self) -> None:
-        """Verify JSON round-trip works when project_id is None."""
-        original = _make_tokens(project_id=None)
 
-        json_str = original.model_dump_json()
-        restored = OAuthTokens.model_validate_json(json_str)
-
-        assert restored.project_id is None
-
-
-class TestOAuthTokensProjectId:
-    """Tests for project_id field preservation."""
-
-    def test_project_id_preserved(self) -> None:
-        """Verify that project_id is stored and retrievable."""
-        tokens = _make_tokens(project_id="98765")
-        assert tokens.project_id == "98765"
-
-    def test_project_id_none_allowed(self) -> None:
-        """Verify that project_id can be None.
-
-        During initial OAuth login, project_id may not yet be known.
-        """
-        tokens = _make_tokens(project_id=None)
-        assert tokens.project_id is None
-
-    def test_project_id_preserved_through_different_values(self) -> None:
-        """Verify that different project_id values are independently preserved."""
-        tokens_a = _make_tokens(project_id="111")
-        tokens_b = _make_tokens(project_id="222")
-
-        assert tokens_a.project_id == "111"
-        assert tokens_b.project_id == "222"
+# TestOAuthTokensProjectId removed in B2 (T044): the legacy
+# ``OAuthTokens.project_id`` field is gone — project_id lives on
+# ``Account.default_project`` in v3.
 
 
 class TestOAuthTokensFromTokenResponse:
@@ -295,14 +259,13 @@ class TestOAuthTokensFromTokenResponse:
             "token_type": "Bearer",
         }
 
-        tokens = OAuthTokens.from_token_response(data, project_id="12345")
+        tokens = OAuthTokens.from_token_response(data)
 
         assert tokens.access_token.get_secret_value() == "new_access"
         assert tokens.refresh_token is not None
         assert tokens.refresh_token.get_secret_value() == "new_refresh"
         assert tokens.scope == "projects analysis"
         assert tokens.token_type == "Bearer"
-        assert tokens.project_id == "12345"
 
     def test_from_token_response_computes_expires_at(self) -> None:
         """Verify that expires_at is computed from expires_in seconds.
@@ -319,7 +282,7 @@ class TestOAuthTokensFromTokenResponse:
         }
 
         before = _utcnow()
-        tokens = OAuthTokens.from_token_response(data, project_id=None)
+        tokens = OAuthTokens.from_token_response(data)
         after = _utcnow()
 
         expected_min = before + timedelta(seconds=7200)
@@ -336,23 +299,9 @@ class TestOAuthTokensFromTokenResponse:
             "token_type": "Bearer",
         }
 
-        tokens = OAuthTokens.from_token_response(data, project_id="123")
+        tokens = OAuthTokens.from_token_response(data)
 
         assert tokens.refresh_token is None
-
-    def test_from_token_response_project_id_none(self) -> None:
-        """Verify from_token_response() accepts None project_id."""
-        data = {
-            "access_token": "tok",
-            "refresh_token": "ref",
-            "expires_in": 3600,
-            "scope": "projects",
-            "token_type": "Bearer",
-        }
-
-        tokens = OAuthTokens.from_token_response(data, project_id=None)
-
-        assert tokens.project_id is None
 
 
 class TestOAuthClientInfo:

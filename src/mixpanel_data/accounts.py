@@ -308,7 +308,7 @@ def login(
     flow = OAuthFlow(region=account.region)
     # ``persist=False`` skips the v2 ``~/.mp/oauth/tokens_{region}.json``
     # write — v3 owns ``~/.mp/accounts/{name}/tokens.json`` exclusively.
-    tokens = flow.login(project_id=account.default_project, persist=False)
+    tokens = flow.login(persist=False)
 
     tokens_path = _persist_browser_tokens(name, tokens)
 

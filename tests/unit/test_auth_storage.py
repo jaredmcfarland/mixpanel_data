@@ -41,7 +41,6 @@ def _make_tokens(
     access_token: str = "access_abc123",
     refresh_token: str | None = "refresh_xyz789",
     scope: str = "projects analysis",
-    project_id: str | None = "12345",
 ) -> OAuthTokens:
     """Create an OAuthTokens instance with sensible defaults for testing.
 
@@ -49,7 +48,6 @@ def _make_tokens(
         access_token: OAuth access token string.
         refresh_token: OAuth refresh token string, or None.
         scope: OAuth scope string.
-        project_id: Associated Mixpanel project ID.
 
     Returns:
         Configured OAuthTokens instance.
@@ -60,7 +58,6 @@ def _make_tokens(
         expires_at=_utcnow() + timedelta(hours=1),
         scope=scope,
         token_type="Bearer",
-        project_id=project_id,
     )
 
 
@@ -217,7 +214,6 @@ class TestOAuthStorageTokenRoundTrip:
         assert loaded.refresh_token.get_secret_value() == "refresh_xyz789"
         assert loaded.scope == "projects analysis"
         assert loaded.token_type == "Bearer"
-        assert loaded.project_id == "12345"
 
     def test_save_and_load_tokens_without_refresh_token(self, temp_dir: Path) -> None:
         """Verify tokens without a refresh token survive round-trip."""
@@ -230,16 +226,8 @@ class TestOAuthStorageTokenRoundTrip:
         assert loaded is not None
         assert loaded.refresh_token is None
 
-    def test_save_and_load_tokens_without_project_id(self, temp_dir: Path) -> None:
-        """Verify tokens without a project_id survive round-trip."""
-        storage = OAuthStorage(storage_dir=temp_dir)
-        original = _make_tokens(project_id=None)
-
-        storage.save_tokens(original, region="eu")
-        loaded = storage.load_tokens(region="eu")
-
-        assert loaded is not None
-        assert loaded.project_id is None
+    # test_save_and_load_tokens_without_project_id removed in B2 (T044):
+    # the legacy ``OAuthTokens.project_id`` field is gone.
 
     def test_expires_at_preserved_through_round_trip(self, temp_dir: Path) -> None:
         """Verify that the expires_at datetime is preserved through save/load.

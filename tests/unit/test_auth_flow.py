@@ -129,42 +129,17 @@ class TestOAuthFlowLogin:
         storage = OAuthStorage(storage_dir=tmp_path)
 
         flow = OAuthFlow(region="us", storage=storage, http_client=http_client)
-        tokens = flow.login(project_id="12345")
+        tokens = flow.login()
 
         assert tokens.access_token.get_secret_value() == "access-tok-123"
         assert tokens.refresh_token is not None
         assert tokens.refresh_token.get_secret_value() == "refresh-tok-456"
-        assert tokens.project_id == "12345"
         mock_browser.open.assert_called_once()
 
-    @patch("mixpanel_data._internal.auth.flow.webbrowser")
-    @patch("mixpanel_data._internal.auth.flow.start_callback_server")
-    @patch("mixpanel_data._internal.auth.flow.ensure_client_registered")
-    def test_preserves_project_id(
-        self,
-        mock_register: MagicMock,
-        mock_callback: MagicMock,
-        mock_browser: MagicMock,
-        tmp_path: Path,
-    ) -> None:
-        """Verify that project_id is passed through to the resulting tokens."""
-        mock_register.return_value = _make_client_info()
-        mock_callback.return_value = (
-            CallbackResult(code="code1", state="s"),
-            19284,
-        )
-        mock_browser.open.return_value = True
-
-        transport = httpx.MockTransport(
-            lambda _req: httpx.Response(200, json=_make_token_response())
-        )
-        http_client = httpx.Client(transport=transport)
-        storage = OAuthStorage(storage_dir=tmp_path)
-
-        flow = OAuthFlow(region="us", storage=storage, http_client=http_client)
-        tokens = flow.login(project_id="proj-999")
-
-        assert tokens.project_id == "proj-999"
+    # test_preserves_project_id removed in B2 (T044): the legacy
+    # ``OAuthTokens.project_id`` field is gone; ``OAuthFlow.login`` no
+    # longer accepts a ``project_id`` kwarg. Project ID lives on
+    # ``Account.default_project`` in v3.
 
     @patch("mixpanel_data._internal.auth.flow.webbrowser")
     @patch("mixpanel_data._internal.auth.flow.start_callback_server")
