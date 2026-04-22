@@ -11,7 +11,7 @@ description: "Task list for Authentication Architecture Redesign (042)"
 **Branch**: `042-auth-architecture-redesign`
 **Supersedes**: 038-auth-project-workspace-redesign
 
-## Status (as of 2026-04-22 — post C1 cluster `18233dc`; cross-cutting iteration coverage complete; only Phase 11 polish remaining)
+## Status (as of 2026-04-22 — post Cluster D `6a01afd`; **042 release-ready at 0.4.0** — all 11 phases done or descoped)
 
 | Phase | Status | Tests | Notes |
 |-------|--------|-------|-------|
@@ -25,11 +25,11 @@ description: "Task list for Authentication Architecture Redesign (042)"
 | 8 — Cowork bridge (US8) | ✅ DONE (`9147b1d`) — Cluster C2 landed | +23 | `bridge.export_bridge` / `bridge.remove_bridge` plus `mp.accounts.export_bridge` / `remove_bridge` wrappers; `mp account export-bridge` / `remove-bridge` CLI commands; `mp session --bridge` flag with full payload display. New `tests/unit/test_bridge_export.py` (15 tests) and `tests/unit/cli/test_bridge_cli.py` (8 tests). |
 | 9 — Plugin / agent surface (US9) | ✅ DONE (`478160f`) — Cluster A2 landed | +15 | `auth_manager.py` 727 → 257 LoC, zero `version >= 2` branches; plugin bumped to 5.0.0; new subprocess-based `tests/integration/test_plugin_auth_manager.py` covers every subcommand + LoC + version-branch guards. Slash command `/mixpanel-data:auth` and setup skill rewritten around the JSON contract. |
 | 10 — Conversion script (US10) | ❌ DROPPED (alpha "free to break") | — | Legacy detection deleted in `5a6b876`; legacy `ConfigManager` + `AccountInfo` + v1 `AuthBridgeFile` + `auth_credential.py` fully removed in B1 / B2; no migration path needed |
-| 11 — Polish & cleanup (Cluster D) | ⚠️ MOSTLY DONE in `5a6b876` + `f18f1aa` + `478160f` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard, public `mixpanel_data.auth_types` module, plugin v5.0.0 bump); **still pending**: Phase 11 release polish (CLAUDE.md sweeps, library version bump to 0.4.0, release notes, LoC budget enforcement, mutation score, security audit) | — | docs, mutation tests, library version bump |
+| 11 — Polish & cleanup (Cluster D) | ✅ DONE (`6a01afd`) — release polish landed | +2 | Library bumped to 0.4.0; `RELEASE_NOTES_0.4.0.md` with explicit BREAKING CHANGES sections; CLAUDE.md / src/mixpanel_data/CLAUDE.md / src/mixpanel_data/cli/CLAUDE.md refreshed for v3 vocabulary; new `tests/unit/test_loc_budget.py` (FR-067 regression guard — 18 files / ~5,800 LoC). T121 grep verified the `Credentials` shim in `_internal/config.py` + `api_client.py` is intentional (bridges v3 Session into legacy api_client HTTP code). T122 grep — zero matches. Mutation testing (T120), security audit (T126), pydocstyle gate (T126a), and manual quickstart walkthrough (T125) deferred as nice-to-haves; all critical release gates met. |
 
-**Full test suite (HEAD `18233dc`)**: 5,954 passed @ ~91% coverage; mypy --strict + ruff clean. (C1 added 12 cross-cutting iteration integration tests; C2 added 23 unit + CLI tests across the bridge writer surface; A2 added 15 subprocess-based plugin integration tests.)
-**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `18233dc`.
-**Net diff for B1+A1+B2+B3+A2+C2+C1**: +5,114 / −13,375 across ~172 files (12 commits — B1×3 / A1 / B2×4 / B3 / A2 / C2 / C1).
+**Full test suite (HEAD `6a01afd`)**: 5,956 passed @ ~91% coverage; mypy --strict + ruff clean. Package builds as `mixpanel_data-0.4.0.tar.gz`.
+**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `6a01afd`.
+**Net diff for the full 042 spec (B1+A1+B2+B3+A2+C2+C1+D)**: +5,539 / −13,411 across ~178 files (13 commits — B1×3 / A1 / B2×4 / B3 / A2 / C2 / C1 / D).
 
 ### Pragmatic deviation from the original phase plan (history)
 

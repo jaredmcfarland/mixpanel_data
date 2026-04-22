@@ -1,10 +1,10 @@
 # PR #126 Review Re-Assessment & 1.0-Readiness Plan
 
-**Branch:** `042-auth-architecture-redesign` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126) · **HEAD:** `18233dc` · **Coverage:** ~91% (5,954 tests + 18 / 18 live) · **mypy --strict + ruff:** clean
+**Branch:** `042-auth-architecture-redesign` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126) · **HEAD:** `6a01afd` · **Coverage:** ~91% (5,956 tests + 18 / 18 live) · **mypy --strict + ruff:** clean · **Build:** `mixpanel_data-0.4.0.tar.gz` ✓
 
 ## Execution Status (as of 2026-04-22)
 
-**🎉 All implementation clusters landed — only Phase 11 release polish (Cluster D) remains.** PR #126 review (35/35) plus A2 plugin rewrite plus C2 bridge writer plus C1 cross-cutting iteration coverage. B1 cluster (Fix 9 / 10 / 14) executed in three commits (`12471c6`, `024a291`, `18283b4`); A1 cluster (Fix 16 / 17 / 18) executed in `4d21c3e`; **B2 cluster (T043 / T044 / T045 / T047 / T048 / T050)** executed in four commits (`3f74cd7` / `651bf66` / `b1c7a74` / `50ccd9d`); **B3 cluster (Fix 27 — public ``mixpanel_data.auth_types`` module)** executed in `f18f1aa`; **A2 cluster (T094–T100 — plugin rewrite)** executed in `478160f`; **C2 cluster (T086 / T087 / T089–T093 — bridge writer)** executed in `9147b1d`; **C1 cluster (T077–T080 / T083 / T084 — cross-cutting iteration tests)** executed in `18233dc`.
+**🎉 042 spec is closed — release-ready at 0.4.0.** All eight clusters landed across 13 commits. PR #126 review (35/35), A2 plugin rewrite, C2 bridge writer, C1 cross-cutting iteration coverage, **D release polish**. B1 cluster (Fix 9 / 10 / 14) — `12471c6`/`024a291`/`18283b4`; A1 — `4d21c3e`; B2 (×4) — `3f74cd7`/`651bf66`/`b1c7a74`/`50ccd9d`; B3 — `f18f1aa`; A2 — `478160f`; C2 — `9147b1d`; C1 — `18233dc`; **D — `6a01afd`** (version bump 0.3.0 → 0.4.0, `RELEASE_NOTES_0.4.0.md`, three CLAUDE.md sweeps, `tests/unit/test_loc_budget.py`).
 
 | Group | Done | Notes |
 |-------|------|-------|
@@ -16,9 +16,9 @@
 | F — public-API surface design | ✅ 4 / 4 | Account.match() exhaustiveness, AccountTestResult/OAuthLoginResult tightening, promoted resolver helpers, `mixpanel_data.auth_types` public module (`f18f1aa` — single source of truth for the v3 auth surface, drops `_AccountTypeLiteral` / `_RegionLiteral` mirrors in types.py). |
 | G — test/doc hygiene | ✅ 5 / 5 | Comment-rot scrub, `current_auth_header` docstring, ConfigManager + Session PBT, atomic-write resilience tests, real-`~/.mp/` write guard fixture |
 
-**No deferred PR #126 fixes remain.** Open spec-level workstream (not part of the PR #126 review): **Cluster D — Phase 11 release polish** (CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit). Cluster A2 (plugin rewrite — Phase 9 / US9) landed in `478160f`; Cluster C2 (bridge writer — Phase 8 / US8) landed in `9147b1d`; Cluster C1 (cross-cutting iteration tests — Phase 7 / US7) landed in `18233dc`.
+**No deferred PR #126 fixes remain.** No open spec-level workstreams. Optional follow-ups (deferred from Phase 11 as nice-to-haves, can land post-0.4.0): T120 mutation testing on the auth subsystem, T125 manual quickstart walkthrough, T126 security audit, T126a `pydocstyle` gate.
 
-**Live QA**: `tests/live/test_042_auth_redesign_live.py` (18 scenarios across SA / oauth_browser / oauth_token / cross-mode switching / bridge file / CLI / edge cases) — 18 / 18 pass against the real Mixpanel API at HEAD `18233dc`.
+**Live QA**: `tests/live/test_042_auth_redesign_live.py` (18 scenarios across SA / oauth_browser / oauth_token / cross-mode switching / bridge file / CLI / edge cases) — 18 / 18 pass against the real Mixpanel API at HEAD `6a01afd`.
 
 ---
 

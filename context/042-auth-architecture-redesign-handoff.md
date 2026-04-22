@@ -1,16 +1,16 @@
 # Session Handoff: 042 Auth Architecture Redesign
 
-**Branch:** `042-auth-architecture-redesign` · **Last commit:** `18233dc` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
-**Suite:** 5,954 pass / ~91% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
-**Generated:** 2026-04-22 (post-C1 — cross-cutting iteration coverage complete; only Phase 11 polish remaining)
+**Branch:** `042-auth-architecture-redesign` · **Last commit:** `6a01afd` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
+**Suite:** 5,956 pass / ~91% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API · **Build:** `mixpanel_data-0.4.0.tar.gz` ✓
+**Generated:** 2026-04-22 (post-D — **release-ready at 0.4.0**)
 
 ---
 
 ## TL;DR for the next session
 
-🎉 **All implementation clusters complete — only Phase 11 release polish (Cluster D) remains.** All 35 of 35 PR #126 review fixes plus the plugin / agent surface (Phase 9 / US9), Cowork bridge writer (Phase 8 / US8), and cross-cutting iteration test coverage (Phase 7 / US7) have landed. Commits: B1 (`12471c6`/`024a291`/`18283b4`) → A1 (`4d21c3e`) → B2 (×4) → B3 (`f18f1aa`) → A2 (`478160f`) → C2 (`9147b1d`) → **C1 (`18233dc`)**. The auth subsystem, plugin surface, Cowork courier story, and per-cluster test coverage are all at target shape.
+🎉 **042 is release-ready at 0.4.0.** All eight clusters landed across 13 commits — B1 (`12471c6`/`024a291`/`18283b4`) → A1 (`4d21c3e`) → B2 (×4) → B3 (`f18f1aa`) → A2 (`478160f`) → C2 (`9147b1d`) → C1 (`18233dc`) → **D (`6a01afd`) — version bump + release notes + CLAUDE.md sweeps + LoC budget guard**. The package builds as `mixpanel_data-0.4.0.tar.gz`; `RELEASE_NOTES_0.4.0.md` documents the BREAKING CHANGES + a step-by-step migration recipe. Plugin manifest is at v5.0.0 with the JSON `schema_version: 1` contract.
 
-Open spec-level workstream: **D** (Phase 11 release polish — CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit). Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
+**Next move:** open the PR for review / merge. Optional follow-ups (deferred from Phase 11 as nice-to-haves): T120 mutation testing on the auth subsystem, T125 manual quickstart walkthrough on a clean `~/.mp/`, T126 security audit (verify all account state files write 0o600), T126a `pydocstyle` gate. These can land in 0.4.1 / 0.5.0; they're not blocking 0.4.0 ship.
 
 ---
 
@@ -38,6 +38,8 @@ Open spec-level workstream: **D** (Phase 11 release polish — CLAUDE.md sweeps,
 ## What landed (recent commits, newest first)
 
 ```
+6a01afd chore(042): release 0.4.0 — auth architecture redesign (Cluster D)
+1071b13 docs(042): refresh trackers — C1 cluster (iteration tests) done
 18233dc test(042): cross-cutting iteration coverage (C1 / Phase 7 / US7)
 76e4167 docs(042): refresh trackers — C2 cluster (bridge writer) done
 9147b1d feat(042): bridge writer + mp account export-bridge / remove-bridge (C2 / Phase 8)
@@ -61,6 +63,16 @@ cd044b7 docs(042): refresh trackers for A1 cluster (Fix 16 / 17 / 18 done)
 93e3081 fix(042): align live auth tests with tightened PR #126 behavior
 5a6b876 feat(042): execute PR #126 review plan — 28 of 35 fixes (P0 + P1)
 ```
+
+D cluster (`6a01afd`, +425 / −36 across 6 files):
+- **T117**: `src/mixpanel_data/__init__.py::__version__` 0.3.0 → 0.4.0; `uv build` produces `mixpanel_data-0.4.0.tar.gz` / `.whl`.
+- **T118**: `RELEASE_NOTES_0.4.0.md` — explicit BREAKING CHANGES across config schema (no `mp config convert`), removed CLI groups (`mp auth` / `mp projects` / `mp workspaces` / `mp context` / `mp config`), removed public Python names (`Credentials`, `AccountInfo`, `CredentialInfo`, `ProjectAlias`, `MigrationResult`, `ActiveContext`, `AuthCredential`, `CredentialType`, `ProjectContext`, `ResolvedSession`, `Workspace.set_workspace_id` / `switch_project` / `switch_workspace` / `current_credential` / `current_project` / `test_credentials`), the new public surface, the plugin v5.0.0 contract, and a step-by-step "wipe + re-add accounts" migration recipe.
+- **T111**: `CLAUDE.md` — rewrote "Key Design Decisions" around Account → Project → Workspace + connection-pool preservation; refreshed env vars table (`MP_AUTH_FILE` added; per-account `tokens.json` path documented); added Breaking-changes-from-0.3 callout. File tree updated for the v3 modules. Recent Changes entry rewritten for 0.4.0.
+- **T112**: `src/mixpanel_data/CLAUDE.md` — added "Auth Mental Model" section + functional namespaces reference + a Workspace usage example with `ws.use(account=, project=, workspace=, target=)` fluent chaining.
+- **T113**: `src/mixpanel_data/cli/CLAUDE.md` — refreshed command groups table (added `account/project/workspace/target/session`; noted removals); rewrote global flags table for the new `--account/--project/--workspace/--target` set with the per-command-not-persistent semantics callout.
+- **T119 / FR-067**: `tests/unit/test_loc_budget.py` — regression-guard test enforcing ≤ 20 auth-subsystem files and ≤ 6,500 total LoC. Excludes `api_client.py` (8K LoC of entity CRUD unrelated to auth). Current state: 18 files / ~5,800 LoC.
+- **T121 / T122**: grep verifications run. T122 (no public deprecated imports) — zero matches. T121 (no legacy markers) — the `Credentials` shim survives in `_internal/config.py`, `api_client.py`, `auth.py`, and `workspace.py` because it bridges v3 Session into the legacy api_client HTTP code. Documented in release notes.
+- **Deferred (nice-to-haves)**: T120 mutation testing on auth, T125 manual quickstart walkthrough, T126 security audit (file-mode verification), T126a `pydocstyle` gate. None are blocking 0.4.0 ship; can land in 0.4.1 / 0.5.0.
 
 C1 cluster (`18233dc`, +632 / 0 across 5 files — pure test additions + 1 example):
 - **T077 — `tests/integration/test_cross_project_iteration.py`** (4 tests). Pins SC-008 + FR-061: `id(api_client._http)` is preserved across `ws.use(project=)`; SA auth header doesn't rebuild on project swap (Basic auth is project-independent); after `ws.discover_projects()` populates the `/me` cache, looping 3 projects + `ws.events()` per turn produces ZERO `/me` requests during the loop and exactly 3 events requests; `ws.use(project=...)` returns `self` for fluent chaining. Uses an `httpx.MockTransport` for request-counting.
@@ -216,9 +228,9 @@ Landed in `9147b1d`. See the "What landed" C2 cluster breakdown above. Verificat
 5. ~~**A2 — plugin / auth_manager rewrite**~~ ✅ DONE (`478160f`, 727 → 257 LoC, +15 subprocess tests, plugin v5.0.0)
 6. ~~**C2 — bridge writer**~~ ✅ DONE (`9147b1d`, +899 / −52 across 7 files, +23 tests)
 7. ~~**C1 — cross-cutting iteration tests**~~ ✅ DONE (`18233dc`, +632 LoC, +12 integration tests + 1 example)
-8. **D — Phase 11 polish** ← **only remaining workstream** (CLAUDE.md sweeps in `CLAUDE.md` / `src/mixpanel_data/CLAUDE.md` / `src/mixpanel_data/cli/CLAUDE.md`; library version bump to 0.4.0; `RELEASE_NOTES_0.4.0.md`; LoC budget enforcement test; mutation testing on auth subsystem; security audit)
+8. ~~**D — Phase 11 polish**~~ ✅ DONE (`6a01afd`, +425 / −36 across 6 files — version bump + release notes + 3 CLAUDE.md sweeps + LoC budget guard)
 
-**Remaining estimate:** ~half a day to 1.0-ready.
+**Status:** 042 spec is closed. Open the PR for review / merge. Optional follow-ups (deferred from Phase 11): T120 mutation testing, T125 manual quickstart, T126 security audit, T126a pydocstyle gate — none are blocking 0.4.0.
 
 ---
 
@@ -227,7 +239,7 @@ Landed in `9147b1d`. See the "What landed" C2 cluster breakdown above. Verificat
 ```bash
 # Confirm branch + HEAD
 git status                    # should show branch=042-auth-architecture-redesign, clean tree
-git log --oneline -18         # top should be 18233dc (C1) / 76e4167 / 9147b1d (C2) / 668ceb4 / 478160f (A2) / d20630e / 07d55cf / f18f1aa / 86e56d7 / 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291
+git log --oneline -20         # top should be 6a01afd (D) / 1071b13 / 18233dc (C1) / 76e4167 / 9147b1d (C2) / 668ceb4 / 478160f (A2) / d20630e / 07d55cf / f18f1aa / 86e56d7 / 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291
 
 # Confirm test suite green (slow — ~3-5 min)
 just check
