@@ -2,6 +2,26 @@
 
 **Branch:** `042-auth-architecture-redesign` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126) · **Scope:** 79 files, +16,199 / −49 · **Coverage:** 91.33% (6,429 tests) · **mypy --strict + ruff:** clean
 
+## Execution Status (as of 2026-04-22)
+
+**28 of 35 fixes landed in `5a6b876`** ("feat(042): execute PR #126 review plan"). Net −7,001 LoC across 51 files; suite at 6,261 pass / 91.57% coverage.
+
+| Group | Done | Notes |
+|-------|------|-------|
+| A — atomicity & security | ✅ 8 / 8 | atomic_write_bytes, _mutate ctx mgr, per-request headers, accounts.use clears workspace, immutable Session.headers, strict=True default, MP_OAUTH_STORAGE_DIR routing, account_dir traversal tests |
+| B — legacy elimination | ⚠️ 4 / 7 | Deleted legacy CLI modules + v1/v2 fixtures + legacy detection; **deferred**: Fix 9/10/14 (Workspace flatten — removes the 85+ tests that mock `_config_manager=`; once flat, legacy `config.py` + v1 bridge can be deleted) |
+| C — behavior gaps | ⚠️ 1 / 4 | `mp target` CLI shipped (5 commands + 10 smoke tests); **deferred**: Fix 16/17/18 (OAuth refresh in OnDiskTokenResolver, `mp account login` PKCE, per-request bearer resolution) |
+| D — unused code & cleanup | ✅ 4 / 4 | Deleted DEFAULT_STORAGE_DIR shim, AccountAccessError, `--refresh`/`--bridge` flags; hid stub fns from `accounts.__all__` |
+| E — input validation hardening | ✅ 3 / 3 | MP_REGION/MP_WORKSPACE_ID/MP_PROJECT_ID strict, expires_at validation, `--secret-stdin` 64 KiB |
+| F — public-API surface design | ⚠️ 3 / 4 | Account.match() exhaustiveness, AccountTestResult/OAuthLoginResult tightening, promoted resolver helpers; **deferred**: Fix 27 (move auth types to public `mixpanel_data.auth_types` module) |
+| G — test/doc hygiene | ✅ 5 / 5 | Comment-rot scrub, `current_auth_header` docstring, ConfigManager + Session PBT, atomic-write resilience tests, real-`~/.mp/` write guard fixture |
+
+**Deferred fixes (7) form a coherent next-PR scope** — primarily the Workspace dual-init flatten (which unblocks Fix 9/10/14) and OAuth wiring (16/17/18); plus the public auth-types module move (27).
+
+**Live QA**: `tests/live/test_042_auth_redesign_live.py` (18 scenarios across SA / oauth_browser / oauth_token / cross-mode switching / bridge file / CLI / edge cases) — 18 / 18 pass against the real Mixpanel API as of 2026-04-22 (commit `93e3081` aligned tests with PR #126 behavior).
+
+---
+
 ## Context
 
 PR #126 (auth architecture redesign) underwent a 6-agent comprehensive review (`/pr-review-toolkit:review-pr ALL ASPECTS ALL AGENTS`). The agents produced ~120 distinct claims spanning correctness, security, atomicity, type design, test coverage, comment accuracy, and over-engineering. The user requested an **impartial re-assessment** of every finding's validity, with a fix plan for the valid ones and reasoning for any rejected.

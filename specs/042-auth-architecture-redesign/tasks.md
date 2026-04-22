@@ -11,7 +11,7 @@ description: "Task list for Authentication Architecture Redesign (042)"
 **Branch**: `042-auth-architecture-redesign`
 **Supersedes**: 038-auth-project-workspace-redesign
 
-## Status (as of 2026-04-21 — MVP session complete)
+## Status (as of 2026-04-22 — post PR #126 review pass `5a6b876`)
 
 | Phase | Status | Tests | Notes |
 |-------|--------|-------|-------|
@@ -19,17 +19,17 @@ description: "Task list for Authentication Architecture Redesign (042)"
 | 2 — Foundational types | ✅ DONE (13/13) | 89 | Account union, Session, Project, WorkspaceRef, TokenResolver, OnDiskTokenResolver |
 | 3 — Schema + Resolver (US2 + US3) | ✅ DONE (12/12) | 79 | `_internal/config_v3.py` + `_internal/auth/resolver.py` + `BridgeFile` v2 |
 | 4 — Account model + Workspace.use (US1 + US4) | ✅ ADDITIVE (15 done, 10 deferred) | 71 | mp.accounts/.targets/.session namespaces; Workspace.use() chain; api_client session support |
-| 5 — CLI surface (US5) | ✅ ADDITIVE (8 done, 6 deferred) | 17 | `mp account/project/workspace/session/config` groups + `--workspace`/`--target` globals |
-| 6 — Targets (US6) | ⬜ PENDING | — | `mp target` group + roundtrip tests |
+| 5 — CLI surface (US5) | ✅ DONE (additive 8 → cleanup landed in `5a6b876`: deleted legacy `cli/commands/{auth,context,projects,workspaces_cmd,config_cmd}.py`, hid stub fns, removed `--refresh`/`--bridge` unwired flags) | 17 | `mp account/project/workspace/session` groups + `--workspace`/`--target` globals; legacy command groups gone |
+| 6 — Targets (US6) | ✅ DONE (`5a6b876`) | +10 | `mp target add/use/list/show/remove` + 10 smoke tests |
 | 7 — Cross-cutting iteration (US7) | ⬜ PENDING | — | integration tests for cross-project / cross-account / parallel-snapshot |
-| 8 — Cowork bridge (US8) | ⬜ PENDING | — | Bridge writer + `mp account export-bridge` / `remove-bridge` |
+| 8 — Cowork bridge (US8) | ⚠️ PARTIAL (read path live; export deferred) | live F1.01 | `BridgeFile` v2 loader integrated into resolver; `mp account export-bridge` / `remove-bridge` writers still TODO |
 | 9 — Plugin / agent surface (US9) | ⬜ PENDING | — | `auth_manager.py` rewrite; plugin v5.0.0 |
-| 10 — Conversion script (US10) | ⬜ PENDING | — | `mp config convert` + `_internal/conversion.py` |
-| 11 — Polish & cleanup | ⬜ PENDING | — | docs, mutation tests, version bump, **and the deferred deletions from Phases 4-5** |
+| 10 — Conversion script (US10) | ❌ DROPPED (alpha "free to break") | — | Legacy detection deleted in `5a6b876`; no migration path needed (no production users) |
+| 11 — Polish & cleanup | ⚠️ MOSTLY DONE in `5a6b876` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard); **still deferred**: Workspace dual-init flatten + OAuth wiring (refresh / `mp account login` PKCE / per-request bearer) + `mixpanel_data.auth_types` public module — see `pr-126-review-plan.md` § Execution Status | — | docs, mutation tests, version bump |
 
-**Full test suite**: 6334 passed, 1 skipped (contract layer placeholder), 530 deselected (live), 0 regressions.
-**New tests added across phases 1-5**: 256.
-**mypy --strict**: clean on every new/modified module.
+**Full test suite (post-`5a6b876`)**: 6,261 passed @ 91.57% coverage; mypy --strict + ruff clean. (Down from 6,334 pre-cleanup — net deletion of legacy code paths.)
+**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API (commit `93e3081` aligned tests with PR #126 product behavior).
+**Net diff from `5a6b876`**: −7,001 LoC across 51 files.
 
 ### Pragmatic deviation from the original phase plan
 
