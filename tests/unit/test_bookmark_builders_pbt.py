@@ -22,7 +22,7 @@ from mixpanel_data._internal.bookmark_builders import (
     build_group_section,
     build_time_section,
 )
-from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.config import Credentials
 from mixpanel_data.types import Filter, GroupBy
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
@@ -66,7 +66,7 @@ def _make_workspace() -> Workspace:
         project_id="12345",
         region="us",
     )
-    mgr = MagicMock(spec=ConfigManager)
+    mgr = MagicMock()
     mgr.config_version.return_value = 1
     mgr.resolve_credentials.return_value = creds
     return Workspace(session=_TEST_SESSION)

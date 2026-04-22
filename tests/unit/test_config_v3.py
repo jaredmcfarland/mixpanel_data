@@ -21,7 +21,7 @@ from mixpanel_data._internal.auth.account import (
     ServiceAccount,
 )
 from mixpanel_data._internal.auth.session import ActiveSession
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import AccountSummary, Target
 
@@ -595,9 +595,7 @@ class TestMutateTransaction:
 
         from unittest.mock import patch
 
-        with patch(
-            "mixpanel_data._internal.config_v3.atomic_write_bytes"
-        ) as mock_write:
+        with patch("mixpanel_data._internal.config.atomic_write_bytes") as mock_write:
             with cm._mutate() as raw:
                 cm._apply_set_active(raw, account="x", workspace=42)
                 cm._apply_update_account(raw, "x", default_project="456")

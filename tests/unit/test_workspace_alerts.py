@@ -20,7 +20,7 @@ from pydantic import SecretStr
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
+from mixpanel_data._internal.config import AuthMethod, Credentials
 from mixpanel_data.types import (
     AlertCount,
     AlertHistoryResponse,
@@ -66,24 +66,10 @@ def _make_oauth_credentials() -> Credentials:
     )
 
 
-def _setup_config_with_account(temp_dir: Path) -> ConfigManager:
-    """Create a ConfigManager with a dummy account for credential resolution.
-
-    Args:
-        temp_dir: Temporary directory for the config file.
-
-    Returns:
-        ConfigManager with a test account configured.
-    """
-    cm = ConfigManager(config_path=temp_dir / "config.toml")
-    cm.add_account(
-        name="test",
-        username="test_user",
-        secret="test_secret",
-        project_id="12345",
-        region="us",
-    )
-    return cm
+# _setup_config_with_account removed in B1 (Fix 9): the legacy v1
+# ``ConfigManager.add_account(project_id=, region=, …)`` signature is
+# gone; ``_make_workspace`` now relies on ``session=_TEST_SESSION``
+# instead, which never touches a real ConfigManager.
 
 
 def _make_workspace(

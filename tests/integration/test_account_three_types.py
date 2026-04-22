@@ -18,7 +18,7 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data import accounts as accounts_ns
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 
 
 @pytest.fixture(autouse=True)

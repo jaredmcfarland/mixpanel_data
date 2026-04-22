@@ -27,7 +27,7 @@ from mixpanel_data._internal.auth.session import (
     Project,
     Session,
 )
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.workspace import Workspace
 
 

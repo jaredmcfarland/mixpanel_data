@@ -43,7 +43,7 @@ from mixpanel_data._internal.auth.session import (
     Session,
     WorkspaceRef,
 )
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.exceptions import ConfigError
 
 _VALID_REGIONS: frozenset[str] = frozenset({"us", "eu", "in"})

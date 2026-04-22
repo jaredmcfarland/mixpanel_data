@@ -24,7 +24,7 @@ from mixpanel_data._internal.auth.account import (
     Region,
     ServiceAccount,
 )
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 
 _NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 _SECRET_ALPHABET = (

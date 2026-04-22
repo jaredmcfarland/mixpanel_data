@@ -48,7 +48,7 @@ from mixpanel_data._internal.auth.account import (
     OAuthTokenAccount,
     ServiceAccount,
 )
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.exceptions import (
     AuthenticationError,
     OAuthError,

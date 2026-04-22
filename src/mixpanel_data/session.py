@@ -13,7 +13,7 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §7.
 from __future__ import annotations
 
 from mixpanel_data._internal.auth.session import ActiveSession
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 
 
 def _config() -> ConfigManager:

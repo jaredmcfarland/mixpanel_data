@@ -45,48 +45,10 @@ def mock_workspace() -> MagicMock:
     return workspace
 
 
-@pytest.fixture
-def mock_config_manager() -> MagicMock:
-    """Create a mock ConfigManager for testing auth commands."""
-    from mixpanel_data._internal.config import AccountInfo
-
-    config = MagicMock()
-
-    # Set up common return values
-    config.list_accounts.return_value = [
-        AccountInfo(
-            name="production",
-            username="user@example.com",
-            project_id="12345",
-            region="us",
-            is_default=True,
-        ),
-        AccountInfo(
-            name="staging",
-            username="user@example.com",
-            project_id="67890",
-            region="eu",
-            is_default=False,
-        ),
-    ]
-
-    config.get_default.return_value = AccountInfo(
-        name="production",
-        username="user@example.com",
-        project_id="12345",
-        region="us",
-        is_default=True,
-    )
-
-    config.get_account.return_value = AccountInfo(
-        name="production",
-        username="user@example.com",
-        project_id="12345",
-        region="us",
-        is_default=True,
-    )
-
-    return config
+# mock_config_manager fixture removed in B1 (Fix 9): the AccountInfo
+# dataclass and legacy ``mp auth`` commands it targeted are gone. Use
+# the v3 ``mp account`` / ``mp session`` / ``mp target`` namespaces
+# instead.
 
 
 @pytest.fixture

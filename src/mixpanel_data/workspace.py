@@ -81,7 +81,6 @@ from mixpanel_data._internal.bookmark_builders import (
     patch_custom_property_filters_for_transform,
 )
 from mixpanel_data._internal.config import ConfigManager, Credentials
-from mixpanel_data._internal.config_v3 import ConfigManager as _ConfigManagerV3
 from mixpanel_data._internal.query.user_builders import (
     extract_cohort_filter,
     filters_to_selector,
@@ -460,7 +459,7 @@ class Workspace:
                 project=project,
                 workspace=workspace,
                 target=target,
-                config=_ConfigManagerV3(),
+                config=ConfigManager(),
                 bridge=br,
             )
         self._v3_session = sess
@@ -547,7 +546,7 @@ class Workspace:
                 "`target=` is mutually exclusive with `account=`/`project=`/`workspace=`."
             )
 
-        cm = _ConfigManagerV3()
+        cm = ConfigManager()
         new_account_obj: _AccountUnion | None = None
         new_project_obj: _ProjectV3 | None = None
         new_workspace_obj: _WorkspaceRefV3 | None = None
@@ -644,7 +643,7 @@ class Workspace:
         """
         if self._v3_session is None:
             return
-        cm = _ConfigManagerV3()
+        cm = ConfigManager()
         cm.set_active(account=self._v3_session.account.name)
         # `set_active(workspace=None)` is "do not touch" per FR-016 axis
         # independence; to actually drop a stale `[active].workspace` when
@@ -692,72 +691,10 @@ class Workspace:
             self._api_client.close()
             self._api_client = None
 
-    @staticmethod
-    def test_credentials(account: str | None = None) -> dict[str, Any]:
-        """Test account credentials by making a lightweight API call.
-
-        This method verifies that credentials are valid and can access the
-        Mixpanel API. It's useful for validating configuration before
-        attempting more expensive operations.
-
-        Args:
-            account: Named account to test. If None, tests the default account
-                or credentials from environment variables.
-
-        Returns:
-            Dict containing:
-                - success: bool - Whether the test succeeded
-                - account: str | None - Account name tested
-                - project_id: str - Project ID from credentials
-                - region: str - Region from credentials
-                - events_found: int - Number of events found (validation metric)
-
-        Raises:
-            AccountNotFoundError: If named account doesn't exist.
-            AuthenticationError: If credentials are invalid.
-            ConfigError: If no credentials can be resolved.
-
-        Example:
-            ```python
-            # Test default account
-            result = Workspace.test_credentials()
-            if result["success"]:
-                print(f"Authenticated to project {result['project_id']}")
-
-            # Test specific account
-            result = Workspace.test_credentials("production")
-            ```
-        """
-        config_manager = ConfigManager()
-        credentials = config_manager.resolve_credentials(account)
-
-        # Get account info if we used a named account
-        account_info = None
-        if account is not None:
-            account_info = config_manager.get_account(account)
-        else:
-            # Check if credentials came from a default account
-            accounts = config_manager.list_accounts()
-            for acc in accounts:
-                if acc.is_default:
-                    account_info = acc
-                    break
-
-        # Create API client and test with a lightweight call
-        api_client = MixpanelAPIClient(credentials)
-        try:
-            events = api_client.get_events()
-            event_count = len(list(events)) if events else 0
-
-            return {
-                "success": True,
-                "account": account_info.name if account_info else None,
-                "project_id": credentials.project_id,
-                "region": credentials.region,
-                "events_found": event_count,
-            }
-        finally:
-            api_client.close()
+    # Workspace.test_credentials removed in B1 (Fix 9): the legacy
+    # ConfigManager.resolve_credentials path it depended on is gone. The
+    # contract (FR-038) routes this capability through ``mp.accounts.test(NAME)``
+    # — see ``src/mixpanel_data/accounts.py``.
 
     # =========================================================================
     # PRIVATE HELPERS

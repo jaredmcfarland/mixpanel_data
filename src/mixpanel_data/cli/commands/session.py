@@ -45,7 +45,7 @@ def session_command(
     # on the account in v3, not in [active]).
     project_display = "(none)"
     if active.account is not None:
-        from mixpanel_data._internal.config_v3 import ConfigManager
+        from mixpanel_data._internal.config import ConfigManager
         from mixpanel_data.exceptions import ConfigError
 
         try:

@@ -1,16 +1,15 @@
 """Public authentication and configuration module.
 
-Re-exports the legacy ``ConfigManager`` / ``Credentials`` types and
-the v2 :class:`BridgeFile` for callers that built against the
-``mixpanel_data.auth`` namespace. Scheduled for narrowing in
-T047 (B2): the canonical surface will move to
-``mixpanel_data.auth_types`` per
+Re-exports the v3 :class:`ConfigManager`, the legacy
+:class:`Credentials` / :class:`AuthMethod` shim types, and the v2
+:class:`BridgeFile` for callers that built against the
+``mixpanel_data.auth`` namespace. Scheduled for narrowing in T047
+(B2): the canonical surface moves to ``mixpanel_data.auth_types`` per
 ``contracts/python-api.md``.
 
 Re-exported classes:
-    ConfigManager: Legacy TOML-based account management.
-    Credentials: Legacy immutable credential container.
-    AccountInfo: Legacy named-account metadata.
+    ConfigManager: v3 TOML-based account/target/active management.
+    Credentials: Legacy immutable credential container (api_client shim).
     AuthMethod: Legacy enum for authentication method selection.
     AuthCredential: v2 standalone auth identity.
     CredentialType: v2 enum distinguishing service_account from oauth.
@@ -31,14 +30,12 @@ from mixpanel_data._internal.auth_credential import (
     ResolvedSession,
 )
 from mixpanel_data._internal.config import (
-    AccountInfo,
     AuthMethod,
     ConfigManager,
     Credentials,
 )
 
 __all__ = [
-    "AccountInfo",
     "AuthCredential",
     "AuthMethod",
     "BridgeFile",

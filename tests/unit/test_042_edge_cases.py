@@ -39,7 +39,7 @@ from mixpanel_data._internal.auth.session import (
     WorkspaceRef,
 )
 from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.cli.main import app
 from mixpanel_data.cli.utils import ExitCode
 from mixpanel_data.exceptions import ConfigError, OAuthError

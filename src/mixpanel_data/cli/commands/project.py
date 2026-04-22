@@ -14,7 +14,7 @@ from typing import Annotated
 import typer
 
 from mixpanel_data import session as session_ns
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.cli.utils import (
     ExitCode,
     console,

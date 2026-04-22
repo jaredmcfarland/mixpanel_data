@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import builtins
 
-from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.types import Target
 
 

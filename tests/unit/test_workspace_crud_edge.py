@@ -22,7 +22,7 @@ from pydantic import SecretStr
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
+from mixpanel_data._internal.config import AuthMethod, Credentials
 from mixpanel_data.types import (
     BlueprintCard,
     BlueprintFinishParams,
@@ -67,24 +67,9 @@ def _make_creds() -> Credentials:
     )
 
 
-def _make_config(temp_dir: Path) -> ConfigManager:
-    """Create a ConfigManager with a test account for credential resolution.
-
-    Args:
-        temp_dir: Temporary directory for the config file.
-
-    Returns:
-        A ConfigManager with a default account configured.
-    """
-    cm = ConfigManager(config_path=temp_dir / "config.toml")
-    cm.add_account(
-        name="default",
-        username="test_user",
-        secret="test_secret",
-        project_id="12345",
-        region="us",
-    )
-    return cm
+# _make_config removed in B1 (Fix 9): the legacy v1 add_account signature
+# is gone and ``_make_workspace`` now uses ``session=_TEST_SESSION``
+# instead of resolving through ConfigManager.
 
 
 def _make_workspace(temp_dir: Path, handler: Any) -> Workspace:

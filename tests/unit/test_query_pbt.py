@@ -28,7 +28,7 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_PROPERTY_TYPES,
     VALID_RESOURCE_TYPES,
 )
-from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.config import Credentials
 from mixpanel_data._internal.validation import validate_bookmark, validate_query_args
 from mixpanel_data.types import (
     Filter,
@@ -97,7 +97,7 @@ def _make_ws() -> Workspace:
         project_id="12345",
         region="us",
     )
-    mgr = MagicMock(spec=ConfigManager)
+    mgr = MagicMock()
     mgr.config_version.return_value = 1
     mgr.resolve_credentials.return_value = creds
     return Workspace(session=_TEST_SESSION)

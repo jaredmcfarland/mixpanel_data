@@ -31,7 +31,7 @@ from pydantic import SecretStr
 from mixpanel_data import Workspace
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.config import Credentials
 from mixpanel_data.exceptions import BookmarkValidationError
 from mixpanel_data.types import Filter, ProfilePageResult, UserQueryResult
 
@@ -127,7 +127,7 @@ def mock_credentials() -> Credentials:
 @pytest.fixture
 def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
     """Create mock ConfigManager that returns credentials."""
-    manager = MagicMock(spec=ConfigManager)
+    manager = MagicMock()
     manager.config_version.return_value = 1
     manager.resolve_credentials.return_value = mock_credentials
     return manager
