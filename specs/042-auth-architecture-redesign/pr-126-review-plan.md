@@ -1,24 +1,24 @@
 # PR #126 Review Re-Assessment & 1.0-Readiness Plan
 
-**Branch:** `042-auth-architecture-redesign` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126) · **Scope:** 79 files, +16,199 / −49 · **Coverage:** 91.33% (6,429 tests) · **mypy --strict + ruff:** clean
+**Branch:** `042-auth-architecture-redesign` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126) · **HEAD:** `18283b4` · **Coverage:** 90.85% (5,948 tests + 18 / 18 live) · **mypy --strict + ruff:** clean
 
 ## Execution Status (as of 2026-04-22)
 
-**28 of 35 fixes landed in `5a6b876`** ("feat(042): execute PR #126 review plan"). Net −7,001 LoC across 51 files; suite at 6,261 pass / 91.57% coverage.
+**31 of 35 fixes landed.** B1 cluster (Fix 9 / 10 / 14) executed in three commits (`12471c6`, `024a291`, `18283b4`); the legacy `config.py` ConfigManager, the v1 `AuthBridgeFile` schema, and the dual-init `Workspace.__init__` are gone. Net −9,750 LoC across the three commits; suite at 5,948 pass / 90.85% coverage.
 
 | Group | Done | Notes |
 |-------|------|-------|
 | A — atomicity & security | ✅ 8 / 8 | atomic_write_bytes, _mutate ctx mgr, per-request headers, accounts.use clears workspace, immutable Session.headers, strict=True default, MP_OAUTH_STORAGE_DIR routing, account_dir traversal tests |
-| B — legacy elimination | ⚠️ 4 / 7 | Deleted legacy CLI modules + v1/v2 fixtures + legacy detection; **deferred**: Fix 9/10/14 (Workspace flatten — removes the 85+ tests that mock `_config_manager=`; once flat, legacy `config.py` + v1 bridge can be deleted) |
-| C — behavior gaps | ⚠️ 1 / 4 | `mp target` CLI shipped (5 commands + 10 smoke tests); **deferred**: Fix 16/17/18 (OAuth refresh in OnDiskTokenResolver, `mp account login` PKCE, per-request bearer resolution) |
+| B — legacy elimination | ✅ 7 / 7 | Earlier: deleted legacy CLI modules + v1/v2 fixtures + legacy detection. **B1 (`12471c6` / `024a291` / `18283b4`)**: Fix 10 flattened `Workspace.__init__` to v3-only kwargs (matches `contracts/python-api.md` §1) + dropped `_resolved_session` / `_init_v3` / `_has_v3_config` / 5× `hasattr(_v3_session)` guards / legacy `mp` CLI globals (`--credential` / `--workspace-id`); Fix 14 deleted v1 `AuthBridgeFile` + 9 helpers + `ConfigManager._resolve_*_from_bridge` chain; Fix 9 merged `_internal/config_v3.py` → `_internal/config.py` and removed legacy `ConfigManager` (`resolve_credentials`, `resolve_session`, `add_account(project_id=, region=)`, `set_default`, `add_credential`, `add_project_alias`, `migrate_v1_to_v2`) + `AccountInfo` / `CredentialInfo` / `ActiveContext` / `ProjectAlias` / `MigrationResult` dataclasses + `Credentials.from_oauth_token` / `to_resolved_session` factories + `Workspace.test_credentials` static method (FR-038 routes to `mp.accounts.test`). Test sweep: ~85 `_config_manager=`-injecting sites migrated to `session=_TEST_SESSION`; 14 dead-legacy test files deleted with rationale. |
+| C — behavior gaps | ⚠️ 1 / 4 | `mp target` CLI shipped (5 commands + 10 smoke tests); **deferred**: Fix 16/17/18 (OAuth refresh in OnDiskTokenResolver, `mp account login` PKCE, per-request bearer resolution) — these form **Cluster A1**, the next workstream. |
 | D — unused code & cleanup | ✅ 4 / 4 | Deleted DEFAULT_STORAGE_DIR shim, AccountAccessError, `--refresh`/`--bridge` flags; hid stub fns from `accounts.__all__` |
 | E — input validation hardening | ✅ 3 / 3 | MP_REGION/MP_WORKSPACE_ID/MP_PROJECT_ID strict, expires_at validation, `--secret-stdin` 64 KiB |
-| F — public-API surface design | ⚠️ 3 / 4 | Account.match() exhaustiveness, AccountTestResult/OAuthLoginResult tightening, promoted resolver helpers; **deferred**: Fix 27 (move auth types to public `mixpanel_data.auth_types` module) |
+| F — public-API surface design | ⚠️ 3 / 4 | Account.match() exhaustiveness, AccountTestResult/OAuthLoginResult tightening, promoted resolver helpers; **deferred**: Fix 27 (`mixpanel_data.auth_types` public module) — small standalone refactor, lands any time after B1. |
 | G — test/doc hygiene | ✅ 5 / 5 | Comment-rot scrub, `current_auth_header` docstring, ConfigManager + Session PBT, atomic-write resilience tests, real-`~/.mp/` write guard fixture |
 
-**Deferred fixes (7) form a coherent next-PR scope** — primarily the Workspace dual-init flatten (which unblocks Fix 9/10/14) and OAuth wiring (16/17/18); plus the public auth-types module move (27).
+**Remaining 4 deferred fixes:** Fix 16 / 17 / 18 (Cluster A1 — OAuth wiring trio) and Fix 27 (Cluster B3 — public auth-types module). Cluster B2 (Phase 4 deferred deletions: T043–T053a) is also pending and is now unblocked by the B1 Workspace flatten.
 
-**Live QA**: `tests/live/test_042_auth_redesign_live.py` (18 scenarios across SA / oauth_browser / oauth_token / cross-mode switching / bridge file / CLI / edge cases) — 18 / 18 pass against the real Mixpanel API as of 2026-04-22 (commit `93e3081` aligned tests with PR #126 behavior).
+**Live QA**: `tests/live/test_042_auth_redesign_live.py` (18 scenarios across SA / oauth_browser / oauth_token / cross-mode switching / bridge file / CLI / edge cases) — 18 / 18 pass against the real Mixpanel API at HEAD `18283b4`.
 
 ---
 
