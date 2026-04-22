@@ -1,14 +1,14 @@
 # Session Handoff: 042 Auth Architecture Redesign
 
-**Branch:** `042-auth-architecture-redesign` · **Last commit:** `18283b4` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
-**Suite:** 5,948 pass / 90.85% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
-**Generated:** 2026-04-22 (post-B1)
+**Branch:** `042-auth-architecture-redesign` · **Last commit:** `4d21c3e` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
+**Suite:** 5,956 pass / 90.85% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
+**Generated:** 2026-04-22 (post-A1)
 
 ---
 
 ## TL;DR for the next session
 
-The 042 auth-redesign feature is ~88% done. **B1 (the Workspace flatten + bridge/config legacy deletion keystone) just landed in three commits — `12471c6` / `024a291` / `18283b4`.** Net −9,750 LoC. Four PR #126 fixes still deferred (16 / 17 / 18 OAuth wiring + 27 public auth-types module) plus B2 sweeps + Phase 9 plugin rewrite + Phase 11 release polish. Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature. **Next workstream is A1 — the OAuth wiring trio.** Without Fix 17, `mp account login NAME` is still a `NotImplementedError` stub, which means new oauth_browser accounts cannot be created from a clean install.
+The 042 auth-redesign feature is **~93% done**. **B1** (Workspace flatten + bridge/config legacy deletion) and **A1** (OAuth wiring trio — refresh + `mp account login` + per-request bearer) both landed. `oauth_browser` now works end-to-end on a clean install: `mp account add personal --type oauth_browser --region us` → `mp account login personal` → tokens persisted to `~/.mp/accounts/personal/tokens.json`, refresh wired, `_get_auth_header` calls the resolver per request. **One PR #126 fix remains** (Fix 27 — public `mixpanel_data.auth_types` module) plus **B2 sweeps**, **A2 plugin rewrite**, **C1 cross-cutting tests**, **C2 bridge writer**, **D Phase 11 release polish**. Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
 
 ---
 
@@ -36,6 +36,8 @@ The 042 auth-redesign feature is ~88% done. **B1 (the Workspace flatten + bridge
 ## What landed (recent commits, newest first)
 
 ```
+4d21c3e feat(042): wire OAuth refresh + mp account login + per-request bearer (A1)
+62befd1 docs(042): refresh trackers for B1 cluster (Fix 9 / 10 / 14 done)
 18283b4 feat(042): merge legacy + v3 config modules into one (Fix 9)
 024a291 feat(042): delete v1 AuthBridgeFile from bridge.py (Fix 14)
 12471c6 feat(042): flatten Workspace dual-init to v3-only path (Fix 10)
@@ -44,9 +46,12 @@ The 042 auth-redesign feature is ~88% done. **B1 (the Workspace flatten + bridge
 5a6b876 feat(042): execute PR #126 review plan — 28 of 35 fixes (P0 + P1)
 41645d4 fix(042): address second Codex review — auto-detect, use(), OAuth atomicity, CLI globals
 dbe10a1 fix(042): address Codex review — workspace pin, Session.headers, persist clear, Target.workspace
-acee076 feat(042): account-as-source-of-truth for project + PR #126 fixes
-c497843 fix(042): tomli mypy ignore tolerant of py3.10 vs py3.11+
 ```
+
+A1 cluster (`4d21c3e`, +645 / −42 across 8 files):
+- **Fix 16** — `OnDiskTokenResolver._refresh_and_persist`: when an on-disk token is within the 30s expiry buffer AND a refresh token is present, call `OAuthFlow.refresh_tokens(...)` and atomic-write the new payload back to `~/.mp/accounts/{name}/tokens.json`. Missing DCR client info surfaces `OAUTH_REFRESH_ERROR`. Previously this branch raised "refresh is not yet wired up".
+- **Fix 17** — `accounts.login(name)` and `mp account login NAME` no longer stubs: full PKCE dance via `OAuthFlow.login(persist=False)` → `_persist_browser_tokens` → `/me` probe to capture user identity + backfill `account.default_project`. Returns `OAuthLoginResult`. CLI grew `--no-browser` flag (reserved for headless mode).
+- **Fix 18** — `MixpanelAPIClient._get_auth_header` re-resolves OAuth bearers per request via the bound `TokenResolver`. SA sessions and the legacy `credentials=` path keep using cached `Credentials.auth_header()`. `current_auth_header` (public) routes through the same per-request path.
 
 The B1 cluster (3 commits, +1,827 / −11,577 across 133 files) finished Group B (legacy elimination) by:
 - **Fix 10 (`12471c6`)** — `Workspace.__init__` is now keyword-only `(account, project, workspace, target, session)` per `contracts/python-api.md` §1; `_init_v3` / `_has_v3_config` / `_resolved_session` / 5× `hasattr(_v3_session)` guards / `_session_to_credentials` helper / legacy `--credential` and `--workspace-id` CLI globals all gone. ~85 `_config_manager=` test sites migrated to `session=_TEST_SESSION`; 13 legacy-only test classes / 1 dead integration file deleted with rationale comments.
@@ -68,14 +73,14 @@ Earlier (`5a6b876`, 51 files, −7,001 LoC) completed:
 
 ### Cluster A — Functional 1.0 blockers
 
-#### A1. OAuth wiring trio (Fix 16, 17, 18) — HIGH IMPACT
+#### A1. OAuth wiring trio (Fix 16, 17, 18) — ✅ DONE
 
-Without these, `oauth_browser` is degraded:
-- **Fix 16** (`src/mixpanel_data/_internal/auth/token_resolver.py:140-165`) — currently raises `OAUTH_REFRESH_ERROR`; replace with real `OAuthFlow.refresh_tokens(refresh_token)` call, persist via `atomic_write_bytes`, mirror `bridge.refresh_bridge_token` error semantics.
-- **Fix 17** (`src/mixpanel_data/cli/commands/account.py:434-441` + `src/mixpanel_data/accounts.py:237-253`) — `mp account login NAME` is a `NotImplementedError` stub. Wire `OAuthFlow` (PKCE + browser callback + `/me` probe to backfill `default_project`). **Users currently cannot add an oauth_browser account from a clean install** — they have to manually copy v2 tokens. The live-test conftest (`tests/live/conftest_042.py:copy_user_oauth_tokens_to_account`) literally exists as a workaround for this gap.
-- **Fix 18** (`src/mixpanel_data/_internal/api_client.py`) — depends on Fix 16. For OAuth accounts, `_get_auth_header()` should call `TokenResolver.get_browser_token(...)` per request instead of reading from a `Credentials` shim built once. Service-account path keeps existing per-request basic auth.
+Landed in `4d21c3e`. `oauth_browser` is no longer degraded:
+- Fix 16 — `OnDiskTokenResolver._refresh_and_persist` calls `OAuthFlow.refresh_tokens` and atomic-writes the new payload back to the per-account path.
+- Fix 17 — `mp account login NAME` runs the full PKCE flow, persists tokens to `~/.mp/accounts/{name}/tokens.json`, probes `/me`, backfills `default_project` if absent. Returns `OAuthLoginResult`.
+- Fix 18 — `MixpanelAPIClient._get_auth_header` re-resolves OAuth bearers per request via the bound `TokenResolver`.
 
-Estimated: ~1 day for the trio.
+`tests/live/conftest_042.py:copy_user_oauth_tokens_to_account` is no longer the only way to seed v3 OAuth tokens — `mp account login` works on a clean install. The helper remains as a non-interactive convenience for live tests (avoids triggering a browser per test run).
 
 #### A2. Plugin rewrite (Phase 9 / US9, T094–T100)
 - Rewrite `mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py` from ~727 → ≤300 lines, zero `if version >= 2` branches, JSON output per `contracts/plugin-auth-manager.md`
@@ -170,15 +175,15 @@ Necessary for Cowork VM users to export credentials from host → guest. Estimat
 ## Recommended sequencing
 
 1. ~~**B1 — Workspace flatten cluster**~~ ✅ DONE (3 commits, −9,750 LoC)
-2. **A1 — OAuth wiring trio** ← **next workstream** (Fix 18 already easier post-flatten)
-3. **B2 — Phase 4 deferred deletions** (mechanical sweeps; T049 / T051 / T052 already absorbed by B1)
+2. ~~**A1 — OAuth wiring trio**~~ ✅ DONE (`4d21c3e`, +645 LoC, +8 unit tests)
+3. **B2 — Phase 4 deferred deletions** ← **next workstream** (mechanical sweeps; T049 / T051 / T052 already absorbed by B1)
 4. **B3 — auth_types public module** (small standalone refactor)
-5. **A2 — plugin / auth_manager rewrite** (depends on public Python API being final)
+5. **A2 — plugin / auth_manager rewrite** (now unblocked — public Python API is final)
 6. **C2 — bridge writer** (small, well-specified)
 7. **C1 — cross-cutting iteration tests** (pure test additions)
 8. **D — Phase 11 polish** (last; depends on everything above)
 
-**Remaining estimate:** ~3–5 focused days to 1.0-ready.
+**Remaining estimate:** ~2–4 focused days to 1.0-ready.
 
 ---
 
@@ -187,7 +192,7 @@ Necessary for Cowork VM users to export credentials from host → guest. Estimat
 ```bash
 # Confirm branch + HEAD
 git status                    # should show branch=042-auth-architecture-redesign, clean tree
-git log --oneline -4          # top three should be 18283b4 / 024a291 / 12471c6
+git log --oneline -5          # top should be 4d21c3e / 62befd1 / 18283b4 / 024a291 / 12471c6
 
 # Confirm test suite green (slow — ~3-5 min)
 just check
@@ -215,7 +220,7 @@ MP_LIVE_OAUTH_TOKEN, MP_LIVE_PROJECT_ID, MP_LIVE_REGION
 
 The `MP_LIVE_*` prefix dodges the autouse env-var cleanup in `tests/conftest.py` (which scrubs `MP_USERNAME` / `MP_SECRET` / `MP_OAUTH_TOKEN` / etc. before each test runs). Live tests opt back in via `monkeypatch.setenv` inside the test body.
 
-**conftest_042.py: `copy_user_oauth_tokens_to_account()` is a workaround for the missing Fix 17.** Once `mp account login NAME` works, the helper can be replaced with a real login flow.
+**conftest_042.py: `copy_user_oauth_tokens_to_account()` is now optional** — Fix 17 (A1) makes `mp account login NAME` work end-to-end. The helper is kept as a non-interactive shortcut for live-test runs (avoids spawning a browser on every test).
 
 ---
 
@@ -252,5 +257,5 @@ src/mixpanel_data/
 mixpanel-plugin/                        # ← A2 plugin rewrite (entire dir)
 
 tests/live/test_042_auth_redesign_live.py
-tests/live/conftest_042.py              # ← can simplify post-Fix 17
+tests/live/conftest_042.py              # ← optional post-A1; helper kept for non-interactive live runs
 ```
