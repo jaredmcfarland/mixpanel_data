@@ -5,8 +5,16 @@
 default:
     @just --list
 
-# Run all checks (lint, typecheck, test)
-check: lint typecheck test
+# Run all checks — must be a strict superset of CI (.github/workflows/ci.yml).
+# CI runs the same commands plus HYPOTHESIS_PROFILE=ci for tests; that
+# profile is the only documented difference (deterministic seed, 200 examples
+# vs default 100). Locally we use the default profile for faster iteration.
+check: lint fmt-check typecheck test-cov build
+
+# Install git hooks so commits are blocked on lint/format failures BEFORE
+# they reach CI. Run once after cloning the repo.
+install-hooks:
+    uv run --group dev pre-commit install
 
 # Run tests
 test *args:

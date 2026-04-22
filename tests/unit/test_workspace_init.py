@@ -41,12 +41,13 @@ def two_accounts() -> ConfigManager:
     """Seed two service accounts with active=team."""
     cm = ConfigManager()
     accounts_ns.add(
-        "team", type="service_account", region="us",
-        username="u", secret=SecretStr("s"),
+        "team",
+        type="service_account",
+        region="us",
+        username="u",
+        secret=SecretStr("s"),
     )
-    accounts_ns.add(
-        "other", type="oauth_browser", region="eu"
-    )
+    accounts_ns.add("other", type="oauth_browser", region="eu")
     cm.set_active(account="team", project="3713224")
     return cm
 
@@ -106,25 +107,27 @@ class TestSessionBypass:
     def test_session_bypass(self, two_accounts: ConfigManager) -> None:
         """A pre-built Session is used as-is, ignoring config."""
         sa: Account = ServiceAccount(
-            name="custom", region="in",
-            username="bypass", secret=SecretStr("bs"),
+            name="custom",
+            region="in",
+            username="bypass",
+            secret=SecretStr("bs"),
         )
         sess = Session(account=sa, project=Project(id="11111"))
         ws = Workspace(session=sess)
         assert ws.account.name == "custom"
         assert ws.project.id == "11111"
 
-    def test_session_use_chain_equivalence(
-        self, two_accounts: ConfigManager
-    ) -> None:
+    def test_session_use_chain_equivalence(self, two_accounts: ConfigManager) -> None:
         """``Workspace().use(...)`` matches ``Workspace(session=Session(...))``.
 
         Per SC-010, the use-chain is interchangeable with session= bypass
         for the same (account, project, workspace) triple.
         """
         sa: Account = ServiceAccount(
-            name="team", region="us",
-            username="u", secret=SecretStr("s"),
+            name="team",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         ws_chain = Workspace().use(account="team", project="3713224")
         ws_session = Workspace(
@@ -137,17 +140,13 @@ class TestSessionBypass:
 class TestReadOnlyProperties:
     """The new properties are read-only (assignment raises)."""
 
-    def test_account_property_readonly(
-        self, two_accounts: ConfigManager
-    ) -> None:
+    def test_account_property_readonly(self, two_accounts: ConfigManager) -> None:
         """Assignment to ``ws.account`` raises AttributeError."""
         ws = Workspace()
         with pytest.raises(AttributeError):
             ws.account = ws.account  # type: ignore[misc]
 
-    def test_project_property_readonly(
-        self, two_accounts: ConfigManager
-    ) -> None:
+    def test_project_property_readonly(self, two_accounts: ConfigManager) -> None:
         """Assignment to ``ws.project`` raises AttributeError."""
         ws = Workspace()
         with pytest.raises(AttributeError):

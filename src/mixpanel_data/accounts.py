@@ -15,7 +15,6 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 from __future__ import annotations
 
 import builtins
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,7 +29,7 @@ from mixpanel_data._internal.auth.account import (
 )
 from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_data._internal.config_v3 import ConfigManager
-from mixpanel_data.exceptions import ConfigError, OAuthError
+from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import AccountSummary, AccountTestResult
 
 if TYPE_CHECKING:

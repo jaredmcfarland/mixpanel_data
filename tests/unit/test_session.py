@@ -28,9 +28,7 @@ from mixpanel_data._internal.auth.session import (
 @pytest.fixture
 def sa() -> ServiceAccount:
     """A minimal ServiceAccount for Session construction."""
-    return ServiceAccount(
-        name="team", region="us", username="u", secret=SecretStr("s")
-    )
+    return ServiceAccount(name="team", region="us", username="u", secret=SecretStr("s"))
 
 
 @pytest.fixture
@@ -57,9 +55,7 @@ class TestProject:
 
     def test_construction_full(self) -> None:
         """Construct with all optional fields."""
-        p = Project(
-            id="3713224", name="Demo", organization_id=42, timezone="UTC"
-        )
+        p = Project(id="3713224", name="Demo", organization_id=42, timezone="UTC")
         assert p.id == "3713224"
         assert p.name == "Demo"
         assert p.organization_id == 42
@@ -144,16 +140,12 @@ class TestSessionConstruction:
         s = Session(account=sa, project=project)
         assert s.workspace is None
 
-    def test_default_headers_empty(
-        self, sa: ServiceAccount, project: Project
-    ) -> None:
+    def test_default_headers_empty(self, sa: ServiceAccount, project: Project) -> None:
         """Headers default to an empty dict."""
         s = Session(account=sa, project=project)
         assert s.headers == {}
 
-    def test_frozen(
-        self, sa: ServiceAccount, project: Project
-    ) -> None:
+    def test_frozen(self, sa: ServiceAccount, project: Project) -> None:
         """Session is frozen — assignment raises."""
         s = Session(account=sa, project=project)
         with pytest.raises(ValidationError):
@@ -163,9 +155,7 @@ class TestSessionConstruction:
 class TestSessionProperties:
     """``project_id``, ``workspace_id``, ``region`` convenience properties."""
 
-    def test_project_id(
-        self, sa: ServiceAccount, project: Project
-    ) -> None:
+    def test_project_id(self, sa: ServiceAccount, project: Project) -> None:
         """``project_id`` returns ``project.id``."""
         s = Session(account=sa, project=project)
         assert s.project_id == "3713224"
@@ -177,9 +167,7 @@ class TestSessionProperties:
         s = Session(account=sa, project=project, workspace=workspace)
         assert s.workspace_id == 8
 
-    def test_workspace_id_none(
-        self, sa: ServiceAccount, project: Project
-    ) -> None:
+    def test_workspace_id_none(self, sa: ServiceAccount, project: Project) -> None:
         """``workspace_id`` is None when workspace is None."""
         s = Session(account=sa, project=project)
         assert s.workspace_id is None
@@ -196,9 +184,7 @@ class TestSessionProperties:
 class TestSessionReplace:
     """``Session.replace(...)`` returns a new Session with selected axes swapped."""
 
-    def test_replace_account(
-        self, sa: ServiceAccount, project: Project
-    ) -> None:
+    def test_replace_account(self, sa: ServiceAccount, project: Project) -> None:
         """Replace account; project and workspace preserved."""
         new_sa = ServiceAccount(
             name="other", region="us", username="u2", secret=SecretStr("s2")
@@ -271,9 +257,7 @@ class TestSessionReplace:
         self, sa: ServiceAccount, project: Project
     ) -> None:
         """Explicit ``headers={}`` clears all custom headers (sentinel semantics)."""
-        s = Session(
-            account=sa, project=project, headers={"X-Foo": "bar"}
-        )
+        s = Session(account=sa, project=project, headers={"X-Foo": "bar"})
         s2 = s.replace(headers={})
         assert s2.headers == {}
 
@@ -281,9 +265,7 @@ class TestSessionReplace:
         self, sa: ServiceAccount, project: Project
     ) -> None:
         """Omitting headers= preserves the existing headers."""
-        s = Session(
-            account=sa, project=project, headers={"X-Foo": "bar"}
-        )
+        s = Session(account=sa, project=project, headers={"X-Foo": "bar"})
         new_p = Project(id="9999")
         s2 = s.replace(project=new_p)
         assert s2.headers == {"X-Foo": "bar"}
@@ -300,9 +282,7 @@ class TestSessionAuthHeader:
         h = s.auth_header(token_resolver=None)
         assert h.startswith("Basic ")
 
-    def test_browser_account_auth_header_uses_resolver(
-        self, project: Project
-    ) -> None:
+    def test_browser_account_auth_header_uses_resolver(self, project: Project) -> None:
         """OAuthBrowserAccount session calls the resolver and returns Bearer."""
 
         class _Resolver:

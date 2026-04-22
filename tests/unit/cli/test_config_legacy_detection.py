@@ -21,7 +21,6 @@ import pytest
 from mixpanel_data._internal.config_v3 import ConfigManager
 from mixpanel_data.exceptions import ConfigError
 
-
 _FIXTURE_DIR = Path(__file__).parent.parent.parent / "fixtures" / "configs"
 
 
@@ -44,9 +43,7 @@ _EXPECTED_LINES = [
         "v2_with_custom_header.toml",
     ],
 )
-def test_legacy_fixtures_surface_exact_error(
-    fixture: str, tmp_path: Path
-) -> None:
+def test_legacy_fixtures_surface_exact_error(fixture: str, tmp_path: Path) -> None:
     """Each legacy fixture surfaces the canonical multi-line ConfigError message."""
     src = _FIXTURE_DIR / fixture
     dst = tmp_path / "config.toml"

@@ -14,7 +14,6 @@ import typer
 
 from mixpanel_data.cli.utils import err_console, handle_errors
 
-
 config_app = typer.Typer(
     name="config",
     help="Convert legacy configs to the v3 schema (042 redesign).",

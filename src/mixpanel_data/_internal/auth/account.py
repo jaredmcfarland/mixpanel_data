@@ -17,7 +17,7 @@ Reference: ``specs/042-auth-architecture-redesign/data-model.md`` §1, §2.
 from __future__ import annotations
 
 import base64
-from typing import Annotated, Literal, Protocol, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Annotated, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from typing_extensions import Self
@@ -114,7 +114,11 @@ class ServiceAccount(_AccountBase):
     secret: SecretStr
     """Service account secret. Redacted in repr/str via Pydantic."""
 
-    def auth_header(self, *, token_resolver: TokenResolver | None = None) -> str:
+    def auth_header(
+        self,
+        *,
+        token_resolver: TokenResolver | None = None,  # noqa: ARG002 — signature parity with OAuth variants
+    ) -> str:
         """Return the ``Authorization`` header value for HTTP requests.
 
         Args:
@@ -241,7 +245,7 @@ class OAuthTokenAccount(_AccountBase):
 
 
 Account = Annotated[
-    Union[ServiceAccount, OAuthBrowserAccount, OAuthTokenAccount],
+    ServiceAccount | OAuthBrowserAccount | OAuthTokenAccount,
     Field(discriminator="type"),
 ]
 """Discriminated union over the three account variants.

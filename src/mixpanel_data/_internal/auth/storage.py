@@ -63,8 +63,7 @@ def account_dir(name: str) -> Path:
     """
     if not _ACCOUNT_NAME_PATTERN.fullmatch(name):
         raise ValueError(
-            f"Invalid account name: {name!r}. "
-            "Must match `^[a-zA-Z0-9_-]{1,64}$`."
+            f"Invalid account name: {name!r}. Must match `^[a-zA-Z0-9_-]{{1,64}}$`."
         )
     return Path.home() / ".mp" / "accounts" / name
 

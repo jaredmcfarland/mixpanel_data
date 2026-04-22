@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import httpx
 import pytest
 from pydantic import SecretStr
 
@@ -35,12 +34,18 @@ def two_accounts() -> ConfigManager:
     """Seed two service accounts with different credentials."""
     cm = ConfigManager()
     accounts_ns.add(
-        "team", type="service_account", region="us",
-        username="team.sa", secret=SecretStr("team-secret"),
+        "team",
+        type="service_account",
+        region="us",
+        username="team.sa",
+        secret=SecretStr("team-secret"),
     )
     accounts_ns.add(
-        "other", type="service_account", region="eu",
-        username="other.sa", secret=SecretStr("other-secret"),
+        "other",
+        type="service_account",
+        region="eu",
+        username="other.sa",
+        secret=SecretStr("other-secret"),
     )
     cm.set_active(account="team", project="3713224")
     return cm
@@ -112,44 +117,46 @@ class TestHTTPTransportPreservation:
     ) -> None:
         """Workspace switch does NOT recreate the underlying httpx.Client."""
         ws = Workspace(account="team", project="3713224")
-        before = id(ws._api_client._http)  # noqa: SLF001 — test introspection
+        client = ws._api_client  # noqa: SLF001 — test introspection
+        assert client is not None
+        before = id(client._http)  # noqa: SLF001
         ws.use(workspace=42)
-        assert id(ws._api_client._http) == before
+        assert id(client._http) == before  # noqa: SLF001
 
     def test_http_client_id_preserved_across_project_switch(
         self, two_accounts: ConfigManager
     ) -> None:
         """Project switch does NOT recreate the underlying httpx.Client."""
         ws = Workspace(account="team", project="3713224")
-        before = id(ws._api_client._http)  # noqa: SLF001
+        client = ws._api_client  # noqa: SLF001
+        assert client is not None
+        before = id(client._http)  # noqa: SLF001
         ws.use(project="9999999")
-        assert id(ws._api_client._http) == before
+        assert id(client._http) == before  # noqa: SLF001
 
     def test_http_client_id_preserved_across_account_switch(
         self, two_accounts: ConfigManager
     ) -> None:
         """Account switch does NOT recreate the underlying httpx.Client."""
         ws = Workspace(account="team", project="3713224")
-        before = id(ws._api_client._http)  # noqa: SLF001
+        client = ws._api_client  # noqa: SLF001
+        assert client is not None
+        before = id(client._http)  # noqa: SLF001
         ws.use(account="other")
-        assert id(ws._api_client._http) == before
+        assert id(client._http) == before  # noqa: SLF001
 
 
 class TestTargetMutualExclusion:
     """``target=`` is mutually exclusive with ``account=``/``project=``/``workspace=``."""
 
-    def test_target_with_account_raises(
-        self, two_accounts: ConfigManager
-    ) -> None:
+    def test_target_with_account_raises(self, two_accounts: ConfigManager) -> None:
         """``use(target=T, account=A)`` raises ValueError."""
         targets_ns.add("ecom", account="team", project="3018488")
         ws = Workspace(account="team", project="3713224")
         with pytest.raises(ValueError):
             ws.use(target="ecom", account="other")
 
-    def test_target_alone_applies_three_axes(
-        self, two_accounts: ConfigManager
-    ) -> None:
+    def test_target_alone_applies_three_axes(self, two_accounts: ConfigManager) -> None:
         """``use(target=T)`` alone applies all three axes from the target."""
         targets_ns.add("ecom", account="other", project="3018488", workspace=42)
         ws = Workspace(account="team", project="3713224")

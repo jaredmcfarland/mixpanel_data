@@ -14,18 +14,18 @@ in a fresh tmp dir to avoid state leak between examples (the function-scoped
 
 from __future__ import annotations
 
-import os
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from hypothesis import HealthCheck, given, settings as hyp_settings
+from hypothesis import HealthCheck, given
+from hypothesis import settings as hyp_settings
 from hypothesis import strategies as st
 from pydantic import SecretStr
 
 from mixpanel_data._internal.auth.resolver import resolve_session
 from mixpanel_data._internal.config_v3 import ConfigManager
-
 
 _NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 account_names = st.text(alphabet=_NAME_ALPHABET, min_size=1, max_size=12)
@@ -34,7 +34,9 @@ workspace_ids = st.integers(min_value=1, max_value=2**31 - 1)
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home(monkeypatch: pytest.MonkeyPatch) -> None:
+def _isolated_home(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[None]:
     """Isolate ``$HOME`` so the resolver doesn't pick up the dev's real bridge."""
     with tempfile.TemporaryDirectory() as tmp:
         monkeypatch.setenv("HOME", tmp)

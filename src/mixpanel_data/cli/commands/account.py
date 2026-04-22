@@ -18,7 +18,6 @@ import typer
 from pydantic import SecretStr
 
 from mixpanel_data import accounts as accounts_ns
-from mixpanel_data._internal.auth.account import AccountType, Region
 from mixpanel_data.cli.utils import (
     ExitCode,
     console,
@@ -27,9 +26,8 @@ from mixpanel_data.cli.utils import (
 )
 from mixpanel_data.exceptions import (
     AccountInUseError,
-    ConfigError,
 )
-
+from mixpanel_data.types import AccountSummary
 
 account_app = typer.Typer(
     name="account",
@@ -38,7 +36,7 @@ account_app = typer.Typer(
 )
 
 
-def _format_summary_table(summaries: list[object]) -> str:
+def _format_summary_table(summaries: list[AccountSummary]) -> str:
     """Render a compact table for ``mp account list`` (no Rich dependency).
 
     Args:
@@ -51,10 +49,8 @@ def _format_summary_table(summaries: list[object]) -> str:
         return "(no accounts configured)"
     lines = ["NAME            TYPE              REGION  ACTIVE"]
     for s in summaries:
-        active = "*" if s.is_active else ""  # type: ignore[attr-defined]
-        lines.append(
-            f"{s.name:<15} {s.type:<17} {s.region:<7} {active}"  # type: ignore[attr-defined]
-        )
+        active = "*" if s.is_active else ""
+        lines.append(f"{s.name:<15} {s.type:<17} {s.region:<7} {active}")
     return "\n".join(lines)
 
 
@@ -106,9 +102,7 @@ def add_account(
     ],
     region: Annotated[
         str,
-        typer.Option(
-            "--region", help="Mixpanel region: us | eu | in"
-        ),
+        typer.Option("--region", help="Mixpanel region: us | eu | in"),
     ],
     username: Annotated[
         str | None,
@@ -151,9 +145,7 @@ def add_account(
         )
         raise typer.Exit(ExitCode.INVALID_ARGS)
     if region not in ("us", "eu", "in"):
-        err_console.print(
-            f"[red]Invalid --region: {region!r}[/red] (use us / eu / in)"
-        )
+        err_console.print(f"[red]Invalid --region: {region!r}[/red] (use us / eu / in)")
         raise typer.Exit(ExitCode.INVALID_ARGS)
 
     secret: SecretStr | None = None

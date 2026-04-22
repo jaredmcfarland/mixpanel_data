@@ -17,7 +17,6 @@ import typer
 from mixpanel_data import session as session_ns
 from mixpanel_data.cli.utils import console, err_console, handle_errors
 
-
 session_app = typer.Typer(
     name="session",
     help="Show / update the active session (042 redesign).",
@@ -38,9 +37,7 @@ def session_command(
     ] = False,
     format: Annotated[  # noqa: A002
         str,
-        typer.Option(
-            "--format", "-f", help="Output format: text | json"
-        ),
+        typer.Option("--format", "-f", help="Output format: text | json"),
     ] = "text",
 ) -> None:
     """Print the persisted ``[active]`` session.

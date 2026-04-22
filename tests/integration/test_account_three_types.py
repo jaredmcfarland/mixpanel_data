@@ -58,18 +58,21 @@ class TestThreeAccountTypes:
         """Register all three account variants via mp.accounts.add."""
         # ServiceAccount.
         accounts_ns.add(
-            "team", type="service_account", region="us",
-            username="team.sa", secret=SecretStr("team-secret"),
+            "team",
+            type="service_account",
+            region="us",
+            username="team.sa",
+            secret=SecretStr("team-secret"),
         )
         # OAuthBrowserAccount — write fake tokens.json to skip the browser.
-        accounts_ns.add(
-            "personal", type="oauth_browser", region="us"
-        )
+        accounts_ns.add("personal", type="oauth_browser", region="us")
         _write_tokens_for("personal", tmp_path)
         # OAuthTokenAccount.
         monkeypatch.setenv("MY_OAUTH_TOK", "ci-bearer")
         accounts_ns.add(
-            "ci", type="oauth_token", region="us",
+            "ci",
+            type="oauth_token",
+            region="us",
             token_env="MY_OAUTH_TOK",
         )
 
@@ -86,15 +89,16 @@ class TestThreeAccountTypes:
     ) -> None:
         """Switching active account works for each type via mp.accounts.use."""
         accounts_ns.add(
-            "team", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "team",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         accounts_ns.add("personal", type="oauth_browser", region="us")
         _write_tokens_for("personal", tmp_path)
         monkeypatch.setenv("MY_OAUTH_TOK", "ci-bearer")
-        accounts_ns.add(
-            "ci", type="oauth_token", region="us", token_env="MY_OAUTH_TOK"
-        )
+        accounts_ns.add("ci", type="oauth_token", region="us", token_env="MY_OAUTH_TOK")
 
         cm = ConfigManager()
         for name in ("personal", "ci", "team"):

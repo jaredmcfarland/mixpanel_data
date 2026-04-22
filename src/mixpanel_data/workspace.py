@@ -55,10 +55,13 @@ from mixpanel_data._internal.auth.account import Account as _AccountUnion
 from mixpanel_data._internal.auth.resolver import resolve_session as _resolve_session_v3
 from mixpanel_data._internal.auth.session import (
     Project as _ProjectV3,
+)
+from mixpanel_data._internal.auth.session import (
     Session as _SessionV3,
+)
+from mixpanel_data._internal.auth.session import (
     WorkspaceRef as _WorkspaceRefV3,
 )
-from mixpanel_data._internal.config_v3 import ConfigManager as _ConfigManagerV3
 from mixpanel_data._internal.bookmark_builders import (
     _build_composed_properties,
     build_date_range,
@@ -72,6 +75,7 @@ from mixpanel_data._internal.bookmark_builders import (
     patch_custom_property_filters_for_transform,
 )
 from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.config_v3 import ConfigManager as _ConfigManagerV3
 from mixpanel_data._internal.query.user_builders import (
     extract_cohort_filter,
     filters_to_selector,
@@ -607,10 +611,12 @@ class Workspace:
                 and br.tokens is not None
                 and br.account.type == "oauth_browser"
             ):
+                import json as _json
+
                 from mixpanel_data._internal.auth.storage import (
                     ensure_account_dir,
                 )
-                import json as _json
+
                 tokens_path = ensure_account_dir(br.account.name) / "tokens.json"
                 if not tokens_path.exists():
                     payload = {
@@ -627,9 +633,7 @@ class Workspace:
                         payload["refresh_token"] = (
                             br.tokens.refresh_token.get_secret_value()
                         )
-                    tokens_path.write_text(
-                        _json.dumps(payload), encoding="utf-8"
-                    )
+                    tokens_path.write_text(_json.dumps(payload), encoding="utf-8")
                     tokens_path.chmod(0o600)
             sess = _resolve_session_v3(
                 account=account,
@@ -713,7 +717,7 @@ class Workspace:
         workspace: int | None = None,
         target: str | None = None,
         persist: bool = False,
-    ) -> "Workspace":
+    ) -> Workspace:
         """Swap one or more session axes in place; return ``self`` for chaining.
 
         ``target=`` is mutually exclusive with ``account=``/``project=``/
@@ -775,9 +779,7 @@ class Workspace:
         else:
             client = self._require_api_client()
             new_account_obj = cm.get_account(account) if account is not None else None
-            new_project_obj = (
-                _ProjectV3(id=project) if project is not None else None
-            )
+            new_project_obj = _ProjectV3(id=project) if project is not None else None
             new_workspace_obj = (
                 _WorkspaceRefV3(id=workspace) if workspace is not None else None
             )
@@ -807,9 +809,7 @@ class Workspace:
             account=self._v3_session.account.name,
             project=self._v3_session.project.id,
             workspace=(
-                self._v3_session.workspace.id
-                if self._v3_session.workspace
-                else None
+                self._v3_session.workspace.id if self._v3_session.workspace else None
             ),
         )
 

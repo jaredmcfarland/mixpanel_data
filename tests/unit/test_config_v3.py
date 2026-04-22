@@ -26,7 +26,6 @@ from mixpanel_data._internal.config_v3 import ConfigManager
 from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import AccountSummary, Target
 
-
 # Path to the fixture corpus (constructed from project root).
 _FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "configs"
 
@@ -126,21 +125,24 @@ class TestAddAccount:
     def test_duplicate_name_raises(self, cm: ConfigManager) -> None:
         """Adding an existing name raises ConfigError."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         with pytest.raises(ConfigError):
-            cm.add_account(
-                "x", type="oauth_browser", region="us"
-            )
+            cm.add_account("x", type="oauth_browser", region="us")
 
     def test_invalid_name_raises(self, cm: ConfigManager) -> None:
         """Names violating the pattern raise ConfigError."""
         with pytest.raises((ConfigError, ValueError)):
             cm.add_account(
                 "bad name",  # space is invalid
-                type="service_account", region="us",
-                username="u", secret=SecretStr("s"),
+                type="service_account",
+                region="us",
+                username="u",
+                secret=SecretStr("s"),
             )
 
 
@@ -150,8 +152,11 @@ class TestSetActive:
     def test_set_account_only(self, cm: ConfigManager) -> None:
         """Setting account axis writes only that key."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.set_active(account="x")
         assert cm.get_active() == ActiveSession(account="x")
@@ -169,8 +174,11 @@ class TestSetActive:
     def test_set_all_three(self, cm: ConfigManager) -> None:
         """Setting all three axes in one call."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.set_active(account="x", project="3713224", workspace=8)
         active = cm.get_active()
@@ -198,8 +206,11 @@ class TestSetActive:
     def test_partial_update_preserves_other_axes(self, cm: ConfigManager) -> None:
         """``set_active(project=...)`` does NOT touch existing account or workspace."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.set_active(account="x", workspace=8)
         cm.set_active(project="3713224")
@@ -215,8 +226,11 @@ class TestTargets:
     def test_add_target_minimal(self, cm: ConfigManager) -> None:
         """Target with no workspace omits the workspace key."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_target("ecom", account="x", project="3018488")
         targets = cm.list_targets()
@@ -226,8 +240,11 @@ class TestTargets:
     def test_add_target_with_workspace(self, cm: ConfigManager) -> None:
         """Target with workspace persists all three fields."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_target("ecom", account="x", project="3018488", workspace=42)
         t = cm.get_target("ecom")
@@ -243,8 +260,11 @@ class TestTargets:
     def test_remove_target(self, cm: ConfigManager) -> None:
         """``remove_target`` deletes the entry; subsequent get_target raises."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_target("ecom", account="x", project="3018488")
         cm.remove_target("ecom")
@@ -254,8 +274,11 @@ class TestTargets:
     def test_apply_target_writes_three_axes(self, cm: ConfigManager) -> None:
         """``apply_target`` writes account, project, workspace to active."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_target("ecom", account="x", project="3018488", workspace=8)
         cm.apply_target("ecom")
@@ -269,8 +292,11 @@ class TestTargets:
     ) -> None:
         """Applying a target with no workspace clears any prior workspace."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.set_active(account="x", project="999", workspace=99)
         cm.add_target("nows", account="x", project="3018488")
@@ -291,8 +317,11 @@ class TestListAccounts:
     def test_returns_summary_objects(self, cm: ConfigManager) -> None:
         """Every entry is an AccountSummary with the right fields."""
         cm.add_account(
-            "team", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "team",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_account("personal", type="oauth_browser", region="eu")
         summaries = cm.list_accounts()
@@ -303,8 +332,11 @@ class TestListAccounts:
     def test_is_active_flag(self, cm: ConfigManager) -> None:
         """``is_active`` reflects ``[active].account``."""
         cm.add_account(
-            "team", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "team",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_account("personal", type="oauth_browser", region="us")
         cm.set_active(account="team")
@@ -315,8 +347,11 @@ class TestListAccounts:
     def test_referenced_by_targets(self, cm: ConfigManager) -> None:
         """``referenced_by_targets`` lists target names referencing the account."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_target("ecom", account="x", project="3018488")
         cm.add_target("ai", account="x", project="3713224")
@@ -330,22 +365,26 @@ class TestRemoveAccount:
     def test_remove_unused(self, cm: ConfigManager) -> None:
         """An unreferenced account is removable without force."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         orphans = cm.remove_account("x")
         assert orphans == []
         assert cm.list_accounts() == []
 
-    def test_remove_referenced_without_force_raises(
-        self, cm: ConfigManager
-    ) -> None:
+    def test_remove_referenced_without_force_raises(self, cm: ConfigManager) -> None:
         """Removing a referenced account without ``force`` raises."""
         from mixpanel_data.exceptions import AccountInUseError
 
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_target("ecom", account="x", project="3018488")
         with pytest.raises(AccountInUseError):
@@ -354,8 +393,11 @@ class TestRemoveAccount:
     def test_remove_with_force_returns_orphans(self, cm: ConfigManager) -> None:
         """``remove_account(force=True)`` returns the names of orphaned targets."""
         cm.add_account(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_target("ecom", account="x", project="3018488")
         cm.add_target("ai", account="x", project="3713224")
@@ -453,11 +495,7 @@ class TestLegacyDetectionV2:
         """``[projects.X]`` section triggers detection."""
         p = tmp_path / "config.toml"
         p.write_text(
-            (
-                "[projects.ecom]\n"
-                'credential = "x"\n'
-                'project_id = "1"\n'
-            ),
+            ('[projects.ecom]\ncredential = "x"\nproject_id = "1"\n'),
             encoding="utf-8",
         )
         cm = ConfigManager(config_path=p)

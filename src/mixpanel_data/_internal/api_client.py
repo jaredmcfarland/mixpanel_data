@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import quote
 
 import httpx
-
 from pydantic import SecretStr
 
 from mixpanel_data._internal.auth.account import (
@@ -253,9 +252,7 @@ class MixpanelAPIClient:
                 "MixpanelAPIClient: pass either `credentials=` or `session=`, not both."
             )
         if session is None and credentials is None:
-            raise TypeError(
-                "MixpanelAPIClient: requires `credentials=` or `session=`."
-            )
+            raise TypeError("MixpanelAPIClient: requires `credentials=` or `session=`.")
 
         self._token_resolver: TokenResolver = token_resolver or OnDiskTokenResolver()
         self._session: Session | None = session
@@ -859,9 +856,7 @@ class MixpanelAPIClient:
             Project(id=project) if isinstance(project, str) else project
         )
         workspace_obj: WorkspaceRef | None = (
-            WorkspaceRef(id=workspace)
-            if isinstance(workspace, int)
-            else workspace
+            WorkspaceRef(id=workspace) if isinstance(workspace, int) else workspace
         )
         new_session = self._session.replace(
             account=account, project=project_obj, workspace=workspace_obj
@@ -901,9 +896,7 @@ class MixpanelAPIClient:
         items: list[dict[str, Any]]
         if isinstance(payload, list):
             items = payload
-        elif isinstance(payload, dict) and isinstance(
-            payload.get("results"), list
-        ):
+        elif isinstance(payload, dict) and isinstance(payload.get("results"), list):
             items = payload["results"]
         else:
             items = []
@@ -911,9 +904,7 @@ class MixpanelAPIClient:
             raise WorkspaceScopeError(
                 f"Project {self.project_id} has no accessible workspaces."
             )
-        default = next(
-            (w for w in items if w.get("is_default")), items[0]
-        )
+        default = next((w for w in items if w.get("is_default")), items[0])
         ref = WorkspaceRef(
             id=int(default["id"]),
             name=default.get("name"),

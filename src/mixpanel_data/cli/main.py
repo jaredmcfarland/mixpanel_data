@@ -196,11 +196,8 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.alerts import alerts_app
     from mixpanel_data.cli.commands.annotations import annotations_app
     from mixpanel_data.cli.commands.auth import auth_app
-    from mixpanel_data.cli.commands.config_cmd import config_app
-    from mixpanel_data.cli.commands.project import project_app
-    from mixpanel_data.cli.commands.session import session_app
-    from mixpanel_data.cli.commands.workspace import workspace_app as v3_workspace_app
     from mixpanel_data.cli.commands.cohorts import cohorts_app
+    from mixpanel_data.cli.commands.config_cmd import config_app
     from mixpanel_data.cli.commands.context import context_app
     from mixpanel_data.cli.commands.custom_events import custom_events_app
     from mixpanel_data.cli.commands.custom_properties import custom_properties_app
@@ -211,11 +208,14 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.inspect import inspect_app
     from mixpanel_data.cli.commands.lexicon import lexicon_app
     from mixpanel_data.cli.commands.lookup_tables import lookup_tables_app
+    from mixpanel_data.cli.commands.project import project_app
     from mixpanel_data.cli.commands.projects import projects_app
     from mixpanel_data.cli.commands.query import query_app
     from mixpanel_data.cli.commands.reports import reports_app
     from mixpanel_data.cli.commands.schemas import schemas_app
+    from mixpanel_data.cli.commands.session import session_app
     from mixpanel_data.cli.commands.webhooks import webhooks_app
+    from mixpanel_data.cli.commands.workspace import workspace_app as v3_workspace_app
     from mixpanel_data.cli.commands.workspaces_cmd import workspaces_app
 
     app.add_typer(

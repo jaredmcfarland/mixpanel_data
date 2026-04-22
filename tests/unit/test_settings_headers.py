@@ -50,9 +50,7 @@ class TestSettingsHeaderAttachment:
         self, cm_with_account_active: ConfigManager
     ) -> None:
         """A custom_header in [settings] appears in ``Session.headers``."""
-        cm_with_account_active.set_custom_header(
-            name="X-Foo", value="bar"
-        )
+        cm_with_account_active.set_custom_header(name="X-Foo", value="bar")
         s = resolve_session(config=cm_with_account_active)
         assert s.headers == {"X-Foo": "bar"}
 

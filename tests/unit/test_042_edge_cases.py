@@ -45,7 +45,6 @@ from mixpanel_data.cli.utils import ExitCode
 from mixpanel_data.exceptions import ConfigError, OAuthError
 from mixpanel_data.workspace import Workspace
 
-
 # =============================================================================
 # Account name boundary + character tests
 # =============================================================================
@@ -126,9 +125,7 @@ class TestOAuthTokenValidatorUnderCopy:
             name="ci", region="us", token=SecretStr("inline-tok")
         )
         # Forcing both fields via copy succeeds in Pydantic v2 by design.
-        bad = original.model_copy(
-            update={"token_env": "MY_ENV"}, deep=True
-        )
+        bad = original.model_copy(update={"token_env": "MY_ENV"}, deep=True)
         # Both fields are now set — the XOR validator never re-fires.
         assert bad.token is not None
         assert bad.token_env == "MY_ENV"
@@ -158,8 +155,10 @@ def base_session() -> Session:
     """A Session with all three axes populated for sentinel-semantics tests."""
     return Session(
         account=ServiceAccount(
-            name="team", region="us",
-            username="u", secret=SecretStr("s"),
+            name="team",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         ),
         project=Project(id="3713224"),
         workspace=WorkspaceRef(id=42),
@@ -209,9 +208,7 @@ class TestSessionReplaceSentinel:
 
 
 @pytest.fixture
-def isolated_home(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
+def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Tmp $HOME so token resolver writes don't pollute the dev's account dir."""
     monkeypatch.setenv("HOME", str(tmp_path))
     return tmp_path
@@ -244,9 +241,7 @@ def _write_tokens(
 class TestTokenResolverMalformed:
     """OnDiskTokenResolver edge cases for corrupted tokens.json."""
 
-    def test_malformed_expires_at_raises(
-        self, isolated_home: Path
-    ) -> None:
+    def test_malformed_expires_at_raises(self, isolated_home: Path) -> None:
         """``expires_at: "not-a-date"`` raises OAuthError."""
         _write_tokens(
             isolated_home,
@@ -383,9 +378,7 @@ class TestResolverEdgeCases:
 class TestBridgeEdgeCases:
     """v2 bridge loader robustness."""
 
-    def test_oauth_browser_without_tokens_rejected(
-        self, tmp_path: Path
-    ) -> None:
+    def test_oauth_browser_without_tokens_rejected(self, tmp_path: Path) -> None:
         """oauth_browser bridge missing the `tokens` field fails validation."""
         payload = {
             "version": 2,
@@ -400,9 +393,7 @@ class TestBridgeEdgeCases:
             BridgeFile.model_validate(payload)
 
     @pytest.mark.parametrize("bad_version", [1, 3, "2"])
-    def test_version_mismatch_rejected(
-        self, bad_version: object
-    ) -> None:
+    def test_version_mismatch_rejected(self, bad_version: object) -> None:
         """version != 2 (Literal[2]) is rejected."""
         payload = {
             "version": bad_version,
@@ -452,9 +443,7 @@ class TestBridgeEdgeCases:
 class TestConfigManagerEdgeCases:
     """Legacy detection + file permissions + idempotency."""
 
-    def test_legacy_detection_config_version_alone(
-        self, tmp_path: Path
-    ) -> None:
+    def test_legacy_detection_config_version_alone(self, tmp_path: Path) -> None:
         """``config_version = 2`` alone (no other v2 markers) triggers detection."""
         p = tmp_path / "config.toml"
         p.write_text("config_version = 2\n", encoding="utf-8")
@@ -463,9 +452,7 @@ class TestConfigManagerEdgeCases:
             cm.list_accounts()
 
     @pytest.mark.skipif(os.name != "posix", reason="POSIX permissions test")
-    def test_file_permissions_under_loose_umask(
-        self, tmp_path: Path
-    ) -> None:
+    def test_file_permissions_under_loose_umask(self, tmp_path: Path) -> None:
         """A loose umask (0o022) doesn't leak into the written config file.
 
         Verifies the explicit chmod to 0o600 inside ConfigManager._write_raw.
@@ -550,9 +537,7 @@ class TestWorkspaceV3Discrimination:
         # autouse fixture in tests/conftest.py only scrubs the auth-related
         # ones, but MP_CUSTOM_HEADER_NAME etc. can leak from the dev's shell).
         for key in list(os.environ):
-            if key.startswith("MP_") and key not in (
-                "MP_CONFIG_PATH",
-            ):
+            if key.startswith("MP_") and key not in ("MP_CONFIG_PATH",):
                 monkeypatch.delenv(key, raising=False)
         monkeypatch.chdir(tmp_path)  # avoids cwd-relative bridge match
         # Empty file — no [accounts] block, no [active]; _has_v3_config → False.
@@ -597,9 +582,7 @@ def cli_runner() -> CliRunner:
 
 
 @pytest.fixture(autouse=True)
-def _isolated_home_for_cli(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def _isolated_home_for_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Isolate $HOME, MP_CONFIG_PATH, and MP_OAUTH_STORAGE_DIR for hermetic tests.
 
     Setting just HOME isn't sufficient: ``OAuthStorage.DEFAULT_STORAGE_DIR``
@@ -624,10 +607,15 @@ class TestCliExitCodes:
         result = cli_runner.invoke(
             app,
             [
-                "account", "add", "team",
-                "--type", "service_account",
-                "--region", "magic",
-                "--username", "u",
+                "account",
+                "add",
+                "team",
+                "--type",
+                "service_account",
+                "--region",
+                "magic",
+                "--username",
+                "u",
             ],
         )
         assert result.exit_code == int(ExitCode.INVALID_ARGS)
@@ -639,10 +627,15 @@ class TestCliExitCodes:
         result = cli_runner.invoke(
             app,
             [
-                "account", "add", "team",
-                "--type", "magic",
-                "--region", "us",
-                "--username", "u",
+                "account",
+                "add",
+                "team",
+                "--type",
+                "magic",
+                "--region",
+                "us",
+                "--username",
+                "u",
             ],
         )
         assert result.exit_code == int(ExitCode.INVALID_ARGS)
@@ -654,10 +647,15 @@ class TestCliExitCodes:
         result = cli_runner.invoke(
             app,
             [
-                "account", "add", "team",
-                "--type", "service_account",
-                "--region", "us",
-                "--username", "u",
+                "account",
+                "add",
+                "team",
+                "--type",
+                "service_account",
+                "--region",
+                "us",
+                "--username",
+                "u",
             ],
         )
         # MP_SECRET is autouse-scrubbed by tests/conftest.py → must fail.
@@ -694,8 +692,10 @@ class TestSecretLeakage:
         """``repr(Session)`` containing a SA account redacts the secret."""
         s = Session(
             account=ServiceAccount(
-                name="team", region="us",
-                username="u", secret=SecretStr(self._SENTINEL),
+                name="team",
+                region="us",
+                username="u",
+                secret=SecretStr(self._SENTINEL),
             ),
             project=Project(id="3713224"),
         )
@@ -725,6 +725,4 @@ class TestSecretLeakage:
         )
         creds = session_to_credentials(s)
         assert creds.oauth_access_token is not None
-        assert (
-            creds.oauth_access_token.get_secret_value() == _OAUTH_TOKEN_PENDING
-        )
+        assert creds.oauth_access_token.get_secret_value() == _OAUTH_TOKEN_PENDING

@@ -407,7 +407,10 @@ class AccountAccessError(ConfigError):
     """
 
     def __init__(
-        self, account_name: str, project_id: str, available_projects: list[str] | None = None
+        self,
+        account_name: str,
+        project_id: str,
+        available_projects: list[str] | None = None,
     ) -> None:
         """Initialize AccountAccessError.
 

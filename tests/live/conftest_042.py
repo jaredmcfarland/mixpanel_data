@@ -12,14 +12,11 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
-import stat
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
-
 
 # Where the user's real (legacy v2) OAuth tokens live, if they've logged in.
 LEGACY_TOKENS_PATH = Path.home() / ".mp" / "oauth" / "tokens_us.json"
@@ -32,9 +29,7 @@ LEGACY_CONFIG_PATH = Path.home() / ".mp" / "config.toml"
 
 
 @pytest.fixture
-def tmp_v3_home(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[Path]:
+def tmp_v3_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Yield a tmp ``$HOME`` with isolated v3 ``~/.mp/`` and ``MP_CONFIG_PATH``.
 
     Sets HOME, MP_CONFIG_PATH, MP_OAUTH_STORAGE_DIR; creates ~/.mp/ at
@@ -57,9 +52,7 @@ def tmp_v3_home(
 # =============================================================================
 
 
-def copy_user_oauth_tokens_to_account(
-    home: Path, account_name: str
-) -> Path:
+def copy_user_oauth_tokens_to_account(home: Path, account_name: str) -> Path:
     """Copy the user's real ~/.mp/oauth/tokens_us.json into the v3 layout.
 
     Reads from ``~/.mp/oauth/tokens_us.json`` (the user's actual on-disk
@@ -83,9 +76,7 @@ def copy_user_oauth_tokens_to_account(
             f"User's legacy OAuth tokens not found at {LEGACY_TOKENS_PATH}. "
             "Live OAuth tests require a prior `mp auth login`."
         )
-    payload: dict[str, Any] = json.loads(
-        LEGACY_TOKENS_PATH.read_text(encoding="utf-8")
-    )
+    payload: dict[str, Any] = json.loads(LEGACY_TOKENS_PATH.read_text(encoding="utf-8"))
     payload.pop("project_id", None)  # v3 drops this field
 
     account_dir = home / ".mp" / "accounts" / account_name
@@ -106,6 +97,7 @@ def get_user_active_project_id() -> str | None:
         return None
     try:
         import sys
+
         if sys.version_info >= (3, 11):
             import tomllib
         else:  # pragma: no cover
@@ -197,8 +189,10 @@ def _probe_sa_credentials() -> tuple[bool, str | None]:
     if _SA_CHECK_RESULT is not None:
         return _SA_CHECK_RESULT
     required = (
-        "MP_LIVE_SA_USERNAME", "MP_LIVE_SA_SECRET",
-        "MP_LIVE_SA_PROJECT_ID", "MP_LIVE_SA_REGION",
+        "MP_LIVE_SA_USERNAME",
+        "MP_LIVE_SA_SECRET",
+        "MP_LIVE_SA_PROJECT_ID",
+        "MP_LIVE_SA_REGION",
     )
     missing = [v for v in required if not os.environ.get(v)]
     if missing:
@@ -207,9 +201,10 @@ def _probe_sa_credentials() -> tuple[bool, str | None]:
     # Live probe — make a single events() call to confirm Mixpanel accepts.
     import os as _os
 
-    saved_env = {k: _os.environ.get(k) for k in (
-        "MP_USERNAME", "MP_SECRET", "MP_PROJECT_ID", "MP_REGION"
-    )}
+    saved_env = {
+        k: _os.environ.get(k)
+        for k in ("MP_USERNAME", "MP_SECRET", "MP_PROJECT_ID", "MP_REGION")
+    }
     try:
         _os.environ["MP_USERNAME"] = _os.environ["MP_LIVE_SA_USERNAME"]
         _os.environ["MP_SECRET"] = _os.environ["MP_LIVE_SA_SECRET"]
@@ -250,9 +245,9 @@ def _probe_static_token() -> tuple[bool, str | None]:
         return _TOKEN_CHECK_RESULT
     import os as _os
 
-    saved_env = {k: _os.environ.get(k) for k in (
-        "MP_OAUTH_TOKEN", "MP_PROJECT_ID", "MP_REGION"
-    )}
+    saved_env = {
+        k: _os.environ.get(k) for k in ("MP_OAUTH_TOKEN", "MP_PROJECT_ID", "MP_REGION")
+    }
     try:
         _os.environ["MP_OAUTH_TOKEN"] = _os.environ["MP_LIVE_OAUTH_TOKEN"]
         _os.environ["MP_PROJECT_ID"] = _os.environ["MP_LIVE_PROJECT_ID"]

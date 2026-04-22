@@ -23,7 +23,6 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §1.
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from pydantic import SecretStr, ValidationError
 
@@ -41,7 +40,6 @@ from mixpanel_data._internal.auth.session import (
 )
 from mixpanel_data._internal.config_v3 import ConfigManager
 from mixpanel_data.exceptions import ConfigError
-
 
 _VALID_REGIONS: frozenset[str] = frozenset({"us", "eu", "in"})
 

@@ -12,7 +12,8 @@ Reference: specs/042-auth-architecture-redesign/data-model.md §4.
 
 from __future__ import annotations
 
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 from pydantic import SecretStr, TypeAdapter
 
 from mixpanel_data._internal.auth.account import (
@@ -27,7 +28,6 @@ from mixpanel_data._internal.auth.session import (
     Session,
     WorkspaceRef,
 )
-
 
 _NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 account_names = st.text(alphabet=_NAME_ALPHABET, min_size=1, max_size=64)

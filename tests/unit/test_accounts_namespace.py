@@ -57,9 +57,7 @@ class TestAdd:
 
     def test_oauth_browser(self, cm: ConfigManager) -> None:
         """Adding an oauth_browser account writes only name + region."""
-        result = accounts_ns.add(
-            "personal", type="oauth_browser", region="eu"
-        )
+        result = accounts_ns.add("personal", type="oauth_browser", region="eu")
         assert result.type == "oauth_browser"
 
     def test_oauth_token_inline(self, cm: ConfigManager) -> None:
@@ -90,29 +88,29 @@ class TestAdd:
         )
         assert cm.get_active().account == "first"
 
-    def test_subsequent_account_does_not_auto_active(
-        self, cm: ConfigManager
-    ) -> None:
+    def test_subsequent_account_does_not_auto_active(self, cm: ConfigManager) -> None:
         """A second account does NOT replace the active selection."""
         accounts_ns.add(
-            "first", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "first",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
-        accounts_ns.add(
-            "second", type="oauth_browser", region="us"
-        )
+        accounts_ns.add("second", type="oauth_browser", region="us")
         assert cm.get_active().account == "first"
 
     def test_duplicate_name_raises(self, cm: ConfigManager) -> None:
         """Adding an existing name raises ConfigError."""
         accounts_ns.add(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         with pytest.raises(ConfigError):
-            accounts_ns.add(
-                "x", type="oauth_browser", region="us"
-            )
+            accounts_ns.add("x", type="oauth_browser", region="us")
 
 
 class TestList:
@@ -125,8 +123,11 @@ class TestList:
     def test_returns_summaries(self, cm: ConfigManager) -> None:
         """Each entry is an AccountSummary."""
         accounts_ns.add(
-            "team", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "team",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         result = accounts_ns.list()
         assert len(result) == 1
@@ -139,22 +140,24 @@ class TestUse:
     def test_use_writes_active_account(self, cm: ConfigManager) -> None:
         """``use(name)`` sets ``[active].account``."""
         accounts_ns.add(
-            "first", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "first",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
-        accounts_ns.add(
-            "second", type="oauth_browser", region="us"
-        )
+        accounts_ns.add("second", type="oauth_browser", region="us")
         accounts_ns.use("second")
         assert cm.get_active().account == "second"
 
-    def test_use_does_not_touch_project_or_workspace(
-        self, cm: ConfigManager
-    ) -> None:
+    def test_use_does_not_touch_project_or_workspace(self, cm: ConfigManager) -> None:
         """Per FR-033, ``accounts.use`` updates only the account axis."""
         accounts_ns.add(
-            "first", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "first",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.set_active(project="3713224", workspace=42)
         accounts_ns.add("other", type="oauth_browser", region="us")
@@ -171,8 +174,11 @@ class TestShow:
     def test_show_named(self, cm: ConfigManager) -> None:
         """``show(name)`` returns that account's summary."""
         accounts_ns.add(
-            "team", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "team",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         result = accounts_ns.show("team")
         assert result.name == "team"
@@ -180,8 +186,11 @@ class TestShow:
     def test_show_active_when_no_name(self, cm: ConfigManager) -> None:
         """``show()`` (no arg) returns the active account."""
         accounts_ns.add(
-            "team", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "team",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         result = accounts_ns.show()
         assert result.name == "team"
@@ -198,20 +207,24 @@ class TestRemove:
     def test_remove_unused(self, cm: ConfigManager) -> None:
         """An unreferenced account removes cleanly."""
         accounts_ns.add(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         orphans = accounts_ns.remove("x")
         assert orphans == []
         assert accounts_ns.list() == []
 
-    def test_remove_referenced_without_force(
-        self, cm: ConfigManager
-    ) -> None:
+    def test_remove_referenced_without_force(self, cm: ConfigManager) -> None:
         """Without ``force``, removing a referenced account raises."""
         accounts_ns.add(
-            "x", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "x",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         cm.add_target("ecom", account="x", project="3018488")
         with pytest.raises(AccountInUseError):
@@ -221,13 +234,14 @@ class TestRemove:
 class TestToken:
     """``mp.accounts.token(name)`` returns the bearer for OAuth accounts."""
 
-    def test_token_for_service_account_returns_none(
-        self, cm: ConfigManager
-    ) -> None:
+    def test_token_for_service_account_returns_none(self, cm: ConfigManager) -> None:
         """ServiceAccount has no bearer → returns None or 'N/A'."""
         accounts_ns.add(
-            "team", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "team",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         result = accounts_ns.token("team")
         assert result is None or result == "N/A"
@@ -235,7 +249,9 @@ class TestToken:
     def test_token_for_oauth_token_inline(self, cm: ConfigManager) -> None:
         """OAuthTokenAccount with inline token returns the plaintext bearer."""
         accounts_ns.add(
-            "ci", type="oauth_token", region="us",
+            "ci",
+            type="oauth_token",
+            region="us",
             token=SecretStr("ey.tok-123"),
         )
         result = accounts_ns.token("ci")
@@ -248,8 +264,11 @@ class TestStubs:
     def test_export_bridge_stub(self, cm: ConfigManager, tmp_path: Path) -> None:
         """``export_bridge`` is a stub until Phase 8."""
         accounts_ns.add(
-            "team", type="service_account", region="us",
-            username="u", secret=SecretStr("s"),
+            "team",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         )
         with pytest.raises(NotImplementedError):
             accounts_ns.export_bridge(to=tmp_path / "bridge.json")

@@ -84,8 +84,6 @@ from mixpanel_data.types import (
     # Auth redesign (042) types
     AccountSummary,
     AccountTestResult,
-    OAuthLoginResult,
-    Target,
     # Result types
     ActivityFeedResult,
     AlertBookmark,
@@ -220,6 +218,7 @@ from mixpanel_data.types import (
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
+    OAuthLoginResult,
     PaginatedResponse,
     PreviewDeletionFiltersParams,
     ProfilePageResult,
@@ -250,6 +249,7 @@ from mixpanel_data.types import (
     SegmentationResult,
     ServingMethod,
     SetTestUsersParams,
+    Target,
     TimeComparison,
     TopEvent,
     UpdateAlertParams,
@@ -287,6 +287,27 @@ __version__ = "0.3.0"
 __all__ = [
     # Core
     "Workspace",
+    # Auth redesign (042) types
+    "Account",
+    "AccountType",
+    "OAuthBrowserAccount",
+    "OAuthTokenAccount",
+    "Region",
+    "ServiceAccount",
+    "Project",
+    "Session",
+    "WorkspaceRef",
+    "AccountSummary",
+    "AccountTestResult",
+    "OAuthLoginResult",
+    "Target",
+    # Auth redesign (042) namespaces
+    "accounts",
+    "session",
+    "targets",
+    # Auth redesign (042) exceptions
+    "AccountAccessError",
+    "AccountInUseError",
     # Auth v2 types
     "AuthCredential",
     "CredentialType",

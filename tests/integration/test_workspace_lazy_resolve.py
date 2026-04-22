@@ -29,8 +29,10 @@ def session_no_workspace() -> Session:
     """Return a Session with workspace=None (lazy)."""
     return Session(
         account=ServiceAccount(
-            name="team", region="us",
-            username="u", secret=SecretStr("s"),
+            name="team",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
         ),
         project=Project(id="3713224"),
         workspace=None,
@@ -58,9 +60,7 @@ class TestLazyResolveUnit:
             return httpx.Response(
                 200,
                 json={
-                    "results": [
-                        {"id": 9999, "name": "Default", "is_default": True}
-                    ],
+                    "results": [{"id": 9999, "name": "Default", "is_default": True}],
                     "status": "ok",
                 },
             )
@@ -81,9 +81,7 @@ class TestLazyResolveUnit:
             return httpx.Response(
                 200,
                 json={
-                    "results": [
-                        {"id": 9999, "name": "Default", "is_default": True}
-                    ],
+                    "results": [{"id": 9999, "name": "Default", "is_default": True}],
                     "status": "ok",
                 },
             )

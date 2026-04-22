@@ -693,12 +693,20 @@ def refresh_bridge_token(
 #
 # Reference: specs/042-auth-architecture-redesign/contracts/config-schema.md §2.
 
-from typing import Annotated as _Annotated  # noqa: E402
+from typing import (  # noqa: E402  # below v1 class defs by design
+    Annotated as _Annotated,
+)
 
 from pydantic import (  # noqa: E402
     Field as _Field,
+)
+from pydantic import (  # noqa: E402
     PositiveInt as _PositiveInt,
+)
+from pydantic import (  # noqa: E402
     TypeAdapter as _TypeAdapter,
+)
+from pydantic import (  # noqa: E402
     ValidationError as _ValidationError,
 )
 
@@ -751,7 +759,7 @@ class BridgeFile(BaseModel):
     """Custom HTTP headers attached to outbound requests at resolution time."""
 
     @model_validator(mode="after")
-    def _validate_oauth_browser_has_tokens(self) -> "BridgeFile":
+    def _validate_oauth_browser_has_tokens(self) -> BridgeFile:
         """Enforce that ``oauth_browser`` accounts include their tokens.
 
         Returns:
@@ -762,9 +770,7 @@ class BridgeFile(BaseModel):
                 is missing.
         """
         if self.account.type == "oauth_browser" and self.tokens is None:
-            raise ValueError(
-                "BridgeFile with oauth_browser account requires `tokens`."
-            )
+            raise ValueError("BridgeFile with oauth_browser account requires `tokens`.")
         return self
 
 

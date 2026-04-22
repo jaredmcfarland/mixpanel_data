@@ -6,16 +6,12 @@ Replaces ``mp projects`` with the singular form. Three subcommands:
 
 from __future__ import annotations
 
-import json as _json
 from typing import Annotated
 
 import typer
 
 from mixpanel_data import session as session_ns
-from mixpanel_data._internal.config_v3 import ConfigManager
 from mixpanel_data.cli.utils import console, err_console, handle_errors
-from mixpanel_data.exceptions import ConfigError
-
 
 project_app = typer.Typer(
     name="project",
@@ -68,9 +64,7 @@ def list_projects(
 @handle_errors
 def use_project(
     ctx: typer.Context,
-    project_id: Annotated[
-        str, typer.Argument(help="Numeric Mixpanel project ID.")
-    ],
+    project_id: Annotated[str, typer.Argument(help="Numeric Mixpanel project ID.")],
 ) -> None:
     """Set the active project ID.
 

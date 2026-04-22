@@ -29,8 +29,11 @@ def cm() -> ConfigManager:
     """Return a ConfigManager seeded with one account named 'x'."""
     cm = ConfigManager()
     accounts_ns.add(
-        "x", type="service_account", region="us",
-        username="u", secret=SecretStr("s"),
+        "x",
+        type="service_account",
+        region="us",
+        username="u",
+        secret=SecretStr("s"),
     )
     return cm
 

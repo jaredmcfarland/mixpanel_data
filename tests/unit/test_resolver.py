@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pydantic import SecretStr
@@ -61,9 +60,7 @@ def cm_with_active(cm: ConfigManager) -> ConfigManager:
 class TestAccountAxisPriority:
     """Order: env → param → target → bridge → config."""
 
-    def test_explicit_param_beats_active(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_explicit_param_beats_active(self, cm_with_active: ConfigManager) -> None:
         """``account=NAME`` param overrides ``[active].account``."""
         cm_with_active.add_account(
             "other",
@@ -75,9 +72,7 @@ class TestAccountAxisPriority:
         s = resolve_session(account="other", config=cm_with_active)
         assert s.account.name == "other"
 
-    def test_active_used_when_no_param(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_active_used_when_no_param(self, cm_with_active: ConfigManager) -> None:
         """No env / no param / no target / no bridge → use ``[active].account``."""
         s = resolve_session(config=cm_with_active)
         assert s.account.name == "team"
@@ -128,9 +123,7 @@ class TestAccountAxisPriority:
 class TestProjectAxisPriority:
     """Order: env → param → target → bridge → config."""
 
-    def test_explicit_param_beats_active(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_explicit_param_beats_active(self, cm_with_active: ConfigManager) -> None:
         """``project=ID`` param overrides ``[active].project``."""
         s = resolve_session(project="888", config=cm_with_active)
         assert s.project.id == "888"
@@ -148,9 +141,7 @@ class TestProjectAxisPriority:
         s = resolve_session(project="888", config=cm_with_active)
         assert s.project.id == "777"
 
-    def test_active_used_when_no_param(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_active_used_when_no_param(self, cm_with_active: ConfigManager) -> None:
         """``[active].project`` used when no override."""
         s = resolve_session(config=cm_with_active)
         assert s.project.id == "3713224"
@@ -166,9 +157,7 @@ class TestProjectAxisPriority:
 class TestWorkspaceAxisPriority:
     """Workspace axis can be None (lazy-resolve later)."""
 
-    def test_param_overrides_active(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_param_overrides_active(self, cm_with_active: ConfigManager) -> None:
         """``workspace=N`` param overrides ``[active].workspace``."""
         cm_with_active.set_active(workspace=99)
         s = resolve_session(workspace=42, config=cm_with_active)
@@ -186,9 +175,7 @@ class TestWorkspaceAxisPriority:
         assert s.workspace is not None
         assert s.workspace.id == 100
 
-    def test_workspace_none_when_unset(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_workspace_none_when_unset(self, cm_with_active: ConfigManager) -> None:
         """No source → workspace remains None (lazy-resolve)."""
         s = resolve_session(config=cm_with_active)
         assert s.workspace is None
@@ -197,45 +184,25 @@ class TestWorkspaceAxisPriority:
 class TestTargetMutualExclusion:
     """``target=`` must not combine with ``account=``/``project=``/``workspace=``."""
 
-    def test_target_with_account_raises(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_target_with_account_raises(self, cm_with_active: ConfigManager) -> None:
         """``target=`` + ``account=`` raises ValueError."""
-        cm_with_active.add_target(
-            "ecom", account="team", project="3018488"
-        )
+        cm_with_active.add_target("ecom", account="team", project="3018488")
         with pytest.raises(ValueError):
-            resolve_session(
-                target="ecom", account="team", config=cm_with_active
-            )
+            resolve_session(target="ecom", account="team", config=cm_with_active)
 
-    def test_target_with_project_raises(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_target_with_project_raises(self, cm_with_active: ConfigManager) -> None:
         """``target=`` + ``project=`` raises ValueError."""
-        cm_with_active.add_target(
-            "ecom", account="team", project="3018488"
-        )
+        cm_with_active.add_target("ecom", account="team", project="3018488")
         with pytest.raises(ValueError):
-            resolve_session(
-                target="ecom", project="999", config=cm_with_active
-            )
+            resolve_session(target="ecom", project="999", config=cm_with_active)
 
-    def test_target_with_workspace_raises(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_target_with_workspace_raises(self, cm_with_active: ConfigManager) -> None:
         """``target=`` + ``workspace=`` raises ValueError."""
-        cm_with_active.add_target(
-            "ecom", account="team", project="3018488"
-        )
+        cm_with_active.add_target("ecom", account="team", project="3018488")
         with pytest.raises(ValueError):
-            resolve_session(
-                target="ecom", workspace=42, config=cm_with_active
-            )
+            resolve_session(target="ecom", workspace=42, config=cm_with_active)
 
-    def test_target_alone_resolves(
-        self, cm_with_active: ConfigManager
-    ) -> None:
+    def test_target_alone_resolves(self, cm_with_active: ConfigManager) -> None:
         """``target=`` alone applies all three axes from the target block."""
         cm_with_active.add_target(
             "ecom", account="team", project="3018488", workspace=42
@@ -262,9 +229,7 @@ class TestNoSideEffects:
         after: dict[str, str] = dict(os.environ)
         assert before == after
 
-    def test_does_not_read_oauth_tokens(
-        self, cm: ConfigManager
-    ) -> None:
+    def test_does_not_read_oauth_tokens(self, cm: ConfigManager) -> None:
         """``resolve_session`` does not read on-disk token files.
 
         For ``oauth_browser`` accounts, the resolver returns a Session whose

@@ -11,13 +11,11 @@ Reference: specs/042-auth-architecture-redesign/research.md R5.
 
 from __future__ import annotations
 
-import httpx
 import pytest
 from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import (
-    OAuthBrowserAccount,
     ServiceAccount,
 )
 from mixpanel_data._internal.auth.session import (
@@ -32,8 +30,10 @@ def session_team() -> Session:
     """Return a Session for a fictional 'team' SA."""
     return Session(
         account=ServiceAccount(
-            name="team", region="us",
-            username="team.sa", secret=SecretStr("team-secret"),
+            name="team",
+            region="us",
+            username="team.sa",
+            secret=SecretStr("team-secret"),
         ),
         project=Project(id="3713224"),
     )
@@ -44,8 +44,10 @@ def session_other() -> Session:
     """Return a Session for a fictional 'other' SA in eu region."""
     return Session(
         account=ServiceAccount(
-            name="other", region="eu",
-            username="other.sa", secret=SecretStr("other-secret"),
+            name="other",
+            region="eu",
+            username="other.sa",
+            secret=SecretStr("other-secret"),
         ),
         project=Project(id="9999999"),
     )

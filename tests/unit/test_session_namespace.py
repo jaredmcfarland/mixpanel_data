@@ -15,7 +15,6 @@ from mixpanel_data import session as session_ns
 from mixpanel_data import targets as targets_ns
 from mixpanel_data._internal.auth.session import ActiveSession
 from mixpanel_data._internal.config_v3 import ConfigManager
-from mixpanel_data.exceptions import ConfigError
 
 
 @pytest.fixture(autouse=True)
@@ -30,8 +29,11 @@ def seeded() -> ConfigManager:
     """Return a ConfigManager with one account."""
     cm = ConfigManager()
     accounts_ns.add(
-        "x", type="service_account", region="us",
-        username="u", secret=SecretStr("s"),
+        "x",
+        type="service_account",
+        region="us",
+        username="u",
+        secret=SecretStr("s"),
     )
     return cm
 
@@ -89,9 +91,7 @@ class TestUse:
         assert active.project == "3018488"
         assert active.workspace == 42
 
-    def test_use_target_with_other_axis_raises(
-        self, seeded: ConfigManager
-    ) -> None:
+    def test_use_target_with_other_axis_raises(self, seeded: ConfigManager) -> None:
         """Combining ``target=`` with any axis kwarg raises ValueError."""
         targets_ns.add("ecom", account="x", project="3018488")
         with pytest.raises(ValueError):

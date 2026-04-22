@@ -22,19 +22,14 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data._internal.auth.account import (
-    OAuthBrowserAccount,
     OAuthTokenAccount,
-    Region,
-    ServiceAccount,
 )
 from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_data.exceptions import OAuthError
 
 
 @pytest.fixture
-def isolated_home(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
+def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Use a tmp directory as ``$HOME`` for isolated ``~/.mp/accounts/`` paths."""
     monkeypatch.setenv("HOME", str(tmp_path))
     return tmp_path
@@ -92,9 +87,7 @@ class TestStaticToken:
     ) -> None:
         """``token_env`` is read from ``os.environ`` at resolution time."""
         monkeypatch.setenv("MY_OAUTH_TOK", "env-tok-456")
-        account = OAuthTokenAccount(
-            name="ci", region="us", token_env="MY_OAUTH_TOK"
-        )
+        account = OAuthTokenAccount(name="ci", region="us", token_env="MY_OAUTH_TOK")
         resolver = OnDiskTokenResolver()
         assert resolver.get_static_token(account) == "env-tok-456"
 
@@ -103,9 +96,7 @@ class TestStaticToken:
     ) -> None:
         """Missing env var raises ``OAuthError``."""
         monkeypatch.delenv("MY_OAUTH_TOK", raising=False)
-        account = OAuthTokenAccount(
-            name="ci", region="us", token_env="MY_OAUTH_TOK"
-        )
+        account = OAuthTokenAccount(name="ci", region="us", token_env="MY_OAUTH_TOK")
         resolver = OnDiskTokenResolver()
         with pytest.raises(OAuthError):
             resolver.get_static_token(account)
@@ -118,9 +109,7 @@ class TestStaticToken:
         Empty strings are not valid bearers.
         """
         monkeypatch.setenv("MY_OAUTH_TOK", "")
-        account = OAuthTokenAccount(
-            name="ci", region="us", token_env="MY_OAUTH_TOK"
-        )
+        account = OAuthTokenAccount(name="ci", region="us", token_env="MY_OAUTH_TOK")
         resolver = OnDiskTokenResolver()
         with pytest.raises(OAuthError):
             resolver.get_static_token(account)

@@ -149,7 +149,7 @@ class TestServiceAccount:
         with pytest.raises(ValidationError):
             ServiceAccount(
                 name="t",
-                region="ap",  # type: ignore[arg-type]
+                region="ap",
                 username="u",
                 secret=SecretStr("s"),
             )
@@ -167,9 +167,7 @@ class TestServiceAccount:
 
     def test_frozen(self) -> None:
         """Mutating an instance raises ValidationError (model_config frozen)."""
-        sa = ServiceAccount(
-            name="t", region="us", username="u", secret=SecretStr("s")
-        )
+        sa = ServiceAccount(name="t", region="us", username="u", secret=SecretStr("s"))
         with pytest.raises(ValidationError):
             sa.name = "other"  # type: ignore[misc]
 
@@ -184,9 +182,7 @@ class TestServiceAccount:
 
     def test_is_long_lived(self) -> None:
         """ServiceAccount is long-lived (no expiry)."""
-        sa = ServiceAccount(
-            name="t", region="us", username="u", secret=SecretStr("s")
-        )
+        sa = ServiceAccount(name="t", region="us", username="u", secret=SecretStr("s"))
         assert sa.is_long_lived() is True
 
 
@@ -238,9 +234,7 @@ class TestOAuthTokenAccount:
 
     def test_inline_token(self) -> None:
         """Construct with inline token only is valid."""
-        a = OAuthTokenAccount(
-            name="ci", region="us", token=SecretStr("ey.tok")
-        )
+        a = OAuthTokenAccount(name="ci", region="us", token=SecretStr("ey.tok"))
         assert a.type == "oauth_token"
         assert a.token is not None
         assert a.token.get_secret_value() == "ey.tok"

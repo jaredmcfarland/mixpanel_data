@@ -36,27 +36,22 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
 
-import httpx
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace, accounts as accounts_ns
+from mixpanel_data import Workspace
+from mixpanel_data import accounts as accounts_ns
 from mixpanel_data._internal.auth.account import (
     OAuthBrowserAccount,
     OAuthTokenAccount,
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.session import Project, Session, WorkspaceRef
 from mixpanel_data._internal.config_v3 import ConfigManager
 from mixpanel_data.exceptions import (
     AuthenticationError,
-    ConfigError,
     OAuthError,
-    QueryError,
 )
 
 # Re-export the fixtures from conftest_042.py so pytest picks them up.
@@ -70,7 +65,6 @@ from tests.live.conftest_042 import (  # noqa: F401 — fixture imports
     require_sa_env_available,
     tmp_v3_home,
 )
-
 
 # Module-level marker — every test below requires `-m live`.
 pytestmark = pytest.mark.live
@@ -142,10 +136,18 @@ class TestCatA_ServiceAccount:
         # Add the account.
         result_add = subprocess.run(
             [
-                "uv", "run", "mp", "account", "add", "team",
-                "--type", "service_account",
-                "--region", live_sa_creds["region"],
-                "--username", live_sa_creds["username"],
+                "uv",
+                "run",
+                "mp",
+                "account",
+                "add",
+                "team",
+                "--type",
+                "service_account",
+                "--region",
+                live_sa_creds["region"],
+                "--username",
+                live_sa_creds["username"],
             ],
             capture_output=True,
             env=env,
@@ -161,19 +163,27 @@ class TestCatA_ServiceAccount:
         # Set the active project.
         result_proj = subprocess.run(
             [
-                "uv", "run", "mp", "project", "use",
+                "uv",
+                "run",
+                "mp",
+                "project",
+                "use",
                 live_sa_creds["project_id"],
             ],
-            capture_output=True, env=env, text=True, check=False,
+            capture_output=True,
+            env=env,
+            text=True,
+            check=False,
         )
-        assert result_proj.returncode == 0, (
-            f"project use failed: {result_proj.stderr}"
-        )
+        assert result_proj.returncode == 0, f"project use failed: {result_proj.stderr}"
 
         # Read events via the new CLI surface.
         result_inspect = subprocess.run(
             ["uv", "run", "mp", "inspect", "events"],
-            capture_output=True, env=env, text=True, check=False,
+            capture_output=True,
+            env=env,
+            text=True,
+            check=False,
         )
         # Allow non-zero (some projects may have zero events) but secret must
         # never leak under any path.
@@ -407,9 +417,7 @@ class TestCatD_CrossModeSwitching:
             secret=SecretStr(live_sa_creds["secret"]),
         )
         copy_user_oauth_tokens_to_account(tmp_v3_home, "personal")
-        ConfigManager().add_account(
-            "personal", type="oauth_browser", region="us"
-        )
+        ConfigManager().add_account("personal", type="oauth_browser", region="us")
         accounts_ns.add(
             "ci",
             type="oauth_token",
@@ -420,7 +428,9 @@ class TestCatD_CrossModeSwitching:
         # Start with SA.
         ws = Workspace(account="team", project=live_sa_creds["project_id"])
         try:
-            before_id = id(ws._api_client._http)  # noqa: SLF001
+            client = ws._api_client  # noqa: SLF001
+            assert client is not None
+            before_id = id(client._http)  # noqa: SLF001
             ws.events()
             # Switch to OAuth browser.
             ws.use(
@@ -428,7 +438,7 @@ class TestCatD_CrossModeSwitching:
                 project=get_user_active_project_id() or "1",
             )
             ws.events()
-            assert id(ws._api_client._http) == before_id, (
+            assert id(client._http) == before_id, (  # noqa: SLF001
                 "httpx.Client recreated across SA → oauth_browser switch"
             )
             # Switch to OAuth token.
@@ -437,7 +447,7 @@ class TestCatD_CrossModeSwitching:
                 project=live_oauth_token_creds["project_id"],
             )
             ws.events()
-            assert id(ws._api_client._http) == before_id, (
+            assert id(client._http) == before_id, (  # noqa: SLF001
                 "httpx.Client recreated across oauth_browser → oauth_token switch"
             )
         finally:
@@ -458,12 +468,8 @@ class TestCatD_CrossModeSwitching:
             secret=SecretStr(live_sa_creds["secret"]),
         )
         copy_user_oauth_tokens_to_account(tmp_v3_home, "personal")
-        ConfigManager().add_account(
-            "personal", type="oauth_browser", region="us"
-        )
-        ConfigManager().set_active(
-            account="team", project=live_sa_creds["project_id"]
-        )
+        ConfigManager().add_account("personal", type="oauth_browser", region="us")
+        ConfigManager().set_active(account="team", project=live_sa_creds["project_id"])
         ws = Workspace()
         try:
             assert ws.account.name == "team"
@@ -508,10 +514,21 @@ class TestCatE_CliEndToEnd:
         # Register the account.
         r1 = subprocess.run(
             [
-                "uv", "run", "mp", "account", "add", "personal-cli",
-                "--type", "oauth_browser", "--region", "us",
+                "uv",
+                "run",
+                "mp",
+                "account",
+                "add",
+                "personal-cli",
+                "--type",
+                "oauth_browser",
+                "--region",
+                "us",
             ],
-            capture_output=True, env=env, text=True, check=False,
+            capture_output=True,
+            env=env,
+            text=True,
+            check=False,
         )
         assert r1.returncode == 0, f"add: {r1.stderr}"
 
@@ -519,14 +536,20 @@ class TestCatE_CliEndToEnd:
         pid = get_user_active_project_id() or "1"
         r2 = subprocess.run(
             ["uv", "run", "mp", "project", "use", pid],
-            capture_output=True, env=env, text=True, check=False,
+            capture_output=True,
+            env=env,
+            text=True,
+            check=False,
         )
         assert r2.returncode == 0, f"project use: {r2.stderr}"
 
         # Hit the live API via inspect.
         r3 = subprocess.run(
             ["uv", "run", "mp", "inspect", "events"],
-            capture_output=True, env=env, text=True, check=False,
+            capture_output=True,
+            env=env,
+            text=True,
+            check=False,
         )
         assert r3.returncode == 0, (
             f"inspect events failed: {r3.stderr}\nstdout: {r3.stdout}"
@@ -548,14 +571,15 @@ class TestCatE_CliEndToEnd:
         )
         result = subprocess.run(
             ["uv", "run", "mp", "session", "--format", "json"],
-            capture_output=True, env=env, text=True, check=False,
+            capture_output=True,
+            env=env,
+            text=True,
+            check=False,
         )
         assert result.returncode == 0
         payload = json.loads(result.stdout.strip())
         assert payload["account"] == "personal-json"
-        assert payload["project"] == (
-            get_user_active_project_id() or "1"
-        )
+        assert payload["project"] == (get_user_active_project_id() or "1")
 
     def test_E1_04_cli_target_account_mutex_exits_3(
         self,
@@ -571,10 +595,19 @@ class TestCatE_CliEndToEnd:
         )
         result = subprocess.run(
             [
-                "uv", "run", "mp",
-                "--target", "X", "--account", "Y", "session",
+                "uv",
+                "run",
+                "mp",
+                "--target",
+                "X",
+                "--account",
+                "Y",
+                "session",
             ],
-            capture_output=True, env=env, text=True, check=False,
+            capture_output=True,
+            env=env,
+            text=True,
+            check=False,
         )
         assert result.returncode == 3, (
             f"expected exit 3, got {result.returncode}: {result.stderr}"
@@ -598,9 +631,8 @@ class TestCatF_Bridge:
         """F1.01 — Bridge file embedding user's oauth_browser tokens authenticates."""
         # Read user's real on-disk tokens.
         from tests.live.conftest_042 import LEGACY_TOKENS_PATH
-        legacy_tokens = json.loads(
-            LEGACY_TOKENS_PATH.read_text(encoding="utf-8")
-        )
+
+        legacy_tokens = json.loads(LEGACY_TOKENS_PATH.read_text(encoding="utf-8"))
 
         bridge_path = tmp_v3_home / "bridge.json"
         pid = get_user_active_project_id() or "1"

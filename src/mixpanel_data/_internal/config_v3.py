@@ -27,13 +27,14 @@ if sys.version_info >= (3, 11):
 else:  # pragma: no cover - py3.10 fallback
     import tomli as tomllib  # type: ignore[import-not-found]
 
+import contextlib
+
 import tomli_w
 from pydantic import SecretStr, TypeAdapter, ValidationError
 
 from mixpanel_data._internal.auth.account import (
     Account,
     AccountType,
-    OAuthBrowserAccount,
     OAuthTokenAccount,
     Region,
     ServiceAccount,
@@ -191,13 +192,9 @@ class ConfigManager:
         if not self._path.exists():
             return {}
         try:
-            raw: dict[str, Any] = tomllib.loads(
-                self._path.read_text(encoding="utf-8")
-            )
+            raw: dict[str, Any] = tomllib.loads(self._path.read_text(encoding="utf-8"))
         except (tomllib.TOMLDecodeError, OSError) as exc:
-            raise ConfigError(
-                f"Could not parse config at {self._path}: {exc}"
-            ) from exc
+            raise ConfigError(f"Could not parse config at {self._path}: {exc}") from exc
         if _is_legacy(raw):
             raise ConfigError(
                 _LEGACY_DETECTED_MESSAGE.format(path=self._path),
@@ -216,19 +213,15 @@ class ConfigManager:
         """
         self._path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         # Tighten parent dir permissions in case it pre-existed with 0o755.
-        try:
+        with contextlib.suppress(OSError):
             self._path.parent.chmod(stat.S_IRWXU)
-        except OSError:
-            pass
         old_umask = os.umask(0o177)
         try:
             self._path.write_bytes(tomli_w.dumps(raw).encode("utf-8"))
         finally:
             os.umask(old_umask)
-        try:
+        with contextlib.suppress(OSError):
             self._path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        except OSError:
-            pass
 
     # ---- accounts ----------------------------------------------------
 
@@ -328,14 +321,10 @@ class ConfigManager:
         block: dict[str, Any] = {"type": type, "region": region}
         if type == "service_account":
             if username is None or secret is None:
-                raise ConfigError(
-                    "ServiceAccount requires `username` and `secret`."
-                )
+                raise ConfigError("ServiceAccount requires `username` and `secret`.")
             block["username"] = username
             block["secret"] = (
-                secret.get_secret_value()
-                if isinstance(secret, SecretStr)
-                else secret
+                secret.get_secret_value() if isinstance(secret, SecretStr) else secret
             )
         elif type == "oauth_browser":
             # No extra fields.
@@ -347,9 +336,7 @@ class ConfigManager:
                 )
             if token is not None:
                 block["token"] = (
-                    token.get_secret_value()
-                    if isinstance(token, SecretStr)
-                    else token
+                    token.get_secret_value() if isinstance(token, SecretStr) else token
                 )
             else:
                 assert token_env is not None
@@ -370,9 +357,7 @@ class ConfigManager:
         self._write_raw(raw)
         return account
 
-    def remove_account(
-        self, name: str, *, force: bool = False
-    ) -> list[str]:
+    def remove_account(self, name: str, *, force: bool = False) -> list[str]:
         """Remove an account.
 
         Args:
@@ -707,9 +692,7 @@ class ConfigManager:
             ConfigError: If ``project`` is not a non-empty digit string.
         """
         if not project or not project.isdigit():
-            raise ConfigError(
-                f"Invalid project ID: {project!r}. Must match `^\\d+$`."
-            )
+            raise ConfigError(f"Invalid project ID: {project!r}. Must match `^\\d+$`.")
 
     @staticmethod
     def _validate_workspace_id(workspace: int) -> None:

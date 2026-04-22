@@ -15,7 +15,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from mixpanel_data import accounts as accounts_ns
 from mixpanel_data._internal.config_v3 import ConfigManager
 from mixpanel_data.cli.main import app
 
@@ -50,10 +49,15 @@ class TestAccountCli:
         result = runner.invoke(
             app,
             [
-                "account", "add", "team",
-                "--type", "service_account",
-                "--region", "us",
-                "--username", "u",
+                "account",
+                "add",
+                "team",
+                "--type",
+                "service_account",
+                "--region",
+                "us",
+                "--username",
+                "u",
             ],
         )
         assert result.exit_code == 0, result.output
@@ -68,24 +72,25 @@ class TestAccountCli:
         )
         assert result.exit_code == 0, result.output
 
-    def test_add_oauth_token_with_env(
-        self, runner: CliRunner
-    ) -> None:
+    def test_add_oauth_token_with_env(self, runner: CliRunner) -> None:
         """``mp account add --type oauth_token --token-env`` is accepted."""
         result = runner.invoke(
             app,
             [
-                "account", "add", "ci",
-                "--type", "oauth_token",
-                "--region", "us",
-                "--token-env", "MP_OAUTH_TOKEN",
+                "account",
+                "add",
+                "ci",
+                "--type",
+                "oauth_token",
+                "--region",
+                "us",
+                "--token-env",
+                "MP_OAUTH_TOKEN",
             ],
         )
         assert result.exit_code == 0, result.output
 
-    def test_add_invalid_type_exits_nonzero(
-        self, runner: CliRunner
-    ) -> None:
+    def test_add_invalid_type_exits_nonzero(self, runner: CliRunner) -> None:
         """Bad ``--type`` exits with non-zero code and prints to stderr."""
         result = runner.invoke(
             app,
@@ -100,8 +105,17 @@ class TestAccountCli:
         monkeypatch.setenv("MP_SECRET", "s")
         runner.invoke(
             app,
-            ["account", "add", "a", "--type", "service_account",
-             "--region", "us", "--username", "u"],
+            [
+                "account",
+                "add",
+                "a",
+                "--type",
+                "service_account",
+                "--region",
+                "us",
+                "--username",
+                "u",
+            ],
         )
         runner.invoke(
             app, ["account", "add", "b", "--type", "oauth_browser", "--region", "us"]
@@ -118,8 +132,17 @@ class TestAccountCli:
         monkeypatch.setenv("MP_SECRET", "s")
         runner.invoke(
             app,
-            ["account", "add", "a", "--type", "service_account",
-             "--region", "us", "--username", "u"],
+            [
+                "account",
+                "add",
+                "a",
+                "--type",
+                "service_account",
+                "--region",
+                "us",
+                "--username",
+                "u",
+            ],
         )
         result = runner.invoke(app, ["account", "remove", "a"])
         assert result.exit_code == 0
@@ -171,8 +194,17 @@ class TestSessionCli:
         monkeypatch.setenv("MP_SECRET", "s")
         runner.invoke(
             app,
-            ["account", "add", "a", "--type", "service_account",
-             "--region", "us", "--username", "u"],
+            [
+                "account",
+                "add",
+                "a",
+                "--type",
+                "service_account",
+                "--region",
+                "us",
+                "--username",
+                "u",
+            ],
         )
         runner.invoke(app, ["project", "use", "3713224"])
         result = runner.invoke(app, ["session"])
@@ -188,8 +220,17 @@ class TestSessionCli:
         monkeypatch.setenv("MP_SECRET", "s")
         runner.invoke(
             app,
-            ["account", "add", "a", "--type", "service_account",
-             "--region", "us", "--username", "u"],
+            [
+                "account",
+                "add",
+                "a",
+                "--type",
+                "service_account",
+                "--region",
+                "us",
+                "--username",
+                "u",
+            ],
         )
         result = runner.invoke(app, ["session", "--format", "json"])
         assert result.exit_code == 0, result.output
@@ -216,8 +257,17 @@ class TestGlobals:
         monkeypatch.setenv("MP_SECRET", "s")
         runner.invoke(
             app,
-            ["account", "add", "a", "--type", "service_account",
-             "--region", "us", "--username", "u"],
+            [
+                "account",
+                "add",
+                "a",
+                "--type",
+                "service_account",
+                "--region",
+                "us",
+                "--username",
+                "u",
+            ],
         )
         result = runner.invoke(
             app,

@@ -203,12 +203,22 @@ OAuth tokens: `~/.mp/oauth/tokens_{region}.json`
 
 **Recommended:** Use the devcontainer (Python 3.10+, uv, just pre-installed)
 
-This project uses [just](https://github.com/casey/just) as a command runner:
+**First-time setup after cloning**: run `just install-hooks` to install the
+git pre-commit hook. Without it, `ruff check` / `ruff format` violations slip
+through to CI.
+
+This project uses [just](https://github.com/casey/just) as a command runner.
+
+**`just check` is a strict superset of CI** — if `just check` passes locally,
+CI will pass. The only documented difference is that CI sets
+`HYPOTHESIS_PROFILE=ci` (200 deterministic examples vs the local default 100),
+which doesn't change pass/fail outcomes.
 
 | Command | Description |
 |---------|-------------|
 | `just` | List all available commands |
-| `just check` | Run all checks (lint, typecheck, test) |
+| `just install-hooks` | One-time: install git pre-commit hook (block ruff/format failures) |
+| `just check` | Run all checks (lint + fmt-check + typecheck + test-cov + build) |
 | `just test` | Run tests (supports args: `just test -k foo`) |
 | `just test-dev` | Run tests with dev Hypothesis profile (fast, 10 examples) |
 | `just test-ci` | Run tests with CI Hypothesis profile (thorough, 200 examples) |

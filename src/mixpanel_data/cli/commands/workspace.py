@@ -13,7 +13,6 @@ import typer
 from mixpanel_data import session as session_ns
 from mixpanel_data.cli.utils import console, err_console, handle_errors
 
-
 workspace_app = typer.Typer(
     name="workspace",
     help="Manage active Mixpanel workspace (042 redesign).",
@@ -31,9 +30,7 @@ def list_workspaces(
             "--project", "-p", help="Project ID (defaults to active project)."
         ),
     ] = None,
-    refresh: Annotated[
-        bool, typer.Option("--refresh", help="Bypass cache.")
-    ] = False,
+    refresh: Annotated[bool, typer.Option("--refresh", help="Bypass cache.")] = False,
 ) -> None:
     """List workspaces in the current project.
 
@@ -44,9 +41,7 @@ def list_workspaces(
         project: Project to query (defaults to active).
         refresh: Bypass cache.
     """
-    err_console.print(
-        "[yellow]`mp workspace list` is a Phase 5+ stub.[/yellow]"
-    )
+    err_console.print("[yellow]`mp workspace list` is a Phase 5+ stub.[/yellow]")
     raise typer.Exit(1)
 
 
