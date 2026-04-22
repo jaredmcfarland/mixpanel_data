@@ -1,16 +1,16 @@
 # Session Handoff: 042 Auth Architecture Redesign
 
-**Branch:** `042-auth-architecture-redesign` · **Last commit:** `9147b1d` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
-**Suite:** 5,942 pass / 91.40% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
-**Generated:** 2026-04-22 (post-C2 — bridge writer + CLI complete)
+**Branch:** `042-auth-architecture-redesign` · **Last commit:** `18233dc` · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
+**Suite:** 5,954 pass / ~91% coverage / mypy --strict + ruff clean · **Live QA:** 18 / 18 against real Mixpanel API
+**Generated:** 2026-04-22 (post-C1 — cross-cutting iteration coverage complete; only Phase 11 polish remaining)
 
 ---
 
 ## TL;DR for the next session
 
-🎉 **PR #126 review plan + A2 plugin rewrite + C2 bridge writer are complete.** All 35 of 35 review fixes plus the plugin / agent surface (Phase 9 / US9) plus the Cowork bridge writer (Phase 8 / US8) have landed across B1 (Workspace flatten + bridge/config legacy deletion), A1 (OAuth wiring trio — refresh + `mp account login` + per-request bearer), B2 (Phase 4 deferred deletions — T043 / T044 / T045 / T047 / T048 / T050), B3 (Fix 27 — public `mixpanel_data.auth_types` module), A2 (`478160f`) — `auth_manager.py` 727 → 257 LoC, plugin v5.0.0, JSON contract `schema_version: 1`, and **C2 (`9147b1d`) — `bridge.export_bridge` / `bridge.remove_bridge` + `mp account export-bridge` / `remove-bridge` CLI + `mp session --bridge` flag**. The auth subsystem, its plugin surface, and the Cowork courier story are all at target shape.
+🎉 **All implementation clusters complete — only Phase 11 release polish (Cluster D) remains.** All 35 of 35 PR #126 review fixes plus the plugin / agent surface (Phase 9 / US9), Cowork bridge writer (Phase 8 / US8), and cross-cutting iteration test coverage (Phase 7 / US7) have landed. Commits: B1 (`12471c6`/`024a291`/`18283b4`) → A1 (`4d21c3e`) → B2 (×4) → B3 (`f18f1aa`) → A2 (`478160f`) → C2 (`9147b1d`) → **C1 (`18233dc`)**. The auth subsystem, plugin surface, Cowork courier story, and per-cluster test coverage are all at target shape.
 
-Open spec-level workstreams (not part of the PR #126 review): **C1** (cross-cutting iteration tests — Phase 7 / US7) and **D** (Phase 11 release polish — CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit). Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
+Open spec-level workstream: **D** (Phase 11 release polish — CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit). Stay on this branch; do not start a 043 spec for the leftover work — it's all "finish what 042 left undone," not a new feature.
 
 ---
 
@@ -38,6 +38,8 @@ Open spec-level workstreams (not part of the PR #126 review): **C1** (cross-cutt
 ## What landed (recent commits, newest first)
 
 ```
+18233dc test(042): cross-cutting iteration coverage (C1 / Phase 7 / US7)
+76e4167 docs(042): refresh trackers — C2 cluster (bridge writer) done
 9147b1d feat(042): bridge writer + mp account export-bridge / remove-bridge (C2 / Phase 8)
 668ceb4 docs(042): refresh trackers — A2 cluster (plugin rewrite) done
 478160f feat(042): rewrite plugin auth_manager + bump v5.0.0 (A2 / Phase 9 / US9)
@@ -59,6 +61,14 @@ cd044b7 docs(042): refresh trackers for A1 cluster (Fix 16 / 17 / 18 done)
 93e3081 fix(042): align live auth tests with tightened PR #126 behavior
 5a6b876 feat(042): execute PR #126 review plan — 28 of 35 fixes (P0 + P1)
 ```
+
+C1 cluster (`18233dc`, +632 / 0 across 5 files — pure test additions + 1 example):
+- **T077 — `tests/integration/test_cross_project_iteration.py`** (4 tests). Pins SC-008 + FR-061: `id(api_client._http)` is preserved across `ws.use(project=)`; SA auth header doesn't rebuild on project swap (Basic auth is project-independent); after `ws.discover_projects()` populates the `/me` cache, looping 3 projects + `ws.events()` per turn produces ZERO `/me` requests during the loop and exactly 3 events requests; `ws.use(project=...)` returns `self` for fluent chaining. Uses an `httpx.MockTransport` for request-counting.
+- **T078 — `tests/integration/test_cross_account_iteration.py`** (3 tests). HTTP transport survives SA → oauth_browser → oauth_token swaps; each account swap installs a structurally distinct Authorization header (Basic vs Bearer / per-account secrets); FR-033 — account swaps re-resolve the project axis to the new account's `default_project`.
+- **T079 — `tests/integration/test_parallel_snapshot.py`** (4 tests). `Session.replace(project=)` returns a new Session with the source unchanged (immutability); unchanged axes survive `replace()` by Python `is` (no deep copy, FR-058); `ThreadPoolExecutor.map(_per_snapshot, snapshots)` is race-free (10 threads each read their own session.project.id); `replace(workspace=None)` clears vs omitting preserves (sentinel three-state semantics).
+- **T080 — `tests/integration/test_cli_shell_loop.py`** (1 subprocess-based test). `mp --project ID session` repeated across three project IDs does NOT mutate `[active]` — the persisted account / default_project are unchanged after the loop. Uses `uv run mp ...` with hermetic tmp HOME.
+- **T083 — `examples/cross_project.py`**: documentation example showing both the sequential `ws.use(project=)` pattern and the snapshot `Session.replace(project=) + ThreadPoolExecutor` pattern. Intentionally minimal — runs against the user's real session.
+- **T081 / T082 deferred**: connection-pool-preservation is now pinned by C1's `id(api_client._http)` assertions (test_cross_project + test_cross_account); `Session.replace` identity preservation is pinned in `test_parallel_snapshot.py::test_replace_preserves_unchanged_axes_by_identity`. Separate audit assertions in `test_api_client_session.py` / PBT would be redundant.
 
 C2 cluster (`9147b1d`, +899 / −52 across 7 files):
 - **T089 — `_internal/auth/bridge.py`** gained `export_bridge(account, *, to, project=None, workspace=None, headers=None, token_resolver=None) -> Path` (atomic 0o600 write via `atomic_write_bytes`; parent dir auto-created at 0o700; for `oauth_browser`, on-disk tokens read via `_read_browser_tokens()` and embedded under `tokens`) and `remove_bridge(*, at=None) -> bool` (resolves path the same way as `load_bridge`; returns False when already absent — idempotent). Private `_serialize_bridge()` projects `SecretStr` fields back to raw strings (B3 — bridge MUST carry usable credentials, redacted output would defeat the courier purpose).
@@ -157,16 +167,9 @@ Standalone refactor, can land any time after B1. Estimated: ~half day.
 
 ### Cluster C — Optional features (P2/P3 from spec)
 
-#### C1. Cross-cutting iteration tests (Phase 7 / US7, T077–T084) — P2
+#### C1. Cross-cutting iteration tests (Phase 7 / US7, T077–T084) — ✅ DONE
 
-**Capability is already live** (Workspace.use + Session.replace). Missing dedicated integration tests:
-- `tests/integration/test_cross_project_iteration.py` — assert zero re-auth, zero `/me` calls, one `httpx.Client` instance throughout
-- `tests/integration/test_cross_account_iteration.py` — auth header rebuild + httpx.Client preserved
-- `tests/integration/test_parallel_snapshot.py` — `Session.replace` + `ThreadPoolExecutor`
-- `tests/integration/test_cli_shell_loop.py` — subprocess + `xargs`
-- `examples/cross_project.py` documentation example
-
-Pure test additions. Land any time. Estimated: ~half day.
+Landed in `18233dc`. See the "What landed" C1 cluster breakdown above. The four integration test files (`test_cross_project_iteration.py` / `test_cross_account_iteration.py` / `test_parallel_snapshot.py` / `test_cli_shell_loop.py`) plus `examples/cross_project.py` cover all four scenarios from US7 — sequential iteration, cross-account swaps, snapshot-mode parallel, and CLI shell loops. T081 / T082 deferred as redundant with the C1 coverage.
 
 #### C2. Cowork bridge WRITER (Phase 8 / US8, T089–T093) — ✅ DONE
 
@@ -212,10 +215,10 @@ Landed in `9147b1d`. See the "What landed" C2 cluster breakdown above. Verificat
 4. ~~**B3 — auth_types public module**~~ ✅ DONE (`f18f1aa`, +165 LoC, +7 unit tests)
 5. ~~**A2 — plugin / auth_manager rewrite**~~ ✅ DONE (`478160f`, 727 → 257 LoC, +15 subprocess tests, plugin v5.0.0)
 6. ~~**C2 — bridge writer**~~ ✅ DONE (`9147b1d`, +899 / −52 across 7 files, +23 tests)
-7. **C1 — cross-cutting iteration tests** ← **next workstream** (pure test additions — capability is already live; just covering cross-project, cross-account, parallel-snapshot, and CLI shell-loop scenarios)
-8. **D — Phase 11 polish** (CLAUDE.md sweeps, library version bump to 0.4.0, release notes, mutation testing, security audit)
+7. ~~**C1 — cross-cutting iteration tests**~~ ✅ DONE (`18233dc`, +632 LoC, +12 integration tests + 1 example)
+8. **D — Phase 11 polish** ← **only remaining workstream** (CLAUDE.md sweeps in `CLAUDE.md` / `src/mixpanel_data/CLAUDE.md` / `src/mixpanel_data/cli/CLAUDE.md`; library version bump to 0.4.0; `RELEASE_NOTES_0.4.0.md`; LoC budget enforcement test; mutation testing on auth subsystem; security audit)
 
-**Remaining estimate:** ~1 focused day to 1.0-ready.
+**Remaining estimate:** ~half a day to 1.0-ready.
 
 ---
 
@@ -224,7 +227,7 @@ Landed in `9147b1d`. See the "What landed" C2 cluster breakdown above. Verificat
 ```bash
 # Confirm branch + HEAD
 git status                    # should show branch=042-auth-architecture-redesign, clean tree
-git log --oneline -16         # top should be 9147b1d (C2) / 668ceb4 / 478160f (A2) / d20630e / 07d55cf / f18f1aa / 86e56d7 / 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291
+git log --oneline -18         # top should be 18233dc (C1) / 76e4167 / 9147b1d (C2) / 668ceb4 / 478160f (A2) / d20630e / 07d55cf / f18f1aa / 86e56d7 / 50ccd9d / b1c7a74 / 651bf66 / 3f74cd7 / cd044b7 / 4d21c3e / 62befd1 / 18283b4 / 024a291
 
 # Confirm test suite green (slow — ~3-5 min)
 just check

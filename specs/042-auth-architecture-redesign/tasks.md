@@ -11,7 +11,7 @@ description: "Task list for Authentication Architecture Redesign (042)"
 **Branch**: `042-auth-architecture-redesign`
 **Supersedes**: 038-auth-project-workspace-redesign
 
-## Status (as of 2026-04-22 — post C2 cluster `9147b1d`; bridge writer complete, 5 of 5 main clusters done)
+## Status (as of 2026-04-22 — post C1 cluster `18233dc`; cross-cutting iteration coverage complete; only Phase 11 polish remaining)
 
 | Phase | Status | Tests | Notes |
 |-------|--------|-------|-------|
@@ -21,15 +21,15 @@ description: "Task list for Authentication Architecture Redesign (042)"
 | 4 — Account model + Workspace.use (US1 + US4) | ✅ DONE — B1 flattened the dual-init, A1 wired OAuth, B2 swept the deferred deletions (T043 / T044 / T045 / T047 / T048 / T050) | 71 | mp.accounts/.targets/.session namespaces; Workspace.use() chain; api_client session support; `mp.accounts.login` end-to-end PKCE; OAuth refresh in OnDiskTokenResolver; per-request bearer in api_client; per-account `me.json` cache; `auth_credential.py` gone; deprecated `Workspace` methods (`switch_*`, `current_*`, `set_workspace_id`) gone. |
 | 5 — CLI surface (US5) | ✅ DONE (additive → cleanup landed in `5a6b876` and tightened in B1: legacy `--credential` / `--workspace-id` globals removed; A1 wired `mp account login NAME --no-browser`) | 17 | `mp account/project/workspace/session/target` groups + `--account`/`--project`/`--workspace`/`--target` globals; legacy command groups gone |
 | 6 — Targets (US6) | ✅ DONE (`5a6b876`) | +10 | `mp target add/use/list/show/remove` + 10 smoke tests |
-| 7 — Cross-cutting iteration (US7) | ⬜ PENDING (Cluster C1) | — | integration tests for cross-project / cross-account / parallel-snapshot — capability is live, dedicated tests deferred |
+| 7 — Cross-cutting iteration (US7) | ✅ DONE (`18233dc`) — Cluster C1 landed | +12 | Pure test additions (capability live since Phase 4): `tests/integration/test_cross_project_iteration.py` (4 tests — http transport / no-rebuild / one-/me-call / fluent chain), `test_cross_account_iteration.py` (3 — transport / per-account headers / FR-033 project re-resolve), `test_parallel_snapshot.py` (4 — replace immutability / identity preservation / ThreadPoolExecutor / sentinel semantics), `test_cli_shell_loop.py` (1 — `mp --project ID` per-command override doesn't mutate `[active]`). Plus `examples/cross_project.py` documenting both sequential and snapshot patterns. |
 | 8 — Cowork bridge (US8) | ✅ DONE (`9147b1d`) — Cluster C2 landed | +23 | `bridge.export_bridge` / `bridge.remove_bridge` plus `mp.accounts.export_bridge` / `remove_bridge` wrappers; `mp account export-bridge` / `remove-bridge` CLI commands; `mp session --bridge` flag with full payload display. New `tests/unit/test_bridge_export.py` (15 tests) and `tests/unit/cli/test_bridge_cli.py` (8 tests). |
 | 9 — Plugin / agent surface (US9) | ✅ DONE (`478160f`) — Cluster A2 landed | +15 | `auth_manager.py` 727 → 257 LoC, zero `version >= 2` branches; plugin bumped to 5.0.0; new subprocess-based `tests/integration/test_plugin_auth_manager.py` covers every subcommand + LoC + version-branch guards. Slash command `/mixpanel-data:auth` and setup skill rewritten around the JSON contract. |
 | 10 — Conversion script (US10) | ❌ DROPPED (alpha "free to break") | — | Legacy detection deleted in `5a6b876`; legacy `ConfigManager` + `AccountInfo` + v1 `AuthBridgeFile` + `auth_credential.py` fully removed in B1 / B2; no migration path needed |
 | 11 — Polish & cleanup (Cluster D) | ⚠️ MOSTLY DONE in `5a6b876` + `f18f1aa` + `478160f` (atomicity, validation, type design, comment-rot scrub, PBT, real-`~/.mp/` write guard, public `mixpanel_data.auth_types` module, plugin v5.0.0 bump); **still pending**: Phase 11 release polish (CLAUDE.md sweeps, library version bump to 0.4.0, release notes, LoC budget enforcement, mutation score, security audit) | — | docs, mutation tests, library version bump |
 
-**Full test suite (HEAD `9147b1d`)**: 5,942 passed @ 91.40% coverage; mypy --strict + ruff clean. (C2 added 23 unit + CLI tests across the bridge writer surface; A2 added 15 subprocess-based plugin integration tests.)
-**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `9147b1d`.
-**Net diff for B1+A1+B2+B3+A2+C2**: +4,482 / −13,375 across ~167 files (11 commits — B1×3 / A1 / B2×4 / B3 / A2 / C2).
+**Full test suite (HEAD `18233dc`)**: 5,954 passed @ ~91% coverage; mypy --strict + ruff clean. (C1 added 12 cross-cutting iteration integration tests; C2 added 23 unit + CLI tests across the bridge writer surface; A2 added 15 subprocess-based plugin integration tests.)
+**Live QA (`tests/live/test_042_auth_redesign_live.py`)**: 18 / 18 pass against real Mixpanel API at HEAD `18233dc`.
+**Net diff for B1+A1+B2+B3+A2+C2+C1**: +5,114 / −13,375 across ~172 files (12 commits — B1×3 / A1 / B2×4 / B3 / A2 / C2 / C1).
 
 ### Pragmatic deviation from the original phase plan (history)
 
@@ -255,17 +255,17 @@ Beyond these, the open clusters are A2 (plugin rewrite — Phase 9 / US9), B3 (`
 
 ### Tests for US7 (TDD — write FIRST)
 
-- [ ] T077 [P] [US7] Write `tests/integration/test_cross_project_iteration.py`: instrumented `MixpanelAPIClient` mock counts HTTP calls per endpoint; first call `ws.projects()` to populate the per-account `/me` cache; then loop over three mock projects calling `ws.use(project=p.id); ws.events()`; assert during the loop body: (a) zero re-auth calls, (b) **zero `/me` HTTP calls** (the cache populated by `ws.projects()` must be reused per FR-061 + SC-008), (c) one events call per iteration, (d) one shared `httpx.Client` instance throughout (assertable via `id()`). Tests MUST fail.
-- [ ] T078 [P] [US7] Write `tests/integration/test_cross_account_iteration.py`: loop over three configured accounts (one of each type, all with mocked `/me`); verify each iteration rebuilds the auth header (assertable via `_auth_header` field change), preserves the `httpx.Client` instance, clears in-session project state. Tests MUST fail.
-- [ ] T079 [P] [US7] Write `tests/integration/test_parallel_snapshot.py`: build N sessions via `Session.replace(project=...)`; dispatch via `ThreadPoolExecutor(max_workers=4)`; verify each worker sees its own Workspace; verify no thread mutates another's session (assertable via session id() snapshot). Tests MUST fail.
-- [ ] T080 [P] [US7] Write `tests/integration/test_cli_shell_loop.py` (subprocess-based): construct a fixture config with three accounts/projects; run `mp project list -f jsonl` and pipe to `xargs -I{} mp --project {} <some-noop-command>` via `subprocess`; assert each invocation uses the per-command override and `[active]` is unchanged after the loop. Tests MUST fail.
+- [X] T077 [P] [US7] Wrote `tests/integration/test_cross_project_iteration.py` (4 tests, C1 cluster `18233dc`). Verifies `id(ws._api_client._http)` preservation across `ws.use(project=)`; SA auth header doesn't rebuild on project swap; after `ws.discover_projects()` populates the `/me` cache, looping 3 projects + `ws.events()` per turn produces ZERO `/me` requests during the loop and exactly 3 events requests; `ws.use(project=...)` returns `self` for fluent chaining.
+- [X] T078 [P] [US7] Wrote `tests/integration/test_cross_account_iteration.py` (3 tests). HTTP transport survives SA → oauth_browser → oauth_token swaps; each account swap installs a structurally distinct Authorization header; FR-033 — account swaps re-resolve the project axis to the new account's `default_project`.
+- [X] T079 [P] [US7] Wrote `tests/integration/test_parallel_snapshot.py` (4 tests). `Session.replace(project=)` returns a new Session; unchanged axes survive by Python identity (FR-058); `ThreadPoolExecutor.map(_per_snapshot, snapshots)` is race-free; `replace(workspace=None)` clears vs omitting preserves (sentinel three-state semantics).
+- [X] T080 [P] [US7] Wrote `tests/integration/test_cli_shell_loop.py` (1 subprocess-based test). `mp --project ID session` repeated across three project IDs does NOT mutate `[active]` — the persisted account / default_project are unchanged after the loop.
 
 ### Implementation for US7
 
-- [ ] T081 [US7] Audit `MixpanelAPIClient` (modified in Phase 4 T041) for the connection-pool-preservation contract. Ensure `use(account=...)` does NOT recreate `self._http`; only `_auth_header` and per-axis caches change. Add a regression assertion in T041's existing test (or amend `tests/unit/test_api_client_session.py`) if the existing coverage doesn't already pin this property explicitly.
-- [ ] T082 [US7] Verify `Session.replace(...)` (implemented in Phase 2 T012) is genuinely immutable: for any source Session `s`, `s.replace(project=P).account is s.account` (Python `is` — object identity preserved for unchanged axes). Add this assertion to `tests/pbt/test_session_pbt.py`.
-- [ ] T083 [US7] Add a quickstart-style example `examples/cross_project.py` demonstrating both sequential and snapshot-parallel iteration. Reference it from [quickstart.md § Cross-cutting iteration](quickstart.md). (No code in `src/`; this is an example file in the repo root for documentation.)
-- [ ] T084 Run `pytest tests/integration/test_cross_project_iteration.py tests/integration/test_cross_account_iteration.py tests/integration/test_parallel_snapshot.py tests/integration/test_cli_shell_loop.py -v`. Confirm all tests pass.
+- [-] T081 [US7] DEFERRED — the connection-pool-preservation contract is now pinned by `test_cross_project_iteration.py::test_use_project_preserves_http_transport` and `test_cross_account_iteration.py::test_iteration_preserves_http_transport` (both assert `id(api_client._http)` is unchanged after every swap). A separate audit assertion in `test_api_client_session.py` is redundant.
+- [-] T082 [US7] DEFERRED — `test_parallel_snapshot.py::test_replace_preserves_unchanged_axes_by_identity` asserts `s.replace(project=P).account is s.account` directly. A second copy in PBT is redundant.
+- [X] T083 [US7] Added `examples/cross_project.py` demonstrating sequential mode (`ws.use(project=...)` loop) and snapshot mode (`Session.replace(project=...) + ThreadPoolExecutor`). The file is intentionally minimal — runs against the user's real session.
+- [X] T084 `pytest tests/integration/test_cross_project_iteration.py tests/integration/test_cross_account_iteration.py tests/integration/test_parallel_snapshot.py tests/integration/test_cli_shell_loop.py -v` — 12 / 12 pass. Full suite at HEAD `18233dc`: 5,954 pass; mypy --strict + ruff clean. Live: 18 / 18.
 
 **Checkpoint**: Cross-cutting iteration verified. US7 confirmed independently.
 
