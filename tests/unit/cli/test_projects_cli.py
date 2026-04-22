@@ -333,6 +333,9 @@ class TestGlobalOptions:
         ctx.obj["workspace"] = None
 
         with patch("mixpanel_data.workspace.Workspace") as mock_ws_cls:
+            # Force the legacy path so the test is hermetic regardless of
+            # the developer's `~/.mp/config.toml`.
+            mock_ws_cls._has_v3_config.return_value = False
             mock_ws_cls.return_value = MagicMock()
             get_workspace(ctx)
             mock_ws_cls.assert_called_once_with(
@@ -342,7 +345,7 @@ class TestGlobalOptions:
             )
 
     def test_get_workspace_project_only_uses_legacy(self) -> None:
-        """Test --project without --credential uses legacy path."""
+        """Test --project without --credential uses legacy path (no v3 config)."""
         import typer
 
         from mixpanel_data.cli.utils import get_workspace
@@ -356,6 +359,7 @@ class TestGlobalOptions:
         ctx.obj["workspace"] = None
 
         with patch("mixpanel_data.workspace.Workspace") as mock_ws_cls:
+            mock_ws_cls._has_v3_config.return_value = False
             mock_ws_cls.return_value = MagicMock()
             get_workspace(ctx)
             mock_ws_cls.assert_called_once_with(

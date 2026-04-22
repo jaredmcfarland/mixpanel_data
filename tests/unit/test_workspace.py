@@ -101,9 +101,14 @@ class TestCredentialResolution:
 
     def test_env_var_credential_resolution(
         self,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """T014: Test env var credential resolution."""
+        # Isolate HOME so `_has_v3_config()` doesn't trip on the dev's
+        # ~/.claude/mixpanel/auth.json bridge file (which `load_bridge`
+        # consults via `Path.home()` even when MP_AUTH_FILE is unset).
+        monkeypatch.setenv("HOME", str(tmp_path))
         # Set environment variables
         monkeypatch.setenv("MP_USERNAME", "env_user")
         monkeypatch.setenv("MP_SECRET", "env_secret")

@@ -250,3 +250,69 @@ class TestUseAccountEnvVarPriority:
         ws.use(account="other")
         assert ws.workspace is not None
         assert ws.workspace.id == 987
+
+
+class TestUseSyncsLegacyShimAndClearsCaches:
+    """``ws.use(...)`` MUST sync ``_credentials`` and clear lazy services.
+
+    Regression: ``use()`` previously updated only ``_v3_session``, leaving
+    ``current_project`` / ``current_credential`` / ``discover_workspaces``
+    reading the prior account's ``_credentials.project_id`` and
+    ``_me_svc`` / ``_discovery`` / ``_live_query`` serving cached state
+    from before the swap.
+    """
+
+    def test_use_project_updates_credentials_project_id(
+        self, two_accounts: ConfigManager
+    ) -> None:
+        """After ``use(project=X)``, ``self._credentials.project_id == X``."""
+        ws = Workspace(account="team", project="3713224")
+        assert ws._credentials is not None  # noqa: SLF001
+        assert ws._credentials.project_id == "3713224"  # noqa: SLF001
+        ws.use(project="9999999")
+        assert ws._credentials is not None  # noqa: SLF001
+        assert ws._credentials.project_id == "9999999"  # noqa: SLF001
+
+    def test_use_account_updates_credentials_for_current_credential(
+        self, two_accounts: ConfigManager
+    ) -> None:
+        """After ``use(account=B)``, ``current_credential`` reflects B."""
+        ws = Workspace(account="team", project="3713224")
+        ws.use(account="other")
+        # `current_credential` reads `self._credentials` for the legacy
+        # synth path; if the shim isn't synced it'd still report 'team'.
+        assert ws._credentials is not None  # noqa: SLF001
+        # `other` is in eu region per the fixture.
+        assert ws._credentials.region == "eu"  # noqa: SLF001
+
+    def test_use_clears_discovery_and_me_service_caches(
+        self, two_accounts: ConfigManager
+    ) -> None:
+        """``use(...)`` resets ``_discovery``, ``_live_query``, ``_me_service``."""
+        ws = Workspace(account="team", project="3713224")
+        # Force-create the cached services.
+        _ = ws._discovery_service  # noqa: SLF001
+        _ = ws._live_query_service  # noqa: SLF001
+        _ = ws._me_svc  # noqa: SLF001
+        assert ws._discovery is not None  # noqa: SLF001
+        assert ws._live_query is not None  # noqa: SLF001
+        assert ws._me_service is not None  # noqa: SLF001
+
+        ws.use(project="9999999")
+
+        # All three caches MUST be cleared so subsequent reads rebuild
+        # against the new session.
+        assert ws._discovery is None  # noqa: SLF001
+        assert ws._live_query is None  # noqa: SLF001
+        assert ws._me_service is None  # noqa: SLF001
+
+    def test_use_target_also_clears_caches(self, two_accounts: ConfigManager) -> None:
+        """The ``target=`` branch of ``use()`` also clears caches."""
+        targets_ns.add("ecom", account="other", project="3018488", workspace=42)
+        ws = Workspace(account="team", project="3713224")
+        _ = ws._discovery_service  # noqa: SLF001
+        assert ws._discovery is not None  # noqa: SLF001
+        ws.use(target="ecom")
+        assert ws._discovery is None  # noqa: SLF001
+        assert ws._credentials is not None  # noqa: SLF001
+        assert ws._credentials.project_id == "3018488"  # noqa: SLF001

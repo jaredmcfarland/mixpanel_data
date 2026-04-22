@@ -161,3 +161,152 @@ class TestUseClearsStaleWorkspaceId:
         assert "/workspaces/42/" not in path
         # Project-scoped (not workspace-scoped) is the expected fallback.
         assert path.startswith("/projects/")
+
+
+class TestUseOAuthAtomicity:
+    """``MixpanelAPIClient.use()`` MUST fail atomically when the new
+    OAuth account has no usable token, preserving the prior session
+    rather than committing the ``pending-login`` placeholder (R5)."""
+
+    def test_use_to_oauth_account_without_token_raises_and_preserves_session(
+        self, session_team: Session
+    ) -> None:
+        """Swap to a tokenless ``OAuthBrowserAccount`` raises, no commit."""
+        from mixpanel_data._internal.auth.account import (
+            OAuthBrowserAccount,
+            TokenResolver,
+        )
+        from mixpanel_data.exceptions import OAuthError
+
+        class _Failing(TokenResolver):
+            """Always fails — simulates a tokenless OAuth account."""
+
+            def get_browser_token(self, name: str, region: str) -> str:
+                raise OAuthError("no tokens on disk")
+
+            def get_static_token(self, account: object) -> str:
+                raise OAuthError("no static token")
+
+        client = MixpanelAPIClient(session=session_team, token_resolver=_Failing())
+        prior_session = client.session
+        prior_creds = client._credentials  # noqa: SLF001
+        prior_header = client.current_auth_header
+
+        oauth_account = OAuthBrowserAccount(name="oauth1", region="us")
+        with pytest.raises(OAuthError):
+            client.use(account=oauth_account)
+
+        # Atomicity: the prior session/credentials/auth header all survive.
+        assert client.session is prior_session
+        assert client._credentials is prior_creds  # noqa: SLF001
+        assert client.current_auth_header == prior_header
+
+    def test_use_to_oauth_token_account_without_token_raises(
+        self, session_team: Session
+    ) -> None:
+        """Swap to a tokenless ``OAuthTokenAccount`` raises and preserves state."""
+        from mixpanel_data._internal.auth.account import (
+            OAuthTokenAccount,
+            TokenResolver,
+        )
+        from mixpanel_data.exceptions import OAuthError
+
+        class _Failing(TokenResolver):
+            def get_browser_token(self, name: str, region: str) -> str:
+                raise OAuthError("not used")
+
+            def get_static_token(self, account: object) -> str:
+                raise OAuthError("env var unset")
+
+        client = MixpanelAPIClient(session=session_team, token_resolver=_Failing())
+        prior_session = client.session
+
+        oauth_token_account = OAuthTokenAccount(
+            name="ot1", region="us", token_env="MISSING_ENV_VAR"
+        )
+        with pytest.raises(OAuthError):
+            client.use(account=oauth_token_account)
+        assert client.session is prior_session
+
+
+class TestSessionToCredentialsOAuthCacheIsolation:
+    """``session_to_credentials`` MUST set ``username=account.name`` for
+    OAuth shims so two OAuth accounts in the same region get distinct
+    ``MeCache`` files (Finding 4)."""
+
+    def test_oauth_browser_username_is_account_name(self) -> None:
+        """OAuth browser shim carries the account name as ``username``."""
+        from mixpanel_data._internal.api_client import session_to_credentials
+        from mixpanel_data._internal.auth.account import OAuthBrowserAccount
+        from mixpanel_data._internal.auth.account import (
+            TokenResolver as _TR,
+        )
+
+        class _StaticToken(_TR):
+            def get_browser_token(self, name: str, region: str) -> str:
+                return "tok"
+
+            def get_static_token(self, account: object) -> str:
+                return "tok"
+
+        s_a = Session(
+            account=OAuthBrowserAccount(name="account_a", region="us"),
+            project=Project(id="3713224"),
+        )
+        s_b = Session(
+            account=OAuthBrowserAccount(name="account_b", region="us"),
+            project=Project(id="3713224"),
+        )
+        creds_a = session_to_credentials(s_a, token_resolver=_StaticToken())
+        creds_b = session_to_credentials(s_b, token_resolver=_StaticToken())
+        assert creds_a.username == "account_a"
+        assert creds_b.username == "account_b"
+        # The whole point: distinct identity → MeCache scopes by this string.
+        assert creds_a.username != creds_b.username
+
+    def test_oauth_token_username_is_account_name(self) -> None:
+        """OAuth static-token shim carries the account name as ``username``."""
+        from mixpanel_data._internal.api_client import session_to_credentials
+        from mixpanel_data._internal.auth.account import OAuthTokenAccount
+        from mixpanel_data._internal.auth.account import (
+            TokenResolver as _TR,
+        )
+
+        class _StaticToken(_TR):
+            def get_browser_token(self, name: str, region: str) -> str:
+                return "tok"
+
+            def get_static_token(self, account: object) -> str:
+                return "tok"
+
+        s = Session(
+            account=OAuthTokenAccount(
+                name="my_token_account", region="us", token=SecretStr("xyz")
+            ),
+            project=Project(id="3713224"),
+        )
+        creds = session_to_credentials(s, token_resolver=_StaticToken())
+        assert creds.username == "my_token_account"
+
+    def test_session_to_credentials_strict_raises_oauth_error(self) -> None:
+        """``strict=True`` propagates OAuthError instead of placeholder."""
+        from mixpanel_data._internal.api_client import session_to_credentials
+        from mixpanel_data._internal.auth.account import OAuthBrowserAccount
+        from mixpanel_data._internal.auth.account import (
+            TokenResolver as _TR,
+        )
+        from mixpanel_data.exceptions import OAuthError
+
+        class _Failing(_TR):
+            def get_browser_token(self, name: str, region: str) -> str:
+                raise OAuthError("no tokens")
+
+            def get_static_token(self, account: object) -> str:
+                raise OAuthError("no token")
+
+        s = Session(
+            account=OAuthBrowserAccount(name="me", region="us"),
+            project=Project(id="3713224"),
+        )
+        with pytest.raises(OAuthError):
+            session_to_credentials(s, token_resolver=_Failing(), strict=True)

@@ -481,6 +481,56 @@ class TestRemoveAccount:
         orphans = cm.remove_account("x", force=True)
         assert sorted(orphans) == ["ai", "ecom"]
 
+    def test_remove_active_account_clears_active_block(self, cm: ConfigManager) -> None:
+        """Removing the active account also clears `[active].account/.workspace`.
+
+        Otherwise `session.show()` keeps printing the deleted name and a
+        fresh `Workspace()` resolves through `get_active().account` into
+        ``ConfigError("Account 'X' not found.")``.
+        """
+        cm.add_account(
+            "x",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        cm.set_active(account="x", workspace=42)
+        assert cm.get_active() == ActiveSession(account="x", workspace=42)
+
+        cm.remove_account("x")
+
+        # Both fields cleared (workspace is project-scoped; meaningless
+        # without the account).
+        assert cm.get_active() == ActiveSession()
+
+    def test_remove_non_active_account_preserves_active_block(
+        self, cm: ConfigManager
+    ) -> None:
+        """Removing a non-active account leaves `[active]` untouched."""
+        cm.add_account(
+            "active_one",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u1",
+            secret=SecretStr("s"),
+        )
+        cm.add_account(
+            "other",
+            type="service_account",
+            region="us",
+            default_project="3018488",
+            username="u2",
+            secret=SecretStr("s"),
+        )
+        cm.set_active(account="active_one", workspace=42)
+
+        cm.remove_account("other")
+
+        assert cm.get_active() == ActiveSession(account="active_one", workspace=42)
+
 
 class TestLegacyDetectionV1:
     """v1 marker detection — at least one of these triggers ConfigError."""

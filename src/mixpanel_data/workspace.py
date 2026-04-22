@@ -449,21 +449,21 @@ class Workspace:
             or _config_manager is not None
         )
         if v3_kwargs_set or (not legacy_kwargs_set and self._has_v3_config()):
-            try:
-                self._init_v3(
-                    account=account,
-                    project=project,
-                    workspace=workspace,
-                    target=target,
-                    session=session,
-                    _api_client=_api_client,
-                )
-            except ConfigError:
-                if v3_kwargs_set:
-                    raise
-                # Fall through to legacy if no new kwargs forced the v3 path.
-            else:
-                return
+            # Don't catch ConfigError here: when the v3 path is chosen
+            # (explicit v3 kwargs OR a v3 config on disk), falling through
+            # to the legacy resolver would try to read v3 account blocks
+            # via the legacy schema (v3 accounts have `default_project`,
+            # not `project_id`), masking the actionable FR-024 message
+            # with a misleading KeyError. The error must surface as-is.
+            self._init_v3(
+                account=account,
+                project=project,
+                workspace=workspace,
+                target=target,
+                session=session,
+                _api_client=_api_client,
+            )
+            return
 
         # Store injected or create default ConfigManager
         self._config_manager = _config_manager or ConfigManager()
@@ -846,6 +846,19 @@ class Workspace:
                 workspace=new_workspace_obj,
             )
             self._v3_session = client.session
+
+        # Sync the legacy `_credentials` shim and clear lazy services so
+        # subsequent reads of `current_project` / `current_credential` /
+        # `discover_workspaces` / `_me_svc` observe the new session
+        # rather than the prior one. Mirrors `switch_project()`.
+        client = self._require_api_client()
+        self._credentials = client._credentials
+        self._initial_workspace_id = (
+            self._v3_session.workspace.id if self._v3_session.workspace else None
+        )
+        self._discovery = None
+        self._live_query = None
+        self._me_service = None
 
         if persist:
             self._persist_active()

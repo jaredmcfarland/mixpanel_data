@@ -365,10 +365,17 @@ class TestWorkspaceIdOption:
             with patch.object(utils_mod, "get_workspace", patched_get_workspace):
                 cli_runner.invoke(app, ["--workspace-id", "777", "inspect", "events"])
 
-        # Verify workspace_id was passed
+        # Verify the workspace ID propagated through. The 042 redesign
+        # routes via the v3 axis kwarg ``workspace=`` when a v3 config is
+        # detected; the legacy path uses ``workspace_id=``. Either is fine
+        # for this test — the goal is end-to-end propagation, not the
+        # specific kwarg name.
         mock_ws_cls.assert_called_once()
         call_kwargs = mock_ws_cls.call_args
-        assert call_kwargs.kwargs.get("workspace_id") == 777
+        ws_value = call_kwargs.kwargs.get("workspace_id") or call_kwargs.kwargs.get(
+            "workspace"
+        )
+        assert ws_value == 777
 
 
 class TestHandleErrorsOAuth:

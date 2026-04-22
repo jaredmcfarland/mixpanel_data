@@ -66,7 +66,10 @@ FR-024 — errors surface at the call site, not at construction.
 
 
 def session_to_credentials(
-    session: Session, *, token_resolver: TokenResolver | None = None
+    session: Session,
+    *,
+    token_resolver: TokenResolver | None = None,
+    strict: bool = False,
 ) -> Credentials:
     """Project a redesigned :class:`Session` into legacy ``Credentials``.
 
@@ -77,13 +80,28 @@ def session_to_credentials(
     a placeholder is used so construction succeeds; the real failure
     surfaces at request time as a 401.
 
+    The OAuth ``Credentials`` shim sets ``username=account.name`` so that
+    ``MeCache`` (scoped by ``credential_name``) keeps per-account cache
+    files in the same region — without this, two OAuth accounts in the
+    same region collide on a single ``me_<region>.json``.
+
     Args:
         session: Resolved session with account / project / optional workspace.
         token_resolver: Used for OAuth accounts; defaults to
             :class:`OnDiskTokenResolver`.
+        strict: When ``True``, ``OAuthError`` propagates instead of being
+            replaced by the ``pending-login`` placeholder. ``MixpanelAPIClient.use()``
+            sets this so an account swap fails atomically when the new
+            account has no usable token (per Research R5), rather than
+            committing a placeholder shim that 401s on every subsequent
+            request.
 
     Returns:
         Legacy ``Credentials`` shim usable by ``MixpanelAPIClient`` internals.
+
+    Raises:
+        OAuthError: When ``strict=True`` and an OAuth token cannot be
+            resolved.
     """
     from mixpanel_data.exceptions import OAuthError
 
@@ -101,9 +119,11 @@ def session_to_credentials(
         try:
             token = resolver.get_browser_token(account.name, account.region)
         except OAuthError:
+            if strict:
+                raise
             token = _OAUTH_TOKEN_PENDING
         return Credentials(
-            username="",
+            username=account.name,
             secret=SecretStr(""),
             project_id=session.project.id,
             region=account.region,
@@ -114,9 +134,11 @@ def session_to_credentials(
         try:
             token = resolver.get_static_token(account)
         except OAuthError:
+            if strict:
+                raise
             token = _OAUTH_TOKEN_PENDING
         return Credentials(
-            username="",
+            username=account.name,
             secret=SecretStr(""),
             project_id=session.project.id,
             region=account.region,
@@ -869,8 +891,11 @@ class MixpanelAPIClient:
             account=account, project=project_obj, workspace=workspace_obj
         )
         # Build new shim BEFORE swapping anything — atomic-on-success.
+        # `strict=True` so a missing OAuth token raises here (preserving the
+        # prior session) instead of committing a `pending-login` placeholder
+        # that would 401 on every subsequent request — see Research R5.
         new_credentials = session_to_credentials(
-            new_session, token_resolver=self._token_resolver
+            new_session, token_resolver=self._token_resolver, strict=True
         )
         self._session = new_session
         self._credentials = new_credentials

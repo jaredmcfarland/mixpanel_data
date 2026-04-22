@@ -508,6 +508,20 @@ class ConfigManager:
         if referenced and not force:
             raise AccountInUseError(name, referenced_by=referenced)
         del accounts_block[name]
+        # If the removed account was the active one, clear the stale
+        # references so a fresh `Workspace()` doesn't trip on
+        # `Account 'X' not found.` and `session.show()` doesn't keep
+        # printing the deleted name. Workspace is project-scoped, so
+        # it's also dropped — the prior workspace ID is meaningless
+        # without an account.
+        active_block = raw.get("active", {}) or {}
+        if active_block.get("account") == name:
+            active_block.pop("account", None)
+            active_block.pop("workspace", None)
+            if active_block:
+                raw["active"] = active_block
+            else:
+                raw.pop("active", None)
         self._write_raw(raw)
         return referenced
 

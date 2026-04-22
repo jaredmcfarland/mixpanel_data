@@ -573,6 +573,37 @@ class TestWorkspaceV3Discrimination:
         with pytest.raises(RuntimeError, match="042 redesign path"):
             _ = ws.account
 
+    def test_v3_auto_detect_propagates_config_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Auto-detected v3 config with no [active].account surfaces the v3 error.
+
+        Regression: previously the v3-path ConfigError was caught and the
+        legacy resolver took over, producing a misleading KeyError when it
+        tried to read v3 account blocks (no `project_id` field). The
+        intended FR-024 message ("set [active].account or pass account=…")
+        was hidden.
+        """
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / "config.toml"))
+        # Scrub MP_* leakage (mirrors test_v3_path_with_empty_config_falls_back_to_legacy).
+        for key in list(os.environ):
+            if key.startswith("MP_") and key != "MP_CONFIG_PATH":
+                monkeypatch.delenv(key, raising=False)
+        monkeypatch.chdir(tmp_path)
+        cm = ConfigManager()
+        cm.add_account(
+            "team",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        # Note: no `cm.set_active(...)` — the v3 resolver should raise.
+        with pytest.raises(ConfigError):
+            Workspace()
+
 
 # =============================================================================
 # CLI exit codes + secret handling
