@@ -141,15 +141,43 @@ class TestSessionConstruction:
         assert s.workspace is None
 
     def test_default_headers_empty(self, sa: ServiceAccount, project: Project) -> None:
-        """Headers default to an empty dict."""
+        """Headers default to an empty mapping."""
         s = Session(account=sa, project=project)
-        assert s.headers == {}
+        assert dict(s.headers) == {}
 
     def test_frozen(self, sa: ServiceAccount, project: Project) -> None:
         """Session is frozen — assignment raises."""
         s = Session(account=sa, project=project)
         with pytest.raises(ValidationError):
             s.workspace = WorkspaceRef(id=1)  # type: ignore[misc]
+
+    def test_headers_immutable(self, sa: ServiceAccount, project: Project) -> None:
+        """``session.headers["X"] = "Y"`` raises ``TypeError``.
+
+        Pydantic ``frozen=True`` only blocks attribute reassignment — without
+        the post-validation ``MappingProxyType`` wrap a caller could still
+        mutate the underlying dict and silently share state across sessions.
+        """
+        s = Session(
+            account=sa, project=project, headers={"X-Mixpanel-Cluster": "internal-1"}
+        )
+        with pytest.raises(TypeError):
+            s.headers["X-Mixpanel-Cluster"] = "leaked"  # type: ignore[index]
+        with pytest.raises(TypeError):
+            s.headers["new-header"] = "leaked"  # type: ignore[index]
+        # Original value preserved.
+        assert s.headers["X-Mixpanel-Cluster"] == "internal-1"
+
+    def test_headers_input_dict_isolation(
+        self, sa: ServiceAccount, project: Project
+    ) -> None:
+        """Mutating the dict passed at construction does not leak into the session."""
+        h = {"X": "1"}
+        s = Session(account=sa, project=project, headers=h)
+        h["X"] = "leaked"
+        h["Y"] = "added"
+        assert s.headers["X"] == "1"
+        assert "Y" not in s.headers
 
 
 class TestSessionProperties:

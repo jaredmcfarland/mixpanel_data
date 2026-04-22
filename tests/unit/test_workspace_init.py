@@ -53,9 +53,11 @@ def two_accounts() -> ConfigManager:
     )
     accounts_ns.add(
         "other",
-        type="oauth_browser",
+        type="service_account",
         region="eu",
         default_project="3713224",
+        username="u2",
+        secret=SecretStr("s2"),
     )
     cm.set_active(account="team")
     return cm

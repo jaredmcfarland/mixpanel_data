@@ -56,29 +56,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-_OAUTH_TOKEN_PENDING = "pending-login"
-"""Placeholder bearer used in the Credentials shim when no real token is
-available yet. Construction succeeds; the actual auth_header() call will
-return the placeholder, and the Mixpanel server will reject the request
-with a 401 when (and only when) the user makes a real call. This matches
-FR-024 — errors surface at the call site, not at construction.
-"""
-
-
 def session_to_credentials(
     session: Session,
     *,
     token_resolver: TokenResolver | None = None,
-    strict: bool = False,
 ) -> Credentials:
     """Project a redesigned :class:`Session` into legacy ``Credentials``.
 
     Used by :class:`MixpanelAPIClient` so the session-aware path can reuse
     the existing HTTP infrastructure that consumes ``Credentials``. For
-    OAuth accounts, the bearer token is resolved up-front when possible.
-    If the token cannot be resolved (no on-disk tokens, missing env var),
-    a placeholder is used so construction succeeds; the real failure
-    surfaces at request time as a 401.
+    OAuth accounts the bearer token is resolved up-front; if it cannot be
+    resolved, ``OAuthError`` propagates so the failure surfaces at the
+    construction call (typically ``Workspace()``) rather than at the next
+    HTTP request as a confusing 401.
 
     The OAuth ``Credentials`` shim sets ``username=account.name`` so that
     ``MeCache`` (scoped by ``credential_name``) keeps per-account cache
@@ -89,22 +79,15 @@ def session_to_credentials(
         session: Resolved session with account / project / optional workspace.
         token_resolver: Used for OAuth accounts; defaults to
             :class:`OnDiskTokenResolver`.
-        strict: When ``True``, ``OAuthError`` propagates instead of being
-            replaced by the ``pending-login`` placeholder. ``MixpanelAPIClient.use()``
-            sets this so an account swap fails atomically when the new
-            account has no usable token (per Research R5), rather than
-            committing a placeholder shim that 401s on every subsequent
-            request.
 
     Returns:
         Legacy ``Credentials`` shim usable by ``MixpanelAPIClient`` internals.
 
     Raises:
-        OAuthError: When ``strict=True`` and an OAuth token cannot be
-            resolved.
+        OAuthError: An OAuth account's token cannot be resolved (no on-disk
+            tokens for ``oauth_browser`` — run ``mp account login NAME``;
+            missing env var for ``oauth_token``).
     """
-    from mixpanel_data.exceptions import OAuthError
-
     resolver = token_resolver or OnDiskTokenResolver()
     account = session.account
     if isinstance(account, ServiceAccount):
@@ -116,12 +99,7 @@ def session_to_credentials(
             auth_method=AuthMethod.basic,
         )
     if isinstance(account, OAuthBrowserAccount):
-        try:
-            token = resolver.get_browser_token(account.name, account.region)
-        except OAuthError:
-            if strict:
-                raise
-            token = _OAUTH_TOKEN_PENDING
+        token = resolver.get_browser_token(account.name, account.region)
         return Credentials(
             username=account.name,
             secret=SecretStr(""),
@@ -131,12 +109,7 @@ def session_to_credentials(
             oauth_access_token=SecretStr(token),
         )
     if isinstance(account, OAuthTokenAccount):
-        try:
-            token = resolver.get_static_token(account)
-        except OAuthError:
-            if strict:
-                raise
-            token = _OAUTH_TOKEN_PENDING
+        token = resolver.get_static_token(account)
         return Credentials(
             username=account.name,
             secret=SecretStr(""),
@@ -257,7 +230,7 @@ class MixpanelAPIClient:
 
         Args:
             credentials: Immutable authentication credentials (legacy path).
-            session: Resolved Session (042 redesign path; mutually exclusive
+            session: Resolved Session (path; mutually exclusive
                 with ``credentials``).
             timeout: Request timeout in seconds for regular requests.
             export_timeout: Request timeout for export operations.
@@ -331,30 +304,50 @@ class MixpanelAPIClient:
         return f"{base}{path}"
 
     def _ensure_client(self) -> httpx.Client:
-        """Ensure HTTP client is initialized.
+        """Ensure the underlying HTTP client (connection pool) is initialized.
+
+        Headers are NOT cached on the client — they are composed per-request
+        by :meth:`_request_headers` so that ``use(account=...)`` swapping the
+        ``Session`` instantly affects subsequent requests without forcing a
+        connection-pool teardown. See Fix 3 for the per-request rationale.
 
         Returns:
-            The httpx.Client instance.
+            The httpx.Client instance (connection pool only).
         """
         if self._client is None:
-            headers: dict[str, str] = {}
-            custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
-            custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
-            if custom_name and custom_value:
-                headers[custom_name] = custom_value
-            # v3 path: Session.headers (populated from `[settings].custom_header`
-            # and bridge.headers per FR-014) MUST ride along on every request.
-            # Session contributions take precedence over env-var headers on
-            # collision — the resolver had a chance to merge env earlier and
-            # the final session state is authoritative at request time.
-            if self._session is not None:
-                headers.update(self._session.headers)
             self._client = httpx.Client(
                 timeout=self._timeout,
                 transport=self._transport,
-                headers=headers,
             )
         return self._client
+
+    def _request_headers(self, extra: dict[str, str]) -> dict[str, str]:
+        """Compose the per-request header set: env-var → session → caller.
+
+        Each layer overrides the prior on header-name collision:
+
+        1. ``MP_CUSTOM_HEADER_NAME`` / ``MP_CUSTOM_HEADER_VALUE`` env pair.
+        2. ``self._session.headers`` (populated from ``[settings].custom_header``
+           and bridge ``headers`` per FR-014). The resolver merged env into
+           the session earlier; the final session state is authoritative.
+        3. ``extra`` — typically ``{"Authorization": auth_header}`` plus any
+           per-call ``Accept-Encoding`` etc. supplied by the caller.
+
+        Args:
+            extra: Per-call headers (e.g., Authorization). May be empty.
+
+        Returns:
+            New dict with all layers merged in precedence order.
+        """
+        headers: dict[str, str] = {}
+        custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+        custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
+        if custom_name and custom_value:
+            headers[custom_name] = custom_value
+        if self._session is not None:
+            headers.update(self._session.headers)
+        headers.update(extra)
+        return headers
 
     def close(self) -> None:
         """Close the HTTP client and release resources."""
@@ -593,6 +586,7 @@ class MixpanelAPIClient:
         if params is None:
             params = {}
         params["query_origin"] = "mixpanel-data-cli"
+        request_headers = self._request_headers(headers)
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -602,7 +596,7 @@ class MixpanelAPIClient:
                     params=params,
                     json=json_data,
                     data=form_data,
-                    headers=headers,
+                    headers=request_headers,
                     timeout=timeout or self._timeout,
                 )
 
@@ -814,7 +808,7 @@ class MixpanelAPIClient:
 
     @property
     def session(self) -> Session:
-        """Return the resolved Session bound to this client (042 redesign).
+        """Return the resolved Session bound to this client.
 
         Returns:
             The Session passed to ``__init__(session=...)``.
@@ -832,10 +826,16 @@ class MixpanelAPIClient:
 
     @property
     def current_auth_header(self) -> str:
-        """Return the cached ``Authorization`` header value.
+        """Return the current ``Authorization`` header value.
+
+        The value is computed from the current ``Credentials`` shim on
+        every access — there is no caching at this level. For
+        ``service_account`` it is a ``Basic`` header derived from
+        username/secret; for OAuth it is a ``Bearer`` header.
 
         Returns:
-            The header value (Basic / Bearer) consumed by every request.
+            The header value (``Basic ...`` or ``Bearer ...``) that
+            every per-request header set carries.
         """
         return self._credentials.auth_header()
 
@@ -890,12 +890,12 @@ class MixpanelAPIClient:
         new_session = self._session.replace(
             account=account, project=project_obj, workspace=workspace_obj
         )
-        # Build new shim BEFORE swapping anything — atomic-on-success.
-        # `strict=True` so a missing OAuth token raises here (preserving the
-        # prior session) instead of committing a `pending-login` placeholder
-        # that would 401 on every subsequent request — see Research R5.
+        # Build the new shim BEFORE swapping anything — atomic-on-success.
+        # ``session_to_credentials`` raises ``OAuthError`` if the new
+        # account has no usable token; the prior session/credentials stay
+        # in place because no assignment happens until both succeed.
         new_credentials = session_to_credentials(
-            new_session, token_resolver=self._token_resolver, strict=True
+            new_session, token_resolver=self._token_resolver
         )
         self._session = new_session
         self._credentials = new_credentials
@@ -1044,7 +1044,7 @@ class MixpanelAPIClient:
 
         url = self._build_url("app", path)
         auth_header = self._credentials.auth_header()
-        headers = {"Authorization": auth_header}
+        headers = self._request_headers({"Authorization": auth_header})
 
         client = self._ensure_client()
 
@@ -1474,10 +1474,12 @@ class MixpanelAPIClient:
             params["limit"] = limit
 
         client = self._ensure_client()
-        headers = {
-            "Authorization": self._get_auth_header(),
-            "Accept-Encoding": "gzip",
-        }
+        headers = self._request_headers(
+            {
+                "Authorization": self._get_auth_header(),
+                "Accept-Encoding": "gzip",
+            }
+        )
 
         # Stream with retry logic
         for attempt in range(self._max_retries + 1):
@@ -7049,7 +7051,7 @@ class MixpanelAPIClient:
             "POST",
             url,
             data=form_data,
-            headers={"Authorization": auth_header},
+            headers=self._request_headers({"Authorization": auth_header}),
             timeout=self._timeout,
         )
         if response.status_code >= 400:
@@ -7252,7 +7254,7 @@ class MixpanelAPIClient:
             "GET",
             url,
             params=params,
-            headers={"Authorization": auth_header},
+            headers=self._request_headers({"Authorization": auth_header}),
             timeout=self._timeout,
         )
         if response.status_code >= 400:

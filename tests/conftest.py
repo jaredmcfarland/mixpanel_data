@@ -87,6 +87,62 @@ def _clean_mp_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(var, raising=False)
 
 
+def _snapshot_real_mp_dir() -> dict[str, float]:
+    """Snapshot mtimes of every file under the developer's real ``~/.mp/``.
+
+    Returns:
+        Mapping from absolute path string to mtime, or an empty dict
+        if no real ``~/.mp/`` exists or it is unreadable.
+    """
+    # Resolve the developer's actual home before any monkeypatch overrides it.
+    # ``Path.home()`` would fail under empty $HOME on some systems; fall back
+    # to ``os.path.expanduser`` which handles that gracefully.
+    real_home = Path(os.path.expanduser("~"))
+    mp_dir = real_home / ".mp"
+    if not mp_dir.is_dir():
+        return {}
+    snapshot: dict[str, float] = {}
+    try:
+        for path in mp_dir.rglob("*"):
+            if path.is_file():
+                snapshot[str(path)] = path.stat().st_mtime
+    except OSError:  # pragma: no cover — permission glitch
+        return {}
+    return snapshot
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _no_test_writes_to_real_home_mp(
+    request: pytest.FixtureRequest,
+) -> Generator[None, None, None]:
+    """Fail loud if any test wrote under the developer's real ``~/.mp/``.
+
+    Snapshots ``~/.mp/`` mtimes at session start and re-checks at session
+    end. If any file changed (or new files appeared), the test that did
+    it leaked outside its tmpdir — which would silently corrupt the
+    developer's real config / token cache. This fixture catches the
+    regression once per session rather than per-test (cheap to run).
+
+    The check is best-effort: missing or unreadable ``~/.mp/`` is
+    treated as "nothing to protect" and the fixture is a no-op.
+    """
+    before = _snapshot_real_mp_dir()
+    yield
+    after = _snapshot_real_mp_dir()
+    changed = sorted(p for p, mtime in after.items() if before.get(p) != mtime)
+    new = sorted(set(after) - set(before))
+    removed = sorted(set(before) - set(after))
+    if changed or new or removed:
+        pytest.fail(
+            "Test(s) leaked writes to the developer's real ~/.mp/.\n"
+            "Each test MUST monkeypatch HOME / MP_CONFIG_PATH / "
+            "MP_OAUTH_STORAGE_DIR to a tmp_path. Offenders:\n"
+            f"  changed: {changed}\n"
+            f"  new:     {new}\n"
+            f"  removed: {removed}"
+        )
+
+
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
     """Create a temporary directory for test files."""

@@ -178,8 +178,11 @@ class TestWorkspaceConstructionWithOAuth:
         Uses OAuth tokens stored on disk and partial env vars to resolve
         OAuth credentials during Workspace construction.
         """
-        # Set up OAuth tokens on disk
-        oauth_dir = temp_dir / "oauth"
+        # Set up OAuth tokens on disk under the new <root>/oauth/ layout
+        # (Fix 7 made MP_OAUTH_STORAGE_DIR name the *root*).
+        storage_root = temp_dir / "mp_root"
+        oauth_dir = storage_root / "oauth"
+        oauth_dir.mkdir(parents=True)
         oauth_storage = OAuthStorage(storage_dir=oauth_dir)
         tokens = OAuthTokens(
             access_token=SecretStr("test-oauth-token"),
@@ -192,10 +195,10 @@ class TestWorkspaceConstructionWithOAuth:
         oauth_storage.save_tokens(tokens, region="us")
 
         # Use partial env vars (project_id + region but NO username/secret)
-        # and point OAuth storage to our temp dir
+        # and point storage root to our temp dir.
         monkeypatch.setenv("MP_PROJECT_ID", "12345")
         monkeypatch.setenv("MP_REGION", "us")
-        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(oauth_dir))
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(storage_root))
 
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
@@ -216,10 +219,12 @@ class TestWorkspaceConstructionWithOAuth:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Workspace still works with Basic Auth credentials (regression)."""
-        # Isolate OAuth storage so real tokens on the machine are not found
-        oauth_dir = temp_dir / "empty_oauth"
-        oauth_dir.mkdir()
-        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(oauth_dir))
+        # Isolate OAuth storage so real tokens on the machine are not found.
+        # MP_OAUTH_STORAGE_DIR names the *root* per Fix 7; we just need an
+        # empty location.
+        empty_root = temp_dir / "empty_root"
+        empty_root.mkdir()
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(empty_root))
 
         basic_creds = _make_basic_credentials()
         transport = httpx.MockTransport(lambda _r: httpx.Response(200, json=[]))

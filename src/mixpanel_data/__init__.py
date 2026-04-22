@@ -60,7 +60,6 @@ from mixpanel_data._literal_types import (
     TimeUnit,
 )
 from mixpanel_data.exceptions import (
-    AccountAccessError,
     AccountExistsError,
     AccountInUseError,
     AccountNotFoundError,
@@ -306,7 +305,6 @@ __all__ = [
     "session",
     "targets",
     # Auth redesign (042) exceptions
-    "AccountAccessError",
     "AccountInUseError",
     # Auth v2 types
     "AuthCredential",

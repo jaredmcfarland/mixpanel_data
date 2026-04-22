@@ -54,10 +54,10 @@ from mixpanel_data._internal.api_client import (
 from mixpanel_data._internal.auth.account import Account as _AccountUnion
 from mixpanel_data._internal.auth.bridge import load_bridge as _load_bridge_v3
 from mixpanel_data._internal.auth.resolver import (
-    _format_no_project_error as _format_no_project_error_v3,
+    format_no_project_error as _format_no_project_error_v3,
 )
 from mixpanel_data._internal.auth.resolver import (
-    _resolve_project_axis as _resolve_project_axis_v3,
+    resolve_project_axis as _resolve_project_axis_v3,
 )
 from mixpanel_data._internal.auth.resolver import resolve_session as _resolve_session_v3
 from mixpanel_data._internal.auth.session import (
@@ -381,7 +381,7 @@ class Workspace:
         workspace_id: int | None = None,
         credential: str | None = None,
         *,
-        # 042 redesign keyword-only kwargs (additive — coexists with legacy).
+        # keyword-only kwargs (additive — coexists with legacy).
         project: str | None = None,
         workspace: int | None = None,
         target: str | None = None,
@@ -418,13 +418,13 @@ class Workspace:
             workspace_id: Optional workspace ID for scoped App API requests
                 (LEGACY kwarg).
             credential: Credential name (v2 config path; LEGACY kwarg).
-            project: Project ID (042 redesign kwarg; mutually exclusive with
+            project: Project ID (kwarg; mutually exclusive with
                 ``target``).
-            workspace: Workspace ID (042 redesign kwarg; mutually exclusive
+            workspace: Workspace ID (kwarg; mutually exclusive
                 with ``target``).
-            target: Apply this target's three axes (042 redesign kwarg;
+            target: Apply this target's three axes (kwarg;
                 mutually exclusive with ``account``/``project``/``workspace``).
-            session: Pre-built Session (042 redesign — full bypass of the
+            session: Pre-built Session (full bypass of the
                 resolver).
             _config_manager: Injected ConfigManager for testing (legacy path).
             _api_client: Injected MixpanelAPIClient for testing.
@@ -434,7 +434,7 @@ class Workspace:
             ConfigError: If no credentials can be resolved.
             AccountNotFoundError: If named account doesn't exist.
         """
-        # 042 redesign path: triggered by any new kwarg OR a v3 config on disk.
+        # path: triggered by any new kwarg OR a v3 config on disk.
         v3_kwargs_set = (
             session is not None
             or project is not None
@@ -576,7 +576,7 @@ class Workspace:
         session: _SessionV3 | None,
         _api_client: MixpanelAPIClient | None,
     ) -> None:
-        """Initialize the v3 (042 redesign) code path.
+        """Initialize the v3 code path.
 
         Either consumes a pre-built ``Session`` (full bypass) or routes
         through :func:`resolve_session` to build one from per-axis inputs.
@@ -628,13 +628,12 @@ class Workspace:
                 # Always overwrite — the bridge is the authoritative
                 # source of truth at startup, so a refreshed payload from
                 # the host must replace any stale on-disk cache here.
+                # ``OAuthTokens.expires_at`` is always set (required, tz-aware
+                # per Fix 25) — no fall-through to None which would trip the
+                # OnDiskTokenResolver expiry check.
                 payload = {
                     "access_token": br.tokens.access_token.get_secret_value(),
-                    "expires_at": (
-                        br.tokens.expires_at.isoformat()
-                        if br.tokens.expires_at
-                        else None
-                    ),
+                    "expires_at": br.tokens.expires_at.isoformat(),
                     "scope": br.tokens.scope or "read",
                     "token_type": br.tokens.token_type,
                 }
@@ -677,7 +676,7 @@ class Workspace:
         if not hasattr(self, "_v3_session") or self._v3_session is None:
             raise RuntimeError(
                 "Workspace.account is only available when constructed via the "
-                "042 redesign path (pass project=, target=, or session=, or "
+                "path (pass project=, target=, or session=, or "
                 "use a v3 ~/.mp/config.toml)."
             )
         return self._v3_session.account
@@ -693,27 +692,21 @@ class Workspace:
             RuntimeError: If constructed via the legacy path.
         """
         if not hasattr(self, "_v3_session") or self._v3_session is None:
-            raise RuntimeError(
-                "Workspace.project is only available via the 042 redesign path."
-            )
+            raise RuntimeError("Workspace.project is only available via the path.")
         return self._v3_session.project
 
     @property
     def workspace(self) -> _WorkspaceRefV3 | None:
         """Return the resolved :class:`WorkspaceRef` (or None for lazy)."""
         if not hasattr(self, "_v3_session") or self._v3_session is None:
-            raise RuntimeError(
-                "Workspace.workspace is only available via the 042 redesign path."
-            )
+            raise RuntimeError("Workspace.workspace is only available via the path.")
         return self._v3_session.workspace
 
     @property
     def session(self) -> _SessionV3:
         """Return the bound :class:`Session`."""
         if not hasattr(self, "_v3_session") or self._v3_session is None:
-            raise RuntimeError(
-                "Workspace.session is only available via the 042 redesign path."
-            )
+            raise RuntimeError("Workspace.session is only available via the path.")
         return self._v3_session
 
     # ---- v3 in-session switching --------------------------------------

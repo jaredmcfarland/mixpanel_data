@@ -19,8 +19,10 @@ from __future__ import annotations
 import os
 import stat
 import sys
+from collections.abc import Generator
+from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -30,8 +32,6 @@ else:  # pragma: no cover - py3.10 fallback (tomllib added in 3.11)
     # `python_version < '3.11'` extra dep isn't pulled in. `unused-ignore`
     # silences mypy on the platform where the ignore is in fact unused.
     import tomli as tomllib  # type: ignore[import-not-found, unused-ignore]
-
-import contextlib
 
 import tomli_w
 from pydantic import SecretStr, TypeAdapter, ValidationError
@@ -44,67 +44,17 @@ from mixpanel_data._internal.auth.account import (
     ServiceAccount,
 )
 from mixpanel_data._internal.auth.session import ActiveSession
+from mixpanel_data._internal.io_utils import atomic_write_bytes
 from mixpanel_data.exceptions import (
     AccountInUseError,
     ConfigError,
 )
 from mixpanel_data.types import AccountSummary, Target
 
-if TYPE_CHECKING:
-    pass
-
-
-_LEGACY_DETECTED_MESSAGE = (
-    "Legacy config schema detected at {path}.\n"
-    "\n"
-    "This version of mixpanel_data uses a single unified schema. Convert "
-    "your config:\n"
-    "\n"
-    "  mp config convert\n"
-    "\n"
-    "After conversion, your old config will be archived as {path}.legacy."
-)
-
-
 _DEFAULT_CONFIG_PATH = Path.home() / ".mp" / "config.toml"
 
 
 _account_adapter: TypeAdapter[Account] = TypeAdapter(Account)
-
-
-def _is_legacy(raw: dict[str, Any]) -> bool:
-    """Return True if the parsed TOML carries any v1, v2, or pre-redesign marker.
-
-    Markers (any one triggers detection):
-        - root key ``config_version`` (v2 marker)
-        - root key ``default`` (v1 marker)
-        - root section ``[credentials]`` (v2 marker)
-        - root section ``[projects]`` (v2 marker)
-        - inside any ``[accounts.X]``: a ``project_id`` key (v1 marker)
-        - ``[active].project`` (v3-pre-redesign marker — project moved onto
-          the account as ``default_project`` per FR-012)
-
-    Args:
-        raw: Parsed TOML as a dict.
-
-    Returns:
-        ``True`` if any legacy marker is present.
-    """
-    if "config_version" in raw:
-        return True
-    if "default" in raw:
-        return True
-    if "credentials" in raw and isinstance(raw["credentials"], dict):
-        return True
-    if "projects" in raw and isinstance(raw["projects"], dict):
-        return True
-    accounts = raw.get("accounts")
-    if isinstance(accounts, dict):
-        for block in accounts.values():
-            if isinstance(block, dict) and "project_id" in block:
-                return True
-    active = raw.get("active")
-    return isinstance(active, dict) and "project" in active
 
 
 def _account_from_block(name: str, block: dict[str, Any]) -> Account:
@@ -190,13 +140,18 @@ class ConfigManager:
     # ---- internals ---------------------------------------------------
 
     def _read_raw(self) -> dict[str, Any]:
-        """Parse the TOML file and reject legacy schemas.
+        """Parse the TOML file.
 
         Returns:
             Raw parsed dict. Empty dict if file does not exist.
 
         Raises:
-            ConfigError: Malformed TOML or legacy schema detected.
+            ConfigError: Malformed TOML. Legacy v1/v2 schemas are no
+                longer detected with a friendly message — they fail at
+                the Pydantic validation layer with an "unexpected key"
+                error. Under the alpha "free to break" lens the user is
+                expected to delete the file and re-add via ``mp account
+                add``.
         """
         if not self._path.exists():
             return {}
@@ -204,33 +159,272 @@ class ConfigManager:
             raw: dict[str, Any] = tomllib.loads(self._path.read_text(encoding="utf-8"))
         except (tomllib.TOMLDecodeError, OSError) as exc:
             raise ConfigError(f"Could not parse config at {self._path}: {exc}") from exc
-        if _is_legacy(raw):
-            raise ConfigError(
-                _LEGACY_DETECTED_MESSAGE.format(path=self._path),
-                details={"path": str(self._path), "schema": "legacy"},
-            )
         return raw
 
     def _write_raw(self, raw: dict[str, Any]) -> None:
         """Serialize ``raw`` to the config file with restrictive permissions.
 
         Creates parent dirs (``~/.mp/``) with mode ``0o700`` and writes the
-        file with mode ``0o600``.
+        file atomically with mode ``0o600`` via :func:`atomic_write_bytes`.
 
         Args:
             raw: Dict to serialize as TOML.
         """
         self._path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         # Tighten parent dir permissions in case it pre-existed with 0o755.
-        with contextlib.suppress(OSError):
+        with suppress(OSError):
             self._path.parent.chmod(stat.S_IRWXU)
-        old_umask = os.umask(0o177)
+        atomic_write_bytes(self._path, tomli_w.dumps(raw).encode("utf-8"))
+
+    @contextmanager
+    def _mutate(self) -> Generator[dict[str, Any], None, None]:
+        """Open a single read-modify-write transaction on the raw config dict.
+
+        The dict is read once at entry and written once at exit. If the
+        body raises, the write is skipped — partial mutations never reach
+        disk. Multiple in-package callers (``Workspace._persist_active``,
+        ``mp.session.use``, ``mp.accounts.add``) compose several
+        ``_apply_*`` mutations within a single transaction so the
+        end-to-end operation is atomic, not just per-mutator.
+
+        Yields:
+            The parsed raw dict, mutated in place.
+
+        Raises:
+            ConfigError: Propagated from ``_read_raw`` or ``_apply_*`` helpers.
+        """
+        raw = self._read_raw()
+        yield raw
+        self._write_raw(raw)
+
+    @staticmethod
+    def _apply_set_active(
+        raw: dict[str, Any],
+        *,
+        account: str | None = None,
+        workspace: int | None = None,
+    ) -> None:
+        """In-place ``[active]`` mutation shared by ``set_active`` and multi-call sites.
+
+        Each kwarg is independent: ``None`` leaves that axis untouched.
+        Validates account existence and workspace shape before mutating.
+
+        Args:
+            raw: Parsed TOML dict (mutated in place).
+            account: New active account name (must reference an existing account).
+            workspace: New active workspace ID (positive integer).
+
+        Raises:
+            ConfigError: Account not configured, or workspace not a positive int.
+        """
+        active_block = raw.setdefault("active", {})
+        if account is not None:
+            accounts_block = raw.get("accounts", {}) or {}
+            if account not in accounts_block:
+                raise ConfigError(
+                    f"Cannot set active account: '{account}' is not configured."
+                )
+            active_block["account"] = account
+        if workspace is not None:
+            ConfigManager._validate_workspace_id(workspace)
+            active_block["workspace"] = workspace
+
+    @staticmethod
+    def _apply_clear_active(
+        raw: dict[str, Any],
+        *,
+        account: bool = False,
+        workspace: bool = False,
+    ) -> None:
+        """In-place ``[active]`` axis-removal shared by ``clear_active`` and multi-call sites.
+
+        Args:
+            raw: Parsed TOML dict (mutated in place).
+            account: Drop ``[active].account`` if True.
+            workspace: Drop ``[active].workspace`` if True.
+        """
+        active_block = raw.get("active", {}) or {}
+        if account and "account" in active_block:
+            del active_block["account"]
+        if workspace and "workspace" in active_block:
+            del active_block["workspace"]
+        if active_block:
+            raw["active"] = active_block
+        else:
+            raw.pop("active", None)
+
+    @staticmethod
+    def _apply_update_account(
+        raw: dict[str, Any],
+        name: str,
+        *,
+        region: Region | None = None,
+        default_project: str | None = None,
+        username: str | None = None,
+        secret: SecretStr | str | None = None,
+        token: SecretStr | str | None = None,
+        token_env: str | None = None,
+    ) -> Account:
+        """In-place per-account mutation shared by ``update_account`` and multi-call sites.
+
+        Args:
+            raw: Parsed TOML dict (mutated in place).
+            name: Account name to update (must already exist).
+            region: New region.
+            default_project: New default project ID (digit string).
+            username: New username (service_account only).
+            secret: New secret (service_account only).
+            token: New inline token (oauth_token only).
+            token_env: New env-var name (oauth_token only).
+
+        Returns:
+            The updated :class:`Account`.
+
+        Raises:
+            ConfigError: Account not found, type-incompatible field, or
+                validation failure.
+        """
+        accounts_block = raw.get("accounts", {}) or {}
+        if name not in accounts_block:
+            raise ConfigError(f"Account '{name}' not found.")
+        block = dict(accounts_block[name])
+        acct_type = block.get("type")
+
+        if region is not None:
+            block["region"] = region
+        if default_project is not None:
+            block["default_project"] = default_project
+        if username is not None:
+            if acct_type != "service_account":
+                raise ConfigError(
+                    f"`username` only applies to service_account "
+                    f"(account '{name}' is {acct_type!r})."
+                )
+            block["username"] = username
+        if secret is not None:
+            if acct_type != "service_account":
+                raise ConfigError(
+                    f"`secret` only applies to service_account "
+                    f"(account '{name}' is {acct_type!r})."
+                )
+            block["secret"] = (
+                secret.get_secret_value() if isinstance(secret, SecretStr) else secret
+            )
+        if token is not None or token_env is not None:
+            if acct_type != "oauth_token":
+                raise ConfigError(
+                    f"`token`/`token_env` only apply to oauth_token "
+                    f"(account '{name}' is {acct_type!r})."
+                )
+            if token is not None and token_env is not None:
+                raise ConfigError(
+                    "OAuthTokenAccount: `token` and `token_env` are mutually exclusive."
+                )
+            block.pop("token", None)
+            block.pop("token_env", None)
+            if token is not None:
+                block["token"] = (
+                    token.get_secret_value() if isinstance(token, SecretStr) else token
+                )
+            else:
+                assert token_env is not None
+                block["token_env"] = token_env
+
         try:
-            self._path.write_bytes(tomli_w.dumps(raw).encode("utf-8"))
-        finally:
-            os.umask(old_umask)
-        with contextlib.suppress(OSError):
-            self._path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            account = _account_adapter.validate_python({"name": name, **block})
+        except ValidationError as exc:
+            raise ConfigError(
+                f"Invalid account fields for '{name}': "
+                f"{exc.errors(include_url=False)[0]['msg']}"
+            ) from exc
+        accounts_block[name] = _account_to_block(account)
+        return account
+
+    @staticmethod
+    def _apply_add_account(
+        raw: dict[str, Any],
+        name: str,
+        *,
+        type: AccountType,  # noqa: A002 — matches public surface
+        region: Region,
+        default_project: str | None = None,
+        username: str | None = None,
+        secret: SecretStr | str | None = None,
+        token: SecretStr | str | None = None,
+        token_env: str | None = None,
+    ) -> Account:
+        """In-place ``[accounts.NAME]`` insertion shared by ``add_account`` and ``mp.accounts.add``.
+
+        Per FR-004, ``default_project`` is REQUIRED at add-time for
+        ``service_account`` and ``oauth_token``; optional for ``oauth_browser``
+        (backfilled by ``mp account login``).
+
+        Args:
+            raw: Parsed TOML dict (mutated in place).
+            name: New account name.
+            type: One of ``service_account`` / ``oauth_browser`` / ``oauth_token``.
+            region: One of ``us`` / ``eu`` / ``in``.
+            default_project: Numeric project ID (string).
+            username: Required for ``service_account``.
+            secret: Required for ``service_account``.
+            token: For ``oauth_token`` (mutually exclusive with ``token_env``).
+            token_env: For ``oauth_token`` (mutually exclusive with ``token``).
+
+        Returns:
+            The constructed :class:`Account`.
+
+        Raises:
+            ConfigError: Duplicate name, missing-required field, validation failure.
+        """
+        accounts_block = raw.setdefault("accounts", {})
+        if name in accounts_block:
+            raise ConfigError(f"Account '{name}' already exists.")
+
+        block: dict[str, Any] = {"type": type, "region": region}
+        if default_project is not None:
+            block["default_project"] = default_project
+        if type == "service_account":
+            if username is None or secret is None:
+                raise ConfigError("ServiceAccount requires `username` and `secret`.")
+            if default_project is None:
+                raise ConfigError(
+                    "ServiceAccount requires `default_project` at add-time."
+                )
+            block["username"] = username
+            block["secret"] = (
+                secret.get_secret_value() if isinstance(secret, SecretStr) else secret
+            )
+        elif type == "oauth_browser":
+            pass  # default_project is optional; populated by `mp account login` later.
+        elif type == "oauth_token":
+            if (token is None) == (token_env is None):
+                raise ConfigError(
+                    "OAuthTokenAccount requires exactly one of `token` or `token_env`."
+                )
+            if default_project is None:
+                raise ConfigError(
+                    "OAuthTokenAccount requires `default_project` at add-time."
+                )
+            if token is not None:
+                block["token"] = (
+                    token.get_secret_value() if isinstance(token, SecretStr) else token
+                )
+            else:
+                assert token_env is not None
+                block["token_env"] = token_env
+        else:  # pragma: no cover — Literal exhaustiveness
+            raise ConfigError(f"Unknown account type: {type!r}")
+
+        try:
+            account = _account_adapter.validate_python({"name": name, **block})
+        except ValidationError as exc:
+            raise ConfigError(
+                f"Invalid account fields for '{name}': "
+                f"{exc.errors(include_url=False)[0]['msg']}"
+            ) from exc
+
+        accounts_block[name] = _account_to_block(account)
+        return account
 
     # ---- accounts ----------------------------------------------------
 
@@ -330,60 +524,18 @@ class ConfigManager:
             ConfigError: Duplicate name, validation failure, or referential
                 integrity violation.
         """
-        raw = self._read_raw()
-        accounts_block = raw.setdefault("accounts", {})
-        if name in accounts_block:
-            raise ConfigError(f"Account '{name}' already exists.")
-
-        # Build a clean block by type.
-        block: dict[str, Any] = {"type": type, "region": region}
-        if default_project is not None:
-            block["default_project"] = default_project
-        if type == "service_account":
-            if username is None or secret is None:
-                raise ConfigError("ServiceAccount requires `username` and `secret`.")
-            if default_project is None:
-                raise ConfigError(
-                    "ServiceAccount requires `default_project` at add-time."
-                )
-            block["username"] = username
-            block["secret"] = (
-                secret.get_secret_value() if isinstance(secret, SecretStr) else secret
+        with self._mutate() as raw:
+            return self._apply_add_account(
+                raw,
+                name,
+                type=type,
+                region=region,
+                default_project=default_project,
+                username=username,
+                secret=secret,
+                token=token,
+                token_env=token_env,
             )
-        elif type == "oauth_browser":
-            # default_project is optional; populated by `mp account login` later.
-            pass
-        elif type == "oauth_token":
-            if (token is None) == (token_env is None):
-                raise ConfigError(
-                    "OAuthTokenAccount requires exactly one of `token` or `token_env`."
-                )
-            if default_project is None:
-                raise ConfigError(
-                    "OAuthTokenAccount requires `default_project` at add-time."
-                )
-            if token is not None:
-                block["token"] = (
-                    token.get_secret_value() if isinstance(token, SecretStr) else token
-                )
-            else:
-                assert token_env is not None
-                block["token_env"] = token_env
-        else:  # pragma: no cover — Literal exhaustiveness
-            raise ConfigError(f"Unknown account type: {type!r}")
-
-        # Validate via the Account model so we catch bad name/region/default_project.
-        try:
-            account = _account_adapter.validate_python({"name": name, **block})
-        except ValidationError as exc:
-            raise ConfigError(
-                f"Invalid account fields for '{name}': "
-                f"{exc.errors(include_url=False)[0]['msg']}"
-            ) from exc
-
-        accounts_block[name] = _account_to_block(account)
-        self._write_raw(raw)
-        return account
 
     def update_account(
         self,
@@ -418,64 +570,17 @@ class ConfigManager:
             ConfigError: Account not found, type-incompatible field, or
                 validation failure.
         """
-        raw = self._read_raw()
-        accounts_block = raw.get("accounts", {}) or {}
-        if name not in accounts_block:
-            raise ConfigError(f"Account '{name}' not found.")
-        block = dict(accounts_block[name])
-        acct_type = block.get("type")
-
-        if region is not None:
-            block["region"] = region
-        if default_project is not None:
-            block["default_project"] = default_project
-        if username is not None:
-            if acct_type != "service_account":
-                raise ConfigError(
-                    f"`username` only applies to service_account "
-                    f"(account '{name}' is {acct_type!r})."
-                )
-            block["username"] = username
-        if secret is not None:
-            if acct_type != "service_account":
-                raise ConfigError(
-                    f"`secret` only applies to service_account "
-                    f"(account '{name}' is {acct_type!r})."
-                )
-            block["secret"] = (
-                secret.get_secret_value() if isinstance(secret, SecretStr) else secret
+        with self._mutate() as raw:
+            return self._apply_update_account(
+                raw,
+                name,
+                region=region,
+                default_project=default_project,
+                username=username,
+                secret=secret,
+                token=token,
+                token_env=token_env,
             )
-        if token is not None or token_env is not None:
-            if acct_type != "oauth_token":
-                raise ConfigError(
-                    f"`token`/`token_env` only apply to oauth_token "
-                    f"(account '{name}' is {acct_type!r})."
-                )
-            if token is not None and token_env is not None:
-                raise ConfigError(
-                    "OAuthTokenAccount: `token` and `token_env` are mutually exclusive."
-                )
-            # Replace whichever pair member is being set; remove the other.
-            block.pop("token", None)
-            block.pop("token_env", None)
-            if token is not None:
-                block["token"] = (
-                    token.get_secret_value() if isinstance(token, SecretStr) else token
-                )
-            else:
-                assert token_env is not None
-                block["token_env"] = token_env
-
-        try:
-            account = _account_adapter.validate_python({"name": name, **block})
-        except ValidationError as exc:
-            raise ConfigError(
-                f"Invalid account fields for '{name}': "
-                f"{exc.errors(include_url=False)[0]['msg']}"
-            ) from exc
-        accounts_block[name] = _account_to_block(account)
-        self._write_raw(raw)
-        return account
 
     def remove_account(self, name: str, *, force: bool = False) -> list[str]:
         """Remove an account.
@@ -495,34 +600,26 @@ class ConfigManager:
             ConfigError: If the account does not exist.
             AccountInUseError: If the account is referenced and ``force=False``.
         """
-        raw = self._read_raw()
-        accounts_block = raw.get("accounts", {}) or {}
-        if name not in accounts_block:
-            raise ConfigError(f"Account '{name}' not found.")
-        targets_block = raw.get("targets", {}) or {}
-        referenced = sorted(
-            tname
-            for tname, tblock in targets_block.items()
-            if isinstance(tblock, dict) and tblock.get("account") == name
-        )
-        if referenced and not force:
-            raise AccountInUseError(name, referenced_by=referenced)
-        del accounts_block[name]
-        # If the removed account was the active one, clear the stale
-        # references so a fresh `Workspace()` doesn't trip on
-        # `Account 'X' not found.` and `session.show()` doesn't keep
-        # printing the deleted name. Workspace is project-scoped, so
-        # it's also dropped — the prior workspace ID is meaningless
-        # without an account.
-        active_block = raw.get("active", {}) or {}
-        if active_block.get("account") == name:
-            active_block.pop("account", None)
-            active_block.pop("workspace", None)
-            if active_block:
-                raw["active"] = active_block
-            else:
-                raw.pop("active", None)
-        self._write_raw(raw)
+        with self._mutate() as raw:
+            accounts_block = raw.get("accounts", {}) or {}
+            if name not in accounts_block:
+                raise ConfigError(f"Account '{name}' not found.")
+            targets_block = raw.get("targets", {}) or {}
+            referenced = sorted(
+                tname
+                for tname, tblock in targets_block.items()
+                if isinstance(tblock, dict) and tblock.get("account") == name
+            )
+            if referenced and not force:
+                raise AccountInUseError(name, referenced_by=referenced)
+            del accounts_block[name]
+            # If the removed account was the active one, drop both axes so a
+            # fresh `Workspace()` doesn't trip on the dangling reference and
+            # `session.show()` doesn't keep printing the deleted name. The
+            # workspace ID is meaningless without its account, so it goes too.
+            active_block = raw.get("active", {}) or {}
+            if active_block.get("account") == name:
+                self._apply_clear_active(raw, account=True, workspace=True)
         return referenced
 
     # ---- active ------------------------------------------------------
@@ -574,21 +671,8 @@ class ConfigManager:
         Raises:
             ConfigError: Validation failure or referential integrity violation.
         """
-        raw = self._read_raw()
-        active_block = raw.setdefault("active", {})
-
-        if account is not None:
-            accounts_block = raw.get("accounts", {}) or {}
-            if account not in accounts_block:
-                raise ConfigError(
-                    f"Cannot set active account: '{account}' is not configured."
-                )
-            active_block["account"] = account
-        if workspace is not None:
-            self._validate_workspace_id(workspace)
-            active_block["workspace"] = workspace
-
-        self._write_raw(raw)
+        with self._mutate() as raw:
+            self._apply_set_active(raw, account=account, workspace=workspace)
         return self.get_active()
 
     def clear_active(
@@ -606,17 +690,8 @@ class ConfigManager:
         Returns:
             The updated ``ActiveSession`` after removals.
         """
-        raw = self._read_raw()
-        active_block = raw.get("active", {}) or {}
-        if account and "account" in active_block:
-            del active_block["account"]
-        if workspace and "workspace" in active_block:
-            del active_block["workspace"]
-        if active_block:
-            raw["active"] = active_block
-        else:
-            raw.pop("active", None)
-        self._write_raw(raw)
+        with self._mutate() as raw:
+            self._apply_clear_active(raw, account=account, workspace=workspace)
         return self.get_active()
 
     # ---- targets -----------------------------------------------------
@@ -693,31 +768,31 @@ class ConfigManager:
         Raises:
             ConfigError: Duplicate name, missing account, or validation failure.
         """
-        raw = self._read_raw()
-        accounts_block = raw.get("accounts", {}) or {}
-        if account not in accounts_block:
-            raise ConfigError(
-                f"Cannot create target '{name}': account '{account}' is not configured."
-            )
-        targets_block = raw.setdefault("targets", {})
-        if name in targets_block:
-            raise ConfigError(f"Target '{name}' already exists.")
+        with self._mutate() as raw:
+            accounts_block = raw.get("accounts", {}) or {}
+            if account not in accounts_block:
+                raise ConfigError(
+                    f"Cannot create target '{name}': "
+                    f"account '{account}' is not configured."
+                )
+            targets_block = raw.setdefault("targets", {})
+            if name in targets_block:
+                raise ConfigError(f"Target '{name}' already exists.")
 
-        try:
-            target = Target(
-                name=name, account=account, project=project, workspace=workspace
-            )
-        except ValidationError as exc:
-            raise ConfigError(
-                f"Invalid target fields for '{name}': "
-                f"{exc.errors(include_url=False)[0]['msg']}"
-            ) from exc
+            try:
+                target = Target(
+                    name=name, account=account, project=project, workspace=workspace
+                )
+            except ValidationError as exc:
+                raise ConfigError(
+                    f"Invalid target fields for '{name}': "
+                    f"{exc.errors(include_url=False)[0]['msg']}"
+                ) from exc
 
-        block: dict[str, Any] = {"account": account, "project": project}
-        if workspace is not None:
-            block["workspace"] = workspace
-        targets_block[name] = block
-        self._write_raw(raw)
+            block: dict[str, Any] = {"account": account, "project": project}
+            if workspace is not None:
+                block["workspace"] = workspace
+            targets_block[name] = block
         return target
 
     def remove_target(self, name: str) -> None:
@@ -729,12 +804,11 @@ class ConfigManager:
         Raises:
             ConfigError: If the target does not exist.
         """
-        raw = self._read_raw()
-        targets_block = raw.get("targets", {}) or {}
-        if name not in targets_block:
-            raise ConfigError(f"Target '{name}' not found.")
-        del targets_block[name]
-        self._write_raw(raw)
+        with self._mutate() as raw:
+            targets_block = raw.get("targets", {}) or {}
+            if name not in targets_block:
+                raise ConfigError(f"Target '{name}' not found.")
+            del targets_block[name]
 
     def apply_target(self, name: str) -> ActiveSession:
         """Write the target to config in a single atomic save.
@@ -757,24 +831,34 @@ class ConfigManager:
             ConfigError: If the target does not exist OR its referenced
                 account is no longer configured.
         """
-        target = self.get_target(name)
-        raw = self._read_raw()
-        accounts_block = raw.get("accounts", {}) or {}
-        if target.account not in accounts_block:
-            raise ConfigError(
-                f"Cannot apply target '{name}': account '{target.account}' "
-                f"is not configured."
-            )
-        # Update target account's default_project to match the target's project.
-        account_block = dict(accounts_block[target.account])
-        account_block["default_project"] = target.project
-        accounts_block[target.account] = account_block
-        # Replace [active] wholesale: a target with no workspace clears prior workspace.
-        active_block: dict[str, Any] = {"account": target.account}
-        if target.workspace is not None:
-            active_block["workspace"] = target.workspace
-        raw["active"] = active_block
-        self._write_raw(raw)
+        with self._mutate() as raw:
+            targets_block = raw.get("targets", {}) or {}
+            target_block = targets_block.get(name)
+            if not isinstance(target_block, dict):
+                raise ConfigError(f"Target '{name}' not found.")
+            try:
+                target = Target(name=name, **target_block)
+            except ValidationError as exc:
+                raise ConfigError(
+                    f"Invalid [targets.{name}] block: "
+                    f"{exc.errors(include_url=False)[0]['msg']}"
+                ) from exc
+            accounts_block = raw.get("accounts", {}) or {}
+            if target.account not in accounts_block:
+                raise ConfigError(
+                    f"Cannot apply target '{name}': "
+                    f"account '{target.account}' is not configured."
+                )
+            # Update target account's default_project to match the target's project.
+            account_block = dict(accounts_block[target.account])
+            account_block["default_project"] = target.project
+            accounts_block[target.account] = account_block
+            # Replace [active] wholesale — a target with no workspace clears
+            # any prior workspace pin.
+            active_block: dict[str, Any] = {"account": target.account}
+            if target.workspace is not None:
+                active_block["workspace"] = target.workspace
+            raw["active"] = active_block
         return self.get_active()
 
     # ---- settings ----------------------------------------------------
@@ -812,10 +896,9 @@ class ConfigManager:
             name: Header name (e.g., ``X-Mixpanel-Cluster``).
             value: Header value.
         """
-        raw = self._read_raw()
-        settings = raw.setdefault("settings", {})
-        settings["custom_header"] = {"name": name, "value": value}
-        self._write_raw(raw)
+        with self._mutate() as raw:
+            settings = raw.setdefault("settings", {})
+            settings["custom_header"] = {"name": name, "value": value}
 
     # ---- validators --------------------------------------------------
 

@@ -1,10 +1,8 @@
-"""Unit tests for the v3 ``ConfigManager`` (T019).
+"""Unit tests for the ``ConfigManager``.
 
-The v3 ConfigManager operates on a single TOML schema with three sections:
+The ConfigManager operates on a single TOML schema with three sections:
 ``[active]``, ``[accounts.NAME]``, ``[targets.NAME]``, plus optional
-``[settings]``. There is no ``config_version`` field; legacy v1 / v2
-configs are detected and rejected with a precise error pointing at
-``mp config convert``. The ``[active]`` block holds only ``account`` and
+``[settings]``. The ``[active]`` block holds only ``account`` and
 ``workspace`` — project lives on the account as ``default_project``.
 
 Reference: specs/042-auth-architecture-redesign/contracts/config-schema.md §1.
@@ -532,115 +530,6 @@ class TestRemoveAccount:
         assert cm.get_active() == ActiveSession(account="active_one", workspace=42)
 
 
-class TestLegacyDetectionV1:
-    """v1 marker detection — at least one of these triggers ConfigError."""
-
-    @pytest.mark.parametrize(
-        "fixture",
-        ["v1_simple.toml", "v1_multi.toml", "v1_with_oauth_orphan.toml"],
-    )
-    def test_v1_fixtures_rejected(self, fixture: str, tmp_path: Path) -> None:
-        """All three v1 fixtures raise on load."""
-        # Copy the fixture to a tmp location (don't pollute the repo's fixtures).
-        src = _FIXTURE_DIR / fixture
-        dst = tmp_path / "config.toml"
-        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-        cm = ConfigManager(config_path=dst)
-        with pytest.raises(ConfigError) as excinfo:
-            cm.list_accounts()  # any read should trip detection
-        assert "Legacy config schema detected" in str(excinfo.value)
-        assert "mp config convert" in str(excinfo.value)
-
-    def test_default_marker(self, tmp_path: Path) -> None:
-        """A bare ``default = "X"`` field at root triggers detection."""
-        p = tmp_path / "config.toml"
-        p.write_text('default = "x"\n', encoding="utf-8")
-        cm = ConfigManager(config_path=p)
-        with pytest.raises(ConfigError, match="Legacy config schema detected"):
-            cm.list_accounts()
-
-    def test_inline_project_id_marker(self, tmp_path: Path) -> None:
-        """A ``[accounts.X].project_id`` triggers v1 detection."""
-        p = tmp_path / "config.toml"
-        p.write_text(
-            (
-                "[accounts.x]\n"
-                'username = "u"\n'
-                'secret = "s"\n'
-                'project_id = "1"\n'
-                'region = "us"\n'
-            ),
-            encoding="utf-8",
-        )
-        cm = ConfigManager(config_path=p)
-        with pytest.raises(ConfigError, match="Legacy config schema detected"):
-            cm.list_accounts()
-
-    def test_active_project_marker(self, tmp_path: Path) -> None:
-        """``[active].project`` triggers v3-pre-redesign legacy detection."""
-        p = tmp_path / "config.toml"
-        p.write_text(
-            ('[active]\naccount = "x"\nproject = "3713224"\n'),
-            encoding="utf-8",
-        )
-        cm = ConfigManager(config_path=p)
-        with pytest.raises(ConfigError, match="Legacy config schema detected"):
-            cm.list_accounts()
-
-
-class TestLegacyDetectionV2:
-    """v2 marker detection."""
-
-    @pytest.mark.parametrize(
-        "fixture",
-        ["v2_simple.toml", "v2_multi.toml", "v2_with_custom_header.toml"],
-    )
-    def test_v2_fixtures_rejected(self, fixture: str, tmp_path: Path) -> None:
-        """All three v2 fixtures raise on load."""
-        src = _FIXTURE_DIR / fixture
-        dst = tmp_path / "config.toml"
-        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-        cm = ConfigManager(config_path=dst)
-        with pytest.raises(ConfigError, match="Legacy config schema detected"):
-            cm.list_accounts()
-
-    def test_config_version_marker(self, tmp_path: Path) -> None:
-        """``config_version = 2`` alone triggers detection."""
-        p = tmp_path / "config.toml"
-        p.write_text("config_version = 2\n", encoding="utf-8")
-        cm = ConfigManager(config_path=p)
-        with pytest.raises(ConfigError, match="Legacy config schema detected"):
-            cm.list_accounts()
-
-    def test_credentials_section(self, tmp_path: Path) -> None:
-        """``[credentials.X]`` section triggers detection."""
-        p = tmp_path / "config.toml"
-        p.write_text(
-            (
-                "[credentials.x]\n"
-                'type = "service_account"\n'
-                'region = "us"\n'
-                'username = "u"\n'
-                'secret = "s"\n'
-            ),
-            encoding="utf-8",
-        )
-        cm = ConfigManager(config_path=p)
-        with pytest.raises(ConfigError, match="Legacy config schema detected"):
-            cm.list_accounts()
-
-    def test_projects_section(self, tmp_path: Path) -> None:
-        """``[projects.X]`` section triggers detection."""
-        p = tmp_path / "config.toml"
-        p.write_text(
-            ('[projects.ecom]\ncredential = "x"\nproject_id = "1"\n'),
-            encoding="utf-8",
-        )
-        cm = ConfigManager(config_path=p)
-        with pytest.raises(ConfigError, match="Legacy config schema detected"):
-            cm.list_accounts()
-
-
 class TestV3FixtureLoad:
     """The v3 golden fixtures load cleanly with the expected shape."""
 
@@ -687,3 +576,75 @@ class TestSettingsCustomHeader:
     def test_get_custom_header_when_absent(self, cm: ConfigManager) -> None:
         """``get_custom_header`` returns None when no header is set."""
         assert cm.get_custom_header() is None
+
+
+class TestMutateTransaction:
+    """``_mutate()`` collapses N read-modify-write cycles into one transaction."""
+
+    def test_single_write_per_transaction(self, cm: ConfigManager) -> None:
+        """A multi-call _mutate() block performs exactly one disk write."""
+        # Seed the file so subsequent writes go through atomic_write_bytes.
+        cm.add_account(
+            "x",
+            type="service_account",
+            region="us",
+            default_project="123",
+            username="u",
+            secret=SecretStr("s"),
+        )
+
+        from unittest.mock import patch
+
+        with patch(
+            "mixpanel_data._internal.config_v3.atomic_write_bytes"
+        ) as mock_write:
+            with cm._mutate() as raw:
+                cm._apply_set_active(raw, account="x", workspace=42)
+                cm._apply_update_account(raw, "x", default_project="456")
+            assert mock_write.call_count == 1
+
+    def test_aborted_transaction_does_not_write(self, cm: ConfigManager) -> None:
+        """An exception inside the body skips the write entirely."""
+        cm.add_account(
+            "x",
+            type="service_account",
+            region="us",
+            default_project="123",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        original = cm.config_path.read_bytes()
+
+        with pytest.raises(RuntimeError, match="boom"), cm._mutate() as raw:
+            cm._apply_set_active(raw, account="x", workspace=42)
+            raise RuntimeError("boom")
+
+        # Disk state preserved — no partial mutation reached the file.
+        assert cm.config_path.read_bytes() == original
+        assert cm.get_active() == ActiveSession()
+
+    def test_multi_call_atomicity_on_validation_failure(
+        self, cm: ConfigManager
+    ) -> None:
+        """A failed step late in a transaction discards earlier mutations."""
+        cm.add_account(
+            "x",
+            type="service_account",
+            region="us",
+            default_project="123",
+            username="u",
+            secret=SecretStr("s"),
+        )
+
+        with (
+            pytest.raises(ConfigError, match="not configured"),
+            cm._mutate() as raw,
+        ):
+            cm._apply_update_account(raw, "x", default_project="999")
+            # This raises — the prior _apply_update_account must NOT persist.
+            cm._apply_set_active(raw, account="missing-account")
+
+        # default_project unchanged on disk.
+        cm2 = ConfigManager(config_path=cm.config_path)
+        account = cm2.get_account("x")
+        assert account.default_project == "123"

@@ -162,3 +162,41 @@ def test_session_typeadapter_roundtrip_preserves_equality(s: Session) -> None:
     assert rebuilt.account == s.account
     assert rebuilt.project == s.project
     assert rebuilt.workspace == s.workspace
+
+
+@given(sessions())
+def test_session_auth_header_format(s: Session) -> None:
+    """``Session.auth_header`` always returns a ``Basic ...`` or ``Bearer ...`` string.
+
+    The exact prefix depends on the account variant:
+    - ``ServiceAccount`` → ``Basic <base64>``
+    - ``OAuthBrowserAccount`` / ``OAuthTokenAccount`` → ``Bearer <token>``
+
+    A fake :class:`TokenResolver` is supplied so the OAuth variants don't
+    need real on-disk tokens.
+    """
+    from mixpanel_data._internal.auth.account import (
+        OAuthTokenAccount as _OAuthTokenAccount,
+    )
+    from mixpanel_data._internal.auth.account import (
+        TokenResolver as _TokenResolver,
+    )
+
+    class _FakeResolver(_TokenResolver):
+        """Always returns the same opaque token; never reads disk."""
+
+        def get_browser_token(self, name: str, region: str) -> str:
+            return "fake-browser-token"
+
+        def get_static_token(self, account: _OAuthTokenAccount) -> str:
+            return "fake-static-token"
+
+    header = s.auth_header(token_resolver=_FakeResolver())
+    if s.account.type == "service_account":
+        assert header.startswith("Basic ")
+    else:
+        assert header.startswith("Bearer ")
+    # Whichever prefix, the value after the space is non-empty.
+    prefix, _, value = header.partition(" ")
+    assert prefix in {"Basic", "Bearer"}
+    assert value

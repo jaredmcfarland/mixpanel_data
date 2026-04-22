@@ -22,7 +22,6 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from mixpanel_data._internal.auth.account import (
     OAuthTokenAccount,
@@ -30,9 +29,6 @@ from mixpanel_data._internal.auth.account import (
     TokenResolver,
 )
 from mixpanel_data.exceptions import OAuthError
-
-if TYPE_CHECKING:
-    pass
 
 
 def _account_tokens_path(name: str) -> Path:
@@ -116,51 +112,61 @@ class OnDiskTokenResolver(TokenResolver):
             )
 
         expires_raw = payload.get("expires_at")
-        if isinstance(expires_raw, str) and expires_raw:
-            try:
-                expires_at = datetime.fromisoformat(expires_raw)
-            except ValueError as exc:
-                raise OAuthError(
-                    (
-                        f"OAuth tokens for account '{name}' have an invalid "
-                        f"`expires_at` value: {expires_raw!r}."
-                    ),
-                    code="OAUTH_TOKEN_ERROR",
-                    details={"account_name": name, "path": str(path)},
-                ) from exc
-            now = datetime.now(timezone.utc)
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at <= now + timedelta(seconds=30):
-                refresh = payload.get("refresh_token")
-                if not isinstance(refresh, str) or not refresh:
-                    raise OAuthError(
-                        (
-                            f"OAuth access token for account '{name}' has "
-                            f"expired and no refresh token is available. "
-                            f"Re-run `mp account login {name}`."
-                        ),
-                        code="OAUTH_TOKEN_ERROR",
-                        details={
-                            "account_name": name,
-                            "region": region,
-                            "path": str(path),
-                        },
-                    )
-                # Refresh path — delegated to OAuthFlow in a later phase.
+        if not isinstance(expires_raw, str) or not expires_raw:
+            raise OAuthError(
+                (
+                    f"OAuth tokens for account '{name}' are missing "
+                    f"`expires_at`. A token without a known expiry would "
+                    f"silently be treated as valid forever; re-run "
+                    f"`mp account login {name}` to refresh."
+                ),
+                code="OAUTH_TOKEN_ERROR",
+                details={"account_name": name, "path": str(path)},
+            )
+        try:
+            expires_at = datetime.fromisoformat(expires_raw)
+        except ValueError as exc:
+            raise OAuthError(
+                (
+                    f"OAuth tokens for account '{name}' have an invalid "
+                    f"`expires_at` value: {expires_raw!r}."
+                ),
+                code="OAUTH_TOKEN_ERROR",
+                details={"account_name": name, "path": str(path)},
+            ) from exc
+        now = datetime.now(timezone.utc)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= now + timedelta(seconds=30):
+            refresh = payload.get("refresh_token")
+            if not isinstance(refresh, str) or not refresh:
                 raise OAuthError(
                     (
                         f"OAuth access token for account '{name}' has "
-                        f"expired. Token refresh is not yet wired up; re-run "
-                        f"`mp account login {name}` to obtain a fresh token."
+                        f"expired and no refresh token is available. "
+                        f"Re-run `mp account login {name}`."
                     ),
-                    code="OAUTH_REFRESH_ERROR",
+                    code="OAUTH_TOKEN_ERROR",
                     details={
                         "account_name": name,
                         "region": region,
                         "path": str(path),
                     },
                 )
+            # Refresh path — delegated to OAuthFlow in a later phase.
+            raise OAuthError(
+                (
+                    f"OAuth access token for account '{name}' has "
+                    f"expired. Token refresh is not yet wired up; re-run "
+                    f"`mp account login {name}` to obtain a fresh token."
+                ),
+                code="OAUTH_REFRESH_ERROR",
+                details={
+                    "account_name": name,
+                    "region": region,
+                    "path": str(path),
+                },
+            )
 
         return access_token
 

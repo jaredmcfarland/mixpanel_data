@@ -14,9 +14,18 @@ Reference: ``specs/042-auth-architecture-redesign/data-model.md`` §3, §4, §5.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveInt,
+    field_serializer,
+    model_validator,
+)
 
 from mixpanel_data._internal.auth.account import (
     Account,
@@ -114,12 +123,51 @@ class Session(BaseModel):
     workspace: WorkspaceRef | None = None
     """Resolved workspace; ``None`` triggers lazy resolution on first use."""
 
-    headers: dict[str, str] = Field(default_factory=dict)
+    headers: Mapping[str, str] = Field(default_factory=dict)
     """Custom HTTP headers attached at resolution time.
 
     Populated from ``[settings].custom_header`` and/or ``bridge.headers``.
     Never read from ``os.environ`` after Session construction (per FR-014).
+
+    Wrapped in :class:`types.MappingProxyType` after validation, so any
+    in-place mutation (``session.headers["X"] = "Y"``) raises
+    :class:`TypeError` instead of silently sharing state across
+    sessions. Consumers that need a mutable copy should use
+    ``dict(session.headers)``.
     """
+
+    @model_validator(mode="after")
+    def _freeze_headers(self) -> Session:
+        """Wrap the headers dict in :class:`MappingProxyType` post-validation.
+
+        Pydantic's ``frozen=True`` only blocks attribute reassignment — it
+        does not freeze container values, so a plain ``dict`` would still
+        be mutable through ``session.headers["X"] = "Y"``. Wrapping in a
+        read-only proxy makes any mutation raise ``TypeError`` at runtime.
+
+        Returns:
+            ``self`` (with ``headers`` replaced by a frozen proxy if needed).
+        """
+        if not isinstance(self.headers, MappingProxyType):
+            object.__setattr__(self, "headers", MappingProxyType(dict(self.headers)))
+        return self
+
+    @field_serializer("headers")
+    def _serialize_headers(self, value: Mapping[str, str]) -> dict[str, str]:
+        """Serialize the headers proxy as a plain dict.
+
+        Pydantic's default serializer would emit a Pydantic warning because
+        ``MappingProxyType`` is not ``dict``; this serializer projects back
+        to a fresh dict so ``model_dump`` / ``model_dump_json`` produce the
+        expected JSON-compatible shape with no warnings.
+
+        Args:
+            value: The (frozen) headers mapping.
+
+        Returns:
+            A fresh ``dict`` snapshot with the same keys and values.
+        """
+        return dict(value)
 
     @property
     def project_id(self) -> str:
@@ -173,7 +221,7 @@ class Session(BaseModel):
         account: Account | None = None,
         project: Project | None = None,
         workspace: WorkspaceRef | None | _SentinelType = _SENTINEL,
-        headers: dict[str, str] | _SentinelType = _SENTINEL,
+        headers: Mapping[str, str] | _SentinelType = _SENTINEL,
     ) -> Session:
         """Return a new Session with the supplied axes swapped in.
 

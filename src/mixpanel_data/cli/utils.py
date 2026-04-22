@@ -310,7 +310,7 @@ def get_workspace(ctx: typer.Context) -> Workspace:
                 workspace_id=workspace_id,
             )
         elif target is not None or Workspace._has_v3_config():
-            # 042 redesign path: pass globals through the v3 axis kwargs
+            # path: pass globals through the v3 axis kwargs
             # so `--target`, `--project`, and `--workspace` actually
             # drive the v3 resolver. Without this, the legacy resolver
             # would try to read v3 account blocks and miss `--target`

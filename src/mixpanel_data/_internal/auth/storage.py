@@ -37,6 +37,7 @@ from typing import Any
 from pydantic import SecretStr
 
 from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+from mixpanel_data._internal.io_utils import atomic_write_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +45,36 @@ logger = logging.getLogger(__name__)
 _ACCOUNT_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 
-def account_dir(name: str) -> Path:
-    """Return ``~/.mp/accounts/{name}/`` for the given account name.
+def _storage_root() -> Path:
+    """Return the root directory under which mixpanel_data writes account state.
 
-    Does not create the directory. Use :func:`ensure_account_dir` if you
-    need it to exist.
+    Resolved at every call so test isolation via ``$HOME`` /
+    ``MP_OAUTH_STORAGE_DIR`` monkeypatching takes effect — a module-level
+    constant captured at import time would silently leak the developer's
+    real ``~/.mp/`` into hermetic tests.
+
+    Despite the name, ``MP_OAUTH_STORAGE_DIR`` controls EVERY on-disk
+    artifact written by mixpanel_data (per-account dirs, OAuth tokens,
+    ``/me`` cache, client registration), not just the OAuth subtree. The
+    name is preserved as a backwards-compat env var only — the root is
+    used by both :func:`account_dir` and
+    :meth:`OAuthStorage._default_storage_dir`.
+
+    Returns:
+        ``$MP_OAUTH_STORAGE_DIR`` if set, else ``$HOME/.mp``.
+    """
+    env_dir = os.environ.get("MP_OAUTH_STORAGE_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path.home() / ".mp"
+
+
+def account_dir(name: str) -> Path:
+    """Return the per-account directory for ``name``.
+
+    Resolves to ``$MP_OAUTH_STORAGE_DIR/accounts/{name}/`` when the env
+    var is set, else ``~/.mp/accounts/{name}/``. Does not create the
+    directory — use :func:`ensure_account_dir` for that.
 
     Args:
         name: Account name (must match the same pattern enforced on the
@@ -65,7 +91,7 @@ def account_dir(name: str) -> Path:
         raise ValueError(
             f"Invalid account name: {name!r}. Must match `^[a-zA-Z0-9_-]{{1,64}}$`."
         )
-    return Path.home() / ".mp" / "accounts" / name
+    return _storage_root() / "accounts" / name
 
 
 def ensure_account_dir(name: str) -> Path:
@@ -142,31 +168,22 @@ class OAuthStorage:
     def _default_storage_dir(cls) -> Path:
         """Return the default OAuth storage path, resolved lazily.
 
-        This MUST stay a method (not a class attribute) so test isolation
-        via ``HOME`` / ``$HOME`` env-var monkeypatching takes effect. A
-        class-level ``Path.home() / ".mp" / "oauth"`` constant would be
-        captured at import time and silently leak the developer's real
-        OAuth tokens into hermetic tests (regression caught by QA).
+        Routes through :func:`_storage_root` so the ``MP_OAUTH_STORAGE_DIR``
+        env var (and ``$HOME`` for tests) takes effect at call time, not
+        import time.
 
         Returns:
-            ``$HOME/.mp/oauth`` resolved at call time.
+            ``<storage-root>/oauth`` resolved at call time.
         """
-        return Path.home() / ".mp" / "oauth"
-
-    # Backwards-compatible class attribute for callers that read it directly.
-    # Lazily resolves on access via the descriptor pattern would be cleaner,
-    # but a one-line property keeps the surface flat and avoids confusion.
-    @property
-    def DEFAULT_STORAGE_DIR(self) -> Path:  # noqa: N802 — preserve old name
-        """Backwards-compat alias for :meth:`_default_storage_dir`."""
-        return self._default_storage_dir()
+        return _storage_root() / "oauth"
 
     def __init__(self, storage_dir: Path | None = None) -> None:
         """Initialize OAuthStorage.
 
         Args:
-            storage_dir: Override the storage directory. If not provided,
-                uses ``MP_OAUTH_STORAGE_DIR`` env var or ``~/.mp/oauth/``.
+            storage_dir: Override the storage directory. When not provided,
+                falls back to :meth:`_default_storage_dir` which honors
+                ``MP_OAUTH_STORAGE_DIR``.
 
         Example:
             ```python
@@ -176,8 +193,6 @@ class OAuthStorage:
         """
         if storage_dir is not None:
             self._storage_dir = storage_dir
-        elif "MP_OAUTH_STORAGE_DIR" in os.environ:
-            self._storage_dir = Path(os.environ["MP_OAUTH_STORAGE_DIR"])
         else:
             self._storage_dir = self._default_storage_dir()
 
@@ -270,22 +285,20 @@ class OAuthStorage:
                     )
 
     def _write_file(self, path: Path, data: dict[str, Any]) -> None:
-        """Write JSON data to a file with restricted permissions.
+        """Atomically write JSON data to ``path`` with mode ``0o600``.
 
-        Sets umask before writing to ensure no group/other bits leak,
-        then explicitly sets ``0o600`` after write.
+        The replace step is atomic on POSIX (same filesystem), so a
+        SIGKILL between tmp-create and rename leaves the prior file in
+        place rather than a partially-written one.
 
         Args:
             path: File path to write to.
             data: Dictionary to serialize as JSON.
         """
         self._ensure_dir()
-        old_umask = os.umask(0o177)
-        try:
-            path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-        finally:
-            os.umask(old_umask)
-        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        atomic_write_bytes(
+            path, json.dumps(data, indent=2, default=str).encode("utf-8")
+        )
 
     def _read_file(self, path: Path) -> dict[str, Any] | None:
         """Read JSON data from a file.

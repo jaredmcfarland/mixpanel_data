@@ -166,7 +166,8 @@ class TestUseClearsStaleWorkspaceId:
 class TestUseOAuthAtomicity:
     """``MixpanelAPIClient.use()`` MUST fail atomically when the new
     OAuth account has no usable token, preserving the prior session
-    rather than committing the ``pending-login`` placeholder (R5)."""
+    rather than landing in a half-swapped state with un-fetchable
+    credentials."""
 
     def test_use_to_oauth_account_without_token_raises_and_preserves_session(
         self, session_team: Session
@@ -288,8 +289,16 @@ class TestSessionToCredentialsOAuthCacheIsolation:
         creds = session_to_credentials(s, token_resolver=_StaticToken())
         assert creds.username == "my_token_account"
 
-    def test_session_to_credentials_strict_raises_oauth_error(self) -> None:
-        """``strict=True`` propagates OAuthError instead of placeholder."""
+    def test_session_to_credentials_oauth_browser_raises_when_no_tokens(
+        self,
+    ) -> None:
+        """``session_to_credentials`` raises ``OAuthError`` for OAuth-without-token.
+
+        Fix 6 deleted the ``pending-login`` placeholder and the ``strict``
+        kwarg — every call now behaves like the prior ``strict=True``,
+        which is the only correct behavior for the new account-as-source-
+        of-truth contract.
+        """
         from mixpanel_data._internal.api_client import session_to_credentials
         from mixpanel_data._internal.auth.account import OAuthBrowserAccount
         from mixpanel_data._internal.auth.account import (
@@ -309,4 +318,4 @@ class TestSessionToCredentialsOAuthCacheIsolation:
             project=Project(id="3713224"),
         )
         with pytest.raises(OAuthError):
-            session_to_credentials(s, token_resolver=_Failing(), strict=True)
+            session_to_credentials(s, token_resolver=_Failing())

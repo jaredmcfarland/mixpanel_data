@@ -1,8 +1,7 @@
-"""``mp session`` Typer command (042 redesign).
+"""``mp session`` Typer command.
 
-Replaces ``mp context`` with a flat command (no subcommand by default —
-``mp session`` prints the active state; ``mp session --bridge`` shows
-bridge status when wired in Phase 8).
+Flat command (no subcommand by default — ``mp session`` prints the
+active session state).
 
 Reference: contracts/cli-commands.md §7.
 """
@@ -15,11 +14,11 @@ from typing import Annotated
 import typer
 
 from mixpanel_data import session as session_ns
-from mixpanel_data.cli.utils import console, err_console, handle_errors
+from mixpanel_data.cli.utils import console, handle_errors
 
 session_app = typer.Typer(
     name="session",
-    help="Show / update the active session (042 redesign).",
+    help="Show / update the active session.",
     invoke_without_command=True,
 )
 
@@ -28,13 +27,6 @@ session_app = typer.Typer(
 @handle_errors
 def session_command(
     ctx: typer.Context,
-    bridge: Annotated[
-        bool,
-        typer.Option(
-            "--bridge",
-            help="Show bridge file status (Phase 8 wiring).",
-        ),
-    ] = False,
     format: Annotated[  # noqa: A002
         str,
         typer.Option("--format", "-f", help="Output format: text | json"),
@@ -44,16 +36,10 @@ def session_command(
 
     Args:
         ctx: Typer context.
-        bridge: When True, show bridge file status (Phase 8).
         format: Output format.
     """
     if ctx.invoked_subcommand is not None:
         return  # let subcommands handle it (none currently)
-    if bridge:
-        err_console.print(
-            "[yellow]`mp session --bridge` is implemented in Phase 8 (US8).[/yellow]"
-        )
-        raise typer.Exit(0)
     active = session_ns.show()
     # Resolve the active account's default_project for display (project lives
     # on the account in v3, not in [active]).

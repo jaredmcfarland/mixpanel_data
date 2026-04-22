@@ -116,7 +116,7 @@ def main(
         typer.Option(
             "--workspace",
             "-w",
-            help="Workspace ID (042 redesign global override).",
+            help="Workspace ID (global override).",
         ),
     ] = None,
     target: Annotated[
@@ -195,10 +195,7 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.account import account_app
     from mixpanel_data.cli.commands.alerts import alerts_app
     from mixpanel_data.cli.commands.annotations import annotations_app
-    from mixpanel_data.cli.commands.auth import auth_app
     from mixpanel_data.cli.commands.cohorts import cohorts_app
-    from mixpanel_data.cli.commands.config_cmd import config_app
-    from mixpanel_data.cli.commands.context import context_app
     from mixpanel_data.cli.commands.custom_events import custom_events_app
     from mixpanel_data.cli.commands.custom_properties import custom_properties_app
     from mixpanel_data.cli.commands.dashboards import dashboards_app
@@ -209,41 +206,19 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.lexicon import lexicon_app
     from mixpanel_data.cli.commands.lookup_tables import lookup_tables_app
     from mixpanel_data.cli.commands.project import project_app
-    from mixpanel_data.cli.commands.projects import projects_app
     from mixpanel_data.cli.commands.query import query_app
     from mixpanel_data.cli.commands.reports import reports_app
     from mixpanel_data.cli.commands.schemas import schemas_app
     from mixpanel_data.cli.commands.session import session_app
+    from mixpanel_data.cli.commands.target import target_app
     from mixpanel_data.cli.commands.webhooks import webhooks_app
-    from mixpanel_data.cli.commands.workspace import workspace_app as v3_workspace_app
-    from mixpanel_data.cli.commands.workspaces_cmd import workspaces_app
+    from mixpanel_data.cli.commands.workspace import workspace_app
 
-    app.add_typer(
-        account_app,
-        name="account",
-        help="Manage accounts (042 redesign — replaces `mp auth`).",
-    )
-    app.add_typer(
-        project_app,
-        name="project",
-        help="Active project (042 redesign — singular `project`).",
-    )
-    app.add_typer(
-        v3_workspace_app,
-        name="workspace",
-        help="Active workspace (042 redesign — singular `workspace`).",
-    )
-    app.add_typer(
-        session_app,
-        name="session",
-        help="Show / update the active session (042 redesign).",
-    )
-    app.add_typer(
-        config_app,
-        name="config",
-        help="Config conversion (042 redesign — `mp config convert`).",
-    )
-    app.add_typer(auth_app, name="auth", help="Manage authentication and accounts.")
+    app.add_typer(account_app, name="account", help="Manage accounts.")
+    app.add_typer(project_app, name="project", help="Active project.")
+    app.add_typer(workspace_app, name="workspace", help="Active workspace.")
+    app.add_typer(session_app, name="session", help="Show / update the active session.")
+    app.add_typer(target_app, name="target", help="Manage saved target triples.")
     app.add_typer(query_app, name="query", help="Query Mixpanel data.")
     app.add_typer(inspect_app, name="inspect", help="Inspect Mixpanel project schema.")
     app.add_typer(dashboards_app, name="dashboards", help="Manage Mixpanel dashboards.")
@@ -277,21 +252,6 @@ def _register_commands() -> None:
         lookup_tables_app,
         name="lookup-tables",
         help="Manage lookup tables.",
-    )
-    app.add_typer(
-        projects_app,
-        name="projects",
-        help="Discover and switch Mixpanel projects.",
-    )
-    app.add_typer(
-        workspaces_app,
-        name="workspaces",
-        help="Discover and switch Mixpanel workspaces.",
-    )
-    app.add_typer(
-        context_app,
-        name="context",
-        help="View and switch the active session context.",
     )
 
 

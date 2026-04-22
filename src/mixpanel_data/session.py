@@ -70,22 +70,27 @@ def use(
         cm.apply_target(target)
         return
     # account / workspace go to [active]; project goes to the active account.
-    if account is not None or workspace is not None:
-        cm.set_active(account=account, workspace=workspace)
-    if project is not None:
-        from mixpanel_data.exceptions import ConfigError
+    # Both are written inside one _mutate() transaction so the on-disk state
+    # never reflects a partial swap (e.g., new account but stale project).
+    with cm._mutate() as raw:
+        if account is not None or workspace is not None:
+            cm._apply_set_active(raw, account=account, workspace=workspace)
+        if project is not None:
+            from mixpanel_data.exceptions import ConfigError
 
-        active = cm.get_active()
-        if account is not None:
-            target_account = account
-        elif active.account is not None:
-            target_account = active.account
-        else:
-            raise ConfigError(
-                "Cannot set project: no active account. Run `mp account use NAME` "
-                "first, or pass `account=NAME` together with `project=`."
-            )
-        cm.update_account(target_account, default_project=project)
+            active_block = raw.get("active", {}) or {}
+            active_account = active_block.get("account")
+            if account is not None:
+                target_account = account
+            elif isinstance(active_account, str):
+                target_account = active_account
+            else:
+                raise ConfigError(
+                    "Cannot set project: no active account. "
+                    "Run `mp account use NAME` first, or pass `account=NAME` "
+                    "together with `project=`."
+                )
+            cm._apply_update_account(raw, target_account, default_project=project)
 
 
 __all__ = ["show", "use"]

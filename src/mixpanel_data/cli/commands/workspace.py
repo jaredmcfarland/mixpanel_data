@@ -1,4 +1,4 @@
-"""``mp workspace`` Typer command group (042 redesign).
+"""``mp workspace`` Typer command group.
 
 Replaces ``mp workspaces`` with the singular form. Reference:
 contracts/cli-commands.md §5.
@@ -15,7 +15,7 @@ from mixpanel_data.cli.utils import console, err_console, handle_errors
 
 workspace_app = typer.Typer(
     name="workspace",
-    help="Manage active Mixpanel workspace (042 redesign).",
+    help="Manage active Mixpanel workspace.",
     no_args_is_help=True,
 )
 
@@ -30,18 +30,16 @@ def list_workspaces(
             "--project", "-p", help="Project ID (defaults to active project)."
         ),
     ] = None,
-    refresh: Annotated[bool, typer.Option("--refresh", help="Bypass cache.")] = False,
 ) -> None:
     """List workspaces in the current project.
 
-    Phase 5 stub — full /me wiring lands with the CLI integration tests.
+    Stub: full /me wiring lands with the CLI integration tests.
 
     Args:
         ctx: Typer context.
         project: Project to query (defaults to active).
-        refresh: Bypass cache.
     """
-    err_console.print("[yellow]`mp workspace list` is a Phase 5+ stub.[/yellow]")
+    err_console.print("[yellow]`mp workspace list` is not yet wired.[/yellow]")
     raise typer.Exit(1)
 
 

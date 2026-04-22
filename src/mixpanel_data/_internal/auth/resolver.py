@@ -50,11 +50,28 @@ _VALID_REGIONS: frozenset[str] = frozenset({"us", "eu", "in"})
 
 
 def _env_region() -> Region | None:
-    """Return ``MP_REGION`` if it's a valid region literal, else None."""
+    """Return ``MP_REGION`` if it's a valid region literal, else ``None``.
+
+    Returns:
+        The region value (``us`` / ``eu`` / ``in``) when set, or ``None``
+        when the env var is absent.
+
+    Raises:
+        ConfigError: When ``MP_REGION`` is set to a value outside the
+            allowed set. Silently dropping an invalid region would route
+            requests to the wrong data residency (or fall through to a
+            different auth source) without telling the user — surface
+            the typo loudly instead.
+    """
     val = os.environ.get("MP_REGION")
-    if val and val in _VALID_REGIONS:
-        return val  # type: ignore[return-value]
-    return None
+    if not val:
+        return None
+    if val not in _VALID_REGIONS:
+        raise ConfigError(
+            f"MP_REGION={val!r} is not one of {sorted(_VALID_REGIONS)}.",
+            details={"env_var": "MP_REGION", "value": val},
+        )
+    return val  # type: ignore[return-value]
 
 
 def _env_account_from_service_quad() -> Account | None:
@@ -155,7 +172,7 @@ def _resolve_account_axis(
     return None
 
 
-def _resolve_project_axis(
+def resolve_project_axis(
     *,
     explicit: str | None,
     target_project: str | None,
@@ -183,6 +200,11 @@ def _resolve_project_axis(
     """
     env_val = os.environ.get("MP_PROJECT_ID")
     if env_val:
+        if not env_val.isdigit():
+            raise ConfigError(
+                f"MP_PROJECT_ID={env_val!r} must be a digit string.",
+                details={"env_var": "MP_PROJECT_ID", "value": env_val},
+            )
         return env_val
     if explicit is not None:
         return explicit
@@ -222,10 +244,17 @@ def _resolve_workspace_axis(
     if env_val:
         try:
             parsed = int(env_val)
-        except ValueError:
-            parsed = 0
-        if parsed > 0:
-            return parsed
+        except ValueError as exc:
+            raise ConfigError(
+                f"MP_WORKSPACE_ID={env_val!r} is not a positive integer.",
+                details={"env_var": "MP_WORKSPACE_ID", "value": env_val},
+            ) from exc
+        if parsed <= 0:
+            raise ConfigError(
+                f"MP_WORKSPACE_ID={env_val!r} is not a positive integer.",
+                details={"env_var": "MP_WORKSPACE_ID", "value": env_val},
+            )
+        return parsed
     if explicit is not None:
         return explicit
     if target_workspace is not None:
@@ -277,7 +306,7 @@ def _format_no_account_error() -> str:
     )
 
 
-def _format_no_project_error(account: Account | None = None) -> str:
+def format_no_project_error(account: Account | None = None) -> str:
     """Return the multi-line FR-024 error for an unresolvable project axis.
 
     Args:
@@ -372,14 +401,14 @@ def resolve_session(
     if account_obj is None:
         raise ConfigError(_format_no_account_error())
 
-    project_id = _resolve_project_axis(
+    project_id = resolve_project_axis(
         explicit=project,
         target_project=target_project,
         bridge=br,
         account=account_obj,
     )
     if project_id is None:
-        raise ConfigError(_format_no_project_error(account_obj))
+        raise ConfigError(format_no_project_error(account_obj))
     try:
         project_obj = Project(id=project_id)
     except ValidationError as exc:
@@ -413,5 +442,7 @@ def resolve_session(
 
 
 __all__ = [
+    "format_no_project_error",
+    "resolve_project_axis",
     "resolve_session",
 ]

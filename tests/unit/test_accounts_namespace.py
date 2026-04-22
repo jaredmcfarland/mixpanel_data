@@ -230,13 +230,13 @@ class TestUse:
         accounts_ns.use("second")
         assert cm.get_active().account == "second"
 
-    def test_use_does_not_touch_workspace(self, cm: ConfigManager) -> None:
-        """Per FR-033, ``accounts.use`` updates only the account axis.
+    def test_use_clears_prior_workspace(self, cm: ConfigManager) -> None:
+        """``accounts.use(NAME)`` drops any prior ``[active].workspace``.
 
-        Project lives on the account itself; workspace pinning in ``[active]``
-        is preserved across account swaps (workspace IDs are project-scoped
-        but ``[active].workspace`` is just a UI hint and may legitimately
-        carry across).
+        Workspaces are project-scoped, so a workspace ID set by the prior
+        account would resolve to a foreign workspace (or 404) under the new
+        account's project. Project itself travels with the account via
+        :attr:`Account.default_project` — no separate axis to reset.
         """
         accounts_ns.add(
             "first",
@@ -258,9 +258,9 @@ class TestUse:
         accounts_ns.use("other")
         active = cm.get_active()
         assert active.account == "other"
-        # Project comes from the new account's default_project, not [active].
+        assert active.workspace is None
+        # Project travels with the account.
         assert cm.get_account("other").default_project == "9999999"
-        assert active.workspace == 42
 
 
 class TestShow:

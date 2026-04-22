@@ -398,64 +398,6 @@ class AccountInUseError(ConfigError):
         return targets if isinstance(targets, list) else []
 
 
-class AccountAccessError(ConfigError):
-    """Account does not have access to the requested project.
-
-    Raised when an account is asked to operate against a project that ``/me``
-    indicates the account cannot reach (e.g., the user has been removed from
-    the project, or a wrong project ID was supplied).
-    """
-
-    def __init__(
-        self,
-        account_name: str,
-        project_id: str,
-        available_projects: list[str] | None = None,
-    ) -> None:
-        """Initialize AccountAccessError.
-
-        Args:
-            account_name: Account that lacks access.
-            project_id: Project the account tried to access.
-            available_projects: Project IDs the account can access (for hints).
-        """
-        available = available_projects or []
-        if available:
-            available_str = ", ".join(f"'{p}'" for p in available)
-            message = (
-                f"Account '{account_name}' does not have access to project "
-                f"'{project_id}'. Available projects: {available_str}."
-            )
-        else:
-            message = (
-                f"Account '{account_name}' does not have access to project "
-                f"'{project_id}'."
-            )
-        details: dict[str, Any] = {
-            "account_name": account_name,
-            "project_id": project_id,
-            "available_projects": list(available),
-        }
-        super().__init__(message, details=details)
-        self._code = "ACCOUNT_ACCESS_DENIED"
-
-    @property
-    def account_name(self) -> str:
-        """Account that lacks access."""
-        return str(self._details.get("account_name", ""))
-
-    @property
-    def project_id(self) -> str:
-        """Project the account tried to access."""
-        return str(self._details.get("project_id", ""))
-
-    @property
-    def available_projects(self) -> list[str]:
-        """Project IDs the account can access."""
-        projects = self._details.get("available_projects")
-        return projects if isinstance(projects, list) else []
-
-
 # Authentication Exceptions
 
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
 
 
 class OAuthTokens(BaseModel):
@@ -49,7 +49,12 @@ class OAuthTokens(BaseModel):
     """The OAuth refresh token, if provided (redacted in output)."""
 
     expires_at: datetime
-    """UTC datetime when the access token expires."""
+    """UTC datetime when the access token expires.
+
+    Must be timezone-aware. Naive datetimes are rejected at validation
+    time so a downstream consumer can never accidentally compare against
+    an aware ``datetime.now(timezone.utc)`` and silently fall through
+    the expiry check (Fix 25)."""
 
     scope: str
     """Space-separated list of granted scopes."""
@@ -59,6 +64,29 @@ class OAuthTokens(BaseModel):
 
     project_id: str | None = None
     """Associated Mixpanel project ID, if known."""
+
+    @field_validator("expires_at")
+    @classmethod
+    def _require_tz_aware(cls, value: datetime) -> datetime:
+        """Reject naive ``expires_at`` values.
+
+        Args:
+            value: The candidate ``expires_at``.
+
+        Returns:
+            The same value (no mutation).
+
+        Raises:
+            ValueError: If ``value.tzinfo is None``.
+        """
+        if value.tzinfo is None:
+            raise ValueError(
+                "OAuthTokens.expires_at must be timezone-aware (UTC). "
+                "Got a naive datetime, which would compare unsafely against "
+                "tz-aware `datetime.now(timezone.utc)` and silently bypass "
+                "the expiry check."
+            )
+        return value
 
     def is_expired(self) -> bool:
         """Check whether the access token is expired or about to expire.

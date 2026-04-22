@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import builtins
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from pydantic import SecretStr
 
@@ -31,9 +30,6 @@ from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_data._internal.config_v3 import ConfigManager
 from mixpanel_data.exceptions import ConfigError
 from mixpanel_data.types import AccountSummary, AccountTestResult
-
-if TYPE_CHECKING:
-    pass
 
 
 def _config() -> ConfigManager:
@@ -89,19 +85,24 @@ def add(
         ConfigError: Validation failure or duplicate name.
     """
     cm = _config()
-    is_first = not cm.list_accounts()
-    cm.add_account(
-        name,
-        type=type,
-        region=region,
-        default_project=default_project,
-        username=username,
-        secret=secret,
-        token=token,
-        token_env=token_env,
-    )
-    if is_first:
-        cm.set_active(account=name)
+    # Compose the add-and-promote-as-active sequence in a single _mutate()
+    # transaction so a fresh process never sees the new account without its
+    # promoted [active].account when it was the first account added.
+    with cm._mutate() as raw:
+        is_first = not (raw.get("accounts") or {})
+        cm._apply_add_account(
+            raw,
+            name,
+            type=type,
+            region=region,
+            default_project=default_project,
+            username=username,
+            secret=secret,
+            token=token,
+            token_env=token_env,
+        )
+        if is_first:
+            cm._apply_set_active(raw, account=name)
     return show(name)
 
 
@@ -167,10 +168,18 @@ def remove(name: str, *, force: bool = False) -> builtins.list[str]:
 
 
 def use(name: str) -> None:
-    """Set ``[active].account = name``.
+    """Switch the active account, clearing any prior workspace pin.
 
-    Per FR-033, this updates only the account axis; ``[active].project``
-    and ``[active].workspace`` are preserved.
+    The new account becomes ``[active].account`` and any prior
+    ``[active].workspace`` is dropped — workspaces are project-scoped, so
+    a leftover workspace ID from a different account would resolve to a
+    foreign workspace (or a 404) on the next ``Workspace()`` construction.
+    Project lives on the account itself as
+    :attr:`Account.default_project`, so it travels with the new account
+    automatically — no separate project axis to reset.
+
+    Both writes happen in a single ``_mutate()`` transaction so the
+    next process never sees a half-swapped state.
 
     Args:
         name: Account to make active.
@@ -178,7 +187,10 @@ def use(name: str) -> None:
     Raises:
         ConfigError: Account does not exist.
     """
-    _config().set_active(account=name)
+    cm = _config()
+    with cm._mutate() as raw:
+        cm._apply_set_active(raw, account=name)
+        cm._apply_clear_active(raw, workspace=True)
 
 
 def show(name: str | None = None) -> AccountSummary:
@@ -333,16 +345,17 @@ def remove_bridge(*, at: Path | None = None) -> bool:
     )
 
 
+# Note: ``login``, ``test``, ``export_bridge``, and ``remove_bridge`` are
+# defined above as stubs but intentionally NOT exported. They become public
+# in __all__ once the underlying OAuth/PKCE/bridge writer wiring lands. This
+# keeps `from mixpanel_data import accounts; accounts.<TAB>` from advertising
+# functions that immediately raise ``NotImplementedError``.
 __all__ = [
     "add",
-    "export_bridge",
     "list",
-    "login",
     "logout",
     "remove",
-    "remove_bridge",
     "show",
-    "test",
     "token",
     "update",
     "use",

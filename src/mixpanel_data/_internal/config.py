@@ -429,7 +429,7 @@ class ConfigManager:
         ``HOME`` env-var monkeypatching takes effect. A class-level
         ``Path.home() / ".mp" / "config.toml"`` constant is captured at
         import time and silently leaks the developer's real config into
-        hermetic tests (regression caught by QA).
+        hermetic tests .
 
         Returns:
             ``$HOME/.mp/config.toml`` resolved at call time.

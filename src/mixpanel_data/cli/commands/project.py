@@ -1,4 +1,4 @@
-"""``mp project`` Typer command group (042 redesign).
+"""``mp project`` Typer command group.
 
 Replaces ``mp projects`` with the singular form. Three subcommands:
 ``list``, ``use``, ``show``. Note: project lives on the active account as
@@ -25,7 +25,7 @@ from mixpanel_data.exceptions import ConfigError
 
 project_app = typer.Typer(
     name="project",
-    help="Manage active Mixpanel project (042 redesign).",
+    help="Manage active Mixpanel project.",
     no_args_is_help=True,
 )
 
@@ -58,21 +58,16 @@ def list_projects(
             help="Fetch projects from /me (cached). Default: print active.",
         ),
     ] = False,
-    refresh: Annotated[
-        bool,
-        typer.Option("--refresh", help="Bypass /me cache and refetch."),
-    ] = False,
 ) -> None:
     """List projects accessible by the active account.
 
-    With ``--remote``, fetches the project list from ``/me`` (cached
-    24 hours; ``--refresh`` to bypass). Without it, just prints the
-    active account's ``default_project`` for a quick summary.
+    With ``--remote``, fetches the project list from ``/me``. Without
+    it, just prints the active account's ``default_project`` for a
+    quick summary.
 
     Args:
         ctx: Typer context.
         remote: Whether to fetch the full /me project list.
-        refresh: Whether to bypass the cache.
     """
     if not remote:
         _account, project = _active_account_default_project()
@@ -81,9 +76,7 @@ def list_projects(
             return
         console.print(project)
         return
-    err_console.print(
-        "[yellow]`mp project list --remote` is wired alongside the /me service in Phase 5+.[/yellow]"
-    )
+    err_console.print("[yellow]`mp project list --remote` is not yet wired.[/yellow]")
     raise typer.Exit(1)
 
 

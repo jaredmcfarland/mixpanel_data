@@ -43,7 +43,6 @@ from mixpanel_data._internal.config_v3 import ConfigManager
 from mixpanel_data.cli.main import app
 from mixpanel_data.cli.utils import ExitCode
 from mixpanel_data.exceptions import ConfigError, OAuthError
-from mixpanel_data.workspace import Workspace
 
 # =============================================================================
 # Account name boundary + character tests
@@ -351,22 +350,39 @@ class TestResolverEdgeCases:
         with pytest.raises(ConfigError):
             resolve_session(config=empty_cm)
 
-    @pytest.mark.parametrize("bad_workspace", ["abc", "0", "-1", "1.5", ""])
-    def test_workspace_id_invalid_silent_skip(
+    @pytest.mark.parametrize("bad_workspace", ["abc", "0", "-1", "1.5"])
+    def test_workspace_id_invalid_raises_config_error(
         self,
         empty_cm: ConfigManager,
         monkeypatch: pytest.MonkeyPatch,
         bad_workspace: str,
     ) -> None:
-        """MP_WORKSPACE_ID with non-positive-int values is silently skipped."""
-        # Set a complete SA quad so the resolver can build a Session.
+        """MP_WORKSPACE_ID with non-positive-int values raises ConfigError.
+
+        Fix 24 inverted the prior "silently skip" behavior — silent
+        downgrades hid typos that left the user wondering why their
+        workspace pin was being ignored.
+        """
         monkeypatch.setenv("MP_USERNAME", "u")
         monkeypatch.setenv("MP_SECRET", "s")
         monkeypatch.setenv("MP_PROJECT_ID", "1")
         monkeypatch.setenv("MP_REGION", "us")
         monkeypatch.setenv("MP_WORKSPACE_ID", bad_workspace)
+        with pytest.raises(ConfigError, match="MP_WORKSPACE_ID"):
+            resolve_session(config=empty_cm)
+
+    def test_workspace_id_empty_string_treated_as_unset(
+        self,
+        empty_cm: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """An empty MP_WORKSPACE_ID is treated as unset (no error)."""
+        monkeypatch.setenv("MP_USERNAME", "u")
+        monkeypatch.setenv("MP_SECRET", "s")
+        monkeypatch.setenv("MP_PROJECT_ID", "1")
+        monkeypatch.setenv("MP_REGION", "us")
+        monkeypatch.setenv("MP_WORKSPACE_ID", "")
         s = resolve_session(config=empty_cm)
-        # workspace remains None — resolver silently skipped the bad value.
         assert s.workspace is None
 
 
@@ -443,13 +459,21 @@ class TestBridgeEdgeCases:
 class TestConfigManagerEdgeCases:
     """Legacy detection + file permissions + idempotency."""
 
-    def test_legacy_detection_config_version_alone(self, tmp_path: Path) -> None:
-        """``config_version = 2`` alone (no other v2 markers) triggers detection."""
+    def test_legacy_v2_config_no_longer_decodes_as_accounts(
+        self, tmp_path: Path
+    ) -> None:
+        """A v2-shaped TOML loads but yields no accounts.
+
+        Fix 11 deleted the friendly ``Legacy config schema detected``
+        message — under the alpha "free to break" lens there are no v1/v2
+        users to migrate. ``config_version = 2`` is now ignored as an
+        unknown key and ``list_accounts`` returns an empty list because
+        the v2 fixture has no ``[accounts]`` section.
+        """
         p = tmp_path / "config.toml"
         p.write_text("config_version = 2\n", encoding="utf-8")
         cm = ConfigManager(config_path=p)
-        with pytest.raises(ConfigError, match="Legacy config schema detected"):
-            cm.list_accounts()
+        assert cm.list_accounts() == []
 
     @pytest.mark.skipif(os.name != "posix", reason="POSIX permissions test")
     def test_file_permissions_under_loose_umask(self, tmp_path: Path) -> None:
@@ -495,116 +519,6 @@ class TestConfigManagerEdgeCases:
 # =============================================================================
 
 
-class TestWorkspaceV3Discrimination:
-    """v3 path detection vs legacy fallback."""
-
-    def test_v3_path_with_seeded_config(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """A v3 config with [accounts.X] + [active] triggers the v3 path."""
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / "config.toml"))
-        cm = ConfigManager()
-        cm.add_account(
-            "team",
-            type="service_account",
-            region="us",
-            default_project="3713224",
-            username="u",
-            secret=SecretStr("s"),
-        )
-        # ConfigManager.add_account does NOT auto-active (the namespace does).
-        # Set [active] explicitly so the resolver has an account axis.
-        cm.set_active(account="team")
-        ws = Workspace()
-        # v3 path → has _v3_session → property access works.
-        # Project comes from the account's default_project.
-        assert ws.account.name == "team"
-        assert ws.project.id == "3713224"
-
-    def test_v3_path_with_empty_config_falls_back_to_legacy(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """An empty config + no accounts + no bridge: _has_v3_config() returns False.
-
-        Without env credentials the legacy path also fails — this verifies
-        the discriminator (we don't accidentally always use v3). Properly
-        isolates HOME, MP_CONFIG_PATH, MP_AUTH_FILE, MP_CUSTOM_HEADER_*, AND
-        cwd so the dev's real bridge file at ``~/.claude/mixpanel/auth.json``,
-        stray ``./mixpanel_auth.json``, and shell-leaked custom headers
-        don't trip detection.
-        """
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / "config.toml"))
-        monkeypatch.delenv("MP_AUTH_FILE", raising=False)
-        # Scrub all MP_* env vars not in the standard cleanup list (the
-        # autouse fixture in tests/conftest.py only scrubs the auth-related
-        # ones, but MP_CUSTOM_HEADER_NAME etc. can leak from the dev's shell).
-        for key in list(os.environ):
-            if key.startswith("MP_") and key not in ("MP_CONFIG_PATH",):
-                monkeypatch.delenv(key, raising=False)
-        monkeypatch.chdir(tmp_path)  # avoids cwd-relative bridge match
-        # Empty file — no [accounts] block, no [active]; _has_v3_config → False.
-        (tmp_path / "config.toml").write_text("", encoding="utf-8")
-        # Legacy path attempts resolution and fails (no env creds, no v1 config).
-        # We just verify the routing works: not a TypeError or AttributeError
-        # from the v3 path being incorrectly chosen.
-        with pytest.raises(ConfigError):
-            Workspace()
-
-    def test_legacy_path_property_access_raises(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Legacy-path Workspace raises RuntimeError on `.account` access.
-
-        Construct a Workspace via the legacy path (using full SA env quad
-        but NO v3 config), then access `.account`. The discriminator should
-        route through legacy, and the v3 property must surface a clear
-        error message.
-        """
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / "config.toml"))
-        # Use legacy-only kwargs to force the legacy path.
-        monkeypatch.setenv("MP_USERNAME", "u")
-        monkeypatch.setenv("MP_SECRET", "s")
-        monkeypatch.setenv("MP_PROJECT_ID", "1")
-        monkeypatch.setenv("MP_REGION", "us")
-        ws = Workspace(project_id="1", region="us")  # legacy positional
-        with pytest.raises(RuntimeError, match="042 redesign path"):
-            _ = ws.account
-
-    def test_v3_auto_detect_propagates_config_error(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Auto-detected v3 config with no [active].account surfaces the v3 error.
-
-        Regression: previously the v3-path ConfigError was caught and the
-        legacy resolver took over, producing a misleading KeyError when it
-        tried to read v3 account blocks (no `project_id` field). The
-        intended FR-024 message ("set [active].account or pass account=…")
-        was hidden.
-        """
-        monkeypatch.setenv("HOME", str(tmp_path))
-        monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / "config.toml"))
-        # Scrub MP_* leakage (mirrors test_v3_path_with_empty_config_falls_back_to_legacy).
-        for key in list(os.environ):
-            if key.startswith("MP_") and key != "MP_CONFIG_PATH":
-                monkeypatch.delenv(key, raising=False)
-        monkeypatch.chdir(tmp_path)
-        cm = ConfigManager()
-        cm.add_account(
-            "team",
-            type="service_account",
-            region="us",
-            default_project="3713224",
-            username="u",
-            secret=SecretStr("s"),
-        )
-        # Note: no `cm.set_active(...)` — the v3 resolver should raise.
-        with pytest.raises(ConfigError):
-            Workspace()
-
-
 # =============================================================================
 # CLI exit codes + secret handling
 # =============================================================================
@@ -629,7 +543,9 @@ def _isolated_home_for_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     """
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / ".mp" / "config.toml"))
-    monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path / ".mp" / "oauth"))
+    # Per Fix 7, MP_OAUTH_STORAGE_DIR names the *root* under which both the
+    # OAuth subtree and the per-account subtree live (no longer aliases /oauth).
+    monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(tmp_path / ".mp"))
 
 
 class TestCliExitCodes:
@@ -737,27 +653,26 @@ class TestSecretLeakage:
         assert self._SENTINEL not in repr(s)
         assert self._SENTINEL not in str(s)
 
-    def test_session_to_credentials_pending_login_placeholder(
+    def test_session_to_credentials_oauth_browser_missing_tokens_raises(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """An OAuthBrowserAccount without on-disk tokens gets the placeholder.
+        """An OAuthBrowserAccount with no on-disk tokens fails fast.
 
-        The placeholder ``pending-login`` is intentional — it lets the client
-        construct without raising; the actual 401 surfaces at request time.
-        Verify the placeholder is exactly the documented string.
+        The prior placeholder (``pending-login``) silently produced a
+        ``Credentials`` shim that would 401 on every request. Fix 6 makes
+        ``session_to_credentials`` propagate ``OAuthError`` at construction
+        so the user sees an actionable ``Run mp account login NAME``
+        message instead of a confusing 401 later.
         """
         monkeypatch.setenv("HOME", str(tmp_path))
-        from mixpanel_data._internal.api_client import (
-            _OAUTH_TOKEN_PENDING,
-            session_to_credentials,
-        )
+        from mixpanel_data._internal.api_client import session_to_credentials
+        from mixpanel_data.exceptions import OAuthError
 
         s = Session(
             account=OAuthBrowserAccount(name="me", region="us"),
             project=Project(id="3713224"),
         )
-        creds = session_to_credentials(s)
-        assert creds.oauth_access_token is not None
-        assert creds.oauth_access_token.get_secret_value() == _OAUTH_TOKEN_PENDING
+        with pytest.raises(OAuthError):
+            session_to_credentials(s)

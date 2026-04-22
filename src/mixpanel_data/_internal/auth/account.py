@@ -17,13 +17,13 @@ Reference: ``specs/042-auth-architecture-redesign/data-model.md`` §1, §2.
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING, Annotated, Literal, Protocol
+from collections.abc import Callable
+from typing import Annotated, Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from typing_extensions import Self
 
-if TYPE_CHECKING:
-    pass
+_T = TypeVar("_T")
 
 
 Region = Literal["us", "eu", "in"]
@@ -94,6 +94,46 @@ class _AccountBase(BaseModel):
     no env / param / target / bridge source overrides it (FR-017). Required at
     add-time for ``service_account`` / ``oauth_token`` accounts; populated
     post-PKCE via ``/me`` for ``oauth_browser`` accounts."""
+
+    def match(
+        self,
+        *,
+        on_service: Callable[[ServiceAccount], _T],
+        on_oauth_browser: Callable[[OAuthBrowserAccount], _T],
+        on_oauth_token: Callable[[OAuthTokenAccount], _T],
+    ) -> _T:
+        """Dispatch to the right callback based on the account variant.
+
+        Centralises the discriminated-union exhaustiveness check so call
+        sites no longer need to scatter ``isinstance`` chains (and so a
+        new variant added in the future surfaces as a single ``mypy``
+        failure here, not via runtime ``TypeError`` at every call site).
+        Each callback receives the type-narrowed variant.
+
+        Args:
+            on_service: Called with ``self`` if this is a ``ServiceAccount``.
+            on_oauth_browser: Called with ``self`` if this is an
+                ``OAuthBrowserAccount``.
+            on_oauth_token: Called with ``self`` if this is an
+                ``OAuthTokenAccount``.
+
+        Returns:
+            The return value of whichever callback was invoked.
+
+        Raises:
+            TypeError: A new ``Account`` variant was added without
+                updating this dispatcher (compile-time ``mypy`` failure
+                in normal use).
+        """
+        if isinstance(self, ServiceAccount):
+            return on_service(self)
+        if isinstance(self, OAuthBrowserAccount):
+            return on_oauth_browser(self)
+        if isinstance(self, OAuthTokenAccount):
+            return on_oauth_token(self)
+        raise TypeError(  # pragma: no cover — Literal exhaustiveness
+            f"Unknown Account variant: {type(self).__name__}"
+        )
 
 
 class ServiceAccount(_AccountBase):

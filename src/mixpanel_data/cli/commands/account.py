@@ -1,4 +1,4 @@
-"""``mp account`` Typer command group (042 redesign).
+"""``mp account`` Typer command group.
 
 Replaces ``mp auth`` with a single source of truth for account CRUD,
 switching, and probing across the three account types
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json as _json
 import os
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -29,9 +30,46 @@ from mixpanel_data.exceptions import (
 )
 from mixpanel_data.types import AccountSummary
 
+# Cap stdin reads at 64 KiB. Real service-account secrets are < 1 KiB
+# and OAuth tokens are < 8 KiB; anything larger is almost certainly the
+# wrong file being piped in (a key bundle, a JSON dump, etc.). Reject
+# loudly rather than silently swallowing it.
+_STDIN_SECRET_MAX_BYTES = 64 * 1024
+
+
+def _read_secret_from_stdin() -> str:
+    """Read a single secret value from stdin (up to 64 KiB).
+
+    Replaces the prior 4096-byte ``os.read(0, 4096)`` which silently
+    truncated long OAuth tokens / passwords piped from password
+    managers. Reads ALL bytes, strips trailing whitespace (which
+    ``pass``, ``cat``, etc. typically append), and rejects payloads
+    larger than ``_STDIN_SECRET_MAX_BYTES`` instead of returning a
+    quietly-corrupted prefix.
+
+    Returns:
+        The decoded secret string (whitespace-stripped).
+
+    Raises:
+        typer.Exit: When stdin is empty or exceeds the cap.
+    """
+    raw = sys.stdin.buffer.read(_STDIN_SECRET_MAX_BYTES + 1)
+    if len(raw) > _STDIN_SECRET_MAX_BYTES:
+        err_console.print(
+            f"[red]stdin payload exceeds {_STDIN_SECRET_MAX_BYTES} bytes; "
+            f"refusing to truncate. Pipe a single secret, not a key bundle.[/red]"
+        )
+        raise typer.Exit(ExitCode.INVALID_ARGS)
+    value = raw.decode("utf-8", errors="strict").strip()
+    if not value:
+        err_console.print("[red]Secret is empty.[/red]")
+        raise typer.Exit(ExitCode.INVALID_ARGS)
+    return value
+
+
 account_app = typer.Typer(
     name="account",
-    help="Manage Mixpanel accounts (042 redesign).",
+    help="Manage Mixpanel accounts.",
     no_args_is_help=True,
 )
 
@@ -180,7 +218,7 @@ def add_account(
             )
             raise typer.Exit(ExitCode.INVALID_ARGS)
         if secret_stdin:
-            secret_value = os.read(0, 4096).decode().rstrip("\n")
+            secret_value = _read_secret_from_stdin()
         else:
             env_secret = os.environ.get("MP_SECRET")
             if not env_secret:
@@ -280,11 +318,7 @@ def update_account(
 
     secret: SecretStr | None = None
     if secret_stdin:
-        secret_value = os.read(0, 4096).decode().rstrip("\n")
-        if not secret_value:
-            err_console.print("[red]Secret is empty.[/red]")
-            raise typer.Exit(ExitCode.INVALID_ARGS)
-        secret = SecretStr(secret_value)
+        secret = SecretStr(_read_secret_from_stdin())
 
     summary = accounts_ns.update(
         name,
@@ -315,10 +349,12 @@ def use_account(
     ctx: typer.Context,
     name: Annotated[str, typer.Argument(help="Account name to make active.")],
 ) -> None:
-    """Set the active account.
+    """Set the active account, clearing any prior workspace pin.
 
-    Per FR-033, this updates ``[active].account`` only; project and
-    workspace remain untouched.
+    Project travels with the account via ``Account.default_project``, but
+    workspace IDs are project-scoped — a workspace ID set under the prior
+    account would resolve to a foreign workspace (or 404) under the new
+    one, so it's dropped on every account swap.
 
     Args:
         ctx: Typer context.

@@ -11859,12 +11859,35 @@ class AccountSummary(BaseModel):
     """Names of targets that reference this account."""
 
 
+class MeUserInfo(BaseModel):
+    """Subset of the ``/api/app/me`` response identifying the principal.
+
+    The full ``/me`` payload is much larger; this trimmed shape captures
+    just the fields callers consistently need to confirm "logged in as
+    X" or "user Y has access".
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: int
+    """Numeric user ID assigned by Mixpanel."""
+
+    email: str
+    """Email address of the authenticated user."""
+
+
 class AccountTestResult(BaseModel):
     """Outcome of ``mp account test NAME`` — captures the ``/me`` probe.
 
     Never raises — error context is captured in ``error`` so the CLI can
     print structured failure messages and ``mp account list`` can color
     accounts as ``needs_login`` / ``needs_token`` based on the error code.
+
+    The ``ok``/``error`` fields are paired by an invariant: ``ok=True``
+    iff ``error is None``. Constructing the model with both ``ok=True``
+    and a non-empty ``error`` (or ``ok=False`` and ``error=None``) raises
+    :class:`pydantic.ValidationError` to prevent ambiguous result states
+    that would force callers to guess the right field to read.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -11875,14 +11898,30 @@ class AccountTestResult(BaseModel):
     ok: bool
     """``True`` if the ``/me`` request succeeded with valid credentials."""
 
-    user: dict[str, Any] | None = None
-    """Subset of the ``/me`` response: ``{"id": ..., "email": ...}``."""
+    user: MeUserInfo | None = None
+    """Authenticated principal identity, when ``ok`` is ``True``."""
 
     accessible_project_count: int | None = None
     """Number of projects the account can read from ``/me``."""
 
     error: str | None = None
     """Human-readable failure reason when ``ok`` is ``False``."""
+
+    @model_validator(mode="after")
+    def _ok_iff_no_error(self) -> AccountTestResult:
+        """Enforce ``ok=True`` ⟺ ``error is None``.
+
+        Returns:
+            ``self`` (no mutation).
+
+        Raises:
+            ValueError: When ``ok``/``error`` disagree.
+        """
+        if self.ok and self.error is not None:
+            raise ValueError("AccountTestResult: ok=True implies error is None.")
+        if not self.ok and self.error is None:
+            raise ValueError("AccountTestResult: ok=False requires a non-empty error.")
+        return self
 
 
 class Target(BaseModel):
@@ -11926,8 +11965,8 @@ class OAuthLoginResult(BaseModel):
     account_name: str
     """Account that was authenticated."""
 
-    user: dict[str, Any] | None = None
-    """Subset of the ``/me`` response: ``{"id": ..., "email": ...}``."""
+    user: MeUserInfo | None = None
+    """Authenticated principal identity from the post-login ``/me`` probe."""
 
     expires_at: datetime | None = None
     """Access-token expiry (UTC) from the token endpoint response."""
