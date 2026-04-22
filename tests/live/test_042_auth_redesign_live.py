@@ -132,7 +132,8 @@ class TestCatA_ServiceAccount:
                 "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
             }
         )
-        # Add the account.
+        # Add the account. Service-account add requires --project (FR enforced
+        # by ConfigManager._apply_add_account; CLI mirrors the same).
         result_add = subprocess.run(
             [
                 "uv",
@@ -147,6 +148,8 @@ class TestCatA_ServiceAccount:
                 live_sa_creds["region"],
                 "--username",
                 live_sa_creds["username"],
+                "--project",
+                live_sa_creds["project_id"],
             ],
             capture_output=True,
             env=env,
@@ -256,29 +259,22 @@ class TestCatB_OAuthBrowser:
         tmp_v3_home: Path,
         require_oauth_browser_available: None,
     ) -> None:
-        """B1.03 — Corrupted tokens.json BEFORE Workspace construction → OAuthError.
+        """B1.03 — Corrupted tokens.json → ``Workspace()`` raises OAuthError.
 
-        The placeholder code path in ``session_to_credentials`` substitutes
-        ``pending-login`` if the resolver fails — that's intentional so the
-        Workspace constructs without raising. To surface a true OAuthError,
-        we need to corrupt BEFORE construction so the resolver fails.
-        Even with the placeholder, the eventual API call surfaces a clean
-        AuthenticationError (401), not a stack trace.
+        Per the PR #126 review fixes (`session_to_credentials`), the resolver
+        no longer swallows token-load failures behind a ``pending-login``
+        placeholder. Bad tokens fail loudly at construction time so users get
+        an actionable error instead of a confusing 401 later.
         """
         _seed_oauth_browser_account(tmp_v3_home)
         # Corrupt BEFORE Workspace construction.
         tokens_path = tmp_v3_home / ".mp" / "accounts" / "personal" / "tokens.json"
         tokens_path.write_text('{"access_token":', encoding="utf-8")
-        # Construction succeeds (placeholder path). API call surfaces a clean error.
-        ws = Workspace()
-        try:
-            with pytest.raises((OAuthError, AuthenticationError)) as excinfo:
-                ws.events()
-            # Error never leaks the placeholder string or any token material.
-            err_str = str(excinfo.value)
-            assert "pending-login" not in err_str
-        finally:
-            ws.close()
+        with pytest.raises((OAuthError, AuthenticationError)) as excinfo:
+            Workspace()
+        err_str = str(excinfo.value)
+        # Error never leaks the placeholder string or any token material.
+        assert "pending-login" not in err_str
 
 
 # =============================================================================
@@ -403,20 +399,28 @@ class TestCatD_CrossModeSwitching:
         The killer claim of R5: connection pool stays alive across account
         switches with real network in flight.
         """
-        # Seed all three accounts in the tmp v3 config.
+        # Seed all three accounts in the tmp v3 config. Service accounts now
+        # require `default_project` at add-time (PR #126 review fix).
         accounts_ns.add(
             "team",
             type="service_account",
             region=live_sa_creds["region"],  # type: ignore[arg-type]
+            default_project=live_sa_creds["project_id"],
             username=live_sa_creds["username"],
             secret=SecretStr(live_sa_creds["secret"]),
         )
         copy_user_oauth_tokens_to_account(tmp_v3_home, "personal")
-        ConfigManager().add_account("personal", type="oauth_browser", region="us")
+        ConfigManager().add_account(
+            "personal",
+            type="oauth_browser",
+            region="us",
+            default_project=get_user_active_project_id() or "1",
+        )
         accounts_ns.add(
             "ci",
             type="oauth_token",
             region=live_oauth_token_creds["region"],  # type: ignore[arg-type]
+            default_project=live_oauth_token_creds["project_id"],
             token=SecretStr(live_oauth_token_creds["token"]),
         )
 
@@ -629,11 +633,20 @@ class TestCatF_Bridge:
         require_oauth_browser_available: None,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """F1.01 — Bridge file embedding user's oauth_browser tokens authenticates."""
-        # Read user's real on-disk tokens.
+        """F1.01 — Bridge file selects oauth_browser account; tokens come from disk.
+
+        Bridge mode for ``oauth_browser`` provides the account record (so the
+        resolver picks it up without a v3 ``[active]`` entry), but the access
+        token is loaded by ``OnDiskTokenResolver`` from the per-account
+        ``tokens.json`` keyed by ``account.name``. We seed both the bridge
+        file and the on-disk token path under the same account name.
+        """
+        # Read user's real on-disk tokens (used both inline-in-bridge and
+        # at the per-account on-disk path the resolver reads from).
         from tests.live.conftest_042 import LEGACY_TOKENS_PATH
 
         legacy_tokens = json.loads(LEGACY_TOKENS_PATH.read_text(encoding="utf-8"))
+        copy_user_oauth_tokens_to_account(tmp_v3_home, "bridged")
 
         bridge_path = tmp_v3_home / "bridge.json"
         pid = get_user_active_project_id() or "1"
@@ -704,26 +717,25 @@ class TestCatG_LiveEdgeCases:
         finally:
             ws.close()
 
-    def test_G1_04_invalid_workspace_id_silent_skip(
+    def test_G1_04_invalid_workspace_id_strict_validation(
         self,
         tmp_v3_home: Path,
         live_sa_creds: dict[str, str],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """G1.04 — MP_WORKSPACE_ID="abc" → silently skipped, Workspace constructs.
+        """G1.04 — MP_WORKSPACE_ID="abc" → strict ConfigError at construction.
 
-        Pass ``project=`` to force the v3 path so the .workspace property is
-        available for assertion.
+        The PR #126 review fixes tightened env validation: malformed
+        ``MP_WORKSPACE_ID`` no longer silently skips — it raises
+        ``ConfigError`` at ``Workspace()`` construction so misconfigured
+        deployments fail loudly instead of silently scoping to None.
         """
+        from mixpanel_data.exceptions import ConfigError
+
         monkeypatch.setenv("MP_USERNAME", live_sa_creds["username"])
         monkeypatch.setenv("MP_SECRET", live_sa_creds["secret"])
         monkeypatch.setenv("MP_PROJECT_ID", live_sa_creds["project_id"])
         monkeypatch.setenv("MP_REGION", live_sa_creds["region"])
         monkeypatch.setenv("MP_WORKSPACE_ID", "abc")  # malformed
-        ws = Workspace(project=live_sa_creds["project_id"])
-        try:
-            assert ws.workspace is None  # silent skip per spec
-            # And the Workspace still works against the API.
-            ws.events()
-        finally:
-            ws.close()
+        with pytest.raises(ConfigError, match="MP_WORKSPACE_ID"):
+            Workspace(project=live_sa_creds["project_id"])
