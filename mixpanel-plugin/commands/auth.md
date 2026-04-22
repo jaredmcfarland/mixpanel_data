@@ -1,43 +1,200 @@
 ---
 name: mixpanel-data:auth
-description: Manage Mixpanel authentication — check status, add/switch/test accounts, OAuth login, migrate config, discover projects. Use with no arguments for a quick status check.
-argument-hint: [status|add|list|switch|test|login|remove|logout|migrate|projects|context|switch-project]
+description: Manage Mixpanel authentication — check session, list/add/use accounts, OAuth login, switch projects/workspaces, manage targets, check the Cowork bridge. Use with no arguments for a one-line session summary.
+argument-hint: [session|account|project|workspace|target|bridge] [...]
 ---
 
 # Mixpanel Authentication Management
 
-You manage Mixpanel credentials using `auth_manager.py`. All operations output JSON — parse it and present results conversationally.
+You manage Mixpanel credentials by shelling out to `auth_manager.py`. Every
+subcommand emits exactly one JSON object to stdout — parse it and present the
+result conversationally.
 
 **Script path:** `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py`
+
+**Schema:** Every response has `schema_version: 1` and a discriminated `state`
+of `ok` | `needs_account` | `needs_project` | `error`. Errors emit JSON to
+stdout (exit 0) so you can `json.loads` unconditionally — no try/except needed.
 
 ## Security Rules (NON-NEGOTIABLE)
 
 - **NEVER ask for secrets (passwords, API secrets) in conversation** — they would be visible in history
 - **NEVER pass secrets as CLI arguments** — visible in process list
-- For account creation, guide the user to run `! mp auth add <name> -u <username> -p <project_id> -r <region>` themselves — this prompts for the secret with hidden input
+- For account creation, guide the user to run `! mp account add <name> --type service_account -u <username> -p <project_id> -r <region>` themselves — this prompts for the secret with hidden input
 
 ## Routing
 
-Parse `$ARGUMENTS` and route to the appropriate operation:
+Parse `$ARGUMENTS` and route to the appropriate subcommand. With no
+arguments, run `session`.
 
-### No arguments or "status"
+### No arguments or "session"
 
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py status`
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py session`
 
-Present the result conversationally:
-- If `active_method` is not `"none"`: Show a brief confirmation with the active method, account name, project ID, and region. If multiple accounts/credentials exist, mention `/mixpanel-data:auth list`. The possible `active_method` values are:
-  - `env_vars` — service-account env vars (`MP_USERNAME`/`MP_SECRET`/`MP_PROJECT_ID`/`MP_REGION`)
-  - `oauth_token_env` — raw OAuth bearer-token env vars (`MP_OAUTH_TOKEN`/`MP_PROJECT_ID`/`MP_REGION`)
-  - `oauth` — OAuth tokens from PKCE storage or v2 OAuth credentials
-  - `service_account` — stored service-account credentials
-- If `active_method` is `"none"`: Diagnose what's missing. Suggest `/mixpanel-data:auth add` (service account), `/mixpanel-data:auth login` (OAuth PKCE browser flow), or `MP_OAUTH_TOKEN` env var (raw bearer token — best for non-interactive contexts like CI or agents).
-- If `env_vars.partial` is true: Show which variables are set and which are missing for the four service-account env vars. Also check `env_vars.oauth_token` for the OAuth-token triple — if either is `partial`, surface the missing vars.
-- If `config_version` is `1`: Mention that `/mixpanel-data:auth migrate` can upgrade to v2 for project switching.
-- If `config_version` is `2`: Show active context (credential + project + workspace) and mention project aliases if any exist.
+Switch on `state`:
+- **`ok`** — show one line: "Active: `account.name` → project `project.id`"
+  (add workspace `workspace.id` if non-null). Mention that
+  `/mixpanel-data:auth account list` and `/mixpanel-data:auth project list`
+  exist if the user wants to switch.
+- **`needs_account`** — no account configured. Show the first
+  `next[0].command` as the recommended onboarding step (OAuth browser flow);
+  list the alternatives in `next[1]` (service account) and `next[2]`
+  (`MP_OAUTH_TOKEN` env triple — best for non-interactive contexts like CI
+  or agents).
+- **`needs_project`** — account configured but no project pinned. Tell the
+  user to run `mp project list` then `mp project use <id>`.
+- **`error`** — show `error.message`. If `error.actionable` is true, the
+  message names a concrete next command.
 
-#### Raw OAuth bearer-token env vars (`MP_OAUTH_TOKEN`)
+### "account list"
 
-For non-interactive contexts (CI, agents, ephemeral environments) where the PKCE browser flow isn't viable, set:
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py account list`
+
+Present `items` as a clean table: `name`, `type`, `region`, `is_active`.
+Mark the active account with a star. If `referenced_by_targets` is non-empty
+for any account, mention it ("`team` is referenced by targets: `ecom`").
+
+If `items` is empty, show the `next` onboarding hints (same as `needs_account`).
+
+### "account add"
+
+This is a guided wizard. Do NOT run any script that handles secrets.
+
+1. Ask for the **account name** (e.g., "personal", "team", "ci")
+2. Ask for the **type** — `oauth_browser` (recommended for laptops),
+   `service_account` (long-lived), or `oauth_token` (CI/agents)
+3. Ask for the **region** (us, eu, or in — default us)
+4. For `service_account`: ask for username and project ID (numeric).
+   For `oauth_token`: ask for project ID and the env-var name holding the bearer.
+   For `oauth_browser`: project ID is OPTIONAL — `mp account login` will
+   backfill it after the PKCE flow.
+5. Then instruct the user to run the appropriate command. For service accounts:
+
+```
+Now run this command — it will prompt for your service account secret with hidden input:
+
+! mp account add <NAME> --type service_account --username <USERNAME> --project <PROJECT_ID> --region <REGION>
+```
+
+For OAuth browser:
+
+```
+! mp account add <NAME> --type oauth_browser --region <REGION>
+! mp account login <NAME>      # opens browser for PKCE flow
+```
+
+Replace placeholders with the values collected above. The `!` prefix runs the
+command in the user's terminal session.
+
+6. After the user confirms they ran it, verify with `account test`:
+   `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py account test <NAME>`
+7. Report success or failure based on the `result.ok` field.
+
+### "account use" or "account use <name>"
+
+If a name is provided:
+- Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py account use <name>`
+
+If no name:
+- First run `account list` to show available accounts
+- Ask which to switch to
+- Then run `account use` with the chosen name
+
+On `state: ok`, show one line: "Switched to `active.account` (project `active.project`)".
+On `state: error`, show `error.message`.
+
+### "account login" or "account login <name>"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py account login <name>`
+
+Tell the user a browser window will open for Mixpanel authentication.
+Wait for the JSON response.
+
+On `state: ok`: "OAuth login successful! `logged_in_as.user.email`, token
+valid until `logged_in_as.expires_at`."
+On `state: error`: Show `error.message` and suggest retrying.
+
+### "account test" or "account test <name>"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py account test [name]`
+
+The subcommand never raises — `state` is always `ok`. Read `result.ok` to
+determine whether the credentials worked:
+- `result.ok: true` → "Connected as `result.user.email` ·
+  `result.accessible_project_count` accessible projects."
+- `result.ok: false` → "Test failed: `result.error`."
+
+### "project list"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py project list`
+
+Present `items` as a table: organization, project name, project ID. Mark the
+active project (`is_active: true`) with a star. Suggest
+`/mixpanel-data:auth project use <id>` to switch.
+
+### "project use <id>"
+
+If no ID: run `project list` first, then ask which to switch to.
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py project use <PROJECT_ID>`
+
+On `state: ok`: "Switched to project `active.project`."
+On `state: error`: Show `error.message`.
+
+### "workspace list"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py workspace list`
+
+Present `items` as a table: workspace ID, name, `is_default`. Mark the
+active workspace with a star. Mention the parent project from
+`project.name` (`project.id`).
+
+### "workspace use <id>"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py workspace use <WORKSPACE_ID>`
+
+On `state: ok`: "Pinned workspace `active.workspace`."
+
+### "target list"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py target list`
+
+Targets are saved (account, project, workspace?) triples — named cursor
+positions. Present as a table: name, account, project, workspace.
+
+### "target add"
+
+Guided wizard — collect target name, account name, project ID, optional
+workspace ID. Then either invoke the auth_manager directly:
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py target add <NAME> --account <ACCT> --project <PROJ> [--workspace <WS>]
+```
+
+Or guide the user to `! mp target add <NAME> --account <ACCT> --project <PROJ> [--workspace <WS>]`.
+
+### "target use <name>"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py target use <name>`
+
+Applies all three axes (`account` / `project` / `workspace`) to `[active]`
+in a single atomic config write.
+
+### "bridge status"
+
+Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py bridge status`
+
+Parse the JSON:
+- If `bridge` is null → "No Cowork bridge file found. To create one, run
+  `mp account export-bridge --to <path>` on your host machine."
+- If `bridge` is non-null → show `bridge.path`, `bridge.account.name`
+  (`bridge.account.type`), pinned `bridge.project` / `bridge.workspace` if set,
+  and any custom `bridge.headers`.
+
+## Bearer-token env vars (`MP_OAUTH_TOKEN`)
+
+For non-interactive contexts (CI, agents, ephemeral environments) where the
+PKCE browser flow isn't viable, set:
 
 ```
 export MP_OAUTH_TOKEN=<bearer-token>
@@ -45,143 +202,15 @@ export MP_PROJECT_ID=<project-id>
 export MP_REGION=<us|eu|in>
 ```
 
-The library builds an `Authorization: Bearer <token>` header for every Mixpanel endpoint. The full service-account env-var set (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) takes precedence when both sets are complete, so this is safe to add to a shell that already exports the service-account vars.
-
-### "list"
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py list`
-
-For **v1 config**: Present accounts as a clean table. Mark the default account with a star. Show account name, project ID, and region.
-
-For **v2 config**: Present two sections:
-1. **Credentials** — name, type (service_account/oauth), region, active status
-2. **Project aliases** — alias name, project ID, credential, workspace ID
-
-### "add"
-
-This is a guided wizard. Do NOT run any script that handles secrets.
-
-1. Ask for the **account name** (e.g., "production", "staging")
-2. Ask for the **service account username** (safe to share — it's not a secret)
-3. Ask for the **project ID** (numeric)
-4. Ask for the **region** (us, eu, or in — default us)
-5. Then instruct the user:
-
-```
-Now run this command — it will prompt for your service account secret with hidden input:
-
-! mp auth add <NAME> -u <USERNAME> -p <PROJECT_ID> -r <REGION>
-```
-
-Replace the placeholders with the values collected above. The `!` prefix runs the command in the user's terminal session.
-
-6. After the user confirms they ran it, verify:
-   `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py test <NAME>`
-7. Report success or failure.
-
-### "switch" or "switch <name>"
-
-If a name is provided:
-- Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py switch <name>`
-
-If no name:
-- First run `list` to show available accounts/credentials
-- Ask which one to switch to
-- Then run `switch` with the chosen name
-
-### "test" or "test <name>"
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py test [name]`
-
-On success: "Connected! Found N events in project P (region R)."
-On failure: Diagnose the specific error and suggest remediation:
-- `AuthenticationError` → "Credentials are invalid. Check your username and secret."
-- `AccountNotFoundError` → "Account not found. Run `/mixpanel-data:auth list` to see available accounts."
-- `ConfigError` → "No credentials configured. Run `/mixpanel-data:auth add` to set up."
-
-### "login" or "login --region <R>"
-
-Ask for the region if not provided (default: us). Ask for project ID if the user wants to associate one.
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py oauth-login --region <REGION> [--project-id <ID>]`
-
-Tell the user a browser window will open for Mixpanel authentication. Wait for the result.
-
-On success: "OAuth login successful! Token valid until <expires_at>."
-On failure: Show the error and suggest retrying.
-
-### "remove" or "remove <name>"
-
-If no name: run `list` first, then ask which account/credential to remove.
-
-**Always confirm before removing**: "Remove account '<name>'? This cannot be undone."
-
-After confirmation:
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py remove <name>`
-
-For v2 config, if the response includes `orphaned_aliases`, warn the user about project aliases that referenced the removed credential.
-
-### "logout" or "logout --region <R>"
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py oauth-logout [--region <R>]`
-
-If no region specified, removes all OAuth tokens. Confirm first: "This will remove all OAuth tokens. Continue?"
-
-### "migrate"
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py migrate --dry-run`
-
-Show the user what will change (credentials created, aliases created). Ask for confirmation.
-
-If confirmed:
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py migrate`
-
-On success: Report migration results. Explain that accounts are now split into credentials (auth identity) and project aliases (project selection), enabling project switching without reconfiguring auth.
-
-If already v2: Tell the user no migration is needed.
-
-### "projects"
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py projects`
-
-Present accessible projects as a table: organization, project name, project ID, timezone. Suggest `/mixpanel-data:auth switch-project <ID>` to switch.
-
-### "context"
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py context`
-
-Show the active credential, project ID, and workspace ID. For v1 config, suggest migrating.
-
-### "switch-project" or "switch-project <project_id>"
-
-If no project_id: run `projects` first, then ask which to switch to.
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py switch-project <PROJECT_ID> [--workspace-id <WS_ID>]`
-
-On success: Confirm the active project was changed.
-If v1 config: Error suggests running `/mixpanel-data:auth migrate` first.
-
-### "cowork-setup"
-
-This command is only available on the host machine, not inside Cowork.
-Tell the user: "Run `mp auth cowork-setup` on your **host machine** (not inside Cowork) to export credentials for Cowork sessions."
-
-### "cowork-status"
-
-Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py cowork-status`
-
-Parse the JSON and present:
-- If `bridge_found` is true: Show auth method, project, region, token expiry, custom header presence
-- If `bridge_found` is false: Suggest running `mp auth cowork-setup` on the host machine
-
-### "cowork-teardown"
-
-This command is only available on the host machine, not inside Cowork.
-Tell the user: "Run `mp auth cowork-teardown` on your **host machine** to remove Cowork credentials."
+The library builds an `Authorization: Bearer <token>` header for every
+Mixpanel endpoint. The full service-account env-var set (`MP_USERNAME` +
+`MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) takes precedence when both
+sets are complete, so this is safe to add to a shell that already exports
+the service-account vars.
 
 ## Presentation Style
 
-- Be concise — show status in 2-3 lines, not a wall of JSON
-- Use tables for lists of accounts, credentials, or projects
+- Be concise — show status in 1–2 lines, not a wall of JSON
+- Use tables for lists of accounts, projects, workspaces, targets
 - Always suggest a next action when something is missing
-- On errors, be specific about what went wrong and how to fix it
+- On errors, show `error.message` verbatim — it names the fix

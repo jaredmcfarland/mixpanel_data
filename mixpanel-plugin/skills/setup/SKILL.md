@@ -19,20 +19,21 @@ This will:
 1. Verify Python 3.10+ is available
 2. Install `mixpanel_data`, `pandas`, `numpy`, `matplotlib`, `seaborn`, `networkx>=3.0`, `anytree>=2.8.0`, `scipy`, and `pyarrow>=17.0` on Python 3.11+ (tries uv, pip in order)
 3. Verify all packages import successfully (including pyarrow on 3.11+, networkx, anytree, and scipy)
-4. Check for configured Mixpanel credentials (supports both v1 and v2 config schemas)
+4. Check for configured Mixpanel credentials (single v3 schema — Account → Project → Workspace)
 
 ## Check Credentials
 
-After installation, check auth status:
+After installation, check the active session:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/../mixpanelyst/scripts/auth_manager.py status
+python3 ${CLAUDE_SKILL_DIR}/../mixpanelyst/scripts/auth_manager.py session
 ```
 
-Parse the JSON result:
-- If `active_method` is not `"none"`, credentials are configured — proceed to verification.
-- If `config_version` is `1`, suggest `/mixpanel-data:auth migrate` to upgrade to v2 for project switching.
-- If `config_version` is `2`, show the active credential and project context.
+Parse the JSON `state` field:
+- **`ok`** — credentials configured. Show `account.name` → project `project.id` and proceed to verification.
+- **`needs_account`** — no account configured. Read `next` for onboarding suggestions and follow "If Credentials Are Missing" below.
+- **`needs_project`** — account configured but no project pinned. Suggest `mp project list` then `mp project use <id>`.
+- **`error`** — show `error.message`. If `error.actionable` is true, the message names a concrete next command.
 
 ## If Credentials Are Missing
 
@@ -40,11 +41,23 @@ If no credentials are configured, guide the user to one of these methods:
 
 ### Recommended: Guided Setup
 
-Tell the user to run `/mixpanel-data:auth add` for a step-by-step walkthrough that securely collects credentials.
+Tell the user to run `/mixpanel-data:auth account add` for a step-by-step
+walkthrough that securely collects credentials. The slash command never
+prompts for secrets in conversation — it instructs the user to run
+`! mp account add ...` themselves so the secret is read with hidden input.
 
 ### Alternative: OAuth Login
 
-Tell the user to run `/mixpanel-data:auth login` for browser-based authentication (no service account needed).
+For OAuth browser auth (laptops with a usable browser):
+
+```
+! mp account add personal --type oauth_browser --region us
+! mp account login personal     # opens browser for PKCE flow
+```
+
+The first `mp account add` registers the account; `mp account login` runs
+the PKCE dance, persists tokens to `~/.mp/accounts/personal/tokens.json`,
+and backfills the account's default project from the post-login `/me` probe.
 
 ### Alternative: Service-Account Environment Variables (temporary)
 
@@ -84,57 +97,62 @@ If running inside Claude Cowork (detected automatically), credentials work diffe
 Tell the user:
 
 > No Mixpanel credentials found in this Cowork session.
-> 
+>
 > On your **host machine** (outside Cowork), run:
 > ```
-> mp auth cowork-setup
+> mp account export-bridge --to ~/.claude/mixpanel/auth.json
 > ```
-> This exports your credentials to `~/.claude/mixpanel/auth.json`, which is
-> automatically mounted into Cowork sessions.
-> 
+> This writes a v2 bridge file embedding your account record (and any
+> oauth_browser tokens) so the Cowork session can read your credentials
+> at startup.
+>
 > Then **start a new Cowork session** — credentials will be available automatically.
 
-Do NOT suggest `/mixpanel-data:auth login`, `/mixpanel-data:auth add`, or environment variables — these won't work inside Cowork.
+Do NOT suggest `/mixpanel-data:auth account login`, `/mixpanel-data:auth account add`, or interactive flows — these won't work inside Cowork.
 
 ### If Bridge File Found But Token Expired
 
-The library will auto-refresh the OAuth token (no browser needed). If refresh fails:
+The library will auto-refresh the OAuth token via the on-disk refresh
+token (no browser needed). If refresh fails:
 
 > Your OAuth session has expired and could not be refreshed.
 > On your host machine, run:
 > ```
-> mp auth login        # re-authenticate
-> mp auth cowork-setup # re-export to Cowork
+> mp account login personal           # re-authenticate
+> mp account export-bridge --to ~/.claude/mixpanel/auth.json
 > ```
 > Then start a new Cowork session.
 
 ## Verify Everything Works
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/../mixpanelyst/scripts/auth_manager.py test
+python3 ${CLAUDE_SKILL_DIR}/../mixpanelyst/scripts/auth_manager.py account test
 ```
 
-If the result shows `"success": true`, setup is complete. The user can now ask questions about their Mixpanel data.
-
-If verification fails, suggest `/mixpanel-data:auth test` for detailed diagnostics.
+The subcommand never raises — read `result.ok` to determine outcome.
+- `result.ok: true` → setup is complete; the user can ask analytics questions.
+- `result.ok: false` → suggest `/mixpanel-data:auth account test` for detailed diagnostics.
 
 ## Post-Setup: Explore Your Data
 
-Once authenticated, these commands help orient the user:
+Once authenticated, these slash commands help orient the user:
 
-- `/mixpanel-data:auth projects` — discover all accessible projects via the /me API
-- `/mixpanel-data:auth context` — see the active credential + project + workspace
-- `/mixpanel-data:auth switch-project <ID>` — switch to a different project (v2 config only)
+- `/mixpanel-data:auth project list` — discover all accessible projects via `/me`
+- `/mixpanel-data:auth session` — see active account / project / workspace
+- `/mixpanel-data:auth project use <id>` — switch to a different project
+- `/mixpanel-data:auth target add NAME --account A --project P` — save a named cursor position
 
-The user can also construct a Workspace targeting a specific credential or project:
+The user can also construct a Workspace targeting a specific account / project /
+workspace directly:
 
 ```python
 import mixpanel_data as mp
 
-ws = mp.Workspace()                              # default credentials
-ws = mp.Workspace(account="production")           # named account (v1)
-ws = mp.Workspace(credential="production")        # named credential (v2)
-ws = mp.Workspace(project_id="67890", region="eu") # explicit project
+ws = mp.Workspace()                                  # default session
+ws = mp.Workspace(account="team")                    # named account
+ws = mp.Workspace(project="67890")                   # explicit project (active account)
+ws = mp.Workspace(account="team", project="67890")   # both axes
+ws.use(project="98765").events()                     # in-session switch (no re-auth)
 ```
 
 _The mixpanelyst skill auto-triggers on analytics questions. For the analytical frameworks that guide investigations, see [analytical-frameworks.md](../mixpanelyst/references/analytical-frameworks.md). For the complete Python API, see [python-api.md](../mixpanelyst/references/python-api.md)._
