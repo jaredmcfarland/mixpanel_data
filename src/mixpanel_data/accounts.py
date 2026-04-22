@@ -448,49 +448,80 @@ def token(name: str | None = None) -> str | None:
     )
 
 
-def export_bridge(*, to: Path, account: str | None = None) -> Path:
+def export_bridge(
+    *,
+    to: Path,
+    account: str | None = None,
+    project: str | None = None,
+    workspace: int | None = None,
+) -> Path:
     """Export the named (or active) account as a v2 bridge file.
 
-    Phase 4 stub — full writer lands in Phase 8.
+    Resolves the account, attaches any ``[settings].custom_header`` as
+    ``bridge.headers`` (B5 — header attaches in memory at resolution time
+    for the consumer), and writes a 0o600 file at ``to`` via
+    :func:`bridge.export_bridge`.
 
     Args:
         to: Destination path for the bridge file.
         account: Account to export; ``None`` means the active account.
+        project: Optional pinned project ID. ``None`` omits the field.
+        workspace: Optional pinned workspace ID. ``None`` omits the field.
+
+    Returns:
+        The path that was written (same as ``to``).
 
     Raises:
-        NotImplementedError: Phase 4 stub.
+        ConfigError: Account not found, no active account, or
+            ``BridgeFile`` validation failure.
+        OAuthError: ``account.type == "oauth_browser"`` but no on-disk
+            tokens are available.
     """
-    raise NotImplementedError(
-        "`mp.accounts.export_bridge` is implemented in Phase 8 (US8)."
+    from mixpanel_data._internal.auth.bridge import (
+        export_bridge as _bridge_export,
+    )
+
+    cm = _config()
+    name = account or cm.get_active().account
+    if name is None:
+        raise ConfigError("No account specified and no active account configured.")
+    acct = cm.get_account(name)
+    header = cm.get_custom_header()
+    headers = {header[0]: header[1]} if header is not None else None
+    return _bridge_export(
+        acct,
+        to=to,
+        project=project,
+        workspace=workspace,
+        headers=headers,
+        token_resolver=OnDiskTokenResolver(),
     )
 
 
 def remove_bridge(*, at: Path | None = None) -> bool:
     """Remove the v2 bridge file at ``at`` (or the default path).
 
-    Phase 4 stub — full implementation lands in Phase 8.
-
     Args:
-        at: Bridge file path; ``None`` means the default search path.
+        at: Bridge file path; ``None`` means ``MP_AUTH_FILE`` then the
+            default search paths.
 
-    Raises:
-        NotImplementedError: Phase 4 stub.
+    Returns:
+        ``True`` if a file was deleted; ``False`` if none was found.
     """
-    raise NotImplementedError(
-        "`mp.accounts.remove_bridge` is implemented in Phase 8 (US8)."
+    from mixpanel_data._internal.auth.bridge import (
+        remove_bridge as _bridge_remove,
     )
 
+    return _bridge_remove(at=at)
 
-# Note: ``login``, ``test``, ``export_bridge``, and ``remove_bridge`` are
-# defined above as stubs but intentionally NOT exported. They become public
-# in __all__ once the underlying OAuth/PKCE/bridge writer wiring lands. This
-# keeps `from mixpanel_data import accounts; accounts.<TAB>` from advertising
-# functions that immediately raise ``NotImplementedError``.
+
 __all__ = [
     "add",
+    "export_bridge",
     "list",
     "logout",
     "remove",
+    "remove_bridge",
     "show",
     "token",
     "update",

@@ -360,26 +360,10 @@ class TestToken:
         assert result == "ey.tok-123"
 
 
-class TestStubs:
-    """Bridge functions are stubs in Phase 4 — they raise NotImplementedError."""
-
-    def test_export_bridge_stub(self, cm: ConfigManager, tmp_path: Path) -> None:
-        """``export_bridge`` is a stub until Phase 8."""
-        accounts_ns.add(
-            "team",
-            type="service_account",
-            region="us",
-            default_project="3713224",
-            username="u",
-            secret=SecretStr("s"),
-        )
-        with pytest.raises(NotImplementedError):
-            accounts_ns.export_bridge(to=tmp_path / "bridge.json")
-
-    def test_remove_bridge_stub(self, cm: ConfigManager) -> None:
-        """``remove_bridge`` is a stub until Phase 8."""
-        with pytest.raises(NotImplementedError):
-            accounts_ns.remove_bridge()
+# Cluster C2 (T089 / T090) replaced the Phase-4 stubs with real bridge
+# writers. Functional coverage now lives in tests/unit/test_bridge_export.py
+# (15 tests across the standalone bridge.export_bridge / remove_bridge
+# functions plus the mp.accounts wrappers).
 
 
 class TestLogin:

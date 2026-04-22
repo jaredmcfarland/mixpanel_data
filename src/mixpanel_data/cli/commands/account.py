@@ -513,6 +513,7 @@ def logout_account(
 
 
 @account_app.command("export-bridge")
+@handle_errors
 def export_bridge_command(
     name: Annotated[
         str | None,
@@ -522,23 +523,39 @@ def export_bridge_command(
         Path,
         typer.Option("--to", help="Destination bridge file path."),
     ] = Path("./mixpanel_auth.json"),
+    project: Annotated[
+        str | None,
+        typer.Option("--project", help="Pin a project ID into the bridge."),
+    ] = None,
+    workspace: Annotated[
+        int | None,
+        typer.Option("--workspace", help="Pin a workspace ID into the bridge."),
+    ] = None,
 ) -> None:
-    """Export the named account as a v2 bridge file (Phase 8 stub)."""
-    err_console.print(
-        "[yellow]`mp account export-bridge` is implemented in Phase 8 (US8).[/yellow]"
+    """Export the named (or active) account as a v2 bridge file at ``--to``.
+
+    For ``oauth_browser`` accounts, embeds the on-disk OAuth tokens so the
+    consumer side (typically a Cowork VM) authenticates without re-running
+    PKCE. Settings-side ``[settings].custom_header`` propagates into the
+    bridge's ``headers`` block.
+    """
+    written = accounts_ns.export_bridge(
+        to=to, account=name, project=project, workspace=workspace
     )
-    raise typer.Exit(ExitCode.GENERAL_ERROR)
+    console.print(f"Wrote bridge file to {written}")
 
 
 @account_app.command("remove-bridge")
+@handle_errors
 def remove_bridge_command(
     at: Annotated[
         Path | None,
         typer.Option("--at", help="Bridge file path (defaults to standard search)."),
     ] = None,
 ) -> None:
-    """Remove the v2 bridge file (Phase 8 stub)."""
-    err_console.print(
-        "[yellow]`mp account remove-bridge` is implemented in Phase 8 (US8).[/yellow]"
-    )
-    raise typer.Exit(ExitCode.GENERAL_ERROR)
+    """Delete the bridge file at ``--at`` (or the resolved default path).
+
+    Idempotent — no error if the bridge is already absent (exit 0 either way).
+    """
+    removed = accounts_ns.remove_bridge(at=at)
+    console.print("Removed bridge file." if removed else "No bridge file to remove.")
