@@ -1,0 +1,32 @@
+# v2 fixture: two credentials (one SA + one OAuth), three project aliases,
+# active points at the SA. Companion ~/.mp/oauth/tokens_us.json should migrate
+# to the OAuth account's per-account directory during conversion.
+
+config_version = 2
+
+[credentials.team]
+type = "service_account"
+username = "team.sa"
+secret = "team-secret"
+region = "us"
+
+[credentials.personal]
+type = "oauth"
+region = "us"
+
+[projects.ecom]
+credential = "team"
+project_id = "3018488"
+workspace_id = 3448414
+
+[projects.ai]
+credential = "team"
+project_id = "3713224"
+
+[projects.personal-default]
+credential = "personal"
+project_id = "9999999"
+
+[active]
+credential = "team"
+project_id = "3018488"

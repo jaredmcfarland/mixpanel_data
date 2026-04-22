@@ -47,7 +47,18 @@ if TYPE_CHECKING:
     )
     from mixpanel_data._internal.me import MeProjectInfo, MeService, MeWorkspaceInfo
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
+from mixpanel_data._internal.api_client import (
+    MixpanelAPIClient,
+    session_to_credentials,
+)
+from mixpanel_data._internal.auth.account import Account as _AccountUnion
+from mixpanel_data._internal.auth.resolver import resolve_session as _resolve_session_v3
+from mixpanel_data._internal.auth.session import (
+    Project as _ProjectV3,
+    Session as _SessionV3,
+    WorkspaceRef as _WorkspaceRefV3,
+)
+from mixpanel_data._internal.config_v3 import ConfigManager as _ConfigManagerV3
 from mixpanel_data._internal.bookmark_builders import (
     _build_composed_properties,
     build_date_range,
@@ -358,6 +369,12 @@ class Workspace:
         region: str | None = None,
         workspace_id: int | None = None,
         credential: str | None = None,
+        *,
+        # 042 redesign keyword-only kwargs (additive — coexists with legacy).
+        project: str | None = None,
+        workspace: int | None = None,
+        target: str | None = None,
+        session: _SessionV3 | None = None,
         # Dependency injection for testing
         _config_manager: ConfigManager | None = None,
         _api_client: MixpanelAPIClient | None = None,
@@ -376,25 +393,67 @@ class Workspace:
         When ``credential`` is provided, uses the v2 ``resolve_session()``
         path instead of the legacy ``resolve_credentials()`` path.
 
+        042 redesign: when any of ``project``, ``workspace``, ``target``, or
+        ``session`` keyword-only kwargs is supplied, OR when no positional
+        args are given AND a v3 config is on disk, the new
+        :func:`~mixpanel_data._internal.auth.resolver.resolve_session`
+        pathway is used instead. The legacy path remains for v1/v2
+        configs and explicit positional callers.
+
         Args:
-            account: Named account from config file. Selects credentials
-                in both v1 (resolve_credentials) and v2 (resolve_session)
-                configs. For migrated v2 configs, also resolves project
-                aliases.
-            project_id: Override project ID from credentials.
-            region: Override region from credentials (us, eu, in).
-            workspace_id: Optional workspace ID for scoped App API requests.
-                If provided, the API client will use workspace-scoped paths.
-            credential: Credential name to use (v2 config path). When
-                provided, uses ``ConfigManager.resolve_session()`` instead
-                of ``resolve_credentials()``.
-            _config_manager: Injected ConfigManager for testing.
+            account: Named account from config file (legacy + v3 — same name).
+            project_id: Override project ID from credentials (LEGACY kwarg).
+            region: Override region from credentials (LEGACY kwarg).
+            workspace_id: Optional workspace ID for scoped App API requests
+                (LEGACY kwarg).
+            credential: Credential name (v2 config path; LEGACY kwarg).
+            project: Project ID (042 redesign kwarg; mutually exclusive with
+                ``target``).
+            workspace: Workspace ID (042 redesign kwarg; mutually exclusive
+                with ``target``).
+            target: Apply this target's three axes (042 redesign kwarg;
+                mutually exclusive with ``account``/``project``/``workspace``).
+            session: Pre-built Session (042 redesign — full bypass of the
+                resolver).
+            _config_manager: Injected ConfigManager for testing (legacy path).
             _api_client: Injected MixpanelAPIClient for testing.
 
         Raises:
+            ValueError: ``target=`` combined with any axis kwarg.
             ConfigError: If no credentials can be resolved.
             AccountNotFoundError: If named account doesn't exist.
         """
+        # 042 redesign path: triggered by any new kwarg OR a v3 config on disk.
+        v3_kwargs_set = (
+            session is not None
+            or project is not None
+            or workspace is not None
+            or target is not None
+        )
+        legacy_kwargs_set = (
+            project_id is not None
+            or region is not None
+            or workspace_id is not None
+            or credential is not None
+            or _config_manager is not None
+        )
+        if v3_kwargs_set or (not legacy_kwargs_set and self._has_v3_config()):
+            try:
+                self._init_v3(
+                    account=account,
+                    project=project,
+                    workspace=workspace,
+                    target=target,
+                    session=session,
+                    _api_client=_api_client,
+                )
+            except ConfigError:
+                if v3_kwargs_set:
+                    raise
+                # Fall through to legacy if no new kwargs forced the v3 path.
+            else:
+                return
+
         # Store injected or create default ConfigManager
         self._config_manager = _config_manager or ConfigManager()
 
@@ -405,25 +464,25 @@ class Workspace:
 
         if credential is not None:
             # v2 path: use resolve_session
-            session = self._config_manager.resolve_session(
+            v2_session = self._config_manager.resolve_session(
                 credential=credential,
                 project_id=project_id,
                 workspace_id=workspace_id,
             )
-            self._resolved_session = session
+            self._resolved_session = v2_session
 
             # Build legacy Credentials from session for backward compat
-            self._credentials = self._session_to_credentials(session)
+            self._credentials = self._session_to_credentials(v2_session)
         else:
             if self._config_manager.config_version() >= 2:
                 # v2 config detected — use resolve_session
-                session = self._config_manager.resolve_session(
+                v2_session = self._config_manager.resolve_session(
                     credential=account,
                     project_id=project_id,
                     workspace_id=workspace_id,
                 )
-                self._resolved_session = session
-                self._credentials = self._session_to_credentials(session)
+                self._resolved_session = v2_session
+                self._credentials = self._session_to_credentials(v2_session)
             else:
                 # Legacy v1 path: use resolve_credentials
                 self._credentials = self._config_manager.resolve_credentials(account)
@@ -460,6 +519,299 @@ class Workspace:
         self._initial_workspace_id = effective_workspace_id
         if effective_workspace_id is not None and self._api_client is not None:
             self._api_client.set_workspace_id(effective_workspace_id)
+
+    # =========================================================================
+    # 042 redesign: v3 path (additive — coexists with legacy path above)
+    # =========================================================================
+
+    @staticmethod
+    def _has_v3_config() -> bool:
+        """Return True if v3 resolution should be attempted at the current paths.
+
+        Returns ``True`` when EITHER:
+        - ``ConfigManager_v3`` can read the file with at least one account
+          or an explicit ``[active].account``, OR
+        - a v2 bridge file is loadable from ``MP_AUTH_FILE`` or the default
+          search paths (the bridge is a self-contained synthetic config
+          source for the v3 resolver).
+
+        Returns:
+            ``True`` if the v3 path should be attempted.
+        """
+        try:
+            cm = _ConfigManagerV3()
+            accounts = cm.list_accounts()
+            if accounts or cm.get_active().account:
+                return True
+        except ConfigError:
+            pass
+        # Check the bridge file as a synthetic v3 config source.
+        try:
+            from mixpanel_data._internal.auth.bridge import load_bridge
+
+            return load_bridge() is not None
+        except ConfigError:
+            # A malformed bridge file at the resolved path — let v3 path
+            # surface the error rather than silently falling back to legacy.
+            return True
+
+    def _init_v3(
+        self,
+        *,
+        account: str | None,
+        project: str | None,
+        workspace: int | None,
+        target: str | None,
+        session: _SessionV3 | None,
+        _api_client: MixpanelAPIClient | None,
+    ) -> None:
+        """Initialize the v3 (042 redesign) code path.
+
+        Either consumes a pre-built ``Session`` (full bypass) or routes
+        through :func:`resolve_session` to build one from per-axis inputs.
+        Wires a session-aware :class:`MixpanelAPIClient`.
+
+        Args:
+            account: Account name override.
+            project: Project ID override.
+            workspace: Workspace ID override.
+            target: Target name (mutually exclusive with account/project/workspace).
+            session: Pre-built Session (full bypass).
+            _api_client: Optional injected client (testing).
+
+        Raises:
+            ValueError: ``target`` combined with any axis kwarg.
+            ConfigError: Resolution failure.
+        """
+        # Common book-keeping shared by both legacy and v3 paths.
+        self._config_manager = ConfigManager()
+        self._credentials = None
+        self._account_name = account
+        self._resolved_session = None
+        self._discovery = None
+        self._live_query = None
+        self._me_service = None
+
+        if session is not None:
+            sess = session
+        else:
+            from mixpanel_data._internal.auth.bridge import load_bridge
+
+            br = load_bridge()
+            # If the bridge has oauth_browser tokens embedded, materialize them
+            # to the per-account on-disk path so the OnDiskTokenResolver can
+            # serve them downstream. This is the Cowork credential-courier
+            # contract: the bridge is the source of truth at startup.
+            if (
+                br is not None
+                and br.tokens is not None
+                and br.account.type == "oauth_browser"
+            ):
+                from mixpanel_data._internal.auth.storage import (
+                    ensure_account_dir,
+                )
+                import json as _json
+                tokens_path = ensure_account_dir(br.account.name) / "tokens.json"
+                if not tokens_path.exists():
+                    payload = {
+                        "access_token": br.tokens.access_token.get_secret_value(),
+                        "expires_at": (
+                            br.tokens.expires_at.isoformat()
+                            if br.tokens.expires_at
+                            else None
+                        ),
+                        "scope": br.tokens.scope or "read",
+                        "token_type": br.tokens.token_type,
+                    }
+                    if br.tokens.refresh_token is not None:
+                        payload["refresh_token"] = (
+                            br.tokens.refresh_token.get_secret_value()
+                        )
+                    tokens_path.write_text(
+                        _json.dumps(payload), encoding="utf-8"
+                    )
+                    tokens_path.chmod(0o600)
+            sess = _resolve_session_v3(
+                account=account,
+                project=project,
+                workspace=workspace,
+                target=target,
+                config=_ConfigManagerV3(),
+                bridge=br,
+            )
+        self._v3_session = sess
+        # Build a Credentials shim so legacy attribute reads keep working.
+        self._credentials = session_to_credentials(sess)
+        self._initial_workspace_id = sess.workspace.id if sess.workspace else None
+        if _api_client is not None:
+            self._api_client = _api_client
+        else:
+            self._api_client = MixpanelAPIClient(session=sess)
+
+    # ---- v3 read-only properties --------------------------------------
+
+    @property
+    def account(self) -> _AccountUnion:
+        """Return the resolved :class:`Account` for the current session.
+
+        Returns:
+            The active ``Account`` discriminated union variant.
+
+        Raises:
+            RuntimeError: If this Workspace was constructed via the legacy
+                path (no v3 Session is bound).
+        """
+        if not hasattr(self, "_v3_session") or self._v3_session is None:
+            raise RuntimeError(
+                "Workspace.account is only available when constructed via the "
+                "042 redesign path (pass project=, target=, or session=, or "
+                "use a v3 ~/.mp/config.toml)."
+            )
+        return self._v3_session.account
+
+    @property
+    def project(self) -> _ProjectV3:
+        """Return the resolved :class:`Project` for the current session.
+
+        Returns:
+            The session's :class:`Project` value.
+
+        Raises:
+            RuntimeError: If constructed via the legacy path.
+        """
+        if not hasattr(self, "_v3_session") or self._v3_session is None:
+            raise RuntimeError(
+                "Workspace.project is only available via the 042 redesign path."
+            )
+        return self._v3_session.project
+
+    @property
+    def workspace(self) -> _WorkspaceRefV3 | None:
+        """Return the resolved :class:`WorkspaceRef` (or None for lazy)."""
+        if not hasattr(self, "_v3_session") or self._v3_session is None:
+            raise RuntimeError(
+                "Workspace.workspace is only available via the 042 redesign path."
+            )
+        return self._v3_session.workspace
+
+    @property
+    def session(self) -> _SessionV3:
+        """Return the bound :class:`Session`."""
+        if not hasattr(self, "_v3_session") or self._v3_session is None:
+            raise RuntimeError(
+                "Workspace.session is only available via the 042 redesign path."
+            )
+        return self._v3_session
+
+    # ---- v3 in-session switching --------------------------------------
+
+    def use(
+        self,
+        *,
+        account: str | None = None,
+        project: str | None = None,
+        workspace: int | None = None,
+        target: str | None = None,
+        persist: bool = False,
+    ) -> "Workspace":
+        """Swap one or more session axes in place; return ``self`` for chaining.
+
+        ``target=`` is mutually exclusive with ``account=``/``project=``/
+        ``workspace=``. The HTTP transport is preserved across all switches
+        (per Research R5).
+
+        Args:
+            account: Replacement account name.
+            project: Replacement project ID.
+            workspace: Replacement workspace ID.
+            target: Apply this target's three axes atomically.
+            persist: When ``True``, also write the new state to ``[active]``.
+
+        Returns:
+            ``self`` for fluent chaining.
+
+        Raises:
+            ValueError: Mutually exclusive args, or referenced name missing.
+            OAuthError: New auth header construction fails (atomic on success).
+        """
+        if target is not None and (
+            account is not None or project is not None or workspace is not None
+        ):
+            raise ValueError(
+                "`target=` is mutually exclusive with `account=`/`project=`/`workspace=`."
+            )
+        if not hasattr(self, "_v3_session") or self._v3_session is None:
+            # First call promotes this Workspace into the v3 path.
+            self._init_v3(
+                account=account,
+                project=project,
+                workspace=workspace,
+                target=target,
+                session=None,
+                _api_client=None,
+            )
+            if persist:
+                self._persist_active()
+            return self
+
+        cm = _ConfigManagerV3()
+        new_account_obj: _AccountUnion | None = None
+        new_project_obj: _ProjectV3 | None = None
+        new_workspace_obj: _WorkspaceRefV3 | None = None
+        if target is not None:
+            t = cm.get_target(target)
+            new_account_obj = cm.get_account(t.account)
+            new_project_obj = _ProjectV3(id=t.project)
+            new_workspace_obj = (
+                _WorkspaceRefV3(id=t.workspace) if t.workspace is not None else None
+            )
+            client = self._require_api_client()
+            client.use(
+                account=new_account_obj,
+                project=new_project_obj,
+                workspace=new_workspace_obj,
+            )
+            self._v3_session = client.session
+        else:
+            client = self._require_api_client()
+            new_account_obj = cm.get_account(account) if account is not None else None
+            new_project_obj = (
+                _ProjectV3(id=project) if project is not None else None
+            )
+            new_workspace_obj = (
+                _WorkspaceRefV3(id=workspace) if workspace is not None else None
+            )
+            # Per FR-033: account-only swap clears in-session project state
+            # (re-resolve from [active] / env on next use).
+            if account is not None and project is None:
+                active = cm.get_active()
+                if active.project is not None:
+                    new_project_obj = _ProjectV3(id=active.project)
+            client.use(
+                account=new_account_obj,
+                project=new_project_obj,
+                workspace=new_workspace_obj,
+            )
+            self._v3_session = client.session
+
+        if persist:
+            self._persist_active()
+        return self
+
+    def _persist_active(self) -> None:
+        """Write the current session's three axes to ``[active]``."""
+        if self._v3_session is None:
+            return
+        cm = _ConfigManagerV3()
+        cm.set_active(
+            account=self._v3_session.account.name,
+            project=self._v3_session.project.id,
+            workspace=(
+                self._v3_session.workspace.id
+                if self._v3_session.workspace
+                else None
+            ),
+        )
 
     @staticmethod
     def _session_to_credentials(session: ResolvedSession) -> Credentials:

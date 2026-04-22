@@ -1,0 +1,15 @@
+# v2 fixture: custom header in [settings] survives unchanged.
+
+config_version = 2
+
+[credentials.team]
+type = "service_account"
+username = "team.sa"
+secret = "team-secret"
+region = "us"
+
+[active]
+credential = "team"
+
+[settings]
+custom_header = { name = "X-Mixpanel-Cluster", value = "internal-1" }

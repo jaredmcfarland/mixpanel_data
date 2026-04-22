@@ -1,0 +1,113 @@
+"""Unit tests for the ``mp.targets`` public namespace (T031).
+
+Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §6.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from pydantic import SecretStr
+
+from mixpanel_data import accounts as accounts_ns
+from mixpanel_data import targets as targets_ns
+from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data.exceptions import ConfigError
+from mixpanel_data.types import Target
+
+
+@pytest.fixture(autouse=True)
+def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate $HOME and MP_CONFIG_PATH for hermetic tests."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / ".mp" / "config.toml"))
+
+
+@pytest.fixture
+def cm() -> ConfigManager:
+    """Return a ConfigManager seeded with one account named 'x'."""
+    cm = ConfigManager()
+    accounts_ns.add(
+        "x", type="service_account", region="us",
+        username="u", secret=SecretStr("s"),
+    )
+    return cm
+
+
+class TestAdd:
+    """``mp.targets.add(name, *, account, project, workspace=None)``."""
+
+    def test_minimal(self, cm: ConfigManager) -> None:
+        """Adding a target without workspace persists account+project only."""
+        t = targets_ns.add("ecom", account="x", project="3018488")
+        assert isinstance(t, Target)
+        assert t.workspace is None
+
+    def test_with_workspace(self, cm: ConfigManager) -> None:
+        """Adding with workspace persists all three fields."""
+        t = targets_ns.add("ecom", account="x", project="3018488", workspace=42)
+        assert t.workspace == 42
+
+    def test_referencing_missing_account_raises(self, cm: ConfigManager) -> None:
+        """Referencing a non-existent account raises ConfigError."""
+        with pytest.raises(ConfigError):
+            targets_ns.add("ecom", account="ghost", project="3018488")
+
+
+class TestList:
+    """``mp.targets.list()`` returns Target records."""
+
+    def test_empty(self, cm: ConfigManager) -> None:
+        """No targets → empty list."""
+        assert targets_ns.list() == []
+
+    def test_with_targets(self, cm: ConfigManager) -> None:
+        """All registered targets appear sorted by name."""
+        targets_ns.add("b", account="x", project="1")
+        targets_ns.add("a", account="x", project="2")
+        result = targets_ns.list()
+        assert [t.name for t in result] == ["a", "b"]
+
+
+class TestUse:
+    """``mp.targets.use(name)`` writes all three [active] axes atomically."""
+
+    def test_use_writes_three_axes(self, cm: ConfigManager) -> None:
+        """``use`` writes account, project, workspace in one call."""
+        targets_ns.add("ecom", account="x", project="3018488", workspace=42)
+        targets_ns.use("ecom")
+        active = cm.get_active()
+        assert active.account == "x"
+        assert active.project == "3018488"
+        assert active.workspace == 42
+
+    def test_use_missing_raises(self, cm: ConfigManager) -> None:
+        """``use("ghost")`` raises ConfigError."""
+        with pytest.raises(ConfigError):
+            targets_ns.use("ghost")
+
+
+class TestRemove:
+    """``mp.targets.remove(name)`` deletes the entry."""
+
+    def test_remove(self, cm: ConfigManager) -> None:
+        """``remove`` deletes the target."""
+        targets_ns.add("ecom", account="x", project="3018488")
+        targets_ns.remove("ecom")
+        assert targets_ns.list() == []
+
+    def test_remove_missing_raises(self, cm: ConfigManager) -> None:
+        """Removing a non-existent target raises."""
+        with pytest.raises(ConfigError):
+            targets_ns.remove("ghost")
+
+
+class TestShow:
+    """``mp.targets.show(name)`` returns the named Target."""
+
+    def test_show(self, cm: ConfigManager) -> None:
+        """``show`` returns the matching Target."""
+        targets_ns.add("ecom", account="x", project="3018488")
+        result = targets_ns.show("ecom")
+        assert result.name == "ecom"

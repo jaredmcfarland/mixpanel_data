@@ -46,6 +46,15 @@ Example:
     ```
 """
 
+from mixpanel_data._internal.auth.account import (
+    Account,
+    AccountType,
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
+    Region,
+    ServiceAccount,
+    TokenResolver,
+)
 from mixpanel_data._internal.auth.bridge import (
     AuthBridgeFile,
     BridgeCustomHeader,
@@ -64,25 +73,52 @@ from mixpanel_data._internal.auth.callback_server import CallbackResult
 from mixpanel_data._internal.auth.client_registration import ensure_client_registered
 from mixpanel_data._internal.auth.flow import OAuthFlow
 from mixpanel_data._internal.auth.pkce import PkceChallenge
-from mixpanel_data._internal.auth.storage import OAuthStorage
+from mixpanel_data._internal.auth.session import (
+    ActiveSession,
+    Project,
+    Session,
+    WorkspaceRef,
+)
+from mixpanel_data._internal.auth.storage import (
+    OAuthStorage,
+    account_dir,
+    ensure_account_dir,
+    legacy_token_path,
+)
 from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
 
 __all__ = [
+    "Account",
+    "AccountType",
+    "ActiveSession",
     "AuthBridgeFile",
     "BridgeCustomHeader",
     "BridgeOAuth",
     "BridgeServiceAccount",
     "CallbackResult",
+    "OAuthBrowserAccount",
     "OAuthFlow",
     "OAuthClientInfo",
     "OAuthStorage",
+    "OAuthTokenAccount",
     "OAuthTokens",
+    "OnDiskTokenResolver",
     "PkceChallenge",
+    "Project",
+    "Region",
+    "ServiceAccount",
+    "Session",
+    "TokenResolver",
+    "WorkspaceRef",
+    "account_dir",
     "apply_bridge_custom_header",
     "bridge_to_credentials",
     "bridge_to_resolved_session",
     "detect_cowork",
+    "ensure_account_dir",
     "ensure_client_registered",
+    "legacy_token_path",
     "find_bridge_file",
     "load_bridge_file",
     "refresh_bridge_token",

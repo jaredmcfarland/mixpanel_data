@@ -1,0 +1,19 @@
+# v2 fixture: one credential, one project alias, complete [active] block.
+
+config_version = 2
+
+[credentials.demo-sa]
+type = "service_account"
+username = "user.x.mp-service-account"
+secret = "v2-secret"
+region = "us"
+
+[projects.ecom]
+credential = "demo-sa"
+project_id = "3018488"
+workspace_id = 3448414
+
+[active]
+credential = "demo-sa"
+project_id = "3713224"
+workspace_id = 3448413

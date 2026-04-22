@@ -681,3 +681,161 @@ def refresh_bridge_token(
         logger.debug("Could not write refreshed token to bridge file (read-only?)")
 
     return updated
+
+
+# =============================================================================
+# v2 Bridge Schema (042-auth-architecture-redesign)
+# =============================================================================
+# The v2 bridge embeds a full Account discriminated-union record (with secrets
+# inline by design — Cowork crosses a trust boundary). It coexists with the
+# AuthBridgeFile model above during the transitional Phase 3-4 window. The
+# v2 resolver consumes BridgeFile via load_bridge(); writers come in Phase 8.
+#
+# Reference: specs/042-auth-architecture-redesign/contracts/config-schema.md §2.
+
+from typing import Annotated as _Annotated  # noqa: E402
+
+from pydantic import (  # noqa: E402
+    Field as _Field,
+    PositiveInt as _PositiveInt,
+    TypeAdapter as _TypeAdapter,
+    ValidationError as _ValidationError,
+)
+
+from mixpanel_data._internal.auth.account import Account as _AccountUnion  # noqa: E402
+from mixpanel_data.exceptions import ConfigError as _ConfigError  # noqa: E402
+
+
+class BridgeFile(BaseModel):
+    """Cowork credential bridge file — v2 schema.
+
+    Embeds a full :class:`~mixpanel_data._internal.auth.account.Account`
+    record (with secrets inline) plus optional project / workspace pinning
+    and a custom-headers map. Loaded as a synthetic config source by
+    :func:`~mixpanel_data._internal.auth.resolver.resolve_session`; written
+    by ``mp account export-bridge`` (deferred to Phase 8).
+
+    Example:
+        ```json
+        {
+          "version": 2,
+          "account": {"type": "oauth_browser", "name": "personal", "region": "us"},
+          "tokens": {"access_token": "...", "refresh_token": "...",
+                     "expires_at": "2026-04-22T12:00:00Z",
+                     "token_type": "Bearer", "scope": "read"},
+          "project": "3713224",
+          "workspace": 3448413,
+          "headers": {"X-Mixpanel-Cluster": "internal-1"}
+        }
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    version: Literal[2] = 2
+    """Bridge schema version — always ``2``."""
+
+    account: _AccountUnion
+    """Full Account discriminated-union record (with secrets inline by design)."""
+
+    tokens: OAuthTokens | None = None
+    """OAuth tokens — required iff ``account.type == "oauth_browser"``."""
+
+    project: _Annotated[str | None, _Field(default=None, pattern=r"^\d+$")] = None
+    """Optional pinned project ID (numeric string)."""
+
+    workspace: _PositiveInt | None = None
+    """Optional pinned workspace ID."""
+
+    headers: dict[str, str] = {}
+    """Custom HTTP headers attached to outbound requests at resolution time."""
+
+    @model_validator(mode="after")
+    def _validate_oauth_browser_has_tokens(self) -> "BridgeFile":
+        """Enforce that ``oauth_browser`` accounts include their tokens.
+
+        Returns:
+            The validated instance.
+
+        Raises:
+            ValueError: If ``account.type == "oauth_browser"`` and ``tokens``
+                is missing.
+        """
+        if self.account.type == "oauth_browser" and self.tokens is None:
+            raise ValueError(
+                "BridgeFile with oauth_browser account requires `tokens`."
+            )
+        return self
+
+
+_DEFAULT_BRIDGE_PATHS: tuple[Path, ...] = (
+    Path.home() / ".claude" / "mixpanel" / "auth.json",
+)
+
+
+def default_bridge_search_paths() -> tuple[Path, ...]:
+    """Return the default bridge file paths consulted in priority order.
+
+    Returns:
+        Tuple of candidate paths (default Cowork location first, then
+        a ``mixpanel_auth.json`` in the current working directory). The
+        ``MP_AUTH_FILE`` env var, if set, is consulted by callers BEFORE
+        any default path.
+    """
+    return (
+        Path.home() / ".claude" / "mixpanel" / "auth.json",
+        Path.cwd() / "mixpanel_auth.json",
+    )
+
+
+_bridge_adapter: _TypeAdapter[BridgeFile] = _TypeAdapter(BridgeFile)
+
+
+def load_bridge(path: Path | None = None) -> BridgeFile | None:
+    """Load and validate a v2 bridge file from disk.
+
+    Resolves the path in this order:
+
+    1. Argument ``path`` (if not None).
+    2. ``$MP_AUTH_FILE`` env var (if set).
+    3. Default search paths (``~/.claude/mixpanel/auth.json``, then
+       ``<cwd>/mixpanel_auth.json``) — first existing file wins.
+
+    Args:
+        path: Optional explicit bridge path.
+
+    Returns:
+        The parsed :class:`BridgeFile`, or ``None`` if no candidate
+        path exists.
+
+    Raises:
+        ConfigError: If a candidate file exists but is malformed or fails
+            schema validation.
+    """
+    candidates: list[Path] = []
+    if path is not None:
+        candidates.append(path)
+    elif "MP_AUTH_FILE" in os.environ and os.environ["MP_AUTH_FILE"]:
+        candidates.append(Path(os.environ["MP_AUTH_FILE"]))
+    else:
+        candidates.extend(default_bridge_search_paths())
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise _ConfigError(
+                f"Could not read bridge file at {candidate}: {exc}",
+                details={"path": str(candidate)},
+            ) from exc
+        try:
+            return _bridge_adapter.validate_python(payload)
+        except _ValidationError as exc:
+            raise _ConfigError(
+                f"Invalid bridge file at {candidate}: "
+                f"{exc.errors(include_url=False)[0]['msg']}",
+                details={"path": str(candidate)},
+            ) from exc
+    return None

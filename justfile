@@ -32,6 +32,22 @@ test-pbt-dev *args:
 test-pbt-ci *args:
     HYPOTHESIS_PROFILE=ci uv run pytest -k "_pbt" {{ args }}
 
+# Run the auth-subsystem fast iteration suite (042 redesign)
+test-auth *args:
+    uv run pytest tests/unit/test_account.py tests/unit/test_session.py \
+        tests/unit/test_resolver.py tests/unit/test_workspace_use.py \
+        tests/unit/test_config_v3.py tests/pbt/test_account_pbt.py \
+        tests/pbt/test_resolver_pbt.py tests/pbt/test_session_pbt.py \
+        -v {{ args }}
+
+# Run the 042 live auth QA against real Mixpanel API (requires creds)
+# Set env vars before running:
+#   MP_LIVE_SA_USERNAME / _SA_SECRET / _SA_PROJECT_ID / _SA_REGION  (Cat A, D, G)
+#   MP_LIVE_OAUTH_TOKEN / _PROJECT_ID / _REGION                     (Cat C, D, G)
+#   (Cat B uses ~/.mp/oauth/tokens_us.json automatically)
+test-live-auth *args:
+    MP_LIVE_TESTS=1 uv run pytest tests/live/test_042_auth_redesign_live.py -v -m live {{ args }}
+
 # === Mutation Testing ===
 
 # Run mutation testing on entire codebase

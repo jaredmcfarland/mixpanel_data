@@ -5,6 +5,20 @@ Complete programmable interface to Mixpanel analytics: discover your schema,
 run live analytics, stream data, and manage entities via the App API.
 """
 
+from mixpanel_data import accounts, session, targets
+from mixpanel_data._internal.auth.account import (
+    Account,
+    AccountType,
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
+    Region,
+    ServiceAccount,
+)
+from mixpanel_data._internal.auth.session import (
+    Project,
+    Session,
+    WorkspaceRef,
+)
 from mixpanel_data._internal.auth_credential import (
     AuthCredential,
     CredentialType,
@@ -46,7 +60,9 @@ from mixpanel_data._literal_types import (
     TimeUnit,
 )
 from mixpanel_data.exceptions import (
+    AccountAccessError,
     AccountExistsError,
+    AccountInUseError,
     AccountNotFoundError,
     APIError,
     AuthenticationError,
@@ -65,6 +81,11 @@ from mixpanel_data.exceptions import (
     WorkspaceScopeError,
 )
 from mixpanel_data.types import (
+    # Auth redesign (042) types
+    AccountSummary,
+    AccountTestResult,
+    OAuthLoginResult,
+    Target,
     # Result types
     ActivityFeedResult,
     AlertBookmark,

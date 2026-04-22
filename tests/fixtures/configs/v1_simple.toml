@@ -1,0 +1,8 @@
+# v1 fixture: one [accounts.X] block with inline project_id, no `default`.
+# Triggers legacy detection via the v1 marker `project_id` inside [accounts.demo-sa].
+
+[accounts.demo-sa]
+username = "user.x.mp-service-account"
+secret = "v1-secret-abc"
+project_id = "3713224"
+region = "us"

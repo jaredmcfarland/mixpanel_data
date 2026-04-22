@@ -348,6 +348,111 @@ class AccountExistsError(ConfigError):
         return str(self._details.get("account_name", ""))
 
 
+class AccountInUseError(ConfigError):
+    """Account is referenced by one or more targets and cannot be removed.
+
+    Raised by ``mp.accounts.remove(name)`` when the account is referenced by
+    one or more ``[targets.NAME]`` blocks and the caller did not pass
+    ``force=True``. The list of dependent target names is available in
+    ``referenced_by`` so callers can show a helpful error message or pass
+    ``force=True`` to delete the account and orphan the targets.
+    """
+
+    def __init__(
+        self, account_name: str, referenced_by: list[str] | None = None
+    ) -> None:
+        """Initialize AccountInUseError.
+
+        Args:
+            account_name: The account that callers tried to remove.
+            referenced_by: Names of targets that reference the account.
+        """
+        targets = referenced_by or []
+        if targets:
+            target_str = ", ".join(f"'{t}'" for t in targets)
+            message = (
+                f"Account '{account_name}' is referenced by target(s): {target_str}. "
+                f"Pass `force=True` to remove anyway."
+            )
+        else:
+            message = (
+                f"Account '{account_name}' is in use. Pass `force=True` to remove."
+            )
+
+        details: dict[str, Any] = {
+            "account_name": account_name,
+            "referenced_by": list(targets),
+        }
+        super().__init__(message, details=details)
+        self._code = "ACCOUNT_IN_USE"
+
+    @property
+    def account_name(self) -> str:
+        """The account name that callers tried to remove."""
+        return str(self._details.get("account_name", ""))
+
+    @property
+    def referenced_by(self) -> list[str]:
+        """Target names that reference the account."""
+        targets = self._details.get("referenced_by")
+        return targets if isinstance(targets, list) else []
+
+
+class AccountAccessError(ConfigError):
+    """Account does not have access to the requested project.
+
+    Raised when an account is asked to operate against a project that ``/me``
+    indicates the account cannot reach (e.g., the user has been removed from
+    the project, or a wrong project ID was supplied).
+    """
+
+    def __init__(
+        self, account_name: str, project_id: str, available_projects: list[str] | None = None
+    ) -> None:
+        """Initialize AccountAccessError.
+
+        Args:
+            account_name: Account that lacks access.
+            project_id: Project the account tried to access.
+            available_projects: Project IDs the account can access (for hints).
+        """
+        available = available_projects or []
+        if available:
+            available_str = ", ".join(f"'{p}'" for p in available)
+            message = (
+                f"Account '{account_name}' does not have access to project "
+                f"'{project_id}'. Available projects: {available_str}."
+            )
+        else:
+            message = (
+                f"Account '{account_name}' does not have access to project "
+                f"'{project_id}'."
+            )
+        details: dict[str, Any] = {
+            "account_name": account_name,
+            "project_id": project_id,
+            "available_projects": list(available),
+        }
+        super().__init__(message, details=details)
+        self._code = "ACCOUNT_ACCESS_DENIED"
+
+    @property
+    def account_name(self) -> str:
+        """Account that lacks access."""
+        return str(self._details.get("account_name", ""))
+
+    @property
+    def project_id(self) -> str:
+        """Project the account tried to access."""
+        return str(self._details.get("project_id", ""))
+
+    @property
+    def available_projects(self) -> list[str]:
+        """Project IDs the account can access."""
+        projects = self._details.get("available_projects")
+        return projects if isinstance(projects, list) else []
+
+
 # Authentication Exceptions
 
 

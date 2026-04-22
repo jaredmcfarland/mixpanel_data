@@ -1,0 +1,30 @@
+# v3 golden output: three accounts (one of each type), two targets, complete [active].
+
+[active]
+account = "team"
+project = "3018488"
+workspace = 3448414
+
+[accounts.team]
+type = "service_account"
+region = "us"
+username = "team.sa"
+secret = "team-secret"
+
+[accounts.personal]
+type = "oauth_browser"
+region = "us"
+
+[accounts.ci]
+type = "oauth_token"
+region = "us"
+token_env = "MP_CI_TOKEN"
+
+[targets.ecom]
+account = "team"
+project = "3018488"
+workspace = 3448414
+
+[targets.ai]
+account = "team"
+project = "3713224"

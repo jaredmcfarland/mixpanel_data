@@ -1,0 +1,13 @@
+# v3 golden output: one account + complete [active]. Used as expected-state
+# for conversion idempotency tests AND as a positive load() example.
+
+[active]
+account = "demo-sa"
+project = "3713224"
+workspace = 3448413
+
+[accounts.demo-sa]
+type = "service_account"
+region = "us"
+username = "user.x.mp-service-account"
+secret = "demo-secret"

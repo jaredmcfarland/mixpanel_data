@@ -124,6 +124,7 @@ addopts = "-vv --tb=short -m 'not live'"
 markers = [
     "live: marks tests as live API tests (deselect with '-m \"not live\"')",
     "destructive: marks tests that consume limited resources (e.g. deletion request quota)",
+    "contract: marks tests that lock recorded HTTP response shapes (auth redesign R6 layered tests)",
 ]
 
 [tool.coverage.run]

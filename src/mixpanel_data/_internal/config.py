@@ -421,7 +421,25 @@ class ConfigManager:
     3. Default: ~/.mp/config.toml
     """
 
-    DEFAULT_CONFIG_PATH = Path.home() / ".mp" / "config.toml"
+    @classmethod
+    def _default_config_path(cls) -> Path:
+        """Return the default config path, resolved lazily.
+
+        MUST stay a method (not a class attribute) so test isolation via
+        ``HOME`` env-var monkeypatching takes effect. A class-level
+        ``Path.home() / ".mp" / "config.toml"`` constant is captured at
+        import time and silently leaks the developer's real config into
+        hermetic tests (regression caught by QA).
+
+        Returns:
+            ``$HOME/.mp/config.toml`` resolved at call time.
+        """
+        return Path.home() / ".mp" / "config.toml"
+
+    @property
+    def DEFAULT_CONFIG_PATH(self) -> Path:  # noqa: N802 — preserve old name
+        """Backwards-compat alias for :meth:`_default_config_path`."""
+        return self._default_config_path()
 
     def __init__(self, config_path: Path | None = None) -> None:
         """Initialize ConfigManager.
@@ -435,7 +453,7 @@ class ConfigManager:
         elif "MP_CONFIG_PATH" in os.environ:
             self._config_path = Path(os.environ["MP_CONFIG_PATH"])
         else:
-            self._config_path = self.DEFAULT_CONFIG_PATH
+            self._config_path = self._default_config_path()
 
     @property
     def config_path(self) -> Path:

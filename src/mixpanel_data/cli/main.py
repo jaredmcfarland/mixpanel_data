@@ -108,7 +108,24 @@ def main(
         typer.Option(
             "--workspace-id",
             envvar="MP_WORKSPACE_ID",
-            help="Workspace ID for App API operations.",
+            help="Workspace ID for App API operations (LEGACY; use --workspace).",
+        ),
+    ] = None,
+    workspace: Annotated[
+        int | None,
+        typer.Option(
+            "--workspace",
+            "-w",
+            help="Workspace ID (042 redesign global override).",
+        ),
+    ] = None,
+    target: Annotated[
+        str | None,
+        typer.Option(
+            "--target",
+            "-t",
+            envvar="MP_TARGET",
+            help="Apply a saved target (mutually exclusive with --account/--project/--workspace).",
         ),
     ] = None,
     quiet: Annotated[
@@ -149,11 +166,22 @@ def main(
             "[red]--account and --credential are mutually exclusive.[/red]"
         )
         raise typer.Exit(3)
+    if target is not None and (
+        account is not None or project is not None or workspace is not None
+    ):
+        err_console.print(
+            "[red]--target is mutually exclusive with --account/--project/--workspace.[/red]"
+        )
+        raise typer.Exit(3)
+
+    # Prefer the new --workspace global; fall back to the legacy --workspace-id.
+    effective_workspace = workspace if workspace is not None else workspace_id
 
     ctx.obj["account"] = account
     ctx.obj["credential"] = credential
     ctx.obj["project"] = project
-    ctx.obj["workspace_id"] = workspace_id
+    ctx.obj["workspace_id"] = effective_workspace
+    ctx.obj["target"] = target
     ctx.obj["quiet"] = quiet
     ctx.obj["verbose"] = verbose
     ctx.obj["workspace"] = None
@@ -164,9 +192,14 @@ def main(
 # These imports are done here to avoid circular imports
 def _register_commands() -> None:
     """Register all command groups with the main app."""
+    from mixpanel_data.cli.commands.account import account_app
     from mixpanel_data.cli.commands.alerts import alerts_app
     from mixpanel_data.cli.commands.annotations import annotations_app
     from mixpanel_data.cli.commands.auth import auth_app
+    from mixpanel_data.cli.commands.config_cmd import config_app
+    from mixpanel_data.cli.commands.project import project_app
+    from mixpanel_data.cli.commands.session import session_app
+    from mixpanel_data.cli.commands.workspace import workspace_app as v3_workspace_app
     from mixpanel_data.cli.commands.cohorts import cohorts_app
     from mixpanel_data.cli.commands.context import context_app
     from mixpanel_data.cli.commands.custom_events import custom_events_app
@@ -185,6 +218,31 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.webhooks import webhooks_app
     from mixpanel_data.cli.commands.workspaces_cmd import workspaces_app
 
+    app.add_typer(
+        account_app,
+        name="account",
+        help="Manage accounts (042 redesign — replaces `mp auth`).",
+    )
+    app.add_typer(
+        project_app,
+        name="project",
+        help="Active project (042 redesign — singular `project`).",
+    )
+    app.add_typer(
+        v3_workspace_app,
+        name="workspace",
+        help="Active workspace (042 redesign — singular `workspace`).",
+    )
+    app.add_typer(
+        session_app,
+        name="session",
+        help="Show / update the active session (042 redesign).",
+    )
+    app.add_typer(
+        config_app,
+        name="config",
+        help="Config conversion (042 redesign — `mp config convert`).",
+    )
     app.add_typer(auth_app, name="auth", help="Manage authentication and accounts.")
     app.add_typer(query_app, name="query", help="Query Mixpanel data.")
     app.add_typer(inspect_app, name="inspect", help="Inspect Mixpanel project schema.")

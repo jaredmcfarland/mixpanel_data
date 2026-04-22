@@ -1,0 +1,98 @@
+"""Unit tests for the ``mp.session`` public namespace (T032).
+
+Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §7.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from pydantic import SecretStr
+
+from mixpanel_data import accounts as accounts_ns
+from mixpanel_data import session as session_ns
+from mixpanel_data import targets as targets_ns
+from mixpanel_data._internal.auth.session import ActiveSession
+from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data.exceptions import ConfigError
+
+
+@pytest.fixture(autouse=True)
+def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate $HOME and MP_CONFIG_PATH."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("MP_CONFIG_PATH", str(tmp_path / ".mp" / "config.toml"))
+
+
+@pytest.fixture
+def seeded() -> ConfigManager:
+    """Return a ConfigManager with one account."""
+    cm = ConfigManager()
+    accounts_ns.add(
+        "x", type="service_account", region="us",
+        username="u", secret=SecretStr("s"),
+    )
+    return cm
+
+
+class TestShow:
+    """``mp.session.show()`` returns the persisted ``[active]`` block."""
+
+    def test_show_returns_active_session(self, seeded: ConfigManager) -> None:
+        """``show()`` returns an ActiveSession matching ``[active]``."""
+        seeded.set_active(account="x", project="3713224", workspace=42)
+        result = session_ns.show()
+        assert isinstance(result, ActiveSession)
+        assert result.account == "x"
+        assert result.project == "3713224"
+        assert result.workspace == 42
+
+
+class TestUse:
+    """``mp.session.use(*, account=, project=, workspace=, target=)``."""
+
+    def test_use_account_only(self, seeded: ConfigManager) -> None:
+        """Updating only the account axis preserves the others."""
+        seeded.set_active(project="3713224", workspace=42)
+        accounts_ns.add("other", type="oauth_browser", region="us")
+        session_ns.use(account="other")
+        active = seeded.get_active()
+        assert active.account == "other"
+        assert active.project == "3713224"
+        assert active.workspace == 42
+
+    def test_use_project_only(self, seeded: ConfigManager) -> None:
+        """Updating only the project axis preserves the others."""
+        seeded.set_active(account="x", workspace=42)
+        session_ns.use(project="9999999")
+        active = seeded.get_active()
+        assert active.account == "x"
+        assert active.project == "9999999"
+        assert active.workspace == 42
+
+    def test_use_workspace_only(self, seeded: ConfigManager) -> None:
+        """Updating only the workspace axis preserves the others."""
+        seeded.set_active(account="x", project="3713224")
+        session_ns.use(workspace=99)
+        active = seeded.get_active()
+        assert active.account == "x"
+        assert active.project == "3713224"
+        assert active.workspace == 99
+
+    def test_use_target(self, seeded: ConfigManager) -> None:
+        """``target=`` applies the target's three axes."""
+        targets_ns.add("ecom", account="x", project="3018488", workspace=42)
+        session_ns.use(target="ecom")
+        active = seeded.get_active()
+        assert active.account == "x"
+        assert active.project == "3018488"
+        assert active.workspace == 42
+
+    def test_use_target_with_other_axis_raises(
+        self, seeded: ConfigManager
+    ) -> None:
+        """Combining ``target=`` with any axis kwarg raises ValueError."""
+        targets_ns.add("ecom", account="x", project="3018488")
+        with pytest.raises(ValueError):
+            session_ns.use(target="ecom", account="x")

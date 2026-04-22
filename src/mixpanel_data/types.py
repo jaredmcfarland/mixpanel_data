@@ -25,7 +25,8 @@ from dataclasses import dataclass, field
 from datetime import date as dt_date
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypedDict, TypeVar
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, TypedDict, TypeVar
 
 from mixpanel_data._literal_types import (
     CohortAggregationType as CohortAggregationType,
@@ -11798,3 +11799,138 @@ class UserQueryResult(ResultWithDataFrame):
             "mode": self.mode,
             "aggregate_data": self.aggregate_data,
         }
+
+
+# =============================================================================
+# Auth Architecture Redesign Types (Phase 042)
+# =============================================================================
+# Read-only summary types for the redesigned auth subsystem. These are the
+# user-facing shapes returned by `mp.accounts.list()`, `mp.targets.list()`,
+# `mp.accounts.test()`, and `mp.accounts.login()`. The underlying frozen
+# Account / Project / WorkspaceRef / Session models live in
+# src/mixpanel_data/_internal/auth/.
+
+
+_AccountTypeLiteral = Literal["service_account", "oauth_browser", "oauth_token"]
+"""Discriminator literal mirroring ``mixpanel_data._internal.auth.account.AccountType``.
+
+Mirrored locally to avoid an import cycle from ``types.py`` into ``_internal``.
+"""
+
+_RegionLiteral = Literal["us", "eu", "in"]
+"""Region literal mirroring ``mixpanel_data._internal.auth.account.Region``."""
+
+
+class AccountSummary(BaseModel):
+    """Read-only summary of a configured account for ``mp account list``.
+
+    Fields are derived from the persisted ``[accounts.NAME]`` block plus
+    runtime context (``is_active``, ``referenced_by_targets``). Status
+    reflects the most recent ``mp account test`` outcome — ``"untested"``
+    is the default for accounts that have never been tested in this session.
+
+    Example:
+        ```python
+        summary = AccountSummary(
+            name="team", type="service_account", region="us",
+            status="ok", is_active=True,
+        )
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    """Local config name (matches the TOML block key)."""
+
+    type: _AccountTypeLiteral
+    """Discriminator value of the underlying ``Account`` variant."""
+
+    region: _RegionLiteral
+    """Mixpanel region — ``us``, ``eu``, or ``in``."""
+
+    status: Literal["ok", "needs_login", "needs_token", "untested"] = "untested"
+    """Result of the most recent ``mp account test`` (or ``"untested"``)."""
+
+    is_active: bool = False
+    """``True`` if ``[active].account == name``."""
+
+    referenced_by_targets: list[str] = Field(default_factory=list)
+    """Names of targets that reference this account."""
+
+
+class AccountTestResult(BaseModel):
+    """Outcome of ``mp account test NAME`` — captures the ``/me`` probe.
+
+    Never raises — error context is captured in ``error`` so the CLI can
+    print structured failure messages and ``mp account list`` can color
+    accounts as ``needs_login`` / ``needs_token`` based on the error code.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    account_name: str
+    """Account that was tested."""
+
+    ok: bool
+    """``True`` if the ``/me`` request succeeded with valid credentials."""
+
+    user: dict[str, Any] | None = None
+    """Subset of the ``/me`` response: ``{"id": ..., "email": ...}``."""
+
+    accessible_project_count: int | None = None
+    """Number of projects the account can read from ``/me``."""
+
+    error: str | None = None
+    """Human-readable failure reason when ``ok`` is ``False``."""
+
+
+class Target(BaseModel):
+    """A saved (account, project, workspace?) triple persisted in ``[targets.NAME]``.
+
+    Targets are named cursor positions: ``mp target use prod`` writes all
+    three axes to ``[active]`` in a single config save. Workspace is
+    optional — when omitted, the target resolves to the project's default
+    workspace at use time (per FR-025 lazy resolution).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    """Local target name (matches the TOML block key)."""
+
+    account: str
+    """Local config name of the referenced account (must exist)."""
+
+    project: Annotated[str, Field(min_length=1, pattern=r"^\d+$")]
+    """Numeric project ID (Mixpanel's wire format)."""
+
+    workspace: int | None = None
+    """Optional workspace ID; ``None`` defers to lazy resolution."""
+
+
+class OAuthLoginResult(BaseModel):
+    """Outcome of ``mp.accounts.login(name)`` — captures the PKCE flow result.
+
+    Returned after a successful OAuth browser flow. ``user`` is populated
+    from the immediate ``/me`` probe issued after the token exchange so
+    callers can confirm "you are now logged in as ``alice@example.com``"
+    without needing a follow-up call.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    account_name: str
+    """Account that was authenticated."""
+
+    user: dict[str, Any] | None = None
+    """Subset of the ``/me`` response: ``{"id": ..., "email": ...}``."""
+
+    expires_at: datetime | None = None
+    """Access-token expiry (UTC) from the token endpoint response."""
+
+    tokens_path: Path
+    """Where the tokens were persisted (``~/.mp/accounts/{name}/tokens.json``)."""
+
+    client_path: Path
+    """Where the DCR client info was persisted (``~/.mp/accounts/{name}/client.json``)."""

@@ -1,0 +1,696 @@
+"""Live QA: 042 auth architecture redesign (Phases 1-5).
+
+Drives all three account types end-to-end against the real Mixpanel API.
+Read-only — no entity creation, no destructive ops, safe against any
+project. Uses tmp v3 home so the user's real ~/.mp/ is never touched.
+
+**How to run**:
+
+    # All categories (requires all three modes):
+    source ~/.zshrc          # ensure MP_LIVE_OAUTH_TOKEN is loaded
+    MP_LIVE_TESTS=1 uv run pytest tests/live/test_042_auth_redesign_live.py -v -m live
+
+    # Single category:
+    MP_LIVE_TESTS=1 uv run pytest tests/live/test_042_auth_redesign_live.py -v -m live -k CatB
+
+**Required env vars** (each gates the corresponding category):
+
+    OAuth browser (Cat B): nothing — uses ~/.mp/oauth/tokens_us.json directly
+    Service account (Cat A): MP_LIVE_SA_USERNAME, MP_LIVE_SA_SECRET,
+                             MP_LIVE_SA_PROJECT_ID, MP_LIVE_SA_REGION
+    Static OAuth token (Cat C): MP_LIVE_OAUTH_TOKEN, MP_LIVE_PROJECT_ID,
+                                MP_LIVE_REGION
+
+The MP_LIVE_* prefix dodges the autouse env-var cleanup in
+tests/conftest.py — that fixture scrubs MP_USERNAME / MP_SECRET /
+MP_OAUTH_TOKEN / etc. before each test runs to keep unit tests
+hermetic. Live tests opt back in by reading from these MP_LIVE_* vars
+and calling monkeypatch.setenv to restore the standard MP_* form
+inside the test body.
+
+Reference: ~/.claude/plans/design-a-qa-plan-vast-wall.md.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
+from pydantic import SecretStr
+
+from mixpanel_data import Workspace, accounts as accounts_ns
+from mixpanel_data._internal.auth.account import (
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
+    ServiceAccount,
+)
+from mixpanel_data._internal.auth.session import Project, Session, WorkspaceRef
+from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data.exceptions import (
+    AuthenticationError,
+    ConfigError,
+    OAuthError,
+    QueryError,
+)
+
+# Re-export the fixtures from conftest_042.py so pytest picks them up.
+from tests.live.conftest_042 import (  # noqa: F401 — fixture imports
+    copy_user_oauth_tokens_to_account,
+    get_user_active_project_id,
+    live_oauth_token_creds,
+    live_sa_creds,
+    require_oauth_browser_available,
+    require_oauth_token_available,
+    require_sa_env_available,
+    tmp_v3_home,
+)
+
+
+# Module-level marker — every test below requires `-m live`.
+pytestmark = pytest.mark.live
+
+
+# =============================================================================
+# Cat A — Service Account end-to-end
+# =============================================================================
+
+
+class TestCatA_ServiceAccount:
+    """Real-API smoke for the SA auth path."""
+
+    def test_A1_01_workspace_from_env_quad_authenticates(
+        self,
+        tmp_v3_home: Path,
+        live_sa_creds: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A1.01 — Workspace() with full SA env quad authenticates against /me."""
+        monkeypatch.setenv("MP_USERNAME", live_sa_creds["username"])
+        monkeypatch.setenv("MP_SECRET", live_sa_creds["secret"])
+        monkeypatch.setenv("MP_PROJECT_ID", live_sa_creds["project_id"])
+        monkeypatch.setenv("MP_REGION", live_sa_creds["region"])
+        ws = Workspace()
+        try:
+            # Real read — list events from the project.
+            events = ws.events()
+            assert isinstance(events, list)
+        finally:
+            ws.close()
+
+    def test_A1_02_persisted_sa_account_authenticates(
+        self,
+        tmp_v3_home: Path,
+        live_sa_creds: dict[str, str],
+    ) -> None:
+        """A1.02 — `mp.accounts.add(..service_account..)` then Workspace(account=) hits API."""
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region=live_sa_creds["region"],  # type: ignore[arg-type]
+            username=live_sa_creds["username"],
+            secret=SecretStr(live_sa_creds["secret"]),
+        )
+        # Set active project so resolver has all axes.
+        ConfigManager().set_active(project=live_sa_creds["project_id"])
+        ws = Workspace(account="team")
+        try:
+            events = ws.events()
+            assert isinstance(events, list)
+        finally:
+            ws.close()
+
+    def test_A1_03_cli_round_trip_no_secret_in_stderr(
+        self,
+        tmp_v3_home: Path,
+        live_sa_creds: dict[str, str],
+    ) -> None:
+        """A1.03 — `mp account add` then `mp inspect events` round-trips; secret never leaks."""
+        env = os.environ.copy()
+        env.update(
+            {
+                "MP_SECRET": live_sa_creds["secret"],
+                "HOME": str(tmp_v3_home),
+                "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
+            }
+        )
+        # Add the account.
+        result_add = subprocess.run(
+            [
+                "uv", "run", "mp", "account", "add", "team",
+                "--type", "service_account",
+                "--region", live_sa_creds["region"],
+                "--username", live_sa_creds["username"],
+            ],
+            capture_output=True,
+            env=env,
+            text=True,
+            check=False,
+        )
+        assert result_add.returncode == 0, (
+            f"add failed: {result_add.stderr}\nstdout: {result_add.stdout}"
+        )
+        assert live_sa_creds["secret"] not in result_add.stdout
+        assert live_sa_creds["secret"] not in result_add.stderr
+
+        # Set the active project.
+        result_proj = subprocess.run(
+            [
+                "uv", "run", "mp", "project", "use",
+                live_sa_creds["project_id"],
+            ],
+            capture_output=True, env=env, text=True, check=False,
+        )
+        assert result_proj.returncode == 0, (
+            f"project use failed: {result_proj.stderr}"
+        )
+
+        # Read events via the new CLI surface.
+        result_inspect = subprocess.run(
+            ["uv", "run", "mp", "inspect", "events"],
+            capture_output=True, env=env, text=True, check=False,
+        )
+        # Allow non-zero (some projects may have zero events) but secret must
+        # never leak under any path.
+        assert live_sa_creds["secret"] not in result_inspect.stdout
+        assert live_sa_creds["secret"] not in result_inspect.stderr
+
+
+# =============================================================================
+# Cat B — OAuth browser end-to-end (reuses user's tokens)
+# =============================================================================
+
+
+def _seed_oauth_browser_account(
+    home: Path,
+    *,
+    name: str = "personal",
+    project_id: str | None = None,
+) -> str:
+    """Seed a v3 oauth_browser account using the user's real on-disk tokens.
+
+    Args:
+        home: Tmp $HOME root from the ``tmp_v3_home`` fixture.
+        name: Account name to create in the v3 config.
+        project_id: Project ID to set in [active]; defaults to the
+            project from the user's real config.
+
+    Returns:
+        The project ID that was set in [active] (for use in assertions).
+    """
+    copy_user_oauth_tokens_to_account(home, name)
+    cm = ConfigManager()
+    cm.add_account(name, type="oauth_browser", region="us")
+    pid = project_id or get_user_active_project_id() or "1"
+    cm.set_active(account=name, project=pid)
+    return pid
+
+
+class TestCatB_OAuthBrowser:
+    """Real-API smoke for the OAuth browser path."""
+
+    def test_B1_01_workspace_reads_on_disk_token_and_authenticates(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_browser_available: None,
+    ) -> None:
+        """B1.01 — Tokens copied from legacy path; Workspace() authenticates."""
+        _seed_oauth_browser_account(tmp_v3_home)
+        ws = Workspace()
+        try:
+            events = ws.events()
+            assert isinstance(events, list)
+        finally:
+            ws.close()
+
+    def test_B1_02_v3_path_actually_taken(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_browser_available: None,
+    ) -> None:
+        """B1.02 — `Workspace.account` is OAuthBrowserAccount (not legacy fallback)."""
+        _seed_oauth_browser_account(tmp_v3_home)
+        ws = Workspace()
+        try:
+            assert isinstance(ws.account, OAuthBrowserAccount)
+            assert ws.account.name == "personal"
+        finally:
+            ws.close()
+
+    def test_B1_03_corrupted_tokens_surface_clean_error(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_browser_available: None,
+    ) -> None:
+        """B1.03 — Corrupted tokens.json BEFORE Workspace construction → OAuthError.
+
+        The placeholder code path in ``session_to_credentials`` substitutes
+        ``pending-login`` if the resolver fails — that's intentional so the
+        Workspace constructs without raising. To surface a true OAuthError,
+        we need to corrupt BEFORE construction so the resolver fails.
+        Even with the placeholder, the eventual API call surfaces a clean
+        AuthenticationError (401), not a stack trace.
+        """
+        _seed_oauth_browser_account(tmp_v3_home)
+        # Corrupt BEFORE Workspace construction.
+        tokens_path = tmp_v3_home / ".mp" / "accounts" / "personal" / "tokens.json"
+        tokens_path.write_text('{"access_token":', encoding="utf-8")
+        # Construction succeeds (placeholder path). API call surfaces a clean error.
+        ws = Workspace()
+        try:
+            with pytest.raises((OAuthError, AuthenticationError)) as excinfo:
+                ws.events()
+            # Error never leaks the placeholder string or any token material.
+            err_str = str(excinfo.value)
+            assert "pending-login" not in err_str
+        finally:
+            ws.close()
+
+
+# =============================================================================
+# Cat C — Static OAuth token end-to-end
+# =============================================================================
+
+
+class TestCatC_OAuthToken:
+    """Real-API smoke for the static OAuth bearer path."""
+
+    def test_C1_01_workspace_from_env_token(
+        self,
+        tmp_v3_home: Path,
+        live_oauth_token_creds: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """C1.01 — MP_OAUTH_TOKEN env var → Workspace() authenticates."""
+        monkeypatch.setenv("MP_OAUTH_TOKEN", live_oauth_token_creds["token"])
+        monkeypatch.setenv("MP_PROJECT_ID", live_oauth_token_creds["project_id"])
+        monkeypatch.setenv("MP_REGION", live_oauth_token_creds["region"])
+        ws = Workspace()
+        try:
+            events = ws.events()
+            assert isinstance(events, list)
+        finally:
+            ws.close()
+
+    def test_C1_02_persisted_token_env_account_authenticates(
+        self,
+        tmp_v3_home: Path,
+        live_oauth_token_creds: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """C1.02 — Persisted oauth_token account with token_env resolves at request time."""
+        monkeypatch.setenv("MY_LIVE_TOK", live_oauth_token_creds["token"])
+        accounts_ns.add(
+            "ci",
+            type="oauth_token",
+            region=live_oauth_token_creds["region"],  # type: ignore[arg-type]
+            token_env="MY_LIVE_TOK",
+        )
+        ConfigManager().set_active(
+            account="ci", project=live_oauth_token_creds["project_id"]
+        )
+        ws = Workspace()
+        try:
+            assert isinstance(ws.account, OAuthTokenAccount)
+            events = ws.events()
+            assert isinstance(events, list)
+        finally:
+            ws.close()
+
+    def test_C1_03_inline_token_authenticates(
+        self,
+        tmp_v3_home: Path,
+        live_oauth_token_creds: dict[str, str],
+    ) -> None:
+        """C1.03 — Inline token (SecretStr) round-trips and authenticates."""
+        accounts_ns.add(
+            "ci-inline",
+            type="oauth_token",
+            region=live_oauth_token_creds["region"],  # type: ignore[arg-type]
+            token=SecretStr(live_oauth_token_creds["token"]),
+        )
+        ConfigManager().set_active(
+            account="ci-inline",
+            project=live_oauth_token_creds["project_id"],
+        )
+        ws = Workspace()
+        try:
+            events = ws.events()
+            assert isinstance(events, list)
+            # SecretStr never leaks in repr.
+            assert live_oauth_token_creds["token"] not in repr(ws.account)
+        finally:
+            ws.close()
+
+    def test_C1_04_empty_env_token_surfaces_clean_error(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_token_available: None,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """C1.04 — Empty env var → either OAuthError (resolver) OR 401 (server).
+
+        ``session_to_credentials`` swallows OAuthError and substitutes the
+        ``pending-login`` placeholder so construction always succeeds. The
+        first API call then surfaces a clean AuthenticationError. Either
+        path is acceptable; both prove the empty-string case is handled.
+        """
+        monkeypatch.setenv("MY_LIVE_TOK", "")  # explicitly empty
+        accounts_ns.add(
+            "ci-empty",
+            type="oauth_token",
+            region=os.environ["MP_LIVE_REGION"],  # type: ignore[arg-type]
+            token_env="MY_LIVE_TOK",
+        )
+        ConfigManager().set_active(
+            account="ci-empty", project=os.environ["MP_LIVE_PROJECT_ID"]
+        )
+        with pytest.raises((OAuthError, AuthenticationError)):
+            ws = Workspace()
+            try:
+                ws.events()
+            finally:
+                ws.close()
+
+
+# =============================================================================
+# Cat D — Cross-mode switching (the killer feature)
+# =============================================================================
+
+
+class TestCatD_CrossModeSwitching:
+    """HTTP transport preservation + atomic auth swap across all 3 modes."""
+
+    def test_D1_01_three_mode_switch_preserves_http_transport(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_browser_available: None,
+        live_sa_creds: dict[str, str],
+        live_oauth_token_creds: dict[str, str],
+    ) -> None:
+        """D1.01 — Switch SA → oauth_browser → oauth_token; httpx.Client preserved.
+
+        The killer claim of R5: connection pool stays alive across account
+        switches with real network in flight.
+        """
+        # Seed all three accounts in the tmp v3 config.
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region=live_sa_creds["region"],  # type: ignore[arg-type]
+            username=live_sa_creds["username"],
+            secret=SecretStr(live_sa_creds["secret"]),
+        )
+        copy_user_oauth_tokens_to_account(tmp_v3_home, "personal")
+        ConfigManager().add_account(
+            "personal", type="oauth_browser", region="us"
+        )
+        accounts_ns.add(
+            "ci",
+            type="oauth_token",
+            region=live_oauth_token_creds["region"],  # type: ignore[arg-type]
+            token=SecretStr(live_oauth_token_creds["token"]),
+        )
+
+        # Start with SA.
+        ws = Workspace(account="team", project=live_sa_creds["project_id"])
+        try:
+            before_id = id(ws._api_client._http)  # noqa: SLF001
+            ws.events()
+            # Switch to OAuth browser.
+            ws.use(
+                account="personal",
+                project=get_user_active_project_id() or "1",
+            )
+            ws.events()
+            assert id(ws._api_client._http) == before_id, (
+                "httpx.Client recreated across SA → oauth_browser switch"
+            )
+            # Switch to OAuth token.
+            ws.use(
+                account="ci",
+                project=live_oauth_token_creds["project_id"],
+            )
+            ws.events()
+            assert id(ws._api_client._http) == before_id, (
+                "httpx.Client recreated across oauth_browser → oauth_token switch"
+            )
+        finally:
+            ws.close()
+
+    def test_D1_04_persist_writes_to_active(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_browser_available: None,
+        live_sa_creds: dict[str, str],
+    ) -> None:
+        """D1.04 — `ws.use(account=A, persist=True)` writes [active] to disk."""
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region=live_sa_creds["region"],  # type: ignore[arg-type]
+            username=live_sa_creds["username"],
+            secret=SecretStr(live_sa_creds["secret"]),
+        )
+        copy_user_oauth_tokens_to_account(tmp_v3_home, "personal")
+        ConfigManager().add_account(
+            "personal", type="oauth_browser", region="us"
+        )
+        ConfigManager().set_active(
+            account="team", project=live_sa_creds["project_id"]
+        )
+        ws = Workspace()
+        try:
+            assert ws.account.name == "team"
+            ws.use(
+                account="personal",
+                project=get_user_active_project_id() or "1",
+                persist=True,
+            )
+        finally:
+            ws.close()
+
+        # Construct a fresh Workspace — should read the persisted state.
+        ws2 = Workspace()
+        try:
+            assert ws2.account.name == "personal"
+        finally:
+            ws2.close()
+
+
+# =============================================================================
+# Cat E — CLI surface end-to-end
+# =============================================================================
+
+
+class TestCatE_CliEndToEnd:
+    """Subprocess-based smokes for the new `mp` CLI groups."""
+
+    def test_E1_01_cli_oauth_round_trip(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_browser_available: None,
+    ) -> None:
+        """E1.01 — `mp account add → mp project use → mp inspect events` round-trips."""
+        copy_user_oauth_tokens_to_account(tmp_v3_home, "personal-cli")
+        env = os.environ.copy()
+        env.update(
+            {
+                "HOME": str(tmp_v3_home),
+                "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
+            }
+        )
+        # Register the account.
+        r1 = subprocess.run(
+            [
+                "uv", "run", "mp", "account", "add", "personal-cli",
+                "--type", "oauth_browser", "--region", "us",
+            ],
+            capture_output=True, env=env, text=True, check=False,
+        )
+        assert r1.returncode == 0, f"add: {r1.stderr}"
+
+        # Set active project.
+        pid = get_user_active_project_id() or "1"
+        r2 = subprocess.run(
+            ["uv", "run", "mp", "project", "use", pid],
+            capture_output=True, env=env, text=True, check=False,
+        )
+        assert r2.returncode == 0, f"project use: {r2.stderr}"
+
+        # Hit the live API via inspect.
+        r3 = subprocess.run(
+            ["uv", "run", "mp", "inspect", "events"],
+            capture_output=True, env=env, text=True, check=False,
+        )
+        assert r3.returncode == 0, (
+            f"inspect events failed: {r3.stderr}\nstdout: {r3.stdout}"
+        )
+
+    def test_E1_05_cli_session_json_output(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_browser_available: None,
+    ) -> None:
+        """E1.05 — `mp session --format json` matches ActiveSession.model_dump()."""
+        _seed_oauth_browser_account(tmp_v3_home, name="personal-json")
+        env = os.environ.copy()
+        env.update(
+            {
+                "HOME": str(tmp_v3_home),
+                "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
+            }
+        )
+        result = subprocess.run(
+            ["uv", "run", "mp", "session", "--format", "json"],
+            capture_output=True, env=env, text=True, check=False,
+        )
+        assert result.returncode == 0
+        payload = json.loads(result.stdout.strip())
+        assert payload["account"] == "personal-json"
+        assert payload["project"] == (
+            get_user_active_project_id() or "1"
+        )
+
+    def test_E1_04_cli_target_account_mutex_exits_3(
+        self,
+        tmp_v3_home: Path,
+    ) -> None:
+        """E1.04 — `mp --target X --account Y session` exits 3 with mutex error."""
+        env = os.environ.copy()
+        env.update(
+            {
+                "HOME": str(tmp_v3_home),
+                "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
+            }
+        )
+        result = subprocess.run(
+            [
+                "uv", "run", "mp",
+                "--target", "X", "--account", "Y", "session",
+            ],
+            capture_output=True, env=env, text=True, check=False,
+        )
+        assert result.returncode == 3, (
+            f"expected exit 3, got {result.returncode}: {result.stderr}"
+        )
+
+
+# =============================================================================
+# Cat F — Bridge file mode
+# =============================================================================
+
+
+class TestCatF_Bridge:
+    """v2 bridge file consumed by the resolver against the real API."""
+
+    def test_F1_01_bridge_oauth_browser_authenticates(
+        self,
+        tmp_v3_home: Path,
+        require_oauth_browser_available: None,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """F1.01 — Bridge file embedding user's oauth_browser tokens authenticates."""
+        # Read user's real on-disk tokens.
+        from tests.live.conftest_042 import LEGACY_TOKENS_PATH
+        legacy_tokens = json.loads(
+            LEGACY_TOKENS_PATH.read_text(encoding="utf-8")
+        )
+
+        bridge_path = tmp_v3_home / "bridge.json"
+        pid = get_user_active_project_id() or "1"
+        bridge_payload = {
+            "version": 2,
+            "account": {
+                "type": "oauth_browser",
+                "name": "bridged",
+                "region": "us",
+            },
+            "tokens": {
+                "access_token": legacy_tokens["access_token"],
+                "expires_at": legacy_tokens["expires_at"],
+                "scope": legacy_tokens.get("scope", "read"),
+                "token_type": legacy_tokens.get("token_type", "Bearer"),
+                **(
+                    {"refresh_token": legacy_tokens["refresh_token"]}
+                    if legacy_tokens.get("refresh_token")
+                    else {}
+                ),
+            },
+            "project": pid,
+        }
+        bridge_path.write_text(json.dumps(bridge_payload), encoding="utf-8")
+        bridge_path.chmod(0o600)
+        monkeypatch.setenv("MP_AUTH_FILE", str(bridge_path))
+
+        ws = Workspace()
+        try:
+            assert ws.account.name == "bridged"
+            events = ws.events()
+            assert isinstance(events, list)
+        finally:
+            ws.close()
+
+
+# =============================================================================
+# Cat G — Edge cases against live API
+# =============================================================================
+
+
+class TestCatG_LiveEdgeCases:
+    """Live-API verification of edge cases that span env + auth + API behavior."""
+
+    def test_G1_02_sa_quad_beats_oauth_token_env(
+        self,
+        tmp_v3_home: Path,
+        live_sa_creds: dict[str, str],
+        live_oauth_token_creds: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """G1.02 — Both SA quad + OAuth token env set → SA wins (PR #125 preserved).
+
+        Pass ``project=`` to force the v3 path; otherwise ``Workspace()``
+        would route through the legacy code (no v3 config on disk).
+        """
+        monkeypatch.setenv("MP_USERNAME", live_sa_creds["username"])
+        monkeypatch.setenv("MP_SECRET", live_sa_creds["secret"])
+        monkeypatch.setenv("MP_PROJECT_ID", live_sa_creds["project_id"])
+        monkeypatch.setenv("MP_REGION", live_sa_creds["region"])
+        monkeypatch.setenv("MP_OAUTH_TOKEN", live_oauth_token_creds["token"])
+        # Force v3 path with explicit project=.
+        ws = Workspace(project=live_sa_creds["project_id"])
+        try:
+            # SA wins → account is ServiceAccount, not OAuthTokenAccount.
+            assert isinstance(ws.account, ServiceAccount)
+            ws.events()  # confirm Basic auth actually works
+        finally:
+            ws.close()
+
+    def test_G1_04_invalid_workspace_id_silent_skip(
+        self,
+        tmp_v3_home: Path,
+        live_sa_creds: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """G1.04 — MP_WORKSPACE_ID="abc" → silently skipped, Workspace constructs.
+
+        Pass ``project=`` to force the v3 path so the .workspace property is
+        available for assertion.
+        """
+        monkeypatch.setenv("MP_USERNAME", live_sa_creds["username"])
+        monkeypatch.setenv("MP_SECRET", live_sa_creds["secret"])
+        monkeypatch.setenv("MP_PROJECT_ID", live_sa_creds["project_id"])
+        monkeypatch.setenv("MP_REGION", live_sa_creds["region"])
+        monkeypatch.setenv("MP_WORKSPACE_ID", "abc")  # malformed
+        ws = Workspace(project=live_sa_creds["project_id"])
+        try:
+            assert ws.workspace is None  # silent skip per spec
+            # And the Workspace still works against the API.
+            ws.events()
+        finally:
+            ws.close()

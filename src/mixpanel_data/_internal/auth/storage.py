@@ -8,6 +8,11 @@ to protect sensitive credential material.
 The storage directory can be overridden via the ``MP_OAUTH_STORAGE_DIR``
 environment variable for testing or custom deployments.
 
+Per-account paths (introduced by 042-auth-architecture-redesign):
+- ``account_dir(name)`` and ``ensure_account_dir(name)`` return / create
+  ``~/.mp/accounts/{name}/`` with mode ``0o700``. Token / client / me
+  files for the new model live here.
+
 Example:
     ```python
     from mixpanel_data._internal.auth.storage import OAuthStorage
@@ -36,6 +41,85 @@ from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
 logger = logging.getLogger(__name__)
 
 
+_ACCOUNT_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+
+def account_dir(name: str) -> Path:
+    """Return ``~/.mp/accounts/{name}/`` for the given account name.
+
+    Does not create the directory. Use :func:`ensure_account_dir` if you
+    need it to exist.
+
+    Args:
+        name: Account name (must match the same pattern enforced on the
+            ``Account`` model — ``^[a-zA-Z0-9_-]{1,64}$``). Validated here
+            as a defense-in-depth check against path traversal.
+
+    Returns:
+        Absolute path to the per-account directory.
+
+    Raises:
+        ValueError: If ``name`` does not match the allowed pattern.
+    """
+    if not _ACCOUNT_NAME_PATTERN.fullmatch(name):
+        raise ValueError(
+            f"Invalid account name: {name!r}. "
+            "Must match `^[a-zA-Z0-9_-]{1,64}$`."
+        )
+    return Path.home() / ".mp" / "accounts" / name
+
+
+def ensure_account_dir(name: str) -> Path:
+    """Create ``~/.mp/accounts/{name}/`` (and its parents) with mode ``0o700``.
+
+    Idempotent — succeeds even if the directory already exists. The parent
+    ``~/.mp/`` directory is also created with restrictive permissions if
+    missing. Symlinks are not followed when applying permissions.
+
+    Args:
+        name: Account name (validated by :func:`account_dir`).
+
+    Returns:
+        The created (or pre-existing) account directory path.
+
+    Raises:
+        ValueError: If ``name`` does not match the allowed pattern.
+    """
+    path = account_dir(name)
+    old_umask = os.umask(0o077)
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    finally:
+        os.umask(old_umask)
+    # Defensive chmod so a pre-existing dir with looser permissions gets locked down.
+    path.chmod(stat.S_IRWXU)
+    return path
+
+
+def legacy_token_path(region: str) -> Path:
+    """Return ``~/.mp/oauth/tokens_{region}.json`` (read-only legacy path).
+
+    Used only by the conversion script (``mp config convert``) to migrate
+    OAuth tokens from the legacy per-region layout to the new per-account
+    layout under ``~/.mp/accounts/{name}/``. Active code paths must NOT
+    read or write this location.
+
+    Args:
+        region: Two-letter region code (``us``, ``eu``, ``in``).
+
+    Returns:
+        Absolute path to the legacy region-scoped tokens file.
+
+    Raises:
+        ValueError: If ``region`` is not a valid two-letter lowercase code.
+    """
+    if not re.fullmatch(r"[a-z]{2}", region):
+        raise ValueError(
+            f"Invalid region: {region!r}. Must be a 2-letter lowercase string."
+        )
+    return Path.home() / ".mp" / "oauth" / f"tokens_{region}.json"
+
+
 class OAuthStorage:
     """Secure file-based storage for OAuth tokens and client info.
 
@@ -55,7 +139,28 @@ class OAuthStorage:
         storage_dir: Path to the storage directory.
     """
 
-    DEFAULT_STORAGE_DIR: Path = Path.home() / ".mp" / "oauth"
+    @classmethod
+    def _default_storage_dir(cls) -> Path:
+        """Return the default OAuth storage path, resolved lazily.
+
+        This MUST stay a method (not a class attribute) so test isolation
+        via ``HOME`` / ``$HOME`` env-var monkeypatching takes effect. A
+        class-level ``Path.home() / ".mp" / "oauth"`` constant would be
+        captured at import time and silently leak the developer's real
+        OAuth tokens into hermetic tests (regression caught by QA).
+
+        Returns:
+            ``$HOME/.mp/oauth`` resolved at call time.
+        """
+        return Path.home() / ".mp" / "oauth"
+
+    # Backwards-compatible class attribute for callers that read it directly.
+    # Lazily resolves on access via the descriptor pattern would be cleaner,
+    # but a one-line property keeps the surface flat and avoids confusion.
+    @property
+    def DEFAULT_STORAGE_DIR(self) -> Path:  # noqa: N802 — preserve old name
+        """Backwards-compat alias for :meth:`_default_storage_dir`."""
+        return self._default_storage_dir()
 
     def __init__(self, storage_dir: Path | None = None) -> None:
         """Initialize OAuthStorage.
@@ -75,7 +180,7 @@ class OAuthStorage:
         elif "MP_OAUTH_STORAGE_DIR" in os.environ:
             self._storage_dir = Path(os.environ["MP_OAUTH_STORAGE_DIR"])
         else:
-            self._storage_dir = self.DEFAULT_STORAGE_DIR
+            self._storage_dir = self._default_storage_dir()
 
     @property
     def storage_dir(self) -> Path:
