@@ -16,7 +16,6 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.auth.bridge import AuthBridgeFile
     from mixpanel_data._internal.auth_credential import ResolvedSession
 
 if sys.version_info >= (3, 11):
@@ -561,12 +560,6 @@ class ConfigManager:
         if env_creds is not None:
             return env_creds
 
-        # Priority 2: Auth bridge file (only when no explicit account requested)
-        if account is None:
-            bridge_creds = self._resolve_from_bridge()
-            if bridge_creds is not None:
-                return bridge_creds
-
         # Priority 3: OAuth tokens (only when no explicit account requested)
         if account is None:
             oauth_creds = self._resolve_from_oauth(
@@ -739,108 +732,6 @@ class ConfigManager:
                 # Prefer token's project_id, fall back to active context
                 return region_candidate, tokens.project_id or active_project_id
         return None, None
-
-    def _load_and_refresh_bridge(self) -> AuthBridgeFile | None:
-        """Load, refresh, and apply custom headers from a bridge file.
-
-        Finds the bridge file, loads it, applies custom headers to env
-        vars, and refreshes expired OAuth tokens. Returns the ready-to-use
-        bridge model, or ``None`` if no valid bridge is found.
-
-        Bridge resolution is only attempted when:
-        - ``MP_AUTH_FILE`` environment variable is explicitly set, OR
-        - Running inside a Cowork VM (detected via ``detect_cowork()``)
-
-        This prevents host-side auth lockout after running
-        ``mp auth cowork-setup``, which writes a bridge file that would
-        otherwise shadow normal credential resolution.
-
-        Returns:
-            An ``AuthBridgeFile`` instance if a valid bridge file is found
-            and ready, ``None`` otherwise.
-        """
-        from mixpanel_data._internal.auth.bridge import (
-            apply_bridge_custom_header,
-            detect_cowork,
-            find_bridge_file,
-            load_bridge_file,
-            refresh_bridge_token,
-        )
-
-        # Only consult bridge files when explicitly requested (MP_AUTH_FILE)
-        # or when running inside a Cowork VM.  On the host, bridge files
-        # written by cowork-setup must not shadow normal auth resolution.
-        if not os.environ.get("MP_AUTH_FILE") and not detect_cowork():
-            return None
-
-        path = find_bridge_file()
-        if path is None:
-            return None
-
-        bridge = load_bridge_file(path)
-        if bridge is None:
-            return None
-
-        # Apply custom headers to env vars
-        apply_bridge_custom_header(bridge)
-
-        # Refresh expired OAuth tokens
-        if (
-            bridge.auth_method == "oauth"
-            and bridge.oauth is not None
-            and bridge.oauth.is_expired()
-        ):
-            try:
-                bridge = refresh_bridge_token(bridge, path)
-            except Exception as exc:
-                if type(exc).__name__ == "OAuthError":
-                    logger.warning("Bridge token refresh failed: %s", exc)
-                else:
-                    logger.warning(
-                        "Bridge token refresh failed (%s): %s. "
-                        "Falling back to other auth methods.",
-                        type(exc).__name__,
-                        exc,
-                    )
-                return None
-
-        return bridge
-
-    def _resolve_from_bridge(self) -> Credentials | None:
-        """Attempt to resolve credentials from an auth bridge file.
-
-        Loads the bridge file from ``MP_AUTH_FILE`` env var or the
-        default location (``~/.claude/mixpanel/auth.json``). If the
-        bridge contains an expired OAuth token, attempts to refresh it.
-
-        Also applies custom headers from the bridge file to env vars.
-
-        Returns:
-            Credentials if a valid bridge file is found, None otherwise.
-        """
-        bridge = self._load_and_refresh_bridge()
-        if bridge is None:
-            return None
-        from mixpanel_data._internal.auth.bridge import bridge_to_credentials
-
-        return bridge_to_credentials(bridge)
-
-    def _resolve_session_from_bridge(self) -> ResolvedSession | None:
-        """Attempt to resolve a session from an auth bridge file.
-
-        Loads the bridge file and converts it to a ``ResolvedSession``.
-        If the bridge contains an expired OAuth token, attempts to
-        refresh it. Also applies custom headers.
-
-        Returns:
-            ResolvedSession if a valid bridge file is found, None otherwise.
-        """
-        bridge = self._load_and_refresh_bridge()
-        if bridge is None:
-            return None
-        from mixpanel_data._internal.auth.bridge import bridge_to_resolved_session
-
-        return bridge_to_resolved_session(bridge)
 
     def _resolve_from_env(self) -> Credentials | None:
         """Attempt to resolve credentials from environment variables.
@@ -1627,28 +1518,6 @@ class ConfigManager:
         env_creds = self._resolve_from_env()
         if env_creds is not None:
             return env_creds.to_resolved_session()
-
-        # Priority 2: Auth bridge file (only when no explicit credential requested)
-        if credential is None:
-            bridge_session = self._resolve_session_from_bridge()
-            if bridge_session is not None:
-                # Apply overrides if provided
-                if project_id is not None or workspace_id is not None:
-                    from mixpanel_data._internal.auth_credential import (
-                        ProjectContext,
-                        ResolvedSession,
-                    )
-
-                    bridge_session = ResolvedSession(
-                        auth=bridge_session.auth,
-                        project=ProjectContext(
-                            project_id=project_id or bridge_session.project_id,
-                            workspace_id=workspace_id
-                            if workspace_id is not None
-                            else bridge_session.workspace_id,
-                        ),
-                    )
-                return bridge_session
 
         config = self._read_config()
         version = int(config.get("config_version", 1))

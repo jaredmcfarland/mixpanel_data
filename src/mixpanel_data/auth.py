@@ -1,44 +1,28 @@
 """Public authentication and configuration module.
 
-This module provides public access to credential management functionality.
-It re-exports the ConfigManager and related types for public use.
+Re-exports the legacy ``ConfigManager`` / ``Credentials`` types and
+the v2 :class:`BridgeFile` for callers that built against the
+``mixpanel_data.auth`` namespace. Scheduled for narrowing in
+T047 (B2): the canonical surface will move to
+``mixpanel_data.auth_types`` per
+``contracts/python-api.md``.
 
 Re-exported classes:
-    ConfigManager: TOML-based account management (~/.mp/config.toml).
-    Credentials: Immutable credential container with SecretStr for secrets.
-    AccountInfo: Named account metadata (name, username, project_id, region).
-    AuthMethod: Enum for authentication method selection (basic, oauth).
-    AuthCredential: Standalone auth identity for v2 config (decoupled from project).
-    CredentialType: Enum distinguishing service_account from oauth.
-    ProjectContext: Project and optional workspace selection.
-    ResolvedSession: Composition of AuthCredential + ProjectContext.
-    AuthBridgeFile: Cowork credential bridge file model.
-    detect_cowork: Detect Claude Cowork VM environment.
-    load_bridge_file: Load and validate bridge credentials from disk.
-
-For full documentation of these classes, see:
-    mixpanel_data._internal.config, mixpanel_data._internal.auth_credential,
-    mixpanel_data._internal.auth.bridge
-
-Example usage:
-    ```python
-    from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
-
-    config = ConfigManager()
-    creds = config.resolve_credentials()
-
-    # Cowork bridge
-    from mixpanel_data.auth import AuthBridgeFile, detect_cowork, load_bridge_file
-
-    if detect_cowork():
-        bridge = load_bridge_file()
-    ```
+    ConfigManager: Legacy TOML-based account management.
+    Credentials: Legacy immutable credential container.
+    AccountInfo: Legacy named-account metadata.
+    AuthMethod: Legacy enum for authentication method selection.
+    AuthCredential: v2 standalone auth identity.
+    CredentialType: v2 enum distinguishing service_account from oauth.
+    ProjectContext: v2 project + workspace selection.
+    ResolvedSession: v2 composition of AuthCredential + ProjectContext.
+    BridgeFile: v2 Cowork credential bridge schema.
+    load_bridge: Load and validate a bridge file from disk.
 """
 
 from mixpanel_data._internal.auth.bridge import (
-    AuthBridgeFile,
-    detect_cowork,
-    load_bridge_file,
+    BridgeFile,
+    load_bridge,
 )
 from mixpanel_data._internal.auth_credential import (
     AuthCredential,
@@ -55,14 +39,13 @@ from mixpanel_data._internal.config import (
 
 __all__ = [
     "AccountInfo",
-    "AuthBridgeFile",
     "AuthCredential",
     "AuthMethod",
+    "BridgeFile",
     "ConfigManager",
-    "Credentials",
     "CredentialType",
+    "Credentials",
     "ProjectContext",
     "ResolvedSession",
-    "detect_cowork",
-    "load_bridge_file",
+    "load_bridge",
 ]
