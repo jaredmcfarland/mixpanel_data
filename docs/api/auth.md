@@ -10,24 +10,35 @@ The auth module provides credential management, configuration, and OAuth 2.0 aut
 ## Overview
 
 ```python
-from mixpanel_data.auth import ConfigManager, Credentials, AccountInfo, AuthMethod
+from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
+from mixpanel_data.auth_types import Account, ServiceAccount
 
 # Manage service accounts
 config = ConfigManager()
-config.add_account("production", username="...", secret="...", project_id="...", region="us")
-accounts = config.list_accounts()
+config.add_account(
+    "production",
+    type="service_account",
+    region="us",
+    default_project="12345",
+    username="...",
+    secret="...",
+)
+accounts = config.list_accounts()  # list[AccountSummary]
 
-# Resolve credentials (checks env vars → OAuth tokens → config file)
-creds = config.resolve_credentials(account="production")
+# Inspect a single account (returns the v3 ``Account`` discriminated union)
+account: Account = config.get_account("production")
+if isinstance(account, ServiceAccount):
+    print(f"SA {account.name} → project {account.default_project}")
 
-# Check auth method
+# Check auth method on a Credentials instance held by the API client
+creds = Credentials(username="...", secret="...", project_id="12345", region="us")
 if creds.auth_method == AuthMethod.oauth:
     print(f"Using OAuth: {creds.auth_header()[:20]}...")
 ```
 
 ## ConfigManager
 
-Manages accounts stored in the TOML config file (`~/.mp/config.toml`) and resolves credentials from multiple sources including OAuth tokens.
+Manages the v3 single-schema TOML config file (`~/.mp/config.toml`) — accounts, targets, and the `[active]` session axes. Higher-level workflows (`mp account add`, `mp account use`, `mp login`) live in `mixpanel_data.accounts` and `mixpanel_data.session`.
 
 ::: mixpanel_data.auth.ConfigManager
     options:
@@ -36,12 +47,15 @@ Manages accounts stored in the TOML config file (`~/.mp/config.toml`) and resolv
       members:
         - __init__
         - config_path
-        - resolve_credentials
         - list_accounts
-        - add_account
-        - remove_account
-        - set_default
         - get_account
+        - add_account
+        - update_account
+        - remove_account
+        - get_active
+        - set_active
+        - clear_active
+        - apply_target
 
 ## AuthMethod
 
@@ -85,11 +99,59 @@ To drive a `Workspace` with these credentials, set the corresponding `MP_OAUTH_T
       show_root_heading: true
       show_root_toc_entry: true
 
-## AccountInfo
+## Account (v3 discriminated union)
 
-Account metadata (without the secret).
+`Account` is the canonical persisted representation of a configured Mixpanel account. It is a Pydantic discriminated union dispatched on the `type` field — the runtime types are the three concrete variant classes below. Use `mixpanel_data.auth_types.Account` as the type hint and `pydantic.TypeAdapter(Account)` to construct from a raw dict.
 
-::: mixpanel_data.auth.AccountInfo
+```python
+from mixpanel_data.auth_types import (
+    Account,
+    ServiceAccount,
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
+)
+
+account: Account = ServiceAccount(
+    name="prod",
+    region="us",
+    default_project="12345",
+    username="...",
+    secret="...",
+)
+```
+
+### ServiceAccount
+
+Long-lived HTTP Basic Auth credentials.
+
+::: mixpanel_data.auth_types.ServiceAccount
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+### OAuthBrowserAccount
+
+PKCE browser flow; access/refresh tokens persisted on disk under `~/.mp/oauth/`.
+
+::: mixpanel_data.auth_types.OAuthBrowserAccount
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+### OAuthTokenAccount
+
+Static bearer token (CI / agents) — supplied inline or via an env var.
+
+::: mixpanel_data.auth_types.OAuthTokenAccount
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## AccountSummary
+
+Read-only account metadata (no secrets) returned by `ConfigManager.list_accounts()` and `mp account list`.
+
+::: mixpanel_data.types.AccountSummary
     options:
       show_root_heading: true
       show_root_toc_entry: true

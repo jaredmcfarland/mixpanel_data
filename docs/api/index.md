@@ -45,6 +45,9 @@ from mixpanel_data import UserQueryResult
 
 # Auth utilities
 from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
+from mixpanel_data.auth_types import (
+    Account, ServiceAccount, OAuthBrowserAccount, OAuthTokenAccount,
+)
 
 # OAuth and workspace exceptions
 from mixpanel_data import OAuthError, WorkspaceScopeError
@@ -97,10 +100,11 @@ The main entry point for all operations:
 
 Credential and account management:
 
-- **ConfigManager** — Manage accounts in config file
+- **ConfigManager** — Manage accounts and the active session in `~/.mp/config.toml`
 - **Credentials** — Credential container with secrets (Basic Auth and OAuth)
 - **AuthMethod** — Authentication method enum (`basic`, `oauth`)
-- **AccountInfo** — Account metadata (without secrets)
+- **Account** — v3 discriminated union over `ServiceAccount` / `OAuthBrowserAccount` / `OAuthTokenAccount` (from `mixpanel_data.auth_types`)
+- **AccountSummary** — Read-only account metadata (no secrets)
 - **OAuthFlow** — OAuth 2.0 PKCE login flow orchestration
 - **OAuthStorage** — Local token and client info persistence
 
