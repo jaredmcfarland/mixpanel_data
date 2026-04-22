@@ -86,6 +86,15 @@ class _AccountBase(BaseModel):
     region: Region
     """Mixpanel data residency — one of ``us``, ``eu``, ``in``."""
 
+    default_project: Annotated[
+        str | None,
+        Field(default=None, pattern=r"^\d+$"),
+    ] = None
+    """Account's home project (numeric string). Resolves the project axis when
+    no env / param / target / bridge source overrides it (FR-017). Required at
+    add-time for ``service_account`` / ``oauth_token`` accounts; populated
+    post-PKCE via ``/me`` for ``oauth_browser`` accounts."""
+
 
 class ServiceAccount(_AccountBase):
     """Basic-auth service account credentials.

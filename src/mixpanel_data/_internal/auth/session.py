@@ -208,17 +208,20 @@ class Session(BaseModel):
 class ActiveSession(BaseModel):
     """Persisted shape of the ``[active]`` block in ``~/.mp/config.toml``.
 
-    All three axes are optional — environment variables or per-command
-    flags can supply each one independently.
+    Only ``account`` and ``workspace`` live in ``[active]``. Project lives
+    on the account itself as ``Account.default_project`` — switching
+    accounts implicitly switches projects (per FR-033). Any legacy
+    ``[active].project`` field is rejected by ``extra="forbid"`` to surface
+    the migration loudly.
+
+    Both fields are optional — environment variables or per-command flags
+    can supply each one independently.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     account: str | None = None
     """Local config name of the active account (must reference ``[accounts.NAME]``)."""
-
-    project: str | None = None
-    """Active project ID (Mixpanel's numeric-string wire format)."""
 
     workspace: int | None = None
     """Active workspace ID (positive int) or ``None`` for lazy resolution."""

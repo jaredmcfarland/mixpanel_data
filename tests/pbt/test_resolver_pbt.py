@@ -48,11 +48,12 @@ def _build_cm(name: str, project: str) -> ConfigManager:
 
     Each call uses an independent ``TemporaryDirectory`` so multiple
     Hypothesis examples in the same test function do not collide on file
-    state.
+    state. Project lives on the account as ``default_project`` (FR-012);
+    only ``account`` and ``workspace`` go to ``[active]``.
 
     Args:
         name: Account name to register.
-        project: Project ID to set in [active].
+        project: Project ID to set as the account's ``default_project``.
 
     Returns:
         A ConfigManager whose tmp dir leaks (Python GC handles it
@@ -64,10 +65,11 @@ def _build_cm(name: str, project: str) -> ConfigManager:
         name,
         type="service_account",
         region="us",
+        default_project=project,
         username="u",
         secret=SecretStr("s"),
     )
-    cm.set_active(account=name, project=project)
+    cm.set_active(account=name)
     return cm
 
 
@@ -138,7 +140,7 @@ def test_env_wins_for_project_axis(
     config_project: str,
     env_project: str,
 ) -> None:
-    """``MP_PROJECT_ID`` always wins over ``[active].project``."""
+    """``MP_PROJECT_ID`` always wins over the account's ``default_project``."""
     cm = _build_cm(name, config_project)
     monkeypatch.setenv("MP_PROJECT_ID", env_project)
     s = resolve_session(config=cm)

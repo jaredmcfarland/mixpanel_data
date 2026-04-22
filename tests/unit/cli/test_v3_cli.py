@@ -58,6 +58,8 @@ class TestAccountCli:
                 "us",
                 "--username",
                 "u",
+                "--project",
+                "3713224",
             ],
         )
         assert result.exit_code == 0, result.output
@@ -86,6 +88,8 @@ class TestAccountCli:
                 "us",
                 "--token-env",
                 "MP_OAUTH_TOKEN",
+                "--project",
+                "3713224",
             ],
         )
         assert result.exit_code == 0, result.output
@@ -115,6 +119,8 @@ class TestAccountCli:
                 "us",
                 "--username",
                 "u",
+                "--project",
+                "3713224",
             ],
         )
         runner.invoke(
@@ -142,6 +148,8 @@ class TestAccountCli:
                 "us",
                 "--username",
                 "u",
+                "--project",
+                "3713224",
             ],
         )
         result = runner.invoke(app, ["account", "remove", "a"])
@@ -157,14 +165,40 @@ class TestProjectCli:
         assert result.exit_code == 0
         assert "no active project" in result.output
 
-    def test_use_writes_active(
+    def test_use_writes_active_account_default_project(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``mp project use ID`` writes [active].project."""
+        """``mp project use ID`` writes the active account's ``default_project``.
+
+        Project lives on the account (FR-012), not in ``[active]``.
+        """
+        monkeypatch.setenv("MP_SECRET", "s")
+        runner.invoke(
+            app,
+            [
+                "account",
+                "add",
+                "a",
+                "--type",
+                "service_account",
+                "--region",
+                "us",
+                "--username",
+                "u",
+                "--project",
+                "1111111",
+            ],
+        )
         result = runner.invoke(app, ["project", "use", "3713224"])
         assert result.exit_code == 0
-        active = ConfigManager().get_active().project
-        assert active == "3713224"
+        cm = ConfigManager()
+        # The active account's default_project was updated.
+        assert cm.get_account("a").default_project == "3713224"
+
+    def test_use_without_active_account_errors(self, runner: CliRunner) -> None:
+        """``mp project use ID`` with no active account exits non-zero."""
+        result = runner.invoke(app, ["project", "use", "3713224"])
+        assert result.exit_code != 0
 
 
 class TestWorkspaceCli:
@@ -204,9 +238,10 @@ class TestSessionCli:
                 "us",
                 "--username",
                 "u",
+                "--project",
+                "3713224",
             ],
         )
-        runner.invoke(app, ["project", "use", "3713224"])
         result = runner.invoke(app, ["session"])
         assert result.exit_code == 0
         assert "account:" in result.output
@@ -230,6 +265,8 @@ class TestSessionCli:
                 "us",
                 "--username",
                 "u",
+                "--project",
+                "3713224",
             ],
         )
         result = runner.invoke(app, ["session", "--format", "json"])
@@ -267,6 +304,8 @@ class TestGlobals:
                 "us",
                 "--username",
                 "u",
+                "--project",
+                "3713224",
             ],
         )
         result = runner.invoke(

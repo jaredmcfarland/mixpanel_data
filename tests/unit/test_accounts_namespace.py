@@ -1,8 +1,8 @@
 """Unit tests for the ``mp.accounts`` public namespace (T030).
 
 The namespace mirrors the spec ``contracts/python-api.md §5``:
-``list``, ``add``, ``remove``, ``use``, ``show``, ``test``, ``login``,
-``logout``, ``token``, ``export_bridge``, ``remove_bridge``.
+``list``, ``add``, ``update``, ``remove``, ``use``, ``show``, ``test``,
+``login``, ``logout``, ``token``, ``export_bridge``, ``remove_bridge``.
 
 Tests focus on the wiring + delegation behavior; the underlying
 ``ConfigManager`` is exercised in ``test_config_v3.py``.
@@ -40,42 +40,83 @@ def cm() -> ConfigManager:
 
 
 class TestAdd:
-    """``mp.accounts.add(name, *, type, region, ...)`` writes accounts."""
+    """``mp.accounts.add(name, *, type, region, default_project, ...)``."""
 
     def test_service_account(self, cm: ConfigManager) -> None:
-        """Adding a service account writes [accounts.NAME] with the new shape."""
+        """Adding a service account writes [accounts.NAME] with default_project."""
         result = accounts_ns.add(
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
         assert isinstance(result, AccountSummary)
         assert result.name == "team"
         assert result.type == "service_account"
+        assert cm.get_account("team").default_project == "3713224"
 
-    def test_oauth_browser(self, cm: ConfigManager) -> None:
-        """Adding an oauth_browser account writes only name + region."""
+    def test_service_account_without_default_project_raises(
+        self, cm: ConfigManager
+    ) -> None:
+        """SA must provide ``default_project`` per FR-004."""
+        with pytest.raises(ConfigError):
+            accounts_ns.add(
+                "team",
+                type="service_account",
+                region="us",
+                username="u",
+                secret=SecretStr("s"),
+            )
+
+    def test_oauth_browser_without_default_project_ok(self, cm: ConfigManager) -> None:
+        """``oauth_browser`` may omit ``default_project`` — backfilled at login."""
         result = accounts_ns.add("personal", type="oauth_browser", region="eu")
         assert result.type == "oauth_browser"
+        assert cm.get_account("personal").default_project is None
+
+    def test_oauth_browser_with_default_project_ok(self, cm: ConfigManager) -> None:
+        """``oauth_browser`` may also pre-set ``default_project``."""
+        result = accounts_ns.add(
+            "personal", type="oauth_browser", region="eu", default_project="12345"
+        )
+        assert result.type == "oauth_browser"
+        assert cm.get_account("personal").default_project == "12345"
 
     def test_oauth_token_inline(self, cm: ConfigManager) -> None:
-        """Adding an oauth_token account with inline token works."""
+        """Adding an oauth_token account with inline token + default_project works."""
         result = accounts_ns.add(
-            "ci", type="oauth_token", region="us", token=SecretStr("ey.x")
+            "ci",
+            type="oauth_token",
+            region="us",
+            default_project="3713224",
+            token=SecretStr("ey.x"),
         )
         assert result.type == "oauth_token"
 
     def test_oauth_token_env(self, cm: ConfigManager) -> None:
-        """Adding an oauth_token account with token_env works."""
+        """Adding an oauth_token account with token_env + default_project works."""
         result = accounts_ns.add(
             "agent",
             type="oauth_token",
             region="us",
+            default_project="3713224",
             token_env="MP_OAUTH_TOKEN",
         )
         assert result.type == "oauth_token"
+
+    def test_oauth_token_without_default_project_raises(
+        self, cm: ConfigManager
+    ) -> None:
+        """oauth_token must provide ``default_project`` per FR-004."""
+        with pytest.raises(ConfigError):
+            accounts_ns.add(
+                "agent",
+                type="oauth_token",
+                region="us",
+                token=SecretStr("ey.x"),
+            )
 
     def test_first_account_auto_active(self, cm: ConfigManager) -> None:
         """Per FR-045, the first account auto-promotes to ``[active].account``."""
@@ -83,6 +124,7 @@ class TestAdd:
             "first",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -94,6 +136,7 @@ class TestAdd:
             "first",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -106,11 +149,46 @@ class TestAdd:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
         with pytest.raises(ConfigError):
             accounts_ns.add("x", type="oauth_browser", region="us")
+
+
+class TestUpdate:
+    """``mp.accounts.update(name, ...)`` mutates fields in place."""
+
+    def test_update_default_project(self, cm: ConfigManager) -> None:
+        """Updating ``default_project`` rewrites the account block."""
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        accounts_ns.update("team", default_project="9999999")
+        assert cm.get_account("team").default_project == "9999999"
+
+    def test_update_region(self, cm: ConfigManager) -> None:
+        """Updating ``region`` works for any account type."""
+        accounts_ns.add("personal", type="oauth_browser", region="us")
+        accounts_ns.update("personal", region="eu")
+        assert cm.get_account("personal").region == "eu"
+
+    def test_update_missing_account_raises(self, cm: ConfigManager) -> None:
+        """Updating a non-existent account raises."""
+        with pytest.raises(ConfigError):
+            accounts_ns.update("ghost", default_project="1")
+
+    def test_update_type_incompatible_field_raises(self, cm: ConfigManager) -> None:
+        """``username=`` on an oauth_browser account raises."""
+        accounts_ns.add("personal", type="oauth_browser", region="us")
+        with pytest.raises(ConfigError):
+            accounts_ns.update("personal", username="bad")
 
 
 class TestList:
@@ -126,6 +204,7 @@ class TestList:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -143,6 +222,7 @@ class TestUse:
             "first",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -150,21 +230,36 @@ class TestUse:
         accounts_ns.use("second")
         assert cm.get_active().account == "second"
 
-    def test_use_does_not_touch_project_or_workspace(self, cm: ConfigManager) -> None:
-        """Per FR-033, ``accounts.use`` updates only the account axis."""
+    def test_use_does_not_touch_workspace(self, cm: ConfigManager) -> None:
+        """Per FR-033, ``accounts.use`` updates only the account axis.
+
+        Project lives on the account itself; workspace pinning in ``[active]``
+        is preserved across account swaps (workspace IDs are project-scoped
+        but ``[active].workspace`` is just a UI hint and may legitimately
+        carry across).
+        """
         accounts_ns.add(
             "first",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
-        cm.set_active(project="3713224", workspace=42)
-        accounts_ns.add("other", type="oauth_browser", region="us")
+        cm.set_active(workspace=42)
+        accounts_ns.add(
+            "other",
+            type="service_account",
+            region="us",
+            default_project="9999999",
+            username="o",
+            secret=SecretStr("o"),
+        )
         accounts_ns.use("other")
         active = cm.get_active()
         assert active.account == "other"
-        assert active.project == "3713224"
+        # Project comes from the new account's default_project, not [active].
+        assert cm.get_account("other").default_project == "9999999"
         assert active.workspace == 42
 
 
@@ -177,6 +272,7 @@ class TestShow:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -189,6 +285,7 @@ class TestShow:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -210,6 +307,7 @@ class TestRemove:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -223,6 +321,7 @@ class TestRemove:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -240,6 +339,7 @@ class TestToken:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -252,6 +352,7 @@ class TestToken:
             "ci",
             type="oauth_token",
             region="us",
+            default_project="3713224",
             token=SecretStr("ey.tok-123"),
         )
         result = accounts_ns.token("ci")
@@ -267,6 +368,7 @@ class TestStubs:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )

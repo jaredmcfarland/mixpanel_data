@@ -55,12 +55,18 @@ def add(
     *,
     type: AccountType,  # noqa: A002 — matches contracts/python-api.md
     region: Region,
+    default_project: str | None = None,
     username: str | None = None,
     secret: SecretStr | str | None = None,
     token: SecretStr | str | None = None,
     token_env: str | None = None,
 ) -> AccountSummary:
     """Add a new account.
+
+    Per FR-004, ``default_project`` is required at add-time for
+    ``service_account`` and ``oauth_token``. For ``oauth_browser`` it is
+    OPTIONAL — the value gets backfilled by ``login(name)`` after the PKCE
+    flow completes via a ``/me`` lookup.
 
     Per FR-045, the first account added auto-promotes to
     ``[active].account``. Subsequent accounts do not.
@@ -69,6 +75,8 @@ def add(
         name: Account name (must match ``^[a-zA-Z0-9_-]{1,64}$``).
         type: One of ``service_account`` / ``oauth_browser`` / ``oauth_token``.
         region: One of ``us`` / ``eu`` / ``in``.
+        default_project: Numeric project ID. Required for SA / oauth_token;
+            optional for oauth_browser (backfilled by ``login()``).
         username: Required for ``service_account``.
         secret: Required for ``service_account``.
         token: For ``oauth_token`` (mutually exclusive with ``token_env``).
@@ -86,6 +94,7 @@ def add(
         name,
         type=type,
         region=region,
+        default_project=default_project,
         username=username,
         secret=secret,
         token=token,
@@ -93,6 +102,49 @@ def add(
     )
     if is_first:
         cm.set_active(account=name)
+    return show(name)
+
+
+def update(
+    name: str,
+    *,
+    region: Region | None = None,
+    default_project: str | None = None,
+    username: str | None = None,
+    secret: SecretStr | str | None = None,
+    token: SecretStr | str | None = None,
+    token_env: str | None = None,
+) -> AccountSummary:
+    """Update fields on an existing account in place.
+
+    Type cannot be changed via this function (remove + re-add for that).
+    Type-incompatible fields raise ``ConfigError``.
+
+    Args:
+        name: Account to update.
+        region: New region.
+        default_project: New ``default_project`` (digit string).
+        username: New username (service_account only).
+        secret: New secret (service_account only).
+        token: New inline token (oauth_token only).
+        token_env: New env-var name (oauth_token only).
+
+    Returns:
+        Updated :class:`AccountSummary`.
+
+    Raises:
+        ConfigError: Account not found, type-incompatible field, or
+            validation failure.
+    """
+    _config().update_account(
+        name,
+        region=region,
+        default_project=default_project,
+        username=username,
+        secret=secret,
+        token=token,
+        token_env=token_env,
+    )
     return show(name)
 
 
@@ -292,5 +344,6 @@ __all__ = [
     "show",
     "test",
     "token",
+    "update",
     "use",
 ]

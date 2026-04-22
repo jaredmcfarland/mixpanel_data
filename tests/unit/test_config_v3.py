@@ -4,7 +4,8 @@ The v3 ConfigManager operates on a single TOML schema with three sections:
 ``[active]``, ``[accounts.NAME]``, ``[targets.NAME]``, plus optional
 ``[settings]``. There is no ``config_version`` field; legacy v1 / v2
 configs are detected and rejected with a precise error pointing at
-``mp config convert``.
+``mp config convert``. The ``[active]`` block holds only ``account`` and
+``workspace`` — project lives on the account as ``default_project``.
 
 Reference: specs/042-auth-architecture-redesign/contracts/config-schema.md §1.
 """
@@ -66,11 +67,12 @@ class TestAddAccount:
     """``add_account`` writes ``[accounts.NAME]`` blocks."""
 
     def test_service_account(self, cm: ConfigManager) -> None:
-        """ServiceAccount round-trips through the file."""
+        """ServiceAccount round-trips through the file (with default_project)."""
         cm.add_account(
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="sa.user",
             secret=SecretStr("super-secret"),
         )
@@ -84,21 +86,24 @@ class TestAddAccount:
         assert isinstance(loaded, ServiceAccount)
         assert loaded.username == "sa.user"
         assert loaded.secret.get_secret_value() == "super-secret"
+        assert loaded.default_project == "3713224"
 
     def test_oauth_browser_account(self, cm: ConfigManager) -> None:
-        """OAuthBrowserAccount has no inline secret — only name+region."""
+        """OAuthBrowserAccount has no inline secret — only name+region (+optional default_project)."""
         cm.add_account("personal", type="oauth_browser", region="eu")
         cm2 = ConfigManager(config_path=cm.config_path)
         loaded = cm2.get_account("personal")
         assert isinstance(loaded, OAuthBrowserAccount)
         assert loaded.region == "eu"
+        assert loaded.default_project is None
 
     def test_oauth_token_with_inline(self, cm: ConfigManager) -> None:
-        """OAuthTokenAccount with inline token round-trips."""
+        """OAuthTokenAccount with inline token + default_project round-trips."""
         cm.add_account(
             "ci",
             type="oauth_token",
             region="us",
+            default_project="3713224",
             token=SecretStr("ey.tok"),
         )
         cm2 = ConfigManager(config_path=cm.config_path)
@@ -107,13 +112,15 @@ class TestAddAccount:
         assert loaded.token is not None
         assert loaded.token.get_secret_value() == "ey.tok"
         assert loaded.token_env is None
+        assert loaded.default_project == "3713224"
 
     def test_oauth_token_with_env(self, cm: ConfigManager) -> None:
-        """OAuthTokenAccount with token_env round-trips."""
+        """OAuthTokenAccount with token_env + default_project round-trips."""
         cm.add_account(
             "agent",
             type="oauth_token",
             region="eu",
+            default_project="3713224",
             token_env="MP_OAUTH_TOKEN",
         )
         cm2 = ConfigManager(config_path=cm.config_path)
@@ -122,12 +129,38 @@ class TestAddAccount:
         assert loaded.token is None
         assert loaded.token_env == "MP_OAUTH_TOKEN"
 
+    def test_service_account_without_default_project_raises(
+        self, cm: ConfigManager
+    ) -> None:
+        """SA without ``default_project`` raises (FR-004)."""
+        with pytest.raises(ConfigError):
+            cm.add_account(
+                "team",
+                type="service_account",
+                region="us",
+                username="u",
+                secret=SecretStr("s"),
+            )
+
+    def test_oauth_token_without_default_project_raises(
+        self, cm: ConfigManager
+    ) -> None:
+        """oauth_token without ``default_project`` raises (FR-004)."""
+        with pytest.raises(ConfigError):
+            cm.add_account(
+                "ci",
+                type="oauth_token",
+                region="us",
+                token=SecretStr("ey.tok"),
+            )
+
     def test_duplicate_name_raises(self, cm: ConfigManager) -> None:
         """Adding an existing name raises ConfigError."""
         cm.add_account(
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -141,13 +174,49 @@ class TestAddAccount:
                 "bad name",  # space is invalid
                 type="service_account",
                 region="us",
+                default_project="3713224",
                 username="u",
                 secret=SecretStr("s"),
             )
 
 
+class TestUpdateAccount:
+    """``update_account`` mutates fields in place."""
+
+    def test_update_default_project(self, cm: ConfigManager) -> None:
+        """Updating ``default_project`` rewrites the account's home project."""
+        cm.add_account(
+            "team",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        cm.update_account("team", default_project="9999999")
+        loaded = cm.get_account("team")
+        assert loaded.default_project == "9999999"
+
+    def test_update_region(self, cm: ConfigManager) -> None:
+        """Region updates work for any account type."""
+        cm.add_account("personal", type="oauth_browser", region="us")
+        cm.update_account("personal", region="eu")
+        assert cm.get_account("personal").region == "eu"
+
+    def test_update_missing_account_raises(self, cm: ConfigManager) -> None:
+        """Updating a non-existent account raises."""
+        with pytest.raises(ConfigError):
+            cm.update_account("ghost", default_project="1")
+
+    def test_update_username_on_browser_raises(self, cm: ConfigManager) -> None:
+        """``username=`` on an oauth_browser account raises."""
+        cm.add_account("personal", type="oauth_browser", region="us")
+        with pytest.raises(ConfigError):
+            cm.update_account("personal", username="u")
+
+
 class TestSetActive:
-    """``set_active`` writes the ``[active]`` block per axis."""
+    """``set_active`` writes ``[active]`` (account + workspace only)."""
 
     def test_set_account_only(self, cm: ConfigManager) -> None:
         """Setting account axis writes only that key."""
@@ -155,46 +224,37 @@ class TestSetActive:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
         cm.set_active(account="x")
         assert cm.get_active() == ActiveSession(account="x")
 
-    def test_set_project_only(self, cm: ConfigManager) -> None:
-        """Setting project axis writes only that key."""
-        cm.set_active(project="3713224")
-        assert cm.get_active() == ActiveSession(project="3713224")
-
     def test_set_workspace_only(self, cm: ConfigManager) -> None:
         """Setting workspace axis writes only that key."""
         cm.set_active(workspace=8)
         assert cm.get_active() == ActiveSession(workspace=8)
 
-    def test_set_all_three(self, cm: ConfigManager) -> None:
-        """Setting all three axes in one call."""
+    def test_set_both(self, cm: ConfigManager) -> None:
+        """Setting both axes in one call."""
         cm.add_account(
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
-        cm.set_active(account="x", project="3713224", workspace=8)
+        cm.set_active(account="x", workspace=8)
         active = cm.get_active()
         assert active.account == "x"
-        assert active.project == "3713224"
         assert active.workspace == 8
 
     def test_account_must_exist(self, cm: ConfigManager) -> None:
         """Setting active.account to a missing account raises ConfigError."""
         with pytest.raises(ConfigError):
             cm.set_active(account="nonexistent")
-
-    def test_project_must_be_digit_string(self, cm: ConfigManager) -> None:
-        """``project`` axis must match ``^\\d+$``."""
-        with pytest.raises(ConfigError):
-            cm.set_active(project="abc")
 
     def test_workspace_must_be_positive(self, cm: ConfigManager) -> None:
         """``workspace`` axis must be > 0."""
@@ -203,20 +263,20 @@ class TestSetActive:
         with pytest.raises(ConfigError):
             cm.set_active(workspace=-5)
 
-    def test_partial_update_preserves_other_axes(self, cm: ConfigManager) -> None:
-        """``set_active(project=...)`` does NOT touch existing account or workspace."""
+    def test_partial_update_preserves_other_axis(self, cm: ConfigManager) -> None:
+        """``set_active(workspace=...)`` does NOT touch existing account."""
         cm.add_account(
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
-        cm.set_active(account="x", workspace=8)
-        cm.set_active(project="3713224")
+        cm.set_active(account="x")
+        cm.set_active(workspace=8)
         active = cm.get_active()
         assert active.account == "x"
-        assert active.project == "3713224"
         assert active.workspace == 8
 
 
@@ -229,6 +289,7 @@ class TestTargets:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -243,6 +304,7 @@ class TestTargets:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -263,6 +325,7 @@ class TestTargets:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -271,12 +334,17 @@ class TestTargets:
         with pytest.raises(ConfigError):
             cm.get_target("ecom")
 
-    def test_apply_target_writes_three_axes(self, cm: ConfigManager) -> None:
-        """``apply_target`` writes account, project, workspace to active."""
+    def test_apply_target_writes_account_workspace_and_default_project(
+        self, cm: ConfigManager
+    ) -> None:
+        """``apply_target`` writes account+workspace to ``[active]`` AND
+        sets the target account's ``default_project`` to the target's project.
+        """
         cm.add_account(
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -284,8 +352,9 @@ class TestTargets:
         cm.apply_target("ecom")
         active = cm.get_active()
         assert active.account == "x"
-        assert active.project == "3018488"
         assert active.workspace == 8
+        # Project went onto the account, not into [active].
+        assert cm.get_account("x").default_project == "3018488"
 
     def test_apply_target_missing_workspace_clears_workspace(
         self, cm: ConfigManager
@@ -295,15 +364,17 @@ class TestTargets:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
-        cm.set_active(account="x", project="999", workspace=99)
+        cm.set_active(account="x", workspace=99)
         cm.add_target("nows", account="x", project="3018488")
         cm.apply_target("nows")
         active = cm.get_active()
         assert active.workspace is None
-        assert active.project == "3018488"
+        # Project goes to the account.
+        assert cm.get_account("x").default_project == "3018488"
 
     def test_apply_missing_target_raises(self, cm: ConfigManager) -> None:
         """``apply_target`` against an unknown target raises ConfigError."""
@@ -320,6 +391,7 @@ class TestListAccounts:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -335,6 +407,7 @@ class TestListAccounts:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -350,6 +423,7 @@ class TestListAccounts:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -368,6 +442,7 @@ class TestRemoveAccount:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -383,6 +458,7 @@ class TestRemoveAccount:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -396,6 +472,7 @@ class TestRemoveAccount:
             "x",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -443,6 +520,17 @@ class TestLegacyDetectionV1:
                 'project_id = "1"\n'
                 'region = "us"\n'
             ),
+            encoding="utf-8",
+        )
+        cm = ConfigManager(config_path=p)
+        with pytest.raises(ConfigError, match="Legacy config schema detected"):
+            cm.list_accounts()
+
+    def test_active_project_marker(self, tmp_path: Path) -> None:
+        """``[active].project`` triggers v3-pre-redesign legacy detection."""
+        p = tmp_path / "config.toml"
+        p.write_text(
+            ('[active]\naccount = "x"\nproject = "3713224"\n'),
             encoding="utf-8",
         )
         cm = ConfigManager(config_path=p)
@@ -507,7 +595,7 @@ class TestV3FixtureLoad:
     """The v3 golden fixtures load cleanly with the expected shape."""
 
     def test_v3_simple(self, tmp_path: Path) -> None:
-        """``v3_simple.toml`` loads as one account + complete active."""
+        """``v3_simple.toml`` loads with project on the account, workspace in [active]."""
         src = _FIXTURE_DIR / "v3_simple.toml"
         dst = tmp_path / "config.toml"
         dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
@@ -517,11 +605,12 @@ class TestV3FixtureLoad:
         assert accounts[0].name == "demo-sa"
         active = cm.get_active()
         assert active.account == "demo-sa"
-        assert active.project == "3713224"
         assert active.workspace == 3448413
+        loaded = cm.get_account("demo-sa")
+        assert loaded.default_project == "3713224"
 
     def test_v3_multi(self, tmp_path: Path) -> None:
-        """``v3_multi.toml`` loads as three accounts of distinct types + two targets."""
+        """``v3_multi.toml`` loads three accounts of distinct types + two targets."""
         src = _FIXTURE_DIR / "v3_multi.toml"
         dst = tmp_path / "config.toml"
         dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")

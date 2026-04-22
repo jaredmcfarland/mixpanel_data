@@ -877,11 +877,15 @@ class MixpanelAPIClient:
     def resolve_workspace(self) -> WorkspaceRef:
         """Return the workspace for the current session, lazy-resolving once.
 
-        When ``Session.workspace`` is None, this calls
-        ``/api/app/projects/{pid}/workspaces/public`` and picks the
+        When ``Session.workspace`` is None, this calls the App API's
+        ``/projects/{pid}/workspaces/public`` endpoint and picks the
         ``is_default=True`` workspace. The result is cached for the
         session's lifetime; subsequent calls return the cached value
         until ``use(account=...)`` or ``use(project=...)`` invalidates.
+
+        The resolved id is also written to the int-id cache used by
+        :meth:`resolve_workspace_id` so the two discovery paths share
+        a single network call.
 
         Returns:
             A :class:`WorkspaceRef` for the current session's project.
@@ -891,7 +895,7 @@ class MixpanelAPIClient:
         """
         if self._resolved_workspace is not None:
             return self._resolved_workspace
-        path = f"/api/app/projects/{self.project_id}/workspaces/public"
+        path = f"/projects/{self.project_id}/workspaces/public"
         payload = self.app_request("GET", path)
         items: list[dict[str, Any]]
         if isinstance(payload, list):
@@ -911,6 +915,7 @@ class MixpanelAPIClient:
             is_default=bool(default.get("is_default")),
         )
         self._resolved_workspace = ref
+        self._cached_workspace_id = ref.id
         return ref
 
     def _parse_retry_after(self, response: httpx.Response) -> int | None:

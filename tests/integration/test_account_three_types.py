@@ -61,6 +61,7 @@ class TestThreeAccountTypes:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="team.sa",
             secret=SecretStr("team-secret"),
         )
@@ -73,6 +74,7 @@ class TestThreeAccountTypes:
             "ci",
             type="oauth_token",
             region="us",
+            default_project="3713224",
             token_env="MY_OAUTH_TOK",
         )
 
@@ -92,13 +94,20 @@ class TestThreeAccountTypes:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
         accounts_ns.add("personal", type="oauth_browser", region="us")
         _write_tokens_for("personal", tmp_path)
         monkeypatch.setenv("MY_OAUTH_TOK", "ci-bearer")
-        accounts_ns.add("ci", type="oauth_token", region="us", token_env="MY_OAUTH_TOK")
+        accounts_ns.add(
+            "ci",
+            type="oauth_token",
+            region="us",
+            default_project="3713224",
+            token_env="MY_OAUTH_TOK",
+        )
 
         cm = ConfigManager()
         for name in ("personal", "ci", "team"):

@@ -164,6 +164,47 @@ class TestBrowserToken:
         assert resolver.get_browser_token("alice", "us") == "A"
         assert resolver.get_browser_token("bob", "us") == "B"
 
+    def test_token_within_30s_buffer_treated_as_expired(
+        self, isolated_home: Path
+    ) -> None:
+        """Tokens expiring within the 30s safety buffer must be refreshed.
+
+        The docstring on ``get_browser_token`` promises a 30s safety
+        buffer so requests in flight can't be tripped by a token that
+        expires between the check and the network call. A token whose
+        ``expires_at`` is 20 seconds away must therefore be treated as
+        expired (and raise here, since refresh is unimplemented and no
+        refresh token is provided).
+        """
+        soon = datetime.now(timezone.utc) + timedelta(seconds=20)
+        _write_tokens_file(
+            isolated_home,
+            name="me",
+            access_token="brw-tok-soon-to-expire",
+            expires_at=soon,
+            refresh_token=None,
+        )
+        resolver = OnDiskTokenResolver()
+        with pytest.raises(OAuthError):
+            resolver.get_browser_token("me", "us")
+
+    def test_token_well_outside_buffer_is_accepted(self, isolated_home: Path) -> None:
+        """A token with > 30s remaining is still accepted.
+
+        Boundary check on the buffer: 5 minutes out should comfortably
+        pass even with the new safety margin in place.
+        """
+        future = datetime.now(timezone.utc) + timedelta(minutes=5)
+        _write_tokens_file(
+            isolated_home,
+            name="me",
+            access_token="brw-tok-comfortable",
+            expires_at=future,
+            refresh_token=None,
+        )
+        resolver = OnDiskTokenResolver()
+        assert resolver.get_browser_token("me", "us") == "brw-tok-comfortable"
+
 
 class TestPathLayout:
     """File system layout invariants per contracts/filesystem-layout.md §3."""

@@ -71,7 +71,7 @@ After the redesign, there is one `resolve_session()` function with three indepen
 
 **Acceptance Scenarios**:
 
-1. **Given** `MP_PROJECT_ID=8` is set in the environment and config `[active].project = "3713224"`, **When** any `mp` command runs, **Then** the resolved project is `8` (env wins on the project axis); the account and workspace axes are unaffected.
+1. **Given** `MP_PROJECT_ID=8` is set in the environment and the active account has `default_project = "3713224"`, **When** any `mp` command runs, **Then** the resolved project is `8` (env wins on the project axis); the account and workspace axes are unaffected.
 2. **Given** `MP_USERNAME` + `MP_SECRET` + `MP_REGION` are all set, **When** any `mp` command runs, **Then** the resolved account is a synthetic in-memory `ServiceAccount` named `"<env>"`; the project axis still resolves independently from `MP_PROJECT_ID` or config.
 3. **Given** the user passes `--account demo-sa --project 3018488` to a CLI command, **When** the resolver runs, **Then** the account axis resolves from the explicit param (no env on account) and the project axis resolves from the explicit param (no env on project).
 4. **Given** the user passes `--target ecom`, **When** the resolver runs, **Then** all three axes (account, project, workspace) resolve from the named target; passing `--target` together with `--account` / `--project` / `--workspace` raises a `ValueError` immediately.
@@ -93,9 +93,9 @@ After the redesign, there is one method — `Workspace.use(account=, project=, w
 **Acceptance Scenarios**:
 
 1. **Given** a `Workspace` constructed with the active session, **When** the user calls `ws.use(project="3018488")`, **Then** subsequent queries target project `3018488`; the account and (resolved) workspace are unchanged unless the new project's default workspace differs; `~/.mp/config.toml` is not modified.
-2. **Given** a `Workspace`, **When** the user calls `ws.use(account="other-sa")`, **Then** the auth header is rebuilt for the new account; the project is implicitly reset (cleared) unless `project=` is also supplied; downstream calls re-resolve project on first use.
+2. **Given** a `Workspace`, **When** the user calls `ws.use(account="other-sa")`, **Then** the auth header is rebuilt for the new account; the project is automatically resolved from the new account's `default_project` (or `MP_PROJECT_ID` env override); if neither is set, the call raises `ConfigError` naming the new account and the four ways to provide a project (FR-024). The prior session's project is never carried forward.
 3. **Given** a `Workspace`, **When** the user calls `ws.use(target="ecom")`, **Then** all three axes (account, project, workspace) are applied from the target's definition; combining `target=` with any of `account=`/`project=`/`workspace=` raises `ValueError`.
-4. **Given** a `Workspace` and `persist=True`, **When** the user calls `ws.use(project="3018488", persist=True)`, **Then** the in-memory session updates AND `~/.mp/config.toml [active].project` is rewritten to `"3018488"`; new processes pick up the change.
+4. **Given** a `Workspace` and `persist=True`, **When** the user calls `ws.use(project="3018488", persist=True)`, **Then** the in-memory session updates AND the active account's `default_project` is rewritten to `"3018488"` in `~/.mp/config.toml`; new processes pick up the change. (`[active]` itself only stores `account` and `workspace`; project lives on the account.)
 5. **Given** a sequence of switches `ws.use(workspace=N1)` → `ws.use(workspace=N2)` → `ws.use(workspace=N3)`, **When** measured, **Then** each switch is an in-memory field update with no API call; the underlying `httpx.Client` instance is the same object throughout.
 6. **Given** `Workspace.use()` returns `self`, **When** the user writes `ws.use(project="A").segmentation(...)`, **Then** the chain compiles and runs as a single fluent expression.
 
@@ -136,7 +136,7 @@ After the redesign, `[targets.NAME]` blocks store named triples. `mp target add 
 **Acceptance Scenarios**:
 
 1. **Given** the user has at least one configured account, **When** they run `mp target add ecom --account team --project 3018488 --workspace 3448413`, **Then** a `[targets.ecom]` block is written with all three fields; `workspace` is optional in the schema (omitting it means "use the project's default workspace at resolution time").
-2. **Given** a configured target, **When** the user runs `mp target use ecom`, **Then** `[active].account`, `[active].project`, and `[active].workspace` are all updated in a single config write; `mp session` reflects all three changes.
+2. **Given** a configured target, **When** the user runs `mp target use ecom`, **Then** `[active].account` and `[active].workspace` are written from the target, AND the target's project is persisted as the target account's `default_project` (with a confirmation message naming the account and the project). `mp session` reflects all three changes.
 3. **Given** the user passes `mp --target ecom query segmentation -e Login --from 2026-04-01`, **Then** the target is applied for that command only; `[active]` is not modified; passing `--target` with `--account`/`--project`/`--workspace` exits with a clear error.
 4. **Given** a target referencing an account that is later deleted, **When** the user runs `mp target use NAME`, **Then** they receive a clear `ConfigError` naming the missing account; the system does not silently fall back.
 5. **Given** the user calls `mp.targets.list()` in Python, **Then** they receive a list of `Target` objects matching the on-disk `[targets.X]` blocks.
@@ -219,7 +219,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 **Acceptance Scenarios**:
 
 1. **Given** an existing v1 config with three `[accounts.X]` blocks (each with embedded `project_id`) and a `default = "X"` field, **When** the user runs `mp config convert`, **Then** the new config contains three `[accounts.X]` blocks (each with the new shape, no `project_id`), three `[targets.X]` blocks (one per original account, capturing its account+project pair), and `[active].account` set to the former default's name.
-2. **Given** an existing v2 config with `[credentials.X]` blocks, `[projects.X]` aliases, and `[active].credential`, **When** the user runs `mp config convert`, **Then** `[credentials.X]` becomes `[accounts.X]` (renamed key), `[projects.X]` becomes `[targets.X]`, `[active].credential` becomes `[active].account`, `[active].project_id` becomes `[active].project`, and `[active].workspace_id` becomes `[active].workspace`.
+2. **Given** an existing v2 config with `[credentials.X]` blocks, `[projects.X]` aliases, and `[active].credential`, **When** the user runs `mp config convert`, **Then** `[credentials.X]` becomes `[accounts.X]` (renamed key), `[projects.X]` becomes `[targets.X]`, `[active].credential` becomes `[active].account`, `[active].project_id` becomes the active account's `default_project` (since project lives on the account in v3), and `[active].workspace_id` becomes `[active].workspace`.
 3. **Given** a converted config, **When** `mp config convert` is run a second time, **Then** the command exits with a friendly message stating the config is already on the new schema and no changes were made.
 4. **Given** a successful conversion, **When** the user inspects `~/.mp/config.toml.legacy`, **Then** the original file is preserved verbatim (so the user can restore it manually if needed); the conversion does not delete the original.
 5. **Given** OAuth tokens at the old path (`~/.mp/oauth/tokens_{region}.json`), **When** `mp config convert` runs, **Then** tokens are moved to `~/.mp/accounts/{account-name}/tokens.json` based on which account they belong to (matched by region, or by the synthetic account created during conversion).
@@ -239,7 +239,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 - **`mp account remove NAME` while `NAME` is the active account**: Removing the active account clears `[active].account`; subsequent commands raise `ConfigError("No account configured")` until the user runs `mp account use OTHER`.
 - **`mp account login NAME` for a non-OAuth account**: The command exits with a clear error stating that login only applies to `oauth_browser` accounts.
 - **`MP_OAUTH_TOKEN` set without `MP_REGION`**: The synthetic OAuthTokenAccount cannot be constructed (region is required); resolver falls through to other account-axis sources; if none resolve, raises `ConfigError` naming `MP_REGION` as the missing piece.
-- **Cross-axis interaction**: Setting `--account team-sa` does NOT clear `[active].project` or `[active].workspace`; per the independent-axes rule, account changes do not implicitly clear other axes. (`Workspace.use(account=...)` in Python *does* clear in-session project state if no `project=` is supplied — but does not modify config.) The CLI behavior and Python in-session behavior differ deliberately: CLI `mp account use NAME` is a single-axis config write; `Workspace.use(account=NAME)` is an in-session state change that conservatively resets dependent state.
+- **Cross-axis interaction**: `mp account use NAME` is a single-axis config write — it updates `[active].account` only, never silently mutating workspace pinning or project assignment (project lives on the account itself, not in `[active]`). `Workspace.use(account=NAME)` in Python re-resolves project per FR-033: if the new account has a `default_project` (or `MP_PROJECT_ID` is set), the swap succeeds with that project; otherwise the call raises `ConfigError` with the standard four-paths-to-fix message. The workspace axis is always cleared on account swap (workspaces are project-scoped).
 
 ## Requirements *(mandatory)*
 
@@ -247,21 +247,21 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 #### Account Model & Storage
 
-- **FR-001**: System MUST define a single `Account` discriminated union with three variants: `ServiceAccount` (type=`service_account`, fields: `name`, `region`, `username`, `secret`), `OAuthBrowserAccount` (type=`oauth_browser`, fields: `name`, `region`), and `OAuthTokenAccount` (type=`oauth_token`, fields: `name`, `region`, exactly one of `token` or `token_env`).
+- **FR-001**: System MUST define a single `Account` discriminated union with three variants: `ServiceAccount` (type=`service_account`, fields: `name`, `region`, `default_project`, `username`, `secret`), `OAuthBrowserAccount` (type=`oauth_browser`, fields: `name`, `region`, `default_project`), and `OAuthTokenAccount` (type=`oauth_token`, fields: `name`, `region`, `default_project`, exactly one of `token` or `token_env`).
 - **FR-002**: All `Account` instances MUST be immutable (frozen Pydantic models) and MUST forbid extra fields.
 - **FR-003**: `Account.auth_header(token_resolver)` MUST produce a valid HTTP `Authorization` header for the account's type: Basic for SA, Bearer for both OAuth variants.
-- **FR-004**: `Account` MUST NOT contain a `project_id` field; identity is project-agnostic.
+- **FR-004**: `Account.default_project` is the account's home project (the project the account works against by default). It is OPTIONAL (`str | None`) and matches `^\d+$`. For `service_account` and `oauth_token` accounts it MUST be supplied at account-add time (the user knows the project up-front for both flows). For `oauth_browser` accounts it is populated post-PKCE by the `/me` discovery call. Identity is otherwise project-agnostic — `default_project` is a hint that drives the project resolution chain (FR-017), not part of the credentials.
 - **FR-005**: `OAuthTokenAccount` MUST validate that exactly one of `token` (inline) or `token_env` (env var name) is set; both or neither MUST raise a validation error.
 - **FR-006**: For `oauth_browser` accounts, no secret material MUST live in the TOML config file; tokens, client info, and the `/me` cache MUST live at `~/.mp/accounts/{name}/`.
 - **FR-007**: For `oauth_token` accounts with `token_env`, the env variable MUST be consulted at resolution time (not at config-load time); an absent env var MUST surface as a clear error at the point of use, not at config load.
 
 #### Configuration Schema
 
-- **FR-008**: System MUST recognize exactly one config schema in `~/.mp/config.toml`. The schema MUST consist of `[active]` (optional account/project/workspace), `[accounts.NAME]` blocks (any number), `[targets.NAME]` blocks (optional, any number), and `[settings]` (optional global request-level settings).
+- **FR-008**: System MUST recognize exactly one config schema in `~/.mp/config.toml`. The schema MUST consist of `[active]` (optional account/workspace pointers — project lives on the account, not in `[active]`), `[accounts.NAME]` blocks (any number; each carrying its own `default_project`), `[targets.NAME]` blocks (optional, any number), and `[settings]` (optional global request-level settings).
 - **FR-009**: System MUST NOT read or write a `config_version` field; the absence of `config_version` and the presence of new-shape blocks IS the schema.
 - **FR-010**: System MUST reject configs containing v1-shaped fields (`default = "X"`, `[accounts.X].project_id` inline) or v2-shaped fields (`[credentials.X]`, `[projects.X]`) with a clear error message that points the user to `mp config convert`.
 - **FR-011**: `[active].account` MUST reference an existing account name; the resolver MUST treat absence as "no active account configured" (not an error at config-load, but a `ConfigError` at resolution time if env vars do not supply auth).
-- **FR-012**: `[active].project` MUST be a string (Mixpanel project IDs are numeric strings); `[active].workspace` MUST be an integer.
+- **FR-012**: `[active]` MUST contain only `account` (string) and `workspace` (positive integer) — both optional. The project field has been removed from `[active]`; project lives on the account as `default_project`. `[accounts.NAME].default_project` MUST be a string matching `^\d+$` (Mixpanel project IDs are numeric strings).
 - **FR-013**: `[targets.NAME]` MUST require `account` and `project`; `workspace` is optional.
 - **FR-014**: `[settings]` MAY include a global `custom_header = { name = "...", value = "..." }`; the resolver MUST attach it to the account in memory and MUST NOT mutate `os.environ`.
 
@@ -269,14 +269,17 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 - **FR-015**: System MUST expose a single `resolve_session(*, account=None, project=None, workspace=None, target=None, config=None) -> Session` function as the only path for obtaining a `Session` from configuration.
 - **FR-016**: The resolver MUST treat the account, project, and workspace axes as independent; resolution on one axis MUST NOT affect the others.
-- **FR-017**: For each axis, the resolver MUST consult sources in the documented priority order: env vars first, then explicit parameter, then target reference, then bridge file, then `[active]` config — first match wins per axis.
+- **FR-017**: For each axis, the resolver MUST consult sources in the documented priority order — first match wins per axis:
+  - **Account axis**: env vars → explicit param → target → bridge → `[active].account`.
+  - **Project axis**: env vars → explicit param → target → bridge → `account.default_project`. The chain ends at the resolved account; there is no `[active].project` fallback (project is account-scoped, not session-scoped).
+  - **Workspace axis**: env vars → explicit param → target → bridge → `[active].workspace`. May resolve to `None` (lazy resolution per FR-025).
 - **FR-018**: `MP_USERNAME`+`MP_SECRET`+`MP_REGION` MUST construct a synthetic in-memory `ServiceAccount` named `"<env>"` and short-circuit the account axis.
 - **FR-019**: `MP_OAUTH_TOKEN`+`MP_REGION` MUST construct a synthetic in-memory `OAuthTokenAccount` named `"<env>"` and short-circuit the account axis. When both env-var sets are present, the SA quad takes precedence (preserves PR #125 behavior).
 - **FR-020**: The resolver MUST raise `ValueError` immediately if `target=` is combined with any of `account=`/`project=`/`workspace=`.
 - **FR-021**: The resolver MUST be deterministic: identical inputs (env + params + config snapshot) MUST always produce identical `Session` instances; no random fallbacks, no timestamp-based behavior.
 - **FR-022**: The resolver MUST NOT read OAuth tokens, hit `/me`, or perform any network I/O; resolution is pure config + env reading.
 - **FR-023**: The resolver MUST NOT mutate `os.environ` or any other process global state.
-- **FR-024**: Failure to resolve the account axis MUST raise `ConfigError` with a multi-line message listing all four configuration paths (`mp account add ...`, `mp account login ...`, `MP_USERNAME`+..., `MP_OAUTH_TOKEN`+...); failure to resolve the project axis MUST raise `ConfigError` with a message pointing at `mp project list` and `mp project use`.
+- **FR-024**: Failure to resolve the account axis MUST raise `ConfigError` with a multi-line message listing all four configuration paths (`mp account add ...`, `mp account login ...`, `MP_USERNAME`+..., `MP_OAUTH_TOKEN`+...); failure to resolve the project axis MUST raise `ConfigError` with a message that names the resolved account and points at the four ways to fix it (`MP_PROJECT_ID`, explicit `--project ID` / `project=` param, `mp account add NAME --project ID` at creation, `mp account update NAME --project ID` for an existing account).
 - **FR-025**: The workspace axis MAY resolve to `None`; this is not an error. Workspace-scoped API endpoints MUST lazy-resolve `None` to the project's default workspace (via `/api/app/projects/{pid}/workspaces/public`) on first use, and MUST cache the result on the API client instance for the session lifetime.
 
 #### Session & API Client
@@ -291,7 +294,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 - **FR-030**: `Workspace.__init__` MUST accept the parameters `account=`, `project=`, `workspace=`, `target=`, `session=`. With no arguments, the Workspace MUST resolve from the active session in config + env. With `session=`, all other axis parameters MUST be ignored (full bypass).
 - **FR-031**: `Workspace` MUST expose properties `account: Account`, `project: Project`, `workspace: WorkspaceRef | None`, `session: Session`.
 - **FR-032**: `Workspace.use(*, account=None, project=None, workspace=None, target=None, persist=False) -> Self` MUST be the only in-session switching method. It MUST return `self` for chaining. With `persist=True`, it MUST also write to `~/.mp/config.toml [active]`.
-- **FR-033**: `Workspace.use(account=NAME)` without an explicit `project=` MUST clear in-session project state (forcing re-resolution on next use); this is the safe default because cross-account project access is not guaranteed.
+- **FR-033**: `Workspace.use(account=NAME)` MUST re-resolve the project axis through the FR-017 priority chain (env > param > target > bridge > `account.default_project`) — the prior session's project is NEVER carried forward across an account swap because cross-account project access is not guaranteed. If no source produces a project, the call MUST raise `ConfigError` per FR-024. The workspace axis MUST also be cleared on account swap (workspaces are project-scoped; the prior workspace is meaningless under the new account/project) and lazy-resolved on the next workspace-scoped API call per FR-025.
 - **FR-034**: `Workspace.use(target=NAME)` MUST be mutually exclusive with `account=`/`project=`/`workspace=`; combining them MUST raise `ValueError`.
 - **FR-035**: `Workspace.projects() -> list[Project]` MUST return all accessible projects via `/me`, cached on disk per-account; the deprecated `discover_projects()` MUST be removed.
 - **FR-036**: `Workspace.workspaces(*, project_all=False) -> list[WorkspaceRef]` MUST return workspaces in the current project; `project_all=True` MUST return workspaces across all accessible projects.
@@ -365,7 +368,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 - **Project**: A Mixpanel project. Identified by Mixpanel's numeric `project_id` (stored as a string). Has `name` and `organization_id` populated lazily from `/me` discovery.
 - **WorkspaceRef**: A reference to a workspace within a project. Identified by Mixpanel's numeric `workspace_id` (positive integer). Has optional `name`. Distinguished from the facade class `Workspace` to avoid name collision.
 - **Session**: The fully-resolved triple `(Account, Project, WorkspaceRef | None)` consumed by the API client. Frozen and immutable. Replaces both v1 `Credentials` and v2 `ResolvedSession`. Supports `replace(...)` for parallel iteration. Workspace is optional in the type but lazy-resolves to the project's default workspace on first workspace-scoped call.
-- **ActiveSession**: The persisted `(account_name, project_id, workspace_id?)` triple stored in `~/.mp/config.toml [active]`. Renamed from v2 "ActiveContext" for clarity. Replaces v1 `default = "X"`.
+- **ActiveSession**: The persisted `(account_name?, workspace_id?)` pair stored in `~/.mp/config.toml [active]`. Renamed from v2 "ActiveContext" for clarity. Replaces v1 `default = "X"`. Note: project is NOT in `[active]` — it lives on the account as `default_project`.
 - **Target**: A named saved-cursor-position — a triple of `(account_name, project_id, workspace_id?)` stored in `[targets.NAME]` config blocks. Replaces v2 "ProjectAlias" with broader semantics (captures account too, not just project). Applied via `mp target use NAME` (writes to `[active]`) or `--target NAME` flag (one-off override).
 - **AccountSummary**: A read-only summary of an account suitable for `mp account list` output. Replaces v1 `AccountInfo` and v2 `CredentialInfo` (merged into one type). No `project_id` field.
 - **AccountTestResult**: The structured result of `mp account test NAME` — captures whether `/me` succeeded, the user identity, accessible project count, and any error detail.

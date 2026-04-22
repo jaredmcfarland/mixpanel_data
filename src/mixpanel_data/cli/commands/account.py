@@ -104,6 +104,18 @@ def add_account(
         str,
         typer.Option("--region", help="Mixpanel region: us | eu | in"),
     ],
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project",
+            help=(
+                "Numeric project ID (default_project). REQUIRED for "
+                "service_account and oauth_token; optional for oauth_browser "
+                "(backfilled by `mp account login`). Falls back to "
+                "MP_PROJECT_ID when omitted."
+            ),
+        ),
+    ] = None,
     username: Annotated[
         str | None,
         typer.Option("--username", help="Username (service_account)"),
@@ -125,16 +137,19 @@ def add_account(
 ) -> None:
     """Add a new account.
 
-    For ``service_account``, ``--username`` is required and the secret is
-    read from stdin (when ``--secret-stdin`` is set) or from ``MP_SECRET``.
-    For ``oauth_token``, supply ``--token-env`` (recommended) or set
-    ``MP_OAUTH_TOKEN`` and we'll capture it inline.
+    For ``service_account``, ``--username`` is required, ``--project`` is
+    required, and the secret is read from stdin (when ``--secret-stdin``
+    is set) or from ``MP_SECRET``. For ``oauth_token``, ``--project`` is
+    required; supply ``--token-env`` (recommended) or set
+    ``MP_OAUTH_TOKEN`` and we'll capture it inline. For ``oauth_browser``,
+    ``--project`` is optional and gets backfilled by ``mp account login``.
 
     Args:
         ctx: Typer context.
         name: Account name (alphanumeric, ``_``, ``-``).
         type: ``service_account`` | ``oauth_browser`` | ``oauth_token``.
         region: ``us`` | ``eu`` | ``in``.
+        project: Numeric project ID (becomes the account's default_project).
         username: Required for ``service_account``.
         secret_stdin: Read secret from stdin instead of env.
         token_env: Env var holding the bearer for ``oauth_token``.
@@ -148,11 +163,21 @@ def add_account(
         err_console.print(f"[red]Invalid --region: {region!r}[/red] (use us / eu / in)")
         raise typer.Exit(ExitCode.INVALID_ARGS)
 
+    # Fall back to MP_PROJECT_ID env var when --project not provided.
+    if project is None:
+        project = os.environ.get("MP_PROJECT_ID") or None
+
     secret: SecretStr | None = None
     token: SecretStr | None = None
     if type == "service_account":
         if not username:
             err_console.print("[red]--username is required for service_account[/red]")
+            raise typer.Exit(ExitCode.INVALID_ARGS)
+        if not project:
+            err_console.print(
+                "[red]--project is required for service_account[/red] "
+                "(or set MP_PROJECT_ID)"
+            )
             raise typer.Exit(ExitCode.INVALID_ARGS)
         if secret_stdin:
             secret_value = os.read(0, 4096).decode().rstrip("\n")
@@ -169,6 +194,12 @@ def add_account(
             raise typer.Exit(ExitCode.INVALID_ARGS)
         secret = SecretStr(secret_value)
     elif type == "oauth_token":
+        if not project:
+            err_console.print(
+                "[red]--project is required for oauth_token[/red] "
+                "(or set MP_PROJECT_ID)"
+            )
+            raise typer.Exit(ExitCode.INVALID_ARGS)
         if token_env is None:
             env_value = os.environ.get("MP_OAUTH_TOKEN")
             if not env_value:
@@ -182,6 +213,7 @@ def add_account(
         name,
         type=type,  # type: ignore[arg-type]
         region=region,  # type: ignore[arg-type]
+        default_project=project,
         username=username,
         secret=secret,
         token=token,
@@ -190,6 +222,91 @@ def add_account(
     console.print(f"Added account '{summary.name}' ({summary.type}, {summary.region})")
     if summary.is_active:
         console.print("(promoted to active)")
+
+
+@account_app.command("update")
+@handle_errors
+def update_account(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="Account name to update.")],
+    region: Annotated[
+        str | None,
+        typer.Option("--region", help="New region: us | eu | in"),
+    ] = None,
+    project: Annotated[
+        str | None,
+        typer.Option(
+            "--project",
+            help="New default_project (numeric project ID).",
+        ),
+    ] = None,
+    username: Annotated[
+        str | None,
+        typer.Option("--username", help="New username (service_account only)."),
+    ] = None,
+    secret_stdin: Annotated[
+        bool,
+        typer.Option(
+            "--secret-stdin",
+            help="Read new secret from stdin (service_account only).",
+        ),
+    ] = False,
+    token_env: Annotated[
+        str | None,
+        typer.Option(
+            "--token-env",
+            help="New env-var name (oauth_token only).",
+        ),
+    ] = None,
+) -> None:
+    """Update fields on an existing account in place.
+
+    Only supplied flags are changed. Type cannot be changed via this
+    command (remove + re-add for that). Type-incompatible flags raise an
+    error.
+
+    Args:
+        ctx: Typer context.
+        name: Account name to update.
+        region: New region.
+        project: New default_project.
+        username: New username (service_account only).
+        secret_stdin: Read a new secret from stdin (service_account only).
+        token_env: New env-var name (oauth_token only).
+    """
+    if region is not None and region not in ("us", "eu", "in"):
+        err_console.print(f"[red]Invalid --region: {region!r}[/red] (use us / eu / in)")
+        raise typer.Exit(ExitCode.INVALID_ARGS)
+
+    secret: SecretStr | None = None
+    if secret_stdin:
+        secret_value = os.read(0, 4096).decode().rstrip("\n")
+        if not secret_value:
+            err_console.print("[red]Secret is empty.[/red]")
+            raise typer.Exit(ExitCode.INVALID_ARGS)
+        secret = SecretStr(secret_value)
+
+    summary = accounts_ns.update(
+        name,
+        region=region,  # type: ignore[arg-type]
+        default_project=project,
+        username=username,
+        secret=secret,
+        token_env=token_env,
+    )
+    changed: list[str] = []
+    if region is not None:
+        changed.append(f"region={summary.region}")
+    if project is not None:
+        changed.append(f"default_project={project}")
+    if username is not None:
+        changed.append("username")
+    if secret_stdin:
+        changed.append("secret")
+    if token_env is not None:
+        changed.append(f"token_env={token_env}")
+    summary_text = ", ".join(changed) if changed else "no changes"
+    console.print(f"Updated account '{summary.name}' ({summary_text})")
 
 
 @account_app.command("use")

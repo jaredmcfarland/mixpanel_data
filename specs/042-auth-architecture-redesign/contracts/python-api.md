@@ -112,7 +112,7 @@ def use(
 **Behavior**:
 - Returns `self` for fluent chaining.
 - `target=` mutually exclusive with `account=`/`project=`/`workspace=` (raises `ValueError`).
-- `account=NAME` without `project=`: resets in-session project state (per FR-033) — the next operation that needs a project re-resolves it from `[active]`/env.
+- `account=NAME` without `project=`: re-resolves the project axis through the FR-017 chain (env > param > target > bridge > `account.default_project`); the prior session's project is never carried forward (per FR-033). If no source provides a project, raises `ConfigError`. The workspace axis is also cleared and lazy-resolves on the next workspace-scoped API call.
 - `project=ID`: validates the new project ID is non-empty and matches `^\d+$`; does NOT verify access rights (deferred to first API call, where access is naturally checked).
 - `workspace=ID`: in-memory field update only.
 - `persist=True`: also writes the new state to `~/.mp/config.toml [active]`.
@@ -186,6 +186,17 @@ def add(
     *,
     type: AccountType,
     region: Region,
+    default_project: str | None = None,
+    username: str | None = None,
+    secret: SecretStr | str | None = None,
+    token: SecretStr | str | None = None,
+    token_env: str | None = None,
+) -> AccountSummary: ...
+def update(
+    name: str,
+    *,
+    region: Region | None = None,
+    default_project: str | None = None,
     username: str | None = None,
     secret: SecretStr | str | None = None,
     token: SecretStr | str | None = None,
@@ -205,11 +216,12 @@ def remove_bridge(*, at: Path | None = None) -> bool: ...
 **Behavior**:
 - All functions accept keyword arguments only; positional args other than `name` are not supported (forward-compatible signatures).
 - `add()` validates the `type`-specific fields:
-  - `service_account` requires `username` + `secret`.
-  - `oauth_browser` requires no extra fields.
-  - `oauth_token` requires exactly one of `token` / `token_env`.
+  - `service_account` requires `username` + `secret` + `default_project`.
+  - `oauth_browser` requires no extra fields; `default_project` is OPTIONAL at add-time and gets backfilled by `login()` post-PKCE via `/me`.
+  - `oauth_token` requires exactly one of `token` / `token_env` + `default_project`.
+- `update()` mutates an existing account in place — only the supplied fields are changed. `default_project` is the most common field to update post-creation (e.g., switching the home project for a long-lived service account).
 - `remove()` raises `AccountInUseError` (a subclass of `ConfigError`) if the account is referenced by targets and `force=False`. With `force=True`, deletes the account and returns the orphaned target names.
-- `use()` writes `[active].account = name` only; does NOT touch `[active].project` / `[active].workspace`.
+- `use()` writes `[active].account = name` only; does NOT touch `[active].workspace`.
 - `test()` hits `/me` and returns structured `AccountTestResult`; never raises (errors captured in `result.error`).
 - `remove_bridge()` returns `True` if the bridge file existed and was removed; `False` if no file existed at the resolved path. Idempotent — never raises for absence.
 
@@ -249,19 +261,20 @@ def show(name: str) -> Target: ...
 ## 7. `mp.session` namespace
 
 ```python
-def show() -> ActiveSession: ...                 # current [active] state
+def show() -> ActiveSession: ...                 # current [active] state (account?, workspace?)
 def use(
     *,
     account: str | None = None,
     project: str | None = None,
     workspace: int | None = None,
     target: str | None = None,
-) -> None: ...                                   # writes any subset of [active] fields
+) -> None: ...                                   # writes account/workspace to [active]; project to active account's default_project
 ```
 
 **Behavior**:
-- `show()` returns the persisted `[active]` block (NOT the resolved Session — for that, construct a Workspace and read `ws.session`).
+- `show()` returns the persisted `[active]` block (`account?`, `workspace?` — project is on the account, not in `[active]`). For the resolved Session, construct a Workspace and read `ws.session`.
 - `use()` is mutually exclusive: `target=` cannot combine with `account=`/`project=`/`workspace=`.
+- `account=` and `workspace=` write to `[active]`; `project=` writes to the active account's `default_project` (since project lives on the account, not in `[active]`). `target=` writes account+workspace to `[active]` and the target's project to that account's `default_project`.
 - Each axis is updated independently if provided; unset axes remain unchanged.
 
 **Raises**:

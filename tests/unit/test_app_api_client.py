@@ -651,6 +651,87 @@ class TestListWorkspaces:
         assert captured_urls[0].startswith(expected)
 
 
+class TestResolveWorkspace:
+    """Test ``resolve_workspace()`` (returns the full WorkspaceRef)."""
+
+    def test_calls_correct_endpoint_no_double_prefix(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """``resolve_workspace()`` hits ``{base}/projects/{pid}/workspaces/public`` exactly.
+
+        Regression: the path used to start with ``/api/app/...`` and
+        ``app_request()`` already prepends the same base, producing a
+        404-yielding double ``/api/app/api/app`` prefix.
+        """
+        captured_urls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured_urls.append(str(request.url))
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": [
+                        {
+                            "id": 7,
+                            "name": "Default",
+                            "project_id": 12345,
+                            "is_default": True,
+                        }
+                    ],
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            client.resolve_workspace()
+
+        expected = f"{ENDPOINTS['us']['app']}/projects/12345/workspaces/public"
+        assert captured_urls == [expected], (
+            f"resolve_workspace() must call {expected} exactly once; got "
+            f"{captured_urls!r}"
+        )
+        assert "/api/app/api/app" not in captured_urls[0]
+
+    def test_writes_to_resolve_workspace_id_cache(
+        self, oauth_credentials: Credentials
+    ) -> None:
+        """A successful ``resolve_workspace()`` populates the int-id cache.
+
+        After calling ``resolve_workspace()``, calling
+        ``resolve_workspace_id()`` MUST NOT trigger another HTTP request —
+        both paths share the same discovery and should share the cache.
+        """
+        call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": [
+                        {
+                            "id": 99,
+                            "name": "Default",
+                            "project_id": 12345,
+                            "is_default": True,
+                        }
+                    ],
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            ref = client.resolve_workspace()
+            ws_id = client.resolve_workspace_id()
+
+        assert ref.id == 99
+        assert ws_id == 99
+        assert call_count == 1
+
+
 # =============================================================================
 # Phase 3B: Empty/None parameter edge cases
 # =============================================================================

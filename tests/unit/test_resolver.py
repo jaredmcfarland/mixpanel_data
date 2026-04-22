@@ -44,6 +44,7 @@ def cm(tmp_path: Path) -> ConfigManager:
         "team",
         type="service_account",
         region="us",
+        default_project="3713224",
         username="team.sa",
         secret=SecretStr("team-secret"),
     )
@@ -52,8 +53,8 @@ def cm(tmp_path: Path) -> ConfigManager:
 
 @pytest.fixture
 def cm_with_active(cm: ConfigManager) -> ConfigManager:
-    """Return a ConfigManager with full ``[active]`` set (account+project)."""
-    cm.set_active(account="team", project="3713224")
+    """Return a ConfigManager with ``[active].account`` set; project on the account."""
+    cm.set_active(account="team")
     return cm
 
 
@@ -66,6 +67,7 @@ class TestAccountAxisPriority:
             "other",
             type="service_account",
             region="us",
+            default_project="9999999",
             username="o",
             secret=SecretStr("o"),
         )
@@ -87,7 +89,7 @@ class TestAccountAxisPriority:
         monkeypatch.setenv("MP_SECRET", "env-secret")
         monkeypatch.setenv("MP_PROJECT_ID", "999")
         monkeypatch.setenv("MP_REGION", "eu")
-        cm.set_active(account="team", project="3713224")
+        cm.set_active(account="team")
         s = resolve_session(config=cm)
         assert isinstance(s.account, ServiceAccount)
         assert s.account.region == "eu"
@@ -124,7 +126,7 @@ class TestProjectAxisPriority:
     """Order: env → param → target → bridge → config."""
 
     def test_explicit_param_beats_active(self, cm_with_active: ConfigManager) -> None:
-        """``project=ID`` param overrides ``[active].project``."""
+        """``project=ID`` param overrides ``account.default_project``."""
         s = resolve_session(project="888", config=cm_with_active)
         assert s.project.id == "888"
 
@@ -142,14 +144,17 @@ class TestProjectAxisPriority:
         assert s.project.id == "777"
 
     def test_active_used_when_no_param(self, cm_with_active: ConfigManager) -> None:
-        """``[active].project`` used when no override."""
+        """Account's ``default_project`` used when no override."""
         s = resolve_session(config=cm_with_active)
         assert s.project.id == "3713224"
 
-    def test_missing_project_axis_raises(self, cm: ConfigManager) -> None:
-        """No env, no param, no target, no bridge, no [active].project → ConfigError."""
-        # cm has an account but no [active].project
-        cm.set_active(account="team")
+    def test_missing_project_axis_raises(self, tmp_path: Path) -> None:
+        """No env / param / target / bridge AND account has no default_project → ConfigError."""
+        cm = ConfigManager(config_path=tmp_path / "config.toml")
+        # Add an oauth_browser account (default_project optional) so the
+        # account axis resolves but the project axis cannot.
+        cm.add_account("personal", type="oauth_browser", region="us")
+        cm.set_active(account="personal")
         with pytest.raises(ConfigError):
             resolve_session(config=cm)
 
@@ -237,8 +242,10 @@ class TestNoSideEffects:
         lazily by ``MixpanelAPIClient`` when a request goes out, not at
         Session construction time.
         """
-        cm.add_account("personal", type="oauth_browser", region="us")
-        cm.set_active(account="personal", project="3713224")
+        cm.add_account(
+            "personal", type="oauth_browser", region="us", default_project="3713224"
+        )
+        cm.set_active(account="personal")
         # No tokens.json at any path — should still construct a Session.
         s = resolve_session(config=cm)
         assert s.account.name == "personal"

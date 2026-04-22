@@ -16,26 +16,29 @@ This document defines the on-disk schemas for `~/.mp/config.toml` (the new schem
 
 [active]
 account   = "demo-sa"          # references [accounts.demo-sa]; OPTIONAL
-project   = "3713224"          # numeric project ID, stored as string; OPTIONAL
 workspace = 3448413            # numeric workspace ID, integer; OPTIONAL
+# NOTE: project is NOT in [active] — it lives on the account as default_project.
 
 [accounts.demo-sa]             # at least one [accounts.X] block expected for normal use
-type     = "service_account"
-region   = "us"
-username = "user.x.mp-service-account"
-secret   = "..."
+type            = "service_account"
+region          = "us"
+default_project = "3713224"    # the account's home project; required for SA at add-time
+username        = "user.x.mp-service-account"
+secret          = "..."
 
 [accounts.personal]
-type   = "oauth_browser"
-region = "us"
+type            = "oauth_browser"
+region          = "us"
+default_project = "9999999"    # populated by `mp account login` after PKCE completes
 # (no inline secret; tokens at ~/.mp/accounts/personal/tokens.json)
 
 [accounts.ci]
-type      = "oauth_token"
-region    = "us"
-token_env = "MP_CI_TOKEN"
+type            = "oauth_token"
+region          = "us"
+default_project = "1111111"    # required at add-time for oauth_token
+token_env       = "MP_CI_TOKEN"
 # OR (mutually exclusive):
-# token   = "ey..."
+# token         = "ey..."
 
 [targets.ecom]                 # OPTIONAL — any number of [targets.X] blocks
 account   = "demo-sa"
@@ -53,21 +56,21 @@ custom_header = { name = "X-Mixpanel-Cluster", value = "internal-1" }
 | Key | Type | Required | Notes |
 |---|---|---|---|
 | `account` | string | optional | must reference an existing `[accounts.X]` |
-| `project` | string | optional | matches `^\d+$` |
 | `workspace` | integer | optional | positive integer |
 
-Empty `[active]` is valid; resolution falls through to env vars or fails with `ConfigError("No account configured")`.
+`[active]` does NOT contain a `project` field. Project lives on the account itself as `default_project` — switching accounts implicitly switches projects (per FR-033). Empty `[active]` is valid; resolution falls through to env vars or fails with `ConfigError("No account configured")`.
 
 #### `[accounts.NAME]` (any number)
 
 NAME constraint: `^[a-zA-Z0-9_-]{1,64}$`
 
-Common keys:
+Common keys (all account types):
 
 | Key | Type | Required | Notes |
 |---|---|---|---|
 | `type` | string | required | `service_account` \| `oauth_browser` \| `oauth_token` |
 | `region` | string | required | `us` \| `eu` \| `in` |
+| `default_project` | string | optional at the schema level | matches `^\d+$`. Required at add-time for `service_account` and `oauth_token` (the user knows the project up-front). For `oauth_browser`, populated by `mp account login NAME` post-PKCE via `/me`; until that runs, the account has no default project and operations needing one will raise `ConfigError`. |
 
 Type-specific keys:
 
@@ -78,7 +81,7 @@ Type-specific keys:
 | `username` | string | required |
 | `secret` | string | required |
 
-**`type = "oauth_browser"`**: no extra keys; tokens & client info live at `~/.mp/accounts/NAME/`.
+**`type = "oauth_browser"`**: no extra keys beyond the common set; tokens & client info live at `~/.mp/accounts/NAME/`.
 
 **`type = "oauth_token"`**:
 
@@ -111,7 +114,7 @@ Future settings may be added here. `extra="allow"` semantics for forward compati
 
 - **I1** — Every `[accounts.NAME]` block has `type` + `region`. Type-specific required fields enforced at load.
 - **I2** — `[active].account` (if set) MUST reference an existing `[accounts.X]`; otherwise raise `ConfigError` at load.
-- **I3** — `[active].project` (if set) is a string matching `^\d+$`; otherwise raise `ConfigError` at load.
+- **I3** — `[accounts.NAME].default_project` (if set) is a string matching `^\d+$`; otherwise raise `ConfigError` at load. `[active]` does NOT have a `project` field — presence is treated as a legacy marker (see §1.4).
 - **I4** — `[active].workspace` (if set) is a positive integer; otherwise raise `ConfigError` at load.
 - **I5** — `[targets.NAME]` MUST reference an existing `[accounts.X]` for `account`; otherwise raise `ConfigError` at load (deferred to use-time per FR-049 edge case if needed; choice is "fail at load" per Principle V Explicit Over Implicit).
 - **I6** — File mode MUST be `0o600`; parent dir `~/.mp/` MUST be `0o700`. Verified at every read.
@@ -139,6 +142,7 @@ Detection rules (any one triggers the error):
 - presence of `[credentials]` section
 - presence of `[projects]` section
 - presence of `project_id` inside any `[accounts.X]` block (v1 marker)
+- presence of `project` inside the `[active]` table (v3-pre-redesign marker — project moved onto the account as `default_project`)
 
 ---
 
@@ -200,7 +204,10 @@ When `MP_AUTH_FILE` is set, OR the default path exists, OR `mp session --bridge`
 | project | Loaded from `bridge.project` if present |
 | workspace | Loaded from `bridge.workspace` if present |
 
-Per axis priority (FR-017): env > param > target > **bridge** > config.
+Per axis priority (FR-017):
+- account: env > param > target > **bridge** > `[active].account`
+- project: env > param > target > **bridge** > `account.default_project`
+- workspace: env > param > target > **bridge** > `[active].workspace`
 
 ---
 
@@ -214,12 +221,12 @@ Per axis priority (FR-017): env > param > target > **bridge** > config.
 |---|---|
 | `default = "X"` | `[active].account = "X"` |
 | `[accounts.X]` (with `type = "service_account"` implicit) | `[accounts.X]` (new shape; `type = "service_account"` explicit) |
-| `[accounts.X].project_id` | `[targets.X].project` (creates a target named after the account); first target whose account == old `default` also drives `[active].project` |
+| `[accounts.X].project_id` | `[accounts.X].default_project` (project lives on the account in v3, not in `[active]`); ALSO emits a `[targets.X]` block for cross-project context preservation |
 | `[accounts.X].region` | `[accounts.X].region` (unchanged) |
 | `[accounts.X].username` | `[accounts.X].username` (unchanged) |
 | `[accounts.X].secret` | `[accounts.X].secret` (unchanged) |
 
-Deduplication: when multiple v1 `[accounts.X]` blocks share identical `(username, secret, region)`, they collapse to a single v3 `[accounts.X]` block (using the lexicographically first old name); each old name produces a target `[targets.OLD_NAME]` pointing at the deduplicated account + the original `project_id`.
+Deduplication: when multiple v1 `[accounts.X]` blocks share identical `(username, secret, region)`, they collapse to a single v3 `[accounts.X]` block (using the lexicographically first old name); the deduplicated account's `default_project` is set from the lexicographically-first source's `project_id`. Each original old name produces a target `[targets.OLD_NAME]` pointing at the deduplicated account + the original `project_id`.
 
 ### 3.2 v2 → v3
 
@@ -231,7 +238,7 @@ Deduplication: when multiple v1 `[accounts.X]` blocks share identical `(username
 | `[credentials.X].type = "service_account"` | unchanged |
 | `[projects.X]` | `[targets.X]` (renamed key; same fields) |
 | `[active].credential` | `[active].account` |
-| `[active].project_id` | `[active].project` |
+| `[active].project_id` | active account's `default_project` (project moved to the account in the redesign) |
 | `[active].workspace_id` | `[active].workspace` |
 | `[settings].custom_header` | `[settings].custom_header` (unchanged) |
 
@@ -239,8 +246,8 @@ OAuth token files migrate per Research R1 mapping rules (the implementation docu
 
 ### 3.3 Edge cases
 
-- A v2 config that has `[active].credential` referencing a credential without a matching `[projects.X]` alias still converts; `[active].project` is not set (the user runs `mp project use ID` post-conversion).
-- A v1 config with no `default` field promotes the lexicographically-first account name to `[active].account` and also sets `[active].project` from that account's old `project_id`.
+- A v2 config that has `[active].credential` referencing a credential without a matching `[projects.X]` alias still converts; the active account's `default_project` is left unset and the user runs `mp account update NAME --project ID` post-conversion (or `mp project use ID`).
+- A v1 config with no `default` field promotes the lexicographically-first account name to `[active].account`; that account's `default_project` is set from its old `project_id`.
 - A v2 config with `[settings]` containing keys other than `custom_header` (forward-compat) preserves them as-is in the new `[settings]` block.
 
 ---

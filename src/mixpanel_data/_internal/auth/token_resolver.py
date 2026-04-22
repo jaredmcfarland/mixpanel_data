@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -131,7 +131,7 @@ class OnDiskTokenResolver(TokenResolver):
             now = datetime.now(timezone.utc)
             if expires_at.tzinfo is None:
                 expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at <= now:
+            if expires_at <= now + timedelta(seconds=30):
                 refresh = payload.get("refresh_token")
                 if not isinstance(refresh, str) or not refresh:
                     raise OAuthError(

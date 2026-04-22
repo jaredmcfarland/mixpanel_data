@@ -55,12 +55,30 @@ def session_command(
         )
         raise typer.Exit(0)
     active = session_ns.show()
+    # Resolve the active account's default_project for display (project lives
+    # on the account in v3, not in [active]).
+    project_display = "(none)"
+    if active.account is not None:
+        from mixpanel_data._internal.config_v3 import ConfigManager
+        from mixpanel_data.exceptions import ConfigError
+
+        try:
+            account = ConfigManager().get_account(active.account)
+            project_display = account.default_project or "(unset)"
+        except ConfigError:
+            project_display = "(unknown)"
     if format == "json":
-        console.print(_json.dumps(active.model_dump(mode="json"), indent=2))
+        payload = active.model_dump(mode="json")
+        payload["project"] = (
+            project_display
+            if project_display not in ("(none)", "(unset)", "(unknown)")
+            else None
+        )
+        console.print(_json.dumps(payload, indent=2))
         return
     parts: list[str] = []
     parts.append(f"account:   {active.account or '(none)'}")
-    parts.append(f"project:   {active.project or '(none)'}")
+    parts.append(f"project:   {project_display}")
     parts.append(
         f"workspace: {active.workspace if active.workspace is not None else '(auto)'}"
     )

@@ -755,7 +755,7 @@ class BridgeFile(BaseModel):
     workspace: _PositiveInt | None = None
     """Optional pinned workspace ID."""
 
-    headers: dict[str, str] = {}
+    headers: dict[str, str] = _Field(default_factory=dict)
     """Custom HTTP headers attached to outbound requests at resolution time."""
 
     @model_validator(mode="after")

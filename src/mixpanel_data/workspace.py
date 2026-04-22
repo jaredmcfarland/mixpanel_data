@@ -52,6 +52,13 @@ from mixpanel_data._internal.api_client import (
     session_to_credentials,
 )
 from mixpanel_data._internal.auth.account import Account as _AccountUnion
+from mixpanel_data._internal.auth.bridge import load_bridge as _load_bridge_v3
+from mixpanel_data._internal.auth.resolver import (
+    _format_no_project_error as _format_no_project_error_v3,
+)
+from mixpanel_data._internal.auth.resolver import (
+    _resolve_project_axis as _resolve_project_axis_v3,
+)
 from mixpanel_data._internal.auth.resolver import resolve_session as _resolve_session_v3
 from mixpanel_data._internal.auth.session import (
     Project as _ProjectV3,
@@ -618,23 +625,25 @@ class Workspace:
                 )
 
                 tokens_path = ensure_account_dir(br.account.name) / "tokens.json"
-                if not tokens_path.exists():
-                    payload = {
-                        "access_token": br.tokens.access_token.get_secret_value(),
-                        "expires_at": (
-                            br.tokens.expires_at.isoformat()
-                            if br.tokens.expires_at
-                            else None
-                        ),
-                        "scope": br.tokens.scope or "read",
-                        "token_type": br.tokens.token_type,
-                    }
-                    if br.tokens.refresh_token is not None:
-                        payload["refresh_token"] = (
-                            br.tokens.refresh_token.get_secret_value()
-                        )
-                    tokens_path.write_text(_json.dumps(payload), encoding="utf-8")
-                    tokens_path.chmod(0o600)
+                # Always overwrite — the bridge is the authoritative
+                # source of truth at startup, so a refreshed payload from
+                # the host must replace any stale on-disk cache here.
+                payload = {
+                    "access_token": br.tokens.access_token.get_secret_value(),
+                    "expires_at": (
+                        br.tokens.expires_at.isoformat()
+                        if br.tokens.expires_at
+                        else None
+                    ),
+                    "scope": br.tokens.scope or "read",
+                    "token_type": br.tokens.token_type,
+                }
+                if br.tokens.refresh_token is not None:
+                    payload["refresh_token"] = (
+                        br.tokens.refresh_token.get_secret_value()
+                    )
+                tokens_path.write_text(_json.dumps(payload), encoding="utf-8")
+                tokens_path.chmod(0o600)
             sess = _resolve_session_v3(
                 account=account,
                 project=project,
@@ -724,6 +733,17 @@ class Workspace:
         ``workspace=``. The HTTP transport is preserved across all switches
         (per Research R5).
 
+        When ``account=`` is supplied, the project axis re-resolves through
+        the FR-017 chain ending at the new account's ``default_project``
+        (env ``MP_PROJECT_ID`` > explicit ``project=`` > new account's
+        ``default_project``). If no source provides a project, the call
+        raises :class:`ConfigError` per FR-033 — the prior session's
+        project is NEVER carried forward across an account swap because
+        cross-account project access is not guaranteed. The workspace
+        axis is cleared on account swap (workspaces are project-scoped;
+        the prior workspace doesn't apply to the new project) — explicit
+        ``workspace=`` or ``MP_WORKSPACE_ID`` env override is honored.
+
         Args:
             account: Replacement account name.
             project: Replacement project ID.
@@ -737,6 +757,7 @@ class Workspace:
         Raises:
             ValueError: Mutually exclusive args, or referenced name missing.
             OAuthError: New auth header construction fails (atomic on success).
+            ConfigError: ``account=`` swap cannot resolve a project axis.
         """
         if target is not None and (
             account is not None or project is not None or workspace is not None
@@ -778,17 +799,47 @@ class Workspace:
             self._v3_session = client.session
         else:
             client = self._require_api_client()
-            new_account_obj = cm.get_account(account) if account is not None else None
-            new_project_obj = _ProjectV3(id=project) if project is not None else None
-            new_workspace_obj = (
-                _WorkspaceRefV3(id=workspace) if workspace is not None else None
-            )
-            # Per FR-033: account-only swap clears in-session project state
-            # (re-resolve from [active] / env on next use).
-            if account is not None and project is None:
-                active = cm.get_active()
-                if active.project is not None:
-                    new_project_obj = _ProjectV3(id=active.project)
+            if account is not None:
+                # Explicit account swap: the user told us which account to use,
+                # so the env-vars-override-param rule (FR-017) on the account
+                # axis doesn't apply here — load the requested account directly.
+                # Project re-resolves through the FR-017 chain ending at the
+                # NEW account's default_project (env > explicit > new account's
+                # default); raises ConfigError if nothing resolves (per FR-033,
+                # cross-account project access is not guaranteed).
+                # Workspace is cleared (workspaces are project-scoped; the
+                # prior workspace is meaningless under the new account/project)
+                # — explicit `workspace=` overrides the clear, and env override
+                # via MP_WORKSPACE_ID still applies for parity with FR-017.
+                import os as _os
+
+                new_account_obj = cm.get_account(account)
+                br = _load_bridge_v3()
+                project_id = _resolve_project_axis_v3(
+                    explicit=project,
+                    target_project=None,
+                    bridge=br,
+                    account=new_account_obj,
+                )
+                if project_id is None:
+                    raise ConfigError(_format_no_project_error_v3(new_account_obj))
+                new_project_obj = _ProjectV3(id=project_id)
+                if workspace is not None:
+                    new_workspace_obj = _WorkspaceRefV3(id=workspace)
+                else:
+                    env_ws = _os.environ.get("MP_WORKSPACE_ID")
+                    if env_ws and env_ws.isdigit() and int(env_ws) > 0:
+                        new_workspace_obj = _WorkspaceRefV3(id=int(env_ws))
+                    else:
+                        new_workspace_obj = None
+            else:
+                new_account_obj = None
+                new_project_obj = (
+                    _ProjectV3(id=project) if project is not None else None
+                )
+                new_workspace_obj = (
+                    _WorkspaceRefV3(id=workspace) if workspace is not None else None
+                )
             client.use(
                 account=new_account_obj,
                 project=new_project_obj,
@@ -801,16 +852,29 @@ class Workspace:
         return self
 
     def _persist_active(self) -> None:
-        """Write the current session's three axes to ``[active]``."""
+        """Persist the current session's axes to disk.
+
+        ``[active].account`` and ``[active].workspace`` are written to the
+        ``[active]`` block. The session's project is written to the
+        account's ``default_project`` (project lives on the account in v3,
+        not in ``[active]``). This keeps ``ws.use(..., persist=True)``
+        consistent with construction-time resolution: a fresh
+        ``Workspace()`` will reproduce the same session.
+        """
         if self._v3_session is None:
             return
         cm = _ConfigManagerV3()
         cm.set_active(
             account=self._v3_session.account.name,
-            project=self._v3_session.project.id,
             workspace=(
                 self._v3_session.workspace.id if self._v3_session.workspace else None
             ),
+        )
+        # Sync the account's default_project with the session's project so
+        # the next process that reads the config gets the same project.
+        cm.update_account(
+            self._v3_session.account.name,
+            default_project=self._v3_session.project.id,
         )
 
     @staticmethod

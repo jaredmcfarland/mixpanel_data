@@ -1,7 +1,10 @@
 """``mp project`` Typer command group (042 redesign).
 
 Replaces ``mp projects`` with the singular form. Three subcommands:
-``list``, ``use``, ``show``. Reference: contracts/cli-commands.md §4.
+``list``, ``use``, ``show``. Note: project lives on the active account as
+``Account.default_project`` (FR-012); ``mp project use ID`` updates that
+field rather than writing to ``[active]``. Reference:
+contracts/cli-commands.md §4.
 """
 
 from __future__ import annotations
@@ -11,13 +14,37 @@ from typing import Annotated
 import typer
 
 from mixpanel_data import session as session_ns
-from mixpanel_data.cli.utils import console, err_console, handle_errors
+from mixpanel_data._internal.config_v3 import ConfigManager
+from mixpanel_data.cli.utils import (
+    ExitCode,
+    console,
+    err_console,
+    handle_errors,
+)
+from mixpanel_data.exceptions import ConfigError
 
 project_app = typer.Typer(
     name="project",
     help="Manage active Mixpanel project (042 redesign).",
     no_args_is_help=True,
 )
+
+
+def _active_account_default_project() -> tuple[str | None, str | None]:
+    """Return ``(active_account_name, default_project)`` or ``(None, None)``.
+
+    Returns:
+        Tuple of (active account name, the account's default_project).
+        Each element is ``None`` when not configured.
+    """
+    active = session_ns.show()
+    if active.account is None:
+        return (None, None)
+    try:
+        account = ConfigManager().get_account(active.account)
+    except ConfigError:
+        return (active.account, None)
+    return (active.account, account.default_project)
 
 
 @project_app.command("list")
@@ -40,7 +67,7 @@ def list_projects(
 
     With ``--remote``, fetches the project list from ``/me`` (cached
     24 hours; ``--refresh`` to bypass). Without it, just prints the
-    currently active project from ``[active]`` for a quick summary.
+    active account's ``default_project`` for a quick summary.
 
     Args:
         ctx: Typer context.
@@ -48,11 +75,11 @@ def list_projects(
         refresh: Whether to bypass the cache.
     """
     if not remote:
-        active = session_ns.show()
-        if active.project is None:
+        _account, project = _active_account_default_project()
+        if project is None:
             console.print("(no active project)")
             return
-        console.print(active.project)
+        console.print(project)
         return
     err_console.print(
         "[yellow]`mp project list --remote` is wired alongside the /me service in Phase 5+.[/yellow]"
@@ -66,26 +93,37 @@ def use_project(
     ctx: typer.Context,
     project_id: Annotated[str, typer.Argument(help="Numeric Mixpanel project ID.")],
 ) -> None:
-    """Set the active project ID.
+    """Update the active account's ``default_project``.
+
+    Project lives on the account, not in ``[active]``. This command is
+    equivalent to ``mp account update <active-account> --project ID``.
 
     Args:
         ctx: Typer context.
         project_id: Mixpanel project ID (numeric string).
     """
-    session_ns.use(project=project_id)
-    console.print(f"Active project: {project_id}")
+    active = session_ns.show()
+    if active.account is None:
+        err_console.print(
+            "[red]No active account configured.[/red] Run `mp account use NAME` first."
+        )
+        raise typer.Exit(ExitCode.NOT_FOUND)
+    ConfigManager().update_account(active.account, default_project=project_id)
+    console.print(
+        f"Set default_project for account '{active.account}' to '{project_id}'"
+    )
 
 
 @project_app.command("show")
 @handle_errors
 def show_project(ctx: typer.Context) -> None:
-    """Show the currently active project.
+    """Show the currently active project (active account's ``default_project``).
 
     Args:
         ctx: Typer context.
     """
-    active = session_ns.show()
-    if active.project is None:
+    _account, project = _active_account_default_project()
+    if project is None:
         console.print("(no active project)")
     else:
-        console.print(active.project)
+        console.print(project)

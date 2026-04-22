@@ -107,11 +107,10 @@ class TestCatA_ServiceAccount:
             "team",
             type="service_account",
             region=live_sa_creds["region"],  # type: ignore[arg-type]
+            default_project=live_sa_creds["project_id"],
             username=live_sa_creds["username"],
             secret=SecretStr(live_sa_creds["secret"]),
         )
-        # Set active project so resolver has all axes.
-        ConfigManager().set_active(project=live_sa_creds["project_id"])
         ws = Workspace(account="team")
         try:
             events = ws.events()
@@ -215,9 +214,9 @@ def _seed_oauth_browser_account(
     """
     copy_user_oauth_tokens_to_account(home, name)
     cm = ConfigManager()
-    cm.add_account(name, type="oauth_browser", region="us")
     pid = project_id or get_user_active_project_id() or "1"
-    cm.set_active(account=name, project=pid)
+    cm.add_account(name, type="oauth_browser", region="us", default_project=pid)
+    cm.set_active(account=name)
     return pid
 
 
@@ -319,11 +318,10 @@ class TestCatC_OAuthToken:
             "ci",
             type="oauth_token",
             region=live_oauth_token_creds["region"],  # type: ignore[arg-type]
+            default_project=live_oauth_token_creds["project_id"],
             token_env="MY_LIVE_TOK",
         )
-        ConfigManager().set_active(
-            account="ci", project=live_oauth_token_creds["project_id"]
-        )
+        ConfigManager().set_active(account="ci")
         ws = Workspace()
         try:
             assert isinstance(ws.account, OAuthTokenAccount)
@@ -342,12 +340,10 @@ class TestCatC_OAuthToken:
             "ci-inline",
             type="oauth_token",
             region=live_oauth_token_creds["region"],  # type: ignore[arg-type]
+            default_project=live_oauth_token_creds["project_id"],
             token=SecretStr(live_oauth_token_creds["token"]),
         )
-        ConfigManager().set_active(
-            account="ci-inline",
-            project=live_oauth_token_creds["project_id"],
-        )
+        ConfigManager().set_active(account="ci-inline")
         ws = Workspace()
         try:
             events = ws.events()
@@ -375,11 +371,10 @@ class TestCatC_OAuthToken:
             "ci-empty",
             type="oauth_token",
             region=os.environ["MP_LIVE_REGION"],  # type: ignore[arg-type]
+            default_project=os.environ["MP_LIVE_PROJECT_ID"],
             token_env="MY_LIVE_TOK",
         )
-        ConfigManager().set_active(
-            account="ci-empty", project=os.environ["MP_LIVE_PROJECT_ID"]
-        )
+        ConfigManager().set_active(account="ci-empty")
         with pytest.raises((OAuthError, AuthenticationError)):
             ws = Workspace()
             try:
@@ -464,12 +459,18 @@ class TestCatD_CrossModeSwitching:
             "team",
             type="service_account",
             region=live_sa_creds["region"],  # type: ignore[arg-type]
+            default_project=live_sa_creds["project_id"],
             username=live_sa_creds["username"],
             secret=SecretStr(live_sa_creds["secret"]),
         )
         copy_user_oauth_tokens_to_account(tmp_v3_home, "personal")
-        ConfigManager().add_account("personal", type="oauth_browser", region="us")
-        ConfigManager().set_active(account="team", project=live_sa_creds["project_id"])
+        ConfigManager().add_account(
+            "personal",
+            type="oauth_browser",
+            region="us",
+            default_project=get_user_active_project_id() or "1",
+        )
+        ConfigManager().set_active(account="team")
         ws = Workspace()
         try:
             assert ws.account.name == "team"

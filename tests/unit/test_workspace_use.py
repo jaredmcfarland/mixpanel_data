@@ -31,12 +31,13 @@ def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def two_accounts() -> ConfigManager:
-    """Seed two service accounts with different credentials."""
+    """Seed two service accounts, each with its own ``default_project``."""
     cm = ConfigManager()
     accounts_ns.add(
         "team",
         type="service_account",
         region="us",
+        default_project="3713224",
         username="team.sa",
         secret=SecretStr("team-secret"),
     )
@@ -44,10 +45,11 @@ def two_accounts() -> ConfigManager:
         "other",
         type="service_account",
         region="eu",
+        default_project="3713224",
         username="other.sa",
         secret=SecretStr("other-secret"),
     )
-    cm.set_active(account="team", project="3713224")
+    cm.set_active(account="team")
     return cm
 
 
@@ -93,20 +95,38 @@ class TestUseAccount:
         ws.use(account="other")
         assert ws.account.name == "other"
 
-    def test_account_change_clears_in_session_project(
+    def test_account_change_uses_new_account_default_project(
         self, two_accounts: ConfigManager
     ) -> None:
-        """Per FR-033, switching account clears in-session project state.
+        """Per FR-033, account swap re-resolves project from the NEW account.
 
-        After ``use(account=A)`` without an explicit project, the next
-        operation that needs a project re-resolves from ``[active]``
-        rather than carrying over the previous account's project ID.
+        After ``use(account=B)`` without an explicit project, the project
+        comes from ``B.default_project`` — never from the prior session.
+        Cross-account project access is not guaranteed; the new account
+        must own its project (or env override must be present).
         """
         ws = Workspace(account="team", project="3018488")
-        # Override the active project, then switch account-only.
         ws.use(account="other")
-        # Account swap clears project — re-resolves from [active] = "3713224".
+        # `other.default_project` was seeded as "3713224" by the fixture.
         assert ws.project.id == "3713224"
+
+    def test_account_swap_no_default_project_raises(
+        self,
+        two_accounts: ConfigManager,
+    ) -> None:
+        """Account swap to an account with no default_project raises ConfigError.
+
+        Per FR-033, the prior session's project is never carried forward.
+        If the new account lacks ``default_project`` and no env / explicit
+        project is provided, the call MUST fail loudly with the standard
+        four-paths-to-fix message.
+        """
+        from mixpanel_data.exceptions import ConfigError
+
+        accounts_ns.add("browser_only", type="oauth_browser", region="us")
+        ws = Workspace(account="team", project="3018488")
+        with pytest.raises(ConfigError):
+            ws.use(account="browser_only")
 
 
 class TestHTTPTransportPreservation:
@@ -175,3 +195,37 @@ class TestPersist:
         ws = Workspace(account="team", project="3713224")
         ws.use(account="other", persist=True)
         assert two_accounts.get_active().account == "other"
+
+
+class TestUseAccountEnvVarPriority:
+    """``use(account=A)`` re-resolves project/workspace per FR-017.
+
+    When swapping account, env-var inputs (``MP_PROJECT_ID``,
+    ``MP_WORKSPACE_ID``) must take precedence over the prior session's
+    project / the global ``[active]`` block. The previous implementation
+    consulted only ``[active]`` and so silently ignored env overrides.
+    """
+
+    def test_account_swap_honors_mp_project_id(
+        self,
+        two_accounts: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``MP_PROJECT_ID`` overrides the new account's ``default_project``."""
+        monkeypatch.setenv("MP_PROJECT_ID", "5555555")
+        ws = Workspace(account="team", project="3713224")
+        ws.use(account="other")
+        assert ws.account.name == "other"
+        assert ws.project.id == "5555555"
+
+    def test_account_swap_honors_mp_workspace_id(
+        self,
+        two_accounts: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``MP_WORKSPACE_ID`` is applied on account swap when set."""
+        monkeypatch.setenv("MP_WORKSPACE_ID", "987")
+        ws = Workspace(account="team", project="3713224")
+        ws.use(account="other")
+        assert ws.workspace is not None
+        assert ws.workspace.id == 987

@@ -73,7 +73,7 @@ _account_adapter: TypeAdapter[Account] = TypeAdapter(Account)
 
 
 def _is_legacy(raw: dict[str, Any]) -> bool:
-    """Return True if the parsed TOML carries any v1 or v2 marker.
+    """Return True if the parsed TOML carries any v1, v2, or pre-redesign marker.
 
     Markers (any one triggers detection):
         - root key ``config_version`` (v2 marker)
@@ -81,6 +81,8 @@ def _is_legacy(raw: dict[str, Any]) -> bool:
         - root section ``[credentials]`` (v2 marker)
         - root section ``[projects]`` (v2 marker)
         - inside any ``[accounts.X]``: a ``project_id`` key (v1 marker)
+        - ``[active].project`` (v3-pre-redesign marker — project moved onto
+          the account as ``default_project`` per FR-012)
 
     Args:
         raw: Parsed TOML as a dict.
@@ -101,7 +103,8 @@ def _is_legacy(raw: dict[str, Any]) -> bool:
         for block in accounts.values():
             if isinstance(block, dict) and "project_id" in block:
                 return True
-    return False
+    active = raw.get("active")
+    return isinstance(active, dict) and "project" in active
 
 
 def _account_from_block(name: str, block: dict[str, Any]) -> Account:
@@ -137,6 +140,8 @@ def _account_to_block(account: Account) -> dict[str, Any]:
         are unwrapped to plain strings (TOML cannot store opaque ``SecretStr``).
     """
     out: dict[str, Any] = {"type": account.type, "region": account.region}
+    if account.default_project is not None:
+        out["default_project"] = account.default_project
     if isinstance(account, ServiceAccount):
         out["username"] = account.username
         out["secret"] = account.secret.get_secret_value()
@@ -146,7 +151,7 @@ def _account_to_block(account: Account) -> dict[str, Any]:
         else:
             assert account.token_env is not None
             out["token_env"] = account.token_env
-    # OAuthBrowserAccount has no extra fields.
+    # OAuthBrowserAccount has no extra fields beyond the common set.
     return out
 
 
@@ -293,6 +298,7 @@ class ConfigManager:
         *,
         type: AccountType,
         region: Region,
+        default_project: str | None = None,
         username: str | None = None,
         secret: SecretStr | str | None = None,
         token: SecretStr | str | None = None,
@@ -300,10 +306,18 @@ class ConfigManager:
     ) -> Account:
         """Add an account block to the config.
 
+        Per FR-004, ``default_project`` is REQUIRED at add-time for
+        ``service_account`` and ``oauth_token`` (the user knows the project
+        up-front for both flows). For ``oauth_browser``, ``default_project``
+        is OPTIONAL — it gets backfilled by ``mp account login`` post-PKCE
+        via ``/me``.
+
         Args:
             name: Account name (must match ``^[a-zA-Z0-9_-]{1,64}$``).
             type: One of ``service_account`` / ``oauth_browser`` / ``oauth_token``.
             region: One of ``us`` / ``eu`` / ``in``.
+            default_project: Numeric project ID. Required for SA and oauth_token;
+                optional (backfilled later) for oauth_browser.
             username: Required for ``service_account``.
             secret: Required for ``service_account``.
             token: For ``oauth_token`` (mutually exclusive with ``token_env``).
@@ -323,20 +337,30 @@ class ConfigManager:
 
         # Build a clean block by type.
         block: dict[str, Any] = {"type": type, "region": region}
+        if default_project is not None:
+            block["default_project"] = default_project
         if type == "service_account":
             if username is None or secret is None:
                 raise ConfigError("ServiceAccount requires `username` and `secret`.")
+            if default_project is None:
+                raise ConfigError(
+                    "ServiceAccount requires `default_project` at add-time."
+                )
             block["username"] = username
             block["secret"] = (
                 secret.get_secret_value() if isinstance(secret, SecretStr) else secret
             )
         elif type == "oauth_browser":
-            # No extra fields.
+            # default_project is optional; populated by `mp account login` later.
             pass
         elif type == "oauth_token":
             if (token is None) == (token_env is None):
                 raise ConfigError(
                     "OAuthTokenAccount requires exactly one of `token` or `token_env`."
+                )
+            if default_project is None:
+                raise ConfigError(
+                    "OAuthTokenAccount requires `default_project` at add-time."
                 )
             if token is not None:
                 block["token"] = (
@@ -348,7 +372,7 @@ class ConfigManager:
         else:  # pragma: no cover — Literal exhaustiveness
             raise ConfigError(f"Unknown account type: {type!r}")
 
-        # Validate via the Account model so we catch bad name/region.
+        # Validate via the Account model so we catch bad name/region/default_project.
         try:
             account = _account_adapter.validate_python({"name": name, **block})
         except ValidationError as exc:
@@ -357,6 +381,98 @@ class ConfigManager:
                 f"{exc.errors(include_url=False)[0]['msg']}"
             ) from exc
 
+        accounts_block[name] = _account_to_block(account)
+        self._write_raw(raw)
+        return account
+
+    def update_account(
+        self,
+        name: str,
+        *,
+        region: Region | None = None,
+        default_project: str | None = None,
+        username: str | None = None,
+        secret: SecretStr | str | None = None,
+        token: SecretStr | str | None = None,
+        token_env: str | None = None,
+    ) -> Account:
+        """Update an existing account in place.
+
+        Only supplied fields are changed. Type cannot be changed via this
+        method (remove + re-add for that). Type-incompatible fields (e.g.,
+        ``token`` for a ``service_account``) raise ``ConfigError``.
+
+        Args:
+            name: Account name to update.
+            region: New region.
+            default_project: New default project ID (digit string).
+            username: New username (service_account only).
+            secret: New secret (service_account only).
+            token: New inline token (oauth_token only).
+            token_env: New env-var name (oauth_token only).
+
+        Returns:
+            The updated ``Account``.
+
+        Raises:
+            ConfigError: Account not found, type-incompatible field, or
+                validation failure.
+        """
+        raw = self._read_raw()
+        accounts_block = raw.get("accounts", {}) or {}
+        if name not in accounts_block:
+            raise ConfigError(f"Account '{name}' not found.")
+        block = dict(accounts_block[name])
+        acct_type = block.get("type")
+
+        if region is not None:
+            block["region"] = region
+        if default_project is not None:
+            block["default_project"] = default_project
+        if username is not None:
+            if acct_type != "service_account":
+                raise ConfigError(
+                    f"`username` only applies to service_account "
+                    f"(account '{name}' is {acct_type!r})."
+                )
+            block["username"] = username
+        if secret is not None:
+            if acct_type != "service_account":
+                raise ConfigError(
+                    f"`secret` only applies to service_account "
+                    f"(account '{name}' is {acct_type!r})."
+                )
+            block["secret"] = (
+                secret.get_secret_value() if isinstance(secret, SecretStr) else secret
+            )
+        if token is not None or token_env is not None:
+            if acct_type != "oauth_token":
+                raise ConfigError(
+                    f"`token`/`token_env` only apply to oauth_token "
+                    f"(account '{name}' is {acct_type!r})."
+                )
+            if token is not None and token_env is not None:
+                raise ConfigError(
+                    "OAuthTokenAccount: `token` and `token_env` are mutually exclusive."
+                )
+            # Replace whichever pair member is being set; remove the other.
+            block.pop("token", None)
+            block.pop("token_env", None)
+            if token is not None:
+                block["token"] = (
+                    token.get_secret_value() if isinstance(token, SecretStr) else token
+                )
+            else:
+                assert token_env is not None
+                block["token_env"] = token_env
+
+        try:
+            account = _account_adapter.validate_python({"name": name, **block})
+        except ValidationError as exc:
+            raise ConfigError(
+                f"Invalid account fields for '{name}': "
+                f"{exc.errors(include_url=False)[0]['msg']}"
+            ) from exc
         accounts_block[name] = _account_to_block(account)
         self._write_raw(raw)
         return account
@@ -420,19 +536,22 @@ class ConfigManager:
         self,
         *,
         account: str | None = None,
-        project: str | None = None,
         workspace: int | None = None,
     ) -> ActiveSession:
         """Update one or more axes in the ``[active]`` block.
 
-        Each kwarg is independent: passing only ``project=X`` updates that
-        axis and leaves the other two untouched. Passing ``None`` for an
-        axis leaves it untouched (use ``clear_active`` to remove keys).
+        ``[active]`` only stores ``account`` and ``workspace`` — project
+        lives on the account itself as ``Account.default_project``. To
+        change the active account's home project, use
+        :meth:`update_account` (e.g., ``cm.update_account(name, default_project=ID)``).
+
+        Each kwarg is independent: passing only ``workspace=W`` updates that
+        axis and leaves ``account`` untouched. Passing ``None`` for an axis
+        leaves it untouched (use ``clear_active`` to remove keys).
 
         Args:
             account: New active account name (must reference an existing
                 ``[accounts.X]``).
-            project: New active project ID (must match ``^\\d+$``).
             workspace: New active workspace ID (positive int).
 
         Returns:
@@ -451,9 +570,6 @@ class ConfigManager:
                     f"Cannot set active account: '{account}' is not configured."
                 )
             active_block["account"] = account
-        if project is not None:
-            self._validate_project_id(project)
-            active_block["project"] = project
         if workspace is not None:
             self._validate_workspace_id(workspace)
             active_block["workspace"] = workspace
@@ -465,14 +581,12 @@ class ConfigManager:
         self,
         *,
         account: bool = False,
-        project: bool = False,
         workspace: bool = False,
     ) -> ActiveSession:
         """Remove specific axes from the ``[active]`` block.
 
         Args:
             account: Drop ``account`` axis if True.
-            project: Drop ``project`` axis if True.
             workspace: Drop ``workspace`` axis if True.
 
         Returns:
@@ -482,8 +596,6 @@ class ConfigManager:
         active_block = raw.get("active", {}) or {}
         if account and "account" in active_block:
             del active_block["account"]
-        if project and "project" in active_block:
-            del active_block["project"]
         if workspace and "workspace" in active_block:
             del active_block["workspace"]
         if active_block:
@@ -611,7 +723,15 @@ class ConfigManager:
         self._write_raw(raw)
 
     def apply_target(self, name: str) -> ActiveSession:
-        """Write the target's three axes to ``[active]`` in a single save.
+        """Write the target to config in a single atomic save.
+
+        Writes ``[active].account = target.account`` and
+        ``[active].workspace = target.workspace``, AND updates the target
+        account's ``default_project`` to the target's project. This keeps
+        the account's home project in sync with the most recently applied
+        target — `mp session` after `mp target use ecom` reflects all three
+        axes (account, project, workspace) without needing a second config
+        layer for "active project".
 
         Args:
             name: Target to apply.
@@ -631,14 +751,14 @@ class ConfigManager:
                 f"Cannot apply target '{name}': account '{target.account}' "
                 f"is not configured."
             )
-        active_block: dict[str, Any] = {
-            "account": target.account,
-            "project": target.project,
-        }
+        # Update target account's default_project to match the target's project.
+        account_block = dict(accounts_block[target.account])
+        account_block["default_project"] = target.project
+        accounts_block[target.account] = account_block
+        # Replace [active] wholesale: a target with no workspace clears prior workspace.
+        active_block: dict[str, Any] = {"account": target.account}
         if target.workspace is not None:
             active_block["workspace"] = target.workspace
-        # apply_target is a single atomic write: replace [active] wholesale
-        # so a target with no workspace clears any prior workspace.
         raw["active"] = active_block
         self._write_raw(raw)
         return self.get_active()

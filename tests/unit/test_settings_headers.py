@@ -36,10 +36,11 @@ def cm_with_account_active(tmp_path: Path) -> ConfigManager:
         "team",
         type="service_account",
         region="us",
+        default_project="3713224",
         username="team.sa",
         secret=SecretStr("team-secret"),
     )
-    cm.set_active(account="team", project="3713224")
+    cm.set_active(account="team")
     return cm
 
 

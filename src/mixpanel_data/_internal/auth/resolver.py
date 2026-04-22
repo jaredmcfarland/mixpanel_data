@@ -4,15 +4,20 @@ Replaces the six-layer fallback chain in the legacy ``ConfigManager`` with
 one pure-functional ``resolve_session`` that consults independent priority
 axes:
 
-    Account axis:    env → param → target → bridge → config[active]
-    Project axis:    env → param → target → bridge → config[active]
-    Workspace axis:  env → param → target → bridge → config[active]
+    Account axis:    env → param → target → bridge → [active].account
+    Project axis:    env → param → target → bridge → account.default_project
+    Workspace axis:  env → param → target → bridge → [active].workspace
 
 Each axis is independent — perturbing one input never affects the others
-(verified by Hypothesis property tests). The resolver does no I/O beyond
-optionally reading the config and bridge file (both passed in by the
-caller); never reads OAuth tokens (those are fetched lazily by
-``MixpanelAPIClient`` at request time); never mutates ``os.environ``.
+(verified by Hypothesis property tests). The project axis chain ends at the
+resolved account (its ``default_project`` field) — there is no
+``[active].project`` fallback. Switching accounts implicitly switches
+projects (FR-033).
+
+The resolver does no I/O beyond optionally reading the config and bridge
+file (both passed in by the caller); never reads OAuth tokens (those are
+fetched lazily by ``MixpanelAPIClient`` at request time); never mutates
+``os.environ``.
 
 Per spec FR-024, when an axis cannot be resolved, the raised
 ``ConfigError`` lists every fix path the user can try.
@@ -155,17 +160,23 @@ def _resolve_project_axis(
     explicit: str | None,
     target_project: str | None,
     bridge: BridgeFile | None,
-    config: ConfigManager,
+    account: Account | None,
 ) -> str | None:
     """Resolve the project axis per the documented priority order.
 
-    Order (per FR-017): env > param > target > bridge > config.
+    Order (per FR-017): env > param > target > bridge > ``account.default_project``.
+
+    The chain ends at the resolved account; there is no ``[active].project``
+    fallback. Project lives on the account itself (``Account.default_project``)
+    rather than in the global ``[active]`` block — switching accounts implicitly
+    switches projects (FR-033).
 
     Args:
         explicit: Value of ``project=`` kwarg.
         target_project: Project from ``--target NAME``, if applied.
         bridge: Loaded bridge file, if any.
-        config: V3 ConfigManager.
+        account: The resolved account whose ``default_project`` is consulted as
+            the bottom layer of the chain.
 
     Returns:
         Project ID (digit string), or ``None`` if no source resolves.
@@ -179,8 +190,9 @@ def _resolve_project_axis(
         return target_project
     if bridge is not None and bridge.project is not None:
         return bridge.project
-    active = config.get_active()
-    return active.project
+    if account is not None:
+        return account.default_project
+    return None
 
 
 def _resolve_workspace_axis(
@@ -191,6 +203,8 @@ def _resolve_workspace_axis(
     config: ConfigManager,
 ) -> int | None:
     """Resolve the workspace axis per the documented priority order.
+
+    Order (per FR-017): env > param > target > bridge > ``[active].workspace``.
 
     ``None`` is a valid terminal value (lazy resolution on first
     workspace-scoped API call per FR-025).
@@ -263,14 +277,30 @@ def _format_no_account_error() -> str:
     )
 
 
-def _format_no_project_error() -> str:
-    """Return the multi-line FR-024 error for an unresolvable project axis."""
+def _format_no_project_error(account: Account | None = None) -> str:
+    """Return the multi-line FR-024 error for an unresolvable project axis.
+
+    Args:
+        account: The resolved account (when available) so the error can name
+            it explicitly — helps the user know which account needs a project.
+    """
+    if account is not None:
+        return (
+            f"No project configured for account {account.name!r}.\n"
+            "\n"
+            "Fix one of the following:\n"
+            "  - Set MP_PROJECT_ID\n"
+            f"  - Run `mp account update {account.name} --project ID`\n"
+            "  - Use `--project ID` per command\n"
+            "  - Use `--target NAME` per command (target supplies project)\n"
+        )
     return (
         "No project configured.\n"
         "\n"
         "Fix one of the following:\n"
         "  - Set MP_PROJECT_ID\n"
-        "  - Run `mp project use ID`\n"
+        "  - Run `mp account update NAME --project ID` for an existing account\n"
+        "  - Add an account with a project: `mp account add NAME ... --project ID`\n"
         "  - Use `--project ID` per command\n"
         "  - Use `--target NAME` per command (target supplies project)\n"
     )
@@ -346,10 +376,10 @@ def resolve_session(
         explicit=project,
         target_project=target_project,
         bridge=br,
-        config=cfg,
+        account=account_obj,
     )
     if project_id is None:
-        raise ConfigError(_format_no_project_error())
+        raise ConfigError(_format_no_project_error(account_obj))
     try:
         project_obj = Project(id=project_id)
     except ValidationError as exc:

@@ -10,6 +10,8 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §1, §2
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -38,17 +40,24 @@ def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def two_accounts() -> ConfigManager:
-    """Seed two service accounts with active=team."""
+    """Seed two accounts. Both have a ``default_project`` so they can be
+    swapped without an explicit project override."""
     cm = ConfigManager()
     accounts_ns.add(
         "team",
         type="service_account",
         region="us",
+        default_project="3713224",
         username="u",
         secret=SecretStr("s"),
     )
-    accounts_ns.add("other", type="oauth_browser", region="eu")
-    cm.set_active(account="team", project="3713224")
+    accounts_ns.add(
+        "other",
+        type="oauth_browser",
+        region="eu",
+        default_project="3713224",
+    )
+    cm.set_active(account="team")
     return cm
 
 
@@ -151,3 +160,71 @@ class TestReadOnlyProperties:
         ws = Workspace()
         with pytest.raises(AttributeError):
             ws.project = ws.project  # type: ignore[misc]
+
+
+class TestBridgeTokenMaterialization:
+    """Bridge is the credential courier — startup MUST refresh on-disk tokens.
+
+    The bridge file (``MP_AUTH_FILE`` / ``~/.claude/mixpanel/auth.json``) is
+    the authoritative source of truth at session start in the Cowork model:
+    when the host pushes a refreshed token through the bridge, the VM's
+    on-disk cache MUST pick it up. A stale local file must not short-circuit
+    the bridge's payload.
+    """
+
+    def test_bridge_overwrites_stale_on_disk_tokens(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """An existing tokens.json must be overwritten by the bridge.
+
+        Regression: the original code wrote ``tokens.json`` only when the
+        file was absent; an expired local cache thus stranded the VM on
+        the old access token even when the host had refreshed and
+        re-emitted the bridge.
+        """
+        account_name = "personal"
+        accounts_dir = tmp_path / ".mp" / "accounts" / account_name
+        accounts_dir.mkdir(parents=True, mode=0o700)
+        stale_path = accounts_dir / "tokens.json"
+        stale_expires = datetime.now(timezone.utc) - timedelta(hours=1)
+        stale_path.write_text(
+            json.dumps(
+                {
+                    "access_token": "STALE",
+                    "expires_at": stale_expires.isoformat(),
+                    "scope": "read",
+                    "token_type": "Bearer",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        fresh_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        bridge_payload = {
+            "version": 2,
+            "account": {
+                "type": "oauth_browser",
+                "name": account_name,
+                "region": "us",
+            },
+            "tokens": {
+                "access_token": "FRESH",
+                "refresh_token": "FRESH-REFRESH",
+                "expires_at": fresh_expires.isoformat(),
+                "scope": "read",
+                "token_type": "Bearer",
+            },
+            "project": "12345",
+        }
+        bridge_path = tmp_path / "bridge.json"
+        bridge_path.write_text(json.dumps(bridge_payload), encoding="utf-8")
+        monkeypatch.setenv("MP_AUTH_FILE", str(bridge_path))
+
+        Workspace()
+
+        on_disk = json.loads(stale_path.read_text(encoding="utf-8"))
+        assert on_disk["access_token"] == "FRESH"
+        assert on_disk["refresh_token"] == "FRESH-REFRESH"
+        assert on_disk["expires_at"] == fresh_expires.isoformat()

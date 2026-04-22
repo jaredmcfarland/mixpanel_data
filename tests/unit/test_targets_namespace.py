@@ -32,6 +32,7 @@ def cm() -> ConfigManager:
         "x",
         type="service_account",
         region="us",
+        default_project="3713224",
         username="u",
         secret=SecretStr("s"),
     )
@@ -74,16 +75,21 @@ class TestList:
 
 
 class TestUse:
-    """``mp.targets.use(name)`` writes all three [active] axes atomically."""
+    """``mp.targets.use(name)`` writes all three axes atomically.
+
+    Account + workspace go to ``[active]``; project goes to the target
+    account's ``default_project`` (project lives on the account).
+    """
 
     def test_use_writes_three_axes(self, cm: ConfigManager) -> None:
-        """``use`` writes account, project, workspace in one call."""
+        """``use`` writes account, workspace to [active] and project to account."""
         targets_ns.add("ecom", account="x", project="3018488", workspace=42)
         targets_ns.use("ecom")
         active = cm.get_active()
         assert active.account == "x"
-        assert active.project == "3018488"
         assert active.workspace == 42
+        # Target project goes onto the target account's default_project.
+        assert cm.get_account("x").default_project == "3018488"
 
     def test_use_missing_raises(self, cm: ConfigManager) -> None:
         """``use("ghost")`` raises ConfigError."""

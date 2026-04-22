@@ -72,17 +72,24 @@ Usage: mp account add NAME --type TYPE [options]
 Options (all):
   --type [service_account|oauth_browser|oauth_token]   required
   --region [us|eu|in]                                  required (or MP_REGION)
+  --project ID                                         see per-type rules below
+                                                       (sets the account's default_project)
 
 Options (--type service_account):
+  --project ID                                         REQUIRED at add-time (or MP_PROJECT_ID)
   --username USERNAME                                  required (or MP_USERNAME)
   --secret SECRET                                      discouraged inline; prefer:
   --secret-stdin                                       read secret from stdin
   (env var fallback: MP_SECRET)
 
 Options (--type oauth_browser):
-  (no extra options; tokens come from `mp account login NAME`)
+  --project ID                                         OPTIONAL at add-time; if omitted,
+                                                       backfilled by `mp account login NAME`
+                                                       via /me discovery
+  (no other extra options; tokens come from `mp account login NAME`)
 
 Options (--type oauth_token):
+  --project ID                                         REQUIRED at add-time (or MP_PROJECT_ID)
   --token TOKEN                                        discouraged inline
   --token-env ENV_VAR                                  preferred — name of env var
                                                        (mutually exclusive with --token)
@@ -93,8 +100,31 @@ Output: confirmation line + writes [accounts.NAME] block to ~/.mp/config.toml
 
 **Exit codes**:
 - 0 — added successfully
-- 3 — invalid args (e.g., missing --username for service_account, both --token and --token-env)
+- 3 — invalid args (e.g., missing --username for service_account, missing --project for service_account/oauth_token, both --token and --token-env)
 - 1 — name already exists (offers `mp account remove NAME` then retry)
+
+### 3.2a `mp account update`
+
+```
+Usage: mp account update NAME [options]
+
+Options (any subset):
+  --region [us|eu|in]
+  --project ID                                         updates the account's default_project
+  --username USERNAME                                  service_account only
+  --secret-stdin                                       service_account only
+  --token TOKEN                                        oauth_token only
+  --token-env ENV_VAR                                  oauth_token only
+
+Effect: in-place update of the named account; only supplied fields are changed.
+
+Output: confirmation listing the changed fields.
+```
+
+**Exit codes**:
+- 0 — updated
+- 3 — invalid args (e.g., field doesn't apply to this account type)
+- 4 — name not found
 
 ### 3.3 `mp account remove`
 
@@ -254,12 +284,17 @@ Exit codes:
 ```
 Usage: mp project use ID
 
-Effect: writes [active].project = ID
-Output: single-line confirmation with the project name (resolved from /me cache if available)
+Effect: updates the active account's default_project = ID (project lives on the
+        account in v3, not in [active]). Equivalent to:
+            mp account update <active-account-name> --project ID
+
+Output: confirmation line: "Set default_project for account 'NAME' to 'ID'"
+        (plus the project name from /me cache if available)
 
 Exit codes:
   0 — set successfully
   3 — invalid args (ID does not match ^\d+$)
+  4 — no active account configured
 ```
 
 ### 4.3 `mp project show`

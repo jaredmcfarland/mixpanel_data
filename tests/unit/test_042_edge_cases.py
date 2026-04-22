@@ -464,6 +464,7 @@ class TestConfigManagerEdgeCases:
                 "team",
                 type="service_account",
                 region="us",
+                default_project="3713224",
                 username="u",
                 secret=SecretStr("s"),
             )
@@ -479,6 +480,7 @@ class TestConfigManagerEdgeCases:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
@@ -507,14 +509,16 @@ class TestWorkspaceV3Discrimination:
             "team",
             type="service_account",
             region="us",
+            default_project="3713224",
             username="u",
             secret=SecretStr("s"),
         )
         # ConfigManager.add_account does NOT auto-active (the namespace does).
         # Set [active] explicitly so the resolver has an account axis.
-        cm.set_active(account="team", project="3713224")
+        cm.set_active(account="team")
         ws = Workspace()
-        # v3 path → has _v3_session → property access works
+        # v3 path → has _v3_session → property access works.
+        # Project comes from the account's default_project.
         assert ws.account.name == "team"
         assert ws.project.id == "3713224"
 
