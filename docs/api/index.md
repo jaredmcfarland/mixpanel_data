@@ -104,16 +104,17 @@ The main entry point for all operations:
 
 ### Auth Surface
 
-Three first-class account types and three functional namespaces, all re-exported from `mixpanel_data`:
+Three first-class account types and three functional namespaces. Most are re-exported from `mixpanel_data`; a few low-level types live under `mixpanel_data.auth_types`:
 
 - **`Account`** — Discriminated union over `ServiceAccount` (Basic Auth), `OAuthBrowserAccount` (PKCE flow, auto-refreshed), `OAuthTokenAccount` (static bearer for CI/agents)
-- **`Session` / `Project` / `WorkspaceRef` / `ActiveSession`** — Immutable resolved-state types
+- **`Session` / `Project` / `WorkspaceRef`** — Immutable resolved-state types (top-level)
+- **`ActiveSession`** — Persisted `[active]`-block snapshot (only from `mixpanel_data.auth_types`)
 - **`mp.accounts`** — Account lifecycle: `add`, `list`, `use`, `show`, `test`, `login`, `logout`, `token`, `export_bridge`, `remove_bridge`, `update`, `remove`
 - **`mp.session`** — Read/write the persisted `[active]` block: `show`, `use`
-- **`mp.targets`** — Saved (account, project, workspace?) cursor positions: `list`, `add`, `use`, `show`, `remove`
+- **`mp.targets`** — Saved (account, project, optional workspace) cursor positions: `list`, `add`, `use`, `show`, `remove`
 - **`AccountSummary` / `AccountTestResult` / `OAuthLoginResult` / `Target`** — Result types
-- **`OAuthTokens`** — Low-level token type (most users never touch this)
-- **`BridgeFile` / `load_bridge`** — Cowork bridge v2 integration
+- **`OAuthTokens`** — Low-level token type, available from `mixpanel_data.auth_types`
+- **`BridgeFile` / `load_bridge`** — Cowork bridge v2 integration, available from `mixpanel_data.auth_types`
 
 [View Auth API](auth.md)
 

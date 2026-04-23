@@ -22,7 +22,7 @@ ws = mp.Workspace(session=mp.Session(account=..., project=..., workspace=...))
 
 # In-session switching — fluent, O(1), no re-auth on project swap
 ws.use(project="3018488").events()
-ws.use(account="personal").events()    # rebuilds auth header; preserves _http
+ws.use(account="personal").events()    # rebuilds auth header; preserves underlying HTTP client
 ws.use(target="ecom").events()         # applies all three axes atomically
 ws.use(workspace=3448414).events()
 
@@ -128,7 +128,7 @@ ws.use(workspace=3448414)
 ws.use(target="ecom")                               # apply all three at once
 
 # Persist the new state
-ws.use(project="3018488", persist=True)             # writes [active].project
+ws.use(project="3018488", persist=True)             # writes account.default_project; [active] only stores account + workspace
 
 # Fluent chain
 result = ws.use(project="3018488").segmentation(
@@ -204,7 +204,7 @@ Read and write the persisted `[active]` block.
 
 ### `mp.targets`
 
-Manage saved (account, project, workspace?) cursor positions.
+Manage saved (account, project, optional workspace) cursor positions.
 
 ::: mixpanel_data.targets
     options:
@@ -271,7 +271,7 @@ from pathlib import Path
 import mixpanel_data as mp
 
 # On the host
-mp.accounts.export_bridge(to=Path("~/.claude/mixpanel/auth.json"))
+mp.accounts.export_bridge(to=Path("~/.claude/mixpanel/auth.json").expanduser())
 mp.accounts.remove_bridge()
 ```
 

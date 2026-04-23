@@ -79,7 +79,7 @@ Discover and switch the active workspace within the current project.
 
 ### target — Saved Targets
 
-A target is a saved (account, project, workspace?) bundle — a named cursor position you can apply with one command.
+A target is a saved (account, project, optional workspace) bundle — a named cursor position you can apply with one command.
 
 | Command | Description |
 |---------|-------------|
@@ -508,9 +508,9 @@ These resolve via `env > param > target > bridge > [active] > default_project` �
 | `MP_PROJECT_ID` | Project override |
 | `MP_WORKSPACE_ID` | Workspace override |
 | `MP_TARGET` | Apply a saved target (mutually exclusive with `MP_ACCOUNT`/`MP_PROJECT_ID`/`MP_WORKSPACE_ID`) |
-| `MP_OAUTH_TOKEN` | Static bearer token (alternative to a registered account; requires `MP_REGION`) |
-| `MP_USERNAME` | Service-account username (env-var path; requires `MP_SECRET`/`MP_PROJECT_ID`/`MP_REGION`) |
-| `MP_SECRET` | Service-account secret |
+| `MP_OAUTH_TOKEN` | Static bearer token (alternative to a registered account; env-var path requires `MP_PROJECT_ID` + `MP_REGION`) |
+| `MP_USERNAME` | Service-account username (requires `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION`) |
+| `MP_SECRET` | Service-account secret (paired with `MP_USERNAME`) |
 | `MP_REGION` | Data residency region (`us`, `eu`, `in`) |
 | `MP_AUTH_FILE` | Override path to the v2 Cowork bridge file |
 | `MP_CONFIG_PATH` | Override config file path (`~/.mp/config.toml`) |

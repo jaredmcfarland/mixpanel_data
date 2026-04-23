@@ -46,7 +46,7 @@ mp session                    # Verify resolved state
 ```bash
 # Set the secret via env var (preferred)
 export MP_SECRET="your-secret-here"
-mp account add team --type service_account --username sa_xxx --region us
+mp account add team --type service_account --username sa_xxx --project 12345 --region us
 # Added account 'team' (service_account, us). Set as active.
 
 mp account test team          # Verify connection
@@ -56,7 +56,7 @@ For CI/CD environments where the secret lives in a shell variable, pipe it via s
 
 ```bash
 echo "$SECRET" | mp account add team --type service_account \
-    --username sa_xxx --region us --secret-stdin
+    --username sa_xxx --project 12345 --region us --secret-stdin
 ```
 
 Or set all credentials as environment variables: `MP_USERNAME`, `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION`
@@ -263,7 +263,7 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 **`mp workspace`** — Switch the active workspace: `list`, `use`, `show`
 
-**`mp target`** — Saved (account, project, workspace?) cursors: `list`, `add`, `use`, `show`, `remove`
+**`mp target`** — Saved (account, project, optional workspace) cursors: `list`, `add`, `use`, `show`, `remove`
 
 **`mp session`** — Show resolved auth state (`mp session [--bridge]`)
 

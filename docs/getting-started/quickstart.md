@@ -33,6 +33,7 @@ export MP_REGION="us"
 export MP_SECRET="your-secret-here"
 mp account add production --type service_account \
     --username sa_abc123... \
+    --project 12345 \
     --region us
 # Added account 'production' (service_account, us). Set as active.
 ```
@@ -43,7 +44,7 @@ For CI/CD environments where the secret lives in a shell variable, pipe it via s
 
 ```bash
 echo "$SECRET" | mp account add production --type service_account \
-    --username sa_abc123... --region us --secret-stdin
+    --username sa_abc123... --project 12345 --region us --secret-stdin
 ```
 
 ### Option C: OAuth Login (Interactive)

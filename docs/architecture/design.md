@@ -97,7 +97,7 @@ The 0.4.0 redesign organizes auth around three independent axes:
 - **Project** — *which Mixpanel project* the calls run against. Lives on the active account as `default_project`; can be overridden per call.
 - **Workspace** — *which workspace inside the project*. Optional; lazy-resolves to the project's default workspace on first workspace-scoped call.
 
-Persisted (account, project, workspace?) bundles are called **targets** and act as named cursor positions: `mp target add ecom --account team --project 3018488` then `mp target use ecom`.
+Persisted (account, project, optional workspace) bundles are called **targets** and act as named cursor positions: `mp target add ecom --account team --project 3018488` then `mp target use ecom`.
 
 ## Data Paths
 

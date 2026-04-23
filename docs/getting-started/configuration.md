@@ -34,9 +34,9 @@ Service accounts are the right default for unattended automation. OAuth browser 
 | `MP_PROJECT_ID` | Project override (CLI: `--project` / `-p`) |
 | `MP_WORKSPACE_ID` | Workspace override (CLI: `--workspace` / `-w`) |
 | `MP_TARGET` | Apply a saved target (CLI: `--target` / `-t`) |
-| `MP_OAUTH_TOKEN` | Static bearer token (alternative to a registered account) |
-| `MP_USERNAME` | Service-account username (env-var path) |
-| `MP_SECRET` | Service-account secret (env-var path) |
+| `MP_OAUTH_TOKEN` | Static bearer token (alternative to a registered account; env-var path requires `MP_PROJECT_ID` + `MP_REGION`) |
+| `MP_USERNAME` | Service-account username (requires `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION`) |
+| `MP_SECRET` | Service-account secret (paired with `MP_USERNAME`) |
 | `MP_REGION` | Data residency region (`us`, `eu`, `in`) |
 | `MP_AUTH_FILE` | Override path to the Cowork bridge file |
 | `MP_CONFIG_PATH` | Override config file path (`~/.mp/config.toml`) |
@@ -56,6 +56,7 @@ These map onto the [credential resolution chain](#credential-resolution-chain) b
 export MP_SECRET="aQUXhKokwLywLoxE3AxLt0g9dXC2G7bT"
 mp account add team --type service_account \
     --username "team-mp.292e7c.mp-service-account" \
+    --project 3018488 \
     --region us
 # Added account 'team' (service_account, us). Set as active.
 ```
@@ -64,7 +65,7 @@ Or read the secret from stdin (useful when it lives in a shell variable):
 
 ```bash
 echo "$SECRET" | mp account add team --type service_account \
-    --username "team-mp..." --region us --secret-stdin
+    --username "team-mp..." --project 3018488 --region us --secret-stdin
 ```
 
 Verify:
@@ -219,14 +220,20 @@ curl -H "Authorization: Bearer $(mp account token personal)" \
 
 ## Credential Resolution Chain
 
-When constructing a `Workspace` (or running a CLI command), each axis is resolved independently in this priority order:
+When constructing a `Workspace` (or running a CLI command), each axis is resolved independently. The general chain is:
 
-1. **Environment variables** — `MP_ACCOUNT`, `MP_PROJECT_ID`, `MP_WORKSPACE_ID`, `MP_OAUTH_TOKEN`, etc.
+1. **Environment variables** — direct env reads inside the resolver.
 2. **Constructor / CLI param** — `Workspace(account="...")`, `mp -a NAME ...`.
 3. **Saved target** — `Workspace(target="ecom")`, `mp -t ecom ...`.
 4. **Bridge file** — `MP_AUTH_FILE` or `~/.claude/mixpanel/auth.json` (Cowork integration).
 5. **Persisted active session** — the `[active]` block in `config.toml`.
 6. **Account default** — `account.default_project` for the project axis.
+
+Per-axis details:
+
+- **Account** — the resolver reads the **service-account env quad** (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) and the **OAuth-token env triple** (`MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION`) directly. The SA quad wins over the OAuth triple. `MP_ACCOUNT` is wired as the env default for the `--account` CLI flag (Typer `envvar=`); it acts at the **param** layer, not the env layer, so an explicit `--account NAME` (or `Workspace(account="...")`) does **not** override it.
+- **Project** — `MP_PROJECT_ID` is read directly by the resolver (env layer), then `--project` / `Workspace(project=...)` (param), then target, bridge, and finally the active account's `default_project`.
+- **Workspace** — `MP_WORKSPACE_ID` is read directly by the resolver (env layer), then `--workspace` / `Workspace(workspace=...)` (param), then target, bridge, and `[active].workspace`.
 
 There is **no silent cross-axis fallback**: switching the active account clears the workspace (workspaces are project-scoped), and project doesn't carry forward to a new account. If an axis can't be resolved, the resolver raises `ConfigError` rather than silently falling back to a default.
 
@@ -263,7 +270,7 @@ If no workspace is specified, workspace-scoped endpoints lazy-resolve to the pro
 
 ## Saved Targets
 
-A **target** is a saved (account, project, workspace?) bundle — a named cursor position you can apply with one command:
+A **target** is a saved (account, project, optional workspace) bundle — a named cursor position you can apply with one command:
 
 ```bash
 mp target add ecom --account team --project 3018488 --workspace 3448414
@@ -317,7 +324,7 @@ The bridge file embeds the full `Account` (with secrets), optional OAuth tokens 
 ```python
 import mixpanel_data as mp
 
-mp.accounts.export_bridge(to=Path("~/.claude/mixpanel/auth.json"))
+mp.accounts.export_bridge(to=Path("~/.claude/mixpanel/auth.json").expanduser())
 mp.accounts.remove_bridge()
 ```
 
