@@ -62,7 +62,16 @@ def atomic_write_bytes(path: Path, data: bytes, *, mode: int = 0o600) -> None:
         try:
             if hasattr(os, "fchmod"):
                 os.fchmod(fd, mode)
-            os.write(fd, data)
+            # ``os.write`` may return a short count on certain
+            # filesystems / signal interruptions — loop until every
+            # byte has been written so we never leave a truncated
+            # config / token file in the rename path.
+            view = memoryview(data)
+            while view:
+                written = os.write(fd, view)
+                if written <= 0:  # pragma: no cover — POSIX guarantees > 0
+                    raise OSError("os.write returned non-positive count")
+                view = view[written:]
         finally:
             os.close(fd)
         os.replace(str(tmp_path), str(path))

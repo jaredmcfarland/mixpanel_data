@@ -224,7 +224,7 @@ class TestSessionCli:
     def test_session_default_format(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """`mp session` prints account/project/workspace lines."""
+        """`mp session` prints contract-formatted four-line summary."""
         monkeypatch.setenv("MP_SECRET", "s")
         runner.invoke(
             app,
@@ -244,14 +244,19 @@ class TestSessionCli:
         )
         result = runner.invoke(app, ["session"])
         assert result.exit_code == 0
-        assert "account:" in result.output
-        assert "project:" in result.output
-        assert "workspace:" in result.output
+        # Contract §7: capitalized labels, four lines (account / project /
+        # workspace / user) with type+region annotation on the account.
+        assert "Account:" in result.output
+        assert "Project:" in result.output
+        assert "Workspace:" in result.output
+        assert "User:" in result.output
+        assert "service_account" in result.output  # account type annotation
+        assert "us" in result.output  # region annotation
 
     def test_session_json_format(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``mp session --format json`` emits a JSON-parseable ActiveSession."""
+        """``mp session --format json`` emits the contract structured payload."""
         monkeypatch.setenv("MP_SECRET", "s")
         runner.invoke(
             app,
@@ -272,7 +277,12 @@ class TestSessionCli:
         result = runner.invoke(app, ["session", "--format", "json"])
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output.strip())
-        assert payload.get("account") == "a"
+        # Contract §7: account is a structured {name, type, region} object
+        # so callers can inspect type/region without a follow-up command.
+        assert payload["account"]["name"] == "a"
+        assert payload["account"]["type"] == "service_account"
+        assert payload["account"]["region"] == "us"
+        assert payload["project"]["id"] == "3713224"
 
 
 class TestConfigCli:

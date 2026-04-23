@@ -122,12 +122,17 @@ def ensure_account_dir(name: str) -> Path:
 
 
 def legacy_token_path(region: str) -> Path:
-    """Return ``~/.mp/oauth/tokens_{region}.json`` (read-only legacy path).
+    """Return ``<storage-root>/oauth/tokens_{region}.json`` (read-only legacy path).
 
     Used only by the conversion script (``mp config convert``) to migrate
     OAuth tokens from the legacy per-region layout to the new per-account
-    layout under ``~/.mp/accounts/{name}/``. Active code paths must NOT
-    read or write this location.
+    layout under ``<storage-root>/accounts/{name}/``. Active code paths
+    must NOT read or write this location.
+
+    Routes through :func:`_storage_root` so the
+    ``MP_OAUTH_STORAGE_DIR`` env-var override is honored — hard-coding
+    ``~/.mp/`` would make migration tooling read the developer's real
+    home directory under test/sandbox runs that overrode the root.
 
     Args:
         region: Two-letter region code (``us``, ``eu``, ``in``).
@@ -142,7 +147,7 @@ def legacy_token_path(region: str) -> Path:
         raise ValueError(
             f"Invalid region: {region!r}. Must be a 2-letter lowercase string."
         )
-    return Path.home() / ".mp" / "oauth" / f"tokens_{region}.json"
+    return _storage_root() / "oauth" / f"tokens_{region}.json"
 
 
 class OAuthStorage:

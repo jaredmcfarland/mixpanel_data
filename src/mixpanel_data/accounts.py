@@ -229,15 +229,24 @@ def show(name: str | None = None) -> AccountSummary:
 def test(name: str | None = None) -> AccountTestResult:
     """Probe ``/me`` for the named account and return the structured result.
 
-    Phase 4 stub: returns a placeholder result indicating ``probe deferred``;
-    full ``/me`` integration arrives in Phase 5 along with the CLI wiring.
-    Never raises — captures errors in ``result.error``.
+    Resolves the named account (or active account when ``name`` is None),
+    constructs a short-lived :class:`MixpanelAPIClient` against ``/me``,
+    and reports whether the credentials are accepted plus the
+    authenticated user identity / accessible-project count from the
+    response body.
+
+    Never raises — every failure mode (account not found, missing
+    credentials, OAuth refresh failure, HTTP error) is captured in
+    ``result.error`` so the CLI can render a structured failure message
+    and downstream tooling can color accounts as
+    ``needs_login`` / ``needs_token`` based on the error string.
 
     Args:
         name: Account to test; ``None`` means the active account.
 
     Returns:
-        :class:`AccountTestResult`.
+        :class:`AccountTestResult` — ``ok=True`` with ``user`` populated
+        on success, or ``ok=False`` with ``error`` describing the failure.
     """
     try:
         summary = show(name)
@@ -245,14 +254,58 @@ def test(name: str | None = None) -> AccountTestResult:
         return AccountTestResult(
             account_name=name or "(none)", ok=False, error=str(exc)
         )
-    return AccountTestResult(
-        account_name=summary.name,
-        ok=False,
-        error=(
-            "test() probe is not yet wired up; this is a Phase 4 stub. "
-            "Use `mp account login` (oauth_browser) or set MP_OAUTH_TOKEN to verify."
-        ),
+
+    cm = _config()
+    try:
+        account = cm.get_account(summary.name)
+    except ConfigError as exc:  # pragma: no cover — show() already validated
+        return AccountTestResult(account_name=summary.name, ok=False, error=str(exc))
+
+    # Lazy imports to keep import-time cheap (httpx + threading pull in lots).
+    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_data._internal.auth.session import Project, Session
+    from mixpanel_data._internal.me import MeResponse
+
+    # ``MixpanelAPIClient`` requires a project to construct a Session even
+    # though ``/me`` itself is project-agnostic. Use the account's default
+    # when present, falling back to ``"0"`` so probes still work for fresh
+    # ``oauth_browser`` accounts that have not yet been login'd.
+    placeholder_project = account.default_project or "0"
+    probe_session = Session(
+        account=account,
+        project=Project(id=placeholder_project),
     )
+
+    api_client = MixpanelAPIClient(session=probe_session)
+    try:
+        try:
+            me_raw = api_client.me()
+        except Exception as exc:  # noqa: BLE001 — capture every failure mode
+            return AccountTestResult(
+                account_name=summary.name,
+                ok=False,
+                error=f"/me probe failed: {exc}",
+            )
+        try:
+            me_resp = MeResponse.model_validate(me_raw)
+        except Exception as exc:  # noqa: BLE001 — malformed payload
+            return AccountTestResult(
+                account_name=summary.name,
+                ok=False,
+                error=f"/me response could not be parsed: {exc}",
+            )
+        user: MeUserInfo | None = None
+        if me_resp.user_id is not None and me_resp.user_email is not None:
+            user = MeUserInfo(id=me_resp.user_id, email=me_resp.user_email)
+        project_count = len(me_resp.projects) if me_resp.projects else 0
+        return AccountTestResult(
+            account_name=summary.name,
+            ok=True,
+            user=user,
+            accessible_project_count=project_count,
+        )
+    finally:
+        api_client.close()
 
 
 def login(

@@ -10,6 +10,7 @@ Reference: specs/042-auth-architecture-redesign/spec.md US7.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from collections.abc import Generator
@@ -77,10 +78,15 @@ class TestCliShellLoop:
         )
         assert rc == 0, err
 
-        # Capture initial active state
+        # Capture initial active state. Contract §7: account is a
+        # nested {name, type, region} object and project is a nested
+        # {id, name, organization} object; parse the JSON instead of
+        # substring-matching to be robust to formatting changes.
         rc, before_out, _ = _mp("session", "--format", "json", env=cli_env)
         assert rc == 0
-        assert '"account": "team"' in before_out
+        before_payload = json.loads(before_out)
+        assert before_payload["account"]["name"] == "team"
+        assert before_payload["project"]["id"] == "100"
 
         # Loop: per-command --project overrides, three different projects.
         # The global --project flag is wired into Workspace construction;
@@ -96,9 +102,10 @@ class TestCliShellLoop:
         # After the loop: [active] still shows the original project.
         rc, after_out, _ = _mp("session", "--format", "json", env=cli_env)
         assert rc == 0
-        assert '"account": "team"' in after_out
+        after_payload = json.loads(after_out)
+        assert after_payload["account"]["name"] == "team"
         # Persisted default_project on the account is still 100.
-        assert '"project": "100"' in after_out
+        assert after_payload["project"]["id"] == "100"
         # And specifically NOT the override values.
         for stale in ("200", "300", "400"):
-            assert f'"project": "{stale}"' not in after_out
+            assert after_payload["project"]["id"] != stale

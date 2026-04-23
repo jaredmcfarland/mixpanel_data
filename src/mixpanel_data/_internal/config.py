@@ -862,6 +862,77 @@ class ConfigManager:
             self._apply_clear_active(raw, account=account, workspace=workspace)
         return self.get_active()
 
+    def apply_session(
+        self,
+        *,
+        account: str | None = None,
+        project: str | None = None,
+        workspace: int | None = None,
+        clear_workspace: bool = False,
+    ) -> ActiveSession:
+        """Atomically apply per-axis session updates in a single transaction.
+
+        Public composition of the per-axis ``_apply_*`` mutators so callers
+        like :func:`mixpanel_data.session.use` and
+        :meth:`mixpanel_data.workspace.Workspace._persist_active` do not
+        have to drive ``_mutate()`` directly. All updates land within one
+        read-modify-write cycle so an interrupted process never leaves the
+        on-disk state reflecting a partial swap (e.g., new account but
+        stale project).
+
+        Each axis kwarg is independent:
+
+        - ``account=None`` leaves ``[active].account`` untouched.
+        - ``project=None`` leaves the target account's
+          ``default_project`` untouched.
+        - ``workspace=None`` leaves ``[active].workspace`` untouched.
+        - ``clear_workspace=True`` removes ``[active].workspace``
+          (mutually exclusive with ``workspace=``).
+
+        ``project=`` writes to the EXPLICIT ``account=`` (if given) else
+        the persisted active account. Raises ``ConfigError`` if no
+        account can be resolved when ``project=`` is supplied.
+
+        Args:
+            account: New active account name (must reference an existing
+                ``[accounts.X]``).
+            project: New ``default_project`` for the target account.
+            workspace: New active workspace ID (positive int).
+            clear_workspace: When True, drop ``[active].workspace``.
+
+        Returns:
+            The updated ``ActiveSession``.
+
+        Raises:
+            ConfigError: Validation failure, missing referenced account,
+                or ``project=`` supplied without an active or explicit
+                account.
+            ValueError: Both ``workspace=`` and ``clear_workspace=True``
+                supplied.
+        """
+        if workspace is not None and clear_workspace:
+            raise ValueError(
+                "`workspace=` and `clear_workspace=True` are mutually exclusive."
+            )
+        with self._mutate() as raw:
+            if account is not None or workspace is not None:
+                self._apply_set_active(raw, account=account, workspace=workspace)
+            if clear_workspace:
+                self._apply_clear_active(raw, workspace=True)
+            if project is not None:
+                active_block = raw.get("active", {}) or {}
+                target_account = (
+                    account if account is not None else active_block.get("account")
+                )
+                if not isinstance(target_account, str):
+                    raise ConfigError(
+                        "Cannot set project: no active account. "
+                        "Run `mp account use NAME` first, or pass `account=NAME` "
+                        "together with `project=`."
+                    )
+                self._apply_update_account(raw, target_account, default_project=project)
+        return self.get_active()
+
     # ---- targets -----------------------------------------------------
 
     def list_targets(self) -> list[Target]:

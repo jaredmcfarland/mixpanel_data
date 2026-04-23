@@ -428,6 +428,7 @@ class Workspace:
                 from mixpanel_data._internal.auth.storage import (
                     ensure_account_dir,
                 )
+                from mixpanel_data._internal.io_utils import atomic_write_bytes
 
                 tokens_path = ensure_account_dir(br.account.name) / "tokens.json"
                 # Always overwrite — the bridge is the authoritative
@@ -446,8 +447,10 @@ class Workspace:
                     payload["refresh_token"] = (
                         br.tokens.refresh_token.get_secret_value()
                     )
-                tokens_path.write_text(_json.dumps(payload), encoding="utf-8")
-                tokens_path.chmod(0o600)
+                # atomic_write_bytes creates the file with 0o600 via O_EXCL
+                # before any data is written, eliminating the umask-derived
+                # permission window left open by write_text + chmod.
+                atomic_write_bytes(tokens_path, _json.dumps(payload).encode("utf-8"))
             sess = _resolve_session_v3(
                 account=account,
                 project=project,
@@ -625,7 +628,7 @@ class Workspace:
         return self
 
     def _persist_active(self) -> None:
-        """Persist the current session's axes to disk.
+        """Persist the current session's axes to disk in one transaction.
 
         ``[active].account`` and ``[active].workspace`` are written to the
         ``[active]`` block. The session's project is written to the
@@ -633,24 +636,25 @@ class Workspace:
         not in ``[active]``). This keeps ``ws.use(..., persist=True)``
         consistent with construction-time resolution: a fresh
         ``Workspace()`` will reproduce the same session.
+
+        All three writes happen inside one :meth:`ConfigManager.apply_session`
+        call so an interrupted process never leaves the on-disk state
+        reflecting a partial swap (e.g., new account but stale project).
+        When the in-session workspace was cleared, ``clear_workspace=True``
+        explicitly drops ``[active].workspace`` rather than leaving the
+        prior pin behind.
         """
         if self._v3_session is None:
             return
-        cm = ConfigManager()
-        cm.set_active(account=self._v3_session.account.name)
-        # `set_active(workspace=None)` is "do not touch" per FR-016 axis
-        # independence; to actually drop a stale `[active].workspace` when
-        # the in-session workspace was cleared (e.g., after `use(account=…)`
-        # cleared it), call `clear_active(workspace=True)` explicitly.
-        if self._v3_session.workspace is not None:
-            cm.set_active(workspace=self._v3_session.workspace.id)
-        else:
-            cm.clear_active(workspace=True)
-        # Sync the account's default_project with the session's project so
-        # the next process that reads the config gets the same project.
-        cm.update_account(
-            self._v3_session.account.name,
-            default_project=self._v3_session.project.id,
+        ConfigManager().apply_session(
+            account=self._v3_session.account.name,
+            project=self._v3_session.project.id,
+            workspace=(
+                self._v3_session.workspace.id
+                if self._v3_session.workspace is not None
+                else None
+            ),
+            clear_workspace=self._v3_session.workspace is None,
         )
 
     def __enter__(self) -> Workspace:

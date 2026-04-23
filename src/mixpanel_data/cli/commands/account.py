@@ -221,12 +221,30 @@ def add_account(
             secret_value = _read_secret_from_stdin()
         else:
             env_secret = os.environ.get("MP_SECRET")
-            if not env_secret:
+            if env_secret:
+                secret_value = env_secret
+            elif sys.stdin.isatty():
+                # Per contracts/cli-commands.md §12 line 569, this is the
+                # one command that may interactively prompt — only when
+                # ``--secret-stdin`` is unset, ``MP_SECRET`` is unset, and
+                # stdin is a TTY (otherwise we'd hang in CI / piped runs).
+                # ``getpass.getpass`` writes the prompt to stderr and
+                # reads from ``/dev/tty`` so the secret never echoes and
+                # never appears in shell history.
+                import getpass
+
+                try:
+                    secret_value = getpass.getpass("Service account secret: ")
+                except (EOFError, OSError):
+                    err_console.print(
+                        "[red]Could not read secret interactively (no TTY available).[/red]"
+                    )
+                    raise typer.Exit(ExitCode.INVALID_ARGS) from None
+            else:
                 err_console.print(
                     "[red]Set MP_SECRET or use --secret-stdin to provide the secret.[/red]"
                 )
                 raise typer.Exit(ExitCode.INVALID_ARGS)
-            secret_value = env_secret
         if not secret_value:
             err_console.print("[red]Secret is empty.[/red]")
             raise typer.Exit(ExitCode.INVALID_ARGS)

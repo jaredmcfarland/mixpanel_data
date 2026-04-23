@@ -9,6 +9,7 @@ contracts/cli-commands.md §4.
 
 from __future__ import annotations
 
+import json as _json
 from typing import Annotated
 
 import typer
@@ -58,16 +59,25 @@ def list_projects(
             help="Fetch projects from /me (cached). Default: print active.",
         ),
     ] = False,
+    format: Annotated[  # noqa: A002
+        str,
+        typer.Option(
+            "--format",
+            "-f",
+            help="Output format (--remote only): table | json | jsonl.",
+        ),
+    ] = "table",
 ) -> None:
     """List projects accessible by the active account.
 
-    With ``--remote``, fetches the project list from ``/me``. Without
-    it, just prints the active account's ``default_project`` for a
-    quick summary.
+    With ``--remote``, fetches the project list from ``/me`` (24h
+    cached) and prints id / name / organization. Without it, just
+    prints the active account's ``default_project`` for a quick summary.
 
     Args:
         ctx: Typer context.
         remote: Whether to fetch the full /me project list.
+        format: Output format for ``--remote`` (``table`` / ``json`` / ``jsonl``).
     """
     if not remote:
         _account, project = _active_account_default_project()
@@ -76,8 +86,52 @@ def list_projects(
             return
         console.print(project)
         return
-    err_console.print("[yellow]`mp project list --remote` is not yet wired.[/yellow]")
-    raise typer.Exit(1)
+
+    # /me-backed listing — construct a short-lived Workspace bound to
+    # the active account / its default_project and pull the cached
+    # project list. Matches the cross-project iteration pattern (see
+    # examples/cross_project.py).
+    from mixpanel_data.workspace import Workspace
+
+    with Workspace() as ws:
+        projects = ws.projects()
+    if format == "json":
+        console.print(
+            _json.dumps(
+                [
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "organization_id": p.organization_id,
+                        "timezone": p.timezone,
+                    }
+                    for p in projects
+                ],
+                indent=2,
+            )
+        )
+        return
+    if format == "jsonl":
+        for p in projects:
+            console.print(
+                _json.dumps(
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "organization_id": p.organization_id,
+                        "timezone": p.timezone,
+                    }
+                )
+            )
+        return
+    if not projects:
+        console.print("(no projects accessible via /me)")
+        return
+    lines = ["ID              NAME                              ORG"]
+    for p in projects:
+        name = (p.name or "")[:33]
+        lines.append(f"{p.id:<15} {name:<33} {p.organization_id}")
+    console.print("\n".join(lines))
 
 
 @project_app.command("use")

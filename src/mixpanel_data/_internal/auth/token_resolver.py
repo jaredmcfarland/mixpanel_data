@@ -31,12 +31,18 @@ from mixpanel_data._internal.auth.account import (
     Region,
     TokenResolver,
 )
+from mixpanel_data._internal.auth.storage import account_dir
 from mixpanel_data._internal.io_utils import atomic_write_bytes
 from mixpanel_data.exceptions import OAuthError
 
 
 def _account_tokens_path(name: str) -> Path:
-    """Return ``~/.mp/accounts/{name}/tokens.json`` for the given account name.
+    """Return ``<account-dir>/tokens.json`` for the given account name.
+
+    Routes through :func:`account_dir` so the
+    ``MP_OAUTH_STORAGE_DIR`` env-var override is honored — hard-coding
+    ``~/.mp/accounts/`` here would silently bypass test isolation and
+    custom-deployment overrides.
 
     Args:
         name: Account name (validated upstream by the ``Account`` model).
@@ -44,7 +50,7 @@ def _account_tokens_path(name: str) -> Path:
     Returns:
         Absolute path to the per-account tokens file.
     """
-    return Path.home() / ".mp" / "accounts" / name / "tokens.json"
+    return account_dir(name) / "tokens.json"
 
 
 class OnDiskTokenResolver(TokenResolver):

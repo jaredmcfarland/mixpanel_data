@@ -10,6 +10,7 @@ Reference: specs/042-auth-architecture-redesign/spec.md US7 / FR-033.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -49,13 +50,14 @@ def _seed_browser_tokens(home: Path, name: str) -> None:
     account_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     tokens_path = account_dir / "tokens.json"
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
-    tokens_path.write_text(
-        '{"access_token": "tok-' + name + '", '
-        '"refresh_token": "ref", '
-        f'"expires_at": "{expires_at}", '
-        '"scope": "read", "token_type": "Bearer"}',
-        encoding="utf-8",
-    )
+    payload = {
+        "access_token": f"tok-{name}",
+        "refresh_token": "ref",
+        "expires_at": expires_at,
+        "scope": "read",
+        "token_type": "Bearer",
+    }
+    tokens_path.write_text(json.dumps(payload), encoding="utf-8")
     tokens_path.chmod(0o600)
 
 

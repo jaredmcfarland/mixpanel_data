@@ -278,6 +278,80 @@ class TestSetActive:
         assert active.workspace == 8
 
 
+class TestApplySession:
+    """``apply_session`` atomically writes account/project/workspace in one transaction."""
+
+    def _seed(self, cm: ConfigManager, name: str = "x") -> None:
+        """Insert a service_account named ``name`` for use in apply_session tests."""
+        cm.add_account(
+            name,
+            type="service_account",
+            region="us",
+            default_project="100",
+            username="u",
+            secret=SecretStr("s"),
+        )
+
+    def test_atomic_three_axis_write(self, cm: ConfigManager) -> None:
+        """Single call writes account, workspace, and account.default_project."""
+        self._seed(cm)
+        cm.apply_session(account="x", project="200", workspace=42)
+        active = cm.get_active()
+        assert active.account == "x"
+        assert active.workspace == 42
+        assert cm.get_account("x").default_project == "200"
+
+    def test_clear_workspace_drops_active_workspace_axis(
+        self, cm: ConfigManager
+    ) -> None:
+        """``clear_workspace=True`` removes ``[active].workspace`` even without ``workspace=``."""
+        self._seed(cm)
+        cm.set_active(account="x", workspace=99)
+        cm.apply_session(account="x", project="100", clear_workspace=True)
+        active = cm.get_active()
+        assert active.account == "x"
+        assert active.workspace is None
+
+    def test_workspace_and_clear_workspace_mutually_exclusive(
+        self, cm: ConfigManager
+    ) -> None:
+        """Passing both ``workspace=`` and ``clear_workspace=True`` raises ValueError."""
+        self._seed(cm)
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            cm.apply_session(
+                account="x", project="100", workspace=42, clear_workspace=True
+            )
+
+    def test_project_without_active_or_explicit_account_raises(
+        self, cm: ConfigManager
+    ) -> None:
+        """``project=`` with no active account and no explicit ``account=`` raises ConfigError."""
+        with pytest.raises(ConfigError, match="no active account"):
+            cm.apply_session(project="100")
+
+    def test_project_writes_to_explicit_account_not_active(
+        self, cm: ConfigManager
+    ) -> None:
+        """When ``account=`` and ``project=`` are both passed, project lands on the EXPLICIT account."""
+        self._seed(cm, "x")
+        self._seed(cm, "y")
+        cm.set_active(account="x")
+        cm.apply_session(account="y", project="500")
+        # 'y' got the project; 'x' kept its original.
+        assert cm.get_account("y").default_project == "500"
+        assert cm.get_account("x").default_project == "100"
+
+    def test_partial_update_preserves_untouched_axes(self, cm: ConfigManager) -> None:
+        """``apply_session(workspace=)`` preserves account / project."""
+        self._seed(cm)
+        cm.set_active(account="x", workspace=10)
+        cm.apply_session(workspace=99)
+        active = cm.get_active()
+        assert active.account == "x"
+        assert active.workspace == 99
+        assert cm.get_account("x").default_project == "100"
+
+
 class TestTargets:
     """``add_target`` / ``list_targets`` / ``get_target`` / ``apply_target``."""
 

@@ -48,6 +48,10 @@ def use(
     axes atomically (writing project to the target account's
     ``default_project``).
 
+    All updates land in a single ``apply_session`` transaction so the
+    on-disk state never reflects a partial swap (e.g., new account but
+    stale project).
+
     Args:
         account: New active account name.
         project: New project ID (digit string) for the active account.
@@ -69,28 +73,7 @@ def use(
     if target is not None:
         cm.apply_target(target)
         return
-    # account / workspace go to [active]; project goes to the active account.
-    # Both are written inside one _mutate() transaction so the on-disk state
-    # never reflects a partial swap (e.g., new account but stale project).
-    with cm._mutate() as raw:
-        if account is not None or workspace is not None:
-            cm._apply_set_active(raw, account=account, workspace=workspace)
-        if project is not None:
-            from mixpanel_data.exceptions import ConfigError
-
-            active_block = raw.get("active", {}) or {}
-            active_account = active_block.get("account")
-            if account is not None:
-                target_account = account
-            elif isinstance(active_account, str):
-                target_account = active_account
-            else:
-                raise ConfigError(
-                    "Cannot set project: no active account. "
-                    "Run `mp account use NAME` first, or pass `account=NAME` "
-                    "together with `project=`."
-                )
-            cm._apply_update_account(raw, target_account, default_project=project)
+    cm.apply_session(account=account, project=project, workspace=workspace)
 
 
 __all__ = ["show", "use"]

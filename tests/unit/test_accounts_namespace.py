@@ -366,6 +366,106 @@ class TestToken:
 # functions plus the mp.accounts wrappers).
 
 
+class TestTest:
+    """``mp.accounts.test(name)`` runs a real ``/me`` probe and reports outcome."""
+
+    def test_missing_account_returns_not_found(self, cm: ConfigManager) -> None:
+        """Unknown account → ``ok=False`` with a helpful error string."""
+        result = accounts_ns.test("ghost")
+        assert result.ok is False
+        assert result.error is not None
+        assert "ghost" in result.error.lower() or "not found" in result.error.lower()
+
+    def test_no_active_account_returns_error(self, cm: ConfigManager) -> None:
+        """No name + no active account → ``ok=False``."""
+        result = accounts_ns.test()
+        assert result.ok is False
+        assert result.error is not None
+
+    def test_successful_probe_populates_user_and_project_count(
+        self, cm: ConfigManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Successful ``/me`` probe → ``ok=True`` with user identity + project count."""
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        from mixpanel_data._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            """Return canned /me payload with two projects + a user."""
+            return {
+                "user_id": 42,
+                "user_email": "team@example.com",
+                "projects": {
+                    "3713224": {"name": "Alpha", "organization_id": 1},
+                    "3018488": {"name": "Beta", "organization_id": 1},
+                },
+            }
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+        result = accounts_ns.test("team")
+        assert result.ok is True
+        assert result.error is None
+        assert result.user is not None
+        assert result.user.id == 42
+        assert result.user.email == "team@example.com"
+        assert result.accessible_project_count == 2
+
+    def test_probe_failure_captured_in_error(
+        self, cm: ConfigManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When the underlying ``/me`` call raises, the failure is captured (never re-raised)."""
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        from mixpanel_data._internal import api_client as api_client_mod
+        from mixpanel_data.exceptions import AuthenticationError
+
+        def _fail_me(self: object) -> dict[str, object]:
+            """Raise a 401 to simulate stale credentials."""
+            raise AuthenticationError("invalid credentials")
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fail_me)
+        result = accounts_ns.test("team")
+        assert result.ok is False
+        assert result.error is not None
+        assert "invalid credentials" in result.error or "/me" in result.error
+
+    def test_active_account_used_when_name_omitted(
+        self, cm: ConfigManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``test()`` with no name probes the active account."""
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region="us",
+            default_project="3713224",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        # First-account auto-promote → "team" is now [active].account
+        from mixpanel_data._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            """Minimal /me payload — just enough to succeed."""
+            return {"user_id": 1, "user_email": "x@example.com", "projects": {}}
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+        result = accounts_ns.test()
+        assert result.ok is True
+        assert result.account_name == "team"
+
+
 class TestLogin:
     """Coverage for Fix 17 — ``mp.accounts.login(name)``."""
 

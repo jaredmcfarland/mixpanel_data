@@ -87,6 +87,24 @@ def _clean_mp_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(var, raising=False)
 
 
+def _real_home_mp_guard_enabled() -> bool:
+    """Return whether the real-home ``~/.mp/`` guard should run this session.
+
+    The guard is enabled in CI (where the home directory is hermetic) and
+    when explicitly opted in via ``MP_TEST_GUARD_REAL_HOME=1``. On a
+    developer machine, unrelated processes — another shell running ``mp``,
+    a background OAuth refresh, an editor syncing dotfiles — can update
+    ``~/.mp/`` mid-test-run and trip the guard for reasons unrelated to
+    test-suite leakage. Defaulting to off there avoids flakes while
+    keeping the safety net in CI.
+
+    Returns:
+        ``True`` when ``$CI`` is set or
+        ``$MP_TEST_GUARD_REAL_HOME=1``; ``False`` otherwise.
+    """
+    return os.getenv("CI") is not None or os.getenv("MP_TEST_GUARD_REAL_HOME") == "1"
+
+
 def _snapshot_real_mp_dir() -> dict[str, float]:
     """Snapshot mtimes of every file under the developer's real ``~/.mp/``.
 
@@ -123,9 +141,18 @@ def _no_test_writes_to_real_home_mp(
     developer's real config / token cache. This fixture catches the
     regression once per session rather than per-test (cheap to run).
 
+    Only enabled in CI or when ``MP_TEST_GUARD_REAL_HOME=1`` is set
+    (see :func:`_real_home_mp_guard_enabled`); on developer machines the
+    guard is a no-op to avoid false positives from unrelated processes
+    touching ``~/.mp/`` mid-run.
+
     The check is best-effort: missing or unreadable ``~/.mp/`` is
     treated as "nothing to protect" and the fixture is a no-op.
     """
+    del request  # session-scoped fixtures take request for parity only
+    if not _real_home_mp_guard_enabled():
+        yield
+        return
     before = _snapshot_real_mp_dir()
     yield
     after = _snapshot_real_mp_dir()

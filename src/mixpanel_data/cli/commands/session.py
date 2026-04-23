@@ -105,6 +105,14 @@ def session_command(
 ) -> None:
     """Print the persisted ``[active]`` session, or bridge state with ``--bridge``.
 
+    Renders the contract-defined four-line summary (account / project /
+    workspace / user) per ``contracts/cli-commands.md §7``: account is
+    annotated with type+region; project and workspace are enriched with
+    their human names from the ``/me`` cache; user identity is read from
+    the same cache. The cache is consulted read-only — fields fall back
+    to ``(uncached)`` rather than triggering a network call so the
+    command stays fast offline.
+
     Args:
         ctx: Typer context.
         bridge: When True, show the bridge file source instead of ``[active]``.
@@ -115,32 +123,109 @@ def session_command(
     if bridge:
         _print_bridge_status(format)
         return
-    active = session_ns.show()
-    # Resolve the active account's default_project for display (project lives
-    # on the account in v3, not in [active]).
-    project_display = "(none)"
-    if active.account is not None:
-        from mixpanel_data._internal.config import ConfigManager
-        from mixpanel_data.exceptions import ConfigError
 
+    from mixpanel_data._internal.config import ConfigManager
+    from mixpanel_data._internal.me import MeCache
+    from mixpanel_data.exceptions import ConfigError
+
+    active = session_ns.show()
+
+    account_type: str | None = None
+    account_region: str | None = None
+    project_id: str | None = None
+    project_name: str | None = None
+    project_org: str | None = None
+    workspace_id: int | None = active.workspace
+    workspace_name: str | None = None
+    user_email: str | None = None
+    me_cached = False
+
+    if active.account is not None:
         try:
-            account = ConfigManager().get_account(active.account)
-            project_display = account.default_project or "(unset)"
+            account_obj = ConfigManager().get_account(active.account)
         except ConfigError:
-            project_display = "(unknown)"
+            account_obj = None
+        if account_obj is not None:
+            account_type = account_obj.type
+            account_region = account_obj.region
+            project_id = account_obj.default_project
+
+            me = MeCache(account_name=active.account).get()
+            if me is not None:
+                me_cached = True
+                if me.user_email is not None:
+                    user_email = me.user_email
+                if project_id is not None and project_id in me.projects:
+                    proj_info = me.projects[project_id]
+                    project_name = proj_info.name
+                    org_id = proj_info.organization_id
+                    org_info = me.organizations.get(str(org_id))
+                    project_org = org_info.name if org_info is not None else str(org_id)
+                if workspace_id is not None and str(workspace_id) in me.workspaces:
+                    workspace_name = me.workspaces[str(workspace_id)].name
+
     if format == "json":
-        payload = active.model_dump(mode="json")
-        payload["project"] = (
-            project_display
-            if project_display not in ("(none)", "(unset)", "(unknown)")
-            else None
-        )
+        payload: dict[str, object] = {
+            "account": (
+                None
+                if active.account is None
+                else {
+                    "name": active.account,
+                    "type": account_type,
+                    "region": account_region,
+                }
+            ),
+            "project": (
+                None
+                if project_id is None
+                else {
+                    "id": project_id,
+                    "name": project_name,
+                    "organization": project_org,
+                }
+            ),
+            "workspace": (
+                None
+                if workspace_id is None
+                else {
+                    "id": workspace_id,
+                    "name": workspace_name,
+                }
+            ),
+            "user": {"email": user_email} if user_email is not None else None,
+            "me_cached": me_cached,
+        }
         console.print(_json.dumps(payload, indent=2))
         return
-    parts: list[str] = []
-    parts.append(f"account:   {active.account or '(none)'}")
-    parts.append(f"project:   {project_display}")
-    parts.append(
-        f"workspace: {active.workspace if active.workspace is not None else '(auto)'}"
-    )
+
+    def _project_line() -> str:
+        """Render the contract-formatted ``Project:`` line."""
+        if project_id is None:
+            return "(none)"
+        name = project_name or ("(uncached)" if not me_cached else "(unknown)")
+        org_part = f" [organization: {project_org}]" if project_org else ""
+        return f"{name} ({project_id}){org_part}"
+
+    def _workspace_line() -> str:
+        """Render the contract-formatted ``Workspace:`` line."""
+        if workspace_id is None:
+            return "auto-resolved on first workspace-scoped call"
+        name = workspace_name or ("(uncached)" if not me_cached else "(unknown)")
+        return f"{name} ({workspace_id})"
+
+    def _account_line() -> str:
+        """Render the contract-formatted ``Account:`` line."""
+        if active.account is None:
+            return "(none)"
+        annotation = f" ({account_type}, {account_region})" if account_type else ""
+        return f"{active.account}{annotation}"
+
+    user_line = user_email if user_email is not None else "(uncached)"
+
+    parts = [
+        f"Account:   {_account_line()}",
+        f"Project:   {_project_line()}",
+        f"Workspace: {_workspace_line()}",
+        f"User:      {user_line}",
+    ]
     console.print("\n".join(parts))

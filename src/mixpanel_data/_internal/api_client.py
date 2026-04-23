@@ -1060,7 +1060,12 @@ class MixpanelAPIClient:
             )
 
         url = self._build_url("app", path)
-        auth_header = self._credentials.auth_header()
+        # Re-resolve per request via _get_auth_header() so refreshed
+        # OAuth tokens (browser refresh / static-token rotation) reach
+        # App API calls without rebuilding the client. Service-account
+        # Basic Auth has no analogous freshness concern; the helper
+        # falls through to the cached credentials in that case.
+        auth_header = self._get_auth_header()
         headers = self._request_headers({"Authorization": auth_header})
 
         client = self._ensure_client()

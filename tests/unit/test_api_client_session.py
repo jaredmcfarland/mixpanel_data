@@ -319,3 +319,105 @@ class TestSessionToCredentialsOAuthCacheIsolation:
         )
         with pytest.raises(OAuthError):
             session_to_credentials(s, token_resolver=_Failing())
+
+
+class TestAppRequestUsesFreshAuthHeader:
+    """``app_request`` must re-resolve the bearer per request (Fix 1).
+
+    For OAuth-bound sessions, the on-disk token may be refreshed between
+    client construction and a later ``app_request`` call. The previous
+    implementation cached ``self._credentials.auth_header()`` at
+    construction and never re-resolved, so refreshed bearers never
+    reached App API calls. The fix routes through
+    ``self._get_auth_header()``, which delegates to the bound
+    ``TokenResolver`` for OAuth accounts.
+    """
+
+    def test_oauth_browser_app_request_picks_up_refreshed_token(self) -> None:
+        """A refreshed browser token reaches App API requests without rebuilding the client."""
+        import httpx
+
+        from mixpanel_data._internal.auth.account import (
+            OAuthBrowserAccount,
+            Region,
+            TokenResolver,
+        )
+
+        captured_headers: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture the Authorization header from each app_request call."""
+            captured_headers.append(request.headers.get("authorization", ""))
+            return httpx.Response(200, json={"status": "ok", "results": []})
+
+        class _RotatingResolver(TokenResolver):
+            """Return a different bearer on each ``get_browser_token`` call."""
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def get_browser_token(self, name: str, region: Region) -> str:
+                self.calls += 1
+                return f"refreshed-token-{self.calls}"
+
+            def get_static_token(self, account: object) -> str:
+                raise NotImplementedError
+
+        session = Session(
+            account=OAuthBrowserAccount(name="rotating", region="us"),
+            project=Project(id="3713224"),
+        )
+        resolver = _RotatingResolver()
+        client = MixpanelAPIClient(
+            session=session,
+            token_resolver=resolver,
+            _transport=httpx.MockTransport(handler),
+        )
+        with client:
+            client.app_request("GET", "/projects/3713224/dashboards")
+            client.app_request("GET", "/projects/3713224/dashboards")
+
+        # Each app_request resolved a fresh bearer — no caching.
+        assert captured_headers == [
+            "Bearer refreshed-token-2",
+            "Bearer refreshed-token-3",
+        ]
+
+    def test_oauth_static_token_app_request_uses_resolver(self) -> None:
+        """Static-token accounts also resolve per request via the TokenResolver."""
+        import httpx
+
+        from mixpanel_data._internal.auth.account import (
+            OAuthTokenAccount,
+            Region,
+            TokenResolver,
+        )
+
+        captured_headers: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture Authorization for assertion."""
+            captured_headers.append(request.headers.get("authorization", ""))
+            return httpx.Response(200, json={"status": "ok", "results": []})
+
+        class _StaticResolver(TokenResolver):
+            """Return a constant bearer for OAuthTokenAccount."""
+
+            def get_browser_token(self, name: str, region: Region) -> str:
+                raise NotImplementedError
+
+            def get_static_token(self, account: object) -> str:
+                return "ci-bearer"
+
+        session = Session(
+            account=OAuthTokenAccount(name="ci", region="us", token_env="MP_CI_TOKEN"),
+            project=Project(id="3713224"),
+        )
+        client = MixpanelAPIClient(
+            session=session,
+            token_resolver=_StaticResolver(),
+            _transport=httpx.MockTransport(handler),
+        )
+        with client:
+            client.app_request("GET", "/projects/3713224/dashboards")
+        assert captured_headers == ["Bearer ci-bearer"]

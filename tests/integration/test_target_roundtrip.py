@@ -338,15 +338,15 @@ class TestCliRoundtrip:
         assert ws.session.workspace.id == 42
 
         # And the CLI session view agrees.
-        # The `mp session --format json` shape is intentionally flat:
-        # {"account": "<name>", "project": "<id>", "workspace": <id|null>}
-        # — see cli/commands/session.py. (Plugin auth_manager.py has the
-        # nested schema; the CLI is the human-/jq-friendly variant.)
+        # The `mp session --format json` shape is the contract §7 structured
+        # payload: {"account": {name, type, region}, "project": {id, name,
+        # organization}, "workspace": {id, name}, "user": {email}|null,
+        # "me_cached": bool} — see cli/commands/session.py.
         out = _mp("session", "--format", "json")
         payload = json.loads(out)
-        assert payload["account"] == "team"
-        assert payload["project"] == "3018488"
-        assert payload["workspace"] == 42
+        assert payload["account"]["name"] == "team"
+        assert payload["project"]["id"] == "3018488"
+        assert payload["workspace"]["id"] == 42
 
     def test_cli_apply_missing_account_raises(self, isolated_home: Path) -> None:
         """``mp target use NAME`` for a target whose account was deleted exits non-zero with a clear error."""
