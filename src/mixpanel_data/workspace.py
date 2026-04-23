@@ -837,7 +837,7 @@ class Workspace:
         """
         return self._me_svc.fetch(force_refresh=force_refresh)
 
-    def projects(self) -> list[_ProjectV3]:
+    def projects(self, *, refresh: bool = False) -> list[_ProjectV3]:
         """List all accessible projects via the /me API (FR-035).
 
         Returns projects from the cached /me response, sorted by name. Each
@@ -850,6 +850,11 @@ class Workspace:
         ``list[tuple[str, MeProjectInfo]]``) — for the raw ``/me`` shape
         with extra fields (``has_workspaces``, ``domain``, ``type``, ...),
         call ``self._me_svc.list_projects()`` directly from internal code.
+
+        Args:
+            refresh: When True, bypass the on-disk and in-memory ``/me``
+                caches and refetch from the API. Default False uses the
+                24h cache.
 
         Returns:
             List of :class:`Project` records sorted by name.
@@ -865,6 +870,8 @@ class Workspace:
                 print(project.id, project.name, len(ws.events()))
             ```
         """
+        if refresh:
+            self._me_svc.fetch(force_refresh=True)
         return [
             _ProjectV3(
                 id=pid,

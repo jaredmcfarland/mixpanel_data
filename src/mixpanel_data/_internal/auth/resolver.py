@@ -128,7 +128,7 @@ def _env_account_from_oauth_token() -> Account | None:
         return None
 
 
-def _resolve_account_axis(
+def resolve_account_axis(
     *,
     explicit: str | None,
     target_account_name: str | None,
@@ -392,7 +392,7 @@ def resolve_session(
         target_project = t.project
         target_workspace = t.workspace
 
-    account_obj = _resolve_account_axis(
+    account_obj = resolve_account_axis(
         explicit=account,
         target_account_name=target_account_name,
         bridge=br,
@@ -443,6 +443,7 @@ def resolve_session(
 
 __all__ = [
     "format_no_project_error",
+    "resolve_account_axis",
     "resolve_project_axis",
     "resolve_session",
 ]

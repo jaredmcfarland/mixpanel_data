@@ -10,7 +10,7 @@ contracts/cli-commands.md §4.
 from __future__ import annotations
 
 import json as _json
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -23,6 +23,9 @@ from mixpanel_data.cli.utils import (
     handle_errors,
 )
 from mixpanel_data.exceptions import ConfigError
+
+if TYPE_CHECKING:
+    from mixpanel_data.workspace import Workspace
 
 project_app = typer.Typer(
     name="project",
@@ -48,15 +51,66 @@ def _active_account_default_project() -> tuple[str | None, str | None]:
     return (active.account, account.default_project)
 
 
+def _open_account_scoped_workspace() -> Workspace:
+    """Build a Workspace tolerant of a missing project axis.
+
+    ``/me`` is account-scoped, so ``mp project list`` MUST work when
+    only auth is configured (FR-047). The standard ``Workspace()``
+    resolver requires a project, so when none is available we fall
+    back to a probe Session with a placeholder project ID — same
+    pattern as ``accounts.login()``'s ``/me`` probe.
+
+    Returns:
+        A Workspace bound to the resolved account; project axis may be
+        a placeholder (``"0"``) when none is configured.
+
+    Raises:
+        ConfigError: No account could be resolved from any source.
+    """
+    from mixpanel_data._internal.auth.bridge import load_bridge
+    from mixpanel_data._internal.auth.resolver import (
+        resolve_account_axis,
+        resolve_session,
+    )
+    from mixpanel_data._internal.auth.session import Project, Session
+    from mixpanel_data.workspace import Workspace
+
+    cm = ConfigManager()
+    bridge = load_bridge()
+    try:
+        return Workspace(session=resolve_session(config=cm, bridge=bridge))
+    except ConfigError:
+        # Resolver failed — most likely the project axis is missing.
+        # Re-resolve account alone; if that also fails, surface the
+        # original "no account" error to the caller.
+        account = resolve_account_axis(
+            explicit=None,
+            target_account_name=None,
+            bridge=bridge,
+            config=cm,
+        )
+        if account is None:
+            raise
+        probe = Session(account=account, project=Project(id="0"))
+        return Workspace(session=probe)
+
+
 @project_app.command("list")
 @handle_errors
 def list_projects(
     ctx: typer.Context,
+    refresh: Annotated[
+        bool,
+        typer.Option(
+            "--refresh",
+            help="Bypass the local /me cache and refetch.",
+        ),
+    ] = False,
     remote: Annotated[
         bool,
         typer.Option(
             "--remote",
-            help="Fetch projects from /me (cached). Default: print active.",
+            help="Alias for --refresh (kept for v2 ergonomic continuity).",
         ),
     ] = False,
     format: Annotated[  # noqa: A002
@@ -64,37 +118,29 @@ def list_projects(
         typer.Option(
             "--format",
             "-f",
-            help="Output format (--remote only): table | json | jsonl.",
+            help="Output format: table | json | jsonl.",
         ),
     ] = "table",
 ) -> None:
     """List projects accessible by the active account.
 
-    With ``--remote``, fetches the project list from ``/me`` (24h
-    cached) and prints id / name / organization. Without it, just
-    prints the active account's ``default_project`` for a quick summary.
+    Always enumerates from ``/me`` (24h cached). The active project is
+    marked. ``--refresh`` (or its alias ``--remote``) bypasses the
+    local cache and refetches. Works with only authentication
+    configured — no project axis required (FR-047).
 
     Args:
         ctx: Typer context.
-        remote: Whether to fetch the full /me project list.
-        format: Output format for ``--remote`` (``table`` / ``json`` / ``jsonl``).
+        refresh: Bypass the local /me cache and refetch.
+        remote: Deprecated alias for ``--refresh``.
+        format: Output format (``table`` / ``json`` / ``jsonl``).
     """
-    if not remote:
-        _account, project = _active_account_default_project()
-        if project is None:
-            console.print("(no active project)")
-            return
-        console.print(project)
-        return
+    bypass_cache = refresh or remote
+    _, active_project = _active_account_default_project()
 
-    # /me-backed listing — construct a short-lived Workspace bound to
-    # the active account / its default_project and pull the cached
-    # project list. Matches the cross-project iteration pattern (see
-    # examples/cross_project.py).
-    from mixpanel_data.workspace import Workspace
+    with _open_account_scoped_workspace() as ws:
+        projects = ws.projects(refresh=bypass_cache)
 
-    with Workspace() as ws:
-        projects = ws.projects()
     if format == "json":
         console.print(
             _json.dumps(
@@ -104,6 +150,7 @@ def list_projects(
                         "name": p.name,
                         "organization_id": p.organization_id,
                         "timezone": p.timezone,
+                        "is_active": p.id == active_project,
                     }
                     for p in projects
                 ],
@@ -120,6 +167,7 @@ def list_projects(
                         "name": p.name,
                         "organization_id": p.organization_id,
                         "timezone": p.timezone,
+                        "is_active": p.id == active_project,
                     }
                 )
             )
@@ -127,10 +175,11 @@ def list_projects(
     if not projects:
         console.print("(no projects accessible via /me)")
         return
-    lines = ["ID              NAME                              ORG"]
+    lines = ["  ID              NAME                              ORG"]
     for p in projects:
+        marker = "*" if p.id == active_project else " "
         name = (p.name or "")[:33]
-        lines.append(f"{p.id:<15} {name:<33} {p.organization_id}")
+        lines.append(f"{marker} {p.id:<15} {name:<33} {p.organization_id}")
     console.print("\n".join(lines))
 
 
