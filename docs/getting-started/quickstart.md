@@ -80,7 +80,7 @@ The library sends `Authorization: Bearer <token>` on every Mixpanel endpoint. To
 
 ## Step 2: Choose a Project
 
-After authenticating, select which Mixpanel project to query:
+After authenticating with a registered account (Options B or C above), select which Mixpanel project to query:
 
 === "CLI"
 
@@ -108,6 +108,9 @@ After authenticating, select which Mixpanel project to query:
 
 `mp project use` writes to the active account's `default_project`. To override per-call without persisting, pass `--project` / `-p` on the CLI or `Workspace(project="...")` in Python.
 
+!!! note "Env-only paths skip this step"
+    `mp project use` requires an active account in `~/.mp/config.toml`. If you set up via Option A (`MP_USERNAME`/`MP_SECRET`/...) or Option D (`MP_OAUTH_TOKEN`/...) without registering an account, set the project via `MP_PROJECT_ID` directly (already required by both env-only paths) or pass `--project` / `Workspace(project=...)` per call. Don't run `mp project use` — it errors with "No active account configured."
+
 ## Step 3: Test Your Connection
 
 Verify credentials are working:
@@ -124,8 +127,11 @@ Verify credentials are working:
     ```python
     import mixpanel_data as mp
 
-    result = mp.accounts.test()  # AccountTestResult; raises ConfigError if no active account
-    print(result.ok, result.user.email, result.accessible_project_count)
+    result = mp.accounts.test()  # AccountTestResult; never raises — check result.ok / result.error
+    if result.ok:
+        print(result.user.email, result.accessible_project_count)
+    else:
+        print("test failed:", result.error)
     ```
 
 ## Step 4: Explore Your Data
