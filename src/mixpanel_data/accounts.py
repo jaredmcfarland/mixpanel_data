@@ -311,7 +311,7 @@ def test(name: str | None = None) -> AccountTestResult:
 def login(
     name: str,
     *,
-    open_browser: bool = True,  # noqa: ARG001 — reserved for headless mode (OAuthFlow always opens today)
+    open_browser: bool = True,
 ) -> OAuthLoginResult:
     """Run the OAuth browser flow for an ``oauth_browser`` account.
 
@@ -331,9 +331,9 @@ def login(
 
     Args:
         name: Account name (must be ``oauth_browser`` type).
-        open_browser: Whether to launch the system browser. ``OAuthFlow``
-            currently always opens the browser; the kwarg is reserved
-            for a future headless mode and presently treated as a hint.
+        open_browser: Whether to launch the system browser. When False,
+            the authorize URL is printed to stderr for manual copy
+            (CLI flag: ``mp account login NAME --no-browser``).
 
     Returns:
         An :class:`OAuthLoginResult` describing the persistence paths,
@@ -361,7 +361,7 @@ def login(
     flow = OAuthFlow(region=account.region)
     # ``persist=False`` skips the v2 ``~/.mp/oauth/tokens_{region}.json``
     # write — v3 owns ``~/.mp/accounts/{name}/tokens.json`` exclusively.
-    tokens = flow.login(persist=False)
+    tokens = flow.login(persist=False, open_browser=open_browser)
 
     tokens_path = _persist_browser_tokens(name, tokens)
 

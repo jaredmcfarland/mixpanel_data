@@ -505,11 +505,16 @@ class TestLogin:
         captured: dict[str, object] = {}
 
         def _fake_login(
-            self: object, project_id: str | None = None, *, persist: bool = True
+            self: object,
+            project_id: str | None = None,
+            *,
+            persist: bool = True,
+            open_browser: bool = True,
         ) -> OAuthTokens:
-            """Stub OAuthFlow.login — record the persist kwarg, return tokens."""
+            """Stub OAuthFlow.login — record kwargs, return tokens."""
             captured["project_id"] = project_id
             captured["persist"] = persist
+            captured["open_browser"] = open_browser
             return OAuthTokens(
                 access_token=SecretStr("brw-tok-fresh"),
                 refresh_token=SecretStr("brw-refresh-fresh"),
@@ -537,6 +542,7 @@ class TestLogin:
 
         assert captured["persist"] is False
         assert captured["project_id"] is None  # account had no default_project
+        assert captured["open_browser"] is True  # default — interactive login
         # Tokens persisted to per-account v3 path
         tokens_path = tmp_path / ".mp" / "accounts" / "personal" / "tokens.json"
         assert tokens_path.exists()
@@ -554,3 +560,65 @@ class TestLogin:
         assert result.user.email == "alice@example.com"
         assert result.expires_at == new_expires
         assert result.tokens_path == tokens_path
+
+    def test_login_propagates_open_browser_false(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        cm: ConfigManager,
+    ) -> None:
+        """``accounts.login(name, open_browser=False)`` reaches OAuthFlow.
+
+        Regression: ``open_browser`` was accepted as a kwarg but dropped
+        with ``# noqa: ARG001``, so ``mp account login --no-browser``
+        still triggered ``webbrowser.open()`` (or failed in headless
+        environments before the user could copy the URL).
+        """
+        from datetime import datetime, timedelta, timezone
+
+        from mixpanel_data._internal.auth import flow as flow_mod
+        from mixpanel_data._internal.auth.token import OAuthTokens
+
+        accounts_ns.add(
+            "personal",
+            type="oauth_browser",
+            region="us",
+            default_project="3713224",
+        )
+
+        captured: dict[str, object] = {}
+
+        def _fake_login(
+            self: object,
+            project_id: str | None = None,
+            *,
+            persist: bool = True,
+            open_browser: bool = True,
+        ) -> OAuthTokens:
+            """Stub OAuthFlow.login — record open_browser, return tokens."""
+            captured["open_browser"] = open_browser
+            return OAuthTokens(
+                access_token=SecretStr("brw-tok"),
+                refresh_token=SecretStr("brw-refresh"),
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                scope="read:project",
+                token_type="Bearer",
+            )
+
+        monkeypatch.setattr(flow_mod.OAuthFlow, "login", _fake_login)
+
+        from mixpanel_data._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            """Return a minimal /me payload — login probe path."""
+            return {
+                "user_id": 1,
+                "user_email": "u@example.com",
+                "projects": {"3713224": {"name": "Demo", "organization_id": 1}},
+            }
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+
+        accounts_ns.login("personal", open_browser=False)
+
+        assert captured["open_browser"] is False

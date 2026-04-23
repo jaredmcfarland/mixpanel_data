@@ -23,7 +23,7 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data._internal.auth.callback_server import CallbackResult
-from mixpanel_data._internal.auth.flow import OAuthFlow
+from mixpanel_data._internal.auth.flow import OAuthFlow, _parse_pasted_redirect
 from mixpanel_data._internal.auth.storage import OAuthStorage
 from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
 from mixpanel_data.exceptions import OAuthError
@@ -171,6 +171,215 @@ class TestOAuthFlowLogin:
 
         assert tokens.access_token.get_secret_value() == "access-tok-123"
         assert tokens.refresh_token is None
+
+    @patch("mixpanel_data._internal.auth.flow.webbrowser")
+    @patch("mixpanel_data._internal.auth.flow.start_callback_server")
+    @patch("mixpanel_data._internal.auth.flow.ensure_client_registered")
+    def test_open_browser_false_skips_webbrowser_and_prints_url(
+        self,
+        mock_register: MagicMock,
+        mock_callback: MagicMock,
+        mock_browser: MagicMock,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """``login(open_browser=False)`` MUST NOT call webbrowser.open.
+
+        The authorize URL must be printed to stderr instead so headless
+        / SSH callers (and the documented ``mp account login --no-browser``
+        flag) can copy it manually.
+        """
+        mock_register.return_value = _make_client_info()
+        mock_callback.return_value = (
+            CallbackResult(code="code1", state="s"),
+            19284,
+        )
+
+        token_resp = _make_token_response()
+        transport = httpx.MockTransport(
+            lambda _req: httpx.Response(200, json=token_resp)
+        )
+        http_client = httpx.Client(transport=transport)
+        storage = OAuthStorage(storage_dir=tmp_path)
+
+        flow = OAuthFlow(region="us", storage=storage, http_client=http_client)
+        flow.login(open_browser=False)
+
+        mock_browser.open.assert_not_called()
+        captured = capsys.readouterr()
+        assert "Open this URL in your browser" in captured.err
+        # Authorize URL is for the configured region's OAuth host.
+        assert "https://" in captured.err
+
+
+class TestParsePastedRedirect:
+    """Unit tests for the ``--no-browser`` paste parser."""
+
+    def test_full_redirect_url(self) -> None:
+        """A full ``http://localhost:.../callback?code=&state=`` URL parses cleanly."""
+        result = _parse_pasted_redirect(
+            "http://localhost:19284/callback?code=ABC&state=XYZ",
+            expected_state="XYZ",
+        )
+        assert result.code == "ABC"
+        assert result.state == "XYZ"
+
+    def test_query_string_only(self) -> None:
+        """A bare ``code=...&state=...`` (no leading ``?`` or URL) parses cleanly."""
+        result = _parse_pasted_redirect("code=ABC&state=XYZ", expected_state="XYZ")
+        assert result.code == "ABC"
+
+    def test_query_string_with_leading_question_mark(self) -> None:
+        """A pasted ``?code=...&state=...`` (browser address-bar fragment) works."""
+        result = _parse_pasted_redirect("?code=ABC&state=XYZ", expected_state="XYZ")
+        assert result.code == "ABC"
+
+    def test_whitespace_is_stripped(self) -> None:
+        """Leading / trailing whitespace from the paste is ignored."""
+        result = _parse_pasted_redirect(
+            "  http://localhost:19284/callback?code=ABC&state=XYZ\n",
+            expected_state="XYZ",
+        )
+        assert result.code == "ABC"
+
+    def test_empty_paste_raises(self) -> None:
+        """An empty paste surfaces a clear error."""
+        with pytest.raises(OAuthError, match="Empty paste"):
+            _parse_pasted_redirect("   \n", expected_state="XYZ")
+
+    def test_state_mismatch_raises(self) -> None:
+        """A pasted state that doesn't match the session is rejected (CSRF).
+
+        Without this check a hostile party could trick the user into pasting
+        an attacker-generated code.
+        """
+        with pytest.raises(OAuthError, match="State mismatch"):
+            _parse_pasted_redirect("code=ABC&state=ATTACKER", expected_state="XYZ")
+
+    def test_missing_code_raises(self) -> None:
+        """``state=`` without ``code=`` is unparseable."""
+        with pytest.raises(OAuthError, match="missing `code` or `state`"):
+            _parse_pasted_redirect("state=XYZ", expected_state="XYZ")
+
+    def test_missing_state_raises(self) -> None:
+        """``code=`` without ``state=`` is unparseable (CSRF guard)."""
+        with pytest.raises(OAuthError, match="missing `code` or `state`"):
+            _parse_pasted_redirect("code=ABC", expected_state="XYZ")
+
+    def test_oauth_error_param_surfaces(self) -> None:
+        """A redirect with ``?error=...`` (user denied / etc.) surfaces the error."""
+        with pytest.raises(OAuthError, match="access_denied"):
+            _parse_pasted_redirect(
+                "http://localhost:19284/callback?error=access_denied&state=XYZ",
+                expected_state="XYZ",
+            )
+
+    def test_oauth_error_with_description_includes_description(self) -> None:
+        """``error_description`` is appended to the surfaced error message."""
+        with pytest.raises(OAuthError, match="user cancelled"):
+            _parse_pasted_redirect(
+                "?error=access_denied&error_description=user+cancelled&state=XYZ",
+                expected_state="XYZ",
+            )
+
+
+class TestOAuthFlowPasteFallback:
+    """``OAuthFlow.login(open_browser=False)`` accepts a pasted redirect URL.
+
+    Mixpanel's ``redirect_uri_allowed`` (in ``webapp/oauth/models.py``)
+    permits any ``http://localhost:<port>/`` URL, so the OAuth provider
+    issues a normal redirect even when no local server is listening on
+    the bound port. The user copies the URL from the failed-to-load tab
+    and pastes it back to the still-running CLI process.
+    """
+
+    @patch("mixpanel_data._internal.auth.flow.webbrowser")
+    @patch("mixpanel_data._internal.auth.flow.start_callback_server")
+    @patch("mixpanel_data._internal.auth.flow.ensure_client_registered")
+    def test_paste_fallback_succeeds_when_callback_blocked(
+        self,
+        mock_register: MagicMock,
+        mock_callback: MagicMock,
+        mock_browser: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """A successful paste produces tokens even if the local callback never fires.
+
+        Stub ``start_callback_server`` to block past the test's lifetime
+        so the paste path is the only one that completes — proves the
+        race resolves on whichever completer wins, not on the callback
+        always firing first.
+        """
+        import threading
+
+        mock_register.return_value = _make_client_info()
+
+        # Block the callback "indefinitely" — daemon thread will be torn
+        # down when the test process exits.
+        block_forever = threading.Event()
+
+        def _blocked_callback(*args: object, **kwargs: object) -> object:
+            block_forever.wait(timeout=60.0)
+            raise OAuthError("test: callback never fires")
+
+        mock_callback.side_effect = _blocked_callback
+
+        # Drive stdin via monkeypatch so the paste reader sees the redirect URL.
+        # Use the actual generated state by hooking into PkceChallenge / state
+        # generation: simplest approach is to capture the authorize URL and
+        # extract state from it.
+        captured_state: list[str] = []
+        original_build = OAuthFlow._build_authorize_url
+
+        def _capturing_build(self: object, **kw: object) -> str:
+            captured_state.append(str(kw["state"]))
+            return original_build(self, **kw)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(OAuthFlow, "_build_authorize_url", _capturing_build)
+
+        # Provide a stdin that yields the redirect URL once state is known.
+        # The paste reader thread reads via sys.stdin.readline(), so we need
+        # to stub sys.stdin in the flow module.
+        class _DeferredStdin:
+            """Stdin that blocks until state is captured, then emits the URL."""
+
+            def readline(self) -> str:
+                # Wait for the authorize URL build (which captures state).
+                for _ in range(200):
+                    if captured_state:
+                        break
+                    time.sleep(0.01)
+                state = captured_state[0]
+                return (
+                    f"http://localhost:19284/callback?code=PASTED_CODE&state={state}\n"
+                )
+
+        import sys
+        import time
+
+        monkeypatch.setattr(sys, "stdin", _DeferredStdin())
+
+        token_resp = _make_token_response(access_token="from-paste")
+        captured_form: list[bytes] = []
+
+        def _handle(request: httpx.Request) -> httpx.Response:
+            captured_form.append(request.content)
+            return httpx.Response(200, json=token_resp)
+
+        http_client = httpx.Client(transport=httpx.MockTransport(_handle))
+        storage = OAuthStorage(storage_dir=tmp_path)
+
+        flow = OAuthFlow(region="us", storage=storage, http_client=http_client)
+        tokens = flow.login(open_browser=False)
+
+        assert tokens.access_token.get_secret_value() == "from-paste"
+        # The token-exchange POST must include the pasted code.
+        assert b"code=PASTED_CODE" in captured_form[0]
+        mock_browser.open.assert_not_called()
+
+        # Allow the blocked callback thread to exit cleanly.
+        block_forever.set()
 
 
 class TestOAuthFlowTokenExchange:
