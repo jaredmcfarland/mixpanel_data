@@ -9,35 +9,35 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data.exceptions import (
     AuthenticationError,
     QueryError,
     RateLimitError,
 )
+from tests.conftest import make_session
 
 
 @pytest.fixture
-def test_credentials() -> Credentials:
+def test_credentials() -> Session:
     """Create test credentials."""
-    return Credentials(
+    return make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id="12345",
         region="us",
     )
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Any,
 ) -> MixpanelAPIClient:
     """Create a client with mock transport."""
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -48,7 +48,7 @@ def create_mock_client(
 class TestActivityFeed:
     """Tests for MixpanelAPIClient.activity_feed()."""
 
-    def test_activity_feed_basic(self, test_credentials: Credentials) -> None:
+    def test_activity_feed_basic(self, test_credentials: Session) -> None:
         """activity_feed() should return events for given users."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -79,7 +79,7 @@ class TestActivityFeed:
         assert len(result["results"]["events"]) == 1
         assert result["results"]["events"][0]["event"] == "Sign Up"
 
-    def test_activity_feed_with_date_range(self, test_credentials: Credentials) -> None:
+    def test_activity_feed_with_date_range(self, test_credentials: Session) -> None:
         """activity_feed() should pass date parameters."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -97,7 +97,7 @@ class TestActivityFeed:
 
         assert result["status"] == "ok"
 
-    def test_activity_feed_multiple_users(self, test_credentials: Credentials) -> None:
+    def test_activity_feed_multiple_users(self, test_credentials: Session) -> None:
         """activity_feed() should accept multiple user IDs."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -121,7 +121,7 @@ class TestActivityFeed:
 class TestSegmentationSum:
     """Tests for MixpanelAPIClient.segmentation_sum()."""
 
-    def test_segmentation_sum_basic(self, test_credentials: Credentials) -> None:
+    def test_segmentation_sum_basic(self, test_credentials: Session) -> None:
         """segmentation_sum() should return sum values."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -148,7 +148,7 @@ class TestSegmentationSum:
         assert result["status"] == "ok"
         assert result["results"]["2024-01-01"] == 15432.50
 
-    def test_segmentation_sum_with_filter(self, test_credentials: Credentials) -> None:
+    def test_segmentation_sum_with_filter(self, test_credentials: Session) -> None:
         """segmentation_sum() should pass where parameter."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -175,7 +175,7 @@ class TestSegmentationSum:
 class TestSegmentationAverage:
     """Tests for MixpanelAPIClient.segmentation_average()."""
 
-    def test_segmentation_average_basic(self, test_credentials: Credentials) -> None:
+    def test_segmentation_average_basic(self, test_credentials: Session) -> None:
         """segmentation_average() should return average values."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -202,7 +202,7 @@ class TestSegmentationAverage:
         assert result["status"] == "ok"
         assert result["results"]["2024-01-01"] == 54.32
 
-    def test_segmentation_average_hourly(self, test_credentials: Credentials) -> None:
+    def test_segmentation_average_hourly(self, test_credentials: Session) -> None:
         """segmentation_average() should support hourly unit."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -229,7 +229,7 @@ class TestSegmentationAverage:
 class TestFrequency:
     """Tests for MixpanelAPIClient.frequency()."""
 
-    def test_frequency_basic(self, test_credentials: Credentials) -> None:
+    def test_frequency_basic(self, test_credentials: Session) -> None:
         """frequency() should return frequency arrays."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -256,7 +256,7 @@ class TestFrequency:
         assert "2024-01-01" in result["data"]
         assert result["data"]["2024-01-01"][0] == 305
 
-    def test_frequency_with_event_filter(self, test_credentials: Credentials) -> None:
+    def test_frequency_with_event_filter(self, test_credentials: Session) -> None:
         """frequency() should pass event parameter."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -283,7 +283,7 @@ class TestFrequency:
 class TestSegmentationNumeric:
     """Tests for MixpanelAPIClient.segmentation_numeric()."""
 
-    def test_segmentation_numeric_basic(self, test_credentials: Credentials) -> None:
+    def test_segmentation_numeric_basic(self, test_credentials: Session) -> None:
         """segmentation_numeric() should return bucketed values."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -313,9 +313,7 @@ class TestSegmentationNumeric:
         assert "data" in result
         assert "0 - 100" in result["data"]["values"]
 
-    def test_segmentation_numeric_with_type(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_segmentation_numeric_with_type(self, test_credentials: Session) -> None:
         """segmentation_numeric() should pass type parameter."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -342,7 +340,7 @@ class TestSegmentationNumeric:
 class TestQuerySavedReport:
     """Tests for MixpanelAPIClient.query_saved_report()."""
 
-    def test_query_saved_report_basic(self, test_credentials: Credentials) -> None:
+    def test_query_saved_report_basic(self, test_credentials: Session) -> None:
         """query_saved_report() should return report data."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -371,7 +369,7 @@ class TestQuerySavedReport:
         assert "Sign Up" in result["series"]
 
     def test_query_saved_report_passes_bookmark_id(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report() should pass bookmark_id in request."""
 
@@ -397,9 +395,7 @@ class TestPhase008ErrorHandling:
     # Activity Feed Error Handling
     # -------------------------------------------------------------------------
 
-    def test_activity_feed_auth_error_on_401(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_activity_feed_auth_error_on_401(self, test_credentials: Session) -> None:
         """activity_feed() should raise AuthenticationError on 401."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -413,9 +409,7 @@ class TestPhase008ErrorHandling:
 
         assert "credentials" in str(exc_info.value).lower()
 
-    def test_activity_feed_query_error_on_400(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_activity_feed_query_error_on_400(self, test_credentials: Session) -> None:
         """activity_feed() should raise QueryError on 400."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -429,9 +423,7 @@ class TestPhase008ErrorHandling:
 
         assert "Invalid query" in str(exc_info.value)
 
-    def test_activity_feed_rate_limit_on_429(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_activity_feed_rate_limit_on_429(self, test_credentials: Session) -> None:
         """activity_feed() should raise RateLimitError on 429."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -439,7 +431,7 @@ class TestPhase008ErrorHandling:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=1, _transport=transport
+            session=test_credentials, max_retries=1, _transport=transport
         )
 
         with client, pytest.raises(RateLimitError) as exc_info:
@@ -452,7 +444,7 @@ class TestPhase008ErrorHandling:
     # -------------------------------------------------------------------------
 
     def test_segmentation_sum_auth_error_on_401(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_sum() should raise AuthenticationError on 401."""
 
@@ -471,7 +463,7 @@ class TestPhase008ErrorHandling:
             )
 
     def test_segmentation_sum_query_error_on_400(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_sum() should raise QueryError on 400."""
 
@@ -492,7 +484,7 @@ class TestPhase008ErrorHandling:
         assert "Invalid property expression" in str(exc_info.value)
 
     def test_segmentation_sum_rate_limit_on_429(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_sum() should raise RateLimitError on 429."""
 
@@ -501,7 +493,7 @@ class TestPhase008ErrorHandling:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=1, _transport=transport
+            session=test_credentials, max_retries=1, _transport=transport
         )
 
         with client, pytest.raises(RateLimitError) as exc_info:
@@ -519,7 +511,7 @@ class TestPhase008ErrorHandling:
     # -------------------------------------------------------------------------
 
     def test_segmentation_average_auth_error_on_401(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_average() should raise AuthenticationError on 401."""
 
@@ -538,7 +530,7 @@ class TestPhase008ErrorHandling:
             )
 
     def test_segmentation_average_query_error_on_400(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_average() should raise QueryError on 400."""
 
@@ -559,7 +551,7 @@ class TestPhase008ErrorHandling:
         assert "Invalid event name" in str(exc_info.value)
 
     def test_segmentation_average_rate_limit_on_429(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_average() should raise RateLimitError on 429."""
 
@@ -568,7 +560,7 @@ class TestPhase008ErrorHandling:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=1, _transport=transport
+            session=test_credentials, max_retries=1, _transport=transport
         )
 
         with client, pytest.raises(RateLimitError) as exc_info:
@@ -585,7 +577,7 @@ class TestPhase008ErrorHandling:
     # Frequency Error Handling
     # -------------------------------------------------------------------------
 
-    def test_frequency_auth_error_on_401(self, test_credentials: Credentials) -> None:
+    def test_frequency_auth_error_on_401(self, test_credentials: Session) -> None:
         """frequency() should raise AuthenticationError on 401."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -602,7 +594,7 @@ class TestPhase008ErrorHandling:
                 addiction_unit="hour",
             )
 
-    def test_frequency_query_error_on_400(self, test_credentials: Credentials) -> None:
+    def test_frequency_query_error_on_400(self, test_credentials: Session) -> None:
         """frequency() should raise QueryError on 400."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -621,7 +613,7 @@ class TestPhase008ErrorHandling:
 
         assert "Invalid date range" in str(exc_info.value)
 
-    def test_frequency_rate_limit_on_429(self, test_credentials: Credentials) -> None:
+    def test_frequency_rate_limit_on_429(self, test_credentials: Session) -> None:
         """frequency() should raise RateLimitError on 429."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -629,7 +621,7 @@ class TestPhase008ErrorHandling:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=1, _transport=transport
+            session=test_credentials, max_retries=1, _transport=transport
         )
 
         with client, pytest.raises(RateLimitError) as exc_info:
@@ -647,7 +639,7 @@ class TestPhase008ErrorHandling:
     # -------------------------------------------------------------------------
 
     def test_segmentation_numeric_auth_error_on_401(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_numeric() should raise AuthenticationError on 401."""
 
@@ -666,7 +658,7 @@ class TestPhase008ErrorHandling:
             )
 
     def test_segmentation_numeric_query_error_on_400(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_numeric() should raise QueryError on 400."""
 
@@ -687,7 +679,7 @@ class TestPhase008ErrorHandling:
         assert "Property not found" in str(exc_info.value)
 
     def test_segmentation_numeric_rate_limit_on_429(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """segmentation_numeric() should raise RateLimitError on 429."""
 
@@ -696,7 +688,7 @@ class TestPhase008ErrorHandling:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=1, _transport=transport
+            session=test_credentials, max_retries=1, _transport=transport
         )
 
         with client, pytest.raises(RateLimitError) as exc_info:
@@ -714,7 +706,7 @@ class TestPhase008ErrorHandling:
     # -------------------------------------------------------------------------
 
     def test_query_saved_report_auth_error_on_401(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report() should raise AuthenticationError on 401."""
 
@@ -728,7 +720,7 @@ class TestPhase008ErrorHandling:
             client.query_saved_report(bookmark_id=12345678)
 
     def test_query_saved_report_query_error_on_400(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report() should raise QueryError on 400."""
 
@@ -744,7 +736,7 @@ class TestPhase008ErrorHandling:
         assert "Invalid bookmark_id" in str(exc_info.value)
 
     def test_query_saved_report_rate_limit_on_429(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report() should raise RateLimitError on 429."""
 
@@ -753,7 +745,7 @@ class TestPhase008ErrorHandling:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=1, _transport=transport
+            session=test_credentials, max_retries=1, _transport=transport
         )
 
         with client, pytest.raises(RateLimitError) as exc_info:

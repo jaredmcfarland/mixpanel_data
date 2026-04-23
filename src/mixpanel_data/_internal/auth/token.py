@@ -10,7 +10,6 @@ Example:
     tokens = OAuthTokens.from_token_response(
         {"access_token": "abc", "refresh_token": "def", "expires_in": 3600,
          "scope": "read", "token_type": "Bearer"},
-        project_id="12345",
     )
     if tokens.is_expired():
         print("Token needs refresh")
@@ -19,9 +18,10 @@ Example:
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
 
 
 class OAuthTokens(BaseModel):
@@ -37,7 +37,6 @@ class OAuthTokens(BaseModel):
         expires_at: UTC datetime when the access token expires.
         scope: Space-separated list of granted scopes.
         token_type: Token type, typically ``"Bearer"``.
-        project_id: Associated Mixpanel project ID, if known.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -49,7 +48,12 @@ class OAuthTokens(BaseModel):
     """The OAuth refresh token, if provided (redacted in output)."""
 
     expires_at: datetime
-    """UTC datetime when the access token expires."""
+    """UTC datetime when the access token expires.
+
+    Must be timezone-aware. Naive datetimes are rejected at validation
+    time so a downstream consumer can never accidentally compare against
+    an aware ``datetime.now(timezone.utc)`` and silently fall through
+    the expiry check (Fix 25)."""
 
     scope: str
     """Space-separated list of granted scopes."""
@@ -57,8 +61,28 @@ class OAuthTokens(BaseModel):
     token_type: str
     """Token type, typically ``'Bearer'``."""
 
-    project_id: str | None = None
-    """Associated Mixpanel project ID, if known."""
+    @field_validator("expires_at")
+    @classmethod
+    def _require_tz_aware(cls, value: datetime) -> datetime:
+        """Reject naive ``expires_at`` values.
+
+        Args:
+            value: The candidate ``expires_at``.
+
+        Returns:
+            The same value (no mutation).
+
+        Raises:
+            ValueError: If ``value.tzinfo is None``.
+        """
+        if value.tzinfo is None:
+            raise ValueError(
+                "OAuthTokens.expires_at must be timezone-aware (UTC). "
+                "Got a naive datetime, which would compare unsafely against "
+                "tz-aware `datetime.now(timezone.utc)` and silently bypass "
+                "the expiry check."
+            )
+        return value
 
     def is_expired(self) -> bool:
         """Check whether the access token is expired or about to expire.
@@ -81,11 +105,7 @@ class OAuthTokens(BaseModel):
         return datetime.now(timezone.utc) + timedelta(seconds=30) >= self.expires_at
 
     @classmethod
-    def from_token_response(
-        cls,
-        data: dict[str, object],
-        project_id: str | None = None,
-    ) -> OAuthTokens:
+    def from_token_response(cls, data: dict[str, object]) -> OAuthTokens:
         """Create an OAuthTokens instance from a raw token endpoint response.
 
         Computes ``expires_at`` by adding the ``expires_in`` value (in seconds)
@@ -95,7 +115,6 @@ class OAuthTokens(BaseModel):
             data: Raw JSON response from the token endpoint. Must contain
                 ``access_token``, ``expires_in``, ``scope``, and ``token_type``.
                 May contain ``refresh_token``.
-            project_id: Optional Mixpanel project ID to associate with the tokens.
 
         Returns:
             A new frozen OAuthTokens instance.
@@ -113,7 +132,7 @@ class OAuthTokens(BaseModel):
                 "scope": "read:project",
                 "token_type": "Bearer",
             }
-            tokens = OAuthTokens.from_token_response(response, project_id="123")
+            tokens = OAuthTokens.from_token_response(response)
             ```
         """
         expires_in_raw = data["expires_in"]
@@ -131,7 +150,6 @@ class OAuthTokens(BaseModel):
             expires_at=expires_at,
             scope=str(data.get("scope", "")),
             token_type=str(data["token_type"]),
-            project_id=project_id,
         )
 
 
@@ -165,3 +183,30 @@ class OAuthClientInfo(BaseModel):
 
     created_at: datetime
     """UTC datetime when the client was registered."""
+
+
+def token_payload_bytes(tokens: OAuthTokens) -> bytes:
+    """Canonical on-disk serialization for :class:`OAuthTokens`.
+
+    Used by every site that writes ``tokens.json`` so the written shape
+    stays in lockstep with what ``OAuthTokens.model_validate_json`` reads
+    back. Omits ``refresh_token`` when ``None`` (rather than emitting an
+    explicit ``null``) — matches the loader's "missing key → ``None``"
+    behavior in :func:`bridge._read_browser_tokens`.
+
+    Args:
+        tokens: The tokens to serialize. ``expires_at`` must be tz-aware
+            (enforced at model construction).
+
+    Returns:
+        UTF-8 encoded JSON bytes ready for :func:`atomic_write_bytes`.
+    """
+    payload: dict[str, object] = {
+        "access_token": tokens.access_token.get_secret_value(),
+        "expires_at": tokens.expires_at.isoformat(),
+        "token_type": tokens.token_type,
+        "scope": tokens.scope,
+    }
+    if tokens.refresh_token is not None:
+        payload["refresh_token"] = tokens.refresh_token.get_secret_value()
+    return json.dumps(payload).encode("utf-8")

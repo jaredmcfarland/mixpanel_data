@@ -26,7 +26,8 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
-from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data.exceptions import (
     AuthenticationError,
     BookmarkValidationError,
@@ -35,6 +36,18 @@ from mixpanel_data.exceptions import (
     ServerError,
 )
 from mixpanel_data.types import ProfilePageResult, UserQueryResult
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -184,26 +197,6 @@ def _page_side_effect_factory(
 
 
 @pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for testing."""
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
-
-
-@pytest.fixture
-def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
-    """Create mock ConfigManager that returns credentials."""
-    manager = MagicMock(spec=ConfigManager)
-    manager.config_version.return_value = 1
-    manager.resolve_credentials.return_value = mock_credentials
-    return manager
-
-
-@pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -215,7 +208,6 @@ def mock_api_client() -> MagicMock:
 
 @pytest.fixture
 def workspace_factory(
-    mock_config_manager: MagicMock,
     mock_api_client: MagicMock,
 ) -> Callable[..., Workspace]:
     """Factory for creating Workspace instances with mocked dependencies."""
@@ -230,7 +222,7 @@ def workspace_factory(
             Workspace instance with mocked dependencies.
         """
         defaults: dict[str, Any] = {
-            "_config_manager": mock_config_manager,
+            "session": _TEST_SESSION,
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)

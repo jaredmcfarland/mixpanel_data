@@ -17,31 +17,37 @@ Verifies:
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
-import pytest
 from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.storage import OAuthStorage
-from mixpanel_data._internal.auth.token import OAuthTokens
-from mixpanel_data._internal.config import (
-    AuthMethod,
-    ConfigManager,
-    Credentials,
-)
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data.types import PublicWorkspace
 from mixpanel_data.workspace import Workspace
+from tests.conftest import make_session
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 
 def _make_oauth_credentials(
     project_id: str = "12345",
     region: str = "us",
     access_token: str = "test-oauth-token",
-) -> Credentials:
+) -> Session:
     """Create OAuth Credentials for testing.
 
     Args:
@@ -52,20 +58,17 @@ def _make_oauth_credentials(
     Returns:
         A Credentials instance with auth_method=oauth.
     """
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
+    return make_session(
         project_id=project_id,
         region=region,
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr(access_token),
+        oauth_token=access_token,
     )
 
 
 def _make_basic_credentials(
     project_id: str = "12345",
     region: str = "us",
-) -> Credentials:
+) -> Session:
     """Create Basic Auth Credentials for testing.
 
     Args:
@@ -75,9 +78,9 @@ def _make_basic_credentials(
     Returns:
         A Credentials instance with auth_method=basic.
     """
-    return Credentials(
+    return make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id=project_id,
         region=region,
     )
@@ -145,95 +148,49 @@ def _make_workspace_handler() -> Callable[[httpx.Request], httpx.Response]:
     return handler
 
 
-def _setup_config_with_account(temp_dir: Path) -> ConfigManager:
-    """Create a ConfigManager with a dummy account for credential resolution.
-
-    Args:
-        temp_dir: Temporary directory for the config file.
-
-    Returns:
-        ConfigManager with a test account configured.
-    """
-    cm = ConfigManager(config_path=temp_dir / "config.toml")
-    cm.add_account(
-        name="test",
-        username="test_user",
-        secret="test_secret",
-        project_id="12345",
-        region="us",
-    )
-    return cm
+# _setup_config_with_account removed in B1 (Fix 9): the legacy v1
+# ``ConfigManager.add_account(project_id=, region=, …)`` signature is
+# gone; ``_make_workspace`` now relies on ``session=_TEST_SESSION``
+# instead, which never touches a real ConfigManager.
 
 
 class TestWorkspaceConstructionWithOAuth:
     """Tests for Workspace construction with OAuth credentials."""
 
-    def test_workspace_with_oauth_credentials(
-        self,
-        temp_dir: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Workspace can be constructed with OAuth credentials.
-
-        Uses OAuth tokens stored on disk and partial env vars to resolve
-        OAuth credentials during Workspace construction.
-        """
-        # Set up OAuth tokens on disk
-        oauth_dir = temp_dir / "oauth"
-        oauth_storage = OAuthStorage(storage_dir=oauth_dir)
-        tokens = OAuthTokens(
-            access_token=SecretStr("test-oauth-token"),
-            refresh_token=SecretStr("test-refresh"),
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-            scope="read:project",
-            token_type="Bearer",
-            project_id="12345",
-        )
-        oauth_storage.save_tokens(tokens, region="us")
-
-        # Use partial env vars (project_id + region but NO username/secret)
-        # and point OAuth storage to our temp dir
-        monkeypatch.setenv("MP_PROJECT_ID", "12345")
-        monkeypatch.setenv("MP_REGION", "us")
-        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(oauth_dir))
+    def test_workspace_with_oauth_credentials(self) -> None:
+        """An OAuth-typed Session yields ``_credentials.auth_method == oauth``."""
+        from mixpanel_data._internal.auth.account import OAuthTokenAccount
 
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        cm = ConfigManager(config_path=temp_dir / "config.toml")
-        ws = Workspace(
-            _config_manager=cm,
-            _api_client=client,
+        client = MixpanelAPIClient(session=oauth_creds, _transport=transport)
+        oauth_session = Session(
+            account=OAuthTokenAccount(
+                name="test_account",
+                region="us",
+                token=SecretStr("test-oauth-token"),
+                default_project="12345",
+            ),
+            project=Project(id="12345"),
         )
+        ws = Workspace(session=oauth_session, _api_client=client)
 
-        # The workspace should have resolved OAuth credentials
-        assert ws._credentials is not None
-        assert ws._credentials.auth_method == AuthMethod.oauth
+        from mixpanel_data._internal.auth.account import OAuthTokenAccount
 
-    def test_workspace_backward_compat_basic_auth(
-        self,
-        temp_dir: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Workspace still works with Basic Auth credentials (regression)."""
-        # Isolate OAuth storage so real tokens on the machine are not found
-        oauth_dir = temp_dir / "empty_oauth"
-        oauth_dir.mkdir()
-        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(oauth_dir))
+        assert isinstance(ws.session.account, OAuthTokenAccount)
+
+    def test_workspace_backward_compat_basic_auth(self) -> None:
+        """A service-account Session resolves through the ServiceAccount path."""
+        from mixpanel_data._internal.auth.account import ServiceAccount
 
         basic_creds = _make_basic_credentials()
         transport = httpx.MockTransport(lambda _r: httpx.Response(200, json=[]))
-        client = MixpanelAPIClient(basic_creds, _transport=transport)
-        cm = _setup_config_with_account(temp_dir)
+        client = MixpanelAPIClient(session=basic_creds, _transport=transport)
 
-        ws = Workspace(
-            _config_manager=cm,
-            _api_client=client,
-        )
+        ws = Workspace(session=_TEST_SESSION, _api_client=client)
 
-        assert ws._credentials is not None
-        assert ws._credentials.auth_method == AuthMethod.basic
-        assert ws._credentials.username == "test_user"
+        assert isinstance(ws.session.account, ServiceAccount)
+        assert ws.session.account.username == "test_user"
 
 
 class TestWorkspaceListWorkspaces:
@@ -246,9 +203,9 @@ class TestWorkspaceListWorkspaces:
         """list_workspaces() returns a list of PublicWorkspace objects."""
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
+        client = MixpanelAPIClient(session=oauth_creds, _transport=transport)
         ws = Workspace(
-            _config_manager=_setup_config_with_account(temp_dir),
+            session=_TEST_SESSION,
             _api_client=client,
         )
 
@@ -283,9 +240,9 @@ class TestWorkspaceListWorkspaces:
 
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(handler)
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
+        client = MixpanelAPIClient(session=oauth_creds, _transport=transport)
         ws = Workspace(
-            _config_manager=_setup_config_with_account(temp_dir),
+            session=_TEST_SESSION,
             _api_client=client,
         )
 
@@ -303,9 +260,9 @@ class TestWorkspaceResolveWorkspaceId:
         """resolve_workspace_id() returns the default workspace ID."""
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
+        client = MixpanelAPIClient(session=oauth_creds, _transport=transport)
         ws = Workspace(
-            _config_manager=_setup_config_with_account(temp_dir),
+            session=_TEST_SESSION,
             _api_client=client,
         )
 
@@ -313,71 +270,5 @@ class TestWorkspaceResolveWorkspaceId:
         assert ws_id == 100  # The default workspace
 
 
-class TestWorkspaceSetWorkspaceId:
-    """Tests for Workspace.set_workspace_id() and workspace_id property."""
-
-    def test_set_and_get_workspace_id(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """set_workspace_id() sets the workspace_id readable from property."""
-        oauth_creds = _make_oauth_credentials()
-        transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        ws = Workspace(
-            _config_manager=_setup_config_with_account(temp_dir),
-            _api_client=client,
-        )
-
-        ws.set_workspace_id(42)
-        assert ws.workspace_id == 42
-
-    def test_workspace_id_initially_none(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """workspace_id is None before any workspace is set."""
-        oauth_creds = _make_oauth_credentials()
-        transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        ws = Workspace(
-            _config_manager=_setup_config_with_account(temp_dir),
-            _api_client=client,
-        )
-
-        assert ws.workspace_id is None
-
-    def test_clear_workspace_id(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """set_workspace_id(None) clears the workspace_id."""
-        oauth_creds = _make_oauth_credentials()
-        transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        ws = Workspace(
-            _config_manager=_setup_config_with_account(temp_dir),
-            _api_client=client,
-        )
-
-        ws.set_workspace_id(42)
-        assert ws.workspace_id == 42
-
-        ws.set_workspace_id(None)
-        assert ws.workspace_id is None
-
-    def test_workspace_id_constructor_param(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """Workspace constructor accepts workspace_id parameter."""
-        oauth_creds = _make_oauth_credentials()
-        transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
-        ws = Workspace(
-            _config_manager=_setup_config_with_account(temp_dir),
-            _api_client=client,
-            workspace_id=999,
-        )
-
-        assert ws.workspace_id == 999
+# TestWorkspaceSetWorkspaceId removed in B2 (T050 / FR-038):
+# ``set_workspace_id`` is gone — use ``ws.use(workspace=N)`` instead.

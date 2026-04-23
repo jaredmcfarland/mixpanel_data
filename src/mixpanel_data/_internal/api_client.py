@@ -24,7 +24,19 @@ from urllib.parse import quote
 
 import httpx
 
-from mixpanel_data._internal.config import Credentials
+from mixpanel_data._internal.auth.account import (
+    Account,
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
+    ServiceAccount,
+    TokenResolver,
+)
+from mixpanel_data._internal.auth.session import (
+    Project,
+    Session,
+    WorkspaceRef,
+)
+from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_data.exceptions import (
     AuthenticationError,
     JQLSyntaxError,
@@ -116,13 +128,12 @@ class MixpanelAPIClient:
 
     Example:
         ```python
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_data._internal.auth.resolver import resolve_session
         from mixpanel_data._internal.api_client import MixpanelAPIClient
 
-        config = ConfigManager()
-        credentials = config.resolve_credentials()
+        session = resolve_session()
 
-        with MixpanelAPIClient(credentials) as client:
+        with MixpanelAPIClient(session=session) as client:
             events = client.get_events()
             print(events)
         ```
@@ -130,45 +141,74 @@ class MixpanelAPIClient:
 
     def __init__(
         self,
-        credentials: Credentials,
         *,
+        session: Session,
         timeout: float = 120.0,
         export_timeout: float = 600.0,
         max_retries: int = 3,
+        token_resolver: TokenResolver | None = None,
         _transport: httpx.BaseTransport | None = None,
     ) -> None:
         """Initialize the API client.
 
         Args:
-            credentials: Immutable authentication credentials.
+            session: Resolved Session (account + project + optional workspace).
             timeout: Request timeout in seconds for regular requests.
             export_timeout: Request timeout for export operations.
             max_retries: Maximum retry attempts for rate-limited requests.
+            token_resolver: For OAuth accounts; defaults to
+                :class:`OnDiskTokenResolver`.
             _transport: Internal parameter for testing with MockTransport.
         """
-        self._credentials = credentials
+        self._token_resolver: TokenResolver = token_resolver or OnDiskTokenResolver()
+        self._session: Session = session
+        # Cache the Basic auth header for service accounts so we don't
+        # base64-encode on every request. OAuth headers resolve per call
+        # via TokenResolver and are not cached here.
+        self._cached_basic_header: str | None = (
+            session.account.auth_header(token_resolver=self._token_resolver)
+            if isinstance(session.account, ServiceAccount)
+            else None
+        )
         self._timeout = timeout
         self._export_timeout = export_timeout
         self._max_retries = max_retries
         self._client: httpx.Client | None = None
         self._transport = _transport
-        self._workspace_id: int | None = None
+        self._workspace_id: int | None = (
+            session.workspace.id if session.workspace else None
+        )
         self._cached_workspace_id: int | None = None
+        self._resolved_workspace: WorkspaceRef | None = session.workspace
 
     def _get_auth_header(self) -> str:
-        """Generate the Authorization header value.
+        """Generate the Authorization header value, resolving per request.
 
-        Delegates to ``Credentials.auth_header()`` which returns
-        ``"Bearer <token>"`` for OAuth or ``"Basic <encoded>"`` for
-        service accounts.
+        For OAuth accounts (browser or static token), delegates to the bound
+        :class:`TokenResolver` on every call so a refreshed bearer is picked
+        up without rebuilding the API client. Service accounts return the
+        cached ``Basic ...`` header since Basic Auth has no freshness concern.
 
         Returns:
             Authorization header value appropriate for the auth method.
 
         Raises:
-            ValueError: If OAuth credentials are missing an access token.
+            OAuthError: An OAuth account's token cannot be re-resolved
+                (e.g. on-disk tokens deleted or refresh failed).
         """
-        return self._credentials.auth_header()
+        account = self._session.account
+        if isinstance(account, ServiceAccount):
+            assert self._cached_basic_header is not None
+            return self._cached_basic_header
+        if isinstance(account, OAuthBrowserAccount):
+            token = self._token_resolver.get_browser_token(account.name, account.region)
+            return f"Bearer {token}"
+        if isinstance(account, OAuthTokenAccount):
+            token = self._token_resolver.get_static_token(account)
+            return f"Bearer {token}"
+        raise TypeError(  # pragma: no cover — Literal exhaustiveness
+            f"Unknown Account variant: {type(account).__name__}"
+        )
 
     def _build_url(self, api_type: str, path: str) -> str:
         """Build full URL for the given API type and path.
@@ -180,7 +220,7 @@ class MixpanelAPIClient:
         Returns:
             Full URL for the endpoint.
         """
-        region = self._credentials.region
+        region = self._session.account.region
         base = ENDPOINTS[region][api_type]
         # Ensure path starts with /
         if not path.startswith("/"):
@@ -188,23 +228,50 @@ class MixpanelAPIClient:
         return f"{base}{path}"
 
     def _ensure_client(self) -> httpx.Client:
-        """Ensure HTTP client is initialized.
+        """Ensure the underlying HTTP client (connection pool) is initialized.
+
+        Headers are NOT cached on the client — they are composed per-request
+        by :meth:`_request_headers` so that ``use(account=...)`` swapping the
+        ``Session`` instantly affects subsequent requests without forcing a
+        connection-pool teardown. See Fix 3 for the per-request rationale.
 
         Returns:
-            The httpx.Client instance.
+            The httpx.Client instance (connection pool only).
         """
         if self._client is None:
-            headers: dict[str, str] = {}
-            custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
-            custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
-            if custom_name and custom_value:
-                headers[custom_name] = custom_value
             self._client = httpx.Client(
                 timeout=self._timeout,
                 transport=self._transport,
-                headers=headers,
             )
         return self._client
+
+    def _request_headers(self, extra: dict[str, str]) -> dict[str, str]:
+        """Compose the per-request header set: env-var → session → caller.
+
+        Each layer overrides the prior on header-name collision:
+
+        1. ``MP_CUSTOM_HEADER_NAME`` / ``MP_CUSTOM_HEADER_VALUE`` env pair.
+        2. ``self._session.headers`` (populated from ``[settings].custom_header``
+           and bridge ``headers`` per FR-014). The resolver merged env into
+           the session earlier; the final session state is authoritative.
+        3. ``extra`` — typically ``{"Authorization": auth_header}`` plus any
+           per-call ``Accept-Encoding`` etc. supplied by the caller.
+
+        Args:
+            extra: Per-call headers (e.g., Authorization). May be empty.
+
+        Returns:
+            New dict with all layers merged in precedence order.
+        """
+        headers: dict[str, str] = {}
+        custom_name = os.environ.get("MP_CUSTOM_HEADER_NAME")
+        custom_value = os.environ.get("MP_CUSTOM_HEADER_VALUE")
+        if custom_name and custom_value:
+            headers[custom_name] = custom_value
+        if self._session is not None:
+            headers.update(self._session.headers)
+        headers.update(extra)
+        return headers
 
     def close(self) -> None:
         """Close the HTTP client and release resources."""
@@ -443,6 +510,7 @@ class MixpanelAPIClient:
         if params is None:
             params = {}
         params["query_origin"] = "mixpanel-data-cli"
+        request_headers = self._request_headers(headers)
 
         for attempt in range(self._max_retries + 1):
             try:
@@ -452,7 +520,7 @@ class MixpanelAPIClient:
                     params=params,
                     json=json_data,
                     data=form_data,
-                    headers=headers,
+                    headers=request_headers,
                     timeout=timeout or self._timeout,
                 )
 
@@ -561,7 +629,7 @@ class MixpanelAPIClient:
         if params is None:
             params = {}
         if inject_project_id:
-            params["project_id"] = self._credentials.project_id
+            params["project_id"] = self._session.project.id
 
         logger.debug(
             "_request - method: %s, url: %s, final params: %s",
@@ -638,25 +706,175 @@ class MixpanelAPIClient:
 
     @property
     def project_id(self) -> str:
-        """Get the project ID from credentials.
+        """Get the project ID from the bound Session.
 
         Useful when constructing URLs that require the project ID.
 
         Returns:
             The Mixpanel project ID.
         """
-        return self._credentials.project_id
+        return self._session.project.id
 
     @property
     def region(self) -> str:
-        """Get the configured region.
+        """Get the configured region from the bound Session.
 
         Useful when constructing regional URLs.
 
         Returns:
             The region code ('us', 'eu', or 'in').
         """
-        return self._credentials.region
+        return self._session.account.region
+
+    # =========================================================================
+    # 042 redesign: session-aware accessors and switching
+    # =========================================================================
+
+    @property
+    def session(self) -> Session:
+        """Return the resolved Session bound to this client.
+
+        Returns:
+            The Session passed to ``__init__(session=...)``.
+        """
+        return self._session
+
+    @property
+    def current_auth_header(self) -> str:
+        """Return the current ``Authorization`` header value.
+
+        The value is computed on every access — there is no caching at
+        this level. Session-bound OAuth accounts re-resolve via the
+        :class:`TokenResolver` (so a refreshed bearer surfaces here
+        immediately); service accounts return ``Basic`` derived from
+        the cached username/secret.
+
+        Returns:
+            The header value (``Basic ...`` or ``Bearer ...``) that
+            every per-request header set carries.
+        """
+        return self._get_auth_header()
+
+    @property
+    def _http(self) -> httpx.Client:
+        """Return the underlying ``httpx.Client``, lazily initializing it.
+
+        Used by tests to verify that ``use()`` switches preserve the
+        same HTTP transport / connection pool.
+        """
+        return self._ensure_client()
+
+    def use(
+        self,
+        *,
+        account: Account | None = None,
+        project: Project | str | None = None,
+        workspace: WorkspaceRef | int | None = None,
+    ) -> None:
+        """Swap one or more session axes in place, preserving the HTTP transport.
+
+        Per Research R5:
+        - ``use(workspace=W)`` is in-memory only (no cache invalidation).
+        - ``use(project=P)`` clears the resolved-workspace cache.
+        - ``use(account=A)`` rebuilds the auth header (atomic on success);
+          clears the resolved-workspace cache.
+
+        The underlying ``httpx.Client`` instance is preserved; only the
+        ``_credentials`` shim and per-axis caches change.
+
+        Args:
+            account: Replacement account.
+            project: Replacement project (``Project`` object or numeric-string
+                project ID).
+            workspace: Replacement workspace (``WorkspaceRef`` or positive int).
+
+        Raises:
+            RuntimeError: If the client was not constructed with ``session=``.
+            OAuthError: If new account auth header construction fails (the
+                previous header is preserved on failure).
+        """
+        project_obj: Project | None = (
+            Project(id=project) if isinstance(project, str) else project
+        )
+        workspace_obj: WorkspaceRef | None = (
+            WorkspaceRef(id=workspace) if isinstance(workspace, int) else workspace
+        )
+        new_session = self._session.replace(
+            account=account, project=project_obj, workspace=workspace_obj
+        )
+        # Atomic-on-success: probe the new account's bearer BEFORE swapping
+        # anything. ServiceAccount returns the cached Basic header; OAuth
+        # variants delegate to TokenResolver — if no token is available the
+        # resolver raises OAuthError and the prior session/header survive.
+        new_cached_basic: str | None
+        if isinstance(new_session.account, ServiceAccount):
+            new_cached_basic = new_session.account.auth_header(
+                token_resolver=self._token_resolver
+            )
+        else:
+            # Probe OAuth resolver to surface missing-token errors here
+            # rather than at the next request. The result isn't cached.
+            new_session.account.auth_header(token_resolver=self._token_resolver)
+            new_cached_basic = None
+        self._session = new_session
+        self._cached_basic_header = new_cached_basic
+        if account is not None or project is not None:
+            self._resolved_workspace = new_session.workspace
+            self._cached_workspace_id = None
+            # Sync the int-id pin with the new session — without this,
+            # `maybe_scoped_path()` keeps emitting `/workspaces/<old>/…`
+            # and routes requests to a workspace that may not exist under
+            # the new project / account.
+            self._workspace_id = (
+                new_session.workspace.id if new_session.workspace else None
+            )
+        if workspace_obj is not None:
+            self._workspace_id = workspace_obj.id
+            self._resolved_workspace = workspace_obj
+
+    def resolve_workspace(self) -> WorkspaceRef:
+        """Return the workspace for the current session, lazy-resolving once.
+
+        When ``Session.workspace`` is None, this calls the App API's
+        ``/projects/{pid}/workspaces/public`` endpoint and picks the
+        ``is_default=True`` workspace. The result is cached for the
+        session's lifetime; subsequent calls return the cached value
+        until ``use(account=...)`` or ``use(project=...)`` invalidates.
+
+        The resolved id is also written to the int-id cache used by
+        :meth:`resolve_workspace_id` so the two discovery paths share
+        a single network call.
+
+        Returns:
+            A :class:`WorkspaceRef` for the current session's project.
+
+        Raises:
+            WorkspaceScopeError: If the project has no workspaces.
+        """
+        if self._resolved_workspace is not None:
+            return self._resolved_workspace
+        path = f"/projects/{self.project_id}/workspaces/public"
+        payload = self.app_request("GET", path)
+        items: list[dict[str, Any]]
+        if isinstance(payload, list):
+            items = payload
+        elif isinstance(payload, dict) and isinstance(payload.get("results"), list):
+            items = payload["results"]
+        else:
+            items = []
+        if not items:
+            raise WorkspaceScopeError(
+                f"Project {self.project_id} has no accessible workspaces."
+            )
+        default = next((w for w in items if w.get("is_default")), items[0])
+        ref = WorkspaceRef(
+            id=int(default["id"]),
+            name=default.get("name"),
+            is_default=bool(default.get("is_default")),
+        )
+        self._resolved_workspace = ref
+        self._cached_workspace_id = ref.id
+        return ref
 
     def _parse_retry_after(self, response: httpx.Response) -> int | None:
         """Parse Retry-After header if present.
@@ -725,7 +943,7 @@ class MixpanelAPIClient:
 
         Example:
             ```python
-            client = MixpanelAPIClient(oauth_credentials)
+            client = MixpanelAPIClient(session=session)
             with client:
                 dashboards = client.app_request(
                     "GET", "/projects/12345/dashboards"
@@ -744,8 +962,13 @@ class MixpanelAPIClient:
             )
 
         url = self._build_url("app", path)
-        auth_header = self._credentials.auth_header()
-        headers = {"Authorization": auth_header}
+        # Re-resolve per request via _get_auth_header() so refreshed
+        # OAuth tokens (browser refresh / static-token rotation) reach
+        # App API calls without rebuilding the client. Service-account
+        # Basic Auth has no analogous freshness concern; the helper
+        # falls through to the cached credentials in that case.
+        auth_header = self._get_auth_header()
+        headers = self._request_headers({"Authorization": auth_header})
 
         client = self._ensure_client()
 
@@ -937,10 +1160,10 @@ class MixpanelAPIClient:
         if not workspaces:
             raise WorkspaceScopeError(
                 "No workspaces found for project "
-                f"'{self._credentials.project_id}'. "
+                f"'{self._session.project.id}'. "
                 "Ensure you have access to at least one workspace.",
                 code="NO_WORKSPACES",
-                details={"project_id": self._credentials.project_id},
+                details={"project_id": self._session.project.id},
             )
 
         # Prefer the default workspace
@@ -980,7 +1203,7 @@ class MixpanelAPIClient:
         """
         if self._workspace_id is not None:
             return f"/workspaces/{self._workspace_id}/{domain_path}"
-        return f"/projects/{self._credentials.project_id}/{domain_path}"
+        return f"/projects/{self._session.project.id}/{domain_path}"
 
     def require_scoped_path(self, domain_path: str) -> str:
         """Build a workspace-scoped API path, auto-discovering if needed.
@@ -1009,7 +1232,7 @@ class MixpanelAPIClient:
             ```
         """
         ws_id = self.resolve_workspace_id()
-        pid = self._credentials.project_id
+        pid = self._session.project.id
         return f"/projects/{pid}/workspaces/{ws_id}/{domain_path}"
 
     def with_project(
@@ -1019,10 +1242,13 @@ class MixpanelAPIClient:
     ) -> MixpanelAPIClient:
         """Create a new client for a different project, sharing HTTP transport.
 
-        Builds new ``Credentials`` with the given ``project_id`` but keeps the
-        same authentication (username/secret/oauth) and region.  The underlying
-        ``httpx.Client`` instance is shared so no extra TCP connections are
-        created.
+        Builds a new :class:`Session` (via :meth:`Session.replace`) with the
+        given ``project_id`` but keeps the same authentication (account) and
+        region. The underlying transport is shared via the ``_transport``
+        kwarg so no extra TCP connections are created; a fresh
+        ``httpx.Client`` wrapping that transport is constructed lazily on
+        first request. (For in-session axis swaps that preserve the existing
+        ``httpx.Client`` instance itself, use :meth:`Workspace.use` instead.)
 
         Args:
             project_id: The project ID to target.
@@ -1033,28 +1259,23 @@ class MixpanelAPIClient:
 
         Example:
             ```python
-            original = MixpanelAPIClient(credentials)
+            original = MixpanelAPIClient(session=session)
             other = original.with_project("9999999", workspace_id=42)
             other.me()  # still uses the same auth
             ```
         """
-        from pydantic import SecretStr as _SecretStr
-
-        new_creds = Credentials(
-            username=self._credentials.username,
-            secret=_SecretStr(self._credentials.secret.get_secret_value()),
-            project_id=project_id,
-            region=self._credentials.region,
-            auth_method=self._credentials.auth_method,
-            oauth_access_token=self._credentials.oauth_access_token,
+        new_session = self._session.replace(
+            project=Project(id=project_id),
+            workspace=WorkspaceRef(id=workspace_id) if workspace_id else None,
         )
         # Share the existing HTTP transport when available
         transport: httpx.BaseTransport | None = self._transport
         new_client = MixpanelAPIClient(
-            new_creds,
+            session=new_session,
             timeout=self._timeout,
             export_timeout=self._export_timeout,
             max_retries=self._max_retries,
+            token_resolver=self._token_resolver,
             _transport=transport,
         )
         if workspace_id is not None:
@@ -1079,7 +1300,7 @@ class MixpanelAPIClient:
 
         Example:
             ```python
-            with MixpanelAPIClient(credentials) as client:
+            with MixpanelAPIClient(session=session) as client:
                 me_data = client.me()
                 print(me_data.get("user_email"))
             ```
@@ -1111,7 +1332,7 @@ class MixpanelAPIClient:
                     print(f"{ws.name} (id={ws.id}, default={ws.is_default})")
             ```
         """
-        pid = self._credentials.project_id
+        pid = self._session.project.id
         path = f"/projects/{pid}/workspaces/public"
         results = self.app_request("GET", path)
 
@@ -1163,7 +1384,7 @@ class MixpanelAPIClient:
         url = self._build_url("export", "/export")
 
         params: dict[str, Any] = {
-            "project_id": self._credentials.project_id,
+            "project_id": self._session.project.id,
             "from_date": from_date,
             "to_date": to_date,
         }
@@ -1175,10 +1396,12 @@ class MixpanelAPIClient:
             params["limit"] = limit
 
         client = self._ensure_client()
-        headers = {
-            "Authorization": self._get_auth_header(),
-            "Accept-Encoding": "gzip",
-        }
+        headers = self._request_headers(
+            {
+                "Authorization": self._get_auth_header(),
+                "Accept-Encoding": "gzip",
+            }
+        )
 
         # Stream with retry logic
         for attempt in range(self._max_retries + 1):
@@ -1373,7 +1596,7 @@ class MixpanelAPIClient:
 
         while True:
             params: dict[str, Any] = {
-                "project_id": self._credentials.project_id,
+                "project_id": self._session.project.id,
                 "page": page,
             }
             if session_id:
@@ -1501,7 +1724,7 @@ class MixpanelAPIClient:
         url = self._build_url("engage", "")
 
         params: dict[str, Any] = {
-            "project_id": self._credentials.project_id,
+            "project_id": self._session.project.id,
             "page": page,
         }
         if session_id:
@@ -1618,7 +1841,7 @@ class MixpanelAPIClient:
         url = self._build_url("engage", "stats")
 
         params: dict[str, Any] = {
-            "project_id": self._credentials.project_id,
+            "project_id": self._session.project.id,
             "action": action,
         }
         if where:
@@ -2205,7 +2428,7 @@ class MixpanelAPIClient:
         """
         url = self._build_url(
             "app",
-            f"/projects/{self._credentials.project_id}/bookmarks",
+            f"/projects/{self._session.project.id}/bookmarks",
         )
         params: dict[str, Any] = {"v": "2"}
         if bookmark_type is not None:
@@ -2512,9 +2735,9 @@ class MixpanelAPIClient:
         # entity_type is a path parameter, not a query parameter
         # URL structure: /api/app/projects/{projectId}/schemas/{entity_type}
         if entity_type is not None:
-            path = f"/projects/{self._credentials.project_id}/schemas/{entity_type}"
+            path = f"/projects/{self._session.project.id}/schemas/{entity_type}"
         else:
-            path = f"/projects/{self._credentials.project_id}/schemas"
+            path = f"/projects/{self._session.project.id}/schemas"
 
         url = self._build_url("app", path)
 
@@ -2561,7 +2784,7 @@ class MixpanelAPIClient:
         # URL structure: /api/app/projects/{projectId}/schemas/{entity_type}?entity_name={name}
         url = self._build_url(
             "app",
-            f"/projects/{self._credentials.project_id}/schemas/{entity_type}",
+            f"/projects/{self._session.project.id}/schemas/{entity_type}",
         )
         params = {"entity_name": name}
 
@@ -4454,7 +4677,7 @@ class MixpanelAPIClient:
                 limits = client.get_flag_limits()
             ```
         """
-        pid = self._credentials.project_id
+        pid = self._session.project.id
         path = f"/projects/{pid}/feature-flags/limits/"
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
@@ -6744,13 +6967,13 @@ class MixpanelAPIClient:
         """
         path = self.maybe_scoped_path("data-definitions/lookup-tables/")
         url = self._build_url("app", path)
-        auth_header = self._credentials.auth_header()
+        auth_header = self._get_auth_header()
         client = self._ensure_client()
         response = client.request(
             "POST",
             url,
             data=form_data,
-            headers={"Authorization": auth_header},
+            headers=self._request_headers({"Authorization": auth_header}),
             timeout=self._timeout,
         )
         if response.status_code >= 400:
@@ -6940,7 +7163,7 @@ class MixpanelAPIClient:
         """
         path = self.maybe_scoped_path("data-definitions/lookup-tables/download/")
         url = self._build_url("app", path)
-        auth_header = self._credentials.auth_header()
+        auth_header = self._get_auth_header()
         client = self._ensure_client()
         params: dict[str, str] = {
             "data-group-id": str(data_group_id),
@@ -6953,7 +7176,7 @@ class MixpanelAPIClient:
             "GET",
             url,
             params=params,
-            headers={"Authorization": auth_header},
+            headers=self._request_headers({"Authorization": auth_header}),
             timeout=self._timeout,
         )
         if response.status_code >= 400:

@@ -16,11 +16,11 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data.exceptions import MixpanelDataError
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -28,20 +28,13 @@ from mixpanel_data.exceptions import MixpanelDataError
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport (no workspace ID set).
@@ -56,7 +49,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -67,7 +60,7 @@ def create_mock_client(
 class TestGetSchemaEnforcement:
     """Tests for get_schema_enforcement() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """get_schema_enforcement() returns the enforcement config dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -95,7 +88,7 @@ class TestGetSchemaEnforcement:
         assert result["ruleEvent"] == "Warn and Accept"
         assert result["state"] == "ingested"
 
-    def test_with_fields_param(self, oauth_credentials: Credentials) -> None:
+    def test_with_fields_param(self, oauth_credentials: Session) -> None:
         """get_schema_enforcement(fields=...) passes fields query parameter."""
         captured_urls: list[str] = []
 
@@ -119,7 +112,7 @@ class TestGetSchemaEnforcement:
 
         assert "fields=ruleEvent" in captured_urls[0] or "fields=" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_schema_enforcement() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -137,7 +130,7 @@ class TestGetSchemaEnforcement:
 
         assert captured_methods[0] == "GET"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """get_schema_enforcement() hits data-definitions/schema/ endpoint."""
         captured_urls: list[str] = []
 
@@ -159,7 +152,7 @@ class TestGetSchemaEnforcement:
 class TestInitSchemaEnforcement:
     """Tests for init_schema_enforcement() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """init_schema_enforcement() returns the created config dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -186,7 +179,7 @@ class TestInitSchemaEnforcement:
         assert captured[0][0] == "POST"
         assert captured[0][1]["ruleEvent"] == "Warn and Drop"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """init_schema_enforcement() hits data-definitions/schema/ endpoint."""
         captured_urls: list[str] = []
 
@@ -208,7 +201,7 @@ class TestInitSchemaEnforcement:
 class TestUpdateSchemaEnforcement:
     """Tests for update_schema_enforcement() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """update_schema_enforcement() returns the updated config dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -238,7 +231,7 @@ class TestUpdateSchemaEnforcement:
         assert result["ruleEvent"] == "Warn and Hide"
         assert captured[0][0] == "PATCH"
 
-    def test_partial_body(self, oauth_credentials: Credentials) -> None:
+    def test_partial_body(self, oauth_credentials: Session) -> None:
         """update_schema_enforcement() sends only provided fields."""
         captured_bodies: list[Any] = []
 
@@ -262,7 +255,7 @@ class TestUpdateSchemaEnforcement:
 class TestReplaceSchemaEnforcement:
     """Tests for replace_schema_enforcement() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """replace_schema_enforcement() returns the replaced config dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -290,7 +283,7 @@ class TestReplaceSchemaEnforcement:
         assert captured[0][0] == "PUT"
         assert captured[0][1] == full_body
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """replace_schema_enforcement() hits data-definitions/schema/ endpoint."""
         captured_urls: list[str] = []
 
@@ -312,7 +305,7 @@ class TestReplaceSchemaEnforcement:
 class TestDeleteSchemaEnforcement:
     """Tests for delete_schema_enforcement() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """delete_schema_enforcement() returns the response dict."""
         captured_methods: list[str] = []
 
@@ -331,7 +324,7 @@ class TestDeleteSchemaEnforcement:
         assert result["deleted"] is True
         assert captured_methods[0] == "DELETE"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """delete_schema_enforcement() hits data-definitions/schema/ endpoint."""
         captured_urls: list[str] = []
 
@@ -358,7 +351,7 @@ class TestDeleteSchemaEnforcement:
 class TestRunAudit:
     """Tests for run_audit() API client method."""
 
-    def test_returns_parsed_response(self, oauth_credentials: Credentials) -> None:
+    def test_returns_parsed_response(self, oauth_credentials: Session) -> None:
         """run_audit() returns raw response with 2-element array in results."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -399,7 +392,7 @@ class TestRunAudit:
         # Second element is metadata
         assert result[1]["computed_at"] == "2026-01-01T00:00:00Z"
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """run_audit() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -417,7 +410,7 @@ class TestRunAudit:
 
         assert captured_methods[0] == "GET"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """run_audit() hits data-definitions/audit/ endpoint."""
         captured_urls: list[str] = []
 
@@ -435,7 +428,7 @@ class TestRunAudit:
 
         assert "/data-definitions/audit/" in captured_urls[0]
 
-    def test_empty_violations(self, oauth_credentials: Credentials) -> None:
+    def test_empty_violations(self, oauth_credentials: Session) -> None:
         """run_audit() handles empty violations list."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -455,7 +448,7 @@ class TestRunAudit:
         assert result[0] == []
         assert result[1]["computed_at"] == "2026-01-01T12:00:00Z"
 
-    def test_non_list_results_raises(self, oauth_credentials: Credentials) -> None:
+    def test_non_list_results_raises(self, oauth_credentials: Session) -> None:
         """run_audit() raises MixpanelDataError when results is not a list."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -473,7 +466,7 @@ class TestRunAudit:
 class TestRunAuditEventsOnly:
     """Tests for run_audit_events_only() API client method."""
 
-    def test_returns_parsed_response(self, oauth_credentials: Credentials) -> None:
+    def test_returns_parsed_response(self, oauth_credentials: Session) -> None:
         """run_audit_events_only() returns raw response with 2-element array."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -504,7 +497,7 @@ class TestRunAuditEventsOnly:
         assert result[0][0]["violation"] == "Unexpected Event"
         assert result[1]["computed_at"] == "2026-01-02T00:00:00Z"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """run_audit_events_only() hits data-definitions/audit-events-only/ endpoint."""
         captured_urls: list[str] = []
 
@@ -522,7 +515,7 @@ class TestRunAuditEventsOnly:
 
         assert "/data-definitions/audit-events-only/" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """run_audit_events_only() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -540,7 +533,7 @@ class TestRunAuditEventsOnly:
 
         assert captured_methods[0] == "GET"
 
-    def test_non_list_results_raises(self, oauth_credentials: Credentials) -> None:
+    def test_non_list_results_raises(self, oauth_credentials: Session) -> None:
         """run_audit_events_only() raises MixpanelDataError when results is not a list."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -602,7 +595,7 @@ def _anomaly_json(
 class TestListDataVolumeAnomalies:
     """Tests for list_data_volume_anomalies() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """list_data_volume_anomalies() returns a list of anomaly dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -628,7 +621,7 @@ class TestListDataVolumeAnomalies:
         assert result[0]["eventName"] == "Signup"
         assert result[1]["eventName"] == "Login"
 
-    def test_with_query_params(self, oauth_credentials: Credentials) -> None:
+    def test_with_query_params(self, oauth_credentials: Session) -> None:
         """list_data_volume_anomalies() passes query parameters."""
         captured_urls: list[str] = []
 
@@ -649,7 +642,7 @@ class TestListDataVolumeAnomalies:
 
         assert "status=open" in captured_urls[0]
 
-    def test_empty_list(self, oauth_credentials: Credentials) -> None:
+    def test_empty_list(self, oauth_credentials: Session) -> None:
         """list_data_volume_anomalies() returns empty list when no anomalies."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -668,7 +661,7 @@ class TestListDataVolumeAnomalies:
 
         assert result == []
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_data_volume_anomalies() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -686,7 +679,7 @@ class TestListDataVolumeAnomalies:
 
         assert captured_methods[0] == "GET"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """list_data_volume_anomalies() hits data-definitions/data-volume-anomalies/."""
         captured_urls: list[str] = []
 
@@ -704,7 +697,7 @@ class TestListDataVolumeAnomalies:
 
         assert "/data-definitions/data-volume-anomalies/" in captured_urls[0]
 
-    def test_missing_anomalies_key_raises(self, oauth_credentials: Credentials) -> None:
+    def test_missing_anomalies_key_raises(self, oauth_credentials: Session) -> None:
         """list_data_volume_anomalies() raises when 'anomalies' key is missing."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -722,7 +715,7 @@ class TestListDataVolumeAnomalies:
 class TestUpdateAnomaly:
     """Tests for update_anomaly() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """update_anomaly() returns the response dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -746,7 +739,7 @@ class TestUpdateAnomaly:
         assert captured[0][1]["status"] == "dismissed"
         assert captured[0][1]["anomalyClass"] == "Event"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """update_anomaly() hits data-definitions/data-volume-anomalies/ endpoint."""
         captured_urls: list[str] = []
 
@@ -772,7 +765,7 @@ class TestUpdateAnomaly:
 class TestBulkUpdateAnomalies:
     """Tests for bulk_update_anomalies() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """bulk_update_anomalies() returns the response dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -800,7 +793,7 @@ class TestBulkUpdateAnomalies:
         assert captured[0][0] == "PATCH"
         assert len(captured[0][1]["anomalies"]) == 2
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """bulk_update_anomalies() hits data-definitions/data-volume-anomalies/bulk/."""
         captured_urls: list[str] = []
 
@@ -861,7 +854,7 @@ def _deletion_request_json(
 class TestListDeletionRequests:
     """Tests for list_deletion_requests() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """list_deletion_requests() returns a list of deletion request dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -885,7 +878,7 @@ class TestListDeletionRequests:
         assert result[0]["eventName"] == "event_a"
         assert result[1]["eventName"] == "event_b"
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_deletion_requests() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -903,7 +896,7 @@ class TestListDeletionRequests:
 
         assert captured_methods[0] == "GET"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """list_deletion_requests() hits data-definitions/events/deletion-requests/."""
         captured_urls: list[str] = []
 
@@ -925,7 +918,7 @@ class TestListDeletionRequests:
 class TestCreateDeletionRequest:
     """Tests for create_deletion_request() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """create_deletion_request() returns the updated full list."""
         captured: list[tuple[str, Any]] = []
 
@@ -957,7 +950,7 @@ class TestCreateDeletionRequest:
         assert captured[0][0] == "POST"
         assert captured[0][1]["eventName"] == "new_event"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """create_deletion_request() hits data-definitions/events/deletion-requests/."""
         captured_urls: list[str] = []
 
@@ -981,7 +974,7 @@ class TestCreateDeletionRequest:
 class TestCancelDeletionRequest:
     """Tests for cancel_deletion_request() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """cancel_deletion_request() returns the updated full list."""
         captured: list[tuple[str, Any]] = []
 
@@ -1004,7 +997,7 @@ class TestCancelDeletionRequest:
         assert captured[0][0] == "DELETE"
         assert captured[0][1]["id"] == 42
 
-    def test_sends_json_body_with_id(self, oauth_credentials: Credentials) -> None:
+    def test_sends_json_body_with_id(self, oauth_credentials: Session) -> None:
         """cancel_deletion_request() sends JSON body with id field."""
         captured_bodies: list[Any] = []
 
@@ -1022,7 +1015,7 @@ class TestCancelDeletionRequest:
 
         assert captured_bodies[0] == {"id": 99}
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """cancel_deletion_request() hits data-definitions/events/deletion-requests/."""
         captured_urls: list[str] = []
 
@@ -1044,7 +1037,7 @@ class TestCancelDeletionRequest:
 class TestPreviewDeletionFilters:
     """Tests for preview_deletion_filters() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """preview_deletion_filters() returns a list of filter dicts."""
         captured: list[tuple[str, Any]] = []
 
@@ -1077,7 +1070,7 @@ class TestPreviewDeletionFilters:
         assert captured[0][0] == "POST"
         assert captured[0][1]["eventName"] == "Signup"
 
-    def test_uses_correct_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_correct_path(self, oauth_credentials: Session) -> None:
         """preview_deletion_filters() hits deletion-requests/preview-filters/."""
         captured_urls: list[str] = []
 

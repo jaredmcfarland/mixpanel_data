@@ -270,12 +270,12 @@ class ProjectNotFoundError(ConfigError):
     Example:
         ```python
         try:
-            projects = ws.discover_projects()
-            match = [p for pid, p in projects if pid == target_id]
+            projects = ws.projects()
+            match = [p for p in projects if p.id == target_id]
             if not match:
                 raise ProjectNotFoundError(
                     target_id,
-                    available_projects=[pid for pid, _ in projects],
+                    available_projects=[p.id for p in projects],
                 )
         except ProjectNotFoundError as e:
             print(f"Project '{e.project_id}' not found.")
@@ -346,6 +346,56 @@ class AccountExistsError(ConfigError):
     def account_name(self) -> str:
         """The conflicting account name."""
         return str(self._details.get("account_name", ""))
+
+
+class AccountInUseError(ConfigError):
+    """Account is referenced by one or more targets and cannot be removed.
+
+    Raised by ``mp.accounts.remove(name)`` when the account is referenced by
+    one or more ``[targets.NAME]`` blocks and the caller did not pass
+    ``force=True``. The list of dependent target names is available in
+    ``referenced_by`` so callers can show a helpful error message or pass
+    ``force=True`` to delete the account and orphan the targets.
+    """
+
+    def __init__(
+        self, account_name: str, referenced_by: list[str] | None = None
+    ) -> None:
+        """Initialize AccountInUseError.
+
+        Args:
+            account_name: The account that callers tried to remove.
+            referenced_by: Names of targets that reference the account.
+        """
+        targets = referenced_by or []
+        if targets:
+            target_str = ", ".join(f"'{t}'" for t in targets)
+            message = (
+                f"Account '{account_name}' is referenced by target(s): {target_str}. "
+                f"Pass `force=True` to remove anyway."
+            )
+        else:
+            message = (
+                f"Account '{account_name}' is in use. Pass `force=True` to remove."
+            )
+
+        details: dict[str, Any] = {
+            "account_name": account_name,
+            "referenced_by": list(targets),
+        }
+        super().__init__(message, details=details)
+        self._code = "ACCOUNT_IN_USE"
+
+    @property
+    def account_name(self) -> str:
+        """The account name that callers tried to remove."""
+        return str(self._details.get("account_name", ""))
+
+    @property
+    def referenced_by(self) -> list[str]:
+        """Target names that reference the account."""
+        targets = self._details.get("referenced_by")
+        return targets if isinstance(targets, list) else []
 
 
 # Authentication Exceptions

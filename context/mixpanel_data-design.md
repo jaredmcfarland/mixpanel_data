@@ -2,6 +2,27 @@
 
 > A Python library for working with Mixpanel data, designed for AI coding agents and data analysis workflows.
 
+> **⚠️ Auth section is OUT OF DATE.** The `ConfigManager` / `Credentials` /
+> `mp auth` material in this document describes the pre-0.4.0 (v1/v2) auth
+> subsystem and is preserved only for historical context on the layered
+> architecture. The current authoritative source for the auth subsystem is
+> [`auth-architecture-redesign.md`](auth-architecture-redesign.md) (the 042
+> redesign that shipped in `mixpanel_data 0.4.0`). In particular, the
+> following are obsolete in this document:
+>
+> - `ConfigManager.resolve_credentials(...)` — replaced by
+>   `_internal/auth/resolver.py::resolve_session(...)`
+> - `Credentials` dataclass — deleted; the API client now takes a `Session`
+> - `MixpanelAPIClient(credentials: Credentials)` — now `MixpanelAPIClient(session: Session, ...)`
+> - `mp auth list/add/remove/switch/show/test` CLI group — replaced by
+>   `mp account` / `mp project` / `mp workspace` / `mp target` / `mp session`
+> - `~/.mp/config.toml` v1 schema (`default = "X"`) and v2 schema
+>   (`[credentials.X]` / `[projects.X]` / `config_version`) — both removed;
+>   single v3 schema described in [`../specs/042-auth-architecture-redesign/contracts/config-schema.md`](../specs/042-auth-architecture-redesign/contracts/config-schema.md)
+>
+> The non-auth sections (StorageEngine, services, query/streaming layers,
+> CLI fetch/query/inspect groups) remain accurate.
+
 ## Executive Summary
 
 ### Problem

@@ -14,10 +14,10 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -25,20 +25,13 @@ from mixpanel_data._internal.config import AuthMethod, Credentials
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport (no workspace ID set).
@@ -53,7 +46,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 def _alert_result(
@@ -90,7 +83,7 @@ def _alert_result(
 class TestListAlerts:
     """Tests for list_alerts() API client method."""
 
-    def test_returns_alert_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_alert_list(self, oauth_credentials: Session) -> None:
         """list_alerts() returns a list of alert dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -114,7 +107,7 @@ class TestListAlerts:
         assert result[0]["id"] == 1
         assert result[1]["name"] == "Alert B"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """list_alerts() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -129,7 +122,7 @@ class TestListAlerts:
 
         assert "/alerts/custom/" in captured_urls[0]
 
-    def test_bookmark_id_param(self, oauth_credentials: Credentials) -> None:
+    def test_bookmark_id_param(self, oauth_credentials: Session) -> None:
         """list_alerts(bookmark_id=42) passes query param."""
         captured_urls: list[str] = []
 
@@ -144,7 +137,7 @@ class TestListAlerts:
 
         assert "bookmark_id=42" in captured_urls[0]
 
-    def test_skip_user_filter_param(self, oauth_credentials: Credentials) -> None:
+    def test_skip_user_filter_param(self, oauth_credentials: Session) -> None:
         """list_alerts(skip_user_filter=True) passes query param."""
         captured_urls: list[str] = []
 
@@ -159,7 +152,7 @@ class TestListAlerts:
 
         assert "skip_user_filter=true" in captured_urls[0]
 
-    def test_empty_result(self, oauth_credentials: Credentials) -> None:
+    def test_empty_result(self, oauth_credentials: Session) -> None:
         """list_alerts() returns empty list when no alerts exist."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -172,7 +165,7 @@ class TestListAlerts:
 
         assert result == []
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_alerts() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -191,7 +184,7 @@ class TestListAlerts:
 class TestCreateAlert:
     """Tests for create_alert() API client method."""
 
-    def test_creates_alert(self, oauth_credentials: Credentials) -> None:
+    def test_creates_alert(self, oauth_credentials: Session) -> None:
         """create_alert() sends POST and returns alert dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -214,7 +207,7 @@ class TestCreateAlert:
         assert captured[0][1]["name"] == "New Alert"
         assert result["id"] == 99
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """create_alert() posts to the alerts/custom/ endpoint."""
         captured_urls: list[str] = []
 
@@ -236,7 +229,7 @@ class TestCreateAlert:
 class TestGetAlert:
     """Tests for get_alert() API client method."""
 
-    def test_gets_alert_by_id(self, oauth_credentials: Credentials) -> None:
+    def test_gets_alert_by_id(self, oauth_credentials: Session) -> None:
         """get_alert() sends GET with alert ID in path."""
         captured_urls: list[str] = []
 
@@ -258,7 +251,7 @@ class TestGetAlert:
         assert "/alerts/custom/42/" in captured_urls[0]
         assert result["id"] == 42
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_alert() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -280,7 +273,7 @@ class TestGetAlert:
 class TestUpdateAlert:
     """Tests for update_alert() API client method."""
 
-    def test_updates_alert(self, oauth_credentials: Credentials) -> None:
+    def test_updates_alert(self, oauth_credentials: Session) -> None:
         """update_alert() sends PATCH with body."""
         captured: list[tuple[str, Any]] = []
 
@@ -303,7 +296,7 @@ class TestUpdateAlert:
         assert captured[0][1]["name"] == "Updated"
         assert result["name"] == "Updated"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """update_alert() targets the correct alert ID in URL."""
         captured_urls: list[str] = []
 
@@ -325,7 +318,7 @@ class TestUpdateAlert:
 class TestDeleteAlert:
     """Tests for delete_alert() API client method."""
 
-    def test_deletes_alert(self, oauth_credentials: Credentials) -> None:
+    def test_deletes_alert(self, oauth_credentials: Session) -> None:
         """delete_alert() sends DELETE request."""
         captured_methods: list[str] = []
 
@@ -340,7 +333,7 @@ class TestDeleteAlert:
 
         assert captured_methods[0] == "DELETE"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """delete_alert() targets the correct alert ID in URL."""
         captured_urls: list[str] = []
 
@@ -359,7 +352,7 @@ class TestDeleteAlert:
 class TestBulkDeleteAlerts:
     """Tests for bulk_delete_alerts() API client method."""
 
-    def test_bulk_deletes(self, oauth_credentials: Credentials) -> None:
+    def test_bulk_deletes(self, oauth_credentials: Session) -> None:
         """bulk_delete_alerts() sends POST with alert_ids."""
         captured: list[tuple[str, Any]] = []
 
@@ -375,7 +368,7 @@ class TestBulkDeleteAlerts:
         assert captured[0][0] == "POST"
         assert captured[0][1] == {"alert_ids": [1, 2, 3]}
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """bulk_delete_alerts() posts to bulk-delete endpoint."""
         captured_urls: list[str] = []
 
@@ -399,7 +392,7 @@ class TestBulkDeleteAlerts:
 class TestGetAlertCount:
     """Tests for get_alert_count() API client method."""
 
-    def test_gets_count(self, oauth_credentials: Credentials) -> None:
+    def test_gets_count(self, oauth_credentials: Session) -> None:
         """get_alert_count() returns count dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -423,7 +416,7 @@ class TestGetAlertCount:
         assert result["anomaly_alerts_count"] == 5
         assert result["alert_limit"] == 100
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """get_alert_count() targets alert-count endpoint."""
         captured_urls: list[str] = []
 
@@ -448,7 +441,7 @@ class TestGetAlertCount:
 
         assert "/alerts/custom/alert-count/" in captured_urls[0]
 
-    def test_with_type_param(self, oauth_credentials: Credentials) -> None:
+    def test_with_type_param(self, oauth_credentials: Session) -> None:
         """get_alert_count(alert_type='anomaly') passes type param."""
         captured_urls: list[str] = []
 
@@ -477,7 +470,7 @@ class TestGetAlertCount:
 class TestGetAlertHistory:
     """Tests for get_alert_history() API client method."""
 
-    def test_gets_history(self, oauth_credentials: Credentials) -> None:
+    def test_gets_history(self, oauth_credentials: Session) -> None:
         """get_alert_history() returns history response."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -500,7 +493,7 @@ class TestGetAlertHistory:
         assert len(result["results"]) == 1
         assert result["pagination"]["page_size"] == 20
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """get_alert_history() targets history endpoint."""
         captured_urls: list[str] = []
 
@@ -521,7 +514,7 @@ class TestGetAlertHistory:
 
         assert "/alerts/custom/42/history/" in captured_urls[0]
 
-    def test_with_pagination_params(self, oauth_credentials: Credentials) -> None:
+    def test_with_pagination_params(self, oauth_credentials: Session) -> None:
         """get_alert_history() passes pagination query params."""
         captured_urls: list[str] = []
 
@@ -548,7 +541,7 @@ class TestGetAlertHistory:
 class TestTestAlert:
     """Tests for test_alert() API client method."""
 
-    def test_sends_test(self, oauth_credentials: Credentials) -> None:
+    def test_sends_test(self, oauth_credentials: Session) -> None:
         """test_alert() sends POST and returns result."""
         captured: list[tuple[str, Any]] = []
 
@@ -567,7 +560,7 @@ class TestTestAlert:
         assert captured[0][0] == "POST"
         assert result["status"] == "sent"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """test_alert() posts to test endpoint."""
         captured_urls: list[str] = []
 
@@ -589,7 +582,7 @@ class TestTestAlert:
 class TestGetAlertScreenshotUrl:
     """Tests for get_alert_screenshot_url() API client method."""
 
-    def test_gets_url(self, oauth_credentials: Credentials) -> None:
+    def test_gets_url(self, oauth_credentials: Session) -> None:
         """get_alert_screenshot_url() returns signed URL dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -608,7 +601,7 @@ class TestGetAlertScreenshotUrl:
 
         assert result["signed_url"] == "https://storage.googleapis.com/abc.png"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """get_alert_screenshot_url() targets screenshot endpoint."""
         captured_urls: list[str] = []
 
@@ -634,7 +627,7 @@ class TestGetAlertScreenshotUrl:
 class TestValidateAlertsForBookmark:
     """Tests for validate_alerts_for_bookmark() API client method."""
 
-    def test_validates(self, oauth_credentials: Credentials) -> None:
+    def test_validates(self, oauth_credentials: Session) -> None:
         """validate_alerts_for_bookmark() sends POST and returns result."""
         captured: list[tuple[str, Any]] = []
 
@@ -665,7 +658,7 @@ class TestValidateAlertsForBookmark:
         assert captured[0][0] == "POST"
         assert result["invalid_count"] == 0
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """validate_alerts_for_bookmark() targets validate endpoint."""
         captured_urls: list[str] = []
 

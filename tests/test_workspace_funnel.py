@@ -16,12 +16,11 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data import Workspace
-from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data.exceptions import BookmarkValidationError
 from mixpanel_data.types import FunnelQueryResult
+from tests.conftest import make_session
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -30,26 +29,6 @@ if TYPE_CHECKING:
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for testing."""
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
-
-
-@pytest.fixture
-def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
-    """Create mock ConfigManager that returns credentials."""
-    manager = MagicMock(spec=ConfigManager)
-    manager.config_version.return_value = 1
-    manager.resolve_credentials.return_value = mock_credentials
-    return manager
 
 
 @pytest.fixture
@@ -64,7 +43,6 @@ def mock_api_client() -> MagicMock:
 
 @pytest.fixture
 def workspace_factory(
-    mock_config_manager: MagicMock,
     mock_api_client: MagicMock,
 ) -> Callable[..., Workspace]:
     """Factory for creating Workspace instances with mocked dependencies."""
@@ -79,7 +57,7 @@ def workspace_factory(
             Workspace instance with mocked dependencies.
         """
         defaults: dict[str, Any] = {
-            "_config_manager": mock_config_manager,
+            "session": make_session(),
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)
@@ -122,27 +100,9 @@ MOCK_FUNNEL_RESPONSE: dict[str, Any] = {
 # =============================================================================
 
 
-class TestQueryFunnelConfigError:
-    """Tests for query_funnel() when credentials are missing."""
-
-    def test_no_credentials_raises_config_error(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """query_funnel raises ConfigError when credentials are None."""
-        from mixpanel_data.exceptions import ConfigError
-
-        no_creds_manager = MagicMock(spec=ConfigManager)
-        no_creds_manager.config_version.return_value = 1
-        no_creds_manager.resolve_credentials.return_value = None
-
-        ws = Workspace(
-            _config_manager=no_creds_manager,
-            _api_client=mock_api_client,
-        )
-
-        with pytest.raises(ConfigError, match="credentials"):
-            ws.query_funnel(["Signup", "Purchase"])
+# TestQueryFunnelConfigError removed in B1 (Fix 10): Workspace.__init__
+# now always populates ``_credentials`` via the v3 session shim, so the
+# "no credentials" path is unreachable.
 
 
 class TestQueryFunnelValidation:

@@ -98,6 +98,19 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["mixpanel_data"]
 
+[tool.ruff.lint.per-file-ignores]
+# Test files routinely accept pytest fixtures as parameters whose only role
+# is to trigger fixture side-effects (e.g., ``_isolated_home: None``). The
+# ARG001/ARG002 lints flag those as unused. F811 fires when a test file
+# imports a fixture from another module so pytest can discover it.
+"tests/**/*.py" = ["ARG001", "ARG002", "F811"]
+# Typer command handlers receive ``ctx: typer.Context`` for every command;
+# the ctx is consumed by the @handle_errors decorator and the framework,
+# even when the body doesn't reference it. Stub commands (Phase-deferred
+# functionality) similarly accept their final-API arg shape. Both shapes
+# are deliberate, not bugs.
+"src/mixpanel_data/cli/commands/*.py" = ["ARG001"]
+
 [tool.mypy]
 python_version = "3.10"
 strict = true
@@ -124,6 +137,7 @@ addopts = "-vv --tb=short -m 'not live'"
 markers = [
     "live: marks tests as live API tests (deselect with '-m \"not live\"')",
     "destructive: marks tests that consume limited resources (e.g. deletion request quota)",
+    "contract: marks tests that lock recorded HTTP response shapes (auth redesign R6 layered tests)",
 ]
 
 [tool.coverage.run]

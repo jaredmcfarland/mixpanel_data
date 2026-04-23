@@ -17,7 +17,8 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
-from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data.exceptions import BookmarkValidationError
 from mixpanel_data.types import (
     CustomPropertyRef,
@@ -26,6 +27,19 @@ from mixpanel_data.types import (
     InlineCustomProperty,
     Metric,
     PropertyInput,
+)
+from tests.conftest import make_session
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
 )
 
 # =============================================================================
@@ -280,13 +294,11 @@ class TestTypeWidening:
 @pytest.fixture
 def ws() -> Workspace:
     """Create a Workspace instance with mocked dependencies."""
-    creds = Credentials(
-        username="u", secret=SecretStr("s"), project_id="1", region="us"
-    )
-    mgr = MagicMock(spec=ConfigManager)
+    creds = make_session(username="u", secret="s", project_id="1", region="us")
+    mgr = MagicMock()
     mgr.config_version.return_value = 1
     mgr.resolve_credentials.return_value = creds
-    return Workspace(_config_manager=mgr, _api_client=MagicMock())
+    return Workspace(session=_TEST_SESSION, _api_client=MagicMock())
 
 
 class TestCustomPropertyValidationCP1:

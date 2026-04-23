@@ -16,33 +16,33 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data.exceptions import QueryError
+from tests.conftest import make_session
 
 # =============================================================================
 # Helpers
 # =============================================================================
 
 
-def _make_credentials() -> Credentials:
+def _make_credentials() -> Session:
     """Create test credentials for API client construction.
 
     Returns:
         Credentials with test values for US region.
     """
-    return Credentials(
+    return make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id="12345",
         region="us",
     )
 
 
 def _create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Any,
 ) -> MixpanelAPIClient:
     """Create a MixpanelAPIClient with mock transport.
@@ -55,7 +55,7 @@ def _create_mock_client(
         MixpanelAPIClient wired to the mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -64,7 +64,7 @@ def _create_mock_client(
 
 
 @pytest.fixture
-def test_credentials() -> Credentials:
+def test_credentials() -> Session:
     """Create test credentials for API client construction.
 
     Returns:
@@ -85,7 +85,7 @@ class TestEngageStats:
     and forwards all parameters correctly.
     """
 
-    def test_posts_to_engage_endpoint(self, test_credentials: Credentials) -> None:
+    def test_posts_to_engage_endpoint(self, test_credentials: Session) -> None:
         """engage_stats() should POST to the /engage endpoint."""
         captured_url: str = ""
 
@@ -99,7 +99,7 @@ class TestEngageStats:
 
         assert "/engage" in captured_url
 
-    def test_posts_to_engage_stats_url(self, test_credentials: Credentials) -> None:
+    def test_posts_to_engage_stats_url(self, test_credentials: Session) -> None:
         """engage_stats() should POST to the /engage/stats URL path."""
         captured_url: str = ""
 
@@ -113,7 +113,7 @@ class TestEngageStats:
 
         assert "/engage/stats" in captured_url
 
-    def test_sends_project_id(self, test_credentials: Credentials) -> None:
+    def test_sends_project_id(self, test_credentials: Session) -> None:
         """engage_stats() should include project_id in request body."""
         captured_body: dict[str, Any] = {}
 
@@ -128,7 +128,7 @@ class TestEngageStats:
 
         assert captured_body.get("project_id") == "12345"
 
-    def test_default_action_is_count(self, test_credentials: Credentials) -> None:
+    def test_default_action_is_count(self, test_credentials: Session) -> None:
         """engage_stats() should default action to 'count()'."""
         captured_body: dict[str, Any] = {}
 
@@ -143,7 +143,7 @@ class TestEngageStats:
 
         assert captured_body.get("action") == "count()"
 
-    def test_custom_action(self, test_credentials: Credentials) -> None:
+    def test_custom_action(self, test_credentials: Session) -> None:
         """engage_stats() should send custom action value."""
         captured_body: dict[str, Any] = {}
 
@@ -158,7 +158,7 @@ class TestEngageStats:
 
         assert captured_body.get("action") == "sum(properties['revenue'])"
 
-    def test_where_sent_as_selector(self, test_credentials: Credentials) -> None:
+    def test_where_sent_as_selector(self, test_credentials: Session) -> None:
         """engage_stats() should send where value as 'selector' param."""
         captured_body: dict[str, Any] = {}
 
@@ -174,9 +174,7 @@ class TestEngageStats:
         assert captured_body.get("selector") == 'properties["plan"] == "premium"'
         assert "where" not in captured_body
 
-    def test_selector_omitted_when_where_none(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_selector_omitted_when_where_none(self, test_credentials: Session) -> None:
         """engage_stats() should not send selector when where is None."""
         captured_body: dict[str, Any] = {}
 
@@ -191,7 +189,7 @@ class TestEngageStats:
 
         assert "selector" not in captured_body
 
-    def test_filter_by_cohort_parameter(self, test_credentials: Credentials) -> None:
+    def test_filter_by_cohort_parameter(self, test_credentials: Session) -> None:
         """engage_stats() should send filter_by_cohort as JSON string."""
         captured_body: dict[str, Any] = {}
 
@@ -207,7 +205,7 @@ class TestEngageStats:
         assert "filter_by_cohort" in captured_body
 
     def test_filter_by_cohort_omitted_when_none(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """engage_stats() should not send filter_by_cohort when None."""
         captured_body: dict[str, Any] = {}
@@ -223,7 +221,7 @@ class TestEngageStats:
 
         assert "filter_by_cohort" not in captured_body
 
-    def test_segment_by_cohorts_parameter(self, test_credentials: Credentials) -> None:
+    def test_segment_by_cohorts_parameter(self, test_credentials: Session) -> None:
         """engage_stats() should send segment_by_cohorts as JSON string."""
         captured_body: dict[str, Any] = {}
 
@@ -243,7 +241,7 @@ class TestEngageStats:
         assert parsed == {"cohort_1": True, "cohort_2": False}
 
     def test_segment_by_cohorts_omitted_when_none(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """engage_stats() should not send segment_by_cohorts when None."""
         captured_body: dict[str, Any] = {}
@@ -259,7 +257,7 @@ class TestEngageStats:
 
         assert "segment_by_cohorts" not in captured_body
 
-    def test_group_id_parameter(self, test_credentials: Credentials) -> None:
+    def test_group_id_parameter(self, test_credentials: Session) -> None:
         """engage_stats() should send data_group_id when group_id is provided."""
         captured_body: dict[str, Any] = {}
 
@@ -274,7 +272,7 @@ class TestEngageStats:
 
         assert captured_body.get("data_group_id") == "companies"
 
-    def test_group_id_omitted_when_none(self, test_credentials: Credentials) -> None:
+    def test_group_id_omitted_when_none(self, test_credentials: Session) -> None:
         """engage_stats() should not send data_group_id when group_id is None."""
         captured_body: dict[str, Any] = {}
 
@@ -289,7 +287,7 @@ class TestEngageStats:
 
         assert "data_group_id" not in captured_body
 
-    def test_as_of_timestamp_parameter(self, test_credentials: Credentials) -> None:
+    def test_as_of_timestamp_parameter(self, test_credentials: Session) -> None:
         """engage_stats() should send as_of_timestamp when provided."""
         captured_body: dict[str, Any] = {}
 
@@ -304,9 +302,7 @@ class TestEngageStats:
 
         assert captured_body.get("as_of_timestamp") == 1700000000
 
-    def test_as_of_timestamp_omitted_when_none(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_as_of_timestamp_omitted_when_none(self, test_credentials: Session) -> None:
         """engage_stats() should not send as_of_timestamp when None."""
         captured_body: dict[str, Any] = {}
 
@@ -322,7 +318,7 @@ class TestEngageStats:
         assert "as_of_timestamp" not in captured_body
 
     def test_include_all_users_false_by_default(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """engage_stats() should not send include_all_users when False (default)."""
         captured_body: dict[str, Any] = {}
@@ -338,7 +334,7 @@ class TestEngageStats:
 
         assert captured_body.get("include_all_users") is not True
 
-    def test_include_all_users_true(self, test_credentials: Credentials) -> None:
+    def test_include_all_users_true(self, test_credentials: Session) -> None:
         """engage_stats() should send include_all_users when cohort filter present."""
         captured_body: dict[str, Any] = {}
 
@@ -356,7 +352,7 @@ class TestEngageStats:
 
         assert captured_body.get("include_all_users") is True
 
-    def test_returns_raw_dict(self, test_credentials: Credentials) -> None:
+    def test_returns_raw_dict(self, test_credentials: Session) -> None:
         """engage_stats() should return the raw response dict."""
         expected: dict[str, Any] = {
             "results": [{"count": 42}],
@@ -372,7 +368,7 @@ class TestEngageStats:
         assert isinstance(result, dict)
         assert result.get("total") == 42
 
-    def test_uses_post_method(self, test_credentials: Credentials) -> None:
+    def test_uses_post_method(self, test_credentials: Session) -> None:
         """engage_stats() should use HTTP POST method."""
         captured_method: str = ""
 
@@ -386,7 +382,7 @@ class TestEngageStats:
 
         assert captured_method == "POST"
 
-    def test_all_params_combined(self, test_credentials: Credentials) -> None:
+    def test_all_params_combined(self, test_credentials: Session) -> None:
         """engage_stats() should combine all parameters in a single request."""
         captured_body: dict[str, Any] = {}
 
@@ -417,7 +413,7 @@ class TestEngageStats:
         assert captured_body.get("include_all_users") is True
 
     def test_non_dict_response_raises_query_error(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """engage_stats() raises QueryError when the API returns a non-dict response."""
 
@@ -444,7 +440,7 @@ class TestExportProfilesPageNewParams:
     sort_key, sort_order, search, limit, and filter_by_cohort parameters.
     """
 
-    def test_sort_key_parameter(self, test_credentials: Credentials) -> None:
+    def test_sort_key_parameter(self, test_credentials: Session) -> None:
         """export_profiles_page() should send sort_key when provided."""
         captured_body: dict[str, Any] = {}
 
@@ -462,7 +458,7 @@ class TestExportProfilesPageNewParams:
 
         assert captured_body.get("sort_key") == "$last_seen"
 
-    def test_sort_key_omitted_when_none(self, test_credentials: Credentials) -> None:
+    def test_sort_key_omitted_when_none(self, test_credentials: Session) -> None:
         """export_profiles_page() should not send sort_key when None."""
         captured_body: dict[str, Any] = {}
 
@@ -480,7 +476,7 @@ class TestExportProfilesPageNewParams:
 
         assert "sort_key" not in captured_body
 
-    def test_sort_order_parameter(self, test_credentials: Credentials) -> None:
+    def test_sort_order_parameter(self, test_credentials: Session) -> None:
         """export_profiles_page() should send sort_order when provided."""
         captured_body: dict[str, Any] = {}
 
@@ -498,7 +494,7 @@ class TestExportProfilesPageNewParams:
 
         assert captured_body.get("sort_order") == "descending"
 
-    def test_sort_order_omitted_when_none(self, test_credentials: Credentials) -> None:
+    def test_sort_order_omitted_when_none(self, test_credentials: Session) -> None:
         """export_profiles_page() should not send sort_order when None."""
         captured_body: dict[str, Any] = {}
 
@@ -516,7 +512,7 @@ class TestExportProfilesPageNewParams:
 
         assert "sort_order" not in captured_body
 
-    def test_search_parameter(self, test_credentials: Credentials) -> None:
+    def test_search_parameter(self, test_credentials: Session) -> None:
         """export_profiles_page() should send search when provided."""
         captured_body: dict[str, Any] = {}
 
@@ -534,7 +530,7 @@ class TestExportProfilesPageNewParams:
 
         assert captured_body.get("search") == "alice@example.com"
 
-    def test_search_omitted_when_none(self, test_credentials: Credentials) -> None:
+    def test_search_omitted_when_none(self, test_credentials: Session) -> None:
         """export_profiles_page() should not send search when None."""
         captured_body: dict[str, Any] = {}
 
@@ -552,7 +548,7 @@ class TestExportProfilesPageNewParams:
 
         assert "search" not in captured_body
 
-    def test_limit_parameter(self, test_credentials: Credentials) -> None:
+    def test_limit_parameter(self, test_credentials: Session) -> None:
         """export_profiles_page() should send limit when provided."""
         captured_body: dict[str, Any] = {}
 
@@ -570,7 +566,7 @@ class TestExportProfilesPageNewParams:
 
         assert captured_body.get("limit") == 50
 
-    def test_limit_omitted_when_none(self, test_credentials: Credentials) -> None:
+    def test_limit_omitted_when_none(self, test_credentials: Session) -> None:
         """export_profiles_page() should not send limit when None."""
         captured_body: dict[str, Any] = {}
 
@@ -588,9 +584,7 @@ class TestExportProfilesPageNewParams:
 
         assert "limit" not in captured_body
 
-    def test_sort_key_and_sort_order_combined(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_sort_key_and_sort_order_combined(self, test_credentials: Session) -> None:
         """export_profiles_page() should send both sort_key and sort_order together."""
         captured_body: dict[str, Any] = {}
 
@@ -613,7 +607,7 @@ class TestExportProfilesPageNewParams:
         assert captured_body.get("sort_key") == "$last_seen"
         assert captured_body.get("sort_order") == "descending"
 
-    def test_all_new_params_combined(self, test_credentials: Credentials) -> None:
+    def test_all_new_params_combined(self, test_credentials: Session) -> None:
         """export_profiles_page() should send all new parameters together."""
         captured_body: dict[str, Any] = {}
 
@@ -648,7 +642,7 @@ class TestExportProfilesPageNewParams:
         assert "filter_by_cohort" in captured_body
 
     def test_new_params_coexist_with_existing_params(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """New parameters should coexist with existing where and output_properties."""
         captured_body: dict[str, Any] = {}
@@ -690,7 +684,7 @@ class TestExportProfilesPageFilterByCohort:
     {"raw_cohort": {...}} formats.
     """
 
-    def test_filter_by_cohort_id_format(self, test_credentials: Credentials) -> None:
+    def test_filter_by_cohort_id_format(self, test_credentials: Session) -> None:
         """filter_by_cohort should accept {"id": N} format as JSON string."""
         captured_body: dict[str, Any] = {}
 
@@ -713,7 +707,7 @@ class TestExportProfilesPageFilterByCohort:
         assert parsed == {"id": 42}
 
     def test_filter_by_cohort_raw_cohort_format(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """filter_by_cohort should accept {"raw_cohort": {...}} format."""
         captured_body: dict[str, Any] = {}
@@ -751,7 +745,7 @@ class TestExportProfilesPageFilterByCohort:
         )
 
     def test_filter_by_cohort_omitted_when_none(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """filter_by_cohort should not be sent when None."""
         captured_body: dict[str, Any] = {}
@@ -771,7 +765,7 @@ class TestExportProfilesPageFilterByCohort:
         assert "filter_by_cohort" not in captured_body
 
     def test_filter_by_cohort_does_not_conflict_with_cohort_id(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """filter_by_cohort param should take precedence when both cohort_id and filter_by_cohort are given."""
         captured_body: dict[str, Any] = {}
@@ -800,7 +794,7 @@ class TestExportProfilesPageFilterByCohort:
         assert parsed.get("id") == 99
 
     def test_filter_by_cohort_passthrough_preserves_json(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """filter_by_cohort should be passed through as-is without re-encoding."""
         captured_body: dict[str, Any] = {}

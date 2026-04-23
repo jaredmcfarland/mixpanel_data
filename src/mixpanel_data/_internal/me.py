@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 import pydantic
 from pydantic import BaseModel, ConfigDict
 
-from mixpanel_data._internal.auth_credential import VALID_REGIONS
+from mixpanel_data._internal.io_utils import atomic_write_bytes
 from mixpanel_data.exceptions import AuthenticationError, ConfigError, QueryError
 
 if TYPE_CHECKING:
@@ -218,91 +218,81 @@ _DEFAULT_TTL_SECONDS = 86400
 
 
 class MeCache:
-    """Disk-based cache for /me API responses.
+    """Disk-based, per-account cache for /me API responses.
 
-    Stores responses as JSON files at ``{storage_dir}/me_{region}.json``
-    (or ``me_{region}_{credential_name}.json`` when scoped) with
-    configurable TTL. Files are created with ``0o600`` permissions.
+    Stores one response file per account at
+    ``~/.mp/accounts/{account_name}/me.json`` (or under ``storage_dir``
+    when overridden for tests) with configurable TTL. Files are created
+    with ``0o600`` permissions inside the per-account directory at
+    ``0o700``.
 
     Args:
-        storage_dir: Directory for cache files. Defaults to ``~/.mp/oauth/``.
+        account_name: Account name — drives the per-account cache
+            directory layout (T043 of the 042 plan).
+        storage_dir: Override the cache directory entirely. When provided,
+            the cache file lives at ``{storage_dir}/me.json`` regardless
+            of ``account_name``. Tests use this to point at a tmp dir.
         ttl_seconds: Cache time-to-live in seconds. Default: 86400 (24h).
-        credential_name: Credential identity for cache isolation. When
-            non-empty, cache files include this name so different
-            credentials in the same region do not share a cache.
 
     Example:
         ```python
-        cache = MeCache()
-        cache.put("us", me_response)
-        cached = cache.get("us")  # Returns MeResponse or None
-        cache.invalidate("us")
+        cache = MeCache(account_name="personal")
+        cache.put(me_response)
+        cached = cache.get()  # Returns MeResponse or None
+        cache.invalidate()
         ```
     """
 
     def __init__(
         self,
+        *,
+        account_name: str,
         storage_dir: Path | None = None,
         ttl_seconds: int = _DEFAULT_TTL_SECONDS,
-        credential_name: str = "",
     ) -> None:
         """Initialize MeCache.
 
         Args:
-            storage_dir: Override cache directory. Defaults to ``~/.mp/oauth/``.
+            account_name: Account name. Cache files live at
+                ``~/.mp/accounts/{account_name}/me.json`` unless
+                ``storage_dir`` overrides.
+            storage_dir: Override cache directory (test injection).
             ttl_seconds: Cache TTL in seconds. Default: 86400 (24 hours).
-            credential_name: Credential identity for cache isolation. When
-                provided, cache files are scoped to this name so that
-                different credentials in the same region do not share a
-                cache file. Defaults to ``""`` (backward-compatible, no
-                scoping).
         """
+        self._account_name = account_name
         if storage_dir is not None:
-            self._storage_dir = storage_dir
+            self._cache_dir = storage_dir
         else:
-            self._storage_dir = Path.home() / ".mp" / "oauth"
+            self._cache_dir = Path.home() / ".mp" / "accounts" / account_name
         self._ttl_seconds = ttl_seconds
-        self._credential_name = credential_name
 
-    def _cache_path(self, region: str) -> Path:
-        """Return the cache file path for a region.
-
-        When ``credential_name`` is set, the file is scoped to that
-        credential so that two service accounts in the same region get
-        separate cache files (e.g. ``me_us_demo-sa.json``).
-
-        Args:
-            region: Data residency region (us, eu, in).
+    def _cache_path(self) -> Path:
+        """Return the per-account cache file path.
 
         Returns:
-            Path to the cache file.
+            ``{cache_dir}/me.json``.
         """
-        if self._credential_name:
-            return self._storage_dir / f"me_{region}_{self._credential_name}.json"
-        return self._storage_dir / f"me_{region}.json"
+        return self._cache_dir / "me.json"
 
-    def get(self, region: str) -> MeResponse | None:
-        """Retrieve a cached /me response for a region.
+    def get(self) -> MeResponse | None:
+        """Retrieve the cached /me response for the bound account.
 
         Returns ``None`` if no cache exists, the cache is expired,
         or the cache file is corrupted.
-
-        Args:
-            region: Data residency region (us, eu, in).
 
         Returns:
             Cached MeResponse or None if cache miss/expired/corrupted.
 
         Example:
             ```python
-            cache = MeCache()
-            me = cache.get("us")
+            cache = MeCache(account_name="personal")
+            me = cache.get()
             if me is None:
                 me = fetch_from_api()
-                cache.put("us", me)
+                cache.put(me)
             ```
         """
-        path = self._cache_path(region)
+        path = self._cache_path()
         if not path.exists():
             return None
 
@@ -318,41 +308,56 @@ class MeCache:
         if cached_at is not None and isinstance(cached_at, (int, float)):
             age = time.time() - cached_at
             if age > self._ttl_seconds:
-                logger.debug("Cache expired for region '%s' (age=%.0fs)", region, age)
+                logger.debug(
+                    "Cache expired for account '%s' (age=%.0fs)",
+                    self._account_name,
+                    age,
+                )
                 return None
 
         try:
             return MeResponse.model_validate(data)
         except pydantic.ValidationError as e:
-            logger.debug("Failed to parse cached /me response: %s", e)
+            # Schema drift on disk is a real signal — log at WARNING so users
+            # see why their cache is silently missing on every CLI invocation.
+            # Then unlink the file so the next call deterministically refetches
+            # rather than re-paying the parse cost.
+            logger.warning(
+                "Cached /me response at %s no longer matches the model "
+                "(schema drift). Invalidating: %s",
+                path,
+                e,
+            )
+            path.unlink(missing_ok=True)
             return None
 
-    def put(self, region: str, response: MeResponse) -> None:
+    def put(self, response: MeResponse) -> None:
         """Store a /me response in the cache.
 
-        Adds ``cached_at`` and ``cached_region`` metadata before writing.
-        Creates the storage directory if it doesn't exist.
-        Sets file permissions to ``0o600`` (owner-only read/write).
+        Adds ``cached_at`` metadata before writing. Creates the per-account
+        directory at mode ``0o700`` if it doesn't exist; the cache file is
+        written at mode ``0o600``.
 
         Args:
-            region: Data residency region (us, eu, in).
             response: MeResponse to cache.
 
         Example:
             ```python
-            cache = MeCache()
-            cache.put("us", me_response)
+            cache = MeCache(account_name="personal")
+            cache.put(me_response)
             ```
         """
-        self._storage_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
         try:
-            os.chmod(self._storage_dir, stat.S_IRWXU)  # 0o700
+            os.chmod(self._cache_dir, stat.S_IRWXU)  # 0o700
         except OSError as e:
-            logger.warning(
-                "Could not set permissions on cache directory %s: %s",
-                self._storage_dir,
-                e,
-            )
+            # Cache contains user emails / org names / project names — PII
+            # that should not be world-readable. A filesystem that can't
+            # enforce 0o700 is a real config issue, not a soft warning.
+            raise ConfigError(
+                f"Cannot enforce 0o700 on cache directory {self._cache_dir}: {e}",
+                details={"path": str(self._cache_dir)},
+            ) from e
 
         # Add cache metadata, stripping bulky fields that bloat the cache.
         # Workspace member_list and unified_member_list can be 10-30MB each
@@ -366,50 +371,27 @@ class MeCache:
                     for key in _STRIP_FROM_WORKSPACES:
                         ws_data.pop(key, None)
         data["cached_at"] = time.time()
-        data["cached_region"] = region
 
-        path = self._cache_path(region)
-        # Write atomically via temp file
-        tmp_path = path.with_suffix(".tmp")
-        try:
-            tmp_path.write_text(
-                json.dumps(data, indent=2, default=str),
-                encoding="utf-8",
-            )
-            # Set permissions before rename
-            os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
-            tmp_path.replace(path)
-        except OSError:
-            # Clean up temp file on failure
-            tmp_path.unlink(missing_ok=True)
-            raise
+        # Route through the project's atomic-write primitive so concurrent
+        # writers (multiple Workspace instances in the same process, parallel
+        # CLI invocations) get distinct tmp filenames keyed on pid+tid and
+        # cannot collide. Mode 0o600 matches the credential-adjacent default.
+        atomic_write_bytes(
+            self._cache_path(),
+            json.dumps(data, indent=2, default=str).encode("utf-8"),
+            mode=0o600,
+        )
 
-    def invalidate(self, region: str) -> None:
-        """Remove the cached /me response for a specific region.
-
-        Args:
-            region: Data residency region to invalidate.
+    def invalidate(self) -> None:
+        """Remove the cached /me response for this account.
 
         Example:
             ```python
-            cache = MeCache()
-            cache.invalidate("us")
+            cache = MeCache(account_name="personal")
+            cache.invalidate()
             ```
         """
-        path = self._cache_path(region)
-        path.unlink(missing_ok=True)
-
-    def invalidate_all(self) -> None:
-        """Remove all cached /me responses.
-
-        Example:
-            ```python
-            cache = MeCache()
-            cache.invalidate_all()
-            ```
-        """
-        for region in VALID_REGIONS:
-            self.invalidate(region)
+        self._cache_path().unlink(missing_ok=True)
 
 
 class MeService:
@@ -483,30 +465,37 @@ class MeService:
 
         # Check disk cache
         if not force_refresh:
-            cached = self._cache.get(self._region)
+            cached = self._cache.get()
             if cached is not None:
                 self._cached_response = cached
                 return cached
 
-        # Call API
-        _NO_ME_ACCESS = (
-            "Credentials lack permission for /me discovery. "
-            "Specify --project explicitly or use credentials with "
-            "/me access."
-        )
+        # Call API. Distinguish 401 (re-login fix) from 403 (need /me scope)
+        # so the user gets the actionable next step, not a generic message.
+        account_name = self._cache._account_name  # noqa: SLF001
         try:
             raw = self._api_client.me()
         except AuthenticationError as exc:
-            raise ConfigError(_NO_ME_ACCESS, details={"status_code": 401}) from exc
+            raise ConfigError(
+                f"Credentials for account '{account_name}' are invalid (401). "
+                f"Run `mp account test {account_name}` to confirm; if it's an "
+                f"oauth_browser account, run `mp account login {account_name}`.",
+                details={"status_code": 401, "account_name": account_name},
+            ) from exc
         except QueryError as exc:
             if exc.status_code == 403:
-                raise ConfigError(_NO_ME_ACCESS, details={"status_code": 403}) from exc
+                raise ConfigError(
+                    f"Account '{account_name}' lacks /me permission (403). "
+                    f"Specify --project explicitly, or use an account whose "
+                    f"credentials have /me scope.",
+                    details={"status_code": 403, "account_name": account_name},
+                ) from exc
             raise
 
         response = MeResponse.model_validate(raw)
 
         # Store in caches
-        self._cache.put(self._region, response)
+        self._cache.put(response)
         self._cached_response = response
 
         return response

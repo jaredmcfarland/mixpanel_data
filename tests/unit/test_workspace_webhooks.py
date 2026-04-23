@@ -19,7 +19,8 @@ import httpx
 from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data.types import (
     CreateWebhookParams,
     ProjectWebhook,
@@ -29,46 +30,38 @@ from mixpanel_data.types import (
     WebhookTestResult,
 )
 from mixpanel_data.workspace import Workspace
+from tests.conftest import make_session
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 # =============================================================================
 # Helpers
 # =============================================================================
 
 
-def _make_oauth_credentials() -> Credentials:
+def _make_oauth_credentials() -> Session:
     """Create OAuth Credentials for testing.
 
     Returns:
         A Credentials instance with auth_method=oauth.
     """
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-token")
 
 
-def _setup_config_with_account(temp_dir: Path) -> ConfigManager:
-    """Create a ConfigManager with a dummy account for credential resolution.
-
-    Args:
-        temp_dir: Temporary directory for the config file.
-
-    Returns:
-        ConfigManager with a test account configured.
-    """
-    cm = ConfigManager(config_path=temp_dir / "config.toml")
-    cm.add_account(
-        name="test",
-        username="test_user",
-        secret="test_secret",
-        project_id="12345",
-        region="us",
-    )
-    return cm
+# _setup_config_with_account removed in B1 (Fix 9): the legacy v1
+# ``ConfigManager.add_account(project_id=, region=, …)`` signature is
+# gone; ``_make_workspace`` now relies on ``session=_TEST_SESSION``
+# instead, which never touches a real ConfigManager.
 
 
 def _make_workspace(
@@ -86,9 +79,9 @@ def _make_workspace(
     """
     creds = _make_oauth_credentials()
     transport = httpx.MockTransport(handler)
-    client = MixpanelAPIClient(creds, _transport=transport)
+    client = MixpanelAPIClient(session=creds, _transport=transport)
     return Workspace(
-        _config_manager=_setup_config_with_account(temp_dir),
+        session=_TEST_SESSION,
         _api_client=client,
     )
 

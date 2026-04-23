@@ -1,34 +1,22 @@
-"""Auth bridge for Claude Cowork credential transfer.
+"""Auth bridge for Claude Cowork credential transfer (042 redesign — v2 schema).
 
-Provides a JSON-based credential bridge that allows ``mixpanel_data``
-to authenticate inside Claude Cowork VMs. Credentials are exported
-from the host machine to ``~/.claude/mixpanel/auth.json``, which is
-bindfs-mounted into the Cowork VM.
+The bridge is a JSON credential file that lets ``mixpanel_data``
+authenticate inside a Claude Cowork VM by reading credentials a host
+process exported. It embeds a full :class:`Account` discriminated-union
+record (with secrets inline by design — Cowork crosses a trust
+boundary), optional project / workspace pinning, and a custom-headers
+map. Loaded as a synthetic config source by
+:func:`~mixpanel_data._internal.auth.resolver.resolve_session`; the
+writer side (Cluster C2 of the 042 plan — :func:`export_bridge` /
+:func:`remove_bridge`) lives at the bottom of this module.
 
-The bridge supports both OAuth 2.0 and service account credentials,
-optional custom HTTP headers, and automatic OAuth token refresh
-(no browser required — uses HTTP POST with refresh token).
+Bridge file search order (first existing file wins):
+    1. Argument ``path`` to :func:`load_bridge` (if not None).
+    2. ``MP_AUTH_FILE`` env var (if set).
+    3. ``~/.claude/mixpanel/auth.json`` (default Cowork location).
+    4. ``<cwd>/mixpanel_auth.json`` (workspace-mount fallback).
 
-Bridge file search order:
-    1. ``MP_AUTH_FILE`` environment variable (explicit path)
-    2. ``mixpanel_auth.json`` in current working directory (Cowork workspace)
-    3. ``~/.claude/mixpanel/auth.json`` (standard location)
-    4. ``~/.claude/mixpanel_auth.json`` (flat file alternative)
-    5. ``~/mnt/{folder}/mixpanel_auth.json`` (Cowork bindfs mount)
-
-Example:
-    ```python
-    from mixpanel_data._internal.auth.bridge import (
-        load_bridge_file,
-        bridge_to_credentials,
-        detect_cowork,
-    )
-
-    if detect_cowork():
-        bridge = load_bridge_file()
-        if bridge is not None:
-            creds = bridge_to_credentials(bridge)
-    ```
+Reference: ``specs/042-auth-architecture-redesign/contracts/config-schema.md`` §2.
 """
 
 from __future__ import annotations
@@ -36,648 +24,363 @@ from __future__ import annotations
 import json
 import logging
 import os
-import stat
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, SecretStr, field_validator, model_validator
-
-from mixpanel_data._internal.auth.flow import OAuthFlow
-from mixpanel_data._internal.auth.token import OAuthTokens
-from mixpanel_data._internal.auth_credential import (
-    VALID_REGIONS,
-    AuthCredential,
-    CredentialType,
-    ProjectContext,
-    RegionType,
-    ResolvedSession,
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveInt,
+    SecretStr,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
 )
-from mixpanel_data._internal.config import AuthMethod, Credentials
-from mixpanel_data.exceptions import OAuthError
+
+from mixpanel_data._internal.auth.account import (
+    Account,
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
+    ServiceAccount,
+    TokenResolver,
+)
+from mixpanel_data._internal.auth.storage import account_dir
+from mixpanel_data._internal.auth.token import OAuthTokens
+from mixpanel_data._internal.io_utils import atomic_write_bytes
+from mixpanel_data.exceptions import ConfigError, OAuthError
 
 logger = logging.getLogger(__name__)
 
-# Sentinel path for Cowork detection
-_COWORK_SESSIONS_PATH = Path("/sessions")
 
-# Default bridge file location
-_BRIDGE_FILENAME = "auth.json"
-_BRIDGE_DIR_NAME = "mixpanel"
-_CLAUDE_DIR_NAME = ".claude"
-# Flat file alternative (for Cowork where subdirectories may not be visible)
-FLAT_BRIDGE_FILENAME = "mixpanel_auth.json"
+class BridgeFile(BaseModel):
+    """Cowork credential bridge file — v2 schema.
 
+    Embeds a full :class:`~mixpanel_data._internal.auth.account.Account`
+    record (with secrets inline) plus optional project / workspace pinning
+    and a custom-headers map.
 
-class BridgeCustomHeader(BaseModel):
-    """Custom HTTP header to include in all API requests.
-
-    Both name and value must be provided. The value is stored as a
-    ``SecretStr`` to prevent accidental exposure in logs.
-
-    Attributes:
-        name: HTTP header name (e.g., ``X-Custom-Auth``).
-        value: HTTP header value (redacted in output).
+    Example:
+        ```json
+        {
+          "version": 2,
+          "account": {"type": "oauth_browser", "name": "personal", "region": "us"},
+          "tokens": {"access_token": "...", "refresh_token": "...",
+                     "expires_at": "2026-04-22T12:00:00Z",
+                     "token_type": "Bearer", "scope": "read"},
+          "project": "3713224",
+          "workspace": 3448413,
+          "headers": {"X-Mixpanel-Cluster": "internal-1"}
+        }
+        ```
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    name: str
-    """HTTP header name."""
+    version: Literal[2] = 2
+    """Bridge schema version — always ``2``."""
 
-    value: SecretStr
-    """HTTP header value (redacted in output)."""
+    account: Account
+    """Full Account discriminated-union record (with secrets inline by design)."""
 
+    tokens: OAuthTokens | None = None
+    """OAuth tokens — required iff ``account.type == "oauth_browser"``."""
 
-class BridgeOAuth(BaseModel):
-    """OAuth 2.0 token data stored in the bridge file.
+    project: Annotated[str | None, Field(default=None, pattern=r"^\d+$")] = None
+    """Optional pinned project ID (numeric string)."""
 
-    Contains everything needed for Bearer auth and token refresh
-    without a browser.
+    workspace: PositiveInt | None = None
+    """Optional pinned workspace ID."""
 
-    Attributes:
-        access_token: OAuth access token (redacted in output).
-        refresh_token: OAuth refresh token for silent renewal.
-        expires_at: UTC datetime when access_token expires.
-        scope: Space-separated granted scopes.
-        token_type: Token type, typically ``"Bearer"``.
-        client_id: OAuth client ID for token refresh requests.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    access_token: SecretStr
-    """OAuth access token (redacted in output)."""
-
-    refresh_token: SecretStr | None = None
-    """OAuth refresh token for silent renewal."""
-
-    expires_at: datetime
-    """UTC datetime when access_token expires."""
-
-    scope: str
-    """Space-separated granted scopes."""
-
-    token_type: str
-    """Token type, typically ``'Bearer'``."""
-
-    client_id: str
-    """OAuth client ID for token refresh requests."""
-
-    def is_expired(self) -> bool:
-        """Check whether the access token is expired or about to expire.
-
-        Uses a 30-second safety buffer to avoid sending tokens that
-        expire during in-flight requests.
-
-        Returns:
-            True if the token is expired or will expire within 30 seconds.
-        """
-        return datetime.now(timezone.utc) + timedelta(seconds=30) >= self.expires_at
-
-
-class BridgeServiceAccount(BaseModel):
-    """Service account credentials stored in the bridge file.
-
-    Attributes:
-        username: Service account username.
-        secret: Service account secret (redacted in output).
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    username: str
-    """Service account username."""
-
-    secret: SecretStr
-    """Service account secret (redacted in output)."""
-
-
-class AuthBridgeFile(BaseModel):
-    """Complete auth bridge file model.
-
-    Represents the JSON structure at ``~/.claude/mixpanel/auth.json``.
-    Contains credentials (OAuth or service account), project context,
-    and optional custom headers for Mixpanel API access.
-
-    Attributes:
-        version: Bridge file format version (must be 1).
-        auth_method: Authentication method (``"oauth"`` or ``"service_account"``).
-        region: Mixpanel data residency region.
-        project_id: Mixpanel project identifier.
-        workspace_id: Optional workspace ID for App API scoping.
-        custom_header: Optional custom HTTP header for all requests.
-        oauth: OAuth token data (required when auth_method is ``"oauth"``).
-        service_account: SA credentials (required when auth_method is ``"service_account"``).
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    version: Literal[1]
-    """Bridge file format version (must be 1)."""
-
-    auth_method: Literal["oauth", "service_account"]
-    """Authentication method."""
-
-    region: RegionType
-    """Mixpanel data residency region (us, eu, or in)."""
-
-    project_id: str
-    """Mixpanel project identifier."""
-
-    workspace_id: int | None = None
-    """Optional workspace ID for App API scoping."""
-
-    custom_header: BridgeCustomHeader | None = None
-    """Optional custom HTTP header for all requests."""
-
-    oauth: BridgeOAuth | None = None
-    """OAuth token data (required when auth_method is 'oauth')."""
-
-    service_account: BridgeServiceAccount | None = None
-    """SA credentials (required when auth_method is 'service_account')."""
-
-    @field_validator("region", mode="before")
-    @classmethod
-    def validate_region(cls, v: str) -> str:
-        """Validate and normalize region to lowercase.
-
-        Args:
-            v: Raw region string.
-
-        Returns:
-            Lowercased, validated region string.
-
-        Raises:
-            ValueError: If region is not one of ``us``, ``eu``, ``in``.
-        """
-        if not isinstance(v, str):
-            raise ValueError(f"Region must be a string. Got: {type(v).__name__}")
-        v_lower = v.lower()
-        if v_lower not in VALID_REGIONS:
-            valid = ", ".join(VALID_REGIONS)
-            raise ValueError(f"Region must be one of: {valid}. Got: {v}")
-        return v_lower
+    headers: dict[str, str] = Field(default_factory=dict)
+    """Custom HTTP headers attached to outbound requests at resolution time."""
 
     @model_validator(mode="after")
-    def validate_auth_sections(self) -> AuthBridgeFile:
-        """Validate that the correct credential section is present.
+    def _validate_oauth_browser_has_tokens(self) -> BridgeFile:
+        """Enforce that ``oauth_browser`` accounts include their tokens.
+
+        Returns:
+            The validated instance.
 
         Raises:
-            ValueError: If ``auth_method`` does not match the provided
-                credential section (e.g., ``"oauth"`` without ``oauth``).
+            ValueError: If ``account.type == "oauth_browser"`` and ``tokens``
+                is missing.
         """
-        if self.auth_method == "oauth" and self.oauth is None:
-            raise ValueError("auth_method='oauth' requires 'oauth' section")
-        if self.auth_method == "service_account" and self.service_account is None:
-            raise ValueError(
-                "auth_method='service_account' requires 'service_account' section"
-            )
+        if self.account.type == "oauth_browser" and self.tokens is None:
+            raise ValueError("BridgeFile with oauth_browser account requires `tokens`.")
         return self
 
 
-def detect_cowork() -> bool:
-    """Detect if running inside a Claude Cowork VM.
-
-    Checks two indicators:
-    1. ``CLAUDE_COWORK`` environment variable is set (reliable)
-    2. ``/sessions/`` mount point exists (heuristic — may false-positive
-       on systems with a ``/sessions`` directory unrelated to Cowork)
-
-    This function is used for informational purposes (CLI output,
-    plugin guidance). Bridge file discovery (``find_bridge_file()``)
-    runs unconditionally and does not depend on this function.
+def default_bridge_search_paths() -> tuple[Path, ...]:
+    """Return the default bridge file paths consulted in priority order.
 
     Returns:
-        True if running inside a Cowork VM.
-
-    Example:
-        ```python
-        if detect_cowork():
-            print("Running inside Claude Cowork")
-        ```
+        Tuple of candidate paths (default Cowork location first, then
+        a ``mixpanel_auth.json`` in the current working directory). The
+        ``MP_AUTH_FILE`` env var, if set, is consulted by callers BEFORE
+        any default path.
     """
-    if os.environ.get("CLAUDE_COWORK"):
-        return True
-    return _COWORK_SESSIONS_PATH.is_dir()
+    return (
+        Path.home() / ".claude" / "mixpanel" / "auth.json",
+        Path.cwd() / "mixpanel_auth.json",
+    )
 
 
-def default_bridge_path() -> Path:
-    """Return the default bridge file path.
+_bridge_adapter: TypeAdapter[BridgeFile] = TypeAdapter(BridgeFile)
+
+
+def load_bridge(path: Path | None = None) -> BridgeFile | None:
+    """Load and validate a v2 bridge file from disk.
+
+    Resolves the path in this order:
+
+    1. Argument ``path`` (if not None).
+    2. ``$MP_AUTH_FILE`` env var (if set).
+    3. Default search paths (``~/.claude/mixpanel/auth.json``, then
+       ``<cwd>/mixpanel_auth.json``) — first existing file wins.
+
+    Args:
+        path: Optional explicit bridge path.
 
     Returns:
-        Path to ``~/.claude/mixpanel/auth.json``.
+        The parsed :class:`BridgeFile`, or ``None`` if no candidate
+        path exists.
+
+    Raises:
+        ConfigError: If a candidate file exists but is malformed or fails
+            schema validation.
     """
-    return Path.home() / _CLAUDE_DIR_NAME / _BRIDGE_DIR_NAME / _BRIDGE_FILENAME
+    candidates: list[Path] = []
+    if path is not None:
+        candidates.append(path)
+    elif "MP_AUTH_FILE" in os.environ and os.environ["MP_AUTH_FILE"]:
+        candidates.append(Path(os.environ["MP_AUTH_FILE"]))
+    else:
+        candidates.extend(default_bridge_search_paths())
 
-
-def find_bridge_file() -> Path | None:
-    """Find the auth bridge file using the search order.
-
-    Search order:
-        1. ``MP_AUTH_FILE`` environment variable (explicit path)
-        2. ``mixpanel_auth.json`` in current working directory (Cowork workspace)
-        3. ``~/.claude/mixpanel/auth.json`` (standard location)
-        4. ``~/.claude/mixpanel_auth.json`` (flat file alternative)
-        5. ``~/mnt/{folder}/mixpanel_auth.json`` (Cowork bindfs mount)
-
-    Returns:
-        Path to the bridge file if found, None otherwise.
-
-    Example:
-        ```python
-        path = find_bridge_file()
-        if path is not None:
-            bridge = load_bridge_file(path)
-        ```
-    """
-    # Priority 1: Explicit env var
-    env_path = os.environ.get("MP_AUTH_FILE")
-    if env_path:
-        p = Path(env_path)
-        if p.is_file():
-            return p
-        logger.debug("MP_AUTH_FILE set but file not found: %s", env_path)
-        return None
-
-    # Priority 2: Bridge file in CWD (workspace root)
-    # In Cowork, the workspace IS mounted — this is the primary Cowork path
-    cwd_bridge = Path.cwd() / FLAT_BRIDGE_FILENAME
-    if cwd_bridge.is_file():
-        logger.debug("Found bridge file in workspace: %s", cwd_bridge)
-        return cwd_bridge
-
-    # Priority 3: Default location (~/.claude/mixpanel/auth.json)
-    default = default_bridge_path()
-    if default.is_file():
-        return default
-
-    # Priority 4: Flat file (~/.claude/mixpanel_auth.json)
-    flat = Path.home() / _CLAUDE_DIR_NAME / FLAT_BRIDGE_FILENAME
-    if flat.is_file():
-        logger.debug("Found flat bridge file: %s", flat)
-        return flat
-
-    # Priority 5: Cowork workspace mount (~/mnt/{folder}/mixpanel_auth.json)
-    # In Cowork, the workspace is at $HOME/mnt/{folder}/
-    mnt_base = Path.home() / "mnt"
-    if mnt_base.is_dir():
-        for child in mnt_base.iterdir():
-            if not child.is_dir():
-                continue
-            cowork_path = child / FLAT_BRIDGE_FILENAME
-            if cowork_path.is_file():
-                logger.debug("Found bridge file at Cowork mount: %s", cowork_path)
-                return cowork_path
-
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        try:
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ConfigError(
+                f"Could not read bridge file at {candidate}: {exc}",
+                details={"path": str(candidate)},
+            ) from exc
+        try:
+            return _bridge_adapter.validate_python(payload)
+        except ValidationError as exc:
+            raise ConfigError(
+                f"Invalid bridge file at {candidate}: "
+                f"{exc.errors(include_url=False)[0]['msg']}",
+                details={"path": str(candidate)},
+            ) from exc
     return None
 
 
-def load_bridge_file(path: Path | None = None) -> AuthBridgeFile | None:
-    """Load and validate a bridge file.
+def _read_browser_tokens(name: str) -> OAuthTokens:
+    """Load on-disk OAuth tokens for an oauth_browser account.
+
+    Reads from ``~/.mp/accounts/{name}/tokens.json`` directly (no refresh
+    attempt — the bridge is a snapshot of whatever is currently on disk;
+    if the bridge holder needs a refresh they can run
+    ``mp account login NAME`` first). Tokens are wrapped in
+    :class:`OAuthTokens` so the bridge file embeds them in the same
+    Pydantic shape the resolver consumes on load.
 
     Args:
-        path: Explicit path to the bridge file. If None, uses
-            ``find_bridge_file()`` to locate it.
+        name: Account name (used to locate the per-account tokens file).
 
     Returns:
-        Validated AuthBridgeFile if found and valid, None otherwise.
-        Returns None (does not raise) for missing files, invalid JSON,
-        or schema validation failures.
-
-    Example:
-        ```python
-        bridge = load_bridge_file()
-        if bridge is not None:
-            creds = bridge_to_credentials(bridge)
-        ```
-    """
-    if path is None:
-        path = find_bridge_file()
-    if path is None:
-        return None
-    if not path.is_file():
-        return None
-
-    try:
-        raw = path.read_text(encoding="utf-8")
-        data = json.loads(raw)
-        return AuthBridgeFile.model_validate(data)
-    except (json.JSONDecodeError, OSError) as exc:
-        logger.debug("Failed to read bridge file %s: %s", path, exc)
-        return None
-    except Exception as exc:
-        logger.debug("Failed to validate bridge file %s: %s", path, exc)
-        return None
-
-
-def write_bridge_file(bridge: AuthBridgeFile, path: Path) -> None:
-    """Write a bridge file with secure permissions.
-
-    Creates the parent directory if needed. Sets directory permissions
-    to ``0o700`` and file permissions to ``0o600``.
-
-    Args:
-        bridge: The bridge file model to write.
-        path: Destination file path.
+        :class:`OAuthTokens` parsed from the on-disk payload.
 
     Raises:
-        OSError: If the file cannot be written.
-
-    Example:
-        ```python
-        bridge = AuthBridgeFile(...)
-        write_bridge_file(bridge, Path.home() / ".claude/mixpanel/auth.json")
-        ```
+        OAuthError: Tokens file missing, malformed, or missing required
+            fields. The caller surfaces this verbatim — no retry / no
+            refresh attempt.
     """
-    dir_existed = path.parent.exists()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not dir_existed:
-        try:
-            os.chmod(path.parent, stat.S_IRWXU)  # 0o700
-        except OSError:
-            logger.warning("Could not set directory permissions on %s", path.parent)
-
-    data = bridge_to_json_dict(bridge)
-    raw = json.dumps(data, indent=2, default=str)
-    path.write_text(raw, encoding="utf-8")
-    try:
-        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
-    except OSError:
-        logger.warning("Could not set file permissions on %s", path)
-
-
-def bridge_to_json_dict(bridge: AuthBridgeFile) -> dict[str, Any]:
-    """Serialize an AuthBridgeFile to a JSON-compatible dict.
-
-    Unwraps ``SecretStr`` fields to plain strings for JSON output.
-
-    Args:
-        bridge: The bridge file model to serialize.
-
-    Returns:
-        JSON-serializable dictionary with all secrets unwrapped.
-    """
-    d: dict[str, Any] = {
-        "version": bridge.version,
-        "auth_method": bridge.auth_method,
-        "region": bridge.region,
-        "project_id": bridge.project_id,
-        "workspace_id": bridge.workspace_id,
-        "custom_header": None,
-        "oauth": None,
-        "service_account": None,
-    }
-    if bridge.custom_header is not None:
-        d["custom_header"] = {
-            "name": bridge.custom_header.name,
-            "value": bridge.custom_header.value.get_secret_value(),
-        }
-    if bridge.oauth is not None:
-        d["oauth"] = {
-            "access_token": bridge.oauth.access_token.get_secret_value(),
-            "refresh_token": bridge.oauth.refresh_token.get_secret_value()
-            if bridge.oauth.refresh_token
-            else None,
-            "expires_at": bridge.oauth.expires_at.isoformat(),
-            "scope": bridge.oauth.scope,
-            "token_type": bridge.oauth.token_type,
-            "client_id": bridge.oauth.client_id,
-        }
-    if bridge.service_account is not None:
-        d["service_account"] = {
-            "username": bridge.service_account.username,
-            "secret": bridge.service_account.secret.get_secret_value(),
-        }
-    return d
-
-
-def bridge_to_credentials(bridge: AuthBridgeFile) -> Credentials:
-    """Convert an AuthBridgeFile to a legacy Credentials object.
-
-    Creates a ``Credentials`` instance suitable for passing to
-    ``MixpanelAPIClient``.
-
-    Args:
-        bridge: The bridge file to convert.
-
-    Returns:
-        Credentials configured for the bridge's auth method.
-
-    Raises:
-        ValueError: If auth_method is ``"oauth"`` but no OAuth data
-            is present, or ``"service_account"`` but no SA data.
-
-    Example:
-        ```python
-        bridge = load_bridge_file()
-        creds = bridge_to_credentials(bridge)
-        client = MixpanelAPIClient(creds)
-        ```
-    """
-    if bridge.auth_method == "oauth":
-        if bridge.oauth is None:
-            raise ValueError("OAuth bridge file missing 'oauth' section")
-        return Credentials(
-            username="",
-            secret=SecretStr(""),
-            project_id=bridge.project_id,
-            region=bridge.region,
-            auth_method=AuthMethod.oauth,
-            oauth_access_token=bridge.oauth.access_token,
-        )
-
-    if bridge.service_account is None:
-        raise ValueError(
-            "Service account bridge file missing 'service_account' section"
-        )
-    return Credentials(
-        username=bridge.service_account.username,
-        secret=bridge.service_account.secret,
-        project_id=bridge.project_id,
-        region=bridge.region,
-        auth_method=AuthMethod.basic,
-    )
-
-
-def bridge_to_resolved_session(bridge: AuthBridgeFile) -> ResolvedSession:
-    """Convert an AuthBridgeFile to a v2 ResolvedSession.
-
-    Creates an ``AuthCredential`` and ``ProjectContext`` from the
-    bridge file data.
-
-    Args:
-        bridge: The bridge file to convert.
-
-    Returns:
-        ResolvedSession with auth and project context.
-
-    Raises:
-        ValueError: If auth_method is ``"oauth"`` but no OAuth data
-            is present, or ``"service_account"`` but no SA data.
-
-    Example:
-        ```python
-        bridge = load_bridge_file()
-        session = bridge_to_resolved_session(bridge)
-        # session.project_id, session.auth_header()
-        ```
-    """
-    if bridge.auth_method == "oauth":
-        if bridge.oauth is None:
-            raise ValueError("OAuth bridge file missing 'oauth' section")
-        auth = AuthCredential(
-            name="cowork-bridge",
-            type=CredentialType.oauth,
-            region=bridge.region,
-            oauth_access_token=bridge.oauth.access_token,
-        )
-    else:
-        if bridge.service_account is None:
-            raise ValueError("SA bridge file missing 'service_account' section")
-        auth = AuthCredential(
-            name="cowork-bridge",
-            type=CredentialType.service_account,
-            region=bridge.region,
-            username=bridge.service_account.username,
-            secret=bridge.service_account.secret,
-        )
-
-    project = ProjectContext(
-        project_id=bridge.project_id,
-        workspace_id=bridge.workspace_id,
-    )
-    return ResolvedSession(auth=auth, project=project)
-
-
-def apply_bridge_custom_header(bridge: AuthBridgeFile) -> None:
-    """Set custom header env vars from bridge file.
-
-    Sets ``MP_CUSTOM_HEADER_NAME`` and ``MP_CUSTOM_HEADER_VALUE``
-    environment variables if the bridge file contains a custom header
-    and the env vars are not already set.
-
-    This allows the existing ``MixpanelAPIClient._ensure_client()``
-    to pick up custom headers without code changes.
-
-    Args:
-        bridge: The bridge file containing optional custom header.
-
-    Example:
-        ```python
-        bridge = load_bridge_file()
-        apply_bridge_custom_header(bridge)
-        # Now MP_CUSTOM_HEADER_* env vars are set if bridge has a header
-        ```
-    """
-    if bridge.custom_header is None:
-        return
-
-    # Don't override existing env vars
-    if os.environ.get("MP_CUSTOM_HEADER_NAME") and os.environ.get(
-        "MP_CUSTOM_HEADER_VALUE"
-    ):
-        logger.debug("MP_CUSTOM_HEADER_* already set, skipping bridge custom header")
-        return
-
-    os.environ["MP_CUSTOM_HEADER_NAME"] = bridge.custom_header.name
-    os.environ["MP_CUSTOM_HEADER_VALUE"] = bridge.custom_header.value.get_secret_value()
-    logger.debug(
-        "Applied custom header from bridge file: %s", bridge.custom_header.name
-    )
-
-
-def refresh_bridge_token(
-    bridge: AuthBridgeFile,
-    bridge_path: Path,
-) -> AuthBridgeFile:
-    """Refresh an expired OAuth token in the bridge file.
-
-    If the bridge uses service account auth or the OAuth token is not
-    expired, returns the bridge unchanged. Otherwise, uses the refresh
-    token to obtain a new access token via HTTP POST (no browser needed).
-
-    Attempts to write the updated bridge file back to disk. Write
-    failures are silently ignored (e.g., read-only mount in Cowork).
-
-    Args:
-        bridge: The bridge file to check and potentially refresh.
-        bridge_path: Path to the bridge file for write-back.
-
-    Returns:
-        The original bridge if no refresh needed, or a new
-        AuthBridgeFile with updated OAuth tokens.
-
-    Raises:
-        OAuthError: If the refresh token is missing or the refresh
-            request fails (e.g., revoked token).
-
-    Example:
-        ```python
-        bridge = load_bridge_file(path)
-        bridge = refresh_bridge_token(bridge, path)
-        creds = bridge_to_credentials(bridge)
-        ```
-    """
-    # SA credentials don't expire
-    if bridge.auth_method != "oauth" or bridge.oauth is None:
-        return bridge
-
-    # Check if token is expired
-    if not bridge.oauth.is_expired():
-        return bridge
-
-    logger.info("Bridge OAuth token expired, attempting refresh...")
-
-    if bridge.oauth.refresh_token is None:
+    path = account_dir(name) / "tokens.json"
+    if not path.exists():
         raise OAuthError(
-            "Cannot refresh: no refresh token in bridge file. "
-            "Re-run 'mp auth cowork-setup' on your host machine.",
-            code="OAUTH_REFRESH_ERROR",
+            f"No OAuth tokens found for account '{name}' at {path}. "
+            f"Run `mp account login {name}` before exporting a bridge.",
+            code="OAUTH_TOKEN_ERROR",
+            details={"account_name": name, "path": str(path)},
         )
-
-    # Build OAuthTokens for the refresh call
-    old_tokens = OAuthTokens(
-        access_token=bridge.oauth.access_token,
-        refresh_token=bridge.oauth.refresh_token,
-        expires_at=bridge.oauth.expires_at,
-        scope=bridge.oauth.scope,
-        token_type=bridge.oauth.token_type,
-        project_id=bridge.project_id,
-    )
-
-    # Refresh via HTTP POST (no browser needed)
-    flow = OAuthFlow(region=bridge.region)
-    new_tokens = flow.refresh_tokens(
-        tokens=old_tokens, client_id=bridge.oauth.client_id
-    )
-
-    # Build updated bridge
-    new_oauth = BridgeOAuth(
-        access_token=new_tokens.access_token,
-        refresh_token=new_tokens.refresh_token or bridge.oauth.refresh_token,
-        expires_at=new_tokens.expires_at,
-        scope=new_tokens.scope or bridge.oauth.scope,
-        token_type=new_tokens.token_type,
-        client_id=bridge.oauth.client_id,
-    )
-
-    updated = AuthBridgeFile(
-        version=bridge.version,
-        auth_method=bridge.auth_method,
-        region=bridge.region,
-        project_id=bridge.project_id,
-        workspace_id=bridge.workspace_id,
-        custom_header=bridge.custom_header,
-        oauth=new_oauth,
-        service_account=bridge.service_account,
-    )
-
-    # Try to write back (ignore errors for read-only mounts)
     try:
-        write_bridge_file(updated, bridge_path)
-        logger.info("Updated bridge file with refreshed token")
-    except OSError:
-        logger.debug("Could not write refreshed token to bridge file (read-only?)")
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OAuthError(
+            f"Could not read OAuth tokens for account '{name}' from {path}: {exc}",
+            code="OAUTH_TOKEN_ERROR",
+            details={"account_name": name, "path": str(path)},
+        ) from exc
+    expires_raw = payload.get("expires_at")
+    if not isinstance(expires_raw, str) or not expires_raw:
+        raise OAuthError(
+            f"OAuth tokens for account '{name}' are missing `expires_at`.",
+            code="OAUTH_TOKEN_ERROR",
+            details={"account_name": name, "path": str(path)},
+        )
+    try:
+        expires_at = datetime.fromisoformat(expires_raw)
+    except ValueError as exc:
+        raise OAuthError(
+            f"OAuth tokens for account '{name}' have an invalid `expires_at` value.",
+            code="OAUTH_TOKEN_ERROR",
+            details={"account_name": name, "path": str(path)},
+        ) from exc
+    access_token = payload.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        raise OAuthError(
+            f"OAuth tokens for account '{name}' are missing `access_token`.",
+            code="OAUTH_TOKEN_ERROR",
+            details={"account_name": name, "path": str(path)},
+        )
+    refresh_raw = payload.get("refresh_token")
+    refresh_token = (
+        SecretStr(refresh_raw) if isinstance(refresh_raw, str) and refresh_raw else None
+    )
+    return OAuthTokens(
+        access_token=SecretStr(access_token),
+        refresh_token=refresh_token,
+        expires_at=expires_at,
+        scope=str(payload.get("scope", "")),
+        token_type=str(payload.get("token_type", "Bearer")),
+    )
 
-    return updated
+
+def _serialize_bridge(bridge: BridgeFile) -> bytes:
+    """Serialize ``bridge`` to UTF-8 JSON bytes with secrets unwrapped.
+
+    Pydantic ``SecretStr`` round-trips as ``"**********"`` by default; for
+    a bridge file we MUST emit the actual secret values inline (B3 — the
+    bridge crosses a trust boundary by design). Uses ``model_dump`` with
+    ``warnings=False`` then walks the result to unwrap secret strings.
+
+    Args:
+        bridge: Validated bridge model.
+
+    Returns:
+        UTF-8 encoded JSON bytes ready for atomic write.
+    """
+    payload = bridge.model_dump(mode="json", exclude_none=True)
+    # Pydantic redacts SecretStr by default in mode="json"; reach back to
+    # the original bridge instance for the raw secret values so the bridge
+    # actually carries usable credentials.
+    account_payload: dict[str, Any] = payload.get("account", {})
+    raw_account = bridge.account
+    if isinstance(raw_account, ServiceAccount):
+        account_payload["secret"] = raw_account.secret.get_secret_value()
+    elif isinstance(raw_account, OAuthTokenAccount) and raw_account.token is not None:
+        account_payload["token"] = raw_account.token.get_secret_value()
+    if bridge.tokens is not None:
+        tokens_payload: dict[str, Any] = payload.get("tokens", {})
+        tokens_payload["access_token"] = bridge.tokens.access_token.get_secret_value()
+        if bridge.tokens.refresh_token is not None:
+            tokens_payload["refresh_token"] = (
+                bridge.tokens.refresh_token.get_secret_value()
+            )
+        payload["tokens"] = tokens_payload
+    payload["account"] = account_payload
+    return json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+
+
+def export_bridge(
+    account: Account,
+    *,
+    to: Path,
+    project: str | None = None,
+    workspace: int | None = None,
+    headers: dict[str, str] | None = None,
+    token_resolver: TokenResolver | None = None,  # noqa: ARG001 — kept for signature parity (uses on-disk reader directly)
+) -> Path:
+    """Write a v2 bridge file at ``to`` embedding ``account``'s full record.
+
+    For ``oauth_browser`` accounts, reads the current on-disk tokens via
+    :func:`_read_browser_tokens` and embeds them under ``tokens``; the
+    bridge consumer then has everything it needs to authenticate without
+    re-running the PKCE flow. For ``service_account`` and ``oauth_token``
+    the secrets travel inline with the account record (B3).
+
+    Atomic on-disk write per :func:`atomic_write_bytes` — the bridge
+    consumer never observes a half-written file.
+
+    Args:
+        account: Account to embed (full record, secrets inline by design).
+        to: Destination path for the bridge file.
+        project: Optional pinned project ID (must match ``^\\d+$``).
+        workspace: Optional pinned workspace ID (positive int).
+        headers: Optional custom HTTP headers map.
+        token_resolver: Reserved for future per-account refresh hooks; the
+            current implementation reads tokens directly from
+            ``~/.mp/accounts/{name}/tokens.json``. Accepted for signature
+            parity with the contract.
+
+    Returns:
+        The path that was written (same as ``to``).
+
+    Raises:
+        OAuthError: ``account.type == "oauth_browser"`` but on-disk tokens
+            are missing / malformed.
+        ConfigError: ``BridgeFile`` validation fails (bad project format,
+            etc.).
+    """
+    tokens: OAuthTokens | None = None
+    if isinstance(account, OAuthBrowserAccount):
+        tokens = _read_browser_tokens(account.name)
+    bridge = BridgeFile(
+        version=2,
+        account=account,
+        tokens=tokens,
+        project=project,
+        workspace=workspace,
+        headers=headers or {},
+    )
+    parent = to.parent
+    if not parent.exists():
+        parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    atomic_write_bytes(to, _serialize_bridge(bridge), mode=0o600)
+    return to
+
+
+def remove_bridge(*, at: Path | None = None) -> bool:
+    """Delete the bridge file at ``at`` (or the resolved default path).
+
+    Resolves the path the same way :func:`load_bridge` does:
+
+    1. ``at`` argument (if not None).
+    2. ``$MP_AUTH_FILE`` env var (if set).
+    3. First existing default search path.
+
+    Idempotent — returns ``False`` if no bridge file exists at the
+    resolved path; the caller can still treat that as "removed" per the
+    contract (``mp account remove-bridge`` exits 0 in both cases).
+
+    Args:
+        at: Optional explicit bridge path.
+
+    Returns:
+        ``True`` if a file was deleted; ``False`` if none was found.
+    """
+    if at is not None:
+        target: Path | None = at
+    elif os.environ.get("MP_AUTH_FILE"):
+        target = Path(os.environ["MP_AUTH_FILE"])
+    else:
+        target = next((p for p in default_bridge_search_paths() if p.exists()), None)
+    if target is None or not target.exists():
+        return False
+    target.unlink()
+    return True
+
+
+__all__ = [
+    "BridgeFile",
+    "default_bridge_search_paths",
+    "export_bridge",
+    "load_bridge",
+    "remove_bridge",
+]

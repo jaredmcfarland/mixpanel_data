@@ -10,11 +10,26 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import SecretStr
 
 from mixpanel_data import Filter, Formula, Metric, Workspace
 from mixpanel_data._internal.api_client import MixpanelAPIClient
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data.exceptions import QueryError
 from mixpanel_data.types import QueryResult
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 # =============================================================================
 # Fixtures
@@ -32,7 +47,7 @@ def mock_api_client() -> MagicMock:
 @pytest.fixture
 def ws(mock_config_manager: MagicMock, mock_api_client: MagicMock) -> Workspace:
     """Create Workspace with mocked API client for integration testing."""
-    workspace = Workspace(_config_manager=mock_config_manager)
+    workspace = Workspace(session=_TEST_SESSION)
     workspace._api_client = mock_api_client
     return workspace
 
@@ -423,7 +438,7 @@ class TestBuildParamsNoApiCall:
 
     def test_works_without_credentials(self, mock_config_manager: MagicMock) -> None:
         """build_params() does not require live credentials."""
-        workspace = Workspace(_config_manager=mock_config_manager)
+        workspace = Workspace(session=_TEST_SESSION)
         # No _api_client set at all
         result = workspace.build_params("Login")
         assert "sections" in result

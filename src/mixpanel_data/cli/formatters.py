@@ -6,6 +6,10 @@ This module provides formatting functions for different output formats:
 - Table: Rich ASCII table
 - CSV: Comma-separated values with headers
 - Plain: Minimal text output (one item per line)
+
+Plus :func:`emit_records` — a single dispatcher used by the identity-axis
+list commands (``mp account list``, ``mp project list``, ``mp workspace list``,
+``mp target list``) so JSON / JSONL handling is implemented exactly once.
 """
 
 from __future__ import annotations
@@ -13,11 +17,15 @@ from __future__ import annotations
 import csv
 import io
 import json
+from collections.abc import Callable, Iterable, Sequence
 from datetime import date, datetime
-from typing import Any
+from typing import Any, TypeVar
 
+from rich.console import Console
 from rich.markup import escape as rich_escape
 from rich.table import Table
+
+_T = TypeVar("_T")
 
 
 def _json_serializer(obj: Any) -> str:
@@ -248,3 +256,49 @@ def format_plain(data: dict[str, Any] | list[Any]) -> str:
         return "\n".join(f"{k}={v}" for k, v in data.items())
 
     return str(data)
+
+
+def emit_records(
+    items: Iterable[_T],
+    *,
+    format: str,  # noqa: A002 — matches CLI ``--format`` parameter name
+    console: Console,
+    to_dict: Callable[[_T], dict[str, Any]],
+    table_renderer: Callable[[Sequence[_T]], str] | None = None,
+) -> None:
+    """Emit a list of records as JSON / JSONL / (caller-supplied) table.
+
+    Centralises the JSON / JSONL projection so the four identity-axis list
+    commands (``mp account list``, ``mp project list``, ``mp workspace list``,
+    ``mp target list``) don't each maintain their own ``json.dumps`` ladder
+    that drifts in subtle ways (indent, ensure_ascii, default serializer).
+
+    The table layout is intentionally NOT abstracted: each command renders
+    its own fixed-width plain-text table with a custom active-row marker
+    and column widths. Forcing a generic Rich Table here would change the
+    visual contract of those commands.
+
+    Args:
+        items: Records to emit.
+        format: One of ``"json"``, ``"jsonl"``, or anything else (delegates
+            to ``table_renderer``).
+        console: Rich :class:`Console` to print to.
+        to_dict: Projection from a record to its JSON-shaped dict. Run
+            once per record on the JSON paths, never on the table path.
+        table_renderer: When ``format`` is not JSON-shaped, called with the
+            full ``items`` list (materialised) to produce the table string.
+            If ``None``, treats the unknown format as JSON.
+    """
+    materialised = list(items) if not isinstance(items, list) else items
+    if format == "json":
+        console.print(format_json([to_dict(x) for x in materialised]))
+        return
+    if format == "jsonl":
+        for x in materialised:
+            console.print(format_jsonl(to_dict(x)))
+        return
+    if table_renderer is not None:
+        console.print(table_renderer(materialised))
+        return
+    # Unknown format with no renderer → fall back to JSON for safety.
+    console.print(format_json([to_dict(x) for x in materialised]))

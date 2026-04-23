@@ -132,7 +132,7 @@ mp auth show production
 ### Managing Accounts with Python
 
 ```python
-from mixpanel_data.auth import ConfigManager
+from mixpanel_data._internal.config import ConfigManager
 
 config = ConfigManager()
 

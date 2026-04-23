@@ -386,9 +386,9 @@ class TestGetWorkspace:
         ctx = MagicMock(spec=typer.Context)
         ctx.obj = {
             "account": None,
-            "credential": None,
             "project": None,
             "workspace_id": None,
+            "target": None,
             "workspace": None,
         }
 
@@ -399,7 +399,7 @@ class TestGetWorkspace:
             result = get_workspace(ctx)
 
             MockWorkspace.assert_called_once_with(
-                account=None, project_id=None, workspace_id=None
+                account=None, project=None, workspace=None, target=None
             )
             assert result == mock_ws
             assert ctx.obj["workspace"] == mock_ws
@@ -410,9 +410,9 @@ class TestGetWorkspace:
         existing_ws = MagicMock()
         ctx.obj = {
             "account": None,
-            "credential": None,
             "project": None,
             "workspace_id": None,
+            "target": None,
             "workspace": existing_ws,
         }
 
@@ -427,9 +427,9 @@ class TestGetWorkspace:
         ctx = MagicMock(spec=typer.Context)
         ctx.obj = {
             "account": "staging",
-            "credential": None,
             "project": None,
             "workspace_id": None,
+            "target": None,
             "workspace": None,
         }
 
@@ -437,7 +437,44 @@ class TestGetWorkspace:
             get_workspace(ctx)
 
             MockWorkspace.assert_called_once_with(
-                account="staging", project_id=None, workspace_id=None
+                account="staging", project=None, workspace=None, target=None
+            )
+
+    def test_target_routes_through_axis_kwargs(self) -> None:
+        """``--target`` is forwarded as the ``target=`` kwarg."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {
+            "account": None,
+            "project": None,
+            "workspace_id": None,
+            "target": "ecom",
+            "workspace": None,
+        }
+
+        with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
+            get_workspace(ctx)
+            MockWorkspace.assert_called_once_with(
+                account=None, project=None, workspace=None, target="ecom"
+            )
+
+    def test_project_and_workspace_passthrough(self) -> None:
+        """``--project`` / ``--workspace`` propagate to the v3 kwargs."""
+        ctx = MagicMock(spec=typer.Context)
+        ctx.obj = {
+            "account": None,
+            "project": "3713224",
+            "workspace_id": 42,
+            "target": None,
+            "workspace": None,
+        }
+
+        with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
+            get_workspace(ctx)
+            MockWorkspace.assert_called_once_with(
+                account=None,
+                project="3713224",
+                workspace=42,
+                target=None,
             )
 
 

@@ -11,7 +11,7 @@ Usage:
     uv run pytest tests/live/test_live_query_user.py -v -m live -k aggregate
 
 Pre-requisites:
-    - Active OAuth token: ``mp auth login``
+    - Active OAuth token: ``mp account login NAME``
     - Project switched to target project with profiles
 """
 

@@ -5,12 +5,7 @@ Complete programmable interface to Mixpanel analytics: discover your schema,
 run live analytics, stream data, and manage entities via the App API.
 """
 
-from mixpanel_data._internal.auth_credential import (
-    AuthCredential,
-    CredentialType,
-    ProjectContext,
-    ResolvedSession,
-)
+from mixpanel_data import accounts, session, targets
 from mixpanel_data._internal.validation import validate_bookmark
 from mixpanel_data._literal_types import (
     CohortAggregationType,
@@ -45,8 +40,20 @@ from mixpanel_data._literal_types import (
     TimeComparisonUnit,
     TimeUnit,
 )
+from mixpanel_data.auth_types import (
+    Account,
+    AccountType,
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
+    Project,
+    Region,
+    ServiceAccount,
+    Session,
+    WorkspaceRef,
+)
 from mixpanel_data.exceptions import (
     AccountExistsError,
+    AccountInUseError,
     AccountNotFoundError,
     APIError,
     AuthenticationError,
@@ -65,6 +72,9 @@ from mixpanel_data.exceptions import (
     WorkspaceScopeError,
 )
 from mixpanel_data.types import (
+    # Auth redesign (042) types
+    AccountSummary,
+    AccountTestResult,
     # Result types
     ActivityFeedResult,
     AlertBookmark,
@@ -199,6 +209,7 @@ from mixpanel_data.types import (
     NumericBucketResult,
     NumericPropertySummaryResult,
     NumericSumResult,
+    OAuthLoginResult,
     PaginatedResponse,
     PreviewDeletionFiltersParams,
     ProfilePageResult,
@@ -229,6 +240,7 @@ from mixpanel_data.types import (
     SegmentationResult,
     ServingMethod,
     SetTestUsersParams,
+    Target,
     TimeComparison,
     TopEvent,
     UpdateAlertParams,
@@ -261,16 +273,31 @@ from mixpanel_data.types import (
 )
 from mixpanel_data.workspace import Workspace
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     # Core
     "Workspace",
-    # Auth v2 types
-    "AuthCredential",
-    "CredentialType",
-    "ProjectContext",
-    "ResolvedSession",
+    # Auth redesign (042) types
+    "Account",
+    "AccountType",
+    "OAuthBrowserAccount",
+    "OAuthTokenAccount",
+    "Region",
+    "ServiceAccount",
+    "Project",
+    "Session",
+    "WorkspaceRef",
+    "AccountSummary",
+    "AccountTestResult",
+    "OAuthLoginResult",
+    "Target",
+    # Auth redesign (042) namespaces
+    "accounts",
+    "session",
+    "targets",
+    # Auth redesign (042) exceptions
+    "AccountInUseError",
     # Validation
     "validate_bookmark",
     # Type aliases — time units

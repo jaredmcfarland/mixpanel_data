@@ -18,10 +18,10 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -29,20 +29,13 @@ from mixpanel_data._internal.config import AuthMethod, Credentials
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport.
@@ -55,7 +48,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -66,7 +59,7 @@ def create_mock_client(
 class TestListDashboards:
     """Tests for list_dashboards() API client method."""
 
-    def test_returns_dashboard_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dashboard_list(self, oauth_credentials: Session) -> None:
         """list_dashboards() returns a list of dashboard dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -90,7 +83,7 @@ class TestListDashboards:
         assert result[0]["id"] == 1
         assert result[1]["title"] == "Dashboard 2"
 
-    def test_filters_by_ids(self, oauth_credentials: Credentials) -> None:
+    def test_filters_by_ids(self, oauth_credentials: Session) -> None:
         """list_dashboards(ids=[1,2]) passes ids as query param."""
         captured_urls: list[str] = []
 
@@ -105,7 +98,7 @@ class TestListDashboards:
 
         assert "ids=1%2C2" in captured_urls[0] or "ids=1,2" in captured_urls[0]
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """list_dashboards() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -120,7 +113,7 @@ class TestListDashboards:
 
         assert "/projects/12345/dashboards" in captured_urls[0]
 
-    def test_empty_result(self, oauth_credentials: Credentials) -> None:
+    def test_empty_result(self, oauth_credentials: Session) -> None:
         """list_dashboards() returns empty list when no dashboards."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -137,7 +130,7 @@ class TestListDashboards:
 class TestCreateDashboard:
     """Tests for create_dashboard() API client method."""
 
-    def test_creates_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_creates_dashboard(self, oauth_credentials: Session) -> None:
         """create_dashboard() sends POST and returns dashboard dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -161,7 +154,7 @@ class TestCreateDashboard:
 class TestGetDashboard:
     """Tests for get_dashboard() API client method."""
 
-    def test_gets_dashboard_by_id(self, oauth_credentials: Credentials) -> None:
+    def test_gets_dashboard_by_id(self, oauth_credentials: Session) -> None:
         """get_dashboard() sends GET with dashboard ID in path."""
         captured_urls: list[str] = []
 
@@ -184,7 +177,7 @@ class TestGetDashboard:
 class TestUpdateDashboard:
     """Tests for update_dashboard() API client method."""
 
-    def test_updates_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_updates_dashboard(self, oauth_credentials: Session) -> None:
         """update_dashboard() sends PATCH with body."""
         captured: list[tuple[str, Any]] = []
 
@@ -207,7 +200,7 @@ class TestUpdateDashboard:
 class TestDeleteDashboard:
     """Tests for delete_dashboard() API client method."""
 
-    def test_deletes_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_deletes_dashboard(self, oauth_credentials: Session) -> None:
         """delete_dashboard() sends DELETE request."""
         captured_methods: list[str] = []
 
@@ -226,7 +219,7 @@ class TestDeleteDashboard:
 class TestBulkDeleteDashboards:
     """Tests for bulk_delete_dashboards() API client method."""
 
-    def test_bulk_deletes_dashboards(self, oauth_credentials: Credentials) -> None:
+    def test_bulk_deletes_dashboards(self, oauth_credentials: Session) -> None:
         """bulk_delete_dashboards() sends POST to bulk-delete with dashboard_ids body."""
         captured: list[tuple[str, str, Any]] = []
 
@@ -254,7 +247,7 @@ class TestBulkDeleteDashboards:
 class TestDashboardOrganization:
     """Tests for dashboard favorite, pin, and remove report operations."""
 
-    def test_favorite_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_favorite_dashboard(self, oauth_credentials: Session) -> None:
         """favorite_dashboard() sends PUT to favorite endpoint."""
         captured: list[tuple[str, str]] = []
 
@@ -270,7 +263,7 @@ class TestDashboardOrganization:
         assert captured[0][0] == "POST"
         assert "/dashboards/1/favorites" in captured[0][1]
 
-    def test_unfavorite_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_unfavorite_dashboard(self, oauth_credentials: Session) -> None:
         """unfavorite_dashboard() sends DELETE to favorites endpoint."""
         captured: list[tuple[str, str]] = []
 
@@ -286,7 +279,7 @@ class TestDashboardOrganization:
         assert captured[0][0] == "DELETE"
         assert "/dashboards/1/favorites" in captured[0][1]
 
-    def test_pin_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_pin_dashboard(self, oauth_credentials: Session) -> None:
         """pin_dashboard() sends POST to pin endpoint."""
         captured: list[tuple[str, str]] = []
 
@@ -302,7 +295,7 @@ class TestDashboardOrganization:
         assert captured[0][0] == "POST"
         assert "/dashboards/1/pin" in captured[0][1]
 
-    def test_unpin_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_unpin_dashboard(self, oauth_credentials: Session) -> None:
         """unpin_dashboard() sends DELETE to pin endpoint."""
         captured: list[tuple[str, str]] = []
 
@@ -318,7 +311,7 @@ class TestDashboardOrganization:
         assert captured[0][0] == "DELETE"
         assert "/dashboards/1/pin" in captured[0][1]
 
-    def test_remove_report_from_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_remove_report_from_dashboard(self, oauth_credentials: Session) -> None:
         """remove_report_from_dashboard() sends PATCH with content action and returns dashboard."""
         captured: list[tuple[str, str, Any]] = []
 
@@ -348,7 +341,7 @@ class TestDashboardOrganization:
         assert result is not None
         assert result["id"] == 1
 
-    def test_add_report_to_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_add_report_to_dashboard(self, oauth_credentials: Session) -> None:
         """add_report_to_dashboard() sends PATCH with create action and source_bookmark_id."""
         captured: list[tuple[str, str, Any]] = []
 
@@ -382,7 +375,7 @@ class TestDashboardOrganization:
 class TestBlueprintOperations:
     """Tests for blueprint API methods."""
 
-    def test_list_blueprint_templates(self, oauth_credentials: Credentials) -> None:
+    def test_list_blueprint_templates(self, oauth_credentials: Session) -> None:
         """list_blueprint_templates() returns template list."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -405,7 +398,7 @@ class TestBlueprintOperations:
         assert result[0]["title_key"] == "onboarding"
 
     def test_list_blueprint_templates_with_reports(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """list_blueprint_templates(include_reports=True) passes param."""
         captured_urls: list[str] = []
@@ -422,7 +415,7 @@ class TestBlueprintOperations:
         assert "include_reports=true" in captured_urls[0]
 
     def test_list_blueprint_templates_dict_of_dicts(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """list_blueprint_templates() converts dict-of-dicts to list with name."""
 
@@ -451,7 +444,7 @@ class TestBlueprintOperations:
         onboarding = next(t for t in result if t["name"] == "onboarding")
         assert onboarding["title_key"] == "Get Started"
 
-    def test_update_blueprint_cohorts(self, oauth_credentials: Credentials) -> None:
+    def test_update_blueprint_cohorts(self, oauth_credentials: Session) -> None:
         """update_blueprint_cohorts() sends PUT with cohort mappings."""
         captured: list[Any] = []
 
@@ -470,7 +463,7 @@ class TestBlueprintOperations:
             "cohorts": [{"placeholder": "new_users", "cohort_id": 42}]
         }
 
-    def test_create_blueprint(self, oauth_credentials: Credentials) -> None:
+    def test_create_blueprint(self, oauth_credentials: Session) -> None:
         """create_blueprint() sends POST with template_type."""
         captured: list[Any] = []
 
@@ -489,7 +482,7 @@ class TestBlueprintOperations:
         assert captured[0] == {"template_type": "onboarding"}
         assert result["id"] == 1
 
-    def test_get_blueprint_config(self, oauth_credentials: Credentials) -> None:
+    def test_get_blueprint_config(self, oauth_credentials: Session) -> None:
         """get_blueprint_config() returns config dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -508,7 +501,7 @@ class TestBlueprintOperations:
 
         assert result["variables"]["event"] == "Signup"
 
-    def test_finalize_blueprint(self, oauth_credentials: Credentials) -> None:
+    def test_finalize_blueprint(self, oauth_credentials: Session) -> None:
         """finalize_blueprint() sends POST and returns dashboard."""
         captured: list[Any] = []
 
@@ -533,7 +526,7 @@ class TestBlueprintOperations:
 class TestDashboardAdvanced:
     """Tests for RCA, ERF, report link, and text card operations."""
 
-    def test_create_rca_dashboard(self, oauth_credentials: Credentials) -> None:
+    def test_create_rca_dashboard(self, oauth_credentials: Session) -> None:
         """create_rca_dashboard() sends POST and returns dashboard."""
         captured: list[Any] = []
 
@@ -554,7 +547,7 @@ class TestDashboardAdvanced:
         assert captured[0]["rca_source_id"] == 42
         assert result["id"] == 99
 
-    def test_get_bookmark_dashboard_ids(self, oauth_credentials: Credentials) -> None:
+    def test_get_bookmark_dashboard_ids(self, oauth_credentials: Session) -> None:
         """get_bookmark_dashboard_ids() returns list of int IDs."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -570,7 +563,7 @@ class TestDashboardAdvanced:
 
         assert result == [1, 2, 3]
 
-    def test_get_dashboard_erf(self, oauth_credentials: Credentials) -> None:
+    def test_get_dashboard_erf(self, oauth_credentials: Session) -> None:
         """get_dashboard_erf() returns ERF metrics dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -586,7 +579,7 @@ class TestDashboardAdvanced:
 
         assert "metrics" in result
 
-    def test_update_report_link(self, oauth_credentials: Credentials) -> None:
+    def test_update_report_link(self, oauth_credentials: Session) -> None:
         """update_report_link() sends PATCH to correct endpoint."""
         captured: list[tuple[str, str, Any]] = []
 
@@ -605,7 +598,7 @@ class TestDashboardAdvanced:
         assert "/dashboards/1/report-links/42" in captured[0][1]
         assert captured[0][2] == {"type": "embedded"}
 
-    def test_update_text_card(self, oauth_credentials: Credentials) -> None:
+    def test_update_text_card(self, oauth_credentials: Session) -> None:
         """update_text_card() sends PATCH to correct endpoint."""
         captured: list[tuple[str, str, Any]] = []
 
@@ -633,7 +626,7 @@ class TestDashboardAdvanced:
 class TestListBookmarksV2:
     """Tests for list_bookmarks_v2() API client method."""
 
-    def test_returns_bookmark_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_bookmark_list(self, oauth_credentials: Session) -> None:
         """list_bookmarks_v2() returns list of bookmark dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -656,7 +649,7 @@ class TestListBookmarksV2:
         assert len(result) == 2
         assert result[0]["name"] == "Report 1"
 
-    def test_filters_by_type(self, oauth_credentials: Credentials) -> None:
+    def test_filters_by_type(self, oauth_credentials: Session) -> None:
         """list_bookmarks_v2(bookmark_type='funnels') passes type param."""
         captured_urls: list[str] = []
 
@@ -671,7 +664,7 @@ class TestListBookmarksV2:
 
         assert "type=funnels" in captured_urls[0]
 
-    def test_filters_by_ids(self, oauth_credentials: Credentials) -> None:
+    def test_filters_by_ids(self, oauth_credentials: Session) -> None:
         """list_bookmarks_v2(ids=[1,2]) passes ids as query param."""
         captured_urls: list[str] = []
 
@@ -690,7 +683,7 @@ class TestListBookmarksV2:
 class TestBookmarkCRUD:
     """Tests for bookmark create, get, update, delete operations."""
 
-    def test_create_bookmark(self, oauth_credentials: Credentials) -> None:
+    def test_create_bookmark(self, oauth_credentials: Session) -> None:
         """create_bookmark() sends POST and returns bookmark dict."""
         captured: list[Any] = []
 
@@ -714,7 +707,7 @@ class TestBookmarkCRUD:
         assert result["id"] == 1
         assert captured[0]["name"] == "New Report"
 
-    def test_get_bookmark(self, oauth_credentials: Credentials) -> None:
+    def test_get_bookmark(self, oauth_credentials: Session) -> None:
         """get_bookmark() sends GET with bookmark ID in path."""
         captured_urls: list[str] = []
 
@@ -733,7 +726,7 @@ class TestBookmarkCRUD:
         assert "/bookmarks/42" in captured_urls[0]
         assert result["id"] == 42
 
-    def test_update_bookmark(self, oauth_credentials: Credentials) -> None:
+    def test_update_bookmark(self, oauth_credentials: Session) -> None:
         """update_bookmark() sends PATCH with body."""
         captured: list[tuple[str, Any]] = []
 
@@ -752,7 +745,7 @@ class TestBookmarkCRUD:
         assert captured[0][0] == "PATCH"
         assert result["name"] == "Updated"
 
-    def test_delete_bookmark(self, oauth_credentials: Credentials) -> None:
+    def test_delete_bookmark(self, oauth_credentials: Session) -> None:
         """delete_bookmark() sends DELETE request."""
         captured_methods: list[str] = []
 
@@ -767,7 +760,7 @@ class TestBookmarkCRUD:
 
         assert captured_methods[0] == "DELETE"
 
-    def test_bulk_delete_bookmarks(self, oauth_credentials: Credentials) -> None:
+    def test_bulk_delete_bookmarks(self, oauth_credentials: Session) -> None:
         """bulk_delete_bookmarks() sends POST to bulk-delete with bookmark_ids body."""
         captured: list[tuple[str, str, Any]] = []
 
@@ -786,7 +779,7 @@ class TestBookmarkCRUD:
         assert "/bookmarks/bulk-delete" in captured[0][1]
         assert captured[0][2] == {"bookmark_ids": [1, 2]}
 
-    def test_bulk_update_bookmarks(self, oauth_credentials: Credentials) -> None:
+    def test_bulk_update_bookmarks(self, oauth_credentials: Session) -> None:
         """bulk_update_bookmarks() sends PATCH with entries."""
         captured: list[Any] = []
 
@@ -801,9 +794,7 @@ class TestBookmarkCRUD:
 
         assert captured[0] == {"bookmarks": [{"id": 1, "name": "Renamed"}]}
 
-    def test_bookmark_linked_dashboard_ids(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_bookmark_linked_dashboard_ids(self, oauth_credentials: Session) -> None:
         """bookmark_linked_dashboard_ids() returns list of dashboard IDs."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -816,7 +807,7 @@ class TestBookmarkCRUD:
 
         assert result == [10, 20, 30]
 
-    def test_get_bookmark_history(self, oauth_credentials: Credentials) -> None:
+    def test_get_bookmark_history(self, oauth_credentials: Session) -> None:
         """get_bookmark_history() returns history response."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -839,7 +830,7 @@ class TestBookmarkCRUD:
         assert "results" in result
 
     def test_get_bookmark_history_with_pagination(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """get_bookmark_history() passes cursor and page_size params."""
         captured_urls: list[str] = []
@@ -863,7 +854,7 @@ class TestBookmarkCRUD:
         assert "page_size=10" in captured_urls[0]
 
     def test_get_bookmark_history_preserves_pagination(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """get_bookmark_history() preserves pagination data from API response."""
 
@@ -901,7 +892,7 @@ class TestBookmarkCRUD:
 class TestListCohortsApp:
     """Tests for list_cohorts_app() API client method."""
 
-    def test_returns_cohort_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_cohort_list(self, oauth_credentials: Session) -> None:
         """list_cohorts_app() returns list of cohort dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -924,7 +915,7 @@ class TestListCohortsApp:
         assert len(result) == 2
         assert result[0]["name"] == "Power Users"
 
-    def test_filters_by_data_group_id(self, oauth_credentials: Credentials) -> None:
+    def test_filters_by_data_group_id(self, oauth_credentials: Session) -> None:
         """list_cohorts_app(data_group_id='abc') passes param."""
         captured_urls: list[str] = []
 
@@ -939,7 +930,7 @@ class TestListCohortsApp:
 
         assert "data_group_id=abc" in captured_urls[0]
 
-    def test_filters_by_ids(self, oauth_credentials: Credentials) -> None:
+    def test_filters_by_ids(self, oauth_credentials: Session) -> None:
         """list_cohorts_app(ids=[1,2]) passes ids param."""
         captured_urls: list[str] = []
 
@@ -958,7 +949,7 @@ class TestListCohortsApp:
 class TestCohortCRUD:
     """Tests for cohort create, get, update, delete operations."""
 
-    def test_get_cohort(self, oauth_credentials: Credentials) -> None:
+    def test_get_cohort(self, oauth_credentials: Session) -> None:
         """get_cohort() sends GET with cohort ID in path."""
         captured_urls: list[str] = []
 
@@ -977,7 +968,7 @@ class TestCohortCRUD:
         assert "/cohorts/42" in captured_urls[0]
         assert result["id"] == 42
 
-    def test_create_cohort(self, oauth_credentials: Credentials) -> None:
+    def test_create_cohort(self, oauth_credentials: Session) -> None:
         """create_cohort() sends POST and returns cohort dict."""
         captured: list[Any] = []
 
@@ -999,7 +990,7 @@ class TestCohortCRUD:
         assert result["id"] == 1
         assert captured[0]["name"] == "New Cohort"
 
-    def test_update_cohort(self, oauth_credentials: Credentials) -> None:
+    def test_update_cohort(self, oauth_credentials: Session) -> None:
         """update_cohort() sends PATCH with body."""
         captured: list[tuple[str, Any]] = []
 
@@ -1018,7 +1009,7 @@ class TestCohortCRUD:
         assert captured[0][0] == "PATCH"
         assert result["name"] == "Updated"
 
-    def test_delete_cohort(self, oauth_credentials: Credentials) -> None:
+    def test_delete_cohort(self, oauth_credentials: Session) -> None:
         """delete_cohort() sends DELETE request."""
         captured_methods: list[str] = []
 
@@ -1033,7 +1024,7 @@ class TestCohortCRUD:
 
         assert captured_methods[0] == "DELETE"
 
-    def test_bulk_delete_cohorts(self, oauth_credentials: Credentials) -> None:
+    def test_bulk_delete_cohorts(self, oauth_credentials: Session) -> None:
         """bulk_delete_cohorts() sends POST to bulk-delete with cohort_ids body."""
         captured: list[tuple[str, str, Any]] = []
 
@@ -1052,7 +1043,7 @@ class TestCohortCRUD:
         assert "/cohorts/bulk-delete" in captured[0][1]
         assert captured[0][2] == {"cohort_ids": [1, 2]}
 
-    def test_bulk_update_cohorts(self, oauth_credentials: Credentials) -> None:
+    def test_bulk_update_cohorts(self, oauth_credentials: Session) -> None:
         """bulk_update_cohorts() sends PATCH with entries."""
         captured: list[Any] = []
 

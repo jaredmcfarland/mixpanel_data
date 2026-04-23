@@ -23,6 +23,7 @@ import jq  # type: ignore[import-not-found]
 import pydantic
 import typer
 from rich.console import Console
+from rich.markup import escape as rich_escape
 
 from mixpanel_data.exceptions import (
     AccountExistsError,
@@ -99,30 +100,39 @@ def handle_errors(func: F) -> F:
         try:
             return func(*args, **kwargs)
         except AuthenticationError as e:
-            err_console.print(f"[red]Authentication error:[/red] {e.message}")
+            err_console.print(
+                f"[red]Authentication error:[/red] {rich_escape(e.message)}"
+            )
             # Show request context to help debug auth issues
             if e.request_url:
                 # Extract endpoint without sensitive params
                 endpoint = e.request_url.split("?")[0].split("/")[-1]
-                err_console.print(f"  [dim]Endpoint:[/dim] {endpoint}")
+                err_console.print(f"  [dim]Endpoint:[/dim] {rich_escape(endpoint)}")
             # Show API error message if available
             if isinstance(e.response_body, dict):
                 api_error = e.response_body.get("error", "")
                 if api_error:
-                    err_console.print(f"  [dim]API response:[/dim] {api_error}")
+                    err_console.print(
+                        f"  [dim]API response:[/dim] {rich_escape(str(api_error))}"
+                    )
             raise typer.Exit(ExitCode.AUTH_ERROR) from None
         except AccountNotFoundError as e:
-            err_console.print(f"[red]Account not found:[/red] {e.account_name}")
+            err_console.print(
+                f"[red]Account not found:[/red] {rich_escape(e.account_name)}"
+            )
             if e.available_accounts:
-                err_console.print(
-                    f"Available accounts: {', '.join(e.available_accounts)}"
-                )
+                joined = ", ".join(rich_escape(a) for a in e.available_accounts)
+                err_console.print(f"Available accounts: {joined}")
             raise typer.Exit(ExitCode.NOT_FOUND) from None
         except AccountExistsError as e:
-            err_console.print(f"[red]Account exists:[/red] {e.account_name}")
+            err_console.print(
+                f"[red]Account exists:[/red] {rich_escape(e.account_name)}"
+            )
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except RateLimitError as e:
-            err_console.print(f"[yellow]Rate limited:[/yellow] {e.message}")
+            err_console.print(
+                f"[yellow]Rate limited:[/yellow] {rich_escape(e.message)}"
+            )
             if e.retry_after:
                 err_console.print(
                     f"[cyan]Wait {e.retry_after} seconds before retrying.[/cyan]"
@@ -130,53 +140,64 @@ def handle_errors(func: F) -> F:
             # Show which endpoint was hit
             if e.request_url:
                 endpoint = e.request_url.split("/")[-1].split("?")[0]
-                err_console.print(f"[dim]Endpoint: {endpoint}[/dim]")
+                err_console.print(f"[dim]Endpoint: {rich_escape(endpoint)}[/dim]")
             err_console.print(
                 "[yellow]Tip:[/yellow] Wait and retry, or reduce your date range."
             )
             raise typer.Exit(ExitCode.RATE_LIMIT) from None
         except EventNotFoundError as e:
-            err_console.print(f"[red]Event not found:[/red] '{e.event_name}'")
+            err_console.print(
+                f"[red]Event not found:[/red] '{rich_escape(e.event_name)}'"
+            )
             if e.similar_events:
-                suggestions = ", ".join(f"'{s}'" for s in e.similar_events[:5])
+                suggestions = ", ".join(
+                    f"'{rich_escape(s)}'" for s in e.similar_events[:5]
+                )
                 err_console.print(f"Did you mean: {suggestions}?")
             raise typer.Exit(ExitCode.NOT_FOUND) from None
         except DateRangeTooLargeError as e:
-            err_console.print(f"[red]Date range too large:[/red] {e.message}")
             err_console.print(
-                f"  [dim]Requested:[/dim] {e.from_date} to {e.to_date} "
-                f"({e.days_requested} days)"
+                f"[red]Date range too large:[/red] {rich_escape(e.message)}"
+            )
+            err_console.print(
+                f"  [dim]Requested:[/dim] {rich_escape(str(e.from_date))} to "
+                f"{rich_escape(str(e.to_date))} ({e.days_requested} days)"
             )
             err_console.print(f"  [dim]Maximum:[/dim] {e.max_days} days")
             err_console.print(
                 "[yellow]Tip:[/yellow] Split into smaller date ranges, e.g.:\n"
-                f"  --from {e.from_date} --to <midpoint>\n"
-                f"  --from <midpoint+1> --to {e.to_date}"
+                f"  --from {rich_escape(str(e.from_date))} --to <midpoint>\n"
+                f"  --from <midpoint+1> --to {rich_escape(str(e.to_date))}"
             )
             raise typer.Exit(ExitCode.INVALID_ARGS) from None
         except JQLSyntaxError as e:
             # JQLSyntaxError must be caught before QueryError (it's a subclass)
             err_console.print(
-                f"[red]JQL error:[/red] {e.error_type}: {e.error_message}"
+                f"[red]JQL error:[/red] {rich_escape(e.error_type)}: "
+                f"{rich_escape(e.error_message)}"
             )
             # Show line info if available (code snippet with caret)
             if e.line_info:
-                err_console.print(f"[dim]{e.line_info}[/dim]")
+                err_console.print(f"[dim]{rich_escape(e.line_info)}[/dim]")
             # Show stack trace if available
             if e.stack_trace:
-                err_console.print(f"  [dim]Location:[/dim] {e.stack_trace}")
+                err_console.print(
+                    f"  [dim]Location:[/dim] {rich_escape(e.stack_trace)}"
+                )
             # Show the script that failed (truncated for readability)
             if e.script:
                 script_preview = e.script.strip()
                 if len(script_preview) > 200:
                     script_preview = script_preview[:200] + "..."
-                err_console.print(f"  [dim]Script:[/dim]\n{script_preview}")
+                err_console.print(
+                    f"  [dim]Script:[/dim]\n{rich_escape(script_preview)}"
+                )
             # Show raw error for debugging if it has more info
             if e.raw_error and e.raw_error != e.error_message:
-                err_console.print(f"  [dim]Raw error:[/dim] {e.raw_error}")
+                err_console.print(f"  [dim]Raw error:[/dim] {rich_escape(e.raw_error)}")
             raise typer.Exit(ExitCode.INVALID_ARGS) from None
         except QueryError as e:
-            err_console.print(f"[red]Query error:[/red] {e.message}")
+            err_console.print(f"[red]Query error:[/red] {rich_escape(e.message)}")
             # Show response body - often contains the actual API error message
             if e.response_body:
                 if isinstance(e.response_body, dict):
@@ -186,7 +207,9 @@ def handle_errors(func: F) -> F:
                         and isinstance(api_error, str)
                         and api_error not in e.message
                     ):
-                        err_console.print(f"  [dim]API error:[/dim] {api_error}")
+                        err_console.print(
+                            f"  [dim]API error:[/dim] {rich_escape(api_error)}"
+                        )
                 elif (
                     isinstance(e.response_body, str)
                     and e.response_body not in e.message
@@ -195,12 +218,17 @@ def handle_errors(func: F) -> F:
                     body_preview = e.response_body[:200]
                     if len(e.response_body) > 200:
                         body_preview += "..."
-                    err_console.print(f"  [dim]Response:[/dim] {body_preview}")
+                    err_console.print(
+                        f"  [dim]Response:[/dim] {rich_escape(body_preview)}"
+                    )
             # Show non-sensitive request context for debugging
             if e.request_params:
                 for key, value in e.request_params.items():
                     if key not in ("project_id",):
-                        err_console.print(f"  [dim]{key}:[/dim] {value}")
+                        err_console.print(
+                            f"  [dim]{rich_escape(str(key))}:[/dim] "
+                            f"{rich_escape(str(value))}"
+                        )
             # Show request body if present (e.g., for POST requests)
             if e.request_body:
                 for key, value in e.request_body.items():
@@ -208,7 +236,10 @@ def handle_errors(func: F) -> F:
                         val_str = str(value)
                         if len(val_str) > 100:
                             val_str = val_str[:100] + "..."
-                        err_console.print(f"  [dim]{key}:[/dim] {val_str}")
+                        err_console.print(
+                            f"  [dim]{rich_escape(str(key))}:[/dim] "
+                            f"{rich_escape(val_str)}"
+                        )
             # Provide contextual hints
             if e.status_code == 403:
                 err_console.print(
@@ -216,53 +247,63 @@ def handle_errors(func: F) -> F:
                 )
             raise typer.Exit(ExitCode.INVALID_ARGS) from None
         except ServerError as e:
-            err_console.print(f"[red]Server error ({e.status_code}):[/red] {e.message}")
+            err_console.print(
+                f"[red]Server error ({e.status_code}):[/red] {rich_escape(e.message)}"
+            )
             # Show response body - may contain actionable error details
             if e.response_body:
                 if isinstance(e.response_body, dict):
                     api_error = e.response_body.get("error", "")
                     if api_error:
-                        err_console.print(f"  [dim]API error:[/dim] {api_error}")
+                        err_console.print(
+                            f"  [dim]API error:[/dim] {rich_escape(str(api_error))}"
+                        )
                 elif isinstance(e.response_body, str):
                     body_preview = e.response_body[:200]
                     if len(e.response_body) > 200:
                         body_preview += "..."
-                    err_console.print(f"  [dim]Response:[/dim] {body_preview}")
+                    err_console.print(
+                        f"  [dim]Response:[/dim] {rich_escape(body_preview)}"
+                    )
             # Show endpoint for context
             if e.request_url:
                 endpoint = e.request_url.split("?")[0].split("/")[-1]
-                err_console.print(f"  [dim]Endpoint:[/dim] {endpoint}")
+                err_console.print(f"  [dim]Endpoint:[/dim] {rich_escape(endpoint)}")
             err_console.print(
                 "[yellow]Hint:[/yellow] This may be a transient issue. "
                 "Try again in a few moments."
             )
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except OAuthError as e:
-            err_console.print(f"[red]OAuth error:[/red] {e.message}")
+            err_console.print(f"[red]OAuth error:[/red] {rich_escape(e.message)}")
             if e.code:
-                err_console.print(f"  [dim]Code:[/dim] {e.code}")
+                err_console.print(f"  [dim]Code:[/dim] {rich_escape(e.code)}")
             raise typer.Exit(ExitCode.AUTH_ERROR) from None
         except WorkspaceScopeError as e:
-            err_console.print(f"[red]Workspace error:[/red] {e.message}")
+            err_console.print(f"[red]Workspace error:[/red] {rich_escape(e.message)}")
             if e.code:
-                err_console.print(f"  [dim]Code:[/dim] {e.code}")
+                err_console.print(f"  [dim]Code:[/dim] {rich_escape(e.code)}")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except ConfigError as e:
-            err_console.print(f"[red]Configuration error:[/red] {e.message}")
+            # Escape the message so block names like ``[accounts.NAME]`` are
+            # rendered literally instead of being parsed as Rich markup.
+            err_console.print(
+                f"[red]Configuration error:[/red] {rich_escape(e.message)}"
+            )
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except MixpanelDataError as e:
-            err_console.print(f"[red]Error:[/red] {e.message}")
+            err_console.print(f"[red]Error:[/red] {rich_escape(e.message)}")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except pydantic.ValidationError as e:
             err_console.print(
                 "[red]API response parsing error:[/red] "
                 "unexpected data format from Mixpanel API"
             )
-            err_console.print(f"  [dim]{e}[/dim]")
+            err_console.print(f"  [dim]{rich_escape(str(e))}[/dim]")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except ValueError as e:
             # Handle validation errors (e.g., invalid date format)
-            err_console.print(f"[red]Invalid argument:[/red] {e}")
+            err_console.print(f"[red]Invalid argument:[/red] {rich_escape(str(e))}")
             raise typer.Exit(ExitCode.INVALID_ARGS) from None
 
     return wrapper  # type: ignore[return-value]
@@ -272,12 +313,9 @@ def get_workspace(ctx: typer.Context) -> Workspace:
     """Get or create workspace from context.
 
     Lazily initializes a Workspace instance, respecting the ``--account``,
-    ``--credential``, ``--project``, and ``--workspace-id`` global options.
-    The workspace is cached in the context for reuse.
-
-    When ``--credential`` is provided, uses
-    ``ConfigManager.resolve_session()`` (v2 path) for credential resolution.
-    Otherwise falls back to the legacy ``account`` parameter.
+    ``--project``, ``--workspace`` (alias ``--workspace-id``), and
+    ``--target`` global options. The workspace is cached in the context
+    for reuse.
 
     Args:
         ctx: Typer context with global options in obj dict.
@@ -293,24 +331,16 @@ def get_workspace(ctx: typer.Context) -> Workspace:
 
     if "workspace" not in ctx.obj or ctx.obj["workspace"] is None:
         account = ctx.obj.get("account")
-        credential = ctx.obj.get("credential")
         project = ctx.obj.get("project")
         workspace_id: int | None = ctx.obj.get("workspace_id")
+        target = ctx.obj.get("target")
 
-        if credential is not None:
-            # v2 path: use resolve_session via credential param
-            ctx.obj["workspace"] = Workspace(
-                credential=credential,
-                project_id=project,
-                workspace_id=workspace_id,
-            )
-        else:
-            # Legacy path: use account with optional project override
-            ctx.obj["workspace"] = Workspace(
-                account=account,
-                project_id=project,
-                workspace_id=workspace_id,
-            )
+        ctx.obj["workspace"] = Workspace(
+            account=account,
+            project=project,
+            workspace=workspace_id,
+            target=target,
+        )
     workspace: Workspace = ctx.obj["workspace"]
     return workspace
 

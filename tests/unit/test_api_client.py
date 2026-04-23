@@ -18,54 +18,55 @@ from mixpanel_data._internal.api_client import (
     MixpanelAPIClient,
     _iter_jsonl_lines,
 )
-from mixpanel_data._internal.config import Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data.exceptions import (
     AuthenticationError,
     QueryError,
     RateLimitError,
 )
+from tests.conftest import make_session
 
 
 @pytest.fixture
-def test_credentials() -> Credentials:
+def test_credentials() -> Session:
     """Create test credentials."""
-    return Credentials(
+    return make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id="12345",
         region="us",
     )
 
 
 @pytest.fixture
-def eu_credentials() -> Credentials:
+def eu_credentials() -> Session:
     """Create EU region test credentials."""
-    return Credentials(
+    return make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id="12345",
         region="eu",
     )
 
 
 @pytest.fixture
-def india_credentials() -> Credentials:
+def india_credentials() -> Session:
     """Create India region test credentials."""
-    return Credentials(
+    return make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id="12345",
         region="in",
     )
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Any,
 ) -> MixpanelAPIClient:
     """Create a client with mock transport."""
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -99,29 +100,27 @@ class TestEndpoints:
 class TestClientInit:
     """Test client initialization."""
 
-    def test_init_with_credentials(self, test_credentials: Credentials) -> None:
-        """Client should accept credentials."""
-        client = MixpanelAPIClient(test_credentials)
-        assert client._credentials == test_credentials
+    def test_init_with_credentials(self, test_credentials: Session) -> None:
+        """Client should accept a Session."""
+        client = MixpanelAPIClient(session=test_credentials)
+        assert client._session == test_credentials
         client.close()
 
-    def test_init_with_custom_timeout(self, test_credentials: Credentials) -> None:
+    def test_init_with_custom_timeout(self, test_credentials: Session) -> None:
         """Client should accept custom timeout."""
-        client = MixpanelAPIClient(test_credentials, timeout=60.0)
+        client = MixpanelAPIClient(session=test_credentials, timeout=60.0)
         assert client._timeout == 60.0
         client.close()
 
-    def test_init_with_custom_export_timeout(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_init_with_custom_export_timeout(self, test_credentials: Session) -> None:
         """Client should accept custom export timeout."""
-        client = MixpanelAPIClient(test_credentials, export_timeout=600.0)
+        client = MixpanelAPIClient(session=test_credentials, export_timeout=600.0)
         assert client._export_timeout == 600.0
         client.close()
 
-    def test_init_with_max_retries(self, test_credentials: Credentials) -> None:
+    def test_init_with_max_retries(self, test_credentials: Session) -> None:
         """Client should accept max retries."""
-        client = MixpanelAPIClient(test_credentials, max_retries=5)
+        client = MixpanelAPIClient(session=test_credentials, max_retries=5)
         assert client._max_retries == 5
         client.close()
 
@@ -129,7 +128,7 @@ class TestClientInit:
 class TestClientLifecycle:
     """Test client lifecycle methods."""
 
-    def test_context_manager(self, test_credentials: Credentials) -> None:
+    def test_context_manager(self, test_credentials: Session) -> None:
         """Client should work as context manager."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -139,7 +138,7 @@ class TestClientLifecycle:
             assert client._client is not None
         assert client._client is None
 
-    def test_close_releases_resources(self, test_credentials: Credentials) -> None:
+    def test_close_releases_resources(self, test_credentials: Session) -> None:
         """Close should release HTTP client."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -155,9 +154,9 @@ class TestClientLifecycle:
 class TestAuthHeader:
     """Test auth header generation."""
 
-    def test_auth_header_format(self, test_credentials: Credentials) -> None:
+    def test_auth_header_format(self, test_credentials: Session) -> None:
         """Auth header should be Base64 encoded Basic auth."""
-        client = MixpanelAPIClient(test_credentials)
+        client = MixpanelAPIClient(session=test_credentials)
         header = client._get_auth_header()
         assert header.startswith("Basic ")
         # Decode and verify
@@ -168,48 +167,140 @@ class TestAuthHeader:
         assert decoded == "test_user:test_secret"
         client.close()
 
+    def test_oauth_session_resolves_bearer_per_request(self) -> None:
+        """Fix 18: session-bound OAuth re-resolves the bearer on each call.
+
+        With a fresh-token-on-every-call resolver stub, two consecutive
+        ``_get_auth_header()`` calls return DIFFERENT bearers — proving
+        the bearer is not cached at construction time.
+        """
+        from mixpanel_data._internal.auth.account import (
+            OAuthBrowserAccount,
+            Region,
+            TokenResolver,
+        )
+        from mixpanel_data._internal.auth.session import Project, Session
+
+        class _CountingResolver(TokenResolver):
+            """Returns a new bearer on each call so we can assert per-request resolution."""
+
+            def __init__(self) -> None:
+                """Track call count starting at 0."""
+                self.calls = 0
+
+            def get_browser_token(self, name: str, region: Region) -> str:
+                """Return ``tok-N`` where N increments on each call."""
+                self.calls += 1
+                return f"tok-{self.calls}"
+
+            def get_static_token(self, account: object) -> str:  # pragma: no cover
+                """Not exercised in this test."""
+                raise AssertionError("static token path should not be hit")
+
+        account: OAuthBrowserAccount = OAuthBrowserAccount(
+            name="alice",
+            region="us",
+            default_project="12345",
+        )
+        session = Session(account=account, project=Project(id="12345"))
+        resolver = _CountingResolver()
+        client = MixpanelAPIClient(session=session, token_resolver=resolver)
+        try:
+            # OAuth bearers are not cached: every _get_auth_header call hits
+            # the resolver, so a refreshed token surfaces on the next request.
+            assert resolver.calls == 0
+            first = client._get_auth_header()
+            second = client._get_auth_header()
+            assert first == "Bearer tok-1"
+            assert second == "Bearer tok-2"
+            assert resolver.calls == 2
+            # current_auth_header (public) routes through the same per-request path.
+            assert client.current_auth_header == "Bearer tok-3"
+            assert resolver.calls == 3
+        finally:
+            client.close()
+
+    def test_service_account_session_uses_basic_auth_no_resolver_call(self) -> None:
+        """Service-account session keeps Basic auth + no per-request resolver call."""
+        from mixpanel_data._internal.auth.account import (
+            Region,
+            ServiceAccount,
+            TokenResolver,
+        )
+        from mixpanel_data._internal.auth.session import Project, Session
+
+        class _NeverCalledResolver(TokenResolver):
+            """Asserts neither token method is called for service-account sessions."""
+
+            def get_browser_token(
+                self, name: str, region: Region
+            ) -> str:  # pragma: no cover
+                """Should never run — service accounts are Basic auth."""
+                raise AssertionError("browser token path should not run for SA")
+
+            def get_static_token(self, account: object) -> str:  # pragma: no cover
+                """Should never run — service accounts are Basic auth."""
+                raise AssertionError("static token path should not run for SA")
+
+        sa = ServiceAccount(
+            name="team",
+            region="us",
+            username="sa-user",
+            secret=SecretStr("sa-secret"),
+            default_project="12345",
+        )
+        session = Session(account=sa, project=Project(id="12345"))
+        client = MixpanelAPIClient(
+            session=session, token_resolver=_NeverCalledResolver()
+        )
+        try:
+            header = client._get_auth_header()
+            assert header.startswith("Basic ")
+        finally:
+            client.close()
+
 
 class TestBuildUrl:
     """Test URL building."""
 
-    def test_build_query_url_us(self, test_credentials: Credentials) -> None:
+    def test_build_query_url_us(self, test_credentials: Session) -> None:
         """Should build correct US query URL."""
-        client = MixpanelAPIClient(test_credentials)
+        client = MixpanelAPIClient(session=test_credentials)
         url = client._build_url("query", "/segmentation")
         assert url == "https://mixpanel.com/api/query/segmentation"
         client.close()
 
-    def test_build_query_url_eu(self, eu_credentials: Credentials) -> None:
+    def test_build_query_url_eu(self, eu_credentials: Session) -> None:
         """Should build correct EU query URL."""
-        client = MixpanelAPIClient(eu_credentials)
+        client = MixpanelAPIClient(session=eu_credentials)
         url = client._build_url("query", "/segmentation")
         assert url == "https://eu.mixpanel.com/api/query/segmentation"
         client.close()
 
-    def test_build_query_url_india(self, india_credentials: Credentials) -> None:
+    def test_build_query_url_india(self, india_credentials: Session) -> None:
         """Should build correct India query URL."""
-        client = MixpanelAPIClient(india_credentials)
+        client = MixpanelAPIClient(session=india_credentials)
         url = client._build_url("query", "/segmentation")
         assert url == "https://in.mixpanel.com/api/query/segmentation"
         client.close()
 
-    def test_build_export_url_us(self, test_credentials: Credentials) -> None:
+    def test_build_export_url_us(self, test_credentials: Session) -> None:
         """Should build correct US export URL."""
-        client = MixpanelAPIClient(test_credentials)
+        client = MixpanelAPIClient(session=test_credentials)
         url = client._build_url("export", "/export")
         assert url == "https://data.mixpanel.com/api/2.0/export"
         client.close()
 
-    def test_build_export_url_eu(self, eu_credentials: Credentials) -> None:
+    def test_build_export_url_eu(self, eu_credentials: Session) -> None:
         """Should build correct EU export URL."""
-        client = MixpanelAPIClient(eu_credentials)
+        client = MixpanelAPIClient(session=eu_credentials)
         url = client._build_url("export", "/export")
         assert url == "https://data-eu.mixpanel.com/api/2.0/export"
         client.close()
 
-    def test_build_url_adds_leading_slash(self, test_credentials: Credentials) -> None:
+    def test_build_url_adds_leading_slash(self, test_credentials: Session) -> None:
         """Should add leading slash if missing."""
-        client = MixpanelAPIClient(test_credentials)
+        client = MixpanelAPIClient(session=test_credentials)
         url = client._build_url("query", "segmentation")
         assert url == "https://mixpanel.com/api/query/segmentation"
         client.close()
@@ -223,7 +314,7 @@ class TestBuildUrl:
 class TestAuthenticatedRequests:
     """Test authenticated request handling (US1)."""
 
-    def test_auth_header_sent(self, test_credentials: Credentials) -> None:
+    def test_auth_header_sent(self, test_credentials: Session) -> None:
         """Auth header should be sent with requests."""
         captured_headers: dict[str, str] = {}
 
@@ -237,7 +328,7 @@ class TestAuthenticatedRequests:
         assert "authorization" in captured_headers
         assert captured_headers["authorization"].startswith("Basic ")
 
-    def test_project_id_in_query_params(self, test_credentials: Credentials) -> None:
+    def test_project_id_in_query_params(self, test_credentials: Session) -> None:
         """Project ID should be in query params."""
         captured_url: str = ""
 
@@ -251,7 +342,7 @@ class TestAuthenticatedRequests:
 
         assert "project_id=12345" in captured_url
 
-    def test_authentication_error_on_401(self, test_credentials: Credentials) -> None:
+    def test_authentication_error_on_401(self, test_credentials: Session) -> None:
         """Should raise AuthenticationError on 401."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -265,9 +356,7 @@ class TestAuthenticatedRequests:
 
         assert "credentials" in str(exc_info.value).lower()
 
-    def test_credentials_not_in_error_messages(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_credentials_not_in_error_messages(self, test_credentials: Session) -> None:
         """Credentials should never appear in error messages."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -283,7 +372,7 @@ class TestAuthenticatedRequests:
         assert "test_secret" not in error_str
         assert "test_user" not in error_str
 
-    def test_regional_routing_us(self, test_credentials: Credentials) -> None:
+    def test_regional_routing_us(self, test_credentials: Session) -> None:
         """US region should use US endpoints."""
         captured_url: str = ""
 
@@ -297,7 +386,7 @@ class TestAuthenticatedRequests:
 
         assert "mixpanel.com" in captured_url
 
-    def test_regional_routing_eu(self, eu_credentials: Credentials) -> None:
+    def test_regional_routing_eu(self, eu_credentials: Session) -> None:
         """EU region should use EU endpoints."""
         captured_url: str = ""
 
@@ -311,7 +400,7 @@ class TestAuthenticatedRequests:
 
         assert "eu.mixpanel.com" in captured_url
 
-    def test_regional_routing_india(self, india_credentials: Credentials) -> None:
+    def test_regional_routing_india(self, india_credentials: Session) -> None:
         """India region should use India endpoints."""
         captured_url: str = ""
 
@@ -334,7 +423,7 @@ class TestAuthenticatedRequests:
 class TestRateLimiting:
     """Test rate limit handling (US2)."""
 
-    def test_retry_on_429_with_retry_after(self, test_credentials: Credentials) -> None:
+    def test_retry_on_429_with_retry_after(self, test_credentials: Session) -> None:
         """Should retry on 429 with Retry-After header."""
         call_count = 0
 
@@ -352,7 +441,7 @@ class TestRateLimiting:
         assert result == ["event1"]
 
     def test_exponential_backoff_without_retry_after(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should use exponential backoff without Retry-After."""
         call_count = 0
@@ -367,7 +456,7 @@ class TestRateLimiting:
         # Use low max_retries for faster test
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=2, _transport=transport
+            session=test_credentials, max_retries=2, _transport=transport
         )
 
         with client:
@@ -377,7 +466,7 @@ class TestRateLimiting:
         assert result == ["event1"]
 
     def test_rate_limit_error_after_max_retries(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should raise RateLimitError after max retries."""
 
@@ -386,7 +475,7 @@ class TestRateLimiting:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=1, _transport=transport
+            session=test_credentials, max_retries=1, _transport=transport
         )
 
         with client, pytest.raises(RateLimitError) as exc_info:
@@ -394,9 +483,7 @@ class TestRateLimiting:
 
         assert exc_info.value.retry_after == 0
 
-    def test_successful_response_after_retry(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_successful_response_after_retry(self, test_credentials: Session) -> None:
         """Should return successful response after retry."""
         call_count = 0
 
@@ -409,7 +496,7 @@ class TestRateLimiting:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=3, _transport=transport
+            session=test_credentials, max_retries=3, _transport=transport
         )
 
         with client:
@@ -427,9 +514,7 @@ class TestRateLimiting:
 class TestEventExport:
     """Test event export streaming (US3)."""
 
-    def test_export_events_returns_iterator(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_export_events_returns_iterator(self, test_credentials: Session) -> None:
         """export_events should return an iterator."""
         mock_data = b'{"event":"A","properties":{"time":1}}\n{"event":"B","properties":{"time":2}}\n'
 
@@ -442,7 +527,7 @@ class TestEventExport:
             assert hasattr(result, "__iter__")
             assert hasattr(result, "__next__")
 
-    def test_jsonl_parsing_line_by_line(self, test_credentials: Credentials) -> None:
+    def test_jsonl_parsing_line_by_line(self, test_credentials: Session) -> None:
         """Should parse JSONL line by line."""
         mock_data = b'{"event":"A","properties":{"time":1}}\n{"event":"B","properties":{"time":2}}\n'
 
@@ -456,7 +541,7 @@ class TestEventExport:
         assert events[0]["event"] == "A"
         assert events[1]["event"] == "B"
 
-    def test_on_batch_callback(self, test_credentials: Credentials) -> None:
+    def test_on_batch_callback(self, test_credentials: Session) -> None:
         """Should invoke on_batch callback."""
         # Create enough events to trigger callback
         events_data = "\n".join(
@@ -480,7 +565,7 @@ class TestEventExport:
         assert 1000 in batch_counts
         assert 1500 in batch_counts
 
-    def test_event_name_filtering(self, test_credentials: Credentials) -> None:
+    def test_event_name_filtering(self, test_credentials: Session) -> None:
         """Should filter by event names."""
         captured_url: str = ""
 
@@ -499,7 +584,7 @@ class TestEventExport:
         # Events should be JSON-encoded in URL
         assert "event=" in captured_url
 
-    def test_malformed_json_skipped(self, test_credentials: Credentials) -> None:
+    def test_malformed_json_skipped(self, test_credentials: Session) -> None:
         """Should skip malformed JSON lines with warning."""
         mock_data = b'{"event":"A","properties":{"time":1}}\nNOT JSON\n{"event":"B","properties":{"time":2}}\n'
 
@@ -514,7 +599,7 @@ class TestEventExport:
         assert events[0]["event"] == "A"
         assert events[1]["event"] == "B"
 
-    def test_export_events_with_limit(self, test_credentials: Credentials) -> None:
+    def test_export_events_with_limit(self, test_credentials: Session) -> None:
         """Should pass limit parameter to API."""
         captured_url: str = ""
 
@@ -528,7 +613,7 @@ class TestEventExport:
 
         assert "limit=1000" in captured_url
 
-    def test_export_events_without_limit(self, test_credentials: Credentials) -> None:
+    def test_export_events_without_limit(self, test_credentials: Session) -> None:
         """Should not include limit parameter when None."""
         captured_url: str = ""
 
@@ -543,7 +628,7 @@ class TestEventExport:
         assert "limit=" not in captured_url
 
     def test_export_events_limit_with_other_params(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should combine limit with other filter parameters."""
         captured_url: str = ""
@@ -577,7 +662,7 @@ class TestEventExport:
 class TestSegmentation:
     """Test segmentation queries (US4)."""
 
-    def test_segmentation_basic(self, test_credentials: Credentials) -> None:
+    def test_segmentation_basic(self, test_credentials: Session) -> None:
         """Should make basic segmentation query."""
         captured_params: dict[str, Any] = {}
 
@@ -593,7 +678,7 @@ class TestSegmentation:
         assert captured_params["from_date"] == "2024-01-01"
         assert captured_params["to_date"] == "2024-01-31"
 
-    def test_segmentation_with_on(self, test_credentials: Credentials) -> None:
+    def test_segmentation_with_on(self, test_credentials: Session) -> None:
         """Should include 'on' parameter."""
         captured_params: dict[str, Any] = {}
 
@@ -609,7 +694,7 @@ class TestSegmentation:
 
         assert captured_params["on"] == 'properties["country"]'
 
-    def test_segmentation_with_where(self, test_credentials: Credentials) -> None:
+    def test_segmentation_with_where(self, test_credentials: Session) -> None:
         """Should include 'where' filter."""
         captured_params: dict[str, Any] = {}
 
@@ -637,7 +722,7 @@ class TestSegmentation:
 class TestDiscovery:
     """Test discovery APIs (US5)."""
 
-    def test_get_events(self, test_credentials: Credentials) -> None:
+    def test_get_events(self, test_credentials: Session) -> None:
         """Should list events with type=general parameter."""
         captured_params: dict[str, Any] = {}
 
@@ -652,7 +737,7 @@ class TestDiscovery:
         assert events == ["event1", "event2", "event3"]
         assert captured_params["type"] == "general"
 
-    def test_get_event_properties(self, test_credentials: Credentials) -> None:
+    def test_get_event_properties(self, test_credentials: Session) -> None:
         """Should list event properties from /events/properties/top endpoint."""
         captured_params: dict[str, Any] = {}
         captured_path: str = ""
@@ -672,7 +757,7 @@ class TestDiscovery:
         assert captured_params["event"] == "Purchase"
         assert set(props) == {"prop1", "prop2"}
 
-    def test_get_property_values(self, test_credentials: Credentials) -> None:
+    def test_get_property_values(self, test_credentials: Session) -> None:
         """Should list property values with limit."""
         captured_params: dict[str, Any] = {}
 
@@ -697,9 +782,7 @@ class TestDiscovery:
 class TestProfileExport:
     """Test profile export (US6)."""
 
-    def test_export_profiles_returns_iterator(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_export_profiles_returns_iterator(self, test_credentials: Session) -> None:
         """export_profiles should return an iterator."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -715,7 +798,7 @@ class TestProfileExport:
             result = client.export_profiles()
             assert hasattr(result, "__iter__")
 
-    def test_pagination_with_session_id(self, test_credentials: Credentials) -> None:
+    def test_pagination_with_session_id(self, test_credentials: Session) -> None:
         """Should handle pagination with session_id."""
         call_count = 0
 
@@ -741,7 +824,7 @@ class TestProfileExport:
         assert len(profiles) == 1
         assert call_count == 2
 
-    def test_where_filter(self, test_credentials: Credentials) -> None:
+    def test_where_filter(self, test_credentials: Session) -> None:
         """Should include where filter."""
         captured_body: dict[str, Any] = {}
 
@@ -756,7 +839,7 @@ class TestProfileExport:
 
         assert "where" in captured_body
 
-    def test_cohort_id_filter(self, test_credentials: Credentials) -> None:
+    def test_cohort_id_filter(self, test_credentials: Session) -> None:
         """Should include filter_by_cohort when cohort_id provided."""
         captured_body: dict[str, Any] = {}
 
@@ -772,7 +855,7 @@ class TestProfileExport:
         # filter_by_cohort requires JSON object format {"id": cohort_id}
         assert captured_body.get("filter_by_cohort") == '{"id": "12345"}'
 
-    def test_output_properties_filter(self, test_credentials: Credentials) -> None:
+    def test_output_properties_filter(self, test_credentials: Session) -> None:
         """Should include output_properties as JSON array string."""
         captured_body: dict[str, Any] = {}
 
@@ -791,7 +874,7 @@ class TestProfileExport:
         assert json.loads(output_props) == ["$email", "$name", "plan"]
 
     def test_cohort_id_and_output_properties_together(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should include both cohort_id and output_properties."""
         captured_body: dict[str, Any] = {}
@@ -814,7 +897,7 @@ class TestProfileExport:
         assert captured_body.get("filter_by_cohort") == '{"id": "cohort_abc"}'
         assert json.loads(captured_body.get("output_properties", "[]")) == ["$email"]
 
-    def test_no_cohort_id_when_none(self, test_credentials: Credentials) -> None:
+    def test_no_cohort_id_when_none(self, test_credentials: Session) -> None:
         """Should not include filter_by_cohort when cohort_id is None."""
         captured_body: dict[str, Any] = {}
 
@@ -829,9 +912,7 @@ class TestProfileExport:
 
         assert "filter_by_cohort" not in captured_body
 
-    def test_no_output_properties_when_none(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_no_output_properties_when_none(self, test_credentials: Session) -> None:
         """Should not include output_properties when None."""
         captured_body: dict[str, Any] = {}
 
@@ -855,7 +936,7 @@ class TestProfileExport:
 class TestFunnelAndRetention:
     """Test funnel and retention queries (US7)."""
 
-    def test_funnel(self, test_credentials: Credentials) -> None:
+    def test_funnel(self, test_credentials: Session) -> None:
         """Should execute funnel query."""
         captured_params: dict[str, Any] = {}
 
@@ -869,7 +950,7 @@ class TestFunnelAndRetention:
 
         assert captured_params["funnel_id"] == "12345"
 
-    def test_retention(self, test_credentials: Credentials) -> None:
+    def test_retention(self, test_credentials: Session) -> None:
         """Should execute retention query."""
         captured_params: dict[str, Any] = {}
 
@@ -885,7 +966,7 @@ class TestFunnelAndRetention:
         assert captured_params["event"] == "Purchase"
 
     def test_retention_default_interval_sends_unit_only(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Regression: with default interval=1, should send 'unit' but NOT 'interval'.
 
@@ -918,7 +999,7 @@ class TestFunnelAndRetention:
         assert "interval" not in captured_params
 
     def test_retention_custom_interval_sends_interval_only(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Regression: with custom interval!=1, should send 'interval' but NOT 'unit'.
 
@@ -951,7 +1032,7 @@ class TestFunnelAndRetention:
         assert "unit" not in captured_params
 
     def test_retention_unit_and_interval_mutually_exclusive(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Regression: 'unit' and 'interval' params must never be sent together.
 
@@ -999,7 +1080,7 @@ class TestFunnelAndRetention:
 class TestJQL:
     """Test JQL queries (US8)."""
 
-    def test_jql_basic(self, test_credentials: Credentials) -> None:
+    def test_jql_basic(self, test_credentials: Session) -> None:
         """Should execute JQL script with form-encoded data."""
         captured_body: dict[str, str] = {}
 
@@ -1019,7 +1100,7 @@ class TestJQL:
         assert "script" in captured_body
         assert result == [{"key": "value"}]
 
-    def test_jql_with_params(self, test_credentials: Credentials) -> None:
+    def test_jql_with_params(self, test_credentials: Session) -> None:
         """Should pass params as JSON string in form data."""
         captured_body: dict[str, str] = {}
 
@@ -1049,7 +1130,7 @@ class TestJQL:
 class TestErrorHandling:
     """Test error handling."""
 
-    def test_query_error_on_400(self, test_credentials: Credentials) -> None:
+    def test_query_error_on_400(self, test_credentials: Session) -> None:
         """Should raise QueryError on 400."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -1063,7 +1144,7 @@ class TestErrorHandling:
 
         assert "Invalid query" in str(exc_info.value)
 
-    def test_jql_syntax_error_on_412(self, test_credentials: Credentials) -> None:
+    def test_jql_syntax_error_on_412(self, test_credentials: Session) -> None:
         """Should raise JQLSyntaxError on 412 with parsed error details."""
         from mixpanel_data.exceptions import JQLSyntaxError
 
@@ -1103,7 +1184,7 @@ class TestErrorHandling:
         assert exc.code == "JQL_SYNTAX_ERROR"
 
     def test_jql_syntax_error_includes_line_info(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """JQLSyntaxError should include code snippet with caret."""
         from mixpanel_data.exceptions import JQLSyntaxError
@@ -1127,7 +1208,7 @@ class TestErrorHandling:
         assert "^" in exc_info.value.line_info
 
     def test_jql_syntax_error_catchable_as_query_error(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """JQLSyntaxError should be catchable as QueryError for backwards compat."""
 
@@ -1141,7 +1222,7 @@ class TestErrorHandling:
             client.jql("bad script")
 
     def test_412_without_json_falls_back_to_query_error(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """412 without valid JSON should raise QueryError."""
 
@@ -1157,7 +1238,7 @@ class TestErrorHandling:
         assert "JQL failed" in str(exc_info.value)
 
     def test_query_error_on_400_with_plain_text(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should raise QueryError with plain text response on 400."""
 
@@ -1176,7 +1257,7 @@ class TestErrorHandling:
 class TestServerErrors:
     """Test 5xx server error handling."""
 
-    def test_server_error_with_dict_body(self, test_credentials: Credentials) -> None:
+    def test_server_error_with_dict_body(self, test_credentials: Session) -> None:
         """Should raise ServerError with error message from dict."""
         from mixpanel_data.exceptions import ServerError
 
@@ -1192,7 +1273,7 @@ class TestServerErrors:
         assert "Internal database error" in str(exc_info.value)
         assert exc_info.value.status_code == 500
 
-    def test_server_error_with_string_body(self, test_credentials: Credentials) -> None:
+    def test_server_error_with_string_body(self, test_credentials: Session) -> None:
         """Should raise ServerError with truncated string body."""
         from mixpanel_data.exceptions import ServerError
 
@@ -1208,7 +1289,7 @@ class TestServerErrors:
         assert "Service temporarily unavailable" in str(exc_info.value)
         assert exc_info.value.status_code == 503
 
-    def test_server_error_with_empty_body(self, test_credentials: Credentials) -> None:
+    def test_server_error_with_empty_body(self, test_credentials: Session) -> None:
         """Should raise ServerError with status code only."""
         from mixpanel_data.exceptions import ServerError
 
@@ -1236,9 +1317,7 @@ class TestRequestEncodingRegression:
     catch issues like double-serialization of JSON data.
     """
 
-    def test_jql_params_not_double_serialized(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_jql_params_not_double_serialized(self, test_credentials: Session) -> None:
         """JQL params should be a JSON string, not double-serialized.
 
         Regression: params were being json.dumps'd then sent via json=data,
@@ -1277,7 +1356,7 @@ class TestRequestEncodingRegression:
         assert not isinstance(parsed_params["nested"], str)
 
     def test_jql_uses_form_encoding_not_json_body(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """JQL should use form-encoded body, not JSON body.
 
@@ -1297,7 +1376,7 @@ class TestRequestEncodingRegression:
         assert "application/x-www-form-urlencoded" in captured_content_type
         assert "application/json" not in captured_content_type
 
-    def test_profile_export_uses_json_body(self, test_credentials: Credentials) -> None:
+    def test_profile_export_uses_json_body(self, test_credentials: Session) -> None:
         """Profile export should use JSON body (not form-encoded).
 
         Ensures we correctly distinguish which APIs need which encoding.
@@ -1328,7 +1407,7 @@ class TestRetryStateResetRegression:
     attempts, preventing state accumulation bugs.
     """
 
-    def test_batch_count_resets_on_retry(self, test_credentials: Credentials) -> None:
+    def test_batch_count_resets_on_retry(self, test_credentials: Session) -> None:
         """Batch count should reset to zero on each retry attempt.
 
         Regression: batch_count was not reset between retries, causing
@@ -1365,7 +1444,7 @@ class TestRetryStateResetRegression:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=3, _transport=transport
+            session=test_credentials, max_retries=3, _transport=transport
         )
 
         with client:
@@ -1385,7 +1464,7 @@ class TestRetryStateResetRegression:
         assert 1500 in last_attempt_counts
 
     def test_profile_page_count_resets_on_retry(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Profile page count should reset on retry attempt.
 
@@ -1422,7 +1501,7 @@ class TestRetryStateResetRegression:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=3, _transport=transport
+            session=test_credentials, max_retries=3, _transport=transport
         )
 
         with client:
@@ -1436,7 +1515,7 @@ class TestRetryStateResetRegression:
         assert current_attempt_counts == [1]
 
     def test_multiple_retries_dont_accumulate_state(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Multiple retry attempts should each start fresh.
 
@@ -1459,7 +1538,7 @@ class TestRetryStateResetRegression:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=3, _transport=transport
+            session=test_credentials, max_retries=3, _transport=transport
         )
 
         with client:
@@ -1480,7 +1559,7 @@ class TestRetryStateResetRegression:
 class TestPublicRequest:
     """Test the public request() method for arbitrary API calls."""
 
-    def test_request_sends_auth_header(self, test_credentials: Credentials) -> None:
+    def test_request_sends_auth_header(self, test_credentials: Session) -> None:
         """request() should send authentication header."""
         captured_headers: dict[str, str] = {}
 
@@ -1494,7 +1573,7 @@ class TestPublicRequest:
         assert "authorization" in captured_headers
         assert captured_headers["authorization"].startswith("Basic ")
 
-    def test_request_with_query_params(self, test_credentials: Credentials) -> None:
+    def test_request_with_query_params(self, test_credentials: Session) -> None:
         """request() should include query parameters."""
         captured_url: str = ""
 
@@ -1513,7 +1592,7 @@ class TestPublicRequest:
         assert "foo=bar" in captured_url
         assert "limit=10" in captured_url
 
-    def test_request_with_json_body(self, test_credentials: Credentials) -> None:
+    def test_request_with_json_body(self, test_credentials: Session) -> None:
         """request() should send JSON body for POST requests."""
         captured_body: dict[str, Any] = {}
         captured_content_type: str = ""
@@ -1543,7 +1622,7 @@ class TestPublicRequest:
             "query_origin": "mixpanel-data-cli",
         }
 
-    def test_request_with_custom_headers(self, test_credentials: Credentials) -> None:
+    def test_request_with_custom_headers(self, test_credentials: Session) -> None:
         """request() should merge custom headers with auth."""
         captured_headers: dict[str, str] = {}
 
@@ -1563,7 +1642,7 @@ class TestPublicRequest:
         assert captured_headers["x-custom-header"] == "custom-value"
 
     def test_request_does_not_inject_project_id(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """request() should NOT automatically inject project_id (user controls URL)."""
         captured_url: str = ""
@@ -1579,7 +1658,7 @@ class TestPublicRequest:
         # project_id should NOT be automatically added
         assert "project_id" not in captured_url
 
-    def test_request_returns_json_response(self, test_credentials: Credentials) -> None:
+    def test_request_returns_json_response(self, test_credentials: Session) -> None:
         """request() should return parsed JSON response."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -1593,7 +1672,7 @@ class TestPublicRequest:
 
         assert result == {"data": {"events": ["A", "B"]}, "status": "ok"}
 
-    def test_request_handles_401(self, test_credentials: Credentials) -> None:
+    def test_request_handles_401(self, test_credentials: Session) -> None:
         """request() should raise AuthenticationError on 401."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -1605,7 +1684,7 @@ class TestPublicRequest:
         ):
             client.request("GET", "https://mixpanel.com/api/app/test")
 
-    def test_request_handles_400(self, test_credentials: Credentials) -> None:
+    def test_request_handles_400(self, test_credentials: Session) -> None:
         """request() should raise QueryError on 400."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -1619,9 +1698,7 @@ class TestPublicRequest:
 
         assert "Bad request" in str(exc_info.value)
 
-    def test_request_handles_429_with_retry(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_request_handles_429_with_retry(self, test_credentials: Session) -> None:
         """request() should retry on 429."""
         call_count = 0
 
@@ -1639,7 +1716,7 @@ class TestPublicRequest:
         assert result == {"success": True}
 
     def test_request_raises_rate_limit_after_max_retries(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """request() should raise RateLimitError after max retries."""
 
@@ -1648,7 +1725,7 @@ class TestPublicRequest:
 
         transport = httpx.MockTransport(handler)
         client = MixpanelAPIClient(
-            test_credentials, max_retries=1, _transport=transport
+            session=test_credentials, max_retries=1, _transport=transport
         )
 
         with client, pytest.raises(RateLimitError) as exc_info:
@@ -1656,9 +1733,7 @@ class TestPublicRequest:
 
         assert exc_info.value.retry_after == 0
 
-    def test_request_lexicon_schemas_example(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_request_lexicon_schemas_example(self, test_credentials: Session) -> None:
         """Example: Fetch event schema from Lexicon API."""
         captured_url: str = ""
         captured_method: str = ""
@@ -1692,27 +1767,27 @@ class TestPublicRequest:
 class TestAPIClientProperties:
     """Test project_id and region properties on MixpanelAPIClient."""
 
-    def test_project_id_property(self, test_credentials: Credentials) -> None:
+    def test_project_id_property(self, test_credentials: Session) -> None:
         """project_id property should return credentials project_id."""
-        client = MixpanelAPIClient(test_credentials)
+        client = MixpanelAPIClient(session=test_credentials)
         assert client.project_id == "12345"
         client.close()
 
-    def test_region_property_us(self, test_credentials: Credentials) -> None:
+    def test_region_property_us(self, test_credentials: Session) -> None:
         """region property should return US for US credentials."""
-        client = MixpanelAPIClient(test_credentials)
+        client = MixpanelAPIClient(session=test_credentials)
         assert client.region == "us"
         client.close()
 
-    def test_region_property_eu(self, eu_credentials: Credentials) -> None:
+    def test_region_property_eu(self, eu_credentials: Session) -> None:
         """region property should return EU for EU credentials."""
-        client = MixpanelAPIClient(eu_credentials)
+        client = MixpanelAPIClient(session=eu_credentials)
         assert client.region == "eu"
         client.close()
 
-    def test_region_property_india(self, india_credentials: Credentials) -> None:
+    def test_region_property_india(self, india_credentials: Session) -> None:
         """region property should return IN for India credentials."""
-        client = MixpanelAPIClient(india_credentials)
+        client = MixpanelAPIClient(session=india_credentials)
         assert client.region == "in"
         client.close()
 
@@ -1730,7 +1805,7 @@ class TestEngageParameterValidation:
     """
 
     def test_distinct_id_distinct_ids_mutually_exclusive(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should raise ValueError when both distinct_id and distinct_ids provided.
 
@@ -1756,7 +1831,7 @@ class TestEngageParameterValidation:
         assert "mutually exclusive" in str(exc_info.value).lower()
 
     def test_behaviors_cohort_id_mutually_exclusive(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should raise ValueError when both behaviors and cohort_id provided.
 
@@ -1782,7 +1857,7 @@ class TestEngageParameterValidation:
         assert "cohort" in str(exc_info.value).lower()
 
     def test_include_all_users_requires_cohort_id(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should raise ValueError when include_all_users without cohort_id.
 
@@ -1810,7 +1885,7 @@ class TestEngageParameterEdgeCases:
     """
 
     def test_empty_distinct_ids_list_returns_empty(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should return empty results for empty distinct_ids list.
 
@@ -1831,9 +1906,7 @@ class TestEngageParameterEdgeCases:
         assert result == []
         assert call_count == 0
 
-    def test_distinct_ids_deduplicates_input(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_distinct_ids_deduplicates_input(self, test_credentials: Session) -> None:
         """Should deduplicate distinct_ids before sending to API.
 
         T005b: Duplicate IDs in the list should be deduplicated to avoid
@@ -1860,7 +1933,7 @@ class TestEngageParameterEdgeCases:
         assert set(sent_ids) == {"user_1", "user_2", "user_3"}
 
     def test_invalid_behaviors_expression_raises_error(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should raise ValueError for invalid behaviors structure.
 
@@ -1881,7 +1954,7 @@ class TestEngageParameterEdgeCases:
         assert "behaviors" in str(exc_info.value).lower()
 
     def test_as_of_timestamp_in_future_raises_error(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should raise ValueError for as_of_timestamp in the future.
 
@@ -1911,9 +1984,7 @@ class TestEngageDistinctIdParameter:
     User Story 1: Fetch specific profiles by ID.
     """
 
-    def test_export_profiles_with_distinct_id(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_export_profiles_with_distinct_id(self, test_credentials: Session) -> None:
         """Should include distinct_id in request body.
 
         T006: When distinct_id is provided, it should be passed to the API
@@ -1939,9 +2010,7 @@ class TestEngageDistinctIdParameter:
         assert captured_body.get("distinct_id") == "user_123"
         assert len(profiles) == 1
 
-    def test_export_profiles_with_distinct_ids(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_export_profiles_with_distinct_ids(self, test_credentials: Session) -> None:
         """Should include distinct_ids as JSON array in request body.
 
         T007: When distinct_ids is provided, it should be serialized as
@@ -1972,9 +2041,7 @@ class TestEngageDistinctIdParameter:
         assert set(sent_ids) == {"user_1", "user_2"}
         assert len(profiles) == 2
 
-    def test_distinct_ids_json_serialization(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_distinct_ids_json_serialization(self, test_credentials: Session) -> None:
         """Should properly JSON-serialize distinct_ids.
 
         T008: distinct_ids must be serialized as a JSON array string,
@@ -2005,7 +2072,7 @@ class TestEngageGroupIdParameter:
     User Story 2: Query group profiles.
     """
 
-    def test_export_profiles_with_group_id(self, test_credentials: Credentials) -> None:
+    def test_export_profiles_with_group_id(self, test_credentials: Session) -> None:
         """Should include data_group_id in request body when group_id provided.
 
         T027: When group_id is provided, it should be passed as 'data_group_id'
@@ -2038,9 +2105,7 @@ class TestEngageBehaviorsParameter:
     User Story 3: Behavioral profile filtering.
     """
 
-    def test_export_profiles_with_behaviors(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_export_profiles_with_behaviors(self, test_credentials: Session) -> None:
         """Should include behaviors in request body.
 
         T039: When behaviors is provided, it should be serialized as JSON
@@ -2069,7 +2134,7 @@ class TestEngageBehaviorsParameter:
         assert parsed[0]["event"] == "Purchase"
 
     def test_export_profiles_with_as_of_timestamp(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should include as_of_timestamp in request body.
 
@@ -2098,7 +2163,7 @@ class TestEngageIncludeAllUsersParameter:
     """
 
     def test_export_profiles_include_all_users_with_cohort(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should include include_all_users when used with cohort_id.
 
@@ -2126,7 +2191,7 @@ class TestEngageIncludeAllUsersParameter:
         assert captured_body.get("include_all_users") is True
 
     def test_export_profiles_include_all_users_false_sent_with_cohort(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should explicitly send include_all_users=False with cohort_id.
 
@@ -2158,7 +2223,7 @@ class TestEngageIncludeAllUsersParameter:
         assert captured_body.get("include_all_users") is False
 
     def test_export_profiles_include_all_users_not_sent_without_cohort(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should not send include_all_users when no cohort_id is provided.
 
@@ -2193,7 +2258,7 @@ class TestEngageIncludeAllUsersParameter:
 class TestExportProfilesPage:
     """Tests for export_profiles_page API method."""
 
-    def test_first_page_without_session_id(self, test_credentials: Credentials) -> None:
+    def test_first_page_without_session_id(self, test_credentials: Session) -> None:
         """Should fetch first page without session_id."""
         captured_body: dict[str, Any] = {}
 
@@ -2224,9 +2289,7 @@ class TestExportProfilesPage:
         assert result.page == 0
         assert result.has_more is True
 
-    def test_subsequent_page_with_session_id(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_subsequent_page_with_session_id(self, test_credentials: Session) -> None:
         """Should fetch subsequent page with session_id."""
         captured_body: dict[str, Any] = {}
 
@@ -2252,7 +2315,7 @@ class TestExportProfilesPage:
         assert len(result.profiles) == 1
         assert result.page == 1
 
-    def test_last_page_no_more_results(self, test_credentials: Credentials) -> None:
+    def test_last_page_no_more_results(self, test_credentials: Session) -> None:
         """Should detect last page when no session_id is returned."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -2273,7 +2336,7 @@ class TestExportProfilesPage:
         assert result.session_id is None
         assert result.has_more is False
 
-    def test_with_filter_parameters(self, test_credentials: Credentials) -> None:
+    def test_with_filter_parameters(self, test_credentials: Session) -> None:
         """Should pass filter parameters to the API."""
         captured_body: dict[str, Any] = {}
 
@@ -2296,7 +2359,7 @@ class TestExportProfilesPage:
         assert captured_body.get("where") == 'properties["plan"] == "premium"'
         assert captured_body.get("output_properties") == '["$name", "$email"]'
 
-    def test_with_cohort_id(self, test_credentials: Credentials) -> None:
+    def test_with_cohort_id(self, test_credentials: Session) -> None:
         """Should pass cohort_id filter to the API."""
         captured_body: dict[str, Any] = {}
 
@@ -2317,7 +2380,7 @@ class TestExportProfilesPage:
 
         assert captured_body.get("filter_by_cohort") == '{"id": "cohort_123"}'
 
-    def test_with_behaviors(self, test_credentials: Credentials) -> None:
+    def test_with_behaviors(self, test_credentials: Session) -> None:
         """Should pass behaviors filter to the API."""
         captured_body: dict[str, Any] = {}
         behaviors = [
@@ -2345,7 +2408,7 @@ class TestExportProfilesPage:
 
         assert "behaviors" in captured_body
 
-    def test_result_type(self, test_credentials: Credentials) -> None:
+    def test_result_type(self, test_credentials: Session) -> None:
         """Should return ProfilePageResult type."""
         from mixpanel_data.types import ProfilePageResult
 
@@ -2366,7 +2429,7 @@ class TestExportProfilesPage:
         assert isinstance(result, ProfilePageResult)
 
     def test_has_more_true_when_session_id_present(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """has_more should be True when session_id is returned."""
 
@@ -2386,9 +2449,7 @@ class TestExportProfilesPage:
 
         assert result.has_more is True
 
-    def test_has_more_false_when_no_session_id(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_has_more_false_when_no_session_id(self, test_credentials: Session) -> None:
         """has_more should be False when no session_id is returned."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -2407,7 +2468,7 @@ class TestExportProfilesPage:
 
         assert result.has_more is False
 
-    def test_empty_results_with_no_session(self, test_credentials: Credentials) -> None:
+    def test_empty_results_with_no_session(self, test_credentials: Session) -> None:
         """Should handle empty results with no session_id."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -2436,7 +2497,7 @@ class TestExportProfilesPagePagination:
     which enables pre-computing the total number of pages for parallel fetching.
     """
 
-    def test_extracts_total_from_response(self, test_credentials: Credentials) -> None:
+    def test_extracts_total_from_response(self, test_credentials: Session) -> None:
         """Should extract total from API response.
 
         The total field indicates how many profiles match the query across
@@ -2460,9 +2521,7 @@ class TestExportProfilesPagePagination:
 
         assert result.total == 5432
 
-    def test_extracts_page_size_from_response(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_extracts_page_size_from_response(self, test_credentials: Session) -> None:
         """Should extract page_size from API response.
 
         The page_size field indicates profiles per page (typically 1000).
@@ -2486,7 +2545,7 @@ class TestExportProfilesPagePagination:
         assert result.page_size == 500
 
     def test_defaults_total_to_zero_when_missing(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should default total to 0 when not in response.
 
@@ -2510,7 +2569,7 @@ class TestExportProfilesPagePagination:
         assert result.total == 0
 
     def test_defaults_page_size_to_1000_when_missing(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """Should default page_size to 1000 when not in response.
 
@@ -2533,7 +2592,7 @@ class TestExportProfilesPagePagination:
 
         assert result.page_size == 1000
 
-    def test_num_pages_computed_correctly(self, test_credentials: Credentials) -> None:
+    def test_num_pages_computed_correctly(self, test_credentials: Session) -> None:
         """num_pages property should be computed from total and page_size.
 
         Verifies end-to-end that extraction and property work together.
@@ -2765,92 +2824,82 @@ class TestIterJsonlLines:
 class TestWithProject:
     """T073: Tests for MixpanelAPIClient.with_project()."""
 
-    def test_with_project_creates_new_client(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_with_project_creates_new_client(self, test_credentials: Session) -> None:
         """with_project should return a new MixpanelAPIClient instance."""
-        original = MixpanelAPIClient(test_credentials)
+        original = MixpanelAPIClient(session=test_credentials)
         new_client = original.with_project("9999999")
         assert new_client is not original
-        assert new_client._credentials.project_id == "9999999"
+        assert new_client._session.project.id == "9999999"
 
-    def test_with_project_preserves_auth(self, test_credentials: Credentials) -> None:
-        """with_project should keep the same username and secret."""
-        original = MixpanelAPIClient(test_credentials)
+    def test_with_project_preserves_auth(self, test_credentials: Session) -> None:
+        """with_project should keep the same account."""
+        from mixpanel_data._internal.auth.account import ServiceAccount
+
+        original = MixpanelAPIClient(session=test_credentials)
         new_client = original.with_project("9999999")
-        assert new_client._credentials.username == test_credentials.username
+        assert isinstance(new_client._session.account, ServiceAccount)
+        assert isinstance(test_credentials.account, ServiceAccount)
+        assert new_client._session.account.username == test_credentials.account.username
         assert (
-            new_client._credentials.secret.get_secret_value()
-            == test_credentials.secret.get_secret_value()
+            new_client._session.account.secret.get_secret_value()
+            == test_credentials.account.secret.get_secret_value()
         )
 
-    def test_with_project_preserves_region(self, eu_credentials: Credentials) -> None:
+    def test_with_project_preserves_region(self, eu_credentials: Session) -> None:
         """with_project should keep the same region."""
-        original = MixpanelAPIClient(eu_credentials)
+        original = MixpanelAPIClient(session=eu_credentials)
         new_client = original.with_project("9999999")
-        assert new_client._credentials.region == "eu"
+        assert new_client._session.account.region == "eu"
 
-    def test_with_project_sets_workspace_id(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_with_project_sets_workspace_id(self, test_credentials: Session) -> None:
         """with_project should set workspace_id when provided."""
-        original = MixpanelAPIClient(test_credentials)
+        original = MixpanelAPIClient(session=test_credentials)
         new_client = original.with_project("9999999", workspace_id=42)
         assert new_client.workspace_id == 42
 
-    def test_with_project_no_workspace_id(self, test_credentials: Credentials) -> None:
+    def test_with_project_no_workspace_id(self, test_credentials: Session) -> None:
         """with_project without workspace_id should leave it as None."""
-        original = MixpanelAPIClient(test_credentials)
+        original = MixpanelAPIClient(session=test_credentials)
         new_client = original.with_project("9999999")
         assert new_client.workspace_id is None
 
-    def test_with_project_preserves_timeouts(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_with_project_preserves_timeouts(self, test_credentials: Session) -> None:
         """with_project should copy timeout and export_timeout."""
         original = MixpanelAPIClient(
-            test_credentials, timeout=30.0, export_timeout=300.0
+            session=test_credentials, timeout=30.0, export_timeout=300.0
         )
         new_client = original.with_project("9999999")
         assert new_client._timeout == 30.0
         assert new_client._export_timeout == 300.0
 
     def test_with_project_preserves_max_retries(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """with_project should copy max_retries."""
-        original = MixpanelAPIClient(test_credentials, max_retries=5)
+        original = MixpanelAPIClient(session=test_credentials, max_retries=5)
         new_client = original.with_project("9999999")
         assert new_client._max_retries == 5
 
-    def test_with_project_shares_transport(self, test_credentials: Credentials) -> None:
+    def test_with_project_shares_transport(self, test_credentials: Session) -> None:
         """with_project should share the HTTP transport."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json={"ok": True})
 
         transport = httpx.MockTransport(handler)
-        original = MixpanelAPIClient(test_credentials, _transport=transport)
+        original = MixpanelAPIClient(session=test_credentials, _transport=transport)
         new_client = original.with_project("9999999")
         assert new_client._transport is transport
 
     def test_with_project_preserves_oauth_credentials(self) -> None:
-        """with_project should copy auth_method and oauth_access_token."""
-        from mixpanel_data._internal.config import AuthMethod
+        """with_project should preserve the OAuth account."""
+        from mixpanel_data._internal.auth.account import OAuthTokenAccount
 
-        oauth_creds = Credentials(
-            username="",
-            secret=SecretStr(""),
-            project_id="12345",
-            region="us",
-            auth_method=AuthMethod.oauth,
-            oauth_access_token=SecretStr("my-oauth-token"),
+        oauth_creds = make_session(
+            project_id="12345", region="us", oauth_token="my-oauth-token"
         )
-        original = MixpanelAPIClient(oauth_creds)
+        original = MixpanelAPIClient(session=oauth_creds)
         new_client = original.with_project("9999999")
-        assert new_client._credentials.auth_method == AuthMethod.oauth
-        assert new_client._credentials.oauth_access_token is not None
-        assert (
-            new_client._credentials.oauth_access_token.get_secret_value()
-            == "my-oauth-token"
-        )
+        assert isinstance(new_client._session.account, OAuthTokenAccount)
+        assert new_client._session.account.token is not None
+        assert new_client._session.account.token.get_secret_value() == "my-oauth-token"

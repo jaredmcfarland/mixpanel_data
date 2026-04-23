@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
@@ -10,10 +9,10 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data import (
-    ConfigError,
     Workspace,
 )
-from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data.types import (
     ActivityFeedResult,
     EventCountsResult,
@@ -34,6 +33,18 @@ from mixpanel_data.types import (
     TopEvent,
 )
 
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -44,23 +55,9 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for testing."""
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
-
-
-@pytest.fixture
-def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
-    """Create mock ConfigManager that returns credentials."""
-    manager = MagicMock(spec=ConfigManager)
-    manager.resolve_credentials.return_value = mock_credentials
-    manager.config_version.return_value = 1
-    return manager
+def mock_config_manager() -> MagicMock:
+    """Create a stub ConfigManager (legacy fixture; unused by current code paths)."""
+    return MagicMock()
 
 
 @pytest.fixture
@@ -75,14 +72,13 @@ def mock_api_client() -> MagicMock:
 
 @pytest.fixture
 def workspace_factory(
-    mock_config_manager: MagicMock,
     mock_api_client: MagicMock,
 ) -> Callable[..., Workspace]:
     """Factory for creating Workspace instances with mocked dependencies."""
 
     def factory(**kwargs: Any) -> Workspace:
         defaults: dict[str, Any] = {
-            "_config_manager": mock_config_manager,
+            "session": _TEST_SESSION,
             "_api_client": mock_api_client,
         }
         defaults.update(kwargs)
@@ -99,141 +95,18 @@ def workspace_factory(
 class TestCredentialResolution:
     """Tests for credential resolution (T014-T017)."""
 
-    def test_env_var_credential_resolution(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """T014: Test env var credential resolution."""
-        # Set environment variables
-        monkeypatch.setenv("MP_USERNAME", "env_user")
-        monkeypatch.setenv("MP_SECRET", "env_secret")
-        monkeypatch.setenv("MP_PROJECT_ID", "99999")
-        monkeypatch.setenv("MP_REGION", "eu")
+    # All legacy credential-resolution tests removed in B1 (Fix 10).
+    # ``Workspace()`` no-arg + env-var resolution is exercised in
+    # tests/unit/test_workspace_init.py against the v3 resolver. The v1
+    # ``ConfigManager.add_account(project_id=, region=)`` API is gone,
+    # and ``Workspace(session=…)`` is a full resolver bypass that cannot
+    # exercise the account/env-var lookup paths these tests pinned.
 
-        with Workspace() as ws:
-            assert ws._credentials is not None
-            assert ws._credentials.username == "env_user"
-            assert ws._credentials.project_id == "99999"
-            assert ws._credentials.region == "eu"
 
-    def test_named_account_credential_resolution(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """T015: Test named account credential resolution."""
-        # Create config with named account
-        config_path = temp_dir / "config.toml"
-        config_manager = ConfigManager(config_path=config_path)
-        config_manager.add_account(
-            name="test_account",
-            username="named_user",
-            secret="named_secret",
-            project_id="11111",
-            region="us",
-        )
-
-        with Workspace(
-            account="test_account",
-            _config_manager=config_manager,
-        ) as ws:
-            assert ws._credentials is not None
-            assert ws._credentials.username == "named_user"
-            assert ws._credentials.project_id == "11111"
-            assert ws._account_name == "test_account"
-
-    def test_default_account_credential_resolution(
-        self,
-        temp_dir: Path,
-    ) -> None:
-        """T016: Test default account credential resolution."""
-        # Create config with default account
-        config_path = temp_dir / "config.toml"
-        config_manager = ConfigManager(config_path=config_path)
-        config_manager.add_account(
-            name="default_account",
-            username="default_user",
-            secret="default_secret",
-            project_id="22222",
-            region="in",
-        )
-
-        with Workspace(
-            _config_manager=config_manager,
-        ) as ws:
-            assert ws._credentials is not None
-            assert ws._credentials.username == "default_user"
-            assert ws._credentials.region == "in"
-
-    def test_config_error_when_no_credentials(
-        self,
-        temp_dir: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """T017: Test ConfigError when no credentials available."""
-        # Clear env vars
-        monkeypatch.delenv("MP_USERNAME", raising=False)
-        monkeypatch.delenv("MP_SECRET", raising=False)
-        monkeypatch.delenv("MP_PROJECT_ID", raising=False)
-        monkeypatch.delenv("MP_REGION", raising=False)
-
-        # Empty config + isolated OAuth dir so real tokens don't leak in
-        config_path = temp_dir / "empty_config.toml"
-        config_manager = ConfigManager(config_path=config_path)
-        monkeypatch.setattr(config_manager, "_resolve_from_oauth", lambda **_kw: None)
-
-        with pytest.raises(ConfigError):
-            Workspace(_config_manager=config_manager)
-
-    def test_project_id_override(
-        self,
-        mock_config_manager: MagicMock,
-    ) -> None:
-        """Test that project_id parameter overrides credentials."""
-        ws = Workspace(
-            project_id="override_project",
-            _config_manager=mock_config_manager,
-        )
-        try:
-            assert ws._credentials is not None
-            assert ws._credentials.project_id == "override_project"
-            # Original username should be preserved
-            assert ws._credentials.username == "test_user"
-        finally:
-            ws.close()
-
-    def test_region_override(
-        self,
-        mock_config_manager: MagicMock,
-    ) -> None:
-        """Test that region parameter overrides credentials."""
-        ws = Workspace(
-            region="eu",
-            _config_manager=mock_config_manager,
-        )
-        try:
-            assert ws._credentials is not None
-            assert ws._credentials.region == "eu"
-            # Original project_id should be preserved
-            assert ws._credentials.project_id == "12345"
-        finally:
-            ws.close()
-
-    def test_both_overrides(
-        self,
-        mock_config_manager: MagicMock,
-    ) -> None:
-        """Test that both project_id and region can be overridden."""
-        ws = Workspace(
-            project_id="new_project",
-            region="in",
-            _config_manager=mock_config_manager,
-        )
-        try:
-            assert ws._credentials is not None
-            assert ws._credentials.project_id == "new_project"
-            assert ws._credentials.region == "in"
-        finally:
-            ws.close()
+# project_id=/region=/credential= overrides removed in B1 (Fix 10): the
+# legacy positional kwargs are gone — use ws.use(project=…) or
+# Workspace(account=…, project=…) instead. See test_workspace_init.py
+# for the v3 construction surface.
 
 
 # =============================================================================
@@ -847,7 +720,7 @@ class TestContextManager:
     ) -> None:
         """Test that close() calls api_client.close()."""
         ws = Workspace(
-            _config_manager=mock_config_manager,
+            session=_TEST_SESSION,
             _api_client=mock_api_client,
         )
         ws.close()
@@ -859,117 +732,10 @@ class TestContextManager:
 # =============================================================================
 
 
-class TestTestCredentials:
-    """Tests for Workspace.test_credentials() static method."""
-
-    def test_test_credentials_with_env_vars(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Test test_credentials() with environment variables."""
-        # Mock the API client
-        from unittest.mock import patch
-
-        monkeypatch.setenv("MP_USERNAME", "test_user")
-        monkeypatch.setenv("MP_SECRET", "test_secret")
-        monkeypatch.setenv("MP_PROJECT_ID", "12345")
-        monkeypatch.setenv("MP_REGION", "us")
-
-        mock_api_client = MagicMock()
-        mock_api_client.get_events.return_value = ["event1", "event2", "event3"]
-
-        with patch("mixpanel_data.workspace.MixpanelAPIClient") as MockAPIClient:
-            MockAPIClient.return_value = mock_api_client
-
-            result = Workspace.test_credentials()
-
-            assert result["success"] is True
-            assert result["project_id"] == "12345"
-            assert result["region"] == "us"
-            assert result["events_found"] == 3
-            mock_api_client.close.assert_called_once()
-
-    def test_test_credentials_with_named_account(
-        self,
-        temp_dir: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """Test test_credentials() with a named account."""
-        from unittest.mock import patch
-
-        # Clear env vars
-        monkeypatch.delenv("MP_USERNAME", raising=False)
-        monkeypatch.delenv("MP_SECRET", raising=False)
-        monkeypatch.delenv("MP_PROJECT_ID", raising=False)
-        monkeypatch.delenv("MP_REGION", raising=False)
-
-        # Create config with named account
-        config_path = temp_dir / "config.toml"
-        config_manager = ConfigManager(config_path=config_path)
-        config_manager.add_account(
-            name="prod",
-            username="prod_user",
-            secret="prod_secret",
-            project_id="99999",
-            region="eu",
-        )
-
-        mock_api_client = MagicMock()
-        mock_api_client.get_events.return_value = ["event1"]
-
-        with (
-            patch("mixpanel_data.workspace.MixpanelAPIClient") as MockAPIClient,
-            patch("mixpanel_data.workspace.ConfigManager") as MockConfigManager,
-        ):
-            MockAPIClient.return_value = mock_api_client
-            MockConfigManager.return_value = config_manager
-
-            result = Workspace.test_credentials("prod")
-
-            assert result["success"] is True
-            assert result["account"] == "prod"
-            assert result["project_id"] == "99999"
-            assert result["region"] == "eu"
-            assert result["events_found"] == 1
-
-    def test_test_credentials_returns_account_none_for_env_vars(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        temp_dir: Path,
-    ) -> None:
-        """Test that test_credentials() returns account=None when using env vars."""
-        from unittest.mock import patch
-
-        # Clear env first and use a config without default account
-        monkeypatch.delenv("MP_USERNAME", raising=False)
-        monkeypatch.delenv("MP_SECRET", raising=False)
-        monkeypatch.delenv("MP_PROJECT_ID", raising=False)
-        monkeypatch.delenv("MP_REGION", raising=False)
-
-        # Set env vars
-        monkeypatch.setenv("MP_USERNAME", "env_user")
-        monkeypatch.setenv("MP_SECRET", "env_secret")
-        monkeypatch.setenv("MP_PROJECT_ID", "12345")
-        monkeypatch.setenv("MP_REGION", "us")
-
-        # Empty config (no accounts)
-        config_path = temp_dir / "config.toml"
-        config_manager = ConfigManager(config_path=config_path)
-
-        mock_api_client = MagicMock()
-        mock_api_client.get_events.return_value = []
-
-        with (
-            patch("mixpanel_data.workspace.MixpanelAPIClient") as MockAPIClient,
-            patch("mixpanel_data.workspace.ConfigManager") as MockConfigManager,
-        ):
-            MockAPIClient.return_value = mock_api_client
-            MockConfigManager.return_value = config_manager
-
-            result = Workspace.test_credentials()
-
-            assert result["success"] is True
-            assert result["account"] is None  # No named account used
+# TestTestCredentials removed in B1 (Fix 9): Workspace.test_credentials
+# (a static method backed by the legacy ConfigManager.resolve_credentials
+# chain) is gone. Per FR-038 the capability lives at
+# ``mp.accounts.test(NAME)`` — see ``src/mixpanel_data/accounts.py``.
 
 
 # =============================================================================
@@ -987,7 +753,7 @@ class TestLimitValidation:
     ) -> None:
         """stream_events should raise ValueError if limit exceeds 100000."""
         ws = Workspace(
-            _config_manager=mock_config_manager,
+            session=_TEST_SESSION,
             _api_client=mock_api_client,
         )
         try:
@@ -1010,7 +776,7 @@ class TestLimitValidation:
     ) -> None:
         """stream_events should raise ValueError if limit is zero or negative."""
         ws = Workspace(
-            _config_manager=mock_config_manager,
+            session=_TEST_SESSION,
             _api_client=mock_api_client,
         )
         try:
@@ -1027,659 +793,111 @@ class TestLimitValidation:
 
 
 # =============================================================================
-# Phase 6: Workspace Discovery (T064-T065b)
+# Phase 6: Workspace Discovery — v3 surface (FR-035 / FR-036)
 # =============================================================================
 
 
-class TestDiscoverWorkspaces:
-    """T064-T065b: Tests for Workspace.discover_workspaces()."""
+class TestWorkspacesMethod:
+    """Tests for ``Workspace.workspaces()`` (FR-036; replaces discover_workspaces)."""
 
-    def test_discover_workspaces_delegates_to_me_svc(
+    def test_workspaces_returns_workspace_refs_from_me_svc(
         self,
         mock_config_manager: MagicMock,
         mock_api_client: MagicMock,
     ) -> None:
-        """discover_workspaces should delegate to _me_svc.list_workspaces."""
+        """``ws.workspaces()`` returns ``list[WorkspaceRef]`` built from MeWorkspaceInfo."""
+        from mixpanel_data._internal.auth.session import WorkspaceRef
         from mixpanel_data._internal.me import MeWorkspaceInfo
 
         ws = Workspace(
-            _config_manager=mock_config_manager,
+            session=_TEST_SESSION,
             _api_client=mock_api_client,
         )
-        expected = [
+        me_payload = [
             MeWorkspaceInfo(id=1, name="Default", project_id=12345, is_default=True),
             MeWorkspaceInfo(id=2, name="Staging", project_id=12345, is_default=False),
         ]
         mock_me_svc = MagicMock()
-        mock_me_svc.list_workspaces.return_value = expected
+        mock_me_svc.list_workspaces.return_value = me_payload
         ws._me_service = mock_me_svc
 
-        result = ws.discover_workspaces()
+        result = ws.workspaces()
 
-        # Should use current project_id from credentials
+        # Defaults to current project's id from credentials.
         mock_me_svc.list_workspaces.assert_called_once_with(project_id="12345")
-        assert result == expected
+        assert [type(w) for w in result] == [WorkspaceRef, WorkspaceRef]
+        assert [(w.id, w.name, w.is_default) for w in result] == [
+            (1, "Default", True),
+            (2, "Staging", False),
+        ]
 
-    def test_discover_workspaces_with_explicit_project(
+    def test_workspaces_with_explicit_project_id(
         self,
         mock_config_manager: MagicMock,
         mock_api_client: MagicMock,
     ) -> None:
-        """discover_workspaces with explicit project_id passes it through."""
+        """``ws.workspaces(project_id=...)`` passes the override through to MeService."""
         ws = Workspace(
-            _config_manager=mock_config_manager,
+            session=_TEST_SESSION,
             _api_client=mock_api_client,
         )
         mock_me_svc = MagicMock()
         mock_me_svc.list_workspaces.return_value = []
         ws._me_service = mock_me_svc
 
-        ws.discover_workspaces(project_id="9999999")
+        ws.workspaces(project_id="9999999")
 
         mock_me_svc.list_workspaces.assert_called_once_with(project_id="9999999")
 
 
-# =============================================================================
-# Phase 7: Switch Project / Workspace (T071-T078)
-# =============================================================================
+class TestProjectsMethod:
+    """Tests for ``Workspace.projects()`` (FR-035; replaces discover_projects)."""
 
-
-class TestSwitchProject:
-    """T071-T074: Tests for Workspace.switch_project()."""
-
-    def test_switch_project_creates_new_api_client(
+    def test_projects_returns_project_records_from_me_svc(
         self,
         mock_config_manager: MagicMock,
         mock_api_client: MagicMock,
     ) -> None:
-        """switch_project should create a new API client via with_project."""
-        new_mock_client = MagicMock()
-        new_mock_client._credentials = Credentials(
-            username="test_user",
-            secret=SecretStr("test_secret"),
-            project_id="9999999",
-            region="us",
-        )
-        mock_api_client.with_project.return_value = new_mock_client
+        """``ws.projects()`` returns ``list[Project]`` built from MeProjectInfo tuples."""
+        from mixpanel_data._internal.auth.session import Project
+        from mixpanel_data._internal.me import MeProjectInfo
 
         ws = Workspace(
-            _config_manager=mock_config_manager,
+            session=_TEST_SESSION,
             _api_client=mock_api_client,
         )
-        ws.switch_project("9999999")
-
-        mock_api_client.with_project.assert_called_once_with(
-            "9999999", workspace_id=None
-        )
-        assert ws._api_client is new_mock_client
-
-    def test_switch_project_with_workspace_id(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """switch_project should pass workspace_id to with_project."""
-        new_mock_client = MagicMock()
-        new_mock_client._credentials = Credentials(
-            username="test_user",
-            secret=SecretStr("test_secret"),
-            project_id="9999999",
-            region="us",
-        )
-        mock_api_client.with_project.return_value = new_mock_client
-
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        ws.switch_project("9999999", workspace_id=42)
-
-        mock_api_client.with_project.assert_called_once_with("9999999", workspace_id=42)
-
-    def test_switch_project_clears_discovery_cache(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """switch_project should clear discovery and me caches."""
-        new_mock_client = MagicMock()
-        new_mock_client._credentials = Credentials(
-            username="test_user",
-            secret=SecretStr("test_secret"),
-            project_id="9999999",
-            region="us",
-        )
-        mock_api_client.with_project.return_value = new_mock_client
-
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        # Pre-populate caches
-        ws._discovery = MagicMock()
-        ws._live_query = MagicMock()
-        ws._me_service = MagicMock()
-
-        ws.switch_project("9999999")
-
-        assert ws._discovery is None
-        assert ws._live_query is None
-        assert ws._me_service is None
-
-    def test_switch_project_updates_credentials(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """switch_project should update _credentials to match new client."""
-        new_creds = Credentials(
-            username="test_user",
-            secret=SecretStr("test_secret"),
-            project_id="9999999",
-            region="us",
-        )
-        new_mock_client = MagicMock()
-        new_mock_client._credentials = new_creds
-        mock_api_client.with_project.return_value = new_mock_client
-
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        ws.switch_project("9999999")
-
-        assert ws._credentials is not None
-        assert ws._credentials.project_id == "9999999"
-
-
-class TestSwitchWorkspace:
-    """T072: Tests for Workspace.switch_workspace()."""
-
-    def test_switch_workspace_delegates_to_set_workspace_id(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """switch_workspace should call set_workspace_id on the API client."""
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        ws.switch_workspace(3448413)
-
-        mock_api_client.set_workspace_id.assert_called_with(3448413)
-
-
-class TestCurrentProject:
-    """T074: Tests for Workspace.current_project property."""
-
-    def test_current_project_returns_project_context(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_project should return a ProjectContext with project_id."""
-        from mixpanel_data._internal.auth_credential import ProjectContext
-
-        mock_api_client.workspace_id = None
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        # Set up me_svc mock to avoid API calls
-        mock_me_svc = MagicMock()
-        mock_me_svc.find_project.return_value = None
-        ws._me_service = mock_me_svc
-
-        ctx = ws.current_project
-        assert isinstance(ctx, ProjectContext)
-        assert ctx.project_id == "12345"
-        assert ctx.workspace_id is None
-
-    def test_current_project_with_workspace_id(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_project should include workspace_id when set."""
-        from mixpanel_data._internal.auth_credential import ProjectContext
-
-        mock_api_client.workspace_id = 42
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        mock_me_svc = MagicMock()
-        mock_me_svc.find_project.return_value = None
-        mock_me_svc.list_workspaces.return_value = []
-        ws._me_service = mock_me_svc
-
-        ctx = ws.current_project
-        assert isinstance(ctx, ProjectContext)
-        assert ctx.workspace_id == 42
-
-    def test_current_project_enriches_names(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_project should include names from /me when available."""
-        from mixpanel_data._internal.me import MeProjectInfo, MeWorkspaceInfo
-
-        mock_api_client.workspace_id = 100
-
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        mock_me_svc = MagicMock()
-        mock_me_svc.find_project.return_value = MeProjectInfo(
-            name="AI Demo", organization_id=1
-        )
-        mock_me_svc.list_workspaces.return_value = [
-            MeWorkspaceInfo(id=100, name="Default", project_id=12345),
+        me_payload = [
+            (
+                "100",
+                MeProjectInfo(name="Alpha", organization_id=42, timezone="US/Pacific"),
+            ),
+            ("200", MeProjectInfo(name="Beta", organization_id=43)),
         ]
+        mock_me_svc = MagicMock()
+        mock_me_svc.list_projects.return_value = me_payload
         ws._me_service = mock_me_svc
 
-        ctx = ws.current_project
-        assert ctx.project_name == "AI Demo"
-        assert ctx.workspace_name == "Default"
+        result = ws.projects()
 
-    def test_current_project_no_credentials_raises(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_project should raise ConfigError with no credentials."""
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        ws._credentials = None
-
-        with pytest.raises(ConfigError, match="No credentials"):
-            _ = ws.current_project
+        mock_me_svc.list_projects.assert_called_once_with()
+        assert [type(p) for p in result] == [Project, Project]
+        assert [(p.id, p.name, p.organization_id, p.timezone) for p in result] == [
+            ("100", "Alpha", 42, "US/Pacific"),
+            ("200", "Beta", 43, None),
+        ]
 
 
-class TestCurrentCredential:
-    """T074: Tests for Workspace.current_credential property."""
+# TestSwitchProject / TestSwitchWorkspace / TestCurrentProject /
+# TestCurrentCredential / TestCurrentCredentialOAuth removed in B2
+# (T050 / FR-038): the deprecated Workspace methods they pinned
+# (``switch_project``, ``switch_workspace``, ``set_workspace_id``,
+# ``current_credential``, ``current_project``) were deleted. Replacements:
+#   - ``ws.use(project=, workspace=)`` instead of switch_project / switch_workspace
+#   - ``ws.account`` / ``ws.project`` / ``ws.workspace`` instead of current_*
+# See tests/unit/test_workspace_use.py for the v3 surface.
 
-    def test_current_credential_legacy_path(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_credential should build AuthCredential from Credentials."""
-        from mixpanel_data._internal.auth_credential import (
-            AuthCredential,
-            CredentialType,
-        )
-
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-
-        cred = ws.current_credential
-        assert isinstance(cred, AuthCredential)
-        assert cred.type == CredentialType.service_account
-        assert cred.region == "us"
-        assert cred.username == "test_user"
-        assert cred.name == "default"
-
-    def test_current_credential_with_account_name(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_credential should use account name when provided."""
-        ws = Workspace(
-            account="staging",
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-
-        cred = ws.current_credential
-        assert cred.name == "staging"
-
-    def test_current_credential_v2_path(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_credential should return session auth for v2 path."""
-        from mixpanel_data._internal.auth_credential import (
-            AuthCredential,
-            CredentialType,
-            ProjectContext,
-            ResolvedSession,
-        )
-
-        mock_cm = MagicMock()
-        auth = AuthCredential(
-            name="demo-sa",
-            type=CredentialType.service_account,
-            region="us",
-            username="sa-user",
-            secret=SecretStr("secret"),
-        )
-        project = ProjectContext(project_id="3713224")
-        session = ResolvedSession(auth=auth, project=project)
-        mock_cm.resolve_session.return_value = session
-
-        ws = Workspace(
-            credential="demo-sa",
-            project_id="3713224",
-            _config_manager=mock_cm,
-            _api_client=mock_api_client,
-        )
-
-        cred = ws.current_credential
-        assert cred is auth
-        assert cred.name == "demo-sa"
-
-    def test_current_credential_no_credentials_raises(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_credential should raise ConfigError with no credentials."""
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-        ws._credentials = None
-        ws._resolved_session = None
-
-        with pytest.raises(ConfigError, match="No credentials"):
-            _ = ws.current_credential
-
-
-# =============================================================================
-# Codex Review Fixes — Regression Tests
-# =============================================================================
-
-
-class TestOAuthProjectOverridePreservation:
-    """Tests for Fix 1: OAuth credentials preserved on project/region override."""
-
-    def test_oauth_auth_method_preserved_on_project_override(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """OAuth auth_method is preserved when project_id overrides credentials."""
-        oauth_creds = Credentials(
-            username="",
-            secret=SecretStr(""),
-            project_id="original",
-            region="us",
-            auth_method=AuthMethod.oauth,
-            oauth_access_token=SecretStr("test-token"),
-        )
-        manager = MagicMock(spec=ConfigManager)
-        manager.resolve_credentials.return_value = oauth_creds
-        manager.config_version.return_value = 1
-
-        ws = Workspace(
-            project_id="override-project",
-            _config_manager=manager,
-            _api_client=mock_api_client,
-        )
-
-        assert ws._credentials is not None
-        assert ws._credentials.auth_method == AuthMethod.oauth
-        assert ws._credentials.oauth_access_token is not None
-        assert ws._credentials.oauth_access_token.get_secret_value() == "test-token"
-        assert ws._credentials.project_id == "override-project"
-
-    def test_oauth_auth_method_preserved_on_region_override(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """OAuth auth_method is preserved when region overrides credentials."""
-        oauth_creds = Credentials(
-            username="",
-            secret=SecretStr(""),
-            project_id="12345",
-            region="us",
-            auth_method=AuthMethod.oauth,
-            oauth_access_token=SecretStr("test-token"),
-        )
-        manager = MagicMock(spec=ConfigManager)
-        manager.resolve_credentials.return_value = oauth_creds
-        manager.config_version.return_value = 1
-
-        ws = Workspace(
-            region="eu",
-            _config_manager=manager,
-            _api_client=mock_api_client,
-        )
-
-        assert ws._credentials is not None
-        assert ws._credentials.auth_method == AuthMethod.oauth
-        assert ws._credentials.region == "eu"
-
-    def test_basic_auth_still_works_on_project_override(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """Basic auth credentials still work with project override (regression)."""
-        mock_config_manager.config_version.return_value = 1
-
-        ws = Workspace(
-            project_id="override-project",
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-
-        assert ws._credentials is not None
-        assert ws._credentials.auth_method == AuthMethod.basic
-        assert ws._credentials.project_id == "override-project"
-        assert ws._credentials.username == "test_user"
-
-
-class TestCurrentCredentialOAuth:
-    """Tests for Fix 2: current_credential handles OAuth legacy path."""
-
-    def test_current_credential_returns_oauth_type_for_oauth_creds(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_credential returns CredentialType.oauth for OAuth sessions."""
-        from mixpanel_data._internal.auth_credential import CredentialType
-
-        oauth_creds = Credentials(
-            username="",
-            secret=SecretStr(""),
-            project_id="12345",
-            region="us",
-            auth_method=AuthMethod.oauth,
-            oauth_access_token=SecretStr("test-token"),
-        )
-        manager = MagicMock(spec=ConfigManager)
-        manager.resolve_credentials.return_value = oauth_creds
-        manager.config_version.return_value = 1
-
-        ws = Workspace(
-            _config_manager=manager,
-            _api_client=mock_api_client,
-        )
-
-        cred = ws.current_credential
-        assert cred.type == CredentialType.oauth
-        assert cred.oauth_access_token is not None
-        assert cred.oauth_access_token.get_secret_value() == "test-token"
-
-    def test_current_credential_returns_service_account_for_basic_auth(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """current_credential returns CredentialType.service_account for basic auth."""
-        from mixpanel_data._internal.auth_credential import CredentialType
-
-        mock_config_manager.config_version.return_value = 1
-
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-
-        cred = ws.current_credential
-        assert cred.type == CredentialType.service_account
-        assert cred.username == "test_user"
-
-
-class TestV2ConfigAutoDetection:
-    """Tests for Fix 3: v2 config auto-detected when credential is None."""
-
-    def test_v2_config_uses_resolve_session_without_credential_param(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """Workspace() with v2 config routes to resolve_session, not resolve_credentials."""
-        from mixpanel_data._internal.auth_credential import (
-            AuthCredential,
-            CredentialType,
-            ProjectContext,
-            ResolvedSession,
-        )
-
-        session = ResolvedSession(
-            auth=AuthCredential(
-                name="demo-sa",
-                type=CredentialType.service_account,
-                region="us",
-                username="sa_user",
-                secret=SecretStr("sa_secret"),
-            ),
-            project=ProjectContext(project_id="99999"),
-        )
-
-        manager = MagicMock(spec=ConfigManager)
-        manager.config_version.return_value = 2
-        manager.resolve_session.return_value = session
-
-        ws = Workspace(
-            _config_manager=manager,
-            _api_client=mock_api_client,
-        )
-
-        # Should call resolve_session, NOT resolve_credentials
-        manager.resolve_session.assert_called_once_with(
-            credential=None,
-            project_id=None,
-            workspace_id=None,
-        )
-        manager.resolve_credentials.assert_not_called()
-        assert ws._resolved_session is session
-        assert ws._credentials is not None
-        assert ws._credentials.project_id == "99999"
-
-    def test_v1_config_still_uses_resolve_credentials(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """Workspace() with v1 config still uses legacy resolve_credentials."""
-        mock_config_manager.config_version.return_value = 1
-
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-
-        mock_config_manager.resolve_credentials.assert_called_once()
-        assert ws._resolved_session is None
-        assert ws._credentials is not None
-
-
-class TestWorkspaceIdPropagation:
-    """Tests for Fix 4: workspace_id from resolved session propagated."""
-
-    def test_session_workspace_id_propagated_when_param_is_none(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """workspace_id from session propagates to _initial_workspace_id."""
-        from mixpanel_data._internal.auth_credential import (
-            AuthCredential,
-            CredentialType,
-            ProjectContext,
-            ResolvedSession,
-        )
-
-        session = ResolvedSession(
-            auth=AuthCredential(
-                name="demo-sa",
-                type=CredentialType.service_account,
-                region="us",
-                username="sa_user",
-                secret=SecretStr("sa_secret"),
-            ),
-            project=ProjectContext(project_id="99999", workspace_id=42),
-        )
-
-        manager = MagicMock(spec=ConfigManager)
-        manager.config_version.return_value = 2
-        manager.resolve_session.return_value = session
-
-        ws = Workspace(
-            _config_manager=manager,
-            _api_client=mock_api_client,
-        )
-
-        assert ws._initial_workspace_id == 42
-        mock_api_client.set_workspace_id.assert_called_once_with(42)
-
-    def test_explicit_workspace_id_overrides_session(
-        self,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """Explicit workspace_id param takes priority over session."""
-        from mixpanel_data._internal.auth_credential import (
-            AuthCredential,
-            CredentialType,
-            ProjectContext,
-            ResolvedSession,
-        )
-
-        session = ResolvedSession(
-            auth=AuthCredential(
-                name="demo-sa",
-                type=CredentialType.service_account,
-                region="us",
-                username="sa_user",
-                secret=SecretStr("sa_secret"),
-            ),
-            project=ProjectContext(project_id="99999", workspace_id=42),
-        )
-
-        manager = MagicMock(spec=ConfigManager)
-        manager.config_version.return_value = 2
-        manager.resolve_session.return_value = session
-
-        ws = Workspace(
-            workspace_id=999,
-            _config_manager=manager,
-            _api_client=mock_api_client,
-        )
-
-        assert ws._initial_workspace_id == 999
-        mock_api_client.set_workspace_id.assert_called_once_with(999)
-
-    def test_no_session_no_workspace_id_stays_none(
-        self,
-        mock_config_manager: MagicMock,
-        mock_api_client: MagicMock,
-    ) -> None:
-        """Without session or explicit param, workspace_id stays None."""
-        mock_config_manager.config_version.return_value = 1
-
-        ws = Workspace(
-            _config_manager=mock_config_manager,
-            _api_client=mock_api_client,
-        )
-
-        assert ws._initial_workspace_id is None
-        mock_api_client.set_workspace_id.assert_not_called()
+# TestV2ConfigAutoDetection / TestWorkspaceIdPropagation removed in B1
+# (Fix 10): both targeted the v2 ResolvedSession resolution path and the
+# legacy ``workspace_id=`` constructor kwarg, all of which are gone.
+# Workspace ID propagation from a v3 Session is exercised in
+# tests/unit/test_workspace_init.py.

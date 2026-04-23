@@ -8,6 +8,11 @@ to protect sensitive credential material.
 The storage directory can be overridden via the ``MP_OAUTH_STORAGE_DIR``
 environment variable for testing or custom deployments.
 
+Per-account paths (introduced by 042-auth-architecture-redesign):
+- ``account_dir(name)`` and ``ensure_account_dir(name)`` return / create
+  ``~/.mp/accounts/{name}/`` with mode ``0o700``. Token / client / me
+  files for the new model live here.
+
 Example:
     ```python
     from mixpanel_data._internal.auth.storage import OAuthStorage
@@ -32,8 +37,88 @@ from typing import Any
 from pydantic import SecretStr
 
 from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+from mixpanel_data._internal.io_utils import atomic_write_bytes
 
 logger = logging.getLogger(__name__)
+
+
+_ACCOUNT_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+
+def _storage_root() -> Path:
+    """Return the root directory under which mixpanel_data writes account state.
+
+    Resolved at every call so test isolation via ``$HOME`` /
+    ``MP_OAUTH_STORAGE_DIR`` monkeypatching takes effect — a module-level
+    constant captured at import time would silently leak the developer's
+    real ``~/.mp/`` into hermetic tests.
+
+    Despite the name, ``MP_OAUTH_STORAGE_DIR`` controls EVERY on-disk
+    artifact written by mixpanel_data (per-account dirs, OAuth tokens,
+    ``/me`` cache, client registration), not just the OAuth subtree. The
+    name is preserved as a backwards-compat env var only — the root is
+    used by both :func:`account_dir` and
+    :meth:`OAuthStorage._default_storage_dir`.
+
+    Returns:
+        ``$MP_OAUTH_STORAGE_DIR`` if set, else ``$HOME/.mp``.
+    """
+    env_dir = os.environ.get("MP_OAUTH_STORAGE_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path.home() / ".mp"
+
+
+def account_dir(name: str) -> Path:
+    """Return the per-account directory for ``name``.
+
+    Resolves to ``$MP_OAUTH_STORAGE_DIR/accounts/{name}/`` when the env
+    var is set, else ``~/.mp/accounts/{name}/``. Does not create the
+    directory — use :func:`ensure_account_dir` for that.
+
+    Args:
+        name: Account name (must match the same pattern enforced on the
+            ``Account`` model — ``^[a-zA-Z0-9_-]{1,64}$``). Validated here
+            as a defense-in-depth check against path traversal.
+
+    Returns:
+        Absolute path to the per-account directory.
+
+    Raises:
+        ValueError: If ``name`` does not match the allowed pattern.
+    """
+    if not _ACCOUNT_NAME_PATTERN.fullmatch(name):
+        raise ValueError(
+            f"Invalid account name: {name!r}. Must match `^[a-zA-Z0-9_-]{{1,64}}$`."
+        )
+    return _storage_root() / "accounts" / name
+
+
+def ensure_account_dir(name: str) -> Path:
+    """Create ``~/.mp/accounts/{name}/`` (and its parents) with mode ``0o700``.
+
+    Idempotent — succeeds even if the directory already exists. The parent
+    ``~/.mp/`` directory is also created with restrictive permissions if
+    missing. Symlinks are not followed when applying permissions.
+
+    Args:
+        name: Account name (validated by :func:`account_dir`).
+
+    Returns:
+        The created (or pre-existing) account directory path.
+
+    Raises:
+        ValueError: If ``name`` does not match the allowed pattern.
+    """
+    path = account_dir(name)
+    old_umask = os.umask(0o077)
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    finally:
+        os.umask(old_umask)
+    # Defensive chmod so a pre-existing dir with looser permissions gets locked down.
+    path.chmod(stat.S_IRWXU)
+    return path
 
 
 class OAuthStorage:
@@ -55,14 +140,26 @@ class OAuthStorage:
         storage_dir: Path to the storage directory.
     """
 
-    DEFAULT_STORAGE_DIR: Path = Path.home() / ".mp" / "oauth"
+    @classmethod
+    def _default_storage_dir(cls) -> Path:
+        """Return the default OAuth storage path, resolved lazily.
+
+        Routes through :func:`_storage_root` so the ``MP_OAUTH_STORAGE_DIR``
+        env var (and ``$HOME`` for tests) takes effect at call time, not
+        import time.
+
+        Returns:
+            ``<storage-root>/oauth`` resolved at call time.
+        """
+        return _storage_root() / "oauth"
 
     def __init__(self, storage_dir: Path | None = None) -> None:
         """Initialize OAuthStorage.
 
         Args:
-            storage_dir: Override the storage directory. If not provided,
-                uses ``MP_OAUTH_STORAGE_DIR`` env var or ``~/.mp/oauth/``.
+            storage_dir: Override the storage directory. When not provided,
+                falls back to :meth:`_default_storage_dir` which honors
+                ``MP_OAUTH_STORAGE_DIR``.
 
         Example:
             ```python
@@ -72,10 +169,8 @@ class OAuthStorage:
         """
         if storage_dir is not None:
             self._storage_dir = storage_dir
-        elif "MP_OAUTH_STORAGE_DIR" in os.environ:
-            self._storage_dir = Path(os.environ["MP_OAUTH_STORAGE_DIR"])
         else:
-            self._storage_dir = self.DEFAULT_STORAGE_DIR
+            self._storage_dir = self._default_storage_dir()
 
     @property
     def storage_dir(self) -> Path:
@@ -166,22 +261,20 @@ class OAuthStorage:
                     )
 
     def _write_file(self, path: Path, data: dict[str, Any]) -> None:
-        """Write JSON data to a file with restricted permissions.
+        """Atomically write JSON data to ``path`` with mode ``0o600``.
 
-        Sets umask before writing to ensure no group/other bits leak,
-        then explicitly sets ``0o600`` after write.
+        The replace step is atomic on POSIX (same filesystem), so a
+        SIGKILL between tmp-create and rename leaves the prior file in
+        place rather than a partially-written one.
 
         Args:
             path: File path to write to.
             data: Dictionary to serialize as JSON.
         """
         self._ensure_dir()
-        old_umask = os.umask(0o177)
-        try:
-            path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-        finally:
-            os.umask(old_umask)
-        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        atomic_write_bytes(
+            path, json.dumps(data, indent=2, default=str).encode("utf-8")
+        )
 
     def _read_file(self, path: Path) -> dict[str, Any] | None:
         """Read JSON data from a file.
@@ -259,7 +352,6 @@ class OAuthStorage:
             "expires_at": tokens.expires_at.isoformat(),
             "scope": tokens.scope,
             "token_type": tokens.token_type,
-            "project_id": tokens.project_id,
         }
         if tokens.refresh_token is not None:
             data["refresh_token"] = tokens.refresh_token.get_secret_value()
@@ -303,7 +395,6 @@ class OAuthStorage:
                 expires_at=data["expires_at"],
                 scope=str(data["scope"]),
                 token_type=str(data["token_type"]),
-                project_id=data.get("project_id"),
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning(

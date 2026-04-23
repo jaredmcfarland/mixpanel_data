@@ -4,14 +4,26 @@ The `mp` command-line interface for `mixpanel_data`—a complete programmable in
 
 ## Command Groups
 
+The auth surface is organized around the **Account → Project → Workspace** hierarchy
+(042 redesign): five identity command groups, each with `use` as the universal
+state-change verb.
+
 | Group | Purpose |
 |-------|---------|
-| `auth` | Account management (login, logout, list, switch) |
+| `account` | Account CRUD + lifecycle (`list`, `add`, `remove`, `use`, `show`, `test`, `login`, `logout`, `token`, `export-bridge`, `remove-bridge`) |
+| `project` | Project axis (`list` from `/me`, `use ID`, `show`) |
+| `workspace` | Workspace axis (`list` from `/me`, `use ID`, `show`) |
+| `target` | Saved (account, project, workspace?) cursors (`list`, `add`, `use`, `show`, `remove`) |
+| `session` | Resolved active session viewer (`mp session [--bridge]`) |
 | `query` | Live Mixpanel API queries (segmentation, funnels, retention, JQL) |
 | `inspect` | Schema discovery (events, properties, funnels, cohorts, bookmarks) |
 | `dashboards` | Dashboard CRUD (list, create, get, update, delete, favorite, pin, blueprints) |
 | `reports` | Report/bookmark CRUD (list, create, get, update, delete, bulk ops, history) |
 | `cohorts` | Cohort CRUD (list, create, get, update, delete, bulk ops) |
+| `flags` / `experiments` / `alerts` / `annotations` / `webhooks` / `lexicon` / `drop-filters` / `custom-properties` / `custom-events` / `lookup-tables` / `schemas` | Entity CRUD + data governance for the matching App API surface |
+
+**Removed (no shim):** `mp auth`, `mp projects`, `mp workspaces`, `mp context`,
+`mp config`. See `RELEASE_NOTES_0.4.0.md` for the legacy → v3 verb map.
 
 ## Files
 
@@ -26,11 +38,22 @@ The `mp` command-line interface for `mixpanel_data`—a complete programmable in
 
 ## Global Options
 
-Defined in `main.py`:
-- `--account, -a`: Named account to use
-- `--quiet, -q`: Suppress progress output
-- `--verbose, -v`: Enable debug output
-- `--version`: Show version and exit
+Defined in `main.py` — flow into the resolver as the *param* layer
+(env > param > target > bridge > config):
+
+| Flag | Short | Purpose |
+|---|---|---|
+| `--account NAME` | `-a` | Named account override |
+| `--project ID` | `-p` | Project ID override |
+| `--workspace ID` | `-w` | Workspace ID override |
+| `--target NAME` | `-t` | Apply a saved target (mutually exclusive with -a/-p/-w) |
+| `--quiet` | `-q` | Suppress progress output |
+| `--verbose` | `-v` | Enable debug output |
+| `--version` |  | Show version and exit |
+
+These overrides are **per-command** — they do NOT mutate `~/.mp/config.toml
+[active]`. To persist, use `mp account use NAME` / `mp project use ID` /
+`mp workspace use N` / `mp target use NAME`.
 
 ## Architecture
 

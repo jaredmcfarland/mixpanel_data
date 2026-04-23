@@ -17,7 +17,11 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+from mixpanel_data._internal.auth.token import (
+    OAuthClientInfo,
+    OAuthTokens,
+    token_payload_bytes,
+)
 
 
 def _utcnow() -> datetime:
@@ -36,7 +40,6 @@ def _make_tokens(
     expires_at: datetime | None = None,
     scope: str = "projects analysis",
     token_type: str = "Bearer",
-    project_id: str | None = "12345",
 ) -> OAuthTokens:
     """Create an OAuthTokens instance with sensible defaults for testing.
 
@@ -46,7 +49,6 @@ def _make_tokens(
         expires_at: Token expiry datetime. Defaults to 1 hour from now.
         scope: OAuth scope string.
         token_type: Token type (typically 'Bearer').
-        project_id: Associated Mixpanel project ID.
 
     Returns:
         Configured OAuthTokens instance.
@@ -62,7 +64,6 @@ def _make_tokens(
         expires_at=expires_at,
         scope=scope,
         token_type=token_type,
-        project_id=project_id,
     )
 
 
@@ -85,11 +86,9 @@ class TestOAuthTokensImmutability:
         with pytest.raises(ValidationError):
             tokens.scope = "different_scope"  # type: ignore[misc]
 
-    def test_frozen_cannot_modify_project_id(self) -> None:
-        """Verify that project_id cannot be modified after construction."""
-        tokens = _make_tokens()
-        with pytest.raises(ValidationError):
-            tokens.project_id = "99999"  # type: ignore[misc]
+    # test_frozen_cannot_modify_project_id removed in B2 (T044): the
+    # ``project_id`` field is gone — project_id lives on
+    # ``Account.default_project`` in v3.
 
 
 class TestOAuthTokensExpiry:
@@ -204,7 +203,6 @@ class TestOAuthTokensSerialization:
             expires_at=expires,
             scope="projects analysis events",
             token_type="Bearer",
-            project_id="54321",
         )
 
         # Use model_dump with mode="json" to get JSON-serializable dict,
@@ -225,7 +223,6 @@ class TestOAuthTokensSerialization:
         assert restored.refresh_token.get_secret_value() == "rt_refresh"
         assert restored.scope == "projects analysis events"
         assert restored.token_type == "Bearer"
-        assert restored.project_id == "54321"
         # Datetime comparison (may lose sub-microsecond precision in JSON)
         assert abs((restored.expires_at - original.expires_at).total_seconds()) < 1
 
@@ -242,39 +239,10 @@ class TestOAuthTokensSerialization:
 
         assert restored.refresh_token is None
 
-    def test_json_round_trip_without_project_id(self) -> None:
-        """Verify JSON round-trip works when project_id is None."""
-        original = _make_tokens(project_id=None)
 
-        json_str = original.model_dump_json()
-        restored = OAuthTokens.model_validate_json(json_str)
-
-        assert restored.project_id is None
-
-
-class TestOAuthTokensProjectId:
-    """Tests for project_id field preservation."""
-
-    def test_project_id_preserved(self) -> None:
-        """Verify that project_id is stored and retrievable."""
-        tokens = _make_tokens(project_id="98765")
-        assert tokens.project_id == "98765"
-
-    def test_project_id_none_allowed(self) -> None:
-        """Verify that project_id can be None.
-
-        During initial OAuth login, project_id may not yet be known.
-        """
-        tokens = _make_tokens(project_id=None)
-        assert tokens.project_id is None
-
-    def test_project_id_preserved_through_different_values(self) -> None:
-        """Verify that different project_id values are independently preserved."""
-        tokens_a = _make_tokens(project_id="111")
-        tokens_b = _make_tokens(project_id="222")
-
-        assert tokens_a.project_id == "111"
-        assert tokens_b.project_id == "222"
+# TestOAuthTokensProjectId removed in B2 (T044): the legacy
+# ``OAuthTokens.project_id`` field is gone — project_id lives on
+# ``Account.default_project`` in v3.
 
 
 class TestOAuthTokensFromTokenResponse:
@@ -295,14 +263,13 @@ class TestOAuthTokensFromTokenResponse:
             "token_type": "Bearer",
         }
 
-        tokens = OAuthTokens.from_token_response(data, project_id="12345")
+        tokens = OAuthTokens.from_token_response(data)
 
         assert tokens.access_token.get_secret_value() == "new_access"
         assert tokens.refresh_token is not None
         assert tokens.refresh_token.get_secret_value() == "new_refresh"
         assert tokens.scope == "projects analysis"
         assert tokens.token_type == "Bearer"
-        assert tokens.project_id == "12345"
 
     def test_from_token_response_computes_expires_at(self) -> None:
         """Verify that expires_at is computed from expires_in seconds.
@@ -319,7 +286,7 @@ class TestOAuthTokensFromTokenResponse:
         }
 
         before = _utcnow()
-        tokens = OAuthTokens.from_token_response(data, project_id=None)
+        tokens = OAuthTokens.from_token_response(data)
         after = _utcnow()
 
         expected_min = before + timedelta(seconds=7200)
@@ -336,23 +303,9 @@ class TestOAuthTokensFromTokenResponse:
             "token_type": "Bearer",
         }
 
-        tokens = OAuthTokens.from_token_response(data, project_id="123")
+        tokens = OAuthTokens.from_token_response(data)
 
         assert tokens.refresh_token is None
-
-    def test_from_token_response_project_id_none(self) -> None:
-        """Verify from_token_response() accepts None project_id."""
-        data = {
-            "access_token": "tok",
-            "refresh_token": "ref",
-            "expires_in": 3600,
-            "scope": "projects",
-            "token_type": "Bearer",
-        }
-
-        tokens = OAuthTokens.from_token_response(data, project_id=None)
-
-        assert tokens.project_id is None
 
 
 class TestOAuthClientInfo:
@@ -582,3 +535,50 @@ class TestOAuthTokensExpiryEdgeCases:
         }
         tokens = OAuthTokens.from_token_response(data)
         assert tokens.is_expired() is False
+
+
+class TestTokenPayloadBytes:
+    """Single-source serialization for ``tokens.json`` (Claim 4)."""
+
+    def test_round_trip_with_refresh_token(self) -> None:
+        """Bytes round-trip through ``model_validate_json`` with all fields preserved."""
+        original = _make_tokens()
+        loaded = OAuthTokens.model_validate_json(token_payload_bytes(original))
+        assert loaded.access_token.get_secret_value() == "access_abc123"
+        assert loaded.refresh_token is not None
+        assert loaded.refresh_token.get_secret_value() == "refresh_xyz789"
+        assert loaded.expires_at == original.expires_at
+        assert loaded.scope == "projects analysis"
+        assert loaded.token_type == "Bearer"
+
+    def test_round_trip_without_refresh_token(self) -> None:
+        """``refresh_token=None`` is omitted on write and restored as None on read.
+
+        Mirrors the loader contract in ``bridge._read_browser_tokens``: a
+        missing ``refresh_token`` key means "no refresh token", not "explicit
+        null". Emitting ``null`` would still round-trip but burns a key for
+        every CI account that never ships one.
+        """
+        original = _make_tokens(refresh_token=None)
+        raw = token_payload_bytes(original)
+        # Wire shape: no ``refresh_token`` key at all.
+        import json as _json
+
+        payload = _json.loads(raw.decode("utf-8"))
+        assert "refresh_token" not in payload
+        loaded = OAuthTokens.model_validate_json(raw)
+        assert loaded.refresh_token is None
+
+    def test_secrets_are_unwrapped_on_disk(self) -> None:
+        """Plain secret values land in the JSON, not Pydantic's redaction marker.
+
+        ``SecretStr`` defaults to ``"**********"`` in ``model_dump_json`` —
+        the helper must explicitly unwrap so the persisted file is usable.
+        """
+        import json as _json
+
+        tokens = _make_tokens(access_token="tok-123", refresh_token="ref-456")
+        payload = _json.loads(token_payload_bytes(tokens).decode("utf-8"))
+        assert payload["access_token"] == "tok-123"
+        assert payload["refresh_token"] == "ref-456"
+        assert "**********" not in payload.values()

@@ -14,10 +14,10 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -25,20 +25,13 @@ from mixpanel_data._internal.config import AuthMethod, Credentials
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport for webhook testing.
@@ -53,7 +46,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 def _webhook_result(
@@ -106,7 +99,7 @@ def _mutation_result(
 class TestListWebhooks:
     """Tests for list_webhooks() API client method."""
 
-    def test_returns_webhook_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_webhook_list(self, oauth_credentials: Session) -> None:
         """list_webhooks() returns a list of webhook dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -130,7 +123,7 @@ class TestListWebhooks:
         assert result[0]["id"] == "id-1"
         assert result[1]["name"] == "Hook B"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """list_webhooks() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -145,7 +138,7 @@ class TestListWebhooks:
 
         assert "/webhooks/" in captured_urls[0]
 
-    def test_empty_result(self, oauth_credentials: Credentials) -> None:
+    def test_empty_result(self, oauth_credentials: Session) -> None:
         """list_webhooks() returns empty list when no webhooks exist."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -158,7 +151,7 @@ class TestListWebhooks:
 
         assert result == []
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_webhooks() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -182,7 +175,7 @@ class TestListWebhooks:
 class TestCreateWebhook:
     """Tests for create_webhook() API client method."""
 
-    def test_creates_webhook(self, oauth_credentials: Credentials) -> None:
+    def test_creates_webhook(self, oauth_credentials: Session) -> None:
         """create_webhook() sends POST and returns mutation result."""
         captured: list[tuple[str, Any]] = []
 
@@ -207,7 +200,7 @@ class TestCreateWebhook:
         assert captured[0][1]["name"] == "New Hook"
         assert result["id"] == "new-id"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """create_webhook() posts to the webhooks endpoint."""
         captured_urls: list[str] = []
 
@@ -234,7 +227,7 @@ class TestCreateWebhook:
 class TestUpdateWebhook:
     """Tests for update_webhook() API client method."""
 
-    def test_updates_webhook(self, oauth_credentials: Credentials) -> None:
+    def test_updates_webhook(self, oauth_credentials: Session) -> None:
         """update_webhook() sends PATCH with body."""
         captured: list[tuple[str, Any]] = []
 
@@ -257,7 +250,7 @@ class TestUpdateWebhook:
         assert captured[0][1]["name"] == "Updated"
         assert result["name"] == "Updated"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """update_webhook() targets the correct webhook ID in URL."""
         captured_urls: list[str] = []
 
@@ -284,7 +277,7 @@ class TestUpdateWebhook:
 class TestDeleteWebhook:
     """Tests for delete_webhook() API client method."""
 
-    def test_deletes_webhook(self, oauth_credentials: Credentials) -> None:
+    def test_deletes_webhook(self, oauth_credentials: Session) -> None:
         """delete_webhook() sends DELETE request."""
         captured_methods: list[str] = []
 
@@ -299,7 +292,7 @@ class TestDeleteWebhook:
 
         assert captured_methods[0] == "DELETE"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """delete_webhook() targets the correct webhook ID in URL."""
         captured_urls: list[str] = []
 
@@ -323,7 +316,7 @@ class TestDeleteWebhook:
 class TestTestWebhook:
     """Tests for test_webhook() API client method."""
 
-    def test_sends_post(self, oauth_credentials: Credentials) -> None:
+    def test_sends_post(self, oauth_credentials: Session) -> None:
         """test_webhook() sends POST request with body."""
         captured: list[tuple[str, Any]] = []
 
@@ -350,7 +343,7 @@ class TestTestWebhook:
         assert result["success"] is True
         assert result["status_code"] == 200
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """test_webhook() posts to the webhooks/test/ endpoint."""
         captured_urls: list[str] = []
 
@@ -375,7 +368,7 @@ class TestTestWebhook:
 
         assert "/webhooks/test/" in captured_urls[0]
 
-    def test_failure_result(self, oauth_credentials: Credentials) -> None:
+    def test_failure_result(self, oauth_credentials: Session) -> None:
         """test_webhook() returns failure result when test fails."""
 
         def handler(request: httpx.Request) -> httpx.Response:

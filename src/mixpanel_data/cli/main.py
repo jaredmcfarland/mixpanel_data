@@ -9,7 +9,7 @@ Usage:
 
 Examples:
     mp --help
-    mp auth list
+    mp account list
     mp --account staging query segmentation -e "Sign Up" --from 2024-01-01 --to 2024-01-31
 """
 
@@ -85,15 +85,6 @@ def main(
             envvar="MP_ACCOUNT",
         ),
     ] = None,
-    credential: Annotated[
-        str | None,
-        typer.Option(
-            "--credential",
-            "-c",
-            help="Credential name to use (v2 config).",
-            envvar="MP_CREDENTIAL",
-        ),
-    ] = None,
     project: Annotated[
         str | None,
         typer.Option(
@@ -103,12 +94,22 @@ def main(
             envvar="MP_PROJECT_ID",
         ),
     ] = None,
-    workspace_id: Annotated[
+    workspace: Annotated[
         int | None,
         typer.Option(
-            "--workspace-id",
+            "--workspace",
+            "-w",
             envvar="MP_WORKSPACE_ID",
-            help="Workspace ID for App API operations.",
+            help="Workspace ID for this command.",
+        ),
+    ] = None,
+    target: Annotated[
+        str | None,
+        typer.Option(
+            "--target",
+            "-t",
+            envvar="MP_TARGET",
+            help="Apply a saved target (mutually exclusive with --account/--project/--workspace).",
         ),
     ] = None,
     quiet: Annotated[
@@ -144,16 +145,18 @@ def main(
     """
     ctx.ensure_object(dict)
 
-    if account is not None and credential is not None:
+    if target is not None and (
+        account is not None or project is not None or workspace is not None
+    ):
         err_console.print(
-            "[red]--account and --credential are mutually exclusive.[/red]"
+            "[red]--target is mutually exclusive with --account/--project/--workspace.[/red]"
         )
         raise typer.Exit(3)
 
     ctx.obj["account"] = account
-    ctx.obj["credential"] = credential
     ctx.obj["project"] = project
-    ctx.obj["workspace_id"] = workspace_id
+    ctx.obj["workspace_id"] = workspace
+    ctx.obj["target"] = target
     ctx.obj["quiet"] = quiet
     ctx.obj["verbose"] = verbose
     ctx.obj["workspace"] = None
@@ -164,11 +167,10 @@ def main(
 # These imports are done here to avoid circular imports
 def _register_commands() -> None:
     """Register all command groups with the main app."""
+    from mixpanel_data.cli.commands.account import account_app
     from mixpanel_data.cli.commands.alerts import alerts_app
     from mixpanel_data.cli.commands.annotations import annotations_app
-    from mixpanel_data.cli.commands.auth import auth_app
     from mixpanel_data.cli.commands.cohorts import cohorts_app
-    from mixpanel_data.cli.commands.context import context_app
     from mixpanel_data.cli.commands.custom_events import custom_events_app
     from mixpanel_data.cli.commands.custom_properties import custom_properties_app
     from mixpanel_data.cli.commands.dashboards import dashboards_app
@@ -178,14 +180,20 @@ def _register_commands() -> None:
     from mixpanel_data.cli.commands.inspect import inspect_app
     from mixpanel_data.cli.commands.lexicon import lexicon_app
     from mixpanel_data.cli.commands.lookup_tables import lookup_tables_app
-    from mixpanel_data.cli.commands.projects import projects_app
+    from mixpanel_data.cli.commands.project import project_app
     from mixpanel_data.cli.commands.query import query_app
     from mixpanel_data.cli.commands.reports import reports_app
     from mixpanel_data.cli.commands.schemas import schemas_app
+    from mixpanel_data.cli.commands.session import session_app
+    from mixpanel_data.cli.commands.target import target_app
     from mixpanel_data.cli.commands.webhooks import webhooks_app
-    from mixpanel_data.cli.commands.workspaces_cmd import workspaces_app
+    from mixpanel_data.cli.commands.workspace import workspace_app
 
-    app.add_typer(auth_app, name="auth", help="Manage authentication and accounts.")
+    app.add_typer(account_app, name="account", help="Manage accounts.")
+    app.add_typer(project_app, name="project", help="Active project.")
+    app.add_typer(workspace_app, name="workspace", help="Active workspace.")
+    app.add_typer(session_app, name="session", help="Show / update the active session.")
+    app.add_typer(target_app, name="target", help="Manage saved target triples.")
     app.add_typer(query_app, name="query", help="Query Mixpanel data.")
     app.add_typer(inspect_app, name="inspect", help="Inspect Mixpanel project schema.")
     app.add_typer(dashboards_app, name="dashboards", help="Manage Mixpanel dashboards.")
@@ -219,21 +227,6 @@ def _register_commands() -> None:
         lookup_tables_app,
         name="lookup-tables",
         help="Manage lookup tables.",
-    )
-    app.add_typer(
-        projects_app,
-        name="projects",
-        help="Discover and switch Mixpanel projects.",
-    )
-    app.add_typer(
-        workspaces_app,
-        name="workspaces",
-        help="Discover and switch Mixpanel workspaces.",
-    )
-    app.add_typer(
-        context_app,
-        name="context",
-        help="View and switch the active session context.",
     )
 
 

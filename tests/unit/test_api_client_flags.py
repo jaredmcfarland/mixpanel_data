@@ -15,10 +15,10 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -26,20 +26,13 @@ from mixpanel_data._internal.config import AuthMethod, Credentials
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
     *,
     workspace_id: int = 100,
@@ -58,7 +51,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    client = MixpanelAPIClient(credentials, _transport=transport)
+    client = MixpanelAPIClient(session=credentials, _transport=transport)
     client.set_workspace_id(workspace_id)
     return client
 
@@ -100,7 +93,7 @@ def _flag_result(
 class TestListFeatureFlags:
     """Tests for list_feature_flags() API client method."""
 
-    def test_returns_flag_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_flag_list(self, oauth_credentials: Session) -> None:
         """list_feature_flags() returns a list of flag dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -124,7 +117,7 @@ class TestListFeatureFlags:
         assert result[0]["id"] == "id-1"
         assert result[1]["name"] == "Flag B"
 
-    def test_uses_require_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_require_scoped_path(self, oauth_credentials: Session) -> None:
         """list_feature_flags() uses require_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -139,7 +132,7 @@ class TestListFeatureFlags:
 
         assert "/feature-flags" in captured_urls[0]
 
-    def test_include_archived(self, oauth_credentials: Credentials) -> None:
+    def test_include_archived(self, oauth_credentials: Session) -> None:
         """list_feature_flags(include_archived=True) passes query param."""
         captured_urls: list[str] = []
 
@@ -154,7 +147,7 @@ class TestListFeatureFlags:
 
         assert "include_archived=true" in captured_urls[0].lower()
 
-    def test_empty_result(self, oauth_credentials: Credentials) -> None:
+    def test_empty_result(self, oauth_credentials: Session) -> None:
         """list_feature_flags() returns empty list when no flags exist."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -167,7 +160,7 @@ class TestListFeatureFlags:
 
         assert result == []
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_feature_flags() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -186,7 +179,7 @@ class TestListFeatureFlags:
 class TestCreateFeatureFlag:
     """Tests for create_feature_flag() API client method."""
 
-    def test_creates_flag(self, oauth_credentials: Credentials) -> None:
+    def test_creates_flag(self, oauth_credentials: Session) -> None:
         """create_feature_flag() sends POST and returns flag dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -209,7 +202,7 @@ class TestCreateFeatureFlag:
         assert captured[0][1] == {"name": "New Flag", "key": "new_flag"}
         assert result["id"] == "new-id"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """create_feature_flag() posts to the feature-flags endpoint."""
         captured_urls: list[str] = []
 
@@ -231,7 +224,7 @@ class TestCreateFeatureFlag:
 class TestGetFeatureFlag:
     """Tests for get_feature_flag() API client method."""
 
-    def test_gets_flag_by_id(self, oauth_credentials: Credentials) -> None:
+    def test_gets_flag_by_id(self, oauth_credentials: Session) -> None:
         """get_feature_flag() sends GET with flag ID in path."""
         captured_urls: list[str] = []
 
@@ -253,7 +246,7 @@ class TestGetFeatureFlag:
         assert "/feature-flags/abc-123" in captured_urls[0]
         assert result["id"] == "abc-123"
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_feature_flag() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -275,7 +268,7 @@ class TestGetFeatureFlag:
 class TestUpdateFeatureFlag:
     """Tests for update_feature_flag() API client method."""
 
-    def test_updates_flag(self, oauth_credentials: Credentials) -> None:
+    def test_updates_flag(self, oauth_credentials: Session) -> None:
         """update_feature_flag() sends PUT with body."""
         captured: list[tuple[str, Any]] = []
 
@@ -306,7 +299,7 @@ class TestUpdateFeatureFlag:
         assert captured[0][1]["name"] == "Updated"
         assert result["name"] == "Updated"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """update_feature_flag() targets the correct flag ID in URL."""
         captured_urls: list[str] = []
 
@@ -331,7 +324,7 @@ class TestUpdateFeatureFlag:
 class TestDeleteFeatureFlag:
     """Tests for delete_feature_flag() API client method."""
 
-    def test_deletes_flag(self, oauth_credentials: Credentials) -> None:
+    def test_deletes_flag(self, oauth_credentials: Session) -> None:
         """delete_feature_flag() sends DELETE request."""
         captured_methods: list[str] = []
 
@@ -346,7 +339,7 @@ class TestDeleteFeatureFlag:
 
         assert captured_methods[0] == "DELETE"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """delete_feature_flag() targets the correct flag ID in URL."""
         captured_urls: list[str] = []
 
@@ -370,7 +363,7 @@ class TestDeleteFeatureFlag:
 class TestArchiveFeatureFlag:
     """Tests for archive_feature_flag() API client method."""
 
-    def test_archives_flag(self, oauth_credentials: Credentials) -> None:
+    def test_archives_flag(self, oauth_credentials: Session) -> None:
         """archive_feature_flag() sends POST to archive endpoint."""
         captured: list[tuple[str, str]] = []
 
@@ -390,7 +383,7 @@ class TestArchiveFeatureFlag:
 class TestRestoreFeatureFlag:
     """Tests for restore_feature_flag() API client method."""
 
-    def test_restores_flag(self, oauth_credentials: Credentials) -> None:
+    def test_restores_flag(self, oauth_credentials: Session) -> None:
         """restore_feature_flag() sends DELETE to archive endpoint."""
         captured: list[tuple[str, str]] = []
 
@@ -414,7 +407,7 @@ class TestRestoreFeatureFlag:
 class TestDuplicateFeatureFlag:
     """Tests for duplicate_feature_flag() API client method."""
 
-    def test_duplicates_flag(self, oauth_credentials: Credentials) -> None:
+    def test_duplicates_flag(self, oauth_credentials: Session) -> None:
         """duplicate_feature_flag() sends POST to duplicate endpoint."""
         captured: list[tuple[str, str]] = []
 
@@ -447,7 +440,7 @@ class TestDuplicateFeatureFlag:
 class TestSetFlagTestUsers:
     """Tests for set_flag_test_users() API client method."""
 
-    def test_sets_test_users(self, oauth_credentials: Credentials) -> None:
+    def test_sets_test_users(self, oauth_credentials: Session) -> None:
         """set_flag_test_users() sends PUT with user mappings."""
         captured: list[tuple[str, str, Any]] = []
 
@@ -472,7 +465,7 @@ class TestSetFlagTestUsers:
 class TestGetFlagHistory:
     """Tests for get_flag_history() API client method."""
 
-    def test_gets_history(self, oauth_credentials: Credentials) -> None:
+    def test_gets_history(self, oauth_credentials: Session) -> None:
         """get_flag_history() sends GET and returns history response."""
         captured_urls: list[str] = []
 
@@ -498,7 +491,7 @@ class TestGetFlagHistory:
         assert result["events"] == [[1, "created"]]
         assert result["count"] == 1
 
-    def test_with_pagination_params(self, oauth_credentials: Credentials) -> None:
+    def test_with_pagination_params(self, oauth_credentials: Session) -> None:
         """get_flag_history() passes pagination query params."""
         captured_urls: list[str] = []
 
@@ -522,7 +515,7 @@ class TestGetFlagHistory:
         url = captured_urls[0]
         assert "page_size=50" in url or "page_size" in url
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_flag_history() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -547,7 +540,7 @@ class TestGetFlagHistory:
 class TestGetFlagLimits:
     """Tests for get_flag_limits() API client method."""
 
-    def test_gets_limits(self, oauth_credentials: Credentials) -> None:
+    def test_gets_limits(self, oauth_credentials: Session) -> None:
         """get_flag_limits() sends GET and returns limits response."""
         captured_urls: list[str] = []
 
@@ -575,7 +568,7 @@ class TestGetFlagLimits:
         assert result["limit"] == 100
         assert result["current_usage"] == 42
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_flag_limits() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -601,9 +594,7 @@ class TestGetFlagLimits:
 
         assert captured_methods[0] == "GET"
 
-    def test_always_uses_project_scoped_path(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_always_uses_project_scoped_path(self, oauth_credentials: Session) -> None:
         """get_flag_limits() always uses project-scoped path, even with workspace set."""
         captured_urls: list[str] = []
 

@@ -2335,12 +2335,9 @@ class TestOAuthTokensRoundTripPBT:
             min_size=1,
             max_size=200,
         ),
-        project_id=st.one_of(st.none(), st.text(min_size=1, max_size=20)),
         expires_in=st.integers(min_value=60, max_value=86400),
     )
-    def test_from_token_response_round_trip(
-        self, scope: str, project_id: str | None, expires_in: int
-    ) -> None:
+    def test_from_token_response_round_trip(self, scope: str, expires_in: int) -> None:
         """from_token_response always produces a valid OAuthTokens."""
         from mixpanel_data._internal.auth.token import OAuthTokens
 
@@ -2351,11 +2348,10 @@ class TestOAuthTokensRoundTripPBT:
             "scope": scope,
             "token_type": "Bearer",
         }
-        tokens = OAuthTokens.from_token_response(data, project_id=project_id)
+        tokens = OAuthTokens.from_token_response(data)
 
         assert tokens.access_token.get_secret_value() == "test_access_token"
         assert tokens.scope == scope
-        assert tokens.project_id == project_id
         assert tokens.token_type == "Bearer"
 
     @given(buffer_seconds=st.integers(min_value=31, max_value=100000))
@@ -2398,25 +2394,22 @@ class TestOAuthTokensRoundTripPBT:
             alphabet=st.characters(whitelist_categories=("L", "N", "P")),
         ),
         scope=st.text(min_size=1, max_size=200),
-        project_id=st.one_of(st.none(), st.text(min_size=1, max_size=20)),
         expires_in=st.integers(min_value=31, max_value=86400),
     )
     def test_storage_save_load_round_trip(
         self,
         access_token: str,
         scope: str,
-        project_id: str | None,
         expires_in: int,
     ) -> None:
         """OAuthStorage save/load round-trips preserve all token fields.
 
         Verifies that saving tokens to disk and loading them back yields
-        identical access_token, scope, and project_id values.
+        identical access_token and scope values.
 
         Args:
             access_token: Randomly generated access token string.
             scope: Randomly generated scope string.
-            project_id: Optional randomly generated project ID.
             expires_in: Token lifetime in seconds (>30 to avoid expiry edge case).
         """
         import tempfile
@@ -2431,7 +2424,6 @@ class TestOAuthTokensRoundTripPBT:
                 "scope": scope,
                 "token_type": "Bearer",
             },
-            project_id=project_id,
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             storage = OAuthStorage(storage_dir=Path(tmpdir))
@@ -2441,7 +2433,6 @@ class TestOAuthTokensRoundTripPBT:
         assert loaded is not None
         assert loaded.access_token.get_secret_value() == access_token
         assert loaded.scope == scope
-        assert loaded.project_id == project_id
 
 
 # =============================================================================

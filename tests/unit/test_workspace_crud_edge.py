@@ -20,7 +20,8 @@ import pytest
 from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, ConfigManager, Credentials
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data.types import (
     BlueprintCard,
     BlueprintFinishParams,
@@ -35,42 +36,33 @@ from mixpanel_data.types import (
     UpdateReportLinkParams,
 )
 from mixpanel_data.workspace import Workspace
+from tests.conftest import make_session
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
+)
 
 
-def _make_creds() -> Credentials:
+def _make_creds() -> Session:
     """Create OAuth Credentials for testing.
 
     Returns:
         A Credentials instance with auth_method=oauth.
     """
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-token")
 
 
-def _make_config(temp_dir: Path) -> ConfigManager:
-    """Create a ConfigManager with a test account for credential resolution.
-
-    Args:
-        temp_dir: Temporary directory for the config file.
-
-    Returns:
-        A ConfigManager with a default account configured.
-    """
-    cm = ConfigManager(config_path=temp_dir / "config.toml")
-    cm.add_account(
-        name="default",
-        username="test_user",
-        secret="test_secret",
-        project_id="12345",
-        region="us",
-    )
-    return cm
+# _make_config removed in B1 (Fix 9): the legacy v1 add_account signature
+# is gone and ``_make_workspace`` now uses ``session=_TEST_SESSION``
+# instead of resolving through ConfigManager.
 
 
 def _make_workspace(temp_dir: Path, handler: Any) -> Workspace:
@@ -85,9 +77,9 @@ def _make_workspace(temp_dir: Path, handler: Any) -> Workspace:
     """
     creds = _make_creds()
     transport = httpx.MockTransport(handler)
-    client = MixpanelAPIClient(creds, _transport=transport)
+    client = MixpanelAPIClient(session=creds, _transport=transport)
     return Workspace(
-        _config_manager=_make_config(temp_dir),
+        session=_TEST_SESSION,
         _api_client=client,
     )
 

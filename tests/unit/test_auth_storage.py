@@ -15,12 +15,10 @@ Verifies:
 
 from __future__ import annotations
 
-import os
 import platform
 import stat
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from pydantic import SecretStr
@@ -43,7 +41,6 @@ def _make_tokens(
     access_token: str = "access_abc123",
     refresh_token: str | None = "refresh_xyz789",
     scope: str = "projects analysis",
-    project_id: str | None = "12345",
 ) -> OAuthTokens:
     """Create an OAuthTokens instance with sensible defaults for testing.
 
@@ -51,7 +48,6 @@ def _make_tokens(
         access_token: OAuth access token string.
         refresh_token: OAuth refresh token string, or None.
         scope: OAuth scope string.
-        project_id: Associated Mixpanel project ID.
 
     Returns:
         Configured OAuthTokens instance.
@@ -62,7 +58,6 @@ def _make_tokens(
         expires_at=_utcnow() + timedelta(hours=1),
         scope=scope,
         token_type="Bearer",
-        project_id=project_id,
     )
 
 
@@ -219,7 +214,6 @@ class TestOAuthStorageTokenRoundTrip:
         assert loaded.refresh_token.get_secret_value() == "refresh_xyz789"
         assert loaded.scope == "projects analysis"
         assert loaded.token_type == "Bearer"
-        assert loaded.project_id == "12345"
 
     def test_save_and_load_tokens_without_refresh_token(self, temp_dir: Path) -> None:
         """Verify tokens without a refresh token survive round-trip."""
@@ -232,16 +226,8 @@ class TestOAuthStorageTokenRoundTrip:
         assert loaded is not None
         assert loaded.refresh_token is None
 
-    def test_save_and_load_tokens_without_project_id(self, temp_dir: Path) -> None:
-        """Verify tokens without a project_id survive round-trip."""
-        storage = OAuthStorage(storage_dir=temp_dir)
-        original = _make_tokens(project_id=None)
-
-        storage.save_tokens(original, region="eu")
-        loaded = storage.load_tokens(region="eu")
-
-        assert loaded is not None
-        assert loaded.project_id is None
+    # test_save_and_load_tokens_without_project_id removed in B2 (T044):
+    # the legacy ``OAuthTokens.project_id`` field is gone.
 
     def test_expires_at_preserved_through_round_trip(self, temp_dir: Path) -> None:
         """Verify that the expires_at datetime is preserved through save/load.
@@ -352,19 +338,20 @@ class TestOAuthStorageEnvOverride:
     def test_mp_oauth_storage_dir_override(
         self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Verify that MP_OAUTH_STORAGE_DIR overrides the default storage path.
+        """Verify ``MP_OAUTH_STORAGE_DIR`` overrides the default storage root.
 
-        When set, OAuthStorage should use the specified directory instead
-        of the default ~/.mp/oauth/.
+        Per Fix 7, the env var names the *root* under which BOTH the
+        OAuth subtree and the per-account subtree live (it used to alias
+        the OAuth subtree directly, which was asymmetric and confusing).
         """
-        custom_dir = temp_dir / "custom_oauth"
-        custom_dir.mkdir(parents=True)
-        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(custom_dir))
+        custom_root = temp_dir / "custom_root"
+        custom_root.mkdir(parents=True)
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(custom_root))
 
         storage = OAuthStorage()
         storage.save_tokens(_make_tokens(), region="us")
 
-        assert (custom_dir / "tokens_us.json").exists()
+        assert (custom_root / "oauth" / "tokens_us.json").exists()
 
     def test_explicit_storage_dir_takes_precedence_over_env(
         self, temp_dir: Path, monkeypatch: pytest.MonkeyPatch
@@ -866,58 +853,3 @@ class TestOAuthStorageConcurrency:
         # Reader results should all be None or valid OAuthTokens
         for result in read_results:
             assert result is None or isinstance(result, OAuthTokens)
-
-
-class TestOAuthStorageUmaskRestoration:
-    """Tests for umask restoration after write operations."""
-
-    @pytest.mark.skipif(
-        platform.system() == "Windows",
-        reason="POSIX umask not available on Windows",
-    )
-    def test_umask_restored_after_write_exception(self, temp_dir: Path) -> None:
-        """Verify umask is restored when write_text raises an exception.
-
-        Sets a known umask, mocks ``Path.write_text`` to raise ``OSError``,
-        then verifies the original umask is restored after the failure.
-        """
-        storage = OAuthStorage(storage_dir=temp_dir)
-
-        os.umask(0o022)
-        try:
-            with (
-                patch.object(Path, "write_text", side_effect=OSError("disk full")),
-                pytest.raises(OSError, match="disk full"),
-            ):
-                storage.save_tokens(_make_tokens(), region="us")
-        finally:
-            restored = os.umask(0o022)
-            os.umask(restored)
-
-        assert restored == 0o022, (
-            f"Expected umask 0o022 after failed write, got {oct(restored)}"
-        )
-
-    @pytest.mark.skipif(
-        platform.system() == "Windows",
-        reason="POSIX umask not available on Windows",
-    )
-    def test_umask_restored_after_successful_write(self, temp_dir: Path) -> None:
-        """Verify umask is restored to original value after successful write.
-
-        Sets umask to ``0o022``, performs a successful save, then checks
-        that the umask is still ``0o022`` (not stuck at the restrictive
-        ``0o177`` used internally).
-        """
-        storage = OAuthStorage(storage_dir=temp_dir)
-
-        os.umask(0o022)
-        try:
-            storage.save_tokens(_make_tokens(), region="us")
-        finally:
-            restored = os.umask(0o022)
-            os.umask(restored)
-
-        assert restored == 0o022, (
-            f"Expected umask 0o022 after successful write, got {oct(restored)}"
-        )

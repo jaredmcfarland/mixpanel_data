@@ -102,7 +102,7 @@ python help.py exceptions              # list all exceptions
 
 | Type | Name | Invocation |
 |------|------|------------|
-| Command | auth | `/mixpanel-data:auth` — manage credentials, accounts, OAuth |
+| Command | auth | `/mixpanel-data:auth` — manage account / project / workspace / target / session / bridge |
 | Skill | setup | `/mixpanel-data:setup` — install deps, verify auth |
 | Skill | mixpanelyst | Auto-triggered on analytics questions |
 | Skill | dashboard-expert | Auto-triggered on dashboard analysis, creation, and modification |
@@ -110,7 +110,7 @@ python help.py exceptions              # list all exceptions
 | Script | Purpose |
 |--------|---------|
 | `help.py` | Live API documentation lookup with fuzzy search |
-| `auth_manager.py` | Programmatic auth status and credential management (JSON output) |
+| `auth_manager.py` | Programmatic auth subcommand wrapper (JSON output, `schema_version: 1`) |
 
 ## Beyond Querying
 
@@ -128,7 +128,29 @@ All entity methods require a workspace ID. Use `ws.resolve_workspace_id()` to au
 
 ## Authentication
 
-Two auth methods: service account (Basic Auth) or OAuth 2.0 PKCE. Run `/mixpanel-data:setup` for first-time configuration, or `/mixpanel-data:auth` to manage credentials after initial setup.
+Three account types — `service_account` (Basic Auth), `oauth_browser` (PKCE
+browser flow), and `oauth_token` (static bearer for CI / agents) — managed
+through a single Account → Project → Workspace hierarchy. Run
+`/mixpanel-data:setup` for first-time configuration, or `/mixpanel-data:auth`
+to switch accounts, projects, workspaces, or saved targets after initial setup.
+
+### Breaking changes from 4.x → 5.0
+
+Plugin 5.0.0 ships against the `mixpanel_data` 0.4.0 auth surface:
+
+- The slash command vocabulary changed from `auth list/add/switch/migrate/...`
+  to a hierarchical `auth account|project|workspace|target|session|bridge`
+  tree. Each verb maps 1:1 to a `mp` CLI command.
+- `auth_manager.py` now emits stable JSON (`schema_version: 1`) with a
+  discriminated `state` field (`ok` / `needs_account` / `needs_project` /
+  `error`). No more `if version >= 2` branches anywhere.
+- Legacy config files from `mixpanel_data` 0.3.x are NO longer auto-detected.
+  A clean install writes only the current schema; older files surface a
+  Pydantic validation error pointing at the offending key. Wipe
+  `~/.mp/config.toml` and run `mp account add ...` to recover.
+- Cowork bridge file format is v2 (full `Account` record + tokens embedded).
+  Use `mp account export-bridge --to PATH` on the host machine instead of
+  the old `mp auth cowork-setup` recipe.
 
 ## Installation
 

@@ -5,8 +5,16 @@
 default:
     @just --list
 
-# Run all checks (lint, typecheck, test)
-check: lint typecheck test
+# Run all checks — must be a strict superset of CI (.github/workflows/ci.yml).
+# CI runs the same commands plus HYPOTHESIS_PROFILE=ci for tests; that
+# profile is the only documented difference (deterministic seed, 200 examples
+# vs default 100). Locally we use the default profile for faster iteration.
+check: lint fmt-check typecheck test-cov build
+
+# Install git hooks so commits are blocked on lint/format failures BEFORE
+# they reach CI. Run once after cloning the repo.
+install-hooks:
+    uv run --group dev pre-commit install
 
 # Run tests
 test *args:
@@ -31,6 +39,22 @@ test-pbt-dev *args:
 # Run property-based tests with CI profile (thorough)
 test-pbt-ci *args:
     HYPOTHESIS_PROFILE=ci uv run pytest -k "_pbt" {{ args }}
+
+# Run the auth-subsystem fast iteration suite (042 redesign)
+test-auth *args:
+    uv run pytest tests/unit/test_account.py tests/unit/test_session.py \
+        tests/unit/test_resolver.py tests/unit/test_workspace_use.py \
+        tests/unit/test_config_v3.py tests/pbt/test_account_pbt.py \
+        tests/pbt/test_resolver_pbt.py tests/pbt/test_session_pbt.py \
+        -v {{ args }}
+
+# Run the 042 live auth QA against real Mixpanel API (requires creds)
+# Set env vars before running:
+#   MP_LIVE_SA_USERNAME / _SA_SECRET / _SA_PROJECT_ID / _SA_REGION  (Cat A, D, G)
+#   MP_LIVE_OAUTH_TOKEN / _PROJECT_ID / _REGION                     (Cat C, D, G)
+#   (Cat B uses ~/.mp/oauth/tokens_us.json automatically)
+test-live-auth *args:
+    MP_LIVE_TESTS=1 uv run pytest tests/live/test_042_auth_redesign_live.py -v -m live {{ args }}
 
 # === Mutation Testing ===
 

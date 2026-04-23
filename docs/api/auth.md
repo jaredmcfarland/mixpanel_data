@@ -10,86 +10,105 @@ The auth module provides credential management, configuration, and OAuth 2.0 aut
 ## Overview
 
 ```python
-from mixpanel_data.auth import ConfigManager, Credentials, AccountInfo, AuthMethod
+from mixpanel_data._internal.config import ConfigManager
+from mixpanel_data.auth_types import Account, ServiceAccount
 
 # Manage service accounts
 config = ConfigManager()
-config.add_account("production", username="...", secret="...", project_id="...", region="us")
-accounts = config.list_accounts()
+config.add_account(
+    "production",
+    type="service_account",
+    region="us",
+    default_project="12345",
+    username="...",
+    secret="...",
+)
+accounts = config.list_accounts()  # list[AccountSummary]
 
-# Resolve credentials (checks env vars → OAuth tokens → config file)
-creds = config.resolve_credentials(account="production")
-
-# Check auth method
-if creds.auth_method == AuthMethod.oauth:
-    print(f"Using OAuth: {creds.auth_header()[:20]}...")
+# Inspect a single account (returns the canonical ``Account`` discriminated union)
+account: Account = config.get_account("production")
+if isinstance(account, ServiceAccount):
+    print(f"SA {account.name} → project {account.default_project}")
 ```
 
 ## ConfigManager
 
-Manages accounts stored in the TOML config file (`~/.mp/config.toml`) and resolves credentials from multiple sources including OAuth tokens.
+Manages the single-schema TOML config file (`~/.mp/config.toml`) — accounts, targets, and the `[active]` session axes. Higher-level workflows (`mp account add`, `mp account use`, `mp login`) live in `mixpanel_data.accounts` and `mixpanel_data.session`.
 
-::: mixpanel_data.auth.ConfigManager
+::: mixpanel_data._internal.config.ConfigManager
     options:
       show_root_heading: true
       show_root_toc_entry: true
       members:
         - __init__
         - config_path
-        - resolve_credentials
         - list_accounts
-        - add_account
-        - remove_account
-        - set_default
         - get_account
+        - add_account
+        - update_account
+        - remove_account
+        - get_active
+        - set_active
+        - clear_active
+        - apply_target
 
-## AuthMethod
+## Authentication
 
-Enum for authentication method selection.
+Authentication is dispatched on the account variant — see the [Account discriminated union](#account-discriminated-union) below. To drive a `Workspace` with a raw OAuth bearer token, set `MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION` env vars and let `Workspace()` resolve them — see [Configuration → Raw OAuth Bearer Token](../getting-started/configuration.md#raw-oauth-bearer-token).
 
-::: mixpanel_data._internal.config.AuthMethod
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
+## Account (discriminated union)
 
-## Credentials
-
-Immutable container for authentication credentials. Supports both Basic Auth (service accounts) and OAuth Bearer token authentication.
-
-**Key fields:**
-
-- `username`, `secret`, `project_id`, `region` — Standard credential fields
-- `auth_method` — `AuthMethod.basic` (default) or `AuthMethod.oauth`
-- `oauth_access_token` — OAuth access token (required when `auth_method` is `oauth`)
-
-**Key methods:**
-
-- `auth_header()` — Returns the appropriate `Authorization` header value (`"Basic <base64>"` or `"Bearer <token>"`)
-- `from_oauth_token(token, project_id, region)` — Class method factory for building OAuth-method `Credentials` from a pre-obtained bearer token (skips the PKCE browser flow). Strips surrounding whitespace defensively and rejects tokens containing control characters.
+`Account` is the canonical persisted representation of a configured Mixpanel account. It is a Pydantic discriminated union dispatched on the `type` field — the runtime types are the three concrete variant classes below. Use `mixpanel_data.auth_types.Account` as the type hint and `pydantic.TypeAdapter(Account)` to construct from a raw dict.
 
 ```python
-from mixpanel_data.auth import Credentials
-
-creds = Credentials.from_oauth_token(
-    token="my-bearer-token",
-    project_id="12345",
-    region="us",
+from mixpanel_data.auth_types import (
+    Account,
+    ServiceAccount,
+    OAuthBrowserAccount,
+    OAuthTokenAccount,
 )
-assert creds.auth_header() == "Bearer my-bearer-token"
+
+account: Account = ServiceAccount(
+    name="prod",
+    region="us",
+    default_project="12345",
+    username="...",
+    secret="...",
+)
 ```
 
-To drive a `Workspace` with these credentials, set the corresponding `MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION` env vars and let `Workspace()` resolve them — see [Configuration → Raw OAuth Bearer Token](../getting-started/configuration.md#raw-oauth-bearer-token).
+### ServiceAccount
 
-::: mixpanel_data.auth.Credentials
+Long-lived HTTP Basic Auth credentials.
+
+::: mixpanel_data.auth_types.ServiceAccount
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-## AccountInfo
+### OAuthBrowserAccount
 
-Account metadata (without the secret).
+PKCE browser flow; access/refresh tokens persisted on disk under `~/.mp/oauth/`.
 
-::: mixpanel_data.auth.AccountInfo
+::: mixpanel_data.auth_types.OAuthBrowserAccount
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+### OAuthTokenAccount
+
+Static bearer token (CI / agents) — supplied inline or via an env var.
+
+::: mixpanel_data.auth_types.OAuthTokenAccount
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+## AccountSummary
+
+Read-only account metadata (no secrets) returned by `ConfigManager.list_accounts()` and `mp account list`.
+
+::: mixpanel_data.types.AccountSummary
     options:
       show_root_heading: true
       show_root_toc_entry: true

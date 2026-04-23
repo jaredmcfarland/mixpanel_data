@@ -16,11 +16,11 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data.exceptions import MixpanelDataError, QueryError
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -28,20 +28,13 @@ from mixpanel_data.exceptions import MixpanelDataError, QueryError
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport (no workspace ID set).
@@ -56,7 +49,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -67,7 +60,7 @@ def create_mock_client(
 class TestGetEventDefinitions:
     """Tests for get_event_definitions() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """get_event_definitions() returns a list of event definition dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -91,7 +84,7 @@ class TestGetEventDefinitions:
         assert result[0]["name"] == "Signup"
         assert result[1]["name"] == "Login"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_event_definitions() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -106,7 +99,7 @@ class TestGetEventDefinitions:
 
         assert "/data-definitions/events/" in captured_urls[0]
 
-    def test_query_params(self, oauth_credentials: Credentials) -> None:
+    def test_query_params(self, oauth_credentials: Session) -> None:
         """get_event_definitions() passes name[] query params."""
         captured_urls: list[str] = []
 
@@ -122,7 +115,7 @@ class TestGetEventDefinitions:
         url = captured_urls[0]
         assert "name%5B%5D=Signup" in url or "name[]=Signup" in url
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_event_definitions() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -141,7 +134,7 @@ class TestGetEventDefinitions:
 class TestUpdateEventDefinition:
     """Tests for update_event_definition() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """update_event_definition() returns the updated event definition dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -165,7 +158,7 @@ class TestUpdateEventDefinition:
         assert captured[0][0] == "PATCH"
         assert result["description"] == "Updated"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """update_event_definition() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -187,7 +180,7 @@ class TestUpdateEventDefinition:
 class TestDeleteEventDefinition:
     """Tests for delete_event_definition() API client method."""
 
-    def test_returns_none(self, oauth_credentials: Credentials) -> None:
+    def test_returns_none(self, oauth_credentials: Session) -> None:
         """delete_event_definition() returns None on success."""
         captured: list[tuple[str, Any]] = []
 
@@ -203,7 +196,7 @@ class TestDeleteEventDefinition:
         assert captured[0][0] == "DELETE"
         assert captured[0][1] == {"name": "Signup"}
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """delete_event_definition() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -222,7 +215,7 @@ class TestDeleteEventDefinition:
 class TestBulkUpdateEventDefinitions:
     """Tests for bulk_update_event_definitions() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """bulk_update_event_definitions() returns a list of updated dicts."""
         captured: list[tuple[str, Any]] = []
 
@@ -249,7 +242,7 @@ class TestBulkUpdateEventDefinitions:
         assert captured[0][0] == "PATCH"
         assert len(result) == 2
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """bulk_update_event_definitions() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -268,7 +261,7 @@ class TestBulkUpdateEventDefinitions:
 class TestGetPropertyDefinitions:
     """Tests for get_property_definitions() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """get_property_definitions() returns a list of property definition dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -291,7 +284,7 @@ class TestGetPropertyDefinitions:
         assert len(result) == 2
         assert result[0]["name"] == "plan_type"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_property_definitions() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -306,7 +299,7 @@ class TestGetPropertyDefinitions:
 
         assert "/data-definitions/properties/" in captured_urls[0]
 
-    def test_resource_type_param(self, oauth_credentials: Credentials) -> None:
+    def test_resource_type_param(self, oauth_credentials: Session) -> None:
         """get_property_definitions() passes resource_type query param."""
         captured_urls: list[str] = []
 
@@ -325,7 +318,7 @@ class TestGetPropertyDefinitions:
 class TestUpdatePropertyDefinition:
     """Tests for update_property_definition() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """update_property_definition() returns the updated property dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -349,7 +342,7 @@ class TestUpdatePropertyDefinition:
         assert captured[0][0] == "PATCH"
         assert result["description"] == "Updated"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """update_property_definition() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -371,7 +364,7 @@ class TestUpdatePropertyDefinition:
 class TestBulkUpdatePropertyDefinitions:
     """Tests for bulk_update_property_definitions() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """bulk_update_property_definitions() returns a list of updated dicts."""
         captured: list[tuple[str, Any]] = []
 
@@ -397,7 +390,7 @@ class TestBulkUpdatePropertyDefinitions:
         assert captured[0][0] == "PATCH"
         assert len(result) == 1
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """bulk_update_property_definitions() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -416,7 +409,7 @@ class TestBulkUpdatePropertyDefinitions:
 class TestListLexiconTags:
     """Tests for list_lexicon_tags() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """list_lexicon_tags() returns a list of tag dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -439,7 +432,7 @@ class TestListLexiconTags:
         assert len(result) == 2
         assert result[0]["name"] == "core"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """list_lexicon_tags() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -454,7 +447,7 @@ class TestListLexiconTags:
 
         assert "/data-definitions/tags/" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_lexicon_tags() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -473,7 +466,7 @@ class TestListLexiconTags:
 class TestCreateLexiconTag:
     """Tests for create_lexicon_tag() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """create_lexicon_tag() returns the created tag dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -496,7 +489,7 @@ class TestCreateLexiconTag:
         assert result["id"] == 10
         assert result["name"] == "new-tag"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """create_lexicon_tag() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -518,7 +511,7 @@ class TestCreateLexiconTag:
 class TestUpdateLexiconTag:
     """Tests for update_lexicon_tag() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """update_lexicon_tag() returns the updated tag dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -540,7 +533,7 @@ class TestUpdateLexiconTag:
         assert captured[0][0] == "PATCH"
         assert result["name"] == "renamed-tag"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """update_lexicon_tag() targets the correct tag ID in URL."""
         captured_urls: list[str] = []
 
@@ -562,7 +555,7 @@ class TestUpdateLexiconTag:
 class TestDeleteLexiconTag:
     """Tests for delete_lexicon_tag() API client method."""
 
-    def test_returns_none(self, oauth_credentials: Credentials) -> None:
+    def test_returns_none(self, oauth_credentials: Session) -> None:
         """delete_lexicon_tag() returns None on success."""
         captured: list[tuple[str, Any]] = []
 
@@ -578,7 +571,7 @@ class TestDeleteLexiconTag:
         assert captured[0][0] == "POST"
         assert captured[0][1] == {"delete": True, "name": "old-tag"}
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """delete_lexicon_tag() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -597,7 +590,7 @@ class TestDeleteLexiconTag:
 class TestGetTrackingMetadata:
     """Tests for get_tracking_metadata() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """get_tracking_metadata() returns tracking metadata dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -621,7 +614,7 @@ class TestGetTrackingMetadata:
         assert result["event_name"] == "Signup"
         assert result["is_tracked"] is True
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_tracking_metadata() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -644,7 +637,7 @@ class TestGetTrackingMetadata:
 class TestGetEventHistory:
     """Tests for get_event_history() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """get_event_history() returns a list of history entry dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -667,7 +660,7 @@ class TestGetEventHistory:
         assert len(result) == 2
         assert result[0]["action"] == "created"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_event_history() includes event name in URL path."""
         captured_urls: list[str] = []
 
@@ -686,7 +679,7 @@ class TestGetEventHistory:
 class TestGetPropertyHistory:
     """Tests for get_property_history() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """get_property_history() returns a list of history entry dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -708,7 +701,7 @@ class TestGetPropertyHistory:
         assert len(result) == 1
         assert result[0]["action"] == "created"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_property_history() includes property name in URL path."""
         captured_urls: list[str] = []
 
@@ -728,7 +721,7 @@ class TestGetPropertyHistory:
 class TestExportLexicon:
     """Tests for export_lexicon() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """export_lexicon() returns an export dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -751,7 +744,7 @@ class TestExportLexicon:
         assert "events" in result
         assert "properties" in result
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """export_lexicon() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -766,7 +759,7 @@ class TestExportLexicon:
 
         assert "/data-definitions/export/" in captured_urls[0]
 
-    def test_export_types_param(self, oauth_credentials: Credentials) -> None:
+    def test_export_types_param(self, oauth_credentials: Session) -> None:
         """export_lexicon(export_types=[...]) passes JSON-encoded export_type param."""
         captured_urls: list[str] = []
 
@@ -783,7 +776,7 @@ class TestExportLexicon:
         assert "export_type=" in url
         assert "All" in url  # JSON-encoded value in URL
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """export_lexicon() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -807,7 +800,7 @@ class TestExportLexicon:
 class TestListCustomProperties:
     """Tests for list_custom_properties() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """list_custom_properties() returns a list of custom property dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -830,7 +823,7 @@ class TestListCustomProperties:
         assert len(result) == 2
         assert result[0]["name"] == "Lifetime Value"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """list_custom_properties() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -845,7 +838,7 @@ class TestListCustomProperties:
 
         assert "/custom_properties/" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_custom_properties() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -864,7 +857,7 @@ class TestListCustomProperties:
 class TestCreateCustomProperty:
     """Tests for create_custom_property() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """create_custom_property() returns the created custom property dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -886,7 +879,7 @@ class TestCreateCustomProperty:
         assert captured[0][0] == "POST"
         assert result["id"] == "cp-new"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """create_custom_property() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -908,7 +901,7 @@ class TestCreateCustomProperty:
 class TestGetCustomProperty:
     """Tests for get_custom_property() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """get_custom_property() returns the custom property dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -928,7 +921,7 @@ class TestGetCustomProperty:
         assert result["id"] == "cp-42"
         assert result["name"] == "My Prop"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_custom_property() includes property ID in URL path."""
         captured_urls: list[str] = []
 
@@ -950,7 +943,7 @@ class TestGetCustomProperty:
 class TestUpdateCustomProperty:
     """Tests for update_custom_property() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """update_custom_property() sends PUT and returns updated dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -972,7 +965,7 @@ class TestUpdateCustomProperty:
         assert captured[0][0] == "PUT"
         assert result["name"] == "Updated Prop"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """update_custom_property() includes property ID in URL path."""
         captured_urls: list[str] = []
 
@@ -994,7 +987,7 @@ class TestUpdateCustomProperty:
 class TestDeleteCustomProperty:
     """Tests for delete_custom_property() API client method."""
 
-    def test_returns_none(self, oauth_credentials: Credentials) -> None:
+    def test_returns_none(self, oauth_credentials: Session) -> None:
         """delete_custom_property() returns None on success."""
         captured_methods: list[str] = []
 
@@ -1009,7 +1002,7 @@ class TestDeleteCustomProperty:
 
         assert captured_methods[0] == "DELETE"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """delete_custom_property() includes property ID in URL path."""
         captured_urls: list[str] = []
 
@@ -1028,7 +1021,7 @@ class TestDeleteCustomProperty:
 class TestValidateCustomProperty:
     """Tests for validate_custom_property() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """validate_custom_property() sends POST and returns validation result."""
         captured: list[tuple[str, Any]] = []
 
@@ -1050,7 +1043,7 @@ class TestValidateCustomProperty:
         assert captured[0][0] == "POST"
         assert result["valid"] is True
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """validate_custom_property() targets validate endpoint."""
         captured_urls: list[str] = []
 
@@ -1077,7 +1070,7 @@ class TestValidateCustomProperty:
 class TestListDropFilters:
     """Tests for list_drop_filters() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """list_drop_filters() returns a list of drop filter dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1100,7 +1093,7 @@ class TestListDropFilters:
         assert len(result) == 2
         assert result[0]["event_name"] == "debug_event"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """list_drop_filters() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -1115,7 +1108,7 @@ class TestListDropFilters:
 
         assert "/data-definitions/events/drop-filters/" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_drop_filters() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -1134,7 +1127,7 @@ class TestListDropFilters:
 class TestCreateDropFilter:
     """Tests for create_drop_filter() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """create_drop_filter() returns the full list after mutation."""
         captured: list[tuple[str, Any]] = []
 
@@ -1159,7 +1152,7 @@ class TestCreateDropFilter:
         assert captured[0][0] == "POST"
         assert len(result) == 2
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """create_drop_filter() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -1178,7 +1171,7 @@ class TestCreateDropFilter:
 class TestUpdateDropFilter:
     """Tests for update_drop_filter() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """update_drop_filter() returns the full list after mutation."""
         captured: list[tuple[str, Any]] = []
 
@@ -1204,7 +1197,7 @@ class TestUpdateDropFilter:
         assert captured[0][0] == "PATCH"
         assert len(result) == 1
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """update_drop_filter() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -1223,7 +1216,7 @@ class TestUpdateDropFilter:
 class TestDeleteDropFilter:
     """Tests for delete_drop_filter() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """delete_drop_filter() returns the full list after deletion."""
         captured: list[tuple[str, Any]] = []
 
@@ -1248,7 +1241,7 @@ class TestDeleteDropFilter:
         assert captured[0][1] == {"id": 1}
         assert len(result) == 1
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """delete_drop_filter() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -1267,7 +1260,7 @@ class TestDeleteDropFilter:
 class TestGetDropFilterLimits:
     """Tests for get_drop_filter_limits() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """get_drop_filter_limits() returns a limits dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1287,7 +1280,7 @@ class TestGetDropFilterLimits:
         assert result["max_filters"] == 10
         assert result["current_count"] == 3
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_drop_filter_limits() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -1302,7 +1295,7 @@ class TestGetDropFilterLimits:
 
         assert "/data-definitions/events/drop-filters/limits/" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_drop_filter_limits() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -1326,7 +1319,7 @@ class TestGetDropFilterLimits:
 class TestListLookupTables:
     """Tests for list_lookup_tables() API client method."""
 
-    def test_returns_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list(self, oauth_credentials: Session) -> None:
         """list_lookup_tables() returns a list of lookup table dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1349,7 +1342,7 @@ class TestListLookupTables:
         assert len(result) == 2
         assert result[0]["name"] == "Plans"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """list_lookup_tables() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -1364,7 +1357,7 @@ class TestListLookupTables:
 
         assert "/data-definitions/lookup-tables/" in captured_urls[0]
 
-    def test_data_group_id_param(self, oauth_credentials: Credentials) -> None:
+    def test_data_group_id_param(self, oauth_credentials: Session) -> None:
         """list_lookup_tables(data_group_id=5) passes query param."""
         captured_urls: list[str] = []
 
@@ -1379,7 +1372,7 @@ class TestListLookupTables:
 
         assert "data-group-id=5" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_lookup_tables() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -1398,7 +1391,7 @@ class TestListLookupTables:
 class TestGetLookupUploadUrl:
     """Tests for get_lookup_upload_url() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """get_lookup_upload_url() returns dict with url, path, key."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1423,7 +1416,7 @@ class TestGetLookupUploadUrl:
         assert "path" in result
         assert "key" in result
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_lookup_upload_url() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -1441,7 +1434,7 @@ class TestGetLookupUploadUrl:
 
         assert "/data-definitions/lookup-tables/upload-url/" in captured_urls[0]
 
-    def test_content_type_param(self, oauth_credentials: Credentials) -> None:
+    def test_content_type_param(self, oauth_credentials: Session) -> None:
         """get_lookup_upload_url(content_type='text/csv') passes param."""
         captured_urls: list[str] = []
 
@@ -1464,7 +1457,7 @@ class TestGetLookupUploadUrl:
 class TestUploadToSignedUrl:
     """Tests for upload_to_signed_url() API client method."""
 
-    def test_returns_none(self, oauth_credentials: Credentials) -> None:
+    def test_returns_none(self, oauth_credentials: Session) -> None:
         """upload_to_signed_url() returns None on success."""
         captured: list[tuple[str, str]] = []
 
@@ -1481,7 +1474,7 @@ class TestUploadToSignedUrl:
 
         assert captured[0][0] == "PUT"
 
-    def test_targets_external_url(self, oauth_credentials: Credentials) -> None:
+    def test_targets_external_url(self, oauth_credentials: Session) -> None:
         """upload_to_signed_url() sends PUT to the provided external URL."""
         captured_urls: list[str] = []
 
@@ -1502,7 +1495,7 @@ class TestUploadToSignedUrl:
 class TestRegisterLookupTable:
     """Tests for register_lookup_table() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """register_lookup_table() returns the registered lookup table dict."""
         captured: list[tuple[str, str]] = []
 
@@ -1526,7 +1519,7 @@ class TestRegisterLookupTable:
         assert captured[0][0] == "POST"
         assert result["data_group_id"] == 10
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """register_lookup_table() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -1553,7 +1546,7 @@ class TestRegisterLookupTable:
 class TestCreateCustomEvent:
     """Tests for create_custom_event() API client method."""
 
-    def test_posts_form_encoded_body(self, oauth_credentials: Credentials) -> None:
+    def test_posts_form_encoded_body(self, oauth_credentials: Session) -> None:
         """create_custom_event() POSTs an application/x-www-form-urlencoded body."""
         captured: list[httpx.Request] = []
 
@@ -1591,9 +1584,7 @@ class TestCreateCustomEvent:
         assert result["id"] == 99
         assert result["name"] == "Page View"
 
-    def test_unwraps_custom_event_envelope(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_unwraps_custom_event_envelope(self, oauth_credentials: Session) -> None:
         """create_custom_event() unwraps {custom_event: {...}} into the inner dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1616,7 +1607,7 @@ class TestCreateCustomEvent:
         assert result == {"id": 1, "name": "X", "alternatives": []}
 
     def test_unwraps_results_then_custom_event_envelope(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """create_custom_event() unwraps both {results: ...} and {custom_event: ...}."""
 
@@ -1643,7 +1634,7 @@ class TestCreateCustomEvent:
         assert result["name"] == "Y"
 
     def test_uses_maybe_scoped_path_project_default(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """create_custom_event() uses project-scoped path by default."""
         captured_urls: list[str] = []
@@ -1663,7 +1654,7 @@ class TestCreateCustomEvent:
         assert "/projects/12345/custom_events/" in captured_urls[0]
 
     def test_workspace_scoped_path_when_workspace_id_set(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """create_custom_event() honors workspace ID when set on the client."""
         captured_urls: list[str] = []
@@ -1683,7 +1674,7 @@ class TestCreateCustomEvent:
 
         assert "/workspaces/77/custom_events/" in captured_urls[0]
 
-    def test_400_raises_query_error(self, oauth_credentials: Credentials) -> None:
+    def test_400_raises_query_error(self, oauth_credentials: Session) -> None:
         """create_custom_event() raises QueryError on 400 (e.g. duplicate name)."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1695,7 +1686,7 @@ class TestCreateCustomEvent:
             client.create_custom_event({"name": "X", "alternatives": "[]"})
 
     def test_422_raises_query_error_with_form_body_in_context(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """create_custom_event() raises QueryError on 422 and preserves the form body."""
 
@@ -1716,7 +1707,7 @@ class TestCreateCustomEvent:
         }
 
     def test_non_dict_response_raises_mixpanel_data_error(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """create_custom_event() raises MixpanelDataError if response isn't a dict."""
 
@@ -1729,7 +1720,7 @@ class TestCreateCustomEvent:
             client.create_custom_event({"name": "X", "alternatives": "[]"})
 
     def test_non_json_response_raises_mixpanel_data_error(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """create_custom_event() raises MixpanelDataError with INVALID_RESPONSE.
 
@@ -1751,7 +1742,7 @@ class TestCreateCustomEvent:
         assert "POST" in message
         assert "/custom_events/" in message
 
-    def test_retries_on_429(self, oauth_credentials: Credentials) -> None:
+    def test_retries_on_429(self, oauth_credentials: Session) -> None:
         """create_custom_event() retries through app_request on 429."""
         attempts: list[int] = []
 
@@ -1776,7 +1767,7 @@ class TestCreateCustomEvent:
         assert len(attempts) == 2  # one retry then success
         assert result["id"] == 1
 
-    def test_wraps_httpx_transport_error(self, oauth_credentials: Credentials) -> None:
+    def test_wraps_httpx_transport_error(self, oauth_credentials: Session) -> None:
         """create_custom_event() surfaces httpx.HTTPError as MixpanelDataError."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1797,7 +1788,7 @@ class TestUpdateCustomEvent:
     """Tests for update_custom_event() API client method."""
 
     def test_patch_body_uses_custom_event_id_not_name(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """update_custom_event() sends customEventId in the PATCH body.
 
@@ -1823,7 +1814,7 @@ class TestUpdateCustomEvent:
         assert body["customEventId"] == 2044168
         assert "name" not in body
 
-    def test_422_raises_query_error(self, oauth_credentials: Credentials) -> None:
+    def test_422_raises_query_error(self, oauth_credentials: Session) -> None:
         """update_custom_event() raises QueryError on 422 (validation error)."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1835,7 +1826,7 @@ class TestUpdateCustomEvent:
             client.update_custom_event(999_999_999, {"description": "X"})
 
     def test_returns_target_mismatch_when_response_id_differs(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """update_custom_event() raises UPDATE_TARGET_MISMATCH on echo mismatch.
 
@@ -1866,7 +1857,7 @@ class TestUpdateCustomEvent:
         assert "2044168" in str(exc_info.value)
 
     def test_returns_dict_when_response_id_matches(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """update_custom_event() returns the dict when customEventId matches."""
 
@@ -1899,7 +1890,7 @@ class TestDeleteCustomEvent:
     """Tests for delete_custom_event() API client method."""
 
     def test_body_uses_custom_event_id_not_name(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """delete_custom_event() sends customEventId in the DELETE body.
 
@@ -1924,7 +1915,7 @@ class TestDeleteCustomEvent:
         assert "name" not in body
 
     def test_uses_maybe_scoped_path_project_default(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """delete_custom_event() uses project-scoped data-definitions path."""
         captured_urls: list[str] = []
@@ -1941,7 +1932,7 @@ class TestDeleteCustomEvent:
         assert "/projects/12345/data-definitions/events/" in captured_urls[0]
 
     def test_workspace_scoped_path_when_workspace_id_set(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """delete_custom_event() honors workspace ID when set on the client."""
         captured_urls: list[str] = []
@@ -1958,7 +1949,7 @@ class TestDeleteCustomEvent:
 
         assert "/workspaces/77/data-definitions/events/" in captured_urls[0]
 
-    def test_404_raises_query_error(self, oauth_credentials: Credentials) -> None:
+    def test_404_raises_query_error(self, oauth_credentials: Session) -> None:
         """delete_custom_event() raises QueryError on 404 (unknown id)."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -1973,7 +1964,7 @@ class TestDeleteCustomEvent:
 class TestMarkLookupTableReady:
     """Tests for mark_lookup_table_ready() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """mark_lookup_table_ready() returns the lookup table dict."""
         captured: list[tuple[str, str]] = []
 
@@ -1997,7 +1988,7 @@ class TestMarkLookupTableReady:
         assert captured[0][0] == "POST"
         assert result["status"] == "ready"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """mark_lookup_table_ready() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -2019,7 +2010,7 @@ class TestMarkLookupTableReady:
 class TestGetLookupUploadStatus:
     """Tests for get_lookup_upload_status() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """get_lookup_upload_status() returns status dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -2039,7 +2030,7 @@ class TestGetLookupUploadStatus:
         assert result["upload_id"] == "u-123"
         assert result["state"] == "complete"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_lookup_upload_status() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -2062,7 +2053,7 @@ class TestGetLookupUploadStatus:
 class TestUpdateLookupTable:
     """Tests for update_lookup_table() API client method."""
 
-    def test_returns_dict(self, oauth_credentials: Credentials) -> None:
+    def test_returns_dict(self, oauth_credentials: Session) -> None:
         """update_lookup_table() sends PATCH and returns updated dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -2084,7 +2075,7 @@ class TestUpdateLookupTable:
         assert captured[0][0] == "PATCH"
         assert result["name"] == "Updated Table"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """update_lookup_table() sends data_group_id in JSON body."""
         captured: list[tuple[str, Any]] = []
 
@@ -2108,7 +2099,7 @@ class TestUpdateLookupTable:
 class TestDeleteLookupTables:
     """Tests for delete_lookup_tables() API client method."""
 
-    def test_returns_none(self, oauth_credentials: Credentials) -> None:
+    def test_returns_none(self, oauth_credentials: Session) -> None:
         """delete_lookup_tables() returns None on success."""
         captured: list[tuple[str, Any]] = []
 
@@ -2124,7 +2115,7 @@ class TestDeleteLookupTables:
         assert captured[0][0] == "DELETE"
         assert captured[0][1] == {"data-group-ids": [1, 2, 3]}
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """delete_lookup_tables() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -2143,7 +2134,7 @@ class TestDeleteLookupTables:
 class TestDownloadLookupTable:
     """Tests for download_lookup_table() API client method."""
 
-    def test_returns_bytes(self, oauth_credentials: Credentials) -> None:
+    def test_returns_bytes(self, oauth_credentials: Session) -> None:
         """download_lookup_table() returns raw bytes."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -2161,7 +2152,7 @@ class TestDownloadLookupTable:
         assert isinstance(result, bytes)
         assert b"col1,col2" in result
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """download_lookup_table() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -2177,7 +2168,7 @@ class TestDownloadLookupTable:
         assert "/data-definitions/lookup-tables/download/" in captured_urls[0]
         assert "data-group-id=5" in captured_urls[0]
 
-    def test_optional_params(self, oauth_credentials: Credentials) -> None:
+    def test_optional_params(self, oauth_credentials: Session) -> None:
         """download_lookup_table() passes optional file_name and limit params."""
         captured_urls: list[str] = []
 
@@ -2198,7 +2189,7 @@ class TestDownloadLookupTable:
 class TestGetLookupDownloadUrl:
     """Tests for get_lookup_download_url() API client method."""
 
-    def test_returns_str(self, oauth_credentials: Credentials) -> None:
+    def test_returns_str(self, oauth_credentials: Session) -> None:
         """get_lookup_download_url() returns a URL string."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -2218,7 +2209,7 @@ class TestGetLookupDownloadUrl:
         assert isinstance(result, str)
         assert "storage.googleapis.com" in result
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """get_lookup_download_url() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -2237,7 +2228,7 @@ class TestGetLookupDownloadUrl:
         assert "/data-definitions/lookup-tables/download-url/" in captured_urls[0]
         assert "data-group-id=5" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_lookup_download_url() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -2265,7 +2256,7 @@ class TestExportLexiconAsyncStringResponse:
     """Tests for export_lexicon() handling async string responses."""
 
     def test_export_lexicon_async_string_response(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """Test export_lexicon handles async string response from API.
 
@@ -2295,7 +2286,7 @@ class TestGetLookupUploadUrlMissingKeys:
     """Tests for get_lookup_upload_url() response validation."""
 
     def test_get_lookup_upload_url_missing_keys(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """Test get_lookup_upload_url raises MixpanelDataError when keys are missing.
 
@@ -2326,7 +2317,7 @@ class TestUploadToSignedUrlNetworkFailure:
     """Tests for upload_to_signed_url() network error handling."""
 
     def test_upload_to_signed_url_network_failure(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """Test upload_to_signed_url wraps ConnectError in MixpanelDataError.
 
@@ -2353,7 +2344,7 @@ class TestRegisterLookupTableNonJsonResponse:
     """Tests for register_lookup_table() non-JSON response handling."""
 
     def test_register_lookup_table_non_json_response(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """Test register_lookup_table raises MixpanelDataError for non-JSON 200 response.
 

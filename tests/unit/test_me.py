@@ -13,6 +13,7 @@ from __future__ import annotations
 import stat
 import time
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -219,19 +220,19 @@ class TestMeResponse:
 
 
 class TestMeCache:
-    """T013: Tests for MeCache."""
+    """T013: Tests for MeCache (per-account v3 layout — T043)."""
 
     @pytest.fixture
     def cache_dir(self, tmp_path: Path) -> Path:
-        """Create a temporary cache directory."""
-        d = tmp_path / "oauth"
-        d.mkdir()
+        """Create a temporary per-account cache directory."""
+        d = tmp_path / "accounts" / "personal"
+        d.mkdir(parents=True)
         return d
 
     @pytest.fixture
     def cache(self, cache_dir: Path) -> MeCache:
-        """Create a MeCache instance with temporary directory."""
-        return MeCache(storage_dir=cache_dir)
+        """Create a MeCache instance bound to a tmp account directory."""
+        return MeCache(account_name="personal", storage_dir=cache_dir)
 
     @pytest.fixture
     def sample_response(self) -> MeResponse:
@@ -246,55 +247,58 @@ class TestMeCache:
 
     def test_put_and_get(self, cache: MeCache, sample_response: MeResponse) -> None:
         """Test storing and retrieving a cached response."""
-        cache.put("us", sample_response)
-        result = cache.get("us")
+        cache.put(sample_response)
+        result = cache.get()
         assert result is not None
         assert result.user_id == 42
         assert result.projects["3713224"].name == "AI Demo"
 
     def test_get_miss(self, cache: MeCache) -> None:
         """Test cache miss returns None."""
-        result = cache.get("us")
+        result = cache.get()
         assert result is None
-
-    def test_get_different_region(
-        self, cache: MeCache, sample_response: MeResponse
-    ) -> None:
-        """Test cache is region-scoped."""
-        cache.put("us", sample_response)
-        assert cache.get("eu") is None
-        assert cache.get("us") is not None
 
     def test_ttl_expiry(self, cache_dir: Path, sample_response: MeResponse) -> None:
         """Test cache entries expire after TTL."""
-        cache = MeCache(storage_dir=cache_dir, ttl_seconds=1)
-        cache.put("us", sample_response)
-        assert cache.get("us") is not None
+        cache = MeCache(account_name="personal", storage_dir=cache_dir, ttl_seconds=1)
+        cache.put(sample_response)
+        assert cache.get() is not None
         time.sleep(1.1)
-        assert cache.get("us") is None
+        assert cache.get() is None
 
     def test_invalidate(self, cache: MeCache, sample_response: MeResponse) -> None:
-        """Test invalidating a specific region's cache."""
-        cache.put("us", sample_response)
-        cache.put("eu", sample_response)
-        cache.invalidate("us")
-        assert cache.get("us") is None
-        assert cache.get("eu") is not None
+        """Test invalidating the account cache."""
+        cache.put(sample_response)
+        assert cache.get() is not None
+        cache.invalidate()
+        assert cache.get() is None
 
-    def test_invalidate_all(self, cache: MeCache, sample_response: MeResponse) -> None:
-        """Test invalidating all regions."""
-        cache.put("us", sample_response)
-        cache.put("eu", sample_response)
-        cache.invalidate_all()
-        assert cache.get("us") is None
-        assert cache.get("eu") is None
+    def test_account_name_isolates_cache(
+        self, tmp_path: Path, sample_response: MeResponse
+    ) -> None:
+        """Two accounts in the same tmp parent get isolated cache files."""
+        cache_a = MeCache(account_name="alice", storage_dir=tmp_path / "alice")
+        cache_b = MeCache(account_name="bob", storage_dir=tmp_path / "bob")
+
+        response_b = MeResponse(user_id=99, user_email="other@example.com")
+
+        cache_a.put(sample_response)
+        cache_b.put(response_b)
+
+        result_a = cache_a.get()
+        result_b = cache_b.get()
+
+        assert result_a is not None
+        assert result_a.user_id == 42
+        assert result_b is not None
+        assert result_b.user_id == 99
 
     def test_file_permissions(
         self, cache: MeCache, cache_dir: Path, sample_response: MeResponse
     ) -> None:
         """Test cache files are created with 0o600 permissions."""
-        cache.put("us", sample_response)
-        cache_file = cache_dir / "me_us.json"
+        cache.put(sample_response)
+        cache_file = cache_dir / "me.json"
         assert cache_file.exists()
         # Check file permissions (owner read/write only)
         file_stat = cache_file.stat()
@@ -305,42 +309,95 @@ class TestMeCache:
         self, cache: MeCache, cache_dir: Path
     ) -> None:
         """Test corrupted cache file returns None gracefully."""
-        cache_file = cache_dir / "me_us.json"
+        cache_file = cache_dir / "me.json"
         cache_file.write_text("not valid json{{{")
-        result = cache.get("us")
-        assert result is None
+        assert cache.get() is None
 
-    def test_credential_name_isolates_cache(
-        self, cache_dir: Path, sample_response: MeResponse
+    def test_default_storage_dir_resolves_to_per_account_path(self) -> None:
+        """Without ``storage_dir`` the cache file lives at ``~/.mp/accounts/{name}/me.json``."""
+        cache = MeCache(account_name="demo-sa")
+        assert (
+            cache._cache_path()
+            == Path.home() / ".mp" / "accounts" / "demo-sa" / "me.json"
+        )
+
+
+class TestMeCacheConcurrency:
+    """``MeCache.put()`` must be safe under concurrent same-process writers.
+
+    Routes through :func:`atomic_write_bytes`, which derives the tmp filename
+    from ``pid + tid`` so two threads writing different payloads to the same
+    cache pick distinct tmp paths and one of them wins atomically — neither
+    can observe a torn or partial file.
+    """
+
+    def test_two_threads_writing_same_cache_produce_valid_file(
+        self, tmp_path: Path
     ) -> None:
-        """Test that different credential names get separate cache files."""
-        cache_a = MeCache(storage_dir=cache_dir, credential_name="sa-a")
-        cache_b = MeCache(storage_dir=cache_dir, credential_name="sa-b")
+        """Two threads racing through ``put()`` MUST leave a parseable file.
 
-        response_b = MeResponse(user_id=99, user_email="other@example.com")
+        Regression: the prior implementation used a fixed
+        ``path.with_suffix('.tmp')`` for the tmp filename, so concurrent
+        writers' ``write_text`` calls clobbered each other and the rename
+        could land a half-written file.
+        """
+        import threading
 
-        cache_a.put("us", sample_response)
-        cache_b.put("us", response_b)
+        cache_dir = tmp_path / "accounts" / "personal"
+        cache_dir.mkdir(parents=True)
+        cache = MeCache(account_name="personal", storage_dir=cache_dir)
 
-        result_a = cache_a.get("us")
-        result_b = cache_b.get("us")
+        # Two distinct payloads — only one should win, but both must be
+        # individually well-formed.
+        resp_a = MeResponse(user_id=1, user_email="a@example.com")
+        resp_b = MeResponse(user_id=2, user_email="b@example.com")
 
-        assert result_a is not None
-        assert result_a.user_id == 42
-        assert result_b is not None
-        assert result_b.user_id == 99
+        barrier = threading.Barrier(2)
+        errors: list[BaseException] = []
 
-    def test_credential_name_in_cache_path(self, cache_dir: Path) -> None:
-        """Test cache file path includes credential_name when set."""
-        cache = MeCache(storage_dir=cache_dir, credential_name="demo-sa")
-        path = cache._cache_path("us")
-        assert path.name == "me_us_demo-sa.json"
+        def writer(payload: MeResponse) -> None:
+            try:
+                barrier.wait()  # release both threads simultaneously
+                cache.put(payload)
+            except BaseException as exc:  # noqa: BLE001 — surface to assertion
+                errors.append(exc)
 
-    def test_empty_credential_name_backward_compat(self, cache_dir: Path) -> None:
-        """Test empty credential_name uses backward-compatible path."""
-        cache = MeCache(storage_dir=cache_dir, credential_name="")
-        path = cache._cache_path("us")
-        assert path.name == "me_us.json"
+        t1 = threading.Thread(target=writer, args=(resp_a,))
+        t2 = threading.Thread(target=writer, args=(resp_b,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        assert not errors, f"Concurrent writers raised: {errors}"
+        result = cache.get()
+        assert result is not None, "Cache file is unparseable after concurrent writes"
+        # Whichever thread won, the file has a valid user_id from one of them.
+        assert result.user_id in (1, 2)
+
+    def test_chmod_failure_on_dir_raises_config_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An OS that refuses ``0o700`` on the dir surfaces a ConfigError.
+
+        Cache holds PII (user emails, project names) — silent fall-through
+        to the default umask would leak that material.
+        """
+        cache_dir = tmp_path / "accounts" / "personal"
+        cache_dir.mkdir(parents=True)
+        cache = MeCache(account_name="personal", storage_dir=cache_dir)
+        resp = MeResponse(user_id=1, user_email="a@example.com")
+
+        original_chmod = __import__("os").chmod
+
+        def chmod_fail(path: Any, mode: int) -> None:
+            if str(path) == str(cache_dir):
+                raise OSError(13, "Permission denied")
+            original_chmod(path, mode)
+
+        monkeypatch.setattr("os.chmod", chmod_fail)
+        with pytest.raises(ConfigError, match="0o700"):
+            cache.put(resp)
 
 
 # ── MeService Tests ─────────────────────────────────────────────────
@@ -404,8 +461,8 @@ class TestMeService:
 
     @pytest.fixture
     def cache(self, cache_dir: Path) -> MeCache:
-        """Create a MeCache with temporary directory."""
-        return MeCache(storage_dir=cache_dir)
+        """Create a MeCache with temporary per-account directory."""
+        return MeCache(account_name="personal", storage_dir=cache_dir)
 
     @pytest.fixture
     def mock_api(self) -> MagicMock:
@@ -462,27 +519,35 @@ class TestMeService:
     ) -> None:
         """Test that fetch() stores response in disk cache."""
         service.fetch()
-        cached = cache.get("us")
+        cached = cache.get()
         assert cached is not None
         assert cached.user_id == 42
 
     # ── fetch() error handling (T041b) ───────────────────────────────
 
     def test_fetch_401_raises_config_error(self, cache: MeCache) -> None:
-        """Test that 401 from /me raises ConfigError with clear message."""
+        """401 → actionable ConfigError mentioning re-login (not /me access)."""
         api = MagicMock()
         api.me.side_effect = AuthenticationError("Invalid credentials", status_code=401)
         svc = MeService(api, cache, "us")
-        with pytest.raises(ConfigError, match="lack permission"):
+        with pytest.raises(ConfigError, match="invalid \\(401\\)") as exc_info:
             svc.fetch()
+        # 401 error should mention `mp account login` as the actionable fix
+        assert "mp account login" in exc_info.value.message
+        assert exc_info.value.details["status_code"] == 401
+        assert exc_info.value.details["account_name"] == "personal"
 
     def test_fetch_403_raises_config_error(self, cache: MeCache) -> None:
-        """Test that 403 from /me raises ConfigError with clear message."""
+        """403 → ConfigError advising explicit --project / different scope."""
         api = MagicMock()
         api.me.side_effect = QueryError("Permission denied", status_code=403)
         svc = MeService(api, cache, "us")
-        with pytest.raises(ConfigError, match="lack permission"):
+        with pytest.raises(ConfigError, match="lacks /me permission") as exc_info:
             svc.fetch()
+        # 403 error should advise explicit --project or a different account
+        assert "--project" in exc_info.value.message
+        assert exc_info.value.details["status_code"] == 403
+        assert exc_info.value.details["account_name"] == "personal"
 
     def test_fetch_other_error_propagates(self, cache: MeCache) -> None:
         """Test that non-401/403 errors propagate unchanged."""

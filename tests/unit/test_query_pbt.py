@@ -19,6 +19,8 @@ from hypothesis import strategies as st
 from pydantic import SecretStr
 
 from mixpanel_data import Workspace
+from mixpanel_data._internal.auth.account import ServiceAccount
+from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.bookmark_builders import build_filter_entry
 from mixpanel_data._internal.bookmark_enums import (
     MATH_REQUIRING_PROPERTY,
@@ -26,7 +28,6 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_PROPERTY_TYPES,
     VALID_RESOURCE_TYPES,
 )
-from mixpanel_data._internal.config import ConfigManager, Credentials
 from mixpanel_data._internal.validation import validate_bookmark, validate_query_args
 from mixpanel_data.types import (
     Filter,
@@ -34,6 +35,19 @@ from mixpanel_data.types import (
     GroupBy,
     Metric,
     QueryResult,
+)
+from tests.conftest import make_session
+
+# ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
+_TEST_SESSION = Session(
+    account=ServiceAccount(
+        name="test_account",
+        region="us",
+        username="test_user",
+        secret=SecretStr("test_secret"),
+        default_project="12345",
+    ),
+    project=Project(id="12345"),
 )
 
 # =============================================================================
@@ -77,16 +91,16 @@ positive_ints = st.integers(min_value=1, max_value=365)
 
 def _make_ws() -> Workspace:
     """Create Workspace with mocked config for PBT (inline, not fixture)."""
-    creds = Credentials(
+    creds = make_session(
         username="test",
-        secret=SecretStr("secret"),
+        secret="secret",
         project_id="12345",
         region="us",
     )
-    mgr = MagicMock(spec=ConfigManager)
+    mgr = MagicMock()
     mgr.config_version.return_value = 1
     mgr.resolve_credentials.return_value = creds
-    return Workspace(_config_manager=mgr)
+    return Workspace(session=_TEST_SESSION)
 
 
 # =============================================================================

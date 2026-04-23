@@ -25,7 +25,8 @@ from dataclasses import dataclass, field
 from datetime import date as dt_date
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypedDict, TypeVar
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, TypedDict, TypeVar
 
 from mixpanel_data._literal_types import (
     CohortAggregationType as CohortAggregationType,
@@ -55,6 +56,14 @@ from mixpanel_data._literal_types import RetentionMode as RetentionMode
 from mixpanel_data._literal_types import SegmentMethod as SegmentMethod
 from mixpanel_data._literal_types import TimeComparisonType as TimeComparisonType
 from mixpanel_data._literal_types import TimeComparisonUnit as TimeComparisonUnit
+from mixpanel_data.auth_types import (
+    AccountName,
+    AccountType,
+    ProjectId,
+    Region,
+    TargetName,
+    WorkspaceId,
+)
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -11798,3 +11807,175 @@ class UserQueryResult(ResultWithDataFrame):
             "mode": self.mode,
             "aggregate_data": self.aggregate_data,
         }
+
+
+# =============================================================================
+# Auth Architecture Redesign Types (Phase 042)
+# =============================================================================
+# Read-only summary types for the redesigned auth subsystem. These are the
+# user-facing shapes returned by `mp.accounts.list()`, `mp.targets.list()`,
+# `mp.accounts.test()`, and `mp.accounts.login()`. The underlying frozen
+# Account / Project / WorkspaceRef / Session models live in
+# src/mixpanel_data/_internal/auth/.
+
+
+# ``AccountType`` and ``Region`` are imported above from ``auth_types`` —
+# the canonical source of truth. The legacy ``_AccountTypeLiteral`` /
+# ``_RegionLiteral`` mirrors that lived here are gone (B3 / Fix 27).
+
+
+class AccountSummary(BaseModel):
+    """Read-only summary of a configured account for ``mp account list``.
+
+    Fields are derived from the persisted ``[accounts.NAME]`` block plus
+    runtime context (``is_active``, ``referenced_by_targets``). Status
+    reflects the most recent ``mp account test`` outcome — ``"untested"``
+    is the default for accounts that have never been tested in this session.
+
+    Example:
+        ```python
+        summary = AccountSummary(
+            name="team", type="service_account", region="us",
+            status="ok", is_active=True,
+        )
+        ```
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    """Local config name (matches the TOML block key)."""
+
+    type: AccountType
+    """Discriminator value of the underlying ``Account`` variant."""
+
+    region: Region
+    """Mixpanel region — ``us``, ``eu``, or ``in``."""
+
+    status: Literal["ok", "needs_login", "needs_token", "untested"] = "untested"
+    """Result of the most recent ``mp account test`` (or ``"untested"``)."""
+
+    is_active: bool = False
+    """``True`` if ``[active].account == name``."""
+
+    referenced_by_targets: list[str] = Field(default_factory=list)
+    """Names of targets that reference this account."""
+
+
+class MeUserInfo(BaseModel):
+    """Subset of the ``/api/app/me`` response identifying the principal.
+
+    The full ``/me`` payload is much larger; this trimmed shape captures
+    just the fields callers consistently need to confirm "logged in as
+    X" or "user Y has access".
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: int
+    """Numeric user ID assigned by Mixpanel."""
+
+    email: str
+    """Email address of the authenticated user."""
+
+
+class AccountTestResult(BaseModel):
+    """Outcome of ``mp account test NAME`` — captures the ``/me`` probe.
+
+    Never raises — error context is captured in ``error`` so the CLI can
+    print structured failure messages and ``mp account list`` can color
+    accounts as ``needs_login`` / ``needs_token`` based on the error code.
+
+    The ``ok``/``error`` fields are paired by an invariant: ``ok=True``
+    iff ``error is None``. Constructing the model with both ``ok=True``
+    and a non-empty ``error`` (or ``ok=False`` and ``error=None``) raises
+    :class:`pydantic.ValidationError` to prevent ambiguous result states
+    that would force callers to guess the right field to read.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    account_name: str
+    """Account that was tested."""
+
+    ok: bool
+    """``True`` if the ``/me`` request succeeded with valid credentials."""
+
+    user: MeUserInfo | None = None
+    """Authenticated principal identity, when ``ok`` is ``True``."""
+
+    accessible_project_count: int | None = None
+    """Number of projects the account can read from ``/me``."""
+
+    error: str | None = None
+    """Human-readable failure reason when ``ok`` is ``False``."""
+
+    @model_validator(mode="after")
+    def _ok_iff_no_error(self) -> AccountTestResult:
+        """Enforce ``ok=True`` ⟺ ``error is None``.
+
+        Returns:
+            ``self`` (no mutation).
+
+        Raises:
+            ValueError: When ``ok``/``error`` disagree.
+        """
+        if self.ok and self.error is not None:
+            raise ValueError("AccountTestResult: ok=True implies error is None.")
+        if not self.ok and self.error is None:
+            raise ValueError("AccountTestResult: ok=False requires a non-empty error.")
+        return self
+
+
+class Target(BaseModel):
+    """A saved (account, project, workspace?) triple persisted in ``[targets.NAME]``.
+
+    Targets are named cursor positions: ``mp target use prod`` writes all
+    three axes to ``[active]`` in a single config save. Workspace is
+    optional — when omitted, the target resolves to the project's default
+    workspace at use time (per FR-025 lazy resolution).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: TargetName
+    """Local target name (matches the TOML block key)."""
+
+    account: AccountName
+    """Local config name of the referenced account (must exist)."""
+
+    project: Annotated[ProjectId, Field(min_length=1, pattern=r"^\d+$")]
+    """Numeric project ID (Mixpanel's wire format)."""
+
+    workspace: Annotated[WorkspaceId, Field(gt=0)] | None = None
+    """Optional workspace ID (must be a positive integer when set);
+    ``None`` defers to lazy resolution. Mirrors ``WorkspaceRef.id``'s
+    ``PositiveInt`` constraint so bad values fail at construction rather
+    than corrupting downstream config."""
+
+
+class OAuthLoginResult(BaseModel):
+    """Outcome of ``mp.accounts.login(name)`` — captures the PKCE flow result.
+
+    Returned after a successful OAuth browser flow. ``user`` is populated
+    from the immediate ``/me`` probe issued after the token exchange so
+    callers can confirm "you are now logged in as ``alice@example.com``"
+    without needing a follow-up call.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    account_name: str
+    """Account that was authenticated."""
+
+    user: MeUserInfo | None = None
+    """Authenticated principal identity from the post-login ``/me`` probe."""
+
+    expires_at: datetime | None = None
+    """Access-token expiry (UTC) from the token endpoint response."""
+
+    tokens_path: Path
+    """Where the tokens were persisted (``~/.mp/accounts/{name}/tokens.json``)."""
+
+    client_path: Path
+    """Where the DCR client info was persisted (``~/.mp/accounts/{name}/client.json``)."""
