@@ -1,44 +1,42 @@
 # Internal Implementation
 
-Private infrastructure powering mixpanel_data's complete programmable interface to Mixpanel analytics. Do not import directly—use public API from `mixpanel_data`.
+Private infrastructure powering `mixpanel_data`'s programmable interface to Mixpanel analytics. Do not import directly — use the public API from `mixpanel_data` (`Workspace`, `mp.accounts`, `mp.targets`, `mp.session`, `Account`, `Session`, etc.).
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `config.py` | Configuration management, credential resolution, TOML parsing |
-| `api_client.py` | HTTP client for Mixpanel API (authentication, error handling) |
-| `query/` | Query engine builders and validators (user_builders.py, user_validators.py) |
-| `services/` | Domain services: DiscoveryService (events, properties, funnels, cohorts, bookmarks, lexicon), LiveQueryService (segmentation, retention, JQL) |
+| `config.py` | `ConfigManager` for `~/.mp/config.toml` — single v3 schema (`[accounts.NAME]` / `[active]` / `[targets.NAME]` / `[settings]`); legacy v1/v2 schemas are rejected with a clear error |
+| `api_client.py` | `MixpanelAPIClient` — HTTP client; takes a `Session`; preserves the underlying `httpx.Client` across in-session axis switches |
+| `me.py` | `MeService` + per-account `MeCache` (`~/.mp/accounts/{name}/me.json`) |
+| `pagination.py` | Cursor-based App API pagination |
+| `io_utils.py` | `atomic_write_bytes` — `O_EXCL` + `os.replace` writes with explicit mode bits |
+| `auth/` | The 042 v3 auth subsystem — see [`../auth_types.py`](../auth_types.py) for the public re-export and [`../../../context/auth-architecture-redesign.md`](../../../context/auth-architecture-redesign.md) for the design |
+| `auth/account.py` | `Account` discriminated union (`ServiceAccount` / `OAuthBrowserAccount` / `OAuthTokenAccount`) + `TokenResolver` protocol |
+| `auth/session.py` | `Session`, `Project`, `WorkspaceRef`, `ActiveSession` |
+| `auth/resolver.py` | `resolve_session(...)` — single resolver with three independent axes (env → param → target → bridge → config) |
+| `auth/token_resolver.py` | `OnDiskTokenResolver` — refreshes browser tokens, reads inline / env-var bearers |
+| `auth/flow.py` | OAuth PKCE flow (browser tokens) |
+| `auth/pkce.py` | PKCE challenge generation (RFC 7636) |
+| `auth/callback_server.py` | Local HTTP callback server for the OAuth redirect |
+| `auth/client_registration.py` | Dynamic Client Registration (RFC 7591) |
+| `auth/storage.py` | `account_dir` / `ensure_account_dir` (per-account `~/.mp/accounts/{name}/` at `0o700`; files at `0o600`) |
+| `auth/token.py` | `OAuthTokens`, `OAuthClientInfo` |
+| `auth/bridge.py` | `BridgeFile` v2 schema + `load_bridge` / `export_bridge` / `remove_bridge` (Cowork credential courier) |
+| `query/` | Query engine builders and validators (`user_builders.py`, `user_validators.py`) |
+| `services/` | Domain services: `DiscoveryService` (events, properties, funnels, cohorts, bookmarks, lexicon), `LiveQueryService` (segmentation, retention, JQL) |
 
-## Key Classes
+## Auth Resolution
 
-### ConfigManager (`config.py`)
-- Manages `~/.mp/config.toml`
-- Resolves credentials (env vars → named account → default)
-- CRUD for named accounts
-- Thread-safe file operations
+A single function — `auth/resolver.py::resolve_session(...)` — returns a `Session` by walking three independent axes:
 
-### Credentials (`config.py`)
-- Immutable credential container
-- Uses `SecretStr` for secret values
-- Fields: username, secret, project_id, region
+| Axis | Priority order |
+|------|----------------|
+| Account | env (`MP_USERNAME`+`MP_SECRET`+`MP_REGION` for SA; `MP_OAUTH_TOKEN`+`MP_REGION` for static bearer) → explicit param → target → bridge → `[active].account` |
+| Project | env (`MP_PROJECT_ID`) → explicit param → target → bridge → `account.default_project` |
+| Workspace | env (`MP_WORKSPACE_ID`) → explicit param → target → bridge → `[active].workspace` (may resolve to `None` and lazy-resolve later) |
 
-### MixpanelAPIClient (`api_client.py`)
-- HTTP client using httpx
-- Basic auth with service account credentials
-- Region-aware base URLs (us, eu, in)
-- Automatic error handling → exception mapping
-
-## Credential Resolution Order
-
-1. Environment variables — either service-account vars (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) or OAuth-token vars (`MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION`); service-account wins when both sets are complete
-2. Auth bridge file (`MP_AUTH_FILE` or `~/.claude/mixpanel/auth.json`)
-3. OAuth tokens from local storage (`~/.mp/oauth/`) — only when no `account` requested
-4. Named account (if `account` parameter specified)
-5. Default account from config file
-
-See `ConfigManager.resolve_credentials` for the authoritative chain.
+Service-account env vars win over `MP_OAUTH_TOKEN` when both sets are complete (preserves PR #125 behavior). The resolver is pure-functional: no network I/O, no `os.environ` mutation, deterministic on repeat invocations with identical inputs.
 
 ## Error Handling
 
@@ -52,9 +50,15 @@ All exceptions include request/response context for debugging.
 
 ## Testing
 
-Use dependency injection—all components accept dependencies:
+Components accept dependencies via constructor injection:
 
 ```python
 config = ConfigManager(_config_path=tmp_path)
-client = MixpanelAPIClient(credentials, _http_client=mock_client)
+session = resolve_session(config=config)
+client = MixpanelAPIClient(session=session, http_client=mock_http)
 ```
+
+For the auth subsystem specifically:
+- `tests/unit/test_resolver.py` and `tests/pbt/test_resolver_pbt.py` lock the per-axis priority order
+- `tests/integration/test_cross_project_iteration.py` and `test_cross_account_iteration.py` lock `httpx.Client` preservation across `Workspace.use(...)` swaps
+- `tests/unit/test_loc_budget.py` is the LoC regression guard for the auth surface

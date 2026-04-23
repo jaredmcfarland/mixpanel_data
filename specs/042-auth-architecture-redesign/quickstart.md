@@ -265,31 +265,29 @@ Removed bridge: ~/.claude/mixpanel/auth.json
 
 ---
 
-## Migrating an existing config (alpha tester)
+## Migrating an existing config (alpha tester)  **[REVISED — `mp config convert` descoped]**
+
+> The original plan was to ship `mp config convert` as a one-shot legacy
+> → v3 conversion. That command was **descoped** under "alpha free to break"
+> (see [`spec.md`](spec.md) post-implementation notes). The shipped
+> behavior is a hard cutover: the new schema rejects the old shape on
+> load, and the user wipes the file and re-adds accounts.
 
 ```bash
 # Existing user upgrades to mixpanel_data 0.4.0
 $ pip install -U mixpanel_data
 
-# First command surfaces the conversion-required error
+# First command surfaces a Pydantic validation error against the new schema
 $ mp account list
-ConfigError: Legacy config schema detected at ~/.mp/config.toml.
+ConfigError: ~/.mp/config.toml does not match the v3 schema.
+  - extra fields not permitted: 'config_version', 'credentials', 'projects'
+  - [accounts.X].project_id is no longer a field; project lives on the account
+    as `default_project`
 
-This version of mixpanel_data uses a single unified schema. Convert your config:
-
-  mp config convert
-
-# Convert
-$ mp config convert
-Source schema: v2
-Actions:
-  - Renamed [credentials.X] → [accounts.X] (3 accounts)
-  - Renamed [projects.X] → [targets.X] (5 targets)
-  - Moved tokens: ~/.mp/oauth/tokens_us.json → ~/.mp/accounts/personal/tokens.json
-  - Set [active].account = "personal"
-  - Set [active].project = "3713224"
-Original archived as: ~/.mp/config.toml.legacy
-Done.
+# Hard cutover recipe (full walkthrough in RELEASE_NOTES_0.4.0.md)
+$ mv ~/.mp/config.toml ~/.mp/config.toml.bak    # keep a backup
+$ mp account add personal --type oauth_browser --region us
+$ mp account login personal                     # re-PKCE; new tokens at ~/.mp/accounts/personal/
 
 # Verify
 $ mp session
@@ -297,11 +295,11 @@ Account:   personal (oauth_browser, us)
 Project:   AI Demo (3713224)
 Workspace: (auto-resolve on first call)
 User:      jared@example.com
-
-# Idempotent — safe to re-run
-$ mp config convert
-Already on the current schema. No changes made.
 ```
+
+The legacy `~/.mp/oauth/` directory is left untouched (and may be deleted
+manually). Service-account migration follows the same pattern: re-add via
+`mp account add team --type service_account ... --project ID --region us`.
 
 ---
 
@@ -430,4 +428,4 @@ WARNING:   Refresh token expired in bridge file. Re-export from host:
 | Show bridge state | `mp session --bridge` |
 | Generate a Cowork bridge | `mp account export-bridge --to PATH` |
 | Remove a bridge | `mp account remove-bridge [--at PATH]` |
-| Migrate legacy config | `mp config convert` |
+| Migrate legacy config | *(descoped)* — `rm ~/.mp/config.toml` and re-add via `mp account add ...` (see RELEASE_NOTES_0.4.0.md) |

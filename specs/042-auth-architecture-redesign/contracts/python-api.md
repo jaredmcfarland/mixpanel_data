@@ -283,7 +283,13 @@ def use(
 
 ---
 
-## 7.5 `mp.config` namespace
+## 7.5 `mp.config` namespace  **[DESCOPED — see ../spec.md post-implementation notes]**
+
+> **Status: DESCOPED.** The `mp.config` Python namespace and its sole
+> `convert(...)` entry point were never shipped. The contract below
+> describes the original intent and is retained for historical context
+> only. The shipped behavior is a hard cutover: legacy configs raise on
+> load; users wipe `~/.mp/config.toml` and re-add accounts.
 
 ```python
 def convert(*, dry_run: bool = False) -> ConversionResult: ...
@@ -348,7 +354,7 @@ class WorkspaceScopeError(MixpanelDataError): ... # NEW — lazy resolve fails (
 ### 9.5 Backward compatibility
 
 - **None.** This is a clean-break redesign. Code calling `Credentials`, `AuthCredential`, `ProjectContext`, `ResolvedSession`, `ProjectAlias`, etc. **will fail with ImportError**. There is no shim or alias.
-- Legacy configs (v1 or v2) **will fail with ConfigError** at any operation that reads the config; the error message points at `mp config convert`.
+- Legacy configs (v1 or v2) **will fail with ConfigError** (Pydantic validation error) at any operation that reads the config. ~~The error message points at `mp config convert`.~~ **[REVISED — `mp config convert` descoped; see ../spec.md post-implementation notes]** Recovery is `rm ~/.mp/config.toml` + `mp account add ...` per `RELEASE_NOTES_0.4.0.md`.
 
 ---
 

@@ -2,10 +2,40 @@
 
 **Feature Branch**: `042-auth-architecture-redesign`
 **Created**: 2026-04-21
-**Status**: Draft
+**Status**: Released as `mixpanel_data 0.4.0` / plugin `5.0.0` (PR #126)
 **Input**: User description: "ALL PHASES of @context/auth-architecture-redesign.md"
 **Supersedes**: `038-auth-project-workspace-redesign`
 **Source design**: [`context/auth-architecture-redesign.md`](../../context/auth-architecture-redesign.md)
+
+> ## Post-implementation notes (2026-04-23)
+>
+> The spec below describes the *intended* full scope. Two scope changes
+> were made during implementation. They are called out here once and then
+> tagged inline against each affected requirement (`**[DESCOPED — see
+> notes]**` / `**[REVISED — see notes]**`):
+>
+> 1. **User Story 10 ("One-Shot Legacy Config Conversion") was DESCOPED**
+>    under the project's "alpha free to break" principle. The breaking
+>    change is delivered as a hard cutover instead of an opt-in conversion:
+>    legacy v1/v2 `~/.mp/config.toml` files raise a Pydantic validation
+>    error on first load and the user wipes the file and re-adds accounts
+>    via `mp account add ...`. The migration recipe is in
+>    [`../../RELEASE_NOTES_0.4.0.md`](../../RELEASE_NOTES_0.4.0.md).
+>    Affected: US10, FR-048, FR-055, FR-062, FR-072, FR-073, SC-017,
+>    SC-019, SC-020, the "Missing OAuth tokens after install" edge case,
+>    and the corresponding `mp config convert` documentation in
+>    [`contracts/cli-commands.md`](contracts/cli-commands.md) §8 and
+>    [`quickstart.md`](quickstart.md) "Migrating an existing config".
+>
+> 2. **FR-067 LoC budget was REVISED** from ≤4,000 LoC across ≤12 files to
+>    ≤6,500 LoC across ≤20 files (current: ~5,800 LoC across 19 files at
+>    HEAD). Rationale: the budget was set against a planned
+>    `api_client.py` split that did not happen; that file accumulated
+>    8,000+ lines of entity-CRUD methods (dashboards / reports / cohorts /
+>    flags / experiments / alerts / data governance) that have nothing to
+>    do with auth and was therefore excluded from the budget scope.
+>    Verified via `tests/unit/test_loc_budget.py`. Affected: FR-067,
+>    SC-001.
 
 ## Overview
 
@@ -13,7 +43,7 @@ The current authentication subsystem carries the scar tissue of an incomplete v1
 
 This redesign is a **clean break** to a single unified model — **Account → Project → Workspace** — with one resolver, one configuration schema, one CLI grammar, and one Python facade. It treats Mixpanel's three credential mechanisms (service accounts, OAuth PKCE, raw bearer tokens) as variants of a single `Account` discriminated union, and elevates cross-account / cross-project / cross-workspace switching to a first-class one-line operation at every layer (Python, CLI, plugin agent).
 
-The breaking change is intentional and acceptable because the package is pre-1.0 with a handful of alpha testers. v1 paths, the v1↔v2 bridge, and the runtime `migrate_v1_to_v2` command are all deleted; legacy configs are converted by a one-shot opt-in script (`mp config convert`). The package version bumps to `mixpanel_data 0.4.0` and the plugin to `5.0.0` to signal the breaking change.
+The breaking change is intentional and acceptable because the package is pre-1.0 with a handful of alpha testers. v1 paths, the v1↔v2 bridge, and the runtime `migrate_v1_to_v2` command are all deleted; legacy configs ~~are converted by a one-shot opt-in script (`mp config convert`)~~ raise a Pydantic validation error on first load and the user wipes the file (recipe in `RELEASE_NOTES_0.4.0.md`) — see post-implementation notes above for the descope decision. The package version bumps to `mixpanel_data 0.4.0` and the plugin to `5.0.0` to signal the breaking change.
 
 This specification covers **all 9 phases** of the redesign (Phase 0 documentation review through Phase 8 migration script + announcement).
 
@@ -53,7 +83,7 @@ After the redesign, there is no `config_version` field. There is one schema. The
 
 1. **Given** no `~/.mp/config.toml`, **When** the user runs `mp account add team-sa --type service_account --username "..." --region us` and supplies the secret, **Then** the resulting config file contains exactly one `[accounts.team-sa]` block with the new shape and an `[active]` section pointing at `team-sa`; it contains no `config_version` field, no `default` field, no `[credentials]` section, and no `[projects]` section.
 2. **Given** no `~/.mp/config.toml`, **When** the user runs `mp account add personal --type oauth_browser --region us` then `mp account login personal`, **Then** the same v3-only schema is produced; tokens are stored at `~/.mp/accounts/personal/tokens.json` (not at the legacy `~/.mp/oauth/tokens_us.json`).
-3. **Given** an existing legacy config (v1 or v2), **When** any `mp` command runs that needs to read it, **Then** the user receives a clear error message that points them to `mp config convert` (which performs a one-shot conversion and archives the original to `~/.mp/config.toml.legacy`); the system does not silently auto-convert.
+3. **Given** an existing legacy config (v1 or v2), **When** any `mp` command runs that needs to read it, **Then** the user receives a clear Pydantic validation error pointing at the offending fields. **[REVISED — `mp config convert` descoped; see post-implementation notes.]** The system does not silently auto-convert; recovery is `rm ~/.mp/config.toml` + `mp account add ...` per `RELEASE_NOTES_0.4.0.md`.
 4. **Given** a converted config, **When** the user re-runs the original failing command, **Then** it succeeds against the new schema with no behavior difference from a fresh-install config.
 5. **Given** the user adds a second account after the first, **When** they inspect the config, **Then** `[active].account` continues to point at the originally-active account (adding does not change active state); the user must run `mp account use NEW-NAME` to switch.
 
@@ -206,7 +236,13 @@ After the redesign, `auth_manager.py` collapses to ~250 lines because there are 
 
 ---
 
-### User Story 10 - One-Shot Legacy Config Conversion (Priority: P3)
+### User Story 10 - One-Shot Legacy Config Conversion (Priority: P3)  **[DESCOPED — see post-implementation notes]**
+
+> **Status: DESCOPED.** Replaced with a hard cutover (legacy configs raise
+> on load; user wipes the file and re-adds accounts). The migration recipe
+> is in [`../../RELEASE_NOTES_0.4.0.md`](../../RELEASE_NOTES_0.4.0.md).
+> The acceptance scenarios below describe the original intent and are
+> retained for historical context only — none of them are deliverables.
 
 An existing alpha tester with a v1 or v2 `~/.mp/config.toml` upgrades `mixpanel_data` to 0.4.0. The user wants a single command that reads their old config, writes the new schema, and archives the original file — explicit, reviewable, with no surprises.
 
@@ -229,7 +265,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 ### Edge Cases
 
-- **Missing OAuth tokens after install of new version**: A user upgrades to 0.4.0 with v2 config and OAuth tokens at `~/.mp/oauth/tokens_us.json`. They have not yet run `mp config convert`. Any command that reads the config errors with the conversion-required message. Tokens at the old path remain on disk; conversion moves them.
+- **Missing OAuth tokens after install of new version**  **[REVISED — `mp config convert` descoped; see post-implementation notes]**: A user upgrades to 0.4.0 with a v2 config and OAuth tokens at `~/.mp/oauth/tokens_us.json`. The first command that reads the config raises a Pydantic validation error (the new schema rejects the old shape with `extra="forbid"` and missing required fields). The user follows the recipe in `RELEASE_NOTES_0.4.0.md`: delete `~/.mp/config.toml`, re-run `mp account add ...`, then `mp account login NAME` for OAuth (re-PKCE; the legacy tokens at `~/.mp/oauth/` are not migrated and may be deleted manually).
 - **Token env var pointed at non-existent variable**: An `oauth_token` account has `token_env = "MP_CI_TOKEN"` but the env var is unset. The account is invalid until the user sets it; `mp account test ci` returns a clear error naming the missing env var; `mp account list` shows the account with a status indicator (e.g., "needs token") rather than failing the entire list.
 - **OAuth refresh token expired**: A long-idle OAuth account fails refresh. `mp account test NAME` reports "needs login"; `mp account login NAME` re-runs the PKCE flow against the existing client_id (no new DCR).
 - **Multiple OAuth identities in same region**: A user runs `mp account add personal --type oauth_browser --region us` and `mp account add work --type oauth_browser --region us`. Each gets its own directory under `~/.mp/accounts/`; tokens never collide. Per design decision §18 #7, region stays per-account; multi-region requires separate account entries.
@@ -259,7 +295,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 - **FR-008**: System MUST recognize exactly one config schema in `~/.mp/config.toml`. The schema MUST consist of `[active]` (optional account/workspace pointers — project lives on the account, not in `[active]`), `[accounts.NAME]` blocks (any number; each carrying its own `default_project`), `[targets.NAME]` blocks (optional, any number), and `[settings]` (optional global request-level settings).
 - **FR-009**: System MUST NOT read or write a `config_version` field; the absence of `config_version` and the presence of new-shape blocks IS the schema.
-- **FR-010**: System MUST reject configs containing v1-shaped fields (`default = "X"`, `[accounts.X].project_id` inline) or v2-shaped fields (`[credentials.X]`, `[projects.X]`) with a clear error message that points the user to `mp config convert`.
+- **FR-010**  **[REVISED — `mp config convert` descoped; see post-implementation notes]**: System MUST reject configs containing v1-shaped fields (`default = "X"`, `[accounts.X].project_id` inline) or v2-shaped fields (`[credentials.X]`, `[projects.X]`). The current implementation surfaces this as a Pydantic validation error from `extra="forbid"` plus required-field violations; legacy detection helper code was deleted along with `mp config convert`. Users recover via `rm ~/.mp/config.toml` + `mp account add ...` per `RELEASE_NOTES_0.4.0.md`.
 - **FR-011**: `[active].account` MUST reference an existing account name; the resolver MUST treat absence as "no active account configured" (not an error at config-load, but a `ConfigError` at resolution time if env vars do not supply auth).
 - **FR-012**: `[active]` MUST contain only `account` (string) and `workspace` (positive integer) — both optional. The project field has been removed from `[active]`; project lives on the account as `default_project`. `[accounts.NAME].default_project` MUST be a string matching `^\d+$` (Mixpanel project IDs are numeric strings).
 - **FR-013**: `[targets.NAME]` MUST require `account` and `project`; `workspace` is optional.
@@ -312,7 +348,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 - **FR-045**: The first account added to an empty config MUST automatically become active (sensible default for fresh installs); subsequent additions MUST NOT change the active account.
 - **FR-046**: `mp session` MUST display the current account name + type + region, project ID + name + organization, workspace ID + name (or "auto-resolved"), and user identity (from cached `/me`; if no cache exists yet, display `(uncached)` and do NOT trigger a fetch). `mp session --bridge` MUST show bridge file source if present.
 - **FR-047**: `mp project list` MUST work with only authentication configured (no project required). Both `mp project list --refresh` and `mp workspace list --refresh` MUST bypass their respective local caches (`/me` cache, workspace cache) and refetch. `mp project list --remote` is an alias for `--refresh` (preserved for ergonomic continuity with the v2 surface).
-- **FR-048**: `mp config convert` MUST be the one-shot conversion command; it MUST read legacy v1/v2 configs, write a v3 config, archive the original to `~/.mp/config.toml.legacy`, and exit with a clear summary of what was converted.
+- **FR-048**  **[DESCOPED — see post-implementation notes]**: `mp config convert` MUST be the one-shot conversion command; it MUST read legacy v1/v2 configs, write a v3 config, archive the original to `~/.mp/config.toml.legacy`, and exit with a clear summary of what was converted.
 
 #### Cowork Bridge
 
@@ -325,7 +361,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 - **FR-053**: Account-scoped state MUST live at `~/.mp/accounts/{name}/`; the directory layout per account is: `tokens.json` (oauth_browser only), `client.json` (oauth_browser only), `me.json` (any account, optional cache).
 - **FR-054**: All account state files MUST be created with file mode `0o600`; the parent directory `~/.mp/accounts/` MUST be created with `0o700`.
-- **FR-055**: The legacy `~/.mp/oauth/` directory MUST be retained on disk only when `~/.mp/config.toml.legacy` exists (i.e., post-conversion); `mp config convert` MUST migrate token files from `~/.mp/oauth/tokens_{region}.json` to `~/.mp/accounts/{name}/tokens.json`.
+- **FR-055**  **[DESCOPED — see post-implementation notes]**: The legacy `~/.mp/oauth/` directory MUST be retained on disk only when `~/.mp/config.toml.legacy` exists (i.e., post-conversion); `mp config convert` MUST migrate token files from `~/.mp/oauth/tokens_{region}.json` to `~/.mp/accounts/{name}/tokens.json`. (Hard cutover: legacy `~/.mp/oauth/` is left alone and the user re-runs `mp account login NAME` to re-PKCE into `~/.mp/accounts/{name}/`.)
 
 #### Plugin / Agent Surface
 
@@ -338,7 +374,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 - **FR-060**: The `MeService` MUST be invokable for every account type (SA, OAuth-browser, OAuth-token); the only difference is what the `/me` response contains.
 - **FR-061**: The `/me` cache MUST be per-account at `~/.mp/accounts/{name}/me.json` with a 24h TTL; `mp project list --refresh` MUST bypass it.
-- **FR-062**: The `OAuthTokens` model MUST drop its `project_id` field (legacy artifact); existing token files at the old path MUST be migrated by `mp config convert`.
+- **FR-062**  **[REVISED — second clause descoped; see post-implementation notes]**: The `OAuthTokens` model MUST drop its `project_id` field (legacy artifact). Existing token files at the old path are NOT auto-migrated; users re-run `mp account login NAME` after re-creating the account.
 
 #### Tech Debt Removal
 
@@ -346,7 +382,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 - **FR-064**: The following methods MUST be deleted: `Workspace._session_to_credentials`, `MixpanelAPIClient.with_project`, `Credentials.from_oauth_token`, `Workspace.test_credentials`, `ConfigManager.resolve_credentials`, `ConfigManager.add_credential`, `ConfigManager.set_default`, `ConfigManager.set_active_credential`, `ConfigManager.set_active_project`, `ConfigManager.set_active_workspace`, `ConfigManager.set_active_context`, `ConfigManager.list_credentials`, `ConfigManager.list_project_aliases`, `ConfigManager.add_project_alias`, `ConfigManager.migrate_v1_to_v2`.
 - **FR-065**: The following CLI commands MUST be deleted: `mp auth list/add/remove/switch/show/test/login/logout/status/token/migrate/cowork-setup/cowork-teardown/cowork-status`, `mp projects list/switch/show/refresh/alias`, `mp workspaces list/switch/show`, `mp context show/switch`.
 - **FR-066**: The six-layer fallback in `_resolve_region_and_project_for_oauth` MUST be replaced by the single per-axis priority list documented in FR-017.
-- **FR-067**: The auth subsystem MUST shrink from ~7,200 LOC across 15 files to ≤4,000 LOC across ≤12 files (target ≤3,500 / 12 per the source design).
+- **FR-067**  **[REVISED — see post-implementation notes]**: The auth subsystem MUST shrink from ~7,200 LOC across 15 files to ≤4,000 LOC across ≤12 files (target ≤3,500 / 12 per the source design). **Shipped budget**: ≤6,500 LOC across ≤20 files (current ~5,800 LoC across 19 files at HEAD). The original budget was set against a planned `api_client.py` split that did not happen; that file's entity-CRUD methods are out of scope for the auth budget. Verified via `tests/unit/test_loc_budget.py`.
 
 #### Testing & Quality
 
@@ -357,9 +393,9 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 #### Migration & Release
 
-- **FR-072**: `mp config convert` MUST be idempotent: running twice on an already-converted config MUST exit with a friendly message and zero exit code.
-- **FR-073**: `mp config convert` MUST preserve the original config file as `~/.mp/config.toml.legacy`; it MUST NOT delete the original.
-- **FR-074**: The package version MUST bump to `mixpanel_data 0.4.0`; the plugin version MUST bump to `5.0.0`. Release notes MUST explicitly call out the breaking change and link to the conversion command.
+- **FR-072**  **[DESCOPED — see post-implementation notes]**: `mp config convert` MUST be idempotent: running twice on an already-converted config MUST exit with a friendly message and zero exit code.
+- **FR-073**  **[DESCOPED — see post-implementation notes]**: `mp config convert` MUST preserve the original config file as `~/.mp/config.toml.legacy`; it MUST NOT delete the original.
+- **FR-074**  **[REVISED — `mp config convert` descoped; see post-implementation notes]**: The package version MUST bump to `mixpanel_data 0.4.0`; the plugin version MUST bump to `5.0.0`. Release notes MUST explicitly call out the breaking change and document the migration recipe (`rm ~/.mp/config.toml` + `mp account add ...`).
 - **FR-075**: Project documentation (`CLAUDE.md` files at root, `src/mixpanel_data/`, `src/mixpanel_data/cli/`, `mixpanel-plugin/`, `context/mixpanel_data-design.md`) MUST be updated to reflect the new vocabulary, schema, and command surface. The v2 design doc (`context/auth-project-workspace-redesign.md`) MUST be archived with a header pointing to the new design.
 
 ### Key Entities
@@ -383,7 +419,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 #### Code shape
 
-- **SC-001**: Auth subsystem source size shrinks from ~7,200 LOC across 15 files to ≤4,000 LOC across ≤12 files (≥40% reduction; target ≥50%). Verified via `tokei` or `wc -l` on the listed files.
+- **SC-001**  **[REVISED — see post-implementation notes]**: Auth subsystem source size shrinks from ~7,200 LOC across 15 files to ≤4,000 LOC across ≤12 files (≥40% reduction; target ≥50%). Verified via `tokei` or `wc -l` on the listed files. **Shipped outcome**: ~5,800 LOC across 19 files (≈19% reduction within the revised scope). The original target assumed an `api_client.py` split that did not happen; the auth-specific surface (the v3 modules under `_internal/auth/`, the new `cli/commands/{account,project,workspace,target,session}.py`, and the rewritten `_internal/config.py`) hits the spirit of the goal — it's the legacy-compatibility code that's gone, not entity-CRUD lines that were never auth in the first place.
 - **SC-002**: Mutation testing score against `_internal/auth/account.py`, `_internal/auth/session.py`, and the resolver in `config.py` is ≥85%.
 - **SC-003**: All `if config_version` / `if version >= 2` / equivalent version-conditional branches in source and test code count exactly zero (verified via `grep`).
 - **SC-004**: Auth subsystem mypy --strict passes with zero violations and zero `Any` types without explicit justification.
@@ -408,14 +444,14 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 
 - **SC-015**: 100% of resolver invocations with identical inputs (env + params + config snapshot) return identical `Session` objects (verified via Hypothesis property-based tests over arbitrary input combinations).
 - **SC-016**: 100% of error messages from `resolve_session()` failures explicitly state both what is missing AND what command to run to fix it (verified via test assertions on every documented failure mode).
-- **SC-017**: 100% of legacy v1 and v2 fixture configs are convertible by `mp config convert` without data loss; subsequent operation against the converted config matches pre-conversion intent (verified via end-to-end fixture tests).
+- **SC-017**  **[DESCOPED — see post-implementation notes]**: 100% of legacy v1 and v2 fixture configs are convertible by `mp config convert` without data loss; subsequent operation against the converted config matches pre-conversion intent (verified via end-to-end fixture tests).
 - **SC-018**: Every call to a workspace-scoped App API endpoint with a `Session` having `workspace=None` succeeds via lazy auto-resolution (verified against the live API or a contract test backed by the published OpenAPI shape; the existence guarantee is per source review §13.2).
-- **SC-019**: 100% of v1/v2 ↔ v3 conversion test cases preserve the user's accessible projects and active selection through the conversion (no orphaned configs, no silent identity loss).
+- **SC-019**  **[DESCOPED — see post-implementation notes]**: 100% of v1/v2 ↔ v3 conversion test cases preserve the user's accessible projects and active selection through the conversion (no orphaned configs, no silent identity loss).
 
 #### Migration & release
 
-- **SC-020**: All existing alpha-tester configs (collected as fixtures) convert successfully by `mp config convert`; no manual TOML editing is required for any case.
-- **SC-021**: The `mixpanel_data` package version bumps to 0.4.0; the plugin version bumps to 5.0.0; release notes for both explicitly call out the breaking change and link to `mp config convert`.
+- **SC-020**  **[REVISED — see post-implementation notes]**: All existing alpha-tester configs (collected as fixtures) convert successfully by `mp config convert`; no manual TOML editing is required for any case. (Replaced under hard cutover: alpha testers wipe `~/.mp/config.toml` and re-add accounts via `mp account add ...`. The recipe is one paragraph in `RELEASE_NOTES_0.4.0.md`.)
+- **SC-021**  **[REVISED — `mp config convert` descoped; see post-implementation notes]**: The `mixpanel_data` package version bumps to 0.4.0; the plugin version bumps to 5.0.0; release notes for both explicitly call out the breaking change and document the migration recipe (hard cutover, not conversion).
 - **SC-022**: The v2 design document (`context/auth-project-workspace-redesign.md`) carries a clear superseded-by header pointing to the new design before the release ships.
 
 ## Assumptions
@@ -428,7 +464,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 - **Switching between two configured service accounts is the same operation as switching between an OAuth and an SA**: Per design principle #1 ("one model"), all account types are interchangeable at the resolution layer; only the auth header construction differs.
 - **OAuth client info per-account is OK**: Per design decision §18 #7, region stays per-account; users with multi-region needs create separate account entries (e.g., `personal-us`, `personal-eu`). This avoids per-region token files inside one account directory and keeps the storage layout flat.
 - **Custom headers stay global**: Per design decision §18 #6, per-account custom headers are not in scope; users with per-deployment headers use `MP_CUSTOM_HEADER_*` env vars per-invocation. This keeps the `Account` model simple.
-- **Conversion is opt-in, not automatic**: Per design decision §18 #8, `mp config convert` is the only path; runtime auto-conversion would violate the "clean break" principle and silently change the user's filesystem.
+- **Conversion is opt-in, not automatic**  **[REVISED — `mp config convert` descoped; see post-implementation notes]**: Per design decision §18 #8, `mp config convert` was the only path; runtime auto-conversion would violate the "clean break" principle and silently change the user's filesystem. (The conversion script itself was then descoped in favor of a hard cutover; the same anti-silent-mutation principle still applies — legacy configs error loudly.)
 - **OAuth token refresh and DCR machinery survive unchanged**: The PKCE, DCR, and callback-server code (`flow.py`, `pkce.py`, `client_registration.py`, `callback_server.py`) is well-tested and remains as-is. Only the storage paths change (from `~/.mp/oauth/` to `~/.mp/accounts/{name}/`).
 - **Existing exception types survive**: `AuthenticationError`, `OAuthError`, `ConfigError`, etc. are kept; only the messages and the call sites change.
 - **API endpoint URLs and request signing logic in `api_client.py` are unaffected**: Only the constructor signature changes (takes `Session` instead of `Credentials`) and the `with_project` factory is removed in favor of in-place axis updates.
@@ -441,7 +477,7 @@ After the redesign, this command is `mp config convert`. It is opt-in (no auto-c
 - **New analytics/query features**: This redesign touches only the auth subsystem (accounts, projects, workspaces, sessions, targets, bridge). It does not add new query types, new entity-management commands, or new discovery features.
 - **Multi-environment config files**: One config per machine. Power users with multi-environment needs use `MP_CONFIG_PATH` to point at alternate files.
 - **Per-account custom headers**: See assumptions; deferred to a future iteration if alpha-tester feedback shows the need.
-- **Automatic schema migration at runtime**: Per design decision §18 #8, only `mp config convert` (opt-in, one-shot) handles legacy configs.
+- **Automatic schema migration at runtime**  **[REVISED — `mp config convert` descoped; see post-implementation notes]**: Per design decision §18 #8, only `mp config convert` (opt-in, one-shot) was to handle legacy configs. Under the descope, NO automatic conversion of any kind is provided — legacy configs raise loudly and the user follows the `RELEASE_NOTES_0.4.0.md` recipe.
 - **Backward-compatible Python imports for deleted types**: There is no shim that re-exports `Credentials` or `AuthCredential` from the public package. Code calling deleted names must be updated.
 - **CI compatibility shim for deleted CLI verbs**: There is no `mp auth list` alias for `mp account list`. Scripts using deleted verbs must be updated.
 - **OAuth token storage outside `~/.mp/accounts/{name}/`**: System-wide secret managers (Keychain, gnome-keyring, etc.) are not in scope. Tokens remain on disk with `0o600` permissions.

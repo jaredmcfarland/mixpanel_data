@@ -1,5 +1,23 @@
 # Design: Authentication, Project & Workspace Management Redesign
 
+> **Status: SUPERSEDED**
+>
+> This document describes the v2 ("credentials + project aliases") auth design
+> from late 2025. It has been superseded by the **Account → Project → Workspace**
+> redesign shipped in `mixpanel_data 0.4.0` (PR #126,
+> branch `042-auth-architecture-redesign`).
+>
+> - Active design: [`auth-architecture-redesign.md`](auth-architecture-redesign.md)
+> - Spec: [`../specs/042-auth-architecture-redesign/spec.md`](../specs/042-auth-architecture-redesign/spec.md)
+> - Migration recipe: [`../RELEASE_NOTES_0.4.0.md`](../RELEASE_NOTES_0.4.0.md)
+>
+> This file is preserved verbatim for historical context only. The v2
+> code paths it describes (`Credentials` wrapper, `[credentials.X]` /
+> `[projects.X]` schema, `mp auth` / `mp projects` / `mp context` CLI groups,
+> `config_version = 2` flag) no longer exist in the codebase.
+
+---
+
 ## Context
 
 `mixpanel_data`'s current authentication system tightly couples *who you are* (credentials) with *what you're working on* (project). A single `Credentials` object bundles username, secret, project_id, and region into one immutable unit. This makes multi-project workflows painful: the real `~/.mp/config.toml` contains 7 duplicate accounts with identical service account credentials, differing only in `project_id`. OAuth tokens can have `project_id=None`, causing silent fallback to wrong projects. There's no project discovery, no workspace persistence, and no way to freely switch context.

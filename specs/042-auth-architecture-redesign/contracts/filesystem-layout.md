@@ -11,7 +11,11 @@ This document defines the on-disk filesystem layout for `mixpanel_data` 0.4.0+. 
 ```
 ~/.mp/                                       # mode 0o700 (created if absent)
 ├── config.toml                              # mode 0o600 — main config
-├── config.toml.legacy                       # mode 0o600 — post-conversion archive (only if `mp config convert` ran)
+│                                            # NOTE: ~~config.toml.legacy~~ never written
+│                                            # — `mp config convert` was descoped (see ../spec.md
+│                                            # post-implementation notes); upgrading users wipe
+│                                            # config.toml and re-add accounts per
+│                                            # RELEASE_NOTES_0.4.0.md
 ├── accounts/                                # mode 0o700
 │   ├── {account-name-1}/                    # mode 0o700, one dir per account
 │   │   ├── tokens.json                      # mode 0o600 (oauth_browser only)
@@ -20,10 +24,10 @@ This document defines the on-disk filesystem layout for `mixpanel_data` 0.4.0+. 
 │   ├── {account-name-2}/
 │   │   └── ...
 │   └── ...
-├── oauth/                                   # LEGACY — present only if `mp config convert` did not delete it
-│   ├── tokens_us.json                       # legacy (pre-0.4.0); migrated to ~/.mp/accounts/{name}/tokens.json
-│   ├── client_us.json                       # legacy
-│   └── me_us_{name}.json                    # legacy
+├── oauth/                                   # LEGACY (pre-0.4.0). Not deleted by 0.4.0;
+│   ├── tokens_us.json                       # the user removes it manually if desired.
+│   ├── client_us.json                       # No automatic migration into ~/.mp/accounts/{name}/
+│   └── me_us_{name}.json                    # — re-run `mp account login NAME` instead.
 └── ... (no other files written by mixpanel_data)
 
 ~/.claude/mixpanel/                          # Cowork bridge default location (created by `mp account export-bridge`)

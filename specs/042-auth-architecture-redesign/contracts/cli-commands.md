@@ -18,10 +18,12 @@ Identity-related groups:
   mp target      manage saved (account, project, workspace) triples
   mp session     show the active session
 
-Configuration:
-  mp config      one-shot operations (convert)
-
 (Existing query/inspect/dashboards/etc. groups unchanged.)
+
+# DESCOPED: `mp config` group (and its sole `mp config convert` command)
+# was descoped under "alpha free to break". See spec.md post-implementation
+# notes and §8 of this document for the original contract preserved for
+# historical context.
 ```
 
 ---
@@ -437,7 +439,15 @@ Exit codes:
 
 ---
 
-## 8. `mp config` group
+## 8. `mp config` group  **[DESCOPED — see spec.md post-implementation notes]**
+
+> **Status: DESCOPED.** The `mp config` command group was never shipped.
+> Legacy v1/v2 configs raise a Pydantic validation error on first load and
+> the user wipes `~/.mp/config.toml` and re-adds accounts via
+> `mp account add ...`. The migration recipe is in
+> [`../../../RELEASE_NOTES_0.4.0.md`](../../../RELEASE_NOTES_0.4.0.md).
+> The contract below describes the original intent and is retained for
+> historical context only.
 
 ### 8.1 `mp config convert`
 
@@ -546,7 +556,7 @@ These are honored consistently across all new commands.
 
 - Any read command (`list`, `show`, `test`) is idempotent and side-effect-free except for cache I/O.
 - Any write command (`add`, `remove`, `use`) is idempotent at the same input.
-- `mp config convert` is idempotent: running twice on a v3 config is a no-op (per FR-072).
+- ~~`mp config convert` is idempotent~~ — descoped (see §8).
 
 ### 12.2 stdout vs stderr
 

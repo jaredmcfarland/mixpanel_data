@@ -10,10 +10,12 @@ This directory contains all design documentation, specifications, and reference 
 context/
 ├── CLAUDE.md                              # This file - directory guide
 ├── mixpanel_data-project-brief.md         # Vision, goals, design principles
-├── mixpanel_data-design.md                # Architecture and technical design
+├── mixpanel_data-design.md                # Architecture and technical design (auth section: see auth-architecture-redesign.md)
 ├── mixpanel_data-api-specification.md     # Python library API specification
 ├── mp-cli-api-specification.md            # CLI command specification
 ├── mp-cli-project-spec.md                 # Full project specification
+├── auth-architecture-redesign.md          # Account → Project → Workspace redesign (042, shipped in 0.4.0) — AUTHORITATIVE auth design
+├── auth-project-workspace-redesign.md     # Predecessor v2 auth design (SUPERSEDED by auth-architecture-redesign.md)
 ├── mixpanel-data-model-reference.md       # Mixpanel data model (events, profiles)
 ├── mixpanel-http-api-specification.md     # Mixpanel HTTP API (all 11 APIs)
 ├── mixpanel-query-expression-language.md  # Query expression syntax
@@ -24,8 +26,12 @@ context/
 
 **For understanding the project:**
 1. **[mixpanel_data-project-brief.md](mixpanel_data-project-brief.md)** — Vision, goals, design principles
-2. **[mixpanel_data-design.md](mixpanel_data-design.md)** — Architecture, layers, system design
+2. **[mixpanel_data-design.md](mixpanel_data-design.md)** — Architecture, layers, system design (auth section is stale — read `auth-architecture-redesign.md` instead)
 3. **[mp-cli-project-spec.md](mp-cli-project-spec.md)** — Full specification with command hierarchy
+
+**For the auth subsystem specifically:**
+1. **[auth-architecture-redesign.md](auth-architecture-redesign.md)** — Account → Project → Workspace model, single resolver, three account types, CLI grammar (042 redesign, shipped in `mixpanel_data 0.4.0`)
+2. **[auth-project-workspace-redesign.md](auth-project-workspace-redesign.md)** — *Superseded* v2 design preserved for historical context only
 
 **For implementation:**
 1. **[mixpanel_data-api-specification.md](mixpanel_data-api-specification.md)** — Python library API design
@@ -130,15 +136,33 @@ ws.close()
 
 ## CLI Commands (Implemented)
 
-### Authentication (6 commands)
+### Identity (Account → Project → Workspace, post-042 redesign)
+
+Five identity command groups, each with `use` as the universal state-change verb. See [auth-architecture-redesign.md](auth-architecture-redesign.md) for the full rationale.
+
 ```bash
-mp auth list                              # List configured accounts
-mp auth add <name>                        # Add new account
-mp auth remove <name>                     # Remove account
-mp auth switch <name>                     # Set default account
-mp auth show [name]                       # Show account details
-mp auth test [name]                       # Test credentials
+# Account CRUD + lifecycle (three account types: service_account, oauth_browser, oauth_token)
+mp account list / add / remove / use / show / test / login / logout / token / export-bridge / remove-bridge
+
+# Project axis (lives on the active account as default_project)
+mp project list / use / show
+
+# Workspace axis (optional; lazy-resolves to project default)
+mp workspace list / use / show
+
+# Saved (account, project, workspace?) cursor positions
+mp target list / add / remove / use / show
+
+# Resolved active session viewer
+mp session [--bridge]
 ```
+
+Per-command global overrides (do not mutate `[active]`):
+`-a / --account NAME`, `-p / --project ID`, `-w / --workspace ID`,
+`-t / --target NAME` (mutex with the per-axis flags).
+
+**Removed (no shim):** `mp auth`, `mp projects`, `mp workspaces`,
+`mp context`, `mp config`. See [`../RELEASE_NOTES_0.4.0.md`](../RELEASE_NOTES_0.4.0.md) for the legacy → v3 verb map.
 
 ### Queries
 ```bash

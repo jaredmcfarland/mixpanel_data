@@ -34,10 +34,11 @@ def sequential_iteration() -> None:
     ws = mp.Workspace()
     try:
         # First call populates the per-account /me cache.
-        for pid, info in ws.discover_projects():
-            ws.use(project=pid)
+        for project in ws.projects():
+            ws.use(project=project.id)
             count = len(ws.events())
-            print(f"{info.name:20s} ({pid}): {count} events")
+            name = project.name or "(unnamed)"
+            print(f"{name:20s} ({project.id}): {count} events")
     finally:
         ws.close()
 
@@ -48,8 +49,8 @@ def snapshot_parallel_iteration() -> None:
     try:
         base_session = ws.session
         snapshots = [
-            base_session.replace(project=mp.Project(id=pid))
-            for pid, _ in ws.discover_projects()
+            base_session.replace(project=mp.Project(id=project.id))
+            for project in ws.projects()
         ]
     finally:
         ws.close()

@@ -809,45 +809,50 @@ class TestLimitValidation:
 
 
 # =============================================================================
-# Phase 6: Workspace Discovery (T064-T065b)
+# Phase 6: Workspace Discovery — v3 surface (FR-035 / FR-036)
 # =============================================================================
 
 
-class TestDiscoverWorkspaces:
-    """T064-T065b: Tests for Workspace.discover_workspaces()."""
+class TestWorkspacesMethod:
+    """Tests for ``Workspace.workspaces()`` (FR-036; replaces discover_workspaces)."""
 
-    def test_discover_workspaces_delegates_to_me_svc(
+    def test_workspaces_returns_workspace_refs_from_me_svc(
         self,
         mock_config_manager: MagicMock,
         mock_api_client: MagicMock,
     ) -> None:
-        """discover_workspaces should delegate to _me_svc.list_workspaces."""
+        """``ws.workspaces()`` returns ``list[WorkspaceRef]`` built from MeWorkspaceInfo."""
+        from mixpanel_data._internal.auth.session import WorkspaceRef
         from mixpanel_data._internal.me import MeWorkspaceInfo
 
         ws = Workspace(
             session=_TEST_SESSION,
             _api_client=mock_api_client,
         )
-        expected = [
+        me_payload = [
             MeWorkspaceInfo(id=1, name="Default", project_id=12345, is_default=True),
             MeWorkspaceInfo(id=2, name="Staging", project_id=12345, is_default=False),
         ]
         mock_me_svc = MagicMock()
-        mock_me_svc.list_workspaces.return_value = expected
+        mock_me_svc.list_workspaces.return_value = me_payload
         ws._me_service = mock_me_svc
 
-        result = ws.discover_workspaces()
+        result = ws.workspaces()
 
-        # Should use current project_id from credentials
+        # Defaults to current project's id from credentials.
         mock_me_svc.list_workspaces.assert_called_once_with(project_id="12345")
-        assert result == expected
+        assert [type(w) for w in result] == [WorkspaceRef, WorkspaceRef]
+        assert [(w.id, w.name, w.is_default) for w in result] == [
+            (1, "Default", True),
+            (2, "Staging", False),
+        ]
 
-    def test_discover_workspaces_with_explicit_project(
+    def test_workspaces_with_explicit_project_id(
         self,
         mock_config_manager: MagicMock,
         mock_api_client: MagicMock,
     ) -> None:
-        """discover_workspaces with explicit project_id passes it through."""
+        """``ws.workspaces(project_id=...)`` passes the override through to MeService."""
         ws = Workspace(
             session=_TEST_SESSION,
             _api_client=mock_api_client,
@@ -856,9 +861,46 @@ class TestDiscoverWorkspaces:
         mock_me_svc.list_workspaces.return_value = []
         ws._me_service = mock_me_svc
 
-        ws.discover_workspaces(project_id="9999999")
+        ws.workspaces(project_id="9999999")
 
         mock_me_svc.list_workspaces.assert_called_once_with(project_id="9999999")
+
+
+class TestProjectsMethod:
+    """Tests for ``Workspace.projects()`` (FR-035; replaces discover_projects)."""
+
+    def test_projects_returns_project_records_from_me_svc(
+        self,
+        mock_config_manager: MagicMock,
+        mock_api_client: MagicMock,
+    ) -> None:
+        """``ws.projects()`` returns ``list[Project]`` built from MeProjectInfo tuples."""
+        from mixpanel_data._internal.auth.session import Project
+        from mixpanel_data._internal.me import MeProjectInfo
+
+        ws = Workspace(
+            session=_TEST_SESSION,
+            _api_client=mock_api_client,
+        )
+        me_payload = [
+            (
+                "100",
+                MeProjectInfo(name="Alpha", organization_id=42, timezone="US/Pacific"),
+            ),
+            ("200", MeProjectInfo(name="Beta", organization_id=43)),
+        ]
+        mock_me_svc = MagicMock()
+        mock_me_svc.list_projects.return_value = me_payload
+        ws._me_service = mock_me_svc
+
+        result = ws.projects()
+
+        mock_me_svc.list_projects.assert_called_once_with()
+        assert [type(p) for p in result] == [Project, Project]
+        assert [(p.id, p.name, p.organization_id, p.timezone) for p in result] == [
+            ("100", "Alpha", 42, "US/Pacific"),
+            ("200", "Beta", 43, None),
+        ]
 
 
 # TestSwitchProject / TestSwitchWorkspace / TestCurrentProject /

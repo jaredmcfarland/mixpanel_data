@@ -122,21 +122,22 @@ Future settings may be added here. `extra="allow"` semantics for forward compati
 - **I8** — No `default = "X"` key (v1 marker). Presence triggers legacy-detection.
 - **I9** — No `[credentials]` or `[projects]` sections (v2 markers). Presence triggers legacy-detection.
 
-### 1.4 Legacy detection
+### 1.4 Legacy detection  **[REVISED — `mp config convert` descoped; see ../spec.md post-implementation notes]**
 
-`ConfigManager.load()` rejects configs with v1 or v2 markers and raises `ConfigError` with this message:
+The original contract had `ConfigManager.load()` raise `ConfigError` with a
+message pointing at `mp config convert`. Under the descope, **the dedicated
+legacy-detection helper was deleted**: legacy configs now surface as
+Pydantic validation errors (`extra="forbid"` rejects v1/v2 fields like
+`config_version`, `default`, `[credentials]`, `[projects]`,
+`[accounts.X].project_id`, `[active].project`) at the moment
+`ConfigManager.load()` parses the TOML.
 
-```
-Legacy config schema detected at ~/.mp/config.toml.
+The detection rules below are still load-bearing as the de facto rejection
+surface — the error just comes from Pydantic's standard model-validation
+machinery instead of a hand-written message. Recovery is documented in
+`RELEASE_NOTES_0.4.0.md`: `rm ~/.mp/config.toml` + `mp account add ...`.
 
-This version of mixpanel_data uses a single unified schema. Convert your config:
-
-  mp config convert
-
-After conversion, your old config will be archived as ~/.mp/config.toml.legacy.
-```
-
-Detection rules (any one triggers the error):
+Detection rules (any one triggers a validation error on load):
 - presence of `config_version` field
 - presence of `default = "..."` field at root
 - presence of `[credentials]` section
@@ -211,9 +212,16 @@ Per axis priority (FR-017):
 
 ---
 
-## 3. Conversion mappings (legacy → v3)
+## 3. Conversion mappings (legacy → v3)  **[DESCOPED — see ../spec.md post-implementation notes]**
 
-`mp config convert` applies these mappings:
+> **Status: DESCOPED.** The mapping tables below describe the conversion
+> contract that `mp config convert` would have implemented. The command
+> was descoped under "alpha free to break"; alpha testers wipe
+> `~/.mp/config.toml` and re-add accounts via `mp account add ...`
+> (recipe in `RELEASE_NOTES_0.4.0.md`). The mappings below are retained
+> for historical context only.
+
+`mp config convert` would have applied these mappings:
 
 ### 3.1 v1 → v3
 
@@ -257,7 +265,7 @@ OAuth token files migrate per Research R1 mapping rules (the implementation docu
 | Purpose | Path |
 |---|---|
 | Main config | `~/.mp/config.toml` |
-| Legacy archive (post-conversion) | `~/.mp/config.toml.legacy` |
+| ~~Legacy archive (post-conversion)~~ — descoped | ~~`~/.mp/config.toml.legacy`~~ — never written |
 | Per-account state | `~/.mp/accounts/{name}/` |
 | OAuth tokens | `~/.mp/accounts/{name}/tokens.json` |
 | OAuth client info | `~/.mp/accounts/{name}/client.json` |

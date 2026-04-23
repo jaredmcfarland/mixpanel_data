@@ -276,29 +276,48 @@ result = ws.query(event, group_by=GroupBy(ref), last=30, mode='total')
 
 ```python
 class Workspace:
-    """Unified entry point for Mixpanel data operations."""
+    """Unified entry point for Mixpanel data operations (042 redesign)."""
 
     def __init__(
         self,
+        *,
         account: str | None = None,
-        project_id: str | None = None,
-        region: str | None = None,
-        workspace_id: int | None = None,
-        credential: str | None = None,
+        project: str | None = None,
+        workspace: int | None = None,
+        target: str | None = None,
+        session: Session | None = None,
     ) -> None:
-        """Create a new Workspace. Credentials resolved in order:
-        1. Environment variables (MP_USERNAME, MP_SECRET, MP_PROJECT_ID, MP_REGION)
-        2. OAuth tokens from local storage
-        3. Named account/credential from config file
-        4. Default account from config file
+        """Create a new Workspace. Resolution per axis is independent
+        (env > param > target > bridge > config); see
+        ``mixpanel_data.auth_types`` and the v3 resolver.
+
+        With ``session=`` supplied, all other axis kwargs are ignored
+        (full bypass).
         """
         ...
 
-    # --- Properties ---
-    workspace_id: int | None       # Currently set workspace ID
-    current_project: ProjectContext # Current project context
-    current_credential: AuthCredential  # Current auth credential
-    api: MixpanelAPIClient         # Direct API client access (escape hatch)
+    # --- Properties (read-only) ---
+    account: Account            # Resolved Account (discriminated union)
+    project: Project            # Resolved Project
+    workspace: WorkspaceRef | None  # Resolved workspace, or None for lazy-resolve
+    session: Session            # The (account, project, workspace) tuple
+    api: MixpanelAPIClient      # Direct API client access (escape hatch)
+
+    def use(
+        self,
+        *,
+        account: str | None = None,
+        project: str | None = None,
+        workspace: int | None = None,
+        target: str | None = None,
+        persist: bool = False,
+    ) -> Self:
+        """Switch any axis in-session. Returns self for chaining.
+        Preserves the underlying httpx.Client. With persist=True, also
+        writes to ~/.mp/config.toml [active]. ``target=`` is mutex
+        with the per-axis kwargs.
+        """
+        ...
 ```
 
 Supports context manager: `with mp.Workspace() as ws: ...`
@@ -309,34 +328,31 @@ Supports context manager: `with mp.Workspace() as ws: ...`
 def me(self, *, force_refresh: bool = False) -> Any: ...
     # Get /me response for current credentials (cached 24h).
 
-def discover_projects(self) -> list[tuple[str, MeProjectInfo]]: ...
-    # List all accessible projects via the /me API.
+def projects(self) -> list[Project]: ...
+    # List accessible projects (v3; returns Project records — id, name,
+    # organization_id, timezone). Replaces deprecated discover_projects().
 
-def discover_workspaces(self, project_id: str | None = None) -> list[MeWorkspaceInfo]: ...
-    # List workspaces for a project via the /me API.
-
-def switch_project(self, project_id: str, workspace_id: int | None = None) -> None: ...
-    # Switch to a different project in-session.
-
-def switch_workspace(self, workspace_id: int) -> None: ...
-    # Switch workspace within the current project.
-
-def set_workspace_id(self, workspace_id: int | None) -> None: ...
-    # Set or clear the workspace ID for scoped App API requests.
+def workspaces(self, *, project_id: str | None = None) -> list[WorkspaceRef]: ...
+    # List workspaces in a project (v3; returns WorkspaceRef records —
+    # id, name, is_default). Replaces deprecated discover_workspaces().
 
 def list_workspaces(self) -> list[PublicWorkspace]: ...
-    # List all public workspaces for the current project.
+    # List all public workspaces for the current project (App API).
 
 def resolve_workspace_id(self) -> int: ...
-    # Auto-discover and resolve workspace ID.
-
-@staticmethod
-def test_credentials(account: str | None = None) -> dict[str, Any]: ...
-    # Test account credentials with a lightweight API call.
+    # Auto-discover and resolve workspace ID (lazy-resolve helper).
 
 def close(self) -> None: ...
     # Close all resources (HTTP client). Idempotent.
 ```
+
+> **Removed (042 redesign — FR-038):** `Workspace.workspace_id` property,
+> `set_workspace_id()`, `switch_project()`, `switch_workspace()`,
+> `discover_projects()`, `discover_workspaces()`, `current_project`,
+> `current_credential`, `test_credentials()`. Use `ws.session.workspace_id`,
+> `ws.use(workspace=N)`, `ws.use(project=P)`, `ws.projects()`,
+> `ws.workspaces()`, `ws.project`, `ws.account`, and `mp.accounts.test(NAME)`
+> respectively.
 
 ### Insights Query
 

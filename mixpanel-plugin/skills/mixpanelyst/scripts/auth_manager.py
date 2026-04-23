@@ -151,7 +151,7 @@ def cmd_project_list(_args: argparse.Namespace) -> dict[str, Any]:
 
     def _extract(ws: Any) -> dict[str, Any]:
         active_id = ws.session.project.id
-        return _ok(items=[{"id": pid, "name": info.name, "organization_id": info.organization_id, "is_active": pid == active_id} for pid, info in ws.discover_projects()])  # noqa: E501  # fmt: skip
+        return _ok(items=[{"id": p.id, "name": p.name, "organization_id": p.organization_id, "is_active": p.id == active_id} for p in ws.projects()])  # noqa: E501  # fmt: skip
 
     return _with_workspace(_extract)
 
@@ -161,7 +161,7 @@ def cmd_workspace_list(_args: argparse.Namespace) -> dict[str, Any]:
 
     def _extract(ws: Any) -> dict[str, Any]:
         project = {"id": ws.session.project.id, "name": ws.session.project.name}
-        return _ok(project=project, items=[{"id": info.id, "name": info.name, "is_default": info.is_default, "is_active": info.id == ws.session.workspace_id} for info in ws.discover_workspaces()])  # noqa: E501  # fmt: skip
+        return _ok(project=project, items=[{"id": w.id, "name": w.name, "is_default": w.is_default, "is_active": w.id == ws.session.workspace_id} for w in ws.workspaces()])  # noqa: E501  # fmt: skip
 
     return _with_workspace(_extract)
 

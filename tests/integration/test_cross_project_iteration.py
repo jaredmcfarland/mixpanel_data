@@ -153,7 +153,7 @@ class TestCrossProjectIteration:
     def test_iteration_over_projects_makes_one_me_call_total(
         self, workspace: Workspace, request_log: list[httpx.Request]
     ) -> None:
-        """``ws.discover_projects()`` populates the cache; the loop never re-fetches.
+        """``ws.projects()`` populates the cache; the loop never re-fetches.
 
         Pre-populate the per-account ``/me`` cache with one explicit call,
         then iterate three projects calling ``ws.events()`` per turn. The
@@ -161,12 +161,12 @@ class TestCrossProjectIteration:
         the seeding call — FR-061 (lazy cache) and SC-008 (zero re-auth).
         """
         # Seed the /me cache (one call).
-        projects = workspace.discover_projects()
+        projects = workspace.projects()
         assert len(projects) == 3
 
         request_log.clear()  # focus the assertion on the loop body
-        for pid, _info in projects:
-            workspace.use(project=pid)
+        for project in projects:
+            workspace.use(project=project.id)
             workspace.events()
 
         # No `/me` requests during iteration; events called exactly once per project.

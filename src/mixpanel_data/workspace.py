@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.me import MeProjectInfo, MeService, MeWorkspaceInfo
+    from mixpanel_data._internal.me import MeService
 
 from mixpanel_data._internal.api_client import (
     MixpanelAPIClient,
@@ -609,9 +609,8 @@ class Workspace:
             self._v3_session = client.session
 
         # Sync the legacy `_credentials` shim and clear lazy services so
-        # subsequent reads of `current_project` / `current_credential` /
-        # `discover_workspaces` / `_me_svc` observe the new session
-        # rather than the prior one. Mirrors `switch_project()`.
+        # subsequent reads of `project` / `account` / `workspaces()` /
+        # `_me_svc` observe the new session rather than the prior one.
         client = self._require_api_client()
         self._credentials = client._credentials
         self._initial_workspace_id = (
@@ -731,29 +730,7 @@ class Workspace:
     # WORKSPACE MANAGEMENT
     # =========================================================================
 
-    @property
-    def workspace_id(self) -> int | None:
-        """Return the currently set workspace ID, or None if not set.
-
-        This returns the explicit workspace ID set via ``set_workspace_id()``
-        or the constructor's ``workspace_id`` parameter. It does NOT
-        auto-discover a workspace ID (use ``resolve_workspace_id()`` for that).
-
-        Returns:
-            The workspace ID if explicitly set, ``None`` otherwise.
-
-        Example:
-            ```python
-            ws = Workspace().use(workspace=42)
-            assert ws.workspace_id == 42
-
-            ws2 = Workspace()
-            assert ws2.workspace_id is None
-            ```
-        """
-        client = self._get_api_client()
-        return client.workspace_id
-
+    # workspace_id property removed (FR-038): use ``ws.session.workspace_id``.
     # set_workspace_id removed in B2 (T050 / FR-038): use ``ws.use(workspace=N)``.
 
     def list_workspaces(self) -> list[PublicWorkspace]:
@@ -855,13 +832,22 @@ class Workspace:
         """
         return self._me_svc.fetch(force_refresh=force_refresh)
 
-    def discover_projects(self) -> list[tuple[str, MeProjectInfo]]:
-        """List all accessible projects via the /me API.
+    def projects(self) -> list[_ProjectV3]:
+        """List all accessible projects via the /me API (FR-035).
 
-        Returns projects from the cached /me response, sorted by name.
+        Returns projects from the cached /me response, sorted by name. Each
+        entry is a v3 :class:`Project` (id + name + organization_id +
+        timezone), built from the underlying ``MeProjectInfo`` payload —
+        callers iterate ``for project in ws.projects(): ws.use(project=project.id)``
+        per the documented cross-project iteration pattern.
+
+        Replaces the deprecated ``discover_projects()`` (which returned
+        ``list[tuple[str, MeProjectInfo]]``) — for the raw ``/me`` shape
+        with extra fields (``has_workspaces``, ``domain``, ``type``, ...),
+        call ``self._me_svc.list_projects()`` directly from internal code.
 
         Returns:
-            List of ``(project_id, MeProjectInfo)`` tuples.
+            List of :class:`Project` records sorted by name.
 
         Raises:
             ConfigError: If credentials lack /me access.
@@ -869,27 +855,39 @@ class Workspace:
         Example:
             ```python
             ws = Workspace()
-            for pid, info in ws.discover_projects():
-                print(f"{pid}: {info.name} (org={info.organization_id})")
+            for project in ws.projects():
+                ws.use(project=project.id)
+                print(project.id, project.name, len(ws.events()))
             ```
         """
-        result: list[tuple[str, MeProjectInfo]] = self._me_svc.list_projects()
-        return result
+        return [
+            _ProjectV3(
+                id=pid,
+                name=info.name,
+                organization_id=info.organization_id,
+                timezone=info.timezone,
+            )
+            for pid, info in self._me_svc.list_projects()
+        ]
 
-    def discover_workspaces(
-        self, project_id: str | None = None
-    ) -> list[MeWorkspaceInfo]:
-        """List workspaces for a project via the /me API.
+    def workspaces(self, *, project_id: str | None = None) -> list[_WorkspaceRefV3]:
+        """List workspaces for a project via the /me API (FR-036).
 
         Returns workspaces from the cached /me response, sorted by name.
         Defaults to the current project if ``project_id`` is not provided.
+
+        Replaces the deprecated ``discover_workspaces()`` (which returned
+        ``list[MeWorkspaceInfo]``) — for the raw ``/me`` shape with extra
+        fields (``is_global``, ``is_restricted``, ``description``, ...),
+        call ``self._me_svc.list_workspaces(project_id=)`` directly from
+        internal code.
 
         Args:
             project_id: Project ID to list workspaces for. Defaults to
                 the current project.
 
         Returns:
-            List of ``MeWorkspaceInfo`` objects sorted by name.
+            List of :class:`WorkspaceRef` records sorted by name.
 
         Raises:
             ConfigError: If credentials lack /me access.
@@ -897,15 +895,17 @@ class Workspace:
         Example:
             ```python
             ws = Workspace()
-            for info in ws.discover_workspaces():
-                print(f"{info.id}: {info.name} (default={info.is_default})")
+            for workspace in ws.workspaces():
+                print(workspace.id, workspace.name, workspace.is_default)
             ```
         """
         pid = project_id
         if pid is None and self._credentials is not None:
             pid = self._credentials.project_id
-        result: list[MeWorkspaceInfo] = self._me_svc.list_workspaces(project_id=pid)
-        return result
+        return [
+            _WorkspaceRefV3(id=info.id, name=info.name, is_default=info.is_default)
+            for info in self._me_svc.list_workspaces(project_id=pid)
+        ]
 
     # switch_project / switch_workspace / current_project / current_credential
     # removed in B2 (T050 / FR-038):

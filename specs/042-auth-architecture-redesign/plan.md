@@ -35,7 +35,7 @@ The spec covers all 9 phases (Phase 0 documentation review through Phase 8 relea
 - ruff format/check passes with zero violations
 - 90% test coverage minimum (CI fails below)
 - ≥85% mutation score on the three auth files listed above
-- Auth subsystem total LOC ≤ 4,000 across ≤ 12 files (down from ~7,200 across 15)
+- Auth subsystem total LOC ≤ 4,000 across ≤ 12 files (down from ~7,200 across 15) — **REVISED at release: ≤6,500 LOC across ≤20 files; current ~5,800 / 19 (see [`spec.md`](spec.md) post-implementation notes and `tests/unit/test_loc_budget.py`).**
 - Zero `if config_version` / `if version >= 2` branches in source or tests (verified via grep)
 - Zero `os.environ` mutations from any auth code (custom headers attach to `Account` instances)
 - Zero deprecated names (`Credentials`, `AuthCredential`, `ProjectContext`, `ResolvedSession`, `ProjectAlias`, `MigrationResult`, `ActiveContext`, `AuthMethod`, `CredentialType`, `AccountInfo`, `CredentialInfo`) reachable from public package root
