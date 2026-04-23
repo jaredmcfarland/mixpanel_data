@@ -194,6 +194,74 @@ class TestSessionSubcommand:
         assert isinstance(payload.get("next"), list)
         assert payload["next"], "needs_project should suggest a next command"
 
+    def test_env_only_auth_returns_ok_with_populated_axes(self, tmp_home: Path) -> None:
+        """Env-only auth (no ``[active]``) MUST resolve to a fully populated ok.
+
+        Regression: prior implementation returned ``state="ok"`` with
+        ``account=None`` / ``project=None`` / ``workspace=None`` because it
+        bypassed the resolver and read ``[active]`` directly. Per § 2.1
+        of the contract, ``state="ok"`` requires populated account / project.
+        """
+        payload = _run(
+            "session",
+            tmp_home=tmp_home,
+            env_extra={
+                "MP_USERNAME": "u",
+                "MP_SECRET": "s",
+                "MP_PROJECT_ID": "3713224",
+                "MP_REGION": "us",
+            },
+        )
+        assert payload["state"] == "ok"
+        assert payload["account"] is not None
+        assert payload["account"]["type"] == "service_account"
+        assert payload["account"]["region"] == "us"
+        assert payload["project"]["id"] == "3713224"
+        # Source map: env supplied account + project; workspace unset → lazy.
+        assert payload["source"]["account"] == "env"
+        assert payload["source"]["project"] == "env"
+        assert payload["source"]["workspace"] == "unset"
+
+    def test_bridge_only_auth_returns_ok(self, tmp_home: Path) -> None:
+        """A bridge-only Cowork VM (no ``[active]``) MUST resolve to ok.
+
+        Regression: prior implementation returned ``state="needs_account"``
+        because ``[active].account`` was None and env vars were absent —
+        the bridge file was never consulted by ``cmd_session``.
+        """
+        bridge_path = tmp_home / "bridge.json"
+        bridge_path.write_text(
+            json.dumps(
+                {
+                    "version": 2,
+                    "account": {
+                        "type": "service_account",
+                        "name": "courier",
+                        "region": "us",
+                        "username": "u",
+                        "secret": "s",
+                    },
+                    "project": "3713224",
+                    "workspace": 3448413,
+                }
+            ),
+            encoding="utf-8",
+        )
+        bridge_path.chmod(0o600)
+        payload = _run(
+            "session",
+            tmp_home=tmp_home,
+            env_extra={"MP_AUTH_FILE": str(bridge_path)},
+        )
+        assert payload["state"] == "ok"
+        assert payload["account"]["name"] == "courier"
+        assert payload["account"]["type"] == "service_account"
+        assert payload["project"]["id"] == "3713224"
+        assert payload["workspace"]["id"] == 3448413
+        assert payload["source"]["account"] == "bridge"
+        assert payload["source"]["project"] == "bridge"
+        assert payload["source"]["workspace"] == "bridge"
+
 
 # =============================================================================
 # `account list/add/use` — list & mutation contracts

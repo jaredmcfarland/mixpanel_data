@@ -25,7 +25,12 @@ from mixpanel_data._internal.auth.bridge import (
     default_bridge_search_paths,
     load_bridge,
 )
+from mixpanel_data._internal.auth.resolver import (
+    resolve_account_axis,
+    resolve_session,
+)
 from mixpanel_data._internal.config import ConfigManager
+from mixpanel_data.exceptions import ConfigError
 
 SCHEMA_VERSION = 1
 
@@ -98,21 +103,57 @@ def _with_workspace(extractor: Callable[[Any], dict[str, Any]]) -> dict[str, Any
         ws.close()
 
 
+def _cached_user(account_name: str) -> dict[str, Any] | None:
+    """Return ``{id,email}`` from MeCache without fetching (FR-046)."""
+    from mixpanel_data._internal.me import MeCache
+
+    me = MeCache(account_name=account_name).get()
+    if me is None or me.user_id is None or me.user_email is None:
+        return None
+    return {"id": me.user_id, "email": me.user_email}
+
+
 def cmd_session(_args: argparse.Namespace) -> dict[str, Any]:
-    """Resolve the persisted session into a discriminated state response."""
+    """Resolve the persisted session into a discriminated state response.
+
+    Delegates to ``resolve_session()`` so bridge-only and env-only auth
+    report ``state="ok"`` with the resolved axes (prior bug: bridge-only
+    returned ``needs_account``; env-only returned ok with all-null axes).
+    """
     cm = ConfigManager()
-    active = cm.get_active()
-    if active.account is None and not _has_env_auth():
-        return {"schema_version": SCHEMA_VERSION, "state": "needs_account", "next": _ONBOARDING}  # noqa: E501  # fmt: skip
-    if active.account is None:
-        return _ok(account=None, project=None, workspace=None, source={"account": "env"})  # noqa: E501  # fmt: skip
-    account = cm.get_account(active.account)
-    if account.default_project is None and not os.environ.get("MP_PROJECT_ID"):
+    bridge = load_bridge()
+    try:
+        session = resolve_session(config=cm, bridge=bridge)
+    except ConfigError:
+        # Two-pass: account-axis only — distinguishes needs_account from needs_project.
+        account = resolve_account_axis(explicit=None, target_account_name=None, bridge=bridge, config=cm)  # noqa: E501  # fmt: skip
+        if account is None:
+            return {"schema_version": SCHEMA_VERSION, "state": "needs_account", "next": _ONBOARDING}  # noqa: E501  # fmt: skip
         return {"schema_version": SCHEMA_VERSION, "state": "needs_project", "account": _account_record(account), "next": _PROJECT_NEXT}  # noqa: E501  # fmt: skip
-    project_id = account.default_project or os.environ["MP_PROJECT_ID"]
-    workspace = {"id": active.workspace} if active.workspace is not None else None
-    source = {"account": "config", "project": "config" if account.default_project else "env", "workspace": "config" if active.workspace is not None else "unset"}  # noqa: E501  # fmt: skip
-    return _ok(account=_account_record(account), project={"id": project_id}, workspace=workspace, source=source)  # noqa: E501  # fmt: skip
+
+    ws_id = session.workspace.id if session.workspace is not None else None
+    has_env_account = _has_env_auth()
+    src_account = "env" if has_env_account else ("bridge" if bridge is not None and bridge.account.name == session.account.name else "config")  # noqa: E501  # fmt: skip
+    src_project = "env" if os.environ.get("MP_PROJECT_ID") else ("bridge" if bridge is not None and bridge.project == session.project.id else "config")  # noqa: E501  # fmt: skip
+    if ws_id is None:
+        src_workspace = "unset"
+    elif os.environ.get("MP_WORKSPACE_ID"):
+        src_workspace = "env"
+    elif bridge is not None and bridge.workspace == ws_id:
+        src_workspace = "bridge"
+    else:
+        src_workspace = "config"
+    return _ok(
+        account=_account_record(session.account),
+        project={"id": session.project.id},
+        workspace={"id": ws_id} if ws_id is not None else None,
+        user=_cached_user(session.account.name),
+        source={
+            "account": src_account,
+            "project": src_project,
+            "workspace": src_workspace,
+        },  # noqa: E501  # fmt: skip
+    )
 
 
 def cmd_account_list(_args: argparse.Namespace) -> dict[str, Any]:
