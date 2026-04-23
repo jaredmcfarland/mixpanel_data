@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import pydantic
 from pydantic import BaseModel, ConfigDict
 
+from mixpanel_data._internal.io_utils import atomic_write_bytes
 from mixpanel_data.exceptions import AuthenticationError, ConfigError, QueryError
 
 if TYPE_CHECKING:
@@ -317,7 +318,17 @@ class MeCache:
         try:
             return MeResponse.model_validate(data)
         except pydantic.ValidationError as e:
-            logger.debug("Failed to parse cached /me response: %s", e)
+            # Schema drift on disk is a real signal — log at WARNING so users
+            # see why their cache is silently missing on every CLI invocation.
+            # Then unlink the file so the next call deterministically refetches
+            # rather than re-paying the parse cost.
+            logger.warning(
+                "Cached /me response at %s no longer matches the model "
+                "(schema drift). Invalidating: %s",
+                path,
+                e,
+            )
+            path.unlink(missing_ok=True)
             return None
 
     def put(self, response: MeResponse) -> None:
@@ -340,11 +351,13 @@ class MeCache:
         try:
             os.chmod(self._cache_dir, stat.S_IRWXU)  # 0o700
         except OSError as e:
-            logger.warning(
-                "Could not set permissions on cache directory %s: %s",
-                self._cache_dir,
-                e,
-            )
+            # Cache contains user emails / org names / project names — PII
+            # that should not be world-readable. A filesystem that can't
+            # enforce 0o700 is a real config issue, not a soft warning.
+            raise ConfigError(
+                f"Cannot enforce 0o700 on cache directory {self._cache_dir}: {e}",
+                details={"path": str(self._cache_dir)},
+            ) from e
 
         # Add cache metadata, stripping bulky fields that bloat the cache.
         # Workspace member_list and unified_member_list can be 10-30MB each
@@ -359,21 +372,15 @@ class MeCache:
                         ws_data.pop(key, None)
         data["cached_at"] = time.time()
 
-        path = self._cache_path()
-        # Write atomically via temp file
-        tmp_path = path.with_suffix(".tmp")
-        try:
-            tmp_path.write_text(
-                json.dumps(data, indent=2, default=str),
-                encoding="utf-8",
-            )
-            # Set permissions before rename
-            os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
-            tmp_path.replace(path)
-        except OSError:
-            # Clean up temp file on failure
-            tmp_path.unlink(missing_ok=True)
-            raise
+        # Route through the project's atomic-write primitive so concurrent
+        # writers (multiple Workspace instances in the same process, parallel
+        # CLI invocations) get distinct tmp filenames keyed on pid+tid and
+        # cannot collide. Mode 0o600 matches the credential-adjacent default.
+        atomic_write_bytes(
+            self._cache_path(),
+            json.dumps(data, indent=2, default=str).encode("utf-8"),
+            mode=0o600,
+        )
 
     def invalidate(self) -> None:
         """Remove the cached /me response for this account.
@@ -463,19 +470,26 @@ class MeService:
                 self._cached_response = cached
                 return cached
 
-        # Call API
-        _NO_ME_ACCESS = (
-            "Credentials lack permission for /me discovery. "
-            "Specify --project explicitly or use credentials with "
-            "/me access."
-        )
+        # Call API. Distinguish 401 (re-login fix) from 403 (need /me scope)
+        # so the user gets the actionable next step, not a generic message.
+        account_name = self._cache._account_name  # noqa: SLF001
         try:
             raw = self._api_client.me()
         except AuthenticationError as exc:
-            raise ConfigError(_NO_ME_ACCESS, details={"status_code": 401}) from exc
+            raise ConfigError(
+                f"Credentials for account '{account_name}' are invalid (401). "
+                f"Run `mp account test {account_name}` to confirm; if it's an "
+                f"oauth_browser account, run `mp account login {account_name}`.",
+                details={"status_code": 401, "account_name": account_name},
+            ) from exc
         except QueryError as exc:
             if exc.status_code == 403:
-                raise ConfigError(_NO_ME_ACCESS, details={"status_code": 403}) from exc
+                raise ConfigError(
+                    f"Account '{account_name}' lacks /me permission (403). "
+                    f"Specify --project explicitly, or use an account whose "
+                    f"credentials have /me scope.",
+                    details={"status_code": 403, "account_name": account_name},
+                ) from exc
             raise
 
         response = MeResponse.model_validate(raw)

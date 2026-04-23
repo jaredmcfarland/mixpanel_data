@@ -156,6 +156,67 @@ class TestAccountCli:
         assert result.exit_code == 0
 
 
+class TestAccountLoginNoBrowser:
+    """``mp account login NAME --no-browser`` MUST propagate ``open_browser=False``.
+
+    Regression: the library function ``accounts.login(name, open_browser=False)``
+    is independently tested, but a CLI wiring bug could silently swallow
+    ``--no-browser`` and still try to launch the system browser, which hangs
+    in headless / SSH / CI contexts. This test pins the propagation contract
+    so a future Typer signature change is caught immediately.
+    """
+
+    def test_no_browser_flag_propagates_to_namespace_login(
+        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``--no-browser`` forwards to ``accounts_ns.login(open_browser=False)``."""
+        from mixpanel_data import accounts as accounts_ns
+
+        # Seed an oauth_browser account so the CLI command type-checks pass.
+        runner.invoke(
+            app,
+            [
+                "account",
+                "add",
+                "personal",
+                "--type",
+                "oauth_browser",
+                "--region",
+                "us",
+            ],
+        )
+
+        captured: dict[str, object] = {}
+
+        def _spy_login(name: str, *, open_browser: bool = True) -> object:
+            captured["name"] = name
+            captured["open_browser"] = open_browser
+            # Return a minimal OAuthLoginResult so the CLI handler can render.
+            from datetime import datetime, timezone
+
+            from mixpanel_data.types import OAuthLoginResult
+
+            return OAuthLoginResult(
+                account_name=name,
+                user=None,
+                expires_at=datetime.now(timezone.utc),
+                tokens_path=Path("/tmp/test/tokens.json"),
+                client_path=Path("/tmp/test/client.json"),
+            )
+
+        monkeypatch.setattr(accounts_ns, "login", _spy_login)
+
+        # Default (no flag) → open_browser=True
+        result = runner.invoke(app, ["account", "login", "personal"])
+        assert result.exit_code == 0, result.output
+        assert captured["open_browser"] is True
+
+        # With --no-browser → open_browser=False
+        result = runner.invoke(app, ["account", "login", "personal", "--no-browser"])
+        assert result.exit_code == 0, result.output
+        assert captured["open_browser"] is False
+
+
 class TestProjectCli:
     """``mp project`` subcommands."""
 
@@ -318,25 +379,24 @@ class TestProjectCliList:
         assert "1111111" in result.output
         assert "2222222" in result.output
 
-    def test_list_remote_is_alias_for_refresh(
+    def test_list_refresh_bypasses_cache(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``--remote`` is preserved as an alias for ``--refresh``."""
+        """``--refresh`` forces a /me re-fetch instead of using the disk cache.
+
+        The legacy ``--remote`` alias was dropped in 0.4.1 — ``--refresh`` is
+        the single canonical name (matches the Python API
+        :meth:`Workspace.projects(refresh=)`).
+        """
         self._seed_account_and_me_cache(runner, monkeypatch)
-        # Both flags MUST be accepted; they trigger the bypass-cache code
-        # path. The MeCache fixture is fresh so a refresh would force a
-        # network call — to keep this hermetic we patch fetch to a no-op
-        # that returns the cached response.
         from mixpanel_data._internal import me as me_mod
 
-        original_fetch = me_mod.MeService.fetch
         call_log: list[bool] = []
 
         def _spy_fetch(
             self: object, *, force_refresh: bool = False
         ) -> me_mod.MeResponse:
             call_log.append(force_refresh)
-            # Bypass the API call by reading straight from disk cache.
             cache = self._cache  # type: ignore[attr-defined]  # noqa: SLF001
             cached: me_mod.MeResponse | None = cache.get()
             assert cached is not None  # seeded by the fixture
@@ -346,13 +406,17 @@ class TestProjectCliList:
 
         result_refresh = runner.invoke(app, ["project", "list", "--refresh"])
         assert result_refresh.exit_code == 0, result_refresh.output
-        result_remote = runner.invoke(app, ["project", "list", "--remote"])
-        assert result_remote.exit_code == 0, result_remote.output
+        assert any(call_log), "--refresh did not force a refetch"
 
-        # Both invocations passed force_refresh=True at least once.
-        assert any(call_log), "neither --refresh nor --remote forced a refetch"
-
-        del original_fetch  # unused — kept for reader clarity
+    def test_list_remote_alias_removed(
+        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``--remote`` was removed in 0.4.1 — usage now exits with usage error."""
+        self._seed_account_and_me_cache(runner, monkeypatch)
+        result = runner.invoke(app, ["project", "list", "--remote"])
+        # Typer maps unknown options to exit code 2 with "No such option".
+        assert result.exit_code == 2
+        assert "--remote" in result.output
 
 
 class TestWorkspaceCli:

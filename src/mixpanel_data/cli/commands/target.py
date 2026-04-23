@@ -138,27 +138,20 @@ def list_targets(
         ctx: Typer context.
         format: Output format.
     """
-    targets = targets_ns.list()
-    if format == "json":
-        console.print(
-            _json.dumps(
-                [
-                    {
-                        "name": t.name,
-                        "account": t.account,
-                        "project": t.project,
-                        "workspace": t.workspace,
-                    }
-                    for t in targets
-                ],
-                indent=2,
-            )
-        )
-    elif format == "jsonl":
-        for t in targets:
-            console.print(_format_target_json(t))
-    else:
-        console.print(_format_target_table(targets))
+    from mixpanel_data.cli.formatters import emit_records
+
+    emit_records(
+        targets_ns.list(),
+        format=format,
+        console=console,
+        to_dict=lambda t: {
+            "name": t.name,
+            "account": t.account,
+            "project": t.project,
+            "workspace": t.workspace,
+        },
+        table_renderer=lambda items: _format_target_table(list(items)),
+    )
 
 
 @target_app.command("show")

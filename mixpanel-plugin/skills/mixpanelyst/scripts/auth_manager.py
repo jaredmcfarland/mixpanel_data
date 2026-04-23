@@ -30,7 +30,11 @@ from mixpanel_data._internal.auth.resolver import (
     resolve_session,
 )
 from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.exceptions import ConfigError
+from mixpanel_data.exceptions import AccountNotFoundError, ConfigError
+
+# Error codes the user can act on (re-login, set env, run specific CLI cmd).
+# The slash command renders precise hints when ``actionable=True``.
+_ACTIONABLE_CODES = frozenset({"OAUTH_TOKEN_ERROR", "OAUTH_REFRESH_ERROR", "OAUTH_REFRESH_REVOKED", "NEEDS_ACCOUNT", "NEEDS_PROJECT"})  # noqa: E501  # fmt: skip
 
 SCHEMA_VERSION = 1
 
@@ -57,9 +61,24 @@ def _ok(**fields: Any) -> dict[str, Any]:
     return {"schema_version": SCHEMA_VERSION, "state": "ok", **fields}
 
 
-def _err(exc: BaseException, *, actionable: bool = False) -> dict[str, Any]:
-    """Wrap ``exc`` as a contracted ``state="error"`` envelope (P3)."""
-    err = {"code": type(exc).__name__, "message": str(exc), "actionable": actionable}
+def _err(exc: BaseException, *, actionable: bool | None = None) -> dict[str, Any]:
+    """Wrap ``exc`` as a contracted ``state="error"`` envelope (P3).
+
+    Pulls structured context off ``MixpanelDataError`` subclasses (``code``,
+    ``details``) and preserves ``__cause__``. ``MP_VERBOSE=1`` adds a
+    one-line traceback. ``actionable`` defaults to True for ``_ACTIONABLE_CODES``.
+    """
+    code = str(getattr(exc, "code", None) or type(exc).__name__)
+    err: dict[str, Any] = {"code": code, "message": str(exc), "actionable": actionable if actionable is not None else code in _ACTIONABLE_CODES}  # noqa: E501  # fmt: skip
+    details = getattr(exc, "details", None)
+    if isinstance(details, dict) and details:
+        err["details"] = details
+    if exc.__cause__ is not None:
+        err["cause"] = f"{type(exc.__cause__).__name__}: {exc.__cause__}"
+    if os.environ.get("MP_VERBOSE", "").lower() in ("1", "true", "yes"):
+        import traceback as _tb
+
+        err["traceback"] = _tb.format_exception_only(type(exc), exc)[-1].strip()
     return {"schema_version": SCHEMA_VERSION, "state": "error", "error": err}
 
 
@@ -81,9 +100,11 @@ def _active_block(project_override: str | None = None) -> dict[str, Any]:
     active = cm.get_active()
     proj = project_override
     if proj is None and active.account:
+        # Narrow catch: only "account missing" / "config malformed" map to
+        # ``proj=None``. Any other exception reflects a real bug and bubbles up.
         try:
             proj = cm.get_account(active.account).default_project
-        except Exception:  # noqa: BLE001 — best-effort enrichment
+        except (AccountNotFoundError, ConfigError):
             proj = None
     return {"account": active.account, "project": proj, "workspace": active.workspace}
 
@@ -264,7 +285,7 @@ def _build_parser() -> argparse.ArgumentParser:
     for verb in ("use", "login", "test"):
         acct.add_parser(verb).add_argument("name")
     proj = sub.add_parser("project").add_subparsers(dest="action", required=True)
-    proj.add_parser("list").add_argument("--remote", action="store_true")
+    proj.add_parser("list")
     proj.add_parser("use").add_argument("project_id")
     wsp = sub.add_parser("workspace").add_subparsers(dest="action", required=True)
     wsp.add_parser("list")

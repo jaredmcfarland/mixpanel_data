@@ -456,12 +456,18 @@ class TestBridgeStatusSubcommand:
 class TestStaticGuards:
     """Per-T100 guards on the rewritten file."""
 
-    def test_loc_budget_at_or_below_300(self) -> None:
-        """``auth_manager.py`` body must stay ≤ 300 lines."""
+    def test_loc_budget_at_or_below_320(self) -> None:
+        """``auth_manager.py`` body must stay ≤ 320 lines.
+
+        The cap was bumped from 300 → 320 in 0.4.1 to make room for the
+        enriched ``_err()`` envelope (actionable code derivation, cause
+        preservation, opt-in MP_VERBOSE traceback). Further growth should
+        be considered a real signal that the script is doing too much.
+        """
         lines = PLUGIN_AUTH_MANAGER.read_text(encoding="utf-8").splitlines()
-        assert len(lines) <= 300, (
+        assert len(lines) <= 320, (
             f"auth_manager.py grew to {len(lines)} lines; "
-            "target is ≤ 300 (Phase 9 / T100)."
+            "target is ≤ 320 (Phase 9 / T100, bumped 0.4.1)."
         )
 
     def test_zero_version_branches(self) -> None:

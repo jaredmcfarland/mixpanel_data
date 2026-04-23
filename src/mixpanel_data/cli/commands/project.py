@@ -9,8 +9,8 @@ contracts/cli-commands.md §4.
 
 from __future__ import annotations
 
-import json as _json
-from typing import TYPE_CHECKING, Annotated
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
@@ -106,13 +106,6 @@ def list_projects(
             help="Bypass the local /me cache and refetch.",
         ),
     ] = False,
-    remote: Annotated[
-        bool,
-        typer.Option(
-            "--remote",
-            help="Alias for --refresh (kept for v2 ergonomic continuity).",
-        ),
-    ] = False,
     format: Annotated[  # noqa: A002
         str,
         typer.Option(
@@ -125,62 +118,48 @@ def list_projects(
     """List projects accessible by the active account.
 
     Always enumerates from ``/me`` (24h cached). The active project is
-    marked. ``--refresh`` (or its alias ``--remote``) bypasses the
-    local cache and refetches. Works with only authentication
-    configured — no project axis required (FR-047).
+    marked. ``--refresh`` bypasses the local cache and refetches. Works
+    with only authentication configured — no project axis required
+    (FR-047).
 
     Args:
         ctx: Typer context.
         refresh: Bypass the local /me cache and refetch.
-        remote: Deprecated alias for ``--refresh``.
         format: Output format (``table`` / ``json`` / ``jsonl``).
     """
-    bypass_cache = refresh or remote
+    from mixpanel_data.cli.formatters import emit_records
+
     _, active_project = _active_account_default_project()
 
     with _open_account_scoped_workspace() as ws:
-        projects = ws.projects(refresh=bypass_cache)
+        projects = ws.projects(refresh=refresh)
 
-    if format == "json":
-        console.print(
-            _json.dumps(
-                [
-                    {
-                        "id": p.id,
-                        "name": p.name,
-                        "organization_id": p.organization_id,
-                        "timezone": p.timezone,
-                        "is_active": p.id == active_project,
-                    }
-                    for p in projects
-                ],
-                indent=2,
-            )
-        )
-        return
-    if format == "jsonl":
-        for p in projects:
-            console.print(
-                _json.dumps(
-                    {
-                        "id": p.id,
-                        "name": p.name,
-                        "organization_id": p.organization_id,
-                        "timezone": p.timezone,
-                        "is_active": p.id == active_project,
-                    }
-                )
-            )
-        return
-    if not projects:
-        console.print("(no projects accessible via /me)")
-        return
-    lines = ["  ID              NAME                              ORG"]
-    for p in projects:
-        marker = "*" if p.id == active_project else " "
-        name = (p.name or "")[:33]
-        lines.append(f"{marker} {p.id:<15} {name:<33} {p.organization_id}")
-    console.print("\n".join(lines))
+    def _to_dict(p: Any) -> dict[str, Any]:
+        return {
+            "id": p.id,
+            "name": p.name,
+            "organization_id": p.organization_id,
+            "timezone": p.timezone,
+            "is_active": p.id == active_project,
+        }
+
+    def _render_table(items: Sequence[Any]) -> str:
+        if not items:
+            return "(no projects accessible via /me)"
+        lines = ["  ID              NAME                              ORG"]
+        for p in items:
+            marker = "*" if p.id == active_project else " "
+            name = (p.name or "")[:33]
+            lines.append(f"{marker} {p.id:<15} {name:<33} {p.organization_id}")
+        return "\n".join(lines)
+
+    emit_records(
+        projects,
+        format=format,
+        console=console,
+        to_dict=_to_dict,
+        table_renderer=_render_table,
+    )
 
 
 @project_app.command("use")

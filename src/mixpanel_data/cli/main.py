@@ -9,7 +9,7 @@ Usage:
 
 Examples:
     mp --help
-    mp auth list
+    mp account list
     mp --account staging query segmentation -e "Sign Up" --from 2024-01-01 --to 2024-01-31
 """
 

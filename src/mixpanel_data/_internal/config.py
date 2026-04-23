@@ -54,10 +54,6 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG_PATH = Path.home() / ".mp" / "config.toml"
 
-# Region constants for runtime validation; ``Region`` is the type-level
-# source of truth in :mod:`mixpanel_data._internal.auth.account`.
-VALID_REGIONS: tuple[Region, ...] = ("us", "eu", "in")
-
 
 # =============================================================================
 # ConfigManager
@@ -1012,19 +1008,6 @@ class ConfigManager:
             settings["custom_header"] = {"name": name, "value": value}
 
     # ---- validators --------------------------------------------------
-
-    @staticmethod
-    def _validate_project_id(project: str) -> None:
-        """Validate a project ID matches Mixpanel's wire format (digit string).
-
-        Args:
-            project: Candidate ID.
-
-        Raises:
-            ConfigError: If ``project`` is not a non-empty digit string.
-        """
-        if not project or not project.isdigit():
-            raise ConfigError(f"Invalid project ID: {project!r}. Must match `^\\d+$`.")
 
     @staticmethod
     def _validate_workspace_id(workspace: int) -> None:

@@ -13,6 +13,7 @@ from __future__ import annotations
 import stat
 import time
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -321,6 +322,84 @@ class TestMeCache:
         )
 
 
+class TestMeCacheConcurrency:
+    """``MeCache.put()`` must be safe under concurrent same-process writers.
+
+    Routes through :func:`atomic_write_bytes`, which derives the tmp filename
+    from ``pid + tid`` so two threads writing different payloads to the same
+    cache pick distinct tmp paths and one of them wins atomically — neither
+    can observe a torn or partial file.
+    """
+
+    def test_two_threads_writing_same_cache_produce_valid_file(
+        self, tmp_path: Path
+    ) -> None:
+        """Two threads racing through ``put()`` MUST leave a parseable file.
+
+        Regression: the prior implementation used a fixed
+        ``path.with_suffix('.tmp')`` for the tmp filename, so concurrent
+        writers' ``write_text`` calls clobbered each other and the rename
+        could land a half-written file.
+        """
+        import threading
+
+        cache_dir = tmp_path / "accounts" / "personal"
+        cache_dir.mkdir(parents=True)
+        cache = MeCache(account_name="personal", storage_dir=cache_dir)
+
+        # Two distinct payloads — only one should win, but both must be
+        # individually well-formed.
+        resp_a = MeResponse(user_id=1, user_email="a@example.com")
+        resp_b = MeResponse(user_id=2, user_email="b@example.com")
+
+        barrier = threading.Barrier(2)
+        errors: list[BaseException] = []
+
+        def writer(payload: MeResponse) -> None:
+            try:
+                barrier.wait()  # release both threads simultaneously
+                cache.put(payload)
+            except BaseException as exc:  # noqa: BLE001 — surface to assertion
+                errors.append(exc)
+
+        t1 = threading.Thread(target=writer, args=(resp_a,))
+        t2 = threading.Thread(target=writer, args=(resp_b,))
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        assert not errors, f"Concurrent writers raised: {errors}"
+        result = cache.get()
+        assert result is not None, "Cache file is unparseable after concurrent writes"
+        # Whichever thread won, the file has a valid user_id from one of them.
+        assert result.user_id in (1, 2)
+
+    def test_chmod_failure_on_dir_raises_config_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An OS that refuses ``0o700`` on the dir surfaces a ConfigError.
+
+        Cache holds PII (user emails, project names) — silent fall-through
+        to the default umask would leak that material.
+        """
+        cache_dir = tmp_path / "accounts" / "personal"
+        cache_dir.mkdir(parents=True)
+        cache = MeCache(account_name="personal", storage_dir=cache_dir)
+        resp = MeResponse(user_id=1, user_email="a@example.com")
+
+        original_chmod = __import__("os").chmod
+
+        def chmod_fail(path: Any, mode: int) -> None:
+            if str(path) == str(cache_dir):
+                raise OSError(13, "Permission denied")
+            original_chmod(path, mode)
+
+        monkeypatch.setattr("os.chmod", chmod_fail)
+        with pytest.raises(ConfigError, match="0o700"):
+            cache.put(resp)
+
+
 # ── MeService Tests ─────────────────────────────────────────────────
 
 
@@ -447,20 +526,28 @@ class TestMeService:
     # ── fetch() error handling (T041b) ───────────────────────────────
 
     def test_fetch_401_raises_config_error(self, cache: MeCache) -> None:
-        """Test that 401 from /me raises ConfigError with clear message."""
+        """401 → actionable ConfigError mentioning re-login (not /me access)."""
         api = MagicMock()
         api.me.side_effect = AuthenticationError("Invalid credentials", status_code=401)
         svc = MeService(api, cache, "us")
-        with pytest.raises(ConfigError, match="lack permission"):
+        with pytest.raises(ConfigError, match="invalid \\(401\\)") as exc_info:
             svc.fetch()
+        # 401 error should mention `mp account login` as the actionable fix
+        assert "mp account login" in exc_info.value.message
+        assert exc_info.value.details["status_code"] == 401
+        assert exc_info.value.details["account_name"] == "personal"
 
     def test_fetch_403_raises_config_error(self, cache: MeCache) -> None:
-        """Test that 403 from /me raises ConfigError with clear message."""
+        """403 → ConfigError advising explicit --project / different scope."""
         api = MagicMock()
         api.me.side_effect = QueryError("Permission denied", status_code=403)
         svc = MeService(api, cache, "us")
-        with pytest.raises(ConfigError, match="lack permission"):
+        with pytest.raises(ConfigError, match="lacks /me permission") as exc_info:
             svc.fetch()
+        # 403 error should advise explicit --project or a different account
+        assert "--project" in exc_info.value.message
+        assert exc_info.value.details["status_code"] == 403
+        assert exc_info.value.details["account_name"] == "personal"
 
     def test_fetch_other_error_propagates(self, cache: MeCache) -> None:
         """Test that non-401/403 errors propagate unchanged."""

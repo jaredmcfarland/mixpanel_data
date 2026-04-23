@@ -22,15 +22,17 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PositiveInt,
     field_serializer,
     model_validator,
 )
 
 from mixpanel_data._internal.auth.account import (
     Account,
+    AccountName,
+    ProjectId,
     Region,
     TokenResolver,
+    WorkspaceId,
 )
 
 
@@ -44,7 +46,7 @@ class Project(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    id: Annotated[str, Field(min_length=1, pattern=r"^\d+$")]
+    id: Annotated[ProjectId, Field(min_length=1, pattern=r"^\d+$")]
     """Numeric project ID (Mixpanel's wire format is a digit string)."""
 
     name: str | None = None
@@ -63,11 +65,19 @@ class WorkspaceRef(BaseModel):
     The data model is named ``WorkspaceRef`` to avoid colliding with the
     public ``Workspace`` facade class. Public re-export keeps the
     ``WorkspaceRef`` name.
+
+    The optional ``project_id`` lets a :class:`Session` cross-check that the
+    workspace actually belongs to the bound project — every workspace lives
+    inside exactly one project, and routing a workspace ID to the wrong
+    project returns 400/404 deep inside the API call rather than at session
+    construction. When populated (typically from a ``/me`` enumeration), the
+    session-level model_validator raises :class:`ValueError` on mismatch
+    instead of letting the bug surface as an HTTP error mid-query.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    id: PositiveInt
+    id: Annotated[WorkspaceId, Field(gt=0)]
     """Positive integer workspace ID assigned by Mixpanel."""
 
     name: str | None = None
@@ -75,6 +85,15 @@ class WorkspaceRef(BaseModel):
 
     is_default: bool | None = None
     """Whether this is the project's default workspace, when known."""
+
+    project_id: ProjectId | None = None
+    """Owning project ID, when known.
+
+    Populated by ``/me`` enumeration paths so :class:`Session` can verify
+    project ↔ workspace coupling. Left ``None`` when the workspace was
+    constructed from a bare ID (e.g. ``MP_WORKSPACE_ID=N``) — in that
+    case the cross-check degrades to "trust the caller" rather than raising
+    a spurious mismatch error."""
 
 
 class _SentinelType:
@@ -135,6 +154,40 @@ class Session(BaseModel):
     sessions. Consumers that need a mutable copy should use
     ``dict(session.headers)``.
     """
+
+    @model_validator(mode="after")
+    def _check_workspace_project_coupling(self) -> Session:
+        """Reject sessions that bind a workspace to the wrong project.
+
+        Every Mixpanel workspace lives inside exactly one project. When the
+        ``WorkspaceRef`` carries a ``project_id`` (populated by ``/me``
+        enumeration), it MUST match the bound project's ID — otherwise the
+        API call would surface a 400/404 deep in the request path with no
+        useful context. Raising here keeps the failure mode at session
+        construction with a clear message.
+
+        Workspaces constructed from a bare ID (no ``project_id``) are
+        accepted — there is nothing to verify against, and the API will
+        still catch the mismatch at request time.
+
+        Returns:
+            ``self`` unchanged.
+
+        Raises:
+            ValueError: ``workspace.project_id`` is set and does not equal
+                ``project.id``.
+        """
+        if (
+            self.workspace is not None
+            and self.workspace.project_id is not None
+            and self.workspace.project_id != self.project.id
+        ):
+            raise ValueError(
+                f"Workspace {self.workspace.id} belongs to project "
+                f"{self.workspace.project_id!r}, not {self.project.id!r}. "
+                f"Re-resolve the workspace under the correct project."
+            )
+        return self
 
     @model_validator(mode="after")
     def _freeze_headers(self) -> Session:
@@ -268,10 +321,10 @@ class ActiveSession(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    account: str | None = None
+    account: AccountName | None = None
     """Local config name of the active account (must reference ``[accounts.NAME]``)."""
 
-    workspace: int | None = None
+    workspace: WorkspaceId | None = None
     """Active workspace ID (positive int) or ``None`` for lazy resolution."""
 
 

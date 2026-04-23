@@ -56,7 +56,14 @@ from mixpanel_data._literal_types import RetentionMode as RetentionMode
 from mixpanel_data._literal_types import SegmentMethod as SegmentMethod
 from mixpanel_data._literal_types import TimeComparisonType as TimeComparisonType
 from mixpanel_data._literal_types import TimeComparisonUnit as TimeComparisonUnit
-from mixpanel_data.auth_types import AccountType, Region
+from mixpanel_data.auth_types import (
+    AccountName,
+    AccountType,
+    ProjectId,
+    Region,
+    TargetName,
+    WorkspaceId,
+)
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -11931,16 +11938,16 @@ class Target(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    name: str
+    name: TargetName
     """Local target name (matches the TOML block key)."""
 
-    account: str
+    account: AccountName
     """Local config name of the referenced account (must exist)."""
 
-    project: Annotated[str, Field(min_length=1, pattern=r"^\d+$")]
+    project: Annotated[ProjectId, Field(min_length=1, pattern=r"^\d+$")]
     """Numeric project ID (Mixpanel's wire format)."""
 
-    workspace: Annotated[int, Field(gt=0)] | None = None
+    workspace: Annotated[WorkspaceId, Field(gt=0)] | None = None
     """Optional workspace ID (must be a positive integer when set);
     ``None`` defers to lazy resolution. Mirrors ``WorkspaceRef.id``'s
     ``PositiveInt`` constraint so bad values fail at construction rather

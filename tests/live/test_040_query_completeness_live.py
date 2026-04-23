@@ -18,7 +18,7 @@ Usage:
     uv run pytest tests/live/test_040_query_completeness_live.py -v -m live -k Offline
 
 Pre-requisites:
-    - Active OAuth token: ``mp auth login``
+    - Active OAuth token: ``mp account login NAME``
     - Project switched to target project with events
 """
 

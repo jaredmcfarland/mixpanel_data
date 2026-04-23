@@ -17,20 +17,45 @@ Reference: ``specs/042-auth-architecture-redesign/data-model.md`` §1, §2.
 from __future__ import annotations
 
 import base64
-from collections.abc import Callable
-from typing import Annotated, Literal, Protocol, TypeVar
+from typing import Annotated, Literal, NewType, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from typing_extensions import Self
-
-_T = TypeVar("_T")
-
 
 Region = Literal["us", "eu", "in"]
 """Supported Mixpanel data residency regions."""
 
 AccountType = Literal["service_account", "oauth_browser", "oauth_token"]
 """Discriminator literal for the :data:`Account` union."""
+
+# ── Phantom-typed identifiers ────────────────────────────────────────
+# Each of these is a ``NewType`` over the underlying primitive. At runtime
+# they are indistinguishable from the base type (zero cost — ``NewType(x)``
+# is essentially an identity). At ``mypy --strict`` time they are distinct,
+# so a function that takes ``ProjectId`` will refuse a bare ``str`` literal
+# (forcing the caller to spell ``ProjectId("3713224")`` or thread a properly
+# typed value through). This catches the entire class of "passed an account
+# name where a project ID was expected" bugs that cross-axis confusion
+# invites — exactly the kind of bug the resolver chain is designed to
+# prevent at the *runtime* level.
+#
+# Public callers can keep passing string literals to the high-level facade
+# (``Workspace.use(account="team")``) — those entry points remain typed as
+# ``str`` for ergonomics. The NewTypes flow through return values and
+# internal signatures so downstream code that uses them benefits from the
+# strict checking automatically.
+
+AccountName = NewType("AccountName", str)
+"""Phantom-typed identifier for ``[accounts.NAME]`` blocks. ``str`` at runtime."""
+
+ProjectId = NewType("ProjectId", str)
+"""Phantom-typed Mixpanel project ID (numeric string). ``str`` at runtime."""
+
+WorkspaceId = NewType("WorkspaceId", int)
+"""Phantom-typed Mixpanel workspace ID (positive integer). ``int`` at runtime."""
+
+TargetName = NewType("TargetName", str)
+"""Phantom-typed identifier for ``[targets.NAME]`` blocks. ``str`` at runtime."""
 
 
 class TokenResolver(Protocol):
@@ -78,7 +103,7 @@ class _AccountBase(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: Annotated[
-        str,
+        AccountName,
         Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$"),
     ]
     """Local config-side identifier — alphanumeric, ``_``, ``-`` (1-64 chars)."""
@@ -87,53 +112,13 @@ class _AccountBase(BaseModel):
     """Mixpanel data residency — one of ``us``, ``eu``, ``in``."""
 
     default_project: Annotated[
-        str | None,
+        ProjectId | None,
         Field(default=None, pattern=r"^\d+$"),
     ] = None
     """Account's home project (numeric string). Resolves the project axis when
     no env / param / target / bridge source overrides it (FR-017). Required at
     add-time for ``service_account`` / ``oauth_token`` accounts; populated
     post-PKCE via ``/me`` for ``oauth_browser`` accounts."""
-
-    def match(
-        self,
-        *,
-        on_service: Callable[[ServiceAccount], _T],
-        on_oauth_browser: Callable[[OAuthBrowserAccount], _T],
-        on_oauth_token: Callable[[OAuthTokenAccount], _T],
-    ) -> _T:
-        """Dispatch to the right callback based on the account variant.
-
-        Centralises the discriminated-union exhaustiveness check so call
-        sites no longer need to scatter ``isinstance`` chains (and so a
-        new variant added in the future surfaces as a single ``mypy``
-        failure here, not via runtime ``TypeError`` at every call site).
-        Each callback receives the type-narrowed variant.
-
-        Args:
-            on_service: Called with ``self`` if this is a ``ServiceAccount``.
-            on_oauth_browser: Called with ``self`` if this is an
-                ``OAuthBrowserAccount``.
-            on_oauth_token: Called with ``self`` if this is an
-                ``OAuthTokenAccount``.
-
-        Returns:
-            The return value of whichever callback was invoked.
-
-        Raises:
-            TypeError: A new ``Account`` variant was added without
-                updating this dispatcher (compile-time ``mypy`` failure
-                in normal use).
-        """
-        if isinstance(self, ServiceAccount):
-            return on_service(self)
-        if isinstance(self, OAuthBrowserAccount):
-            return on_oauth_browser(self)
-        if isinstance(self, OAuthTokenAccount):
-            return on_oauth_token(self)
-        raise TypeError(  # pragma: no cover — Literal exhaustiveness
-            f"Unknown Account variant: {type(self).__name__}"
-        )
 
 
 class ServiceAccount(_AccountBase):

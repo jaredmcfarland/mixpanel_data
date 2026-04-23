@@ -19,6 +19,7 @@ from mixpanel_data._internal.auth.account import (
     OAuthBrowserAccount,
     OAuthTokenAccount,
     ServiceAccount,
+    TargetName,
 )
 from mixpanel_data._internal.auth.session import ActiveSession
 from mixpanel_data._internal.config import ConfigManager
@@ -633,8 +634,9 @@ class TestFixtureLoad:
         assert accounts["personal"].type == "oauth_browser"
         assert accounts["ci"].type == "oauth_token"
         targets = {t.name: t for t in cm.list_targets()}
-        assert targets["ecom"].workspace == 3448414
-        assert targets["ai"].workspace is None
+        # NewType keys are str at runtime — index with cast literals.
+        assert targets[TargetName("ecom")].workspace == 3448414
+        assert targets[TargetName("ai")].workspace is None
 
 
 class TestSettingsCustomHeader:

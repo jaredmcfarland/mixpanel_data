@@ -28,6 +28,7 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §1.
 from __future__ import annotations
 
 import os
+import typing
 
 from pydantic import SecretStr, ValidationError
 
@@ -46,7 +47,10 @@ from mixpanel_data._internal.auth.session import (
 from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.exceptions import ConfigError
 
-_VALID_REGIONS: frozenset[str] = frozenset({"us", "eu", "in"})
+# Derive from the ``Region`` Literal so adding a new region (e.g. ``"jp"``)
+# happens in exactly one place — the type — and every runtime check picks
+# it up automatically.
+_VALID_REGIONS: frozenset[str] = frozenset(typing.get_args(Region))
 
 
 def _env_region() -> Region | None:
@@ -217,7 +221,39 @@ def resolve_project_axis(
     return None
 
 
-def _resolve_workspace_axis(
+def env_workspace_id() -> int | None:
+    """Return ``MP_WORKSPACE_ID`` as a validated positive int, or ``None``.
+
+    Centralises the env validation so every caller — :func:`resolve_workspace_axis`
+    and the in-session ``Workspace.use(account=...)`` path that intentionally
+    skips the ``[active]`` fallback per FR-033 — surfaces identical errors
+    on malformed input.
+
+    Returns:
+        Parsed positive integer, or ``None`` if the env var is unset.
+
+    Raises:
+        ConfigError: ``MP_WORKSPACE_ID`` is set but not a positive integer.
+    """
+    env_val = os.environ.get("MP_WORKSPACE_ID")
+    if not env_val:
+        return None
+    try:
+        parsed = int(env_val)
+    except ValueError as exc:
+        raise ConfigError(
+            f"MP_WORKSPACE_ID={env_val!r} is not a positive integer.",
+            details={"env_var": "MP_WORKSPACE_ID", "value": env_val},
+        ) from exc
+    if parsed <= 0:
+        raise ConfigError(
+            f"MP_WORKSPACE_ID={env_val!r} is not a positive integer.",
+            details={"env_var": "MP_WORKSPACE_ID", "value": env_val},
+        )
+    return parsed
+
+
+def resolve_workspace_axis(
     *,
     explicit: int | None,
     target_workspace: int | None,
@@ -240,21 +276,9 @@ def _resolve_workspace_axis(
     Returns:
         Workspace ID, or ``None`` (lazy-resolve later).
     """
-    env_val = os.environ.get("MP_WORKSPACE_ID")
-    if env_val:
-        try:
-            parsed = int(env_val)
-        except ValueError as exc:
-            raise ConfigError(
-                f"MP_WORKSPACE_ID={env_val!r} is not a positive integer.",
-                details={"env_var": "MP_WORKSPACE_ID", "value": env_val},
-            ) from exc
-        if parsed <= 0:
-            raise ConfigError(
-                f"MP_WORKSPACE_ID={env_val!r} is not a positive integer.",
-                details={"env_var": "MP_WORKSPACE_ID", "value": env_val},
-            )
-        return parsed
+    env_val = env_workspace_id()
+    if env_val is not None:
+        return env_val
     if explicit is not None:
         return explicit
     if target_workspace is not None:
@@ -416,7 +440,7 @@ def resolve_session(
             f"Invalid project ID: {project_id!r}. Must match `^\\d+$`."
         ) from exc
 
-    workspace_id = _resolve_workspace_axis(
+    workspace_id = resolve_workspace_axis(
         explicit=workspace,
         target_workspace=target_workspace,
         bridge=br,

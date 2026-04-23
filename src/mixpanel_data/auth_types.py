@@ -16,12 +16,16 @@ Reference: ``specs/042-auth-architecture-redesign/contracts/python-api.md``.
 
 from mixpanel_data._internal.auth.account import (
     Account,
+    AccountName,
     AccountType,
     OAuthBrowserAccount,
     OAuthTokenAccount,
+    ProjectId,
     Region,
     ServiceAccount,
+    TargetName,
     TokenResolver,
+    WorkspaceId,
 )
 from mixpanel_data._internal.auth.bridge import BridgeFile, load_bridge
 from mixpanel_data._internal.auth.session import (
@@ -41,6 +45,11 @@ __all__ = [
     "OAuthTokenAccount",
     "ServiceAccount",
     "Region",
+    # Phantom-typed identifiers (NewType — str/int at runtime, distinct in mypy)
+    "AccountName",
+    "ProjectId",
+    "WorkspaceId",
+    "TargetName",
     # Session + axes
     "ActiveSession",
     "Project",

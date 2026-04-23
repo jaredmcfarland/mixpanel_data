@@ -155,4 +155,4 @@ def test_account_region_in_allowed_set(account: Account) -> None:
 def test_account_immutable(account: Account) -> None:
     """Mutating any account raises (frozen=True)."""
     with pytest.raises(ValidationError):
-        account.name = "renamed"  # type: ignore[misc]
+        account.name = "renamed"  # type: ignore[misc, assignment]

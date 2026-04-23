@@ -529,8 +529,14 @@ class TestOAuthFlowRefresh:
         assert "client_id=cid" in body
         assert new_tokens.access_token.get_secret_value() == "access-tok-123"
 
-    def test_refresh_error_raises_oauth_error(self, tmp_path: Path) -> None:
-        """Verify that a failed refresh raises OAuthError with OAUTH_REFRESH_ERROR."""
+    def test_refresh_invalid_grant_raises_revoked(self, tmp_path: Path) -> None:
+        """``invalid_grant`` from the IdP → distinct ``OAUTH_REFRESH_REVOKED`` code.
+
+        A refresh token that the IdP rejects is permanently dead — the user must
+        re-run the browser flow, not just retry. The distinct error code lets
+        downstream callers (CLI, plugin) emit the precise recovery hint instead
+        of suggesting a generic retry.
+        """
         transport = httpx.MockTransport(
             lambda _req: httpx.Response(400, json={"error": "invalid_grant"})
         )
@@ -540,6 +546,35 @@ class TestOAuthFlowRefresh:
         tokens = OAuthTokens(
             access_token=SecretStr("old"),
             refresh_token=SecretStr("bad-refresh"),
+            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            scope="projects",
+            token_type="Bearer",
+        )
+
+        flow = OAuthFlow(region="us", storage=storage, http_client=http_client)
+        with pytest.raises(OAuthError) as exc_info:
+            flow.refresh_tokens(tokens=tokens, client_id="cid", account_name="personal")
+        assert exc_info.value.code == "OAUTH_REFRESH_REVOKED"
+        # Actionable hint embeds the account name so the user knows which
+        # `mp account login` to re-run.
+        assert "personal" in exc_info.value.message
+        assert "mp account login personal" in exc_info.value.message
+
+    def test_refresh_transient_5xx_raises_generic_error(self, tmp_path: Path) -> None:
+        """A 5xx from the IdP keeps the generic ``OAUTH_REFRESH_ERROR`` code.
+
+        Distinguishing transient failures from permanent ones (revoked refresh)
+        is the whole point of the split — a retry would help here, not re-login.
+        """
+        transport = httpx.MockTransport(
+            lambda _req: httpx.Response(503, text="Service Unavailable")
+        )
+        http_client = httpx.Client(transport=transport)
+        storage = OAuthStorage(storage_dir=tmp_path)
+
+        tokens = OAuthTokens(
+            access_token=SecretStr("old"),
+            refresh_token=SecretStr("good-refresh"),
             expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
             scope="projects",
             token_type="Bearer",
@@ -653,8 +688,12 @@ class TestOAuthFlowGetValidToken:
         assert reloaded is not None
         assert reloaded.access_token.get_secret_value() == "access-tok-123"
 
-    def test_raises_oauth_error_if_refresh_fails(self, tmp_path: Path) -> None:
-        """Verify that a failed refresh raises OAuthError with OAUTH_REFRESH_ERROR."""
+    def test_raises_revoked_if_refresh_fails_invalid_grant(
+        self, tmp_path: Path
+    ) -> None:
+        """An ``invalid_grant`` response routes through the new
+        ``OAUTH_REFRESH_REVOKED`` code rather than the generic refresh-error code,
+        so callers can prompt the user to re-login instead of suggesting retry."""
         transport = httpx.MockTransport(
             lambda _req: httpx.Response(400, json={"error": "invalid_grant"})
         )
@@ -675,7 +714,7 @@ class TestOAuthFlowGetValidToken:
         flow = OAuthFlow(region="us", storage=storage, http_client=http_client)
         with pytest.raises(OAuthError) as exc_info:
             flow.get_valid_token(region="us")
-        assert exc_info.value.code == "OAUTH_REFRESH_ERROR"
+        assert exc_info.value.code == "OAUTH_REFRESH_REVOKED"
 
     def test_raises_oauth_error_if_no_tokens_exist(self, tmp_path: Path) -> None:
         """Verify that missing tokens raises OAuthError with OAUTH_TOKEN_ERROR."""

@@ -341,3 +341,77 @@ class TestUseUpdatesSessionAndClearsCaches:
         ws.use(target="ecom")
         second = ws._me_svc  # noqa: SLF001
         assert second._cache._account_name == "other"  # noqa: SLF001
+
+
+class TestUseTargetEnvOverride:
+    """``use(target=T)`` MUST honor env vars per FR-017 (env > target)."""
+
+    def test_mp_project_id_beats_target_project(
+        self,
+        two_accounts: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Construction routes through ``resolve_session`` which honors env;
+        ``use(target=)`` must do the same. Without this, in-session env
+        overrides set after construction would silently be ignored on a
+        target swap.
+        """
+        targets_ns.add("ecom", account="other", project="3018488", workspace=42)
+        ws = Workspace(account="team", project="3713224")
+        monkeypatch.setenv("MP_PROJECT_ID", "5555555")
+        ws.use(target="ecom")
+        # Target says project=3018488, but MP_PROJECT_ID overrides per FR-017.
+        assert ws.project.id == "5555555"
+        # Account / workspace still come from the target.
+        assert ws.account.name == "other"
+        assert ws.workspace is not None
+        assert ws.workspace.id == 42
+
+    def test_mp_workspace_id_beats_target_workspace(
+        self,
+        two_accounts: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``MP_WORKSPACE_ID`` overrides the target's workspace."""
+        targets_ns.add("ecom", account="other", project="3018488", workspace=42)
+        ws = Workspace(account="team", project="3713224")
+        monkeypatch.setenv("MP_WORKSPACE_ID", "987")
+        ws.use(target="ecom")
+        assert ws.workspace is not None
+        assert ws.workspace.id == 987
+
+
+class TestUseAccountWorkspaceEnvValidation:
+    """``use(account=)`` MUST validate ``MP_WORKSPACE_ID`` like construction.
+
+    The previous inline ``isdigit() and int(env_ws) > 0`` check silently
+    swallowed invalid values (e.g. ``-1``); the canonical
+    :func:`env_workspace_id` raises :class:`ConfigError` on the same input.
+    Both code paths must agree so that an env-var typo surfaces consistently.
+    """
+
+    def test_invalid_negative_mp_workspace_id_raises(
+        self,
+        two_accounts: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``MP_WORKSPACE_ID=-1`` must raise on account swap, not silently clear."""
+        from mixpanel_data.exceptions import ConfigError
+
+        ws = Workspace(account="team", project="3713224")
+        monkeypatch.setenv("MP_WORKSPACE_ID", "-1")
+        with pytest.raises(ConfigError, match="MP_WORKSPACE_ID"):
+            ws.use(account="other")
+
+    def test_invalid_non_int_mp_workspace_id_raises(
+        self,
+        two_accounts: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """``MP_WORKSPACE_ID=abc`` must raise on account swap."""
+        from mixpanel_data.exceptions import ConfigError
+
+        ws = Workspace(account="team", project="3713224")
+        monkeypatch.setenv("MP_WORKSPACE_ID", "abc")
+        with pytest.raises(ConfigError, match="MP_WORKSPACE_ID"):
+            ws.use(account="other")

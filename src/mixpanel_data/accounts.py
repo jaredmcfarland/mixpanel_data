@@ -21,6 +21,7 @@ from mixpanel_data._internal.auth.account import (
     AccountType,
     OAuthBrowserAccount,
     OAuthTokenAccount,
+    ProjectId,
     Region,
     ServiceAccount,
 )
@@ -352,7 +353,7 @@ def login(
     from mixpanel_data._internal.api_client import MixpanelAPIClient
     from mixpanel_data._internal.auth.flow import OAuthFlow
     from mixpanel_data._internal.auth.session import Project, Session
-    from mixpanel_data._internal.me import MeCache, MeResponse, MeService
+    from mixpanel_data._internal.me import MeResponse
 
     flow = OAuthFlow(region=account.region)
     # ``persist=False`` skips the v2 ``~/.mp/oauth/tokens_{region}.json``
@@ -372,11 +373,6 @@ def login(
     )
     api_client = MixpanelAPIClient(session=probe_session)
     try:
-        me_svc = MeService(
-            api_client=api_client,
-            cache=MeCache(account_name=name),
-            region=account.region,
-        )
         try:
             me_raw = api_client.me()
             me_resp = MeResponse.model_validate(me_raw)
@@ -386,14 +382,12 @@ def login(
                 code="OAUTH_TOKEN_ERROR",
                 details={"account_name": name, "region": account.region},
             ) from exc
-        # MeService is constructed for parity with the rest of the codebase
-        # (eager cache wiring) but the immediate-post-login response is
-        # consumed directly so a second network call is not needed.
-        del me_svc  # signal: kept reference live during the try block
         if me_resp.user_id is not None and me_resp.user_email is not None:
             user = MeUserInfo(id=me_resp.user_id, email=me_resp.user_email)
         if chosen_project is None and me_resp.projects:
-            chosen_project = next(iter(sorted(me_resp.projects)))
+            # ``me_resp.projects`` keys are str at runtime; cast to ProjectId
+            # to satisfy the typed contract on ``Account.default_project``.
+            chosen_project = ProjectId(next(iter(sorted(me_resp.projects))))
             cm.update_account(name, default_project=chosen_project)
     finally:
         api_client.close()
@@ -424,9 +418,8 @@ def _persist_browser_tokens(name: str, tokens: Any) -> Path:
         "access_token": tokens.access_token.get_secret_value(),
         "expires_at": tokens.expires_at.isoformat(),
         "token_type": tokens.token_type,
+        "scope": tokens.scope,
     }
-    if tokens.scope is not None:
-        payload["scope"] = tokens.scope
     if tokens.refresh_token is not None:
         payload["refresh_token"] = tokens.refresh_token.get_secret_value()
     atomic_write_bytes(path, json.dumps(payload).encode("utf-8"))

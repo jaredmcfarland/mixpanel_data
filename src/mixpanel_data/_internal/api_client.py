@@ -943,7 +943,7 @@ class MixpanelAPIClient:
 
         Example:
             ```python
-            client = MixpanelAPIClient(oauth_credentials)
+            client = MixpanelAPIClient(session=session)
             with client:
                 dashboards = client.app_request(
                     "GET", "/projects/12345/dashboards"
@@ -1242,10 +1242,13 @@ class MixpanelAPIClient:
     ) -> MixpanelAPIClient:
         """Create a new client for a different project, sharing HTTP transport.
 
-        Builds new ``Credentials`` with the given ``project_id`` but keeps the
-        same authentication (username/secret/oauth) and region.  The underlying
-        ``httpx.Client`` instance is shared so no extra TCP connections are
-        created.
+        Builds a new :class:`Session` (via :meth:`Session.replace`) with the
+        given ``project_id`` but keeps the same authentication (account) and
+        region. The underlying transport is shared via the ``_transport``
+        kwarg so no extra TCP connections are created; a fresh
+        ``httpx.Client`` wrapping that transport is constructed lazily on
+        first request. (For in-session axis swaps that preserve the existing
+        ``httpx.Client`` instance itself, use :meth:`Workspace.use` instead.)
 
         Args:
             project_id: The project ID to target.
@@ -1297,7 +1300,7 @@ class MixpanelAPIClient:
 
         Example:
             ```python
-            with MixpanelAPIClient(credentials) as client:
+            with MixpanelAPIClient(session=session) as client:
                 me_data = client.me()
                 print(me_data.get("user_email"))
             ```

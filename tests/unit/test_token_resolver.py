@@ -248,10 +248,15 @@ class TestBrowserTokenRefresh:
         new_expires = datetime.now(timezone.utc) + timedelta(hours=1)
 
         def _fake_refresh(
-            self: object, *, tokens: OAuthTokens, client_id: str
+            self: object,
+            *,
+            tokens: OAuthTokens,
+            client_id: str,
+            account_name: str | None = None,
         ) -> OAuthTokens:
             """Return refreshed tokens; record the inputs for assertions."""
             captured["client_id"] = client_id
+            captured["account_name"] = account_name
             captured["refresh_token_in"] = (
                 tokens.refresh_token.get_secret_value()
                 if tokens.refresh_token
@@ -313,7 +318,7 @@ class TestBrowserTokenRefresh:
         monkeypatch.setattr(
             flow_mod.OAuthFlow,
             "refresh_tokens",
-            lambda _self, *, tokens, client_id: OAuthTokens(  # noqa: ARG005
+            lambda _self, *, tokens, client_id, account_name=None: OAuthTokens(  # noqa: ARG005
                 access_token=SecretStr("brw-tok-new"),
                 refresh_token=None,  # IdP didn't rotate
                 expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
@@ -375,3 +380,122 @@ class TestPathLayout:
         d = isolated_home / ".mp" / "accounts" / "me"
         if os.name == "posix":
             assert stat.S_IMODE(d.stat().st_mode) == 0o700
+
+
+class TestConcurrentRefresh:
+    """Two threads racing to refresh the same expired browser token.
+
+    The realistic scenario: an in-process Workspace fans out N parallel API
+    calls; each lazily resolves the bearer; they all observe the same
+    expired ``tokens.json`` and race ``_refresh_and_persist``. The contract
+    we want to lock:
+
+    1. Both callers receive a valid (non-empty) access token.
+    2. The on-disk ``tokens.json`` parses cleanly (no torn write).
+    3. The IdP is called once-per-thread — there is no single-flight guard
+       at this layer (a future enhancement could add one; for now we
+       document the actual behaviour).
+    """
+
+    def test_two_threads_racing_refresh_both_get_tokens_and_disk_is_valid(
+        self, isolated_home: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Two threads race ``_refresh_and_persist``; assert the contract above."""
+        import threading
+
+        from mixpanel_data._internal.auth import flow as flow_mod
+        from mixpanel_data._internal.auth import storage as storage_mod
+        from mixpanel_data._internal.auth.token import (
+            OAuthClientInfo,
+            OAuthTokens,
+        )
+
+        # Seed an expired tokens.json with a refresh token.
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        path = _write_tokens_file(
+            isolated_home,
+            name="me",
+            access_token="expired-tok",
+            expires_at=past,
+            refresh_token="brw-refresh-1",
+        )
+
+        # Stub DCR client info so the resolver doesn't try to read disk.
+        monkeypatch.setattr(
+            storage_mod.OAuthStorage,
+            "load_client_info",
+            lambda _self, *, region: OAuthClientInfo(  # noqa: ARG005
+                client_id="dcr-client-1",
+                region="us",
+                redirect_uri="http://localhost:8765/callback",
+                scope="read:project",
+                created_at=datetime.now(timezone.utc),
+            ),
+        )
+
+        # Use a Barrier to release both threads into ``refresh_tokens`` at the
+        # same instant, maximising the window where they would have collided
+        # on a fixed tmp filename. ``atomic_write_bytes`` derives tmp paths
+        # from pid+tid so each thread picks a distinct one.
+        barrier = threading.Barrier(2)
+        gate = threading.Event()
+        call_count = 0
+        call_lock = threading.Lock()
+        new_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        def _fake_refresh(
+            self: object,
+            *,
+            tokens: OAuthTokens,
+            client_id: str,  # noqa: ARG001
+            account_name: str | None = None,  # noqa: ARG001
+        ) -> OAuthTokens:
+            """Return refreshed tokens after a controlled barrier sync."""
+            nonlocal call_count
+            with call_lock:
+                call_count += 1
+                my_n = call_count
+            # Both threads wait at the barrier; the test thread releases
+            # them via ``gate.set()`` so they enter the write path together.
+            barrier.wait(timeout=2)
+            gate.wait(timeout=2)
+            return OAuthTokens(
+                access_token=SecretStr(f"brw-tok-new-{my_n}"),
+                refresh_token=SecretStr(f"brw-refresh-{my_n + 1}"),
+                expires_at=new_expires,
+                scope="read:project",
+                token_type="Bearer",
+            )
+
+        monkeypatch.setattr(flow_mod.OAuthFlow, "refresh_tokens", _fake_refresh)
+
+        results: list[str | BaseException] = [None, None]  # type: ignore[list-item]
+
+        def _worker(idx: int) -> None:
+            try:
+                resolver = OnDiskTokenResolver()
+                results[idx] = resolver.get_browser_token("me", "us")
+            except BaseException as exc:  # noqa: BLE001 — surface to assertion
+                results[idx] = exc
+
+        t1 = threading.Thread(target=_worker, args=(0,))
+        t2 = threading.Thread(target=_worker, args=(1,))
+        t1.start()
+        t2.start()
+        # Give both threads time to reach the barrier in the stub.
+        gate.set()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        # Both calls returned tokens (no exception).
+        for r in results:
+            assert isinstance(r, str), f"thread raised: {r!r}"
+            assert r.startswith("brw-tok-new-")
+
+        # Final on-disk file parses cleanly (no torn / partial write).
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload["access_token"].startswith("brw-tok-new-")
+        assert payload["refresh_token"].startswith("brw-refresh-")
+        # Both threads triggered an IdP call (the resolver does NOT have a
+        # single-flight guard; this assertion documents the current behaviour).
+        assert call_count == 2

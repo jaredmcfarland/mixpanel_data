@@ -80,7 +80,7 @@ class TestProject:
         """Project is frozen — assignment raises."""
         p = Project(id="3713224")
         with pytest.raises(ValidationError):
-            p.id = "999"  # type: ignore[misc]
+            p.id = "999"  # type: ignore[misc, assignment]
 
 
 class TestWorkspaceRef:
@@ -111,7 +111,7 @@ class TestWorkspaceRef:
         """WorkspaceRef is frozen — assignment raises."""
         w = WorkspaceRef(id=8)
         with pytest.raises(ValidationError):
-            w.id = 9  # type: ignore[misc]
+            w.id = 9  # type: ignore[misc, assignment]
 
 
 class TestSessionConstruction:

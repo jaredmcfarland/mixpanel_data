@@ -169,7 +169,7 @@ class TestServiceAccount:
         """Mutating an instance raises ValidationError (model_config frozen)."""
         sa = ServiceAccount(name="t", region="us", username="u", secret=SecretStr("s"))
         with pytest.raises(ValidationError):
-            sa.name = "other"  # type: ignore[misc]
+            sa.name = "other"  # type: ignore[misc, assignment]
 
     def test_auth_header(self) -> None:
         """``auth_header`` returns Basic-auth base64 of ``user:secret``."""

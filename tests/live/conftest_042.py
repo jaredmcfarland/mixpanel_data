@@ -74,7 +74,7 @@ def copy_user_oauth_tokens_to_account(home: Path, account_name: str) -> Path:
     if not LEGACY_TOKENS_PATH.exists():
         raise FileNotFoundError(
             f"User's legacy OAuth tokens not found at {LEGACY_TOKENS_PATH}. "
-            "Live OAuth tests require a prior `mp auth login`."
+            "Live OAuth tests require a prior `mp account login NAME`."
         )
     payload: dict[str, Any] = json.loads(LEGACY_TOKENS_PATH.read_text(encoding="utf-8"))
     payload.pop("project_id", None)  # v3 drops this field
@@ -163,12 +163,12 @@ def require_oauth_browser_available() -> None:
     if not LEGACY_TOKENS_PATH.exists():
         pytest.skip(
             f"OAuth browser mode requires real tokens at {LEGACY_TOKENS_PATH} "
-            "(run `mp auth login` first)."
+            "(run `mp account login NAME` first)."
         )
     if not _oauth_token_is_fresh():
         pytest.skip(
             f"OAuth tokens at {LEGACY_TOKENS_PATH} are expired. "
-            "Run `mp auth login` to refresh, then re-run these tests."
+            "Run `mp account login NAME` to refresh, then re-run these tests."
         )
 
 

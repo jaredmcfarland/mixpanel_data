@@ -204,7 +204,7 @@ class OAuthFlow:
         tokens = self._storage.load_tokens(region=region)
         if tokens is None:
             raise OAuthError(
-                "No OAuth tokens found. Please log in first with `mp auth login`.",
+                "No OAuth tokens found. Please log in first with `mp account login NAME`.",
                 code="OAUTH_TOKEN_ERROR",
             )
 
@@ -216,7 +216,7 @@ class OAuthFlow:
         if client_info is None:
             raise OAuthError(
                 "No OAuth client info found for refresh. "
-                "Please log in again with `mp auth login`.",
+                "Please log in again with `mp account login NAME`.",
                 code="OAUTH_REFRESH_ERROR",
             )
 
@@ -443,6 +443,8 @@ class OAuthFlow:
         self,
         tokens: OAuthTokens,
         client_id: str,
+        *,
+        account_name: str | None = None,
     ) -> OAuthTokens:
         """Refresh OAuth tokens using a refresh token.
 
@@ -452,13 +454,19 @@ class OAuthFlow:
         Args:
             tokens: Current OAuthTokens containing the refresh token.
             client_id: The OAuth client ID.
+            account_name: When supplied, embedded in OAuthError messages
+                so the user knows exactly which account to recover (e.g.
+                ``"Re-run `mp account login NAME`"``).
 
         Returns:
             New OAuthTokens with a fresh access token.
 
         Raises:
             OAuthError: If no refresh token is available
-                (``OAUTH_REFRESH_ERROR``) or the refresh request fails.
+                (``OAUTH_REFRESH_ERROR``), the IdP rejects the refresh
+                token as ``invalid_grant`` (``OAUTH_REFRESH_REVOKED`` —
+                permanent, requires re-login), or the request fails for
+                a transient reason (``OAUTH_REFRESH_ERROR``).
 
         Example:
             ```python
@@ -466,9 +474,15 @@ class OAuthFlow:
             ```
         """
         if tokens.refresh_token is None:
+            hint = (
+                f"Run `mp account login {account_name}`."
+                if account_name
+                else "Run `mp account login NAME`."
+            )
             raise OAuthError(
-                "Cannot refresh: no refresh token available. Please log in again.",
+                f"Cannot refresh: no refresh token available. {hint}",
                 code="OAUTH_REFRESH_ERROR",
+                details=({"account_name": account_name} if account_name else {}),
             )
 
         form_data: dict[str, str] = {
@@ -480,6 +494,7 @@ class OAuthFlow:
             form_data,
             operation="Token refresh",
             error_code="OAUTH_REFRESH_ERROR",
+            account_name=account_name,
         )
 
     def _post_token_request(
@@ -488,6 +503,7 @@ class OAuthFlow:
         *,
         operation: str,
         error_code: str,
+        account_name: str | None = None,
     ) -> OAuthTokens:
         """POST form data to the token endpoint and parse the response.
 
@@ -499,13 +515,18 @@ class OAuthFlow:
             operation: Human-readable name for error messages
                 (e.g., ``"Token exchange"`` or ``"Token refresh"``).
             error_code: OAuthError code to use on failure.
+            account_name: When supplied, embedded in the actionable hint
+                so the user knows exactly which account to re-login.
 
         Returns:
             Parsed OAuthTokens from the token endpoint response.
 
         Raises:
             OAuthError: If the request fails, returns a non-200 status,
-                returns non-JSON, or is missing required fields.
+                returns non-JSON, or is missing required fields. A 401
+                response with ``error=invalid_grant`` is mapped to
+                ``OAUTH_REFRESH_REVOKED`` so callers can give the user
+                the precise "re-run login" recovery hint.
         """
         token_url = f"{self._base_url}token/"
 
@@ -519,6 +540,39 @@ class OAuthFlow:
             ) from exc
 
         if response.status_code != 200:
+            # Distinguish a permanently dead refresh token (IdP returned
+            # 400/401 with ``error=invalid_grant``) from a transient
+            # network or 5xx failure. The dead-token case has a precise
+            # recovery action; the transient case just wants a retry.
+            invalid_grant = False
+            if response.status_code in (400, 401):
+                try:
+                    payload = response.json()
+                    invalid_grant = (
+                        isinstance(payload, dict)
+                        and payload.get("error") == "invalid_grant"
+                    )
+                except (json.JSONDecodeError, ValueError):
+                    invalid_grant = False
+            if invalid_grant and operation == "Token refresh":
+                hint = (
+                    f"Re-run `mp account login {account_name}`."
+                    if account_name
+                    else "Re-run `mp account login NAME`."
+                )
+                raise OAuthError(
+                    (
+                        f"Refresh token has been revoked or expired"
+                        f"{f' for account {account_name!r}' if account_name else ''}"
+                        f". {hint}"
+                    ),
+                    code="OAUTH_REFRESH_REVOKED",
+                    details={
+                        "status_code": response.status_code,
+                        "response_body": response.text,
+                        "account_name": account_name,
+                    },
+                )
             raise OAuthError(
                 f"{operation} failed with status {response.status_code}: "
                 f"{response.text}",
@@ -526,6 +580,7 @@ class OAuthFlow:
                 details={
                     "status_code": response.status_code,
                     "response_body": response.text,
+                    **({"account_name": account_name} if account_name else {}),
                 },
             )
 

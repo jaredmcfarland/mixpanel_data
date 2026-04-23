@@ -6,7 +6,6 @@ contracts/cli-commands.md §5.
 
 from __future__ import annotations
 
-import json as _json
 from typing import Annotated
 
 import typer
@@ -31,6 +30,10 @@ def list_workspaces(
             "--project", "-p", help="Project ID (defaults to active project)."
         ),
     ] = None,
+    refresh: Annotated[
+        bool,
+        typer.Option("--refresh", help="Bypass the local /me cache (FR-047)."),
+    ] = False,
     format: Annotated[  # noqa: A002
         str,
         typer.Option("--format", "-f", help="Output format: table | json | jsonl."),
@@ -41,43 +44,43 @@ def list_workspaces(
     Constructs a short-lived :class:`Workspace` against the resolved
     session, then pulls the workspace list from the cached ``/me``
     response (24h TTL) for ``--project`` (or the active project when
-    ``--project`` is omitted).
+    ``--project`` is omitted). ``--refresh`` bypasses the cache.
 
     Args:
         ctx: Typer context.
         project: Project to query (defaults to the active project).
+        refresh: Bypass the local ``/me`` cache and refetch.
         format: Output format (``table`` / ``json`` / ``jsonl``).
     """
+    from collections.abc import Sequence
+    from typing import Any as _Any
+
+    from mixpanel_data.cli.formatters import emit_records
     from mixpanel_data.workspace import Workspace
 
     with Workspace(project=project) as ws:
-        workspaces = ws.workspaces(project_id=project)
-    if format == "json":
-        console.print(
-            _json.dumps(
-                [
-                    {"id": w.id, "name": w.name, "is_default": w.is_default}
-                    for w in workspaces
-                ],
-                indent=2,
-            )
-        )
-        return
-    if format == "jsonl":
-        for w in workspaces:
-            console.print(
-                _json.dumps({"id": w.id, "name": w.name, "is_default": w.is_default})
-            )
-        return
-    if not workspaces:
-        console.print("(no workspaces accessible via /me)")
-        return
-    lines = ["ID              NAME                              DEFAULT"]
-    for w in workspaces:
-        marker = "*" if w.is_default else ""
-        name = (w.name or "")[:33]
-        lines.append(f"{w.id:<15} {name:<33} {marker}")
-    console.print("\n".join(lines))
+        workspaces = ws.workspaces(project_id=project, refresh=refresh)
+
+    def _to_dict(w: _Any) -> dict[str, _Any]:
+        return {"id": w.id, "name": w.name, "is_default": w.is_default}
+
+    def _render_table(items: Sequence[_Any]) -> str:
+        if not items:
+            return "(no workspaces accessible via /me)"
+        lines = ["ID              NAME                              DEFAULT"]
+        for w in items:
+            marker = "*" if w.is_default else ""
+            name = (w.name or "")[:33]
+            lines.append(f"{w.id:<15} {name:<33} {marker}")
+        return "\n".join(lines)
+
+    emit_records(
+        workspaces,
+        format=format,
+        console=console,
+        to_dict=_to_dict,
+        table_renderer=_render_table,
+    )
 
 
 @workspace_app.command("use")

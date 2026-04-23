@@ -12,6 +12,7 @@ from __future__ import annotations
 import json as _json
 import os
 import sys
+import typing
 from pathlib import Path
 from typing import Annotated
 
@@ -19,6 +20,8 @@ import typer
 from pydantic import SecretStr
 
 from mixpanel_data import accounts as accounts_ns
+from mixpanel_data._internal.auth.account import AccountType as _AccountTypeLiteral
+from mixpanel_data._internal.auth.account import Region
 from mixpanel_data.cli.utils import (
     ExitCode,
     console,
@@ -114,16 +117,15 @@ def list_accounts(
         ctx: Typer context.
         format: Output format.
     """
-    summaries = accounts_ns.list()
-    if format == "json":
-        console.print(
-            _json.dumps([s.model_dump(mode="json") for s in summaries], indent=2)
-        )
-    elif format == "jsonl":
-        for s in summaries:
-            console.print(_json.dumps(s.model_dump(mode="json")))
-    else:
-        console.print(_format_summary_table(summaries))
+    from mixpanel_data.cli.formatters import emit_records
+
+    emit_records(
+        accounts_ns.list(),
+        format=format,
+        console=console,
+        to_dict=lambda s: s.model_dump(mode="json"),
+        table_renderer=lambda items: _format_summary_table(list(items)),
+    )
 
 
 @account_app.command("add")
@@ -192,13 +194,22 @@ def add_account(
         secret_stdin: Read secret from stdin instead of env.
         token_env: Env var holding the bearer for ``oauth_token``.
     """
-    if type not in ("service_account", "oauth_browser", "oauth_token"):
+    # Catch the two most common CLI typos (--type / --region) here so the
+    # exit code is the semantic ``INVALID_ARGS`` (3) rather than the generic
+    # ``GENERAL_ERROR`` (1) that ``@handle_errors`` maps the deeper Pydantic
+    # ``ConfigError`` to. Both layers enforce the same set — the model is the
+    # authoritative source of truth; this is a UX shim for the CLI surface.
+    valid_types = typing.get_args(_AccountTypeLiteral)
+    valid_regions = typing.get_args(Region)
+    if type not in valid_types:
         err_console.print(
-            f"[red]Invalid --type: {type!r}[/red] (use service_account / oauth_browser / oauth_token)"
+            f"[red]Invalid --type: {type!r}[/red] (use {' / '.join(valid_types)})"
         )
         raise typer.Exit(ExitCode.INVALID_ARGS)
-    if region not in ("us", "eu", "in"):
-        err_console.print(f"[red]Invalid --region: {region!r}[/red] (use us / eu / in)")
+    if region not in valid_regions:
+        err_console.print(
+            f"[red]Invalid --region: {region!r}[/red] (use {' / '.join(valid_regions)})"
+        )
         raise typer.Exit(ExitCode.INVALID_ARGS)
 
     # Fall back to MP_PROJECT_ID env var when --project not provided.
@@ -330,8 +341,12 @@ def update_account(
         secret_stdin: Read a new secret from stdin (service_account only).
         token_env: New env-var name (oauth_token only).
     """
-    if region is not None and region not in ("us", "eu", "in"):
-        err_console.print(f"[red]Invalid --region: {region!r}[/red] (use us / eu / in)")
+    # See ``add_account`` — same UX shim for INVALID_ARGS exit code.
+    if region is not None and region not in typing.get_args(Region):
+        err_console.print(
+            f"[red]Invalid --region: {region!r}[/red] "
+            f"(use {' / '.join(typing.get_args(Region))})"
+        )
         raise typer.Exit(ExitCode.INVALID_ARGS)
 
     secret: SecretStr | None = None
@@ -472,9 +487,7 @@ def test_account(
 ) -> None:
     """Probe ``/me`` for the named (or active) account.
 
-    Phase 4 returns a stubbed result; full ``/me`` integration arrives
-    later in the rollout. Never raises — failure is captured in the
-    result's ``error`` field.
+    Never raises — failure is captured in the result's ``error`` field.
 
     Args:
         ctx: Typer context.

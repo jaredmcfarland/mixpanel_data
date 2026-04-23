@@ -466,6 +466,144 @@ class TestTest:
         assert result.account_name == "team"
 
 
+class TestTestOAuthBrowser:
+    """``mp.accounts.test(name)`` against an ``oauth_browser`` account.
+
+    The existing :class:`TestTest` covers ``service_account`` only; OAuth
+    browser accounts go through a different code path (``OnDiskTokenResolver``
+    materializes the bearer mid-probe, which can fail in distinct ways:
+    missing tokens file, expired tokens with no refresh, refresh-revoked).
+    All three failure modes MUST report ``ok=False`` with an actionable
+    message rather than crashing the caller.
+    """
+
+    def _add_oauth_browser_account(self, cm: ConfigManager) -> None:
+        """Seed an ``oauth_browser`` account named ``personal`` (region ``us``)."""
+        accounts_ns.add(
+            "personal",
+            type="oauth_browser",
+            region="us",
+            default_project="3713224",
+        )
+
+    def test_oauth_browser_no_tokens_returns_actionable_error(
+        self,
+        cm: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """No tokens.json on disk → ``ok=False`` mentioning login."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        self._add_oauth_browser_account(cm)
+        result = accounts_ns.test("personal")
+        assert result.ok is False
+        assert result.error is not None
+        assert "login" in result.error.lower() or "personal" in result.error.lower()
+
+    def test_oauth_browser_expired_no_refresh_returns_actionable_error(
+        self,
+        cm: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Expired tokens with no refresh_token → ``ok=False`` advising re-login."""
+        import json as _json
+        from datetime import datetime, timedelta, timezone
+
+        monkeypatch.setenv("HOME", str(tmp_path))
+        self._add_oauth_browser_account(cm)
+        # Hand-write tokens.json with an expired access token and no refresh.
+        account_dir = tmp_path / ".mp" / "accounts" / "personal"
+        account_dir.mkdir(parents=True)
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        (account_dir / "tokens.json").write_text(
+            _json.dumps(
+                {
+                    "access_token": "expired-tok",
+                    "expires_at": past.isoformat(),
+                    "token_type": "Bearer",
+                    "scope": "read:project",
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = accounts_ns.test("personal")
+        assert result.ok is False
+        assert result.error is not None
+        assert "login" in result.error.lower() or "refresh" in result.error.lower()
+
+    def test_oauth_browser_refresh_revoked_returns_actionable_error(
+        self,
+        cm: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """IdP returns ``invalid_grant`` → ``ok=False`` mentions re-login.
+
+        This is the path that surfaces when the user revokes the OAuth
+        consent in the Mixpanel UI; the on-disk refresh token still exists
+        but is permanently dead.
+        """
+        import json as _json
+        from datetime import datetime, timedelta, timezone
+
+        from mixpanel_data._internal.auth import flow as flow_mod
+        from mixpanel_data._internal.auth import storage as storage_mod
+        from mixpanel_data._internal.auth.token import OAuthClientInfo
+
+        monkeypatch.setenv("HOME", str(tmp_path))
+        self._add_oauth_browser_account(cm)
+        account_dir = tmp_path / ".mp" / "accounts" / "personal"
+        account_dir.mkdir(parents=True)
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        (account_dir / "tokens.json").write_text(
+            _json.dumps(
+                {
+                    "access_token": "expired-tok",
+                    "refresh_token": "revoked-refresh",
+                    "expires_at": past.isoformat(),
+                    "token_type": "Bearer",
+                    "scope": "read:project",
+                }
+            ),
+            encoding="utf-8",
+        )
+        # Stub DCR client info so the refresh path can find a client.
+        monkeypatch.setattr(
+            storage_mod.OAuthStorage,
+            "load_client_info",
+            lambda _self, *, region: OAuthClientInfo(  # noqa: ARG005
+                client_id="dcr-1",
+                region="us",
+                redirect_uri="http://localhost:8765/cb",
+                scope="read:project",
+                created_at=datetime.now(timezone.utc),
+            ),
+        )
+        # Stub refresh_tokens to raise the new OAUTH_REFRESH_REVOKED code.
+        from mixpanel_data.exceptions import OAuthError
+
+        def _revoked(
+            self: object,
+            *,
+            tokens: object,  # noqa: ARG001
+            client_id: str,  # noqa: ARG001
+            account_name: str | None = None,
+        ) -> object:
+            raise OAuthError(
+                f"Refresh token has been revoked for account {account_name!r}. "
+                f"Re-run `mp account login {account_name}`.",
+                code="OAUTH_REFRESH_REVOKED",
+            )
+
+        monkeypatch.setattr(flow_mod.OAuthFlow, "refresh_tokens", _revoked)
+
+        result = accounts_ns.test("personal")
+        assert result.ok is False
+        assert result.error is not None
+        assert "login" in result.error.lower() or "revoked" in result.error.lower()
+
+
 class TestLogin:
     """Coverage for Fix 17 — ``mp.accounts.login(name)``."""
 

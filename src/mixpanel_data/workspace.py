@@ -44,6 +44,9 @@ from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import Account as _AccountUnion
 from mixpanel_data._internal.auth.bridge import load_bridge as _load_bridge
 from mixpanel_data._internal.auth.resolver import (
+    env_workspace_id as _env_workspace_id,
+)
+from mixpanel_data._internal.auth.resolver import (
     format_no_project_error as _format_no_project_error,
 )
 from mixpanel_data._internal.auth.resolver import (
@@ -537,70 +540,70 @@ class Workspace:
             )
 
         cm = ConfigManager()
+        client = self._require_api_client()
         new_account_obj: _AccountUnion | None = None
         new_project_obj: _Project | None = None
         new_workspace_obj: _WorkspaceRef | None = None
         if target is not None:
-            t = cm.get_target(target)
-            new_account_obj = cm.get_account(t.account)
-            new_project_obj = _Project(id=t.project)
-            new_workspace_obj = (
-                _WorkspaceRef(id=t.workspace) if t.workspace is not None else None
+            # Route through the same resolver as Workspace() construction so
+            # env > param > target > bridge > config ordering applies (FR-017).
+            # Without this, mid-process env-var overrides would be honored at
+            # construction but silently ignored on `ws.use(target=...)`.
+            sess = _resolve_session(
+                target=target,
+                config=cm,
+                bridge=_load_bridge(),
             )
-            client = self._require_api_client()
-            client.use(
+            new_account_obj = sess.account
+            new_project_obj = sess.project
+            new_workspace_obj = sess.workspace
+        elif account is not None:
+            # Explicit account swap: the user told us which account to use,
+            # so the env-vars-override-param rule (FR-017) on the account
+            # axis doesn't apply here — load the requested account directly.
+            # Project re-resolves through the FR-017 chain ending at the
+            # NEW account's default_project (env > explicit > new account's
+            # default); raises ConfigError if nothing resolves (per FR-033,
+            # cross-account project access is not guaranteed).
+            # Workspace is cleared (workspaces are project-scoped; the
+            # prior workspace is meaningless under the new account/project)
+            # — explicit `workspace=` overrides the clear, and env override
+            # via MP_WORKSPACE_ID still applies for parity with FR-017.
+            new_account_obj = cm.get_account(account)
+            br = _load_bridge()
+            project_id = _resolve_project_axis(
+                explicit=project,
+                target_project=None,
+                bridge=br,
                 account=new_account_obj,
-                project=new_project_obj,
-                workspace=new_workspace_obj,
             )
-            self._session = client.session
-        else:
-            client = self._require_api_client()
-            if account is not None:
-                # Explicit account swap: the user told us which account to use,
-                # so the env-vars-override-param rule (FR-017) on the account
-                # axis doesn't apply here — load the requested account directly.
-                # Project re-resolves through the FR-017 chain ending at the
-                # NEW account's default_project (env > explicit > new account's
-                # default); raises ConfigError if nothing resolves (per FR-033,
-                # cross-account project access is not guaranteed).
-                # Workspace is cleared (workspaces are project-scoped; the
-                # prior workspace is meaningless under the new account/project)
-                # — explicit `workspace=` overrides the clear, and env override
-                # via MP_WORKSPACE_ID still applies for parity with FR-017.
-                import os as _os
-
-                new_account_obj = cm.get_account(account)
-                br = _load_bridge()
-                project_id = _resolve_project_axis(
-                    explicit=project,
-                    target_project=None,
-                    bridge=br,
-                    account=new_account_obj,
-                )
-                if project_id is None:
-                    raise ConfigError(_format_no_project_error(new_account_obj))
-                new_project_obj = _Project(id=project_id)
-                if workspace is not None:
-                    new_workspace_obj = _WorkspaceRef(id=workspace)
-                else:
-                    env_ws = _os.environ.get("MP_WORKSPACE_ID")
-                    if env_ws and env_ws.isdigit() and int(env_ws) > 0:
-                        new_workspace_obj = _WorkspaceRef(id=int(env_ws))
-                    else:
-                        new_workspace_obj = None
+            if project_id is None:
+                raise ConfigError(_format_no_project_error(new_account_obj))
+            new_project_obj = _Project(id=project_id)
+            # Account-swap intentionally clears workspace per FR-033 (workspaces
+            # are project-scoped; the prior workspace doesn't apply to the new
+            # project). Only an explicit ``workspace=`` kwarg or a validated
+            # ``MP_WORKSPACE_ID`` env var can populate it. We bypass
+            # ``resolve_workspace_axis`` because that consults ``[active].workspace``
+            # — which is exactly the fallback we need to skip here.
+            if workspace is not None:
+                new_workspace_obj = _WorkspaceRef(id=workspace)
             else:
-                new_account_obj = None
-                new_project_obj = _Project(id=project) if project is not None else None
+                env_ws = _env_workspace_id()
                 new_workspace_obj = (
-                    _WorkspaceRef(id=workspace) if workspace is not None else None
+                    _WorkspaceRef(id=env_ws) if env_ws is not None else None
                 )
-            client.use(
-                account=new_account_obj,
-                project=new_project_obj,
-                workspace=new_workspace_obj,
+        else:
+            new_project_obj = _Project(id=project) if project is not None else None
+            new_workspace_obj = (
+                _WorkspaceRef(id=workspace) if workspace is not None else None
             )
-            self._session = client.session
+        client.use(
+            account=new_account_obj,
+            project=new_project_obj,
+            workspace=new_workspace_obj,
+        )
+        self._session = client.session
 
         # Clear lazy services so subsequent reads of `project` / `account` /
         # `workspaces()` / `_me_svc` observe the new session rather than the
@@ -634,8 +637,6 @@ class Workspace:
         explicitly drops ``[active].workspace`` rather than leaving the
         prior pin behind.
         """
-        if self._session is None:
-            return
         ConfigManager().apply_session(
             account=self._session.account.name,
             project=self._session.project.id,
@@ -850,7 +851,12 @@ class Workspace:
             for pid, info in self._me_svc.list_projects()
         ]
 
-    def workspaces(self, *, project_id: str | None = None) -> list[_WorkspaceRef]:
+    def workspaces(
+        self,
+        *,
+        project_id: str | None = None,
+        refresh: bool = False,
+    ) -> list[_WorkspaceRef]:
         """List workspaces for a project via the /me API (FR-036).
 
         Returns workspaces from the cached /me response, sorted by name.
@@ -865,6 +871,9 @@ class Workspace:
         Args:
             project_id: Project ID to list workspaces for. Defaults to
                 the current project.
+            refresh: When True, bypass the on-disk and in-memory ``/me``
+                caches and refetch from the API. Default False uses the
+                24h cache. Mirrors :meth:`projects(refresh=)` (FR-047).
 
         Returns:
             List of :class:`WorkspaceRef` records sorted by name.
@@ -879,6 +888,8 @@ class Workspace:
                 print(workspace.id, workspace.name, workspace.is_default)
             ```
         """
+        if refresh:
+            self._me_svc.fetch(force_refresh=True)
         pid = project_id
         if pid is None:
             pid = self._session.project.id
