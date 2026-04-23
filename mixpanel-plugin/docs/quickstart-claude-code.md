@@ -203,14 +203,18 @@ You never need to write this yourself, but it's helpful to know what's possible.
 
 ### Remove an account
 
+The slash command focuses on read + onboarding flows; destructive lifecycle
+operations stay on the CLI. Run them in your terminal (or via the `!`
+shell prefix inside Claude Code):
+
 ```
-/mixpanel-data:auth account remove my-old-project
+! mp account remove my-old-project
 ```
 
 ### Revoke OAuth tokens
 
 ```
-/mixpanel-data:auth account logout my-account-name
+! mp account logout my-account-name
 ```
 
 ### Save a named target (account + project + optional workspace)

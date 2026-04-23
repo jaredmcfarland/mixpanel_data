@@ -313,6 +313,20 @@ print(flow.top_transitions(5))     # Top 5 most common paths
 print(flow.drop_off_summary())     # Where users drop off
 ```
 
+### User Profile Query
+
+```python
+from mixpanel_data import Filter
+
+# Pull profile fields for high-value users
+result = ws.query_user(
+    where=Filter.greater_than("purchase_count", 10),
+    properties=["$name", "$email", "plan"],
+    limit=None,                      # fetch every match (None = no cap)
+)
+print(result.df.head())              # distinct_id | $name | $email | plan
+```
+
 ### Stream Events
 
 For processing large datasets without loading everything into memory:
@@ -383,21 +397,19 @@ Once authenticated, just ask Claude questions in natural language:
 "Build me a weekly KPI dashboard for the product team."
 ```
 
-Claude will choose the right query engine (Insights, Funnels, Retention, or Flows), write and execute the Python code, and explain the results.
+Claude will choose the right query engine (Insights, Funnels, Retention, Flows, or Users), write and execute the Python code, and explain the results.
 
-### Specialist Agents
+### What's in the Plugin
 
-The plugin includes five specialist agents that Claude can invoke automatically based on your question:
+The plugin ships three skills that Claude loads automatically when relevant:
 
-| Agent | What It Does | Example Question |
-|-------|-------------|-----------------|
-| **analyst** | General-purpose orchestrator | "Show me revenue trends by plan type" |
-| **explorer** | Discovers your data schema | "What events and properties do we track?" |
-| **diagnostician** | Root cause analysis | "Why did signups drop last Tuesday?" |
-| **synthesizer** | Multi-engine cross-analysis | "Compare funnel conversion for retained vs. churned users" |
-| **narrator** | Executive summaries | "Write a weekly product report for leadership" |
+| Skill | Trigger | What It Does |
+|-------|---------|--------------|
+| **setup** | `/mixpanel-data:setup` (manual) | Installs `mixpanel_data` + analytics dependencies and verifies credentials. |
+| **mixpanelyst** | Auto-loads on analytics questions | Distilled `Workspace` API reference, discovery workflow, exploratory analysis playbook, and live `help.py` lookup for method signatures, types, and enums. |
+| **dashboard-expert** | Auto-loads on dashboard questions | Four-mode workflow (Analyze, Build, Modify, Explain) for Mixpanel dashboards, with 9 design templates, chart-type selection, and layout reference. |
 
-You don't need to invoke these manually — Claude routes to the right agent based on your question.
+The `/mixpanel-data:auth` slash command provides a guided wrapper around `mp account / project / workspace / target / session / bridge` for managing credentials without leaving the conversation.
 
 ---
 
@@ -501,6 +513,7 @@ ws.query("Event", last=30)              # Insights query
 ws.query_funnel(["A", "B", "C"])        # Funnel query
 ws.query_retention("A", "B")            # Retention query
 ws.query_flow("Event", forward=3)       # Flow query
+ws.query_user(properties=["$email"])    # User profile query
 ws.stream_events(from_date="...", to_date="...")  # Stream events
 ```
 
@@ -510,9 +523,14 @@ ws.stream_events(from_date="...", to_date="...")  # Stream events
 |----------|---------|
 | `MP_USERNAME` | Service account username |
 | `MP_SECRET` | Service account secret |
+| `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account; requires `MP_PROJECT_ID` + `MP_REGION`; the full service-account quad takes precedence when both sets are complete) |
 | `MP_PROJECT_ID` | Your Mixpanel project ID |
 | `MP_REGION` | Data residency region (`us`, `eu`, or `in`) |
 | `MP_WORKSPACE_ID` | Workspace ID (for dashboard and entity management) |
+| `MP_ACCOUNT` | Override the active account name |
+| `MP_TARGET` | Apply a saved target (mutually exclusive with `MP_ACCOUNT`/`MP_PROJECT_ID`/`MP_WORKSPACE_ID`) |
+| `MP_AUTH_FILE` | Override path to the v2 Cowork bridge file |
+| `MP_CONFIG_PATH` | Override config file location |
 
 ### Output Formats
 
