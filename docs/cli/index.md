@@ -25,31 +25,78 @@ mp --version
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--account` | `-a` | Account name to use (overrides default) |
-| `--workspace-id` | | Workspace ID for App API operations (env: `MP_WORKSPACE_ID`) |
+| `--account` | `-a` | Account name to use (env: `MP_ACCOUNT`) |
+| `--project` | `-p` | Project ID override (env: `MP_PROJECT_ID`) |
+| `--workspace` | `-w` | Workspace ID override (env: `MP_WORKSPACE_ID`) |
+| `--target` | `-t` | Apply a saved target (env: `MP_TARGET`) — mutually exclusive with `-a`/`-p`/`-w` |
 | `--quiet` | `-q` | Suppress progress output |
 | `--verbose` | `-v` | Enable debug output |
 | `--version` | | Show version and exit |
 | `--help` | | Show help and exit |
 
+These resolve via the priority chain `env > param > target > bridge > [active] > default_project`. See [Configuration → Credential Resolution Chain](../getting-started/configuration.md#credential-resolution-chain).
+
 ## Command Groups
 
-### auth — Account & Authentication Management
+### account — Account Management
 
-Manage stored credentials, accounts, and OAuth authentication.
+Manage configured accounts (service accounts, OAuth browser, OAuth token) and the active account.
 
 | Command | Description |
 |---------|-------------|
-| `mp auth list` | List configured service accounts |
-| `mp auth add` | Add a new service account |
-| `mp auth remove` | Remove a service account |
-| `mp auth switch` | Set the default account |
-| `mp auth show` | Display account details |
-| `mp auth test` | Test account credentials |
-| `mp auth login` | OAuth 2.0 login via browser |
-| `mp auth logout` | Remove stored OAuth tokens |
-| `mp auth status` | Show OAuth authentication state per region |
-| `mp auth token` | Output raw OAuth access token (for piping) |
+| `mp account list` | List configured accounts (active marked with `*`) |
+| `mp account add` | Register a new account (`--type {service_account, oauth_browser, oauth_token}`) |
+| `mp account update` | Rotate region / secret / token / default_project on an existing account |
+| `mp account remove` | Delete an account (`--force` orphans dependent targets) |
+| `mp account use` | Switch the active account (clears workspace) |
+| `mp account show` | Display account metadata (omit name for active) |
+| `mp account test` | Probe `/me`; returns `AccountTestResult` |
+| `mp account login` | Run the OAuth browser PKCE flow (oauth_browser only) |
+| `mp account logout` | Delete on-disk OAuth tokens (oauth_browser only) |
+| `mp account token` | Print the bearer token (for piping to curl etc.) |
+| `mp account export-bridge` | Write a v2 Cowork bridge file |
+| `mp account remove-bridge` | Delete the bridge file (idempotent) |
+
+### project — Project Switching
+
+Discover and switch the active Mixpanel project (resolved against the active account's `/me` response).
+
+| Command | Description |
+|---------|-------------|
+| `mp project list` | List accessible projects |
+| `mp project use` | Persist the active project (writes to the active account's `default_project`) |
+| `mp project show` | Show the active project |
+
+### workspace — Workspace Switching
+
+Discover and switch the active workspace within the current project.
+
+| Command | Description |
+|---------|-------------|
+| `mp workspace list` | List workspaces for the current project |
+| `mp workspace use` | Persist the active workspace (writes to `[active].workspace`) |
+| `mp workspace show` | Show the active workspace |
+
+### target — Saved Targets
+
+A target is a saved (account, project, workspace?) bundle — a named cursor position you can apply with one command.
+
+| Command | Description |
+|---------|-------------|
+| `mp target list` | List configured targets |
+| `mp target add` | Register a new target (`--account A --project P [--workspace W]`) |
+| `mp target use` | Apply a target atomically (writes all three `[active]` axes in one save) |
+| `mp target show` | Show target details |
+| `mp target remove` | Delete a target |
+
+### session — Active Session Inspection
+
+Show the resolved active session — account, project, workspace, user.
+
+| Command | Description |
+|---------|-------------|
+| `mp session` | Print the active session (`-f json` for machine-readable output) |
+| `mp session --bridge` | Show bridge-resolved state (Cowork integration) |
 
 ### query — Query Operations
 
@@ -444,28 +491,30 @@ mp inspect events --format plain | wc -l
 | Code | Meaning | Exception |
 |------|---------|-----------|
 | 0 | Success | — |
-| 1 | General error | `MixpanelDataError` |
-| 2 | Authentication error | `AuthenticationError` |
+| 1 | General error | `MixpanelDataError`, `WorkspaceScopeError`, `AccountInUseError` |
+| 2 | Authentication error | `AuthenticationError`, `OAuthError` |
 | 3 | Invalid arguments | `ConfigError`, validation errors |
-| 4 | Resource not found | `AccountNotFoundError` |
+| 4 | Resource not found | `AccountNotFoundError`, `ProjectNotFoundError` |
 | 5 | Rate limit exceeded | `RateLimitError` |
 | 130 | Interrupted | Ctrl+C |
 
-!!! note "OAuth and Workspace Errors"
-    `OAuthError` maps to exit code 2 (authentication error). `WorkspaceScopeError` maps to exit code 1 (general error).
-
 ## Environment Variables
+
+These resolve via `env > param > target > bridge > [active] > default_project` — see [Configuration → Credential Resolution Chain](../getting-started/configuration.md#credential-resolution-chain).
 
 | Variable | Description |
 |----------|-------------|
-| `MP_USERNAME` | Service account username |
-| `MP_SECRET` | Service account secret |
-| `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account; requires `MP_PROJECT_ID` + `MP_REGION`; ignored when the full service-account env-var set is also present) |
-| `MP_PROJECT_ID` | Project ID |
-| `MP_REGION` | Data residency region |
-| `MP_WORKSPACE_ID` | Workspace ID for App API operations |
-| `MP_ACCOUNT` | Account name to use |
-| `MP_CONFIG_PATH` | Override config file path |
+| `MP_ACCOUNT` | Active account override |
+| `MP_PROJECT_ID` | Project override |
+| `MP_WORKSPACE_ID` | Workspace override |
+| `MP_TARGET` | Apply a saved target (mutually exclusive with `MP_ACCOUNT`/`MP_PROJECT_ID`/`MP_WORKSPACE_ID`) |
+| `MP_OAUTH_TOKEN` | Static bearer token (alternative to a registered account; requires `MP_REGION`) |
+| `MP_USERNAME` | Service-account username (env-var path; requires `MP_SECRET`/`MP_PROJECT_ID`/`MP_REGION`) |
+| `MP_SECRET` | Service-account secret |
+| `MP_REGION` | Data residency region (`us`, `eu`, `in`) |
+| `MP_AUTH_FILE` | Override path to the v2 Cowork bridge file |
+| `MP_CONFIG_PATH` | Override config file path (`~/.mp/config.toml`) |
+| `MP_OAUTH_STORAGE_DIR` | Override storage root (`~/.mp`) |
 
 ## Examples
 
@@ -473,7 +522,8 @@ mp inspect events --format plain | wc -l
 
 ```bash
 # 1. Set up credentials (prompts for secret securely)
-mp auth add production --username sa_... --project 12345 --region us
+mp account add personal --type oauth_browser --region us
+mp account login personal       # opens browser for PKCE flow
 
 # 2. Explore schema
 mp inspect events

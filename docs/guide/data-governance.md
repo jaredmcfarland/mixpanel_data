@@ -5,7 +5,7 @@ Manage Mixpanel data governance programmatically: Lexicon definitions (events, p
 !!! note "Prerequisites"
     Data governance requires **authentication** — service account or OAuth credentials.
 
-    All data governance operations require a **workspace ID** — set via `MP_WORKSPACE_ID` env var, `--workspace-id` CLI flag, or `ws.set_workspace_id()`. Find yours with `mp inspect info` or `ws.info()`.
+    All data governance operations require a **workspace ID** — set via `MP_WORKSPACE_ID` env var, `--workspace` / `-w` CLI flag, `Workspace(workspace=N)`, or `ws.use(workspace=N)`. List available workspaces with `mp workspace list` or `ws.workspaces()`.
 
 !!! tip "Read-Only Discovery"
     For read-only Lexicon schema exploration (listing events/properties with descriptions and metadata), see the [Discovery guide — Lexicon Schemas](discovery.md#lexicon-schemas). This guide covers **write operations**: creating, updating, and deleting definitions.

@@ -53,7 +53,7 @@ mp --version
 You should see output like:
 
 ```
-mixpanel_data 0.1.0
+mixpanel_data 0.4.0
 ```
 
 Test the Python import:

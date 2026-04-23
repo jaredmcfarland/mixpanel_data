@@ -7,7 +7,7 @@ Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, experim
 
     **Scoping differs by entity type:**
 
-    - **Dashboards, reports, cohorts, alerts, annotations, webhooks** require a **workspace ID** — set via `MP_WORKSPACE_ID` env var, `--workspace-id` CLI flag, or `ws.set_workspace_id()`. Find yours with `mp inspect info` or `ws.info()`.
+    - **Dashboards, reports, cohorts, alerts, annotations, webhooks** require a **workspace ID** — set via `MP_WORKSPACE_ID` env var, `--workspace` / `-w` CLI flag, `Workspace(workspace=N)`, or `ws.use(workspace=N)`. List available workspaces with `mp workspace list` or `ws.workspaces()`.
     - **Feature flags and experiments** are **project-scoped** and do NOT require a workspace ID.
 
 ## Dashboards

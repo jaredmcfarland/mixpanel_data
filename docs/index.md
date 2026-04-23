@@ -28,11 +28,11 @@ import mixpanel_data as mp
 ws = mp.Workspace()
 
 # Discover what's in your project
-events = ws.list_events()
-props = ws.list_properties("Purchase")
-values = ws.list_property_values("Purchase", "country")
-funnels = ws.list_funnels()
-cohorts = ws.list_cohorts()
+events = ws.events()
+props = ws.properties("Purchase")
+values = ws.property_values("country", event="Purchase")
+funnels = ws.funnels()
+cohorts = ws.cohorts()
 bookmarks = ws.list_bookmarks()
 
 # Manage entities
@@ -133,7 +133,7 @@ result = ws.query(CohortMetric(123, "Power Users"), last=90, unit="week")
 
 # Legacy live queries
 segmentation = ws.segmentation(
-    event=events[0].name,
+    event=events[0],
     from_date="2025-01-01",
     to_date="2025-01-31",
     on="country"

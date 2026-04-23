@@ -733,7 +733,8 @@ class Workspace:
         """Resolve the workspace ID for scoped requests.
 
         Resolution order:
-        1. Explicit workspace ID (set via ``set_workspace_id()``)
+        1. Explicit workspace ID (set via ``Workspace(workspace=N)`` or
+           ``Workspace.use(workspace=N)``)
         2. Cached auto-discovered workspace ID
         3. Auto-discover by listing workspaces and finding the default
 

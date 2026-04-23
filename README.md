@@ -29,33 +29,34 @@ mp --version
 
 ## Quick Start
 
+> **What's new in 0.4.0:** Three first-class account types (`service_account` / `oauth_browser` / `oauth_token`), single resolver (`env > param > target > bridge > [active]`), fluent in-session switching via `Workspace.use(...)`, new CLI groups (`mp account` / `mp project` / `mp workspace` / `mp target` / `mp session`). **Hard break from 0.3.x** — see [Migration → 0.3.x to 0.4.0](docs/migration/0.4.0.md) for the upgrade walkthrough.
+
 ### 1. Authenticate
 
 **Option A: OAuth Login (interactive, recommended)**
 
 ```bash
-mp auth login --region us --project-id 12345  # Opens browser
-mp auth status  # Verify connection
+mp account add personal --type oauth_browser --region us
+mp account login personal     # Opens browser for PKCE flow
+mp session                    # Verify resolved state
 ```
 
 **Option B: Service Account (scripts, CI/CD)**
 
 ```bash
-# Interactive prompt (secure)
-mp auth add production --username sa_xxx --project 12345 --region us
-# You'll be prompted for the service account secret with hidden input
+# Set the secret via env var (preferred)
+export MP_SECRET="your-secret-here"
+mp account add team --type service_account --username sa_xxx --region us
+# Added account 'team' (service_account, us). Set as active.
 
-mp auth test  # Verify connection
+mp account test team          # Verify connection
 ```
 
-Alternative methods for CI/CD:
+For CI/CD environments where the secret lives in a shell variable, pipe it via stdin:
 
 ```bash
-# Via inline environment variable (secret is only exposed to this command)
-MP_SECRET=xxx mp auth add production --username sa_xxx --project 12345
-
-# Via stdin (useful when secret is already in a variable)
-echo "$SECRET" | mp auth add production --username sa_xxx --project 12345 --secret-stdin
+echo "$SECRET" | mp account add team --type service_account \
+    --username sa_xxx --region us --secret-stdin
 ```
 
 Or set all credentials as environment variables: `MP_USERNAME`, `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION`
@@ -256,7 +257,15 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 
 ## CLI Reference
 
-**`mp auth`** — Authentication: `login`, `logout`, `status`, `token` (OAuth); `list`, `add`, `remove`, `switch`, `show`, `test` (service accounts)
+**`mp account`** — Manage accounts: `list`, `add`, `update`, `remove`, `use`, `show`, `test`, `login`, `logout`, `token`, `export-bridge`, `remove-bridge`
+
+**`mp project`** — Switch the active project: `list`, `use`, `show`
+
+**`mp workspace`** — Switch the active workspace: `list`, `use`, `show`
+
+**`mp target`** — Saved (account, project, workspace?) cursors: `list`, `add`, `use`, `show`, `remove`
+
+**`mp session`** — Show resolved auth state (`mp session [--bridge]`)
 
 **`mp query`** — Run analytics: `segmentation`, `funnel`, `retention`, `jql`, `saved-report`, `flows`, `event-counts`, `property-counts`, `activity-feed`, `frequency`, `segmentation-numeric`, `segmentation-sum`, `segmentation-average`
 
@@ -338,7 +347,7 @@ Key design features:
 - **Consistent interfaces**: Same operations available as Python methods and CLI commands
 - **Structured output**: All CLI commands support `--format json` for machine-readable responses, plus `--jq` for inline filtering
 - **Streaming data extraction**: Memory-efficient iterators for events and profiles
-- **Dual authentication**: Service accounts (Basic Auth) for automation, OAuth 2.0 PKCE for interactive use
+- **Three first-class account types**: `service_account` (Basic Auth) for unattended automation, `oauth_browser` (PKCE flow with auto-refreshed tokens) for interactive use, `oauth_token` (static bearer) for CI / agents
 - **Typed exceptions**: Error codes and context for programmatic handling
 
 ## Claude Code Plugin
