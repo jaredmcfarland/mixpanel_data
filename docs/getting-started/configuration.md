@@ -101,10 +101,13 @@ mp query segmentation -e Login --from 2026-04-01 --to 2026-04-21
 Or register a named account that pulls the token from an env var at request time:
 
 ```bash
-mp account add ci --type oauth_token --token-env MP_CI_TOKEN --region us
+mp account add ci --type oauth_token --token-env MP_CI_TOKEN \
+    --project 3713224 --region us
 mp account use ci
 MP_CI_TOKEN=ey... mp query segmentation -e Login --from 2026-04-01
 ```
+
+`--project` is required when registering an `oauth_token` account (it becomes the account's `default_project`).
 
 Static bearers are not persisted (no refresh capability — pass a fresh token when the previous one expires).
 
@@ -322,6 +325,8 @@ mp account remove-bridge
 The bridge file embeds the full `Account` (with secrets), optional OAuth tokens (for `oauth_browser` accounts), and optional pinned project/workspace/headers. Default search order: `MP_AUTH_FILE` → `~/.claude/mixpanel/auth.json` → `./mixpanel_auth.json`.
 
 ```python
+from pathlib import Path
+
 import mixpanel_data as mp
 
 mp.accounts.export_bridge(to=Path("~/.claude/mixpanel/auth.json").expanduser())

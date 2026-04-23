@@ -160,8 +160,8 @@ funnel.df
 ```bash
 # Discover your data landscape
 mp inspect events
-mp inspect properties "Purchase"
-mp inspect values "Purchase" "country"
+mp inspect properties --event Purchase
+mp inspect values --event Purchase --property country
 mp inspect top-events
 mp inspect funnels
 mp inspect cohorts

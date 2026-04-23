@@ -46,11 +46,18 @@ from mixpanel_data import UserQueryResult
 # Auth surface — recommended top-level imports
 from mixpanel_data import (
     Account, ServiceAccount, OAuthBrowserAccount, OAuthTokenAccount,
-    Session, Project, WorkspaceRef, OAuthTokens, Region,
+    Session, Project, WorkspaceRef, Region,
     AccountSummary, AccountTestResult, OAuthLoginResult, Target,
 )
-# These are also available from mixpanel_data.auth_types (single source of truth);
+# Account/Session/WorkspaceRef/account variants are also available from
+# mixpanel_data.auth_types (single source of truth for the auth subsystem);
 # the top-level form is canonical throughout the docs.
+
+# Low-level types live only under mixpanel_data.auth_types
+from mixpanel_data.auth_types import (
+    OAuthTokens, OAuthClientInfo, TokenResolver, OnDiskTokenResolver,
+    BridgeFile, load_bridge, ActiveSession,
+)
 
 # Functional namespaces
 from mixpanel_data import accounts, session, targets

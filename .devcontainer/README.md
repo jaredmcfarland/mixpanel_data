@@ -9,7 +9,7 @@ The devcontainer uses Docker volumes for configuration directories to ensure it 
 ### Automatic Credential Syncing
 - **GitHub CLI config** (`~/.config/gh`): Automatically synced from host if it exists
 - **GCloud credentials** (`~/.config/gcloud`): Automatically synced from host if it exists
-- **Mixpanel config** (`~/.mp`): Stored in volume (create with `mp auth add` if needed)
+- **Mixpanel config** (`~/.mp`): Stored in volume (create with `mp account add` if needed)
 
 When you start or rebuild the container, your existing GitHub and GCloud authentication from the host will be automatically available inside the container. No manual steps required!
 
@@ -20,8 +20,9 @@ If credentials aren't found on your host, you can authenticate inside the contai
 # GitHub CLI
 gh auth login
 
-# Mixpanel
-mp auth add
+# Mixpanel — pick one of:
+mp account add personal --type oauth_browser --region us && mp account login personal
+mp account add team --type service_account --username sa_xxx --project 12345 --region us
 ```
 
 Note: GCloud is not installed in the devcontainer. If you need gcloud credentials for Vertex AI, authenticate on your host machine first and the credentials will be synced automatically.

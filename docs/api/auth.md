@@ -253,7 +253,7 @@ Read-only structured results returned from the namespaces above.
 
 When constructing a `Workspace`, each axis is resolved independently in this priority order:
 
-1. **Environment variables** — `MP_ACCOUNT`, `MP_PROJECT_ID`, `MP_WORKSPACE_ID`, `MP_OAUTH_TOKEN`, etc.
+1. **Environment variables** — the resolver reads `MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION` (service-account quad), `MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION` (OAuth-token triple), `MP_PROJECT_ID` (project axis), and `MP_WORKSPACE_ID` (workspace axis). `MP_ACCOUNT` is **not** consumed by the Python resolver — it only feeds the CLI's `--account` / `-a` flag via Typer's `envvar=` default.
 2. **Constructor / CLI param** — `Workspace(account="...")`, `mp -a NAME ...`.
 3. **Saved target** — `Workspace(target="ecom")`, `mp -t ecom ...`.
 4. **Bridge file** — `MP_AUTH_FILE` or `~/.claude/mixpanel/auth.json`.

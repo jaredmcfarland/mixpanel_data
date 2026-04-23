@@ -47,7 +47,7 @@ You only need to do this once. Choose the method that works best for you.
 Run the `/mixpanel-data:auth` command:
 
 ```
-/mixpanel-data:auth add my-project
+/mixpanel-data:auth account add my-project
 ```
 
 Claude will walk you through it step by step:
@@ -60,20 +60,33 @@ Claude will walk you through it step by step:
 
 Your secret is never visible in the conversation.
 
-> If your account has access to multiple projects, you can switch later with `/mixpanel-data:auth switch-project <id>`. Run `/mixpanel-data:auth projects` to see what's available.
+> If your account has access to multiple projects, you can switch later with `/mixpanel-data:auth project use <id>`. Run `/mixpanel-data:auth project list` to see what's available.
 
 ### Option B: OAuth Login (Browser-Based)
 
 ```
-/mixpanel-data:auth login
+/mixpanel-data:auth account add personal --type oauth_browser --region us
+/mixpanel-data:auth account login personal
 ```
 
-Claude will ask for your region, then open a browser window where you log in with your Mixpanel credentials. After login, your projects are automatically discovered — if you have exactly one project, it's selected for you. If you have multiple, Claude will help you pick one.
+The first command registers an OAuth browser account; the second opens a browser window where you log in with your Mixpanel credentials. After login, your default project is backfilled automatically from the post-login `/me` probe. Use `/mixpanel-data:auth project list` then `/mixpanel-data:auth project use <id>` to switch if you have multiple projects.
+
+### Option C: Raw OAuth Bearer Token (CI / Agents)
+
+If a managed OAuth client (e.g., a CI pipeline) hands you a pre-obtained access token, inject it via env vars without going through the browser:
+
+```bash
+export MP_OAUTH_TOKEN="<bearer-token>"
+export MP_PROJECT_ID="12345"
+export MP_REGION="us"  # or "eu", "in"
+```
+
+The full service-account env-var set (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) takes precedence when both sets are complete.
 
 ### Verify It Worked
 
 ```
-/mixpanel-data:auth test
+/mixpanel-data:auth account test
 ```
 
 You should see confirmation that Claude connected successfully and found events in your project.
@@ -156,53 +169,55 @@ You never need to write this yourself, but it's helpful to know what's possible.
 
 ## Managing Accounts
 
-### Check current status
+### Check current session (active account / project / workspace)
 
 ```
-/mixpanel-data:auth status
+/mixpanel-data:auth session
 ```
 
 ### Switch between accounts
 
 ```
-/mixpanel-data:auth list
-/mixpanel-data:auth switch production
-```
-
-### See full context (active credential, project, workspace)
-
-```
-/mixpanel-data:auth context
+/mixpanel-data:auth account list
+/mixpanel-data:auth account use production
 ```
 
 ### Discover accessible projects
 
 ```
-/mixpanel-data:auth projects
+/mixpanel-data:auth project list
 ```
 
-### Switch projects (v2 config)
+### Switch projects
 
 ```
-/mixpanel-data:auth switch-project 67890
+/mixpanel-data:auth project use 67890
+```
+
+### Switch workspaces
+
+```
+/mixpanel-data:auth workspace list
+/mixpanel-data:auth workspace use 3448414
 ```
 
 ### Remove an account
 
 ```
-/mixpanel-data:auth remove my-old-project
+/mixpanel-data:auth account remove my-old-project
 ```
 
 ### Revoke OAuth tokens
 
 ```
-/mixpanel-data:auth logout
+/mixpanel-data:auth account logout my-account-name
 ```
 
-### Upgrade to v2 config (enables project switching)
+### Save a named target (account + project + optional workspace)
 
 ```
-/mixpanel-data:auth migrate
+/mixpanel-data:auth target add ecom --account team --project 3018488
+/mixpanel-data:auth target use ecom
 ```
 
 ---
@@ -211,18 +226,18 @@ You never need to write this yourself, but it's helpful to know what's possible.
 
 ### "No credentials configured"
 
-Run `/mixpanel-data:auth add my-project` and follow the prompts, or `/mixpanel-data:auth login` for OAuth.
+Run `/mixpanel-data:auth account add my-project` and follow the prompts, or `/mixpanel-data:auth account add personal --type oauth_browser --region us` followed by `/mixpanel-data:auth account login personal` for OAuth.
 
 ### "Authentication failed"
 
 - Check that your service account username and secret are correct (Mixpanel Settings > Service Accounts)
 - Verify your project ID matches the project the service account has access to
 - Make sure the region matches your project's data residency
-- Run `/mixpanel-data:auth test` for detailed error information
+- Run `/mixpanel-data:auth account test` for detailed error information
 
 ### "OAuth token expired" or OAuth login stopped working
 
-Run `/mixpanel-data:auth login` again to refresh your tokens. If you switch to a service account instead, run `/mixpanel-data:auth add <name>` — service account credentials don't expire.
+Run `/mixpanel-data:auth account login <name>` again to refresh your tokens. If you switch to a service account instead, run `/mixpanel-data:auth account add <name> --type service_account ...` — service account credentials don't expire.
 
 ### Plugin not appearing
 

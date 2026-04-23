@@ -158,7 +158,7 @@ Once you know an event name, see what properties it has:
 === "CLI"
 
     ```bash
-    mp inspect properties "Purchase"
+    mp inspect properties --event Purchase
     ```
 
 === "Python"
@@ -176,7 +176,7 @@ See actual values a property contains:
 === "CLI"
 
     ```bash
-    mp inspect values "Purchase" "country"
+    mp inspect values --event Purchase --property country
     ```
 
 === "Python"
