@@ -49,7 +49,7 @@ cohort = ws.create_cohort(mp.CreateCohortParams(name="Power Users"))
 ws.update_cohort(cohort.id, mp.UpdateCohortParams(name="Super Users"))
 ```
 
-Dashboard, report, and cohort operations require a workspace ID, set via `MP_WORKSPACE_ID` environment variable, `--workspace-id` CLI flag, or `ws.set_workspace_id()`.
+Dashboard, report, and cohort operations require a workspace ID, set via `MP_WORKSPACE_ID` environment variable, `--workspace` / `-w` CLI flag, `Workspace(workspace=N)`, or `ws.use(workspace=N)`. List available workspaces with `mp workspace list` or `ws.workspaces()`.
 
 ### Feature Flags & Experiments
 
@@ -116,6 +116,32 @@ events = ws.list_custom_events()
 
 See the [Data Governance guide](../guide/data-governance.md) for complete coverage.
 
+!!! note "`workspaces()` vs `list_workspaces()`"
+    Both methods are exposed. `workspaces()` (recommended) returns `list[WorkspaceRef]` from the cached `/me` response — fast, typed, and consistent with `events()` / `properties()` / `funnels()` / `cohorts()`. `list_workspaces()` is a lower-level escape hatch that calls `GET /api/app/projects/{pid}/workspaces/public` directly and returns `list[PublicWorkspace]`.
+
+## In-Session Switching
+
+`Workspace.use()` swaps the active account, project, workspace, or target without rebuilding the underlying `httpx.Client` or per-account `/me` cache. It returns `self` for fluent chaining, so cross-project iteration is O(1) per swap.
+
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+ws.use(account="team")                              # implicitly clears workspace
+ws.use(project="3018488")
+ws.use(workspace=3448414)
+ws.use(target="ecom")                               # apply all three at once
+
+# Persist the new state
+ws.use(project="3018488", persist=True)             # writes [active]
+
+# Read the resolved state
+print(ws.account.name, ws.project.id, ws.workspace.id if ws.workspace else None)
+print(ws.session)                                   # full Session snapshot
+```
+
+See [Auth → Workspace.use()](auth.md#workspaceuse-in-session-switching) for the resolution semantics and parallel-snapshot patterns.
+
 ## Class Reference
 
 ::: mixpanel_data.Workspace
@@ -125,9 +151,14 @@ See the [Data Governance guide](../guide/data-governance.md) for complete covera
       members:
         - __init__
         - close
-        - test_credentials
-        - workspace_id
-        - set_workspace_id
+        - account
+        - project
+        - workspace
+        - session
+        - use
+        - me
+        - projects
+        - workspaces
         - list_workspaces
         - resolve_workspace_id
         - events

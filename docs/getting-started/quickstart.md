@@ -29,24 +29,22 @@ export MP_REGION="us"
 ### Option B: Config File (Service Account)
 
 ```bash
-# Interactive prompt (secure, recommended)
-mp auth add production \
+# Set the secret via env var (preferred)
+export MP_SECRET="your-secret-here"
+mp account add production --type service_account \
     --username sa_abc123... \
     --project 12345 \
     --region us
-# You'll be prompted for the service account secret with hidden input
+# Added account 'production' (service_account, us). Set as active.
 ```
 
-This stores credentials in `~/.mp/config.toml` and sets `production` as the default account.
+This stores credentials in `~/.mp/config.toml` and sets `production` as the active account.
 
-For CI/CD environments, provide the secret via environment variable or stdin:
+For CI/CD environments where the secret lives in a shell variable, pipe it via stdin:
 
 ```bash
-# Via environment variable
-MP_SECRET=your-secret mp auth add production --username sa_abc123... --project 12345
-
-# Via stdin
-echo "$SECRET" | mp auth add production --username sa_abc123... --project 12345 --secret-stdin
+echo "$SECRET" | mp account add production --type service_account \
+    --username sa_abc123... --project 12345 --region us --secret-stdin
 ```
 
 ### Option C: OAuth Login (Interactive)
@@ -54,14 +52,19 @@ echo "$SECRET" | mp auth add production --username sa_abc123... --project 12345 
 For interactive use without managing service account credentials:
 
 ```bash
-# Login via browser (opens Mixpanel authorization page)
-mp auth login --region us --project-id 12345
+# Register an OAuth account
+mp account add personal --type oauth_browser --region us
 
-# Check your auth status
-mp auth status
+# Run the PKCE browser flow
+mp account login personal
+# Opening browser...
+# ✓ Authenticated as jared@example.com
+
+# Inspect resolved state
+mp session
 ```
 
-OAuth tokens are stored locally at `~/.mp/oauth/` and automatically refreshed when expired. See [Configuration](configuration.md#oauth-authentication) for details.
+OAuth tokens are stored at `~/.mp/accounts/personal/tokens.json` and automatically refreshed when expired. The active project is backfilled from the post-login `/me` probe. See [Configuration → OAuth (browser) — token storage](configuration.md#oauth-browser-token-storage) for details.
 
 ### Option D: Raw OAuth Bearer Token (CI / Agents)
 
@@ -73,16 +76,22 @@ export MP_PROJECT_ID="12345"
 export MP_REGION="us"  # or "eu", "in"
 ```
 
-The library sends `Authorization: Bearer <token>` on every Mixpanel endpoint. Tokens injected this way are not persisted (no refresh — pass a fresh token when the previous one expires). See [Configuration → Raw OAuth Bearer Token](configuration.md#raw-oauth-bearer-token) for precedence rules.
+The library sends `Authorization: Bearer <token>` on every Mixpanel endpoint. Tokens injected this way are not persisted (no refresh — pass a fresh token when the previous one expires). See [Configuration → OAuth (static bearer / CI)](configuration.md#oauth-static-bearer-ci) and the precedence note under [Environment Variables](configuration.md#environment-variables).
 
-## Step 2: Test Your Connection
+## Step 2: Choose a Project
 
-Verify credentials are working:
+After authenticating with a registered account (Options B or C above), select which Mixpanel project to query:
 
 === "CLI"
 
     ```bash
-    mp auth test
+    mp project list
+    # ID        NAME              ORG       WORKSPACES
+    # 3713224   AI Demo           Acme      ✓
+    # 3018488   E-Commerce Demo   Acme      ✓
+
+    mp project use 3713224
+    # Active project: AI Demo (3713224)
     ```
 
 === "Python"
@@ -91,10 +100,41 @@ Verify credentials are working:
     import mixpanel_data as mp
 
     ws = mp.Workspace()
-    ws.test_credentials()  # Raises AuthenticationError if invalid
+    for project in ws.projects():
+        print(project.id, project.name)
+
+    ws.use(project="3713224", persist=True)
     ```
 
-## Step 3: Explore Your Data
+`mp project use` writes to the active account's `default_project`. To override per-call without persisting, pass `--project` / `-p` on the CLI or `Workspace(project="...")` in Python.
+
+!!! note "Env-only paths skip this step"
+    `mp project use` requires an active account in `~/.mp/config.toml`. If you set up via Option A (`MP_USERNAME`/`MP_SECRET`/...) or Option D (`MP_OAUTH_TOKEN`/...) without registering an account, set the project via `MP_PROJECT_ID` directly (already required by both env-only paths) or pass `--project` / `Workspace(project=...)` per call. Don't run `mp project use` — it errors with "No active account configured."
+
+## Step 3: Test Your Connection
+
+Verify credentials are working:
+
+=== "CLI"
+
+    ```bash
+    mp account test
+    # { "account_name": "production", "ok": true, "user": {...}, "accessible_project_count": 7 }
+    ```
+
+=== "Python"
+
+    ```python
+    import mixpanel_data as mp
+
+    result = mp.accounts.test()  # AccountTestResult; never raises — check result.ok / result.error
+    if result.ok:
+        print(result.user.email, result.accessible_project_count)
+    else:
+        print("test failed:", result.error)
+    ```
+
+## Step 4: Explore Your Data
 
 Before writing queries, survey your data landscape. Discovery commands let you see what exists in your Mixpanel project without guessing.
 
@@ -112,9 +152,9 @@ Before writing queries, survey your data landscape. Discovery commands let you s
     import mixpanel_data as mp
 
     ws = mp.Workspace()
-    events = ws.list_events()
-    for e in events[:10]:
-        print(e.name)
+    events = ws.events()         # list[str]
+    for name in events[:10]:
+        print(name)
     ```
 
 ### Drill Into Properties
@@ -124,15 +164,15 @@ Once you know an event name, see what properties it has:
 === "CLI"
 
     ```bash
-    mp inspect properties "Purchase"
+    mp inspect properties --event Purchase
     ```
 
 === "Python"
 
     ```python
-    props = ws.list_properties("Purchase")
-    for p in props:
-        print(f"{p.name}: {p.type}")
+    props = ws.properties("Purchase")    # list[str]
+    for name in props:
+        print(name)
     ```
 
 ### Sample Property Values
@@ -142,13 +182,13 @@ See actual values a property contains:
 === "CLI"
 
     ```bash
-    mp inspect values "Purchase" "country"
+    mp inspect values --event Purchase --property country
     ```
 
 === "Python"
 
     ```python
-    values = ws.list_property_values("Purchase", "country")
+    values = ws.property_values("country", event="Purchase")
     print(values)  # ['US', 'UK', 'DE', 'FR', ...]
     ```
 
@@ -185,14 +225,14 @@ See funnels, cohorts, and saved reports already defined in Mixpanel:
 === "Python"
 
     ```python
-    funnels = ws.list_funnels()
-    cohorts = ws.list_cohorts()
+    funnels = ws.funnels()
+    cohorts = ws.cohorts()
     bookmarks = ws.list_bookmarks()
     ```
 
 This discovery workflow ensures your queries reference real event names, valid properties, and actual values—no trial and error.
 
-## Step 4: Run Analytics Queries
+## Step 5: Run Analytics Queries
 
 ### Insights Queries (Recommended)
 
@@ -377,7 +417,33 @@ For segmentation, funnels, and retention via the older Query API:
     print(result.df)
     ```
 
-## Step 5: Manage Entities & Data Governance (Optional)
+## Step 6: Switch Accounts and Projects In-Session
+
+`Workspace.use()` swaps any axis without rebuilding the underlying HTTP client (O(1) per swap), so cross-project iteration is cheap:
+
+```python
+import mixpanel_data as mp
+
+ws = mp.Workspace()
+
+# In-session switching (returns self for chaining)
+ws.use(account="team")              # implicitly clears workspace
+ws.use(project="3018488")
+ws.use(workspace=3448414)
+ws.use(target="ecom")               # apply all three at once
+
+# Persist the new state
+ws.use(project="3018488", persist=True)
+
+# Iterate across projects
+for project in ws.projects():
+    ws.use(project=project.id)
+    print(project.name, len(ws.events()))
+```
+
+See [Configuration → Saved Targets](configuration.md#saved-targets) for the full target workflow.
+
+## Step 7: Manage Entities & Data Governance (Optional)
 
 Create, update, and delete dashboards, reports, cohorts, feature flags, and experiments:
 
@@ -431,7 +497,7 @@ Create, update, and delete dashboards, reports, cohorts, feature flags, and expe
 
 See the [Entity Management guide](../guide/entity-management.md) for complete coverage of dashboard, report, cohort, feature flag, and experiment operations. See the [Data Governance guide](../guide/data-governance.md) for Lexicon definitions, drop filters, custom properties, custom events, lookup tables, schema registry, schema enforcement, data auditing, and event deletion requests.
 
-## Step 6: Stream Data
+## Step 8: Stream Data
 
 For ETL pipelines or data processing, stream data directly:
 

@@ -73,24 +73,21 @@ You need to connect `mixpanel_data` to your Mixpanel project. There are two ways
 
 ### Option A: OAuth Login (Recommended for Personal Use)
 
-This opens your browser so you can log in with your Mixpanel credentials:
+Register an OAuth browser account, then run the PKCE login flow — the second command opens your browser so you can authenticate with Mixpanel:
 
 ```bash
-mp auth login --region us
+mp account add personal --type oauth_browser --region us
+mp account login personal
 ```
 
-After logging in, `mixpanel_data` automatically discovers your accessible projects. If you have exactly one project, it is selected for you. If you have multiple projects, you'll be prompted to choose one:
+After logging in, `mixpanel_data` automatically backfills the account's `default_project` from the post-login `/me` probe. If you have multiple accessible projects and want to switch:
 
 ```bash
-mp projects list                  # See all your projects
-mp projects switch YOUR_PROJECT_ID  # Select a project
+mp project list                # See all your accessible projects
+mp project use YOUR_PROJECT_ID # Switch to a different project
 ```
 
-You can also specify a project ID upfront if you already know it:
-
-```bash
-mp auth login --region us --project-id YOUR_PROJECT_ID
-```
+You can also pin a specific project at registration time by passing `--project YOUR_PROJECT_ID` to `mp account add`.
 
 **Region options:**
 
@@ -103,7 +100,7 @@ mp auth login --region us --project-id YOUR_PROJECT_ID
 Verify the connection:
 
 ```bash
-mp auth status
+mp session
 ```
 
 ### Option B: Service Account (Recommended for Scripts & CI/CD)
@@ -113,15 +110,16 @@ Service accounts are ideal for automation. You'll need a **service account usern
 Add the credentials (you'll be prompted for the secret securely):
 
 ```bash
-mp auth add my-project --username YOUR_SA_USERNAME --project YOUR_PROJECT_ID --region us
+mp account add my-project --type service_account \
+    --username YOUR_SA_USERNAME --project YOUR_PROJECT_ID --region us
 ```
 
-You'll see a hidden input prompt for the secret — paste it and press Enter.
+You'll see a hidden input prompt for the secret — paste it and press Enter. (For non-interactive use, prefer `export MP_SECRET=...` before the command, or pipe the secret via `--secret-stdin`.)
 
 Then verify the connection:
 
 ```bash
-mp auth test
+mp account test
 ```
 
 You should see a success message confirming the credentials work.
@@ -137,11 +135,11 @@ export MP_PROJECT_ID="12345"
 export MP_REGION="us"
 ```
 
-These take effect immediately for any `mp` command or Python script in the same terminal session.
+These take effect immediately for any `mp` command or Python script in the same terminal session. For an OAuth bearer token instead of a service account, set `MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION` (the service-account quad takes precedence when both sets are complete).
 
 ### Where Credentials Are Stored
 
-Credentials are saved to `~/.mp/config.toml`. This file is created automatically when you run `mp auth add` or `mp auth login`. You should never need to edit it by hand.
+Account records and the active session live in `~/.mp/config.toml`. OAuth browser tokens are stored per-account at `~/.mp/accounts/<name>/tokens.json` (mode `0o600`) and refreshed automatically on expiry. These files are created automatically when you run `mp account add` or `mp account login` — you should never need to edit them by hand.
 
 ---
 
@@ -315,6 +313,20 @@ print(flow.top_transitions(5))     # Top 5 most common paths
 print(flow.drop_off_summary())     # Where users drop off
 ```
 
+### User Profile Query
+
+```python
+from mixpanel_data import Filter
+
+# Pull profile fields for high-value users
+result = ws.query_user(
+    where=Filter.greater_than("purchase_count", 10),
+    properties=["$name", "$email", "plan"],
+    limit=None,                      # fetch every match (None = no cap)
+)
+print(result.df.head())              # distinct_id | $name | $email | plan
+```
+
 ### Stream Events
 
 For processing large datasets without loading everything into memory:
@@ -364,10 +376,10 @@ This will:
 If the setup skill reports that no credentials are found, use the `/mixpanel-data:auth` command:
 
 ```
-/mixpanel-data:auth add my-project
+/mixpanel-data:auth account add my-project
 ```
 
-Claude will guide you through entering your service account username, project ID, and region. You'll be prompted to run a shell command that securely collects your secret.
+Claude will guide you through entering your service account username, project ID, and region. You'll be prompted to run a shell command that securely collects your secret. For OAuth, use `/mixpanel-data:auth account add personal --type oauth_browser --region us` followed by `/mixpanel-data:auth account login personal`.
 
 ### Ask Analytics Questions
 
@@ -385,21 +397,19 @@ Once authenticated, just ask Claude questions in natural language:
 "Build me a weekly KPI dashboard for the product team."
 ```
 
-Claude will choose the right query engine (Insights, Funnels, Retention, or Flows), write and execute the Python code, and explain the results.
+Claude will choose the right query engine (Insights, Funnels, Retention, Flows, or Users), write and execute the Python code, and explain the results.
 
-### Specialist Agents
+### What's in the Plugin
 
-The plugin includes five specialist agents that Claude can invoke automatically based on your question:
+The plugin ships three skills that Claude loads automatically when relevant:
 
-| Agent | What It Does | Example Question |
-|-------|-------------|-----------------|
-| **analyst** | General-purpose orchestrator | "Show me revenue trends by plan type" |
-| **explorer** | Discovers your data schema | "What events and properties do we track?" |
-| **diagnostician** | Root cause analysis | "Why did signups drop last Tuesday?" |
-| **synthesizer** | Multi-engine cross-analysis | "Compare funnel conversion for retained vs. churned users" |
-| **narrator** | Executive summaries | "Write a weekly product report for leadership" |
+| Skill | Trigger | What It Does |
+|-------|---------|--------------|
+| **setup** | `/mixpanel-data:setup` (manual) | Installs `mixpanel_data` + analytics dependencies and verifies credentials. |
+| **mixpanelyst** | Auto-loads on analytics questions | Distilled `Workspace` API reference, discovery workflow, exploratory analysis playbook, and live `help.py` lookup for method signatures, types, and enums. |
+| **dashboard-expert** | Auto-loads on dashboard questions | Four-mode workflow (Analyze, Build, Modify, Explain) for Mixpanel dashboards, with 9 design templates, chart-type selection, and layout reference. |
 
-You don't need to invoke these manually — Claude routes to the right agent based on your question.
+The `/mixpanel-data:auth` slash command provides a guided wrapper around `mp account / project / workspace / target / session / bridge` for managing credentials without leaving the conversation.
 
 ---
 
@@ -409,36 +419,36 @@ You don't need to invoke these manually — Claude routes to the right agent bas
 
 ### Step 1: Set Up the Credential Bridge (On Your Local Machine)
 
-Choose or create a directory to use as your Cowork workspace, then run this on your **local machine** (not inside Cowork):
+On your **local machine** (not inside Cowork), export the active account into a v2 bridge file at the default Cowork-readable path:
 
 ```bash
-mp auth cowork-setup --dir /path/to/your/workspace
+mp account export-bridge --to ~/.claude/mixpanel/auth.json
 ```
 
-This writes a `mixpanel_auth.json` bridge file into the specified directory. When you start a Cowork session, select this same directory as your workspace so the VM can access the credentials.
+This writes a v2 `auth.json` bridge file embedding your full `Account` record (and any `oauth_browser` tokens) so the Cowork session can read your credentials at startup. The default search path inside Cowork is `~/.claude/mixpanel/auth.json` — override with `MP_AUTH_FILE` if you need a custom location.
 
 **Options:**
 
 ```bash
-# Use a specific credential (if you have multiple accounts)
-mp auth cowork-setup --dir /path/to/workspace --credential production
+# Export a specific named account (defaults to the active account)
+mp account export-bridge --to ~/.claude/mixpanel/auth.json --account production
 
-# Override the project ID
-mp auth cowork-setup --dir /path/to/workspace --project-id 12345
+# Pin a project ID into the bridge (overrides the account's default_project)
+mp account export-bridge --to ~/.claude/mixpanel/auth.json --project 12345
 
-# Include a workspace ID (needed for dashboard and entity management)
-mp auth cowork-setup --dir /path/to/workspace --workspace-id 3448413
+# Pin a workspace ID into the bridge (needed for dashboard/entity management)
+mp account export-bridge --to ~/.claude/mixpanel/auth.json --workspace 3448413
 ```
 
 ### Step 2: Verify the Bridge (Anywhere)
 
-Check that the bridge file exists and is valid:
+Check that the bridge resolves correctly:
 
 ```bash
-mp auth cowork-status
+mp session --bridge
 ```
 
-This shows you the auth method, region, project ID, and whether OAuth tokens are still valid.
+This shows the resolved account, project, workspace, and any pinned headers from the bridge file.
 
 ### Step 3: Use mixpanel_data in Cowork
 
@@ -455,12 +465,13 @@ The setup script automatically detects the Cowork environment and reads credenti
 When you no longer need Cowork access, remove the bridge file:
 
 ```bash
-mp auth cowork-teardown --dir /path/to/your/workspace
+mp account remove-bridge          # removes the default ~/.claude/mixpanel/auth.json
+mp account remove-bridge --at /custom/path/auth.json
 ```
 
 ### OAuth Token Refresh
 
-If you authenticated with OAuth, the bridge file includes a refresh token. The library automatically refreshes expired tokens inside Cowork — no browser interaction needed. If the refresh token itself expires, you'll need to re-authenticate on your local machine (`mp auth login`) and re-run `mp auth cowork-setup --dir /path/to/your/workspace`.
+If you authenticated with OAuth, the bridge file embeds your refresh token. The library automatically refreshes expired access tokens inside Cowork — no browser interaction needed. If the refresh token itself is rejected (e.g., revoked at the IdP), you'll need to re-authenticate on your local machine (`mp account login <name>`) and re-run `mp account export-bridge --to ~/.claude/mixpanel/auth.json` to pick up the fresh tokens.
 
 ---
 
@@ -470,17 +481,22 @@ If you authenticated with OAuth, the bridge file includes a refresh token. The l
 
 | Command | What It Does |
 |---------|-------------|
-| `mp auth login` | Log in with OAuth (opens browser) |
-| `mp auth add <name>` | Add a service account |
-| `mp auth test` | Test your credentials |
-| `mp auth status` | Show current auth status |
+| `mp account add <name> --type oauth_browser --region us` | Register an OAuth browser account |
+| `mp account login <name>` | Run the PKCE browser flow for an OAuth account |
+| `mp account add <name> --type service_account --username ... --project ... --region ...` | Register a service account |
+| `mp account test [name]` | Test credentials for an account (defaults to active) |
+| `mp session` | Show the resolved active session (account / project / workspace) |
+| `mp account use <name>` | Switch the active account |
+| `mp project list` / `mp project use <id>` | List accessible projects / switch active project |
+| `mp workspace list` / `mp workspace use <id>` | List workspaces / pin one to the active session |
+| `mp target add <name> --account A --project P [--workspace W]` | Save a named (account, project, workspace?) cursor |
+| `mp target use <name>` | Apply a saved target atomically |
+| `mp account export-bridge --to PATH` | Write a v2 Cowork bridge file |
+| `mp account remove-bridge [--at PATH]` | Remove the bridge file |
 | `mp inspect events` | List all tracked events |
 | `mp inspect properties --event <name>` | List properties for an event |
 | `mp query segmentation --event <name> --from <date> --to <date>` | Run a segmentation query |
 | `mp query funnel <id> --from <date> --to <date>` | Query a saved funnel |
-| `mp projects list` | List accessible projects |
-| `mp projects switch <id>` | Switch active project |
-| `mp auth migrate` | Migrate v1 config to v2 format |
 | `mp --help` | Show all available commands |
 | `mp <command> --help` | Show help for a specific command |
 
@@ -497,6 +513,7 @@ ws.query("Event", last=30)              # Insights query
 ws.query_funnel(["A", "B", "C"])        # Funnel query
 ws.query_retention("A", "B")            # Retention query
 ws.query_flow("Event", forward=3)       # Flow query
+ws.query_user(properties=["$email"])    # User profile query
 ws.stream_events(from_date="...", to_date="...")  # Stream events
 ```
 
@@ -506,9 +523,14 @@ ws.stream_events(from_date="...", to_date="...")  # Stream events
 |----------|---------|
 | `MP_USERNAME` | Service account username |
 | `MP_SECRET` | Service account secret |
+| `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account; requires `MP_PROJECT_ID` + `MP_REGION`; the full service-account quad takes precedence when both sets are complete) |
 | `MP_PROJECT_ID` | Your Mixpanel project ID |
 | `MP_REGION` | Data residency region (`us`, `eu`, or `in`) |
 | `MP_WORKSPACE_ID` | Workspace ID (for dashboard and entity management) |
+| `MP_ACCOUNT` | Override the active account name |
+| `MP_TARGET` | Apply a saved target (mutually exclusive with `MP_ACCOUNT`/`MP_PROJECT_ID`/`MP_WORKSPACE_ID`) |
+| `MP_AUTH_FILE` | Override path to the v2 Cowork bridge file |
+| `MP_CONFIG_PATH` | Override config file location |
 
 ### Output Formats
 
@@ -547,38 +569,40 @@ If using `uv`, make sure the virtual environment is activated.
 - Double-check your service account username and secret in Mixpanel (Settings > Service Accounts)
 - Verify your project ID matches the project the service account has access to
 - Make sure the region flag matches your project's data residency
-- Run `mp auth test` to see the specific error message
+- Run `mp account test <name>` to see the specific error message
 
 ### "No credentials configured"
 
 Run one of:
 
 ```bash
-# OAuth (interactive — auto-discovers your projects)
-mp auth login --region us
+# OAuth browser (interactive PKCE flow)
+mp account add personal --type oauth_browser --region us
+mp account login personal
 
 # Service account
-mp auth add my-project --username YOUR_USERNAME --project YOUR_PROJECT_ID --region us
+mp account add my-project --type service_account \
+    --username YOUR_USERNAME --project YOUR_PROJECT_ID --region us
 ```
 
 ### OAuth Token Expired
 
 ```bash
-# Re-authenticate
-mp auth login --region us
+# Re-authenticate (refresh token revoked or expired)
+mp account login <name>
 ```
 
 ### Plugin Not Working in Claude Code
 
 1. Make sure plugins are enabled in your Claude Code settings
 2. Run `/mixpanel-data:setup` to install dependencies
-3. Check auth with `/mixpanel-data:auth status`
+3. Check auth with `/mixpanel-data:auth session`
 4. If the plugin doesn't appear, try restarting Claude Code
 
 ### Cowork VM Can't Find Credentials
 
-1. On your **local machine**, run: `mp auth cowork-setup --dir /path/to/your/workspace`
-2. Verify with: `mp auth cowork-status`
+1. On your **local machine**, run: `mp account export-bridge --to ~/.claude/mixpanel/auth.json`
+2. Verify with: `mp session --bridge`
 3. Inside the Cowork session, run: `/mixpanel-data:setup`
 
 ---

@@ -13,7 +13,9 @@ All library exceptions inherit from `MixpanelDataError`, enabling callers to cat
 MixpanelDataError
 ├── ConfigError
 │   ├── AccountNotFoundError
-│   └── AccountExistsError
+│   ├── AccountExistsError
+│   ├── AccountInUseError
+│   └── ProjectNotFoundError
 ├── APIError
 │   ├── AuthenticationError
 │   ├── RateLimitError
@@ -40,6 +42,8 @@ except mp.OAuthError as e:
     print(f"OAuth error [{e.code}]: {e.message}")
 except mp.WorkspaceScopeError as e:
     print(f"Workspace error [{e.code}]: {e.message}")
+except mp.AccountInUseError as e:
+    print(f"Account '{e.account_name}' referenced by targets: {e.referenced_by}")
 except mp.MixpanelDataError as e:
     print(f"Error [{e.code}]: {e.message}")
 ```
@@ -100,6 +104,16 @@ except mp.MixpanelDataError as e:
       show_root_heading: true
       show_root_toc_entry: true
 
+::: mixpanel_data.AccountInUseError
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_data.ProjectNotFoundError
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## OAuth Exceptions
 
 Raised during OAuth 2.0 PKCE authentication flows.
@@ -107,7 +121,8 @@ Raised during OAuth 2.0 PKCE authentication flows.
 | Error Code | Raised When |
 |------------|-------------|
 | `OAUTH_TOKEN_ERROR` | Token exchange fails |
-| `OAUTH_REFRESH_ERROR` | Token refresh fails |
+| `OAUTH_REFRESH_ERROR` | Token refresh fails (transient) |
+| `OAUTH_REFRESH_REVOKED` | Refresh token rejected by IdP as `invalid_grant` (re-run `mp account login NAME`) |
 | `OAUTH_REGISTRATION_ERROR` | Dynamic client registration fails |
 | `OAUTH_TIMEOUT` | Callback server times out waiting for authorization |
 | `OAUTH_PORT_ERROR` | Cannot bind to a local port for the callback server |

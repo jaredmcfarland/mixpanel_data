@@ -78,6 +78,8 @@ plugins:
           - getting-started/installation.md
           - getting-started/quickstart.md
           - getting-started/configuration.md
+        Migration:
+          - migration/0.4.0.md
         User Guide:
           - guide/unified-query-system.md
           - guide/discovery.md
@@ -132,6 +134,8 @@ plugins:
           - getting-started/installation.md: "Install with pip or uv"
           - getting-started/quickstart.md: "First queries in 5 minutes"
           - getting-started/configuration.md: "Accounts, env vars, config files"
+        Migration:
+          - migration/0.4.0.md: "Upgrade from 0.3.x to 0.4.0 (auth architecture redesign)"
         User Guide:
           - guide/unified-query-system.md: "Unified query system — one vocabulary, four analytics engines"
           - guide/discovery.md: "Explore schema, events, properties, cohorts"
@@ -177,6 +181,8 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
+  - Migration:
+      - From 0.3.x to 0.4.0: migration/0.4.0.md
   - User Guide:
       - The Unified Query System: guide/unified-query-system.md
       - Data Discovery: guide/discovery.md

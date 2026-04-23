@@ -23,18 +23,18 @@ Systematic QA testing for the `mp` CLI against live Mixpanel data.
 ```bash
 uv run mp --version
 uv run mp --help
-uv run mp auth --help
+uv run mp account --help
 uv run mp fetch --help
 uv run mp query --help
 uv run mp inspect --help
 ```
 
-## 2. Auth
+## 2. Account
 ```bash
-uv run mp auth list
-uv run mp auth list --format table
-uv run mp auth show sinkapp-prod
-uv run mp auth test sinkapp-prod
+uv run mp account list
+uv run mp account list --format table
+uv run mp account show sinkapp-prod
+uv run mp account test sinkapp-prod
 ```
 
 ## 3. Inspect
@@ -82,8 +82,8 @@ uv run mp -a sinkapp-prod query segmentation-average --event "Added Entity" --on
 ## 7. Output Formats
 ```bash
 uv run mp -a sinkapp-prod inspect events --format json | head -10
-uv run mp -a sinkapp-prod auth list --format table
-uv run mp -a sinkapp-prod auth list --format csv
+uv run mp -a sinkapp-prod account list --format table
+uv run mp -a sinkapp-prod account list --format csv
 uv run mp -a sinkapp-prod inspect events --format plain | head -5
 uv run mp -a sinkapp-prod inspect events --format jsonl | head -5
 ```

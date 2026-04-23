@@ -81,52 +81,43 @@ echo ""
 echo "Checking Mixpanel credentials..."
 "$python_cmd" -c "
 import os, sys
-# Check environment variables first
-env_vars = ['MP_USERNAME', 'MP_SECRET', 'MP_PROJECT_ID', 'MP_REGION']
-env_set = [v for v in env_vars if os.environ.get(v)]
-if len(env_set) == len(env_vars):
-    print(f'✓ All environment variables set')
+
+# 1) Service-account env quad
+sa_quad = ['MP_USERNAME', 'MP_SECRET', 'MP_PROJECT_ID', 'MP_REGION']
+sa_set = [v for v in sa_quad if os.environ.get(v)]
+if len(sa_set) == len(sa_quad):
+    print('✓ Service-account env quad is fully set (MP_USERNAME + MP_SECRET + MP_PROJECT_ID + MP_REGION)')
     sys.exit(0)
-elif env_set:
-    missing = [v for v in env_vars if not os.environ.get(v)]
-    print(f'⚠ Partial environment config — missing: {\", \".join(missing)}')
+elif sa_set:
+    missing = [v for v in sa_quad if not os.environ.get(v)]
+    print(f'⚠ Partial service-account env config — missing: {\", \".join(missing)}')
 
-# Check config file
+# 2) OAuth-token env triple
+oauth_triple = ['MP_OAUTH_TOKEN', 'MP_PROJECT_ID', 'MP_REGION']
+oauth_set = [v for v in oauth_triple if os.environ.get(v)]
+if len(oauth_set) == len(oauth_triple):
+    print('✓ OAuth-token env triple is fully set (MP_OAUTH_TOKEN + MP_PROJECT_ID + MP_REGION)')
+    sys.exit(0)
+
+# 3) Persisted accounts in ~/.mp/config.toml
 try:
-    from mixpanel_data._internal.config import ConfigManager
-    cm = ConfigManager()
-    version = 1  # config schema version is fixed under the 0.4.0 layout
-
-    if version >= 2:
-        # v2 config: credential + project context
-        credentials = cm.list_credentials()
-        if credentials:
-            active = [c for c in credentials if c.is_active]
-            print(f'✓ Config v2: {len(credentials)} credential(s)')
-            if active:
-                print(f'  Active: {active[0].name} ({active[0].type}, {active[0].region})')
-            aliases = cm.list_project_aliases()
-            if aliases:
-                print(f'  {len(aliases)} project alias(es) configured')
+    import mixpanel_data as mp
+    accounts = mp.accounts.list()
+    if accounts:
+        active = next((a for a in accounts if a.is_active), None)
+        names = ', '.join(a.name for a in accounts)
+        print(f'✓ {len(accounts)} account(s) in ~/.mp/config.toml: {names}')
+        if active:
+            print(f'  Active: {active.name} ({active.type}, {active.region})')
         else:
-            print('⚠ Config v2 but no credentials configured.')
-            print('  Run /mixpanel-data:auth add (service account) or /mixpanel-data:auth login (OAuth)')
+            print('⚠ No active account selected. Run: mp account use <name>')
     else:
-        # v1 config: account-based
-        accounts = cm.list_accounts()
-        if accounts:
-            names = [a.name for a in accounts]
-            print(f'✓ Config v1: {len(accounts)} account(s): {\", \".join(names)}')
-            default = next((a.name for a in accounts if a.is_default), None)
-            if default:
-                print(f'  Default: {default}')
-            print(f'  Tip: Run /mixpanel-data:auth migrate to upgrade to v2 for project switching')
-        else:
-            print('⚠ No accounts configured yet.')
-            print('  Run /mixpanel-data:auth add (service account) or /mixpanel-data:auth login (OAuth)')
+        print('⚠ No accounts configured yet.')
+        print('  OAuth browser:    mp account add personal --type oauth_browser --region us && mp account login personal')
+        print('  Service account:  mp account add team --type service_account --username sa_xxx --project 12345 --region us')
 except Exception as e:
-    print(f'⚠ Could not check config file credentials: {e}')
-    print('  Set environment variables: MP_USERNAME, MP_SECRET, MP_PROJECT_ID')
+    print(f'⚠ Could not read ~/.mp/config.toml: {e}')
+    print('  Set env vars (service-account quad or OAuth triple) or run mp account add ...')
 "
 
 # Cowork detection: check for bridge file
@@ -142,15 +133,21 @@ import json, sys
 try:
     with open(sys.argv[1]) as fh:
         bridge = json.load(fh)
-    print(f'  Auth method: {bridge.get(\"auth_method\", \"unknown\")}')
-    print(f'  Region: {bridge.get(\"region\", \"unknown\")}')
-    print(f'  Project: {bridge.get(\"project_id\", \"unknown\")}')
-    ch = bridge.get('custom_header')
-    if ch:
-        print(f'  Custom header: {ch.get(\"name\", \"?\")} ✓')
-    oauth = bridge.get('oauth')
-    if oauth and oauth.get('expires_at'):
-        print(f'  Token expires: {oauth[\"expires_at\"]}')
+    if bridge.get('version') != 2:
+        print(f'  ⚠ Unexpected bridge version: {bridge.get(\"version\")} (expected 2)')
+    account = bridge.get('account', {})
+    print(f'  Account: {account.get(\"name\", \"?\")} ({account.get(\"type\", \"?\")}, {account.get(\"region\", \"?\")})')
+    project = bridge.get('project') or account.get('default_project')
+    if project:
+        print(f'  Project: {project}')
+    if bridge.get('workspace'):
+        print(f'  Workspace: {bridge[\"workspace\"]}')
+    headers = bridge.get('headers') or {}
+    if headers:
+        print(f'  Custom headers: {len(headers)} entr{\"y\" if len(headers) == 1 else \"ies\"} ✓')
+    tokens = bridge.get('tokens')
+    if tokens and tokens.get('expires_at'):
+        print(f'  Token expires: {tokens[\"expires_at\"]}')
 except Exception as e:
     print(f'  Error reading bridge file: {e}')
 " "$f"
@@ -161,7 +158,7 @@ except Exception as e:
   if [ -z "$BRIDGE_FOUND" ]; then
     echo "⚠ No auth bridge file found."
     echo "  On your HOST machine, run:"
-    echo "    mp auth cowork-setup"
+    echo "    mp account export-bridge --to ~/.claude/mixpanel/auth.json"
     echo "  Then start a new Cowork session."
   fi
 fi
