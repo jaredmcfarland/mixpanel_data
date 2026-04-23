@@ -80,6 +80,10 @@ account_app = typer.Typer(
 def _format_summary_table(summaries: list[AccountSummary]) -> str:
     """Render a compact table for ``mp account list`` (no Rich dependency).
 
+    Column widths grow to fit the longest entry (account names accept up
+    to 64 chars per ``_AccountBase.name``); fixed widths would silently
+    truncate long values.
+
     Args:
         summaries: List of AccountSummary records.
 
@@ -88,10 +92,15 @@ def _format_summary_table(summaries: list[AccountSummary]) -> str:
     """
     if not summaries:
         return "(no accounts configured)"
-    lines = ["NAME            TYPE              REGION  ACTIVE"]
+    name_w = max(len("NAME"), *(len(s.name) for s in summaries))
+    type_w = max(len("TYPE"), *(len(s.type) for s in summaries))
+    region_w = max(len("REGION"), *(len(s.region) for s in summaries))
+    lines = [f"{'NAME':<{name_w}}  {'TYPE':<{type_w}}  {'REGION':<{region_w}}  ACTIVE"]
     for s in summaries:
         active = "*" if s.is_active else ""
-        lines.append(f"{s.name:<15} {s.type:<17} {s.region:<7} {active}")
+        lines.append(
+            f"{s.name:<{name_w}}  {s.type:<{type_w}}  {s.region:<{region_w}}  {active}"
+        )
     return "\n".join(lines)
 
 
@@ -546,6 +555,7 @@ def logout_account(
 @account_app.command("export-bridge")
 @handle_errors
 def export_bridge_command(
+    ctx: typer.Context,
     name: Annotated[
         str | None,
         typer.Option("--account", help="Account to export (defaults to active)"),
@@ -579,6 +589,7 @@ def export_bridge_command(
 @account_app.command("remove-bridge")
 @handle_errors
 def remove_bridge_command(
+    ctx: typer.Context,
     at: Annotated[
         Path | None,
         typer.Option("--at", help="Bridge file path (defaults to standard search)."),

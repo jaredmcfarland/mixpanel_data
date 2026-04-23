@@ -46,6 +46,7 @@ from mixpanel_data._internal.auth.account import (
     ServiceAccount,
     TokenResolver,
 )
+from mixpanel_data._internal.auth.storage import account_dir
 from mixpanel_data._internal.auth.token import OAuthTokens
 from mixpanel_data._internal.io_utils import atomic_write_bytes
 from mixpanel_data.exceptions import ConfigError, OAuthError
@@ -200,7 +201,7 @@ def _read_browser_tokens(name: str) -> OAuthTokens:
             fields. The caller surfaces this verbatim — no retry / no
             refresh attempt.
     """
-    path = Path.home() / ".mp" / "accounts" / name / "tokens.json"
+    path = account_dir(name) / "tokens.json"
     if not path.exists():
         raise OAuthError(
             f"No OAuth tokens found for account '{name}' at {path}. "

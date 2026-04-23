@@ -315,7 +315,7 @@ def _resolve_headers(
     return headers
 
 
-def _format_no_account_error() -> str:
+def format_no_account_error() -> str:
     """Return the multi-line FR-024 error for an unresolvable account axis."""
     return (
         "No account configured.\n"
@@ -423,7 +423,7 @@ def resolve_session(
         config=cfg,
     )
     if account_obj is None:
-        raise ConfigError(_format_no_account_error())
+        raise ConfigError(format_no_account_error())
 
     project_id = resolve_project_axis(
         explicit=project,
@@ -466,6 +466,7 @@ def resolve_session(
 
 
 __all__ = [
+    "format_no_account_error",
     "format_no_project_error",
     "resolve_account_axis",
     "resolve_project_axis",

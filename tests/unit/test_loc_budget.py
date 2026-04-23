@@ -20,9 +20,10 @@ cohorts / flags / experiments / alerts / data governance) that have
 nothing to do with auth. The original spec budget assumed an
 api_client split that didn't happen and is out of scope here.
 
-Current numbers at HEAD ``18233dc``: 19 files / ~5,800 LoC. The
-budgets below carry ~10% headroom so a single cleanup PR doesn't
-trip the test, but a substantial bloat does.
+Current ballpark at the 042 branch tip: 19 files / ~5,800 LoC.
+Re-run ``wc -l`` against ``_auth_subsystem_files()`` to get a fresh
+number; the budgets below carry ~10% headroom so a single cleanup
+PR doesn't trip the test, but a substantial bloat does.
 """
 
 from __future__ import annotations

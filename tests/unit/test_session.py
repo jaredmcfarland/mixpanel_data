@@ -323,3 +323,20 @@ class TestSessionAuthHeader:
         a = OAuthBrowserAccount(name="me", region="us")
         s = Session(account=a, project=project)
         assert s.auth_header(token_resolver=_Resolver()) == "Bearer tok-for-me-us"
+
+
+class TestPublicSurface:
+    """Lock the ``session.__all__`` exports (Claim 8)."""
+
+    def test_private_sentinel_not_exported(self) -> None:
+        """``_SENTINEL`` and ``_SentinelType`` carry the private prefix and must
+        not appear in ``__all__``.
+
+        Re-exporting underscore-prefixed names is an antipattern: it advertises
+        them as part of the supported surface while the prefix says otherwise.
+        Internal callers can still import them directly by name.
+        """
+        from mixpanel_data._internal.auth import session as session_mod
+
+        assert "_SENTINEL" not in session_mod.__all__
+        assert "_SentinelType" not in session_mod.__all__

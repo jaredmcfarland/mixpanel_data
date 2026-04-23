@@ -17,10 +17,8 @@ Reference: ``specs/042-auth-architecture-redesign/data-model.md``,
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -30,7 +28,7 @@ from mixpanel_data._internal.auth.account import (
     TokenResolver,
 )
 from mixpanel_data._internal.auth.storage import account_dir
-from mixpanel_data._internal.auth.token import OAuthTokens
+from mixpanel_data._internal.auth.token import OAuthTokens, token_payload_bytes
 from mixpanel_data._internal.io_utils import atomic_write_bytes
 from mixpanel_data.exceptions import OAuthError
 
@@ -217,22 +215,11 @@ class OnDiskTokenResolver(TokenResolver):
 
         # Refresh tokens may rotate; if the IdP returns no new refresh token
         # we keep the existing one to preserve future refresh capability.
-        # Reuse model_dump_json so the persisted shape matches what
-        # `model_validate_json` will read back — single source of truth.
         if new_tokens.refresh_token is None:
             new_tokens = new_tokens.model_copy(
                 update={"refresh_token": tokens.refresh_token}
             )
-        new_payload: dict[str, Any] = {
-            "access_token": new_tokens.access_token.get_secret_value(),
-            "expires_at": new_tokens.expires_at.isoformat(),
-            "token_type": new_tokens.token_type,
-            "scope": new_tokens.scope,
-            "refresh_token": new_tokens.refresh_token.get_secret_value()
-            if new_tokens.refresh_token
-            else None,
-        }
-        atomic_write_bytes(path, json.dumps(new_payload).encode("utf-8"))
+        atomic_write_bytes(path, token_payload_bytes(new_tokens))
         return new_tokens.access_token.get_secret_value()
 
     def get_static_token(self, account: OAuthTokenAccount) -> str:

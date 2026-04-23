@@ -17,7 +17,11 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+from mixpanel_data._internal.auth.token import (
+    OAuthClientInfo,
+    OAuthTokens,
+    token_payload_bytes,
+)
 
 
 def _utcnow() -> datetime:
@@ -531,3 +535,50 @@ class TestOAuthTokensExpiryEdgeCases:
         }
         tokens = OAuthTokens.from_token_response(data)
         assert tokens.is_expired() is False
+
+
+class TestTokenPayloadBytes:
+    """Single-source serialization for ``tokens.json`` (Claim 4)."""
+
+    def test_round_trip_with_refresh_token(self) -> None:
+        """Bytes round-trip through ``model_validate_json`` with all fields preserved."""
+        original = _make_tokens()
+        loaded = OAuthTokens.model_validate_json(token_payload_bytes(original))
+        assert loaded.access_token.get_secret_value() == "access_abc123"
+        assert loaded.refresh_token is not None
+        assert loaded.refresh_token.get_secret_value() == "refresh_xyz789"
+        assert loaded.expires_at == original.expires_at
+        assert loaded.scope == "projects analysis"
+        assert loaded.token_type == "Bearer"
+
+    def test_round_trip_without_refresh_token(self) -> None:
+        """``refresh_token=None`` is omitted on write and restored as None on read.
+
+        Mirrors the loader contract in ``bridge._read_browser_tokens``: a
+        missing ``refresh_token`` key means "no refresh token", not "explicit
+        null". Emitting ``null`` would still round-trip but burns a key for
+        every CI account that never ships one.
+        """
+        original = _make_tokens(refresh_token=None)
+        raw = token_payload_bytes(original)
+        # Wire shape: no ``refresh_token`` key at all.
+        import json as _json
+
+        payload = _json.loads(raw.decode("utf-8"))
+        assert "refresh_token" not in payload
+        loaded = OAuthTokens.model_validate_json(raw)
+        assert loaded.refresh_token is None
+
+    def test_secrets_are_unwrapped_on_disk(self) -> None:
+        """Plain secret values land in the JSON, not Pydantic's redaction marker.
+
+        ``SecretStr`` defaults to ``"**********"`` in ``model_dump_json`` —
+        the helper must explicitly unwrap so the persisted file is usable.
+        """
+        import json as _json
+
+        tokens = _make_tokens(access_token="tok-123", refresh_token="ref-456")
+        payload = _json.loads(token_payload_bytes(tokens).decode("utf-8"))
+        assert payload["access_token"] == "tok-123"
+        assert payload["refresh_token"] == "ref-456"
+        assert "**********" not in payload.values()

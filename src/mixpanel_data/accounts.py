@@ -11,9 +11,7 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 from __future__ import annotations
 
 import builtins
-import json
 from pathlib import Path
-from typing import Any
 
 from pydantic import SecretStr
 
@@ -25,7 +23,8 @@ from mixpanel_data._internal.auth.account import (
     Region,
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.storage import ensure_account_dir
+from mixpanel_data._internal.auth.storage import account_dir, ensure_account_dir
+from mixpanel_data._internal.auth.token import OAuthTokens, token_payload_bytes
 from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data._internal.io_utils import atomic_write_bytes
@@ -401,7 +400,7 @@ def login(
     )
 
 
-def _persist_browser_tokens(name: str, tokens: Any) -> Path:
+def _persist_browser_tokens(name: str, tokens: OAuthTokens) -> Path:
     """Write ``tokens`` to the per-account ``tokens.json`` atomically (mode 0o600).
 
     Args:
@@ -412,17 +411,8 @@ def _persist_browser_tokens(name: str, tokens: Any) -> Path:
     Returns:
         The path that was written.
     """
-    account_dir = ensure_account_dir(name)
-    path = account_dir / "tokens.json"
-    payload: dict[str, Any] = {
-        "access_token": tokens.access_token.get_secret_value(),
-        "expires_at": tokens.expires_at.isoformat(),
-        "token_type": tokens.token_type,
-        "scope": tokens.scope,
-    }
-    if tokens.refresh_token is not None:
-        payload["refresh_token"] = tokens.refresh_token.get_secret_value()
-    atomic_write_bytes(path, json.dumps(payload).encode("utf-8"))
+    path = ensure_account_dir(name) / "tokens.json"
+    atomic_write_bytes(path, token_payload_bytes(tokens))
     return path
 
 
@@ -453,7 +443,7 @@ def logout(name: str) -> None:
         ConfigError: Account not found.
     """
     summary = show(name)  # raises if missing
-    tokens_path = Path.home() / ".mp" / "accounts" / summary.name / "tokens.json"
+    tokens_path = account_dir(summary.name) / "tokens.json"
     if tokens_path.exists():
         tokens_path.unlink()
 
@@ -561,10 +551,12 @@ __all__ = [
     "add",
     "export_bridge",
     "list",
+    "login",
     "logout",
     "remove",
     "remove_bridge",
     "show",
+    "test",
     "token",
     "update",
     "use",

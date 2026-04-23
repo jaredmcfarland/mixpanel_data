@@ -423,11 +423,10 @@ class Workspace:
                 and br.tokens is not None
                 and br.account.type == "oauth_browser"
             ):
-                import json as _json
-
                 from mixpanel_data._internal.auth.storage import (
                     ensure_account_dir,
                 )
+                from mixpanel_data._internal.auth.token import token_payload_bytes
                 from mixpanel_data._internal.io_utils import atomic_write_bytes
 
                 tokens_path = ensure_account_dir(br.account.name) / "tokens.json"
@@ -436,21 +435,18 @@ class Workspace:
                 # the host must replace any stale on-disk cache here.
                 # ``OAuthTokens.expires_at`` is always set (required, tz-aware
                 # per Fix 25) — no fall-through to None which would trip the
-                # OnDiskTokenResolver expiry check.
-                payload = {
-                    "access_token": br.tokens.access_token.get_secret_value(),
-                    "expires_at": br.tokens.expires_at.isoformat(),
-                    "scope": br.tokens.scope or "read",
-                    "token_type": br.tokens.token_type,
-                }
-                if br.tokens.refresh_token is not None:
-                    payload["refresh_token"] = (
-                        br.tokens.refresh_token.get_secret_value()
+                # OnDiskTokenResolver expiry check. Empty scopes from the
+                # bridge get a ``"read"`` default so the cached file matches
+                # what `mp account login` would have written.
+                tokens_to_persist = br.tokens
+                if not tokens_to_persist.scope:
+                    tokens_to_persist = tokens_to_persist.model_copy(
+                        update={"scope": "read"}
                     )
                 # atomic_write_bytes creates the file with 0o600 via O_EXCL
                 # before any data is written, eliminating the umask-derived
                 # permission window left open by write_text + chmod.
-                atomic_write_bytes(tokens_path, _json.dumps(payload).encode("utf-8"))
+                atomic_write_bytes(tokens_path, token_payload_bytes(tokens_to_persist))
             sess = _resolve_session(
                 account=account,
                 project=project,

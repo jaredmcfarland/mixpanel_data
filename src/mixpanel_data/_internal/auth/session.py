@@ -333,6 +333,4 @@ __all__ = [
     "Project",
     "Session",
     "WorkspaceRef",
-    "_SENTINEL",
-    "_SentinelType",
 ]

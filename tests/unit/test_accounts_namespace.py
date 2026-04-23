@@ -760,3 +760,82 @@ class TestLogin:
         accounts_ns.login("personal", open_browser=False)
 
         assert captured["open_browser"] is False
+
+
+class TestPublicSurface:
+    """Lock the ``mp.accounts`` public surface (Claim 6)."""
+
+    def test_login_and_test_are_exported(self) -> None:
+        """``login`` and ``test`` belong to ``__all__`` per ``contracts/python-api.md §5``.
+
+        Both are documented public API and called by
+        ``mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py``.
+        Omitting them from ``__all__`` hides them from ``help()``,
+        tab-completion, and ``from mixpanel_data.accounts import *``.
+        """
+        assert "login" in accounts_ns.__all__
+        assert "test" in accounts_ns.__all__
+
+    def test_all_entries_resolve(self) -> None:
+        """Every name in ``__all__`` maps to a real attribute on the module."""
+        for name in accounts_ns.__all__:
+            assert hasattr(accounts_ns, name), f"__all__ lists missing attr {name!r}"
+
+
+class TestLogoutHonorsStorageOverride:
+    """``logout`` must remove tokens from the env-var-overridden path (Claim 3)."""
+
+    def test_logout_uses_account_dir(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        cm: ConfigManager,
+    ) -> None:
+        """Tokens written under ``MP_OAUTH_STORAGE_DIR`` are deleted by ``logout``.
+
+        Hardcoding ``Path.home() / ".mp" / ...`` would silently bypass the
+        env-var override that hermetic tests and custom deployments rely on.
+        Verifies the file under the override path is gone after the call.
+        """
+        storage_root = tmp_path / "custom-storage"
+        monkeypatch.setenv("MP_OAUTH_STORAGE_DIR", str(storage_root))
+
+        accounts_ns.add("personal", type="oauth_browser", region="us")
+
+        # Seed tokens.json under the override path the way `mp account login` would.
+        tokens_path = storage_root / "accounts" / "personal" / "tokens.json"
+        tokens_path.parent.mkdir(parents=True, mode=0o700)
+        tokens_path.write_text("{}", encoding="utf-8")
+        assert tokens_path.exists()
+
+        accounts_ns.logout("personal")
+
+        assert not tokens_path.exists()
+        # The legacy ``$HOME/.mp/`` path must NOT have been touched.
+        assert not (tmp_path / ".mp" / "accounts" / "personal" / "tokens.json").exists()
+
+
+class TestSummaryTableDynamicWidth:
+    """``mp account list`` table widens for long names (Claim 9).
+
+    Account names accept up to 64 characters per ``_AccountBase.name``;
+    a fixed-width formatter would silently truncate, which makes the
+    active-marker column slide left and confuses the eye. The renderer
+    must expand to fit the longest entry.
+    """
+
+    def test_long_name_is_not_truncated(self, cm: ConfigManager) -> None:
+        """A 64-char account name appears verbatim in the rendered table."""
+        from mixpanel_data.cli.commands.account import _format_summary_table
+
+        long_name = "a" * 64
+        accounts_ns.add(long_name, type="oauth_browser", region="us")
+
+        rendered = _format_summary_table(accounts_ns.list())
+
+        assert long_name in rendered, (
+            "Long account name truncated; column widths must expand to fit."
+        )
+        # Header still present, and the active marker line follows the row's name.
+        first_data_line = rendered.splitlines()[1]
+        assert first_data_line.startswith(long_name)

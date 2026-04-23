@@ -104,8 +104,16 @@ def _account_to_block(account: Account) -> dict[str, Any]:
     elif isinstance(account, OAuthTokenAccount):
         if account.token is not None:
             out["token"] = account.token.get_secret_value()
+        # The ``OAuthTokenAccount`` validator enforces ``token XOR token_env``,
+        # so this branch is reachable only when ``token_env`` is set. Raise
+        # explicitly (rather than ``assert``) so the invariant survives
+        # ``python -O``, where assertions are stripped.
+        elif account.token_env is None:  # pragma: no cover — model invariant
+            raise ConfigError(
+                f"OAuthTokenAccount {account.name!r} has neither "
+                "`token` nor `token_env`."
+            )
         else:
-            assert account.token_env is not None
             out["token_env"] = account.token_env
     # OAuthBrowserAccount has no extra fields beyond the common set.
     return out
@@ -362,8 +370,14 @@ class ConfigManager:
                 block["token"] = (
                     token.get_secret_value() if isinstance(token, SecretStr) else token
                 )
+            # Mutual exclusion is enforced above, so reaching this branch
+            # with ``token_env is None`` is impossible. Raise explicitly
+            # rather than ``assert`` so the invariant survives ``python -O``.
+            elif token_env is None:  # pragma: no cover — control-flow invariant
+                raise ConfigError(
+                    f"Account {name!r}: neither `token` nor `token_env` resolved."
+                )
             else:
-                assert token_env is not None
                 block["token_env"] = token_env
 
         try:
@@ -445,8 +459,14 @@ class ConfigManager:
                 block["token"] = (
                     token.get_secret_value() if isinstance(token, SecretStr) else token
                 )
+            # XOR is enforced above, so reaching this branch with
+            # ``token_env is None`` is impossible. Raise explicitly rather
+            # than ``assert`` so the invariant survives ``python -O``.
+            elif token_env is None:  # pragma: no cover — control-flow invariant
+                raise ConfigError(
+                    f"Account {name!r}: neither `token` nor `token_env` resolved."
+                )
             else:
-                assert token_env is not None
                 block["token_env"] = token_env
         else:  # pragma: no cover — Literal exhaustiveness
             raise ConfigError(f"Unknown account type: {type!r}")

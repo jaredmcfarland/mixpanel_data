@@ -18,6 +18,7 @@ Example:
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
@@ -182,3 +183,30 @@ class OAuthClientInfo(BaseModel):
 
     created_at: datetime
     """UTC datetime when the client was registered."""
+
+
+def token_payload_bytes(tokens: OAuthTokens) -> bytes:
+    """Canonical on-disk serialization for :class:`OAuthTokens`.
+
+    Used by every site that writes ``tokens.json`` so the written shape
+    stays in lockstep with what ``OAuthTokens.model_validate_json`` reads
+    back. Omits ``refresh_token`` when ``None`` (rather than emitting an
+    explicit ``null``) — matches the loader's "missing key → ``None``"
+    behavior in :func:`bridge._read_browser_tokens`.
+
+    Args:
+        tokens: The tokens to serialize. ``expires_at`` must be tz-aware
+            (enforced at model construction).
+
+    Returns:
+        UTF-8 encoded JSON bytes ready for :func:`atomic_write_bytes`.
+    """
+    payload: dict[str, object] = {
+        "access_token": tokens.access_token.get_secret_value(),
+        "expires_at": tokens.expires_at.isoformat(),
+        "token_type": tokens.token_type,
+        "scope": tokens.scope,
+    }
+    if tokens.refresh_token is not None:
+        payload["refresh_token"] = tokens.refresh_token.get_secret_value()
+    return json.dumps(payload).encode("utf-8")
