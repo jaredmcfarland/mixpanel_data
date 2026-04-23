@@ -616,6 +616,7 @@ class Workspace:
         # `_me_svc` observe the new session rather than the prior one.
         client = self._require_api_client()
         self._credentials = client._credentials
+        self._account_name = self._v3_session.account.name
         self._initial_workspace_id = (
             self._v3_session.workspace.id if self._v3_session.workspace else None
         )

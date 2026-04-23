@@ -316,3 +316,36 @@ class TestUseSyncsLegacyShimAndClearsCaches:
         assert ws._discovery is None  # noqa: SLF001
         assert ws._credentials is not None  # noqa: SLF001
         assert ws._credentials.project_id == "3018488"  # noqa: SLF001
+
+    def test_use_account_updates_me_cache_account_name(
+        self, two_accounts: ConfigManager
+    ) -> None:
+        """``use(account=B)`` retargets ``MeCache`` at ``B``'s storage dir.
+
+        Regression: ``use()`` reset ``_me_service`` but never updated
+        ``self._account_name``. The lazy ``_me_svc`` property then
+        constructed ``MeCache(account_name=self._account_name)`` with the
+        prior account, so post-swap ``/me`` calls read/wrote
+        ``~/.mp/accounts/<old>/me.json`` against the new account's
+        session — silently corrupting both caches.
+        """
+        ws = Workspace(account="team", project="3713224")
+        # Force MeCache lazy creation while bound to "team".
+        first = ws._me_svc  # noqa: SLF001
+        assert first._cache._account_name == "team"  # noqa: SLF001
+        ws.use(account="other")
+        # New MeService must rebuild against "other", not "team".
+        second = ws._me_svc  # noqa: SLF001
+        assert second._cache._account_name == "other"  # noqa: SLF001
+
+    def test_use_target_updates_me_cache_account_name(
+        self, two_accounts: ConfigManager
+    ) -> None:
+        """``use(target=T)`` also retargets ``MeCache`` (target may swap account)."""
+        targets_ns.add("ecom", account="other", project="3018488", workspace=42)
+        ws = Workspace(account="team", project="3713224")
+        first = ws._me_svc  # noqa: SLF001
+        assert first._cache._account_name == "team"  # noqa: SLF001
+        ws.use(target="ecom")
+        second = ws._me_svc  # noqa: SLF001
+        assert second._cache._account_name == "other"  # noqa: SLF001
