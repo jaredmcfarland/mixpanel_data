@@ -116,6 +116,9 @@ events = ws.list_custom_events()
 
 See the [Data Governance guide](../guide/data-governance.md) for complete coverage.
 
+!!! note "`workspaces()` vs `list_workspaces()`"
+    Both methods are exposed. `workspaces()` (recommended) returns `list[WorkspaceRef]` from the cached `/me` response — fast, typed, and consistent with `events()` / `properties()` / `funnels()` / `cohorts()`. `list_workspaces()` is a lower-level escape hatch that calls `GET /api/app/projects/{pid}/workspaces/public` directly and returns `list[PublicWorkspace]`.
+
 ## In-Session Switching
 
 `Workspace.use()` swaps the active account, project, workspace, or target without rebuilding the underlying `httpx.Client` or per-account `/me` cache. It returns `self` for fluent chaining, so cross-project iteration is O(1) per swap.

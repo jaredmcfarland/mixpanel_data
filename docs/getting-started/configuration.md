@@ -231,7 +231,7 @@ When constructing a `Workspace` (or running a CLI command), each axis is resolve
 
 Per-axis details:
 
-- **Account** — the resolver reads the **service-account env quad** (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) and the **OAuth-token env triple** (`MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION`) directly. The SA quad wins over the OAuth triple. `MP_ACCOUNT` is wired as the env default for the `--account` CLI flag (Typer `envvar=`); it acts at the **param** layer, not the env layer, so an explicit `--account NAME` (or `Workspace(account="...")`) does **not** override it.
+- **Account** — the resolver reads the **service-account env quad** (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) and the **OAuth-token env triple** (`MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION`) directly. The SA quad wins over the OAuth triple. `MP_ACCOUNT` is wired as the `envvar=` default for `--account` / `-a` by Typer — it is **not** read directly by the resolver's env step (unlike `MP_USERNAME` / `MP_OAUTH_TOKEN`). An explicit `--account NAME` or `Workspace(account="...")` overrides it normally.
 - **Project** — `MP_PROJECT_ID` is read directly by the resolver (env layer), then `--project` / `Workspace(project=...)` (param), then target, bridge, and finally the active account's `default_project`.
 - **Workspace** — `MP_WORKSPACE_ID` is read directly by the resolver (env layer), then `--workspace` / `Workspace(workspace=...)` (param), then target, bridge, and `[active].workspace`.
 
