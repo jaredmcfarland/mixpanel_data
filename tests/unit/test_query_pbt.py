@@ -28,7 +28,6 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_PROPERTY_TYPES,
     VALID_RESOURCE_TYPES,
 )
-from mixpanel_data._internal.config import Credentials
 from mixpanel_data._internal.validation import validate_bookmark, validate_query_args
 from mixpanel_data.types import (
     Filter,
@@ -37,6 +36,7 @@ from mixpanel_data.types import (
     Metric,
     QueryResult,
 )
+from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -91,9 +91,9 @@ positive_ints = st.integers(min_value=1, max_value=365)
 
 def _make_ws() -> Workspace:
     """Create Workspace with mocked config for PBT (inline, not fixture)."""
-    creds = Credentials(
+    creds = make_session(
         username="test",
-        secret=SecretStr("secret"),
+        secret="secret",
         project_id="12345",
         region="us",
     )

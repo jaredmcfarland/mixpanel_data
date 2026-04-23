@@ -40,27 +40,24 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from mixpanel_data._internal.me import MeService
 
-from mixpanel_data._internal.api_client import (
-    MixpanelAPIClient,
-    session_to_credentials,
-)
+from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import Account as _AccountUnion
-from mixpanel_data._internal.auth.bridge import load_bridge as _load_bridge_v3
+from mixpanel_data._internal.auth.bridge import load_bridge as _load_bridge
 from mixpanel_data._internal.auth.resolver import (
-    format_no_project_error as _format_no_project_error_v3,
+    format_no_project_error as _format_no_project_error,
 )
 from mixpanel_data._internal.auth.resolver import (
-    resolve_project_axis as _resolve_project_axis_v3,
+    resolve_project_axis as _resolve_project_axis,
 )
-from mixpanel_data._internal.auth.resolver import resolve_session as _resolve_session_v3
+from mixpanel_data._internal.auth.resolver import resolve_session as _resolve_session
 from mixpanel_data._internal.auth.session import (
-    Project as _ProjectV3,
-)
-from mixpanel_data._internal.auth.session import (
-    Session as _SessionV3,
+    Project as _Project,
 )
 from mixpanel_data._internal.auth.session import (
-    WorkspaceRef as _WorkspaceRefV3,
+    Session as _Session,
+)
+from mixpanel_data._internal.auth.session import (
+    WorkspaceRef as _WorkspaceRef,
 )
 from mixpanel_data._internal.bookmark_builders import (
     _build_composed_properties,
@@ -74,7 +71,7 @@ from mixpanel_data._internal.bookmark_builders import (
     build_time_section,
     patch_custom_property_filters_for_transform,
 )
-from mixpanel_data._internal.config import ConfigManager, Credentials
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data._internal.query.user_builders import (
     extract_cohort_filter,
     filters_to_selector,
@@ -372,7 +369,7 @@ class Workspace:
         project: str | None = None,
         workspace: int | None = None,
         target: str | None = None,
-        session: _SessionV3 | None = None,
+        session: _Session | None = None,
         _api_client: MixpanelAPIClient | None = None,
     ) -> None:
         """Create a new Workspace bound to a resolved :class:`Session`.
@@ -451,7 +448,7 @@ class Workspace:
                 # before any data is written, eliminating the umask-derived
                 # permission window left open by write_text + chmod.
                 atomic_write_bytes(tokens_path, _json.dumps(payload).encode("utf-8"))
-            sess = _resolve_session_v3(
+            sess = _resolve_session(
                 account=account,
                 project=project,
                 workspace=workspace,
@@ -459,12 +456,8 @@ class Workspace:
                 config=ConfigManager(),
                 bridge=br,
             )
-        self._v3_session = sess
+        self._session = sess
         self._account_name: str = sess.account.name
-        # Credentials shim built from the v3 Session keeps legacy attribute
-        # reads (``_credentials.region``, ``_credentials.project_id``, …)
-        # working across the legacy methods scheduled for B2 deletion.
-        self._credentials: Credentials = session_to_credentials(sess)
         self._initial_workspace_id = sess.workspace.id if sess.workspace else None
         if _api_client is not None:
             self._api_client: MixpanelAPIClient | None = _api_client
@@ -476,22 +469,22 @@ class Workspace:
     @property
     def account(self) -> _AccountUnion:
         """Return the resolved :class:`Account` for the current session."""
-        return self._v3_session.account
+        return self._session.account
 
     @property
-    def project(self) -> _ProjectV3:
+    def project(self) -> _Project:
         """Return the resolved :class:`Project` for the current session."""
-        return self._v3_session.project
+        return self._session.project
 
     @property
-    def workspace(self) -> _WorkspaceRefV3 | None:
+    def workspace(self) -> _WorkspaceRef | None:
         """Return the resolved :class:`WorkspaceRef` (or ``None`` for lazy)."""
-        return self._v3_session.workspace
+        return self._session.workspace
 
     @property
-    def session(self) -> _SessionV3:
+    def session(self) -> _Session:
         """Return the bound :class:`Session`."""
-        return self._v3_session
+        return self._session
 
     # ---- v3 in-session switching --------------------------------------
 
@@ -545,14 +538,14 @@ class Workspace:
 
         cm = ConfigManager()
         new_account_obj: _AccountUnion | None = None
-        new_project_obj: _ProjectV3 | None = None
-        new_workspace_obj: _WorkspaceRefV3 | None = None
+        new_project_obj: _Project | None = None
+        new_workspace_obj: _WorkspaceRef | None = None
         if target is not None:
             t = cm.get_target(target)
             new_account_obj = cm.get_account(t.account)
-            new_project_obj = _ProjectV3(id=t.project)
+            new_project_obj = _Project(id=t.project)
             new_workspace_obj = (
-                _WorkspaceRefV3(id=t.workspace) if t.workspace is not None else None
+                _WorkspaceRef(id=t.workspace) if t.workspace is not None else None
             )
             client = self._require_api_client()
             client.use(
@@ -560,7 +553,7 @@ class Workspace:
                 project=new_project_obj,
                 workspace=new_workspace_obj,
             )
-            self._v3_session = client.session
+            self._session = client.session
         else:
             client = self._require_api_client()
             if account is not None:
@@ -578,47 +571,43 @@ class Workspace:
                 import os as _os
 
                 new_account_obj = cm.get_account(account)
-                br = _load_bridge_v3()
-                project_id = _resolve_project_axis_v3(
+                br = _load_bridge()
+                project_id = _resolve_project_axis(
                     explicit=project,
                     target_project=None,
                     bridge=br,
                     account=new_account_obj,
                 )
                 if project_id is None:
-                    raise ConfigError(_format_no_project_error_v3(new_account_obj))
-                new_project_obj = _ProjectV3(id=project_id)
+                    raise ConfigError(_format_no_project_error(new_account_obj))
+                new_project_obj = _Project(id=project_id)
                 if workspace is not None:
-                    new_workspace_obj = _WorkspaceRefV3(id=workspace)
+                    new_workspace_obj = _WorkspaceRef(id=workspace)
                 else:
                     env_ws = _os.environ.get("MP_WORKSPACE_ID")
                     if env_ws and env_ws.isdigit() and int(env_ws) > 0:
-                        new_workspace_obj = _WorkspaceRefV3(id=int(env_ws))
+                        new_workspace_obj = _WorkspaceRef(id=int(env_ws))
                     else:
                         new_workspace_obj = None
             else:
                 new_account_obj = None
-                new_project_obj = (
-                    _ProjectV3(id=project) if project is not None else None
-                )
+                new_project_obj = _Project(id=project) if project is not None else None
                 new_workspace_obj = (
-                    _WorkspaceRefV3(id=workspace) if workspace is not None else None
+                    _WorkspaceRef(id=workspace) if workspace is not None else None
                 )
             client.use(
                 account=new_account_obj,
                 project=new_project_obj,
                 workspace=new_workspace_obj,
             )
-            self._v3_session = client.session
+            self._session = client.session
 
-        # Sync the legacy `_credentials` shim and clear lazy services so
-        # subsequent reads of `project` / `account` / `workspaces()` /
-        # `_me_svc` observe the new session rather than the prior one.
-        client = self._require_api_client()
-        self._credentials = client._credentials
-        self._account_name = self._v3_session.account.name
+        # Clear lazy services so subsequent reads of `project` / `account` /
+        # `workspaces()` / `_me_svc` observe the new session rather than the
+        # prior one.
+        self._account_name = self._session.account.name
         self._initial_workspace_id = (
-            self._v3_session.workspace.id if self._v3_session.workspace else None
+            self._session.workspace.id if self._session.workspace else None
         )
         self._discovery = None
         self._live_query = None
@@ -645,17 +634,17 @@ class Workspace:
         explicitly drops ``[active].workspace`` rather than leaving the
         prior pin behind.
         """
-        if self._v3_session is None:
+        if self._session is None:
             return
         ConfigManager().apply_session(
-            account=self._v3_session.account.name,
-            project=self._v3_session.project.id,
+            account=self._session.account.name,
+            project=self._session.project.id,
             workspace=(
-                self._v3_session.workspace.id
-                if self._v3_session.workspace is not None
+                self._session.workspace.id
+                if self._session.workspace is not None
                 else None
             ),
-            clear_workspace=self._v3_session.workspace is None,
+            clear_workspace=self._session.workspace is None,
         )
 
     def __enter__(self) -> Workspace:
@@ -689,11 +678,6 @@ class Workspace:
             self._api_client.close()
             self._api_client = None
 
-    # Workspace.test_credentials removed in B1 (Fix 9): the legacy
-    # ConfigManager.resolve_credentials path it depended on is gone. The
-    # contract (FR-038) routes this capability through ``mp.accounts.test(NAME)``
-    # — see ``src/mixpanel_data/accounts.py``.
-
     # =========================================================================
     # PRIVATE HELPERS
     # =========================================================================
@@ -705,38 +689,22 @@ class Workspace:
             MixpanelAPIClient instance.
         """
         if self._api_client is None:
-            if self._credentials is None:
-                raise ConfigError(
-                    "API access requires credentials. "
-                    "Use Workspace() with credentials instead of Workspace.open()."
-                )
-            self._api_client = MixpanelAPIClient(self._credentials)
+            self._api_client = MixpanelAPIClient(session=self._session)
             if self._initial_workspace_id is not None:
                 self._api_client.set_workspace_id(self._initial_workspace_id)
         return self._api_client
 
     def _require_api_client(self) -> MixpanelAPIClient:
-        """Get API client or raise if unavailable.
+        """Get API client (always available — created in ``__init__``).
 
         Returns:
             MixpanelAPIClient instance.
-
-        Raises:
-            ConfigError: If credentials are not available.
         """
-        if self._credentials is None:
-            raise ConfigError(
-                "API access requires credentials. "
-                "Use Workspace() with credentials instead of Workspace.open()."
-            )
         return self._get_api_client()
 
     # =========================================================================
     # WORKSPACE MANAGEMENT
     # =========================================================================
-
-    # workspace_id property removed (FR-038): use ``ws.session.workspace_id``.
-    # set_workspace_id removed in B2 (T050 / FR-038): use ``ws.use(workspace=N)``.
 
     def list_workspaces(self) -> list[PublicWorkspace]:
         """List all public workspaces for the current project.
@@ -806,7 +774,7 @@ class Workspace:
 
             cache = MeCache(account_name=self._account_name)
             self._me_service = _MeService(
-                self._require_api_client(), cache, self._v3_session.account.region
+                self._require_api_client(), cache, self._session.account.region
             )
         return self._me_service
 
@@ -837,7 +805,7 @@ class Workspace:
         """
         return self._me_svc.fetch(force_refresh=force_refresh)
 
-    def projects(self, *, refresh: bool = False) -> list[_ProjectV3]:
+    def projects(self, *, refresh: bool = False) -> list[_Project]:
         """List all accessible projects via the /me API (FR-035).
 
         Returns projects from the cached /me response, sorted by name. Each
@@ -873,7 +841,7 @@ class Workspace:
         if refresh:
             self._me_svc.fetch(force_refresh=True)
         return [
-            _ProjectV3(
+            _Project(
                 id=pid,
                 name=info.name,
                 organization_id=info.organization_id,
@@ -882,7 +850,7 @@ class Workspace:
             for pid, info in self._me_svc.list_projects()
         ]
 
-    def workspaces(self, *, project_id: str | None = None) -> list[_WorkspaceRefV3]:
+    def workspaces(self, *, project_id: str | None = None) -> list[_WorkspaceRef]:
         """List workspaces for a project via the /me API (FR-036).
 
         Returns workspaces from the cached /me response, sorted by name.
@@ -912,19 +880,12 @@ class Workspace:
             ```
         """
         pid = project_id
-        if pid is None and self._credentials is not None:
-            pid = self._credentials.project_id
+        if pid is None:
+            pid = self._session.project.id
         return [
-            _WorkspaceRefV3(id=info.id, name=info.name, is_default=info.is_default)
+            _WorkspaceRef(id=info.id, name=info.name, is_default=info.is_default)
             for info in self._me_svc.list_workspaces(project_id=pid)
         ]
-
-    # switch_project / switch_workspace / current_project / current_credential
-    # removed in B2 (T050 / FR-038):
-    #   - switch_project(P, workspace_id=W)  → ws.use(project=P, workspace=W)
-    #   - switch_workspace(W)                 → ws.use(workspace=W)
-    #   - ws.current_project                  → ws.project / ws.workspace
-    #   - ws.current_credential               → ws.account
 
     @property
     def _discovery_service(self) -> DiscoveryService:
@@ -2373,17 +2334,9 @@ class Workspace:
             data_group_id=data_group_id,
         )
 
-        # Delegate to service — _live_query_service calls _require_api_client
-        # which ensures _credentials is not None
-        credentials = self._credentials
-        if credentials is None:
-            raise ConfigError(
-                "API access requires credentials. "
-                "Use Workspace() with credentials instead of Workspace.open()."
-            )
         return self._live_query_service.query(
             bookmark_params=params,
-            project_id=int(credentials.project_id),
+            project_id=int(self._session.project.id),
         )
 
     def build_params(
@@ -3152,15 +3105,9 @@ class Workspace:
             data_group_id=data_group_id,
         )
 
-        credentials = self._credentials
-        if credentials is None:
-            raise ConfigError(
-                "API access requires credentials. "
-                "Use Workspace() with credentials instead of Workspace.open()."
-            )
         return self._live_query_service.query_funnel(
             bookmark_params=params,
-            project_id=int(credentials.project_id),
+            project_id=int(self._session.project.id),
         )
 
     def build_funnel_params(
@@ -3943,15 +3890,9 @@ class Workspace:
             exclusions=exclusions,
         )
 
-        credentials = self._credentials
-        if credentials is None:
-            raise ConfigError(
-                "API access requires credentials. "
-                "Use Workspace() with credentials instead of Workspace.open()."
-            )
         return self._live_query_service.query_flow(
             bookmark_params=params,
-            project_id=int(credentials.project_id),
+            project_id=int(self._session.project.id),
             mode=mode,
         )
 
@@ -4311,15 +4252,9 @@ class Workspace:
             data_group_id=data_group_id,
         )
 
-        credentials = self._credentials
-        if credentials is None:
-            raise ConfigError(
-                "API access requires credentials. "
-                "Use Workspace() with credentials instead of Workspace.open()."
-            )
         return self._live_query_service.query_retention(
             bookmark_params=params,
-            project_id=int(credentials.project_id),
+            project_id=int(self._session.project.id),
         )
 
     def build_retention_params(
@@ -9399,14 +9334,6 @@ class Workspace:
             )
             ```
         """
-        # Credential check (before validation to fail fast)
-        if self._credentials is None:
-            raise ConfigError(
-                "query_user() requires credentials. "
-                "Provide credentials via environment variables, "
-                "config file, or Workspace constructor."
-            )
-
         params = self._resolve_and_build_user_params(
             where=where,
             cohort=cohort,

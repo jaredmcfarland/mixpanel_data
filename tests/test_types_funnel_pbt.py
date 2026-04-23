@@ -32,12 +32,12 @@ from mixpanel_data import Workspace
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import Credentials
 from mixpanel_data.types import (
     FunnelMathType,
     FunnelQueryResult,
     FunnelStep,
 )
+from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -103,9 +103,9 @@ def _make_workspace() -> Workspace:
     can be called inside ``@given``-decorated tests without triggering
     Hypothesis's ``function_scoped_fixture`` health check.
     """
-    creds = Credentials(
+    creds = make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id="12345",
         region="us",
     )

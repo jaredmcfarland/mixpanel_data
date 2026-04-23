@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 from hypothesis import HealthCheck, Phase, Verbosity, settings
-from pydantic import SecretStr
 
 # =============================================================================
 # Hypothesis Configuration
@@ -59,7 +58,75 @@ settings.load_profile(os.getenv("HYPOTHESIS_PROFILE", "default"))
 
 if TYPE_CHECKING:
     from mixpanel_data._internal.api_client import MixpanelAPIClient
-    from mixpanel_data._internal.config import ConfigManager, Credentials
+    from mixpanel_data._internal.auth.session import Session
+    from mixpanel_data._internal.config import ConfigManager
+
+
+def make_session(
+    *,
+    username: str = "test_user",
+    secret: str = "test_secret",
+    project_id: str = "12345",
+    region: str = "us",
+    name: str = "test_account",
+    workspace_id: int | None = None,
+    oauth_token: str | None = None,
+) -> Session:
+    """Build a Session for tests with sensible defaults.
+
+    Mirrors the kwarg shape of the retired ``Credentials`` test fixtures.
+    Pass ``oauth_token`` to construct an ``OAuthTokenAccount``-backed Session
+    instead of the default ``ServiceAccount``.
+
+    Args:
+        username: Service-account username (ignored when ``oauth_token`` is set).
+        secret: Service-account secret (ignored when ``oauth_token`` is set).
+        project_id: Mixpanel project ID (numeric string).
+        region: Mixpanel region (``us`` / ``eu`` / ``in``).
+        name: Local account name used for cache scoping.
+        workspace_id: Optional workspace ID; ``None`` triggers lazy resolution.
+        oauth_token: When set, build an OAuthTokenAccount with this static bearer.
+
+    Returns:
+        A frozen Session usable for ``MixpanelAPIClient(session=...)``.
+    """
+    from typing import cast
+
+    from pydantic import SecretStr
+
+    from mixpanel_data._internal.auth.account import Region
+
+    region_typed = cast("Region", region)
+
+    from mixpanel_data._internal.auth.account import (
+        OAuthTokenAccount,
+        ServiceAccount,
+    )
+    from mixpanel_data._internal.auth.session import (
+        Project,
+        Session,
+        WorkspaceRef,
+    )
+
+    account: OAuthTokenAccount | ServiceAccount
+    if oauth_token is not None:
+        account = OAuthTokenAccount(
+            name=name,
+            region=region_typed,
+            token=SecretStr(oauth_token),
+        )
+    else:
+        account = ServiceAccount(
+            name=name,
+            region=region_typed,
+            username=username,
+            secret=SecretStr(secret),
+        )
+    return Session(
+        account=account,
+        project=Project(id=project_id),
+        workspace=WorkspaceRef(id=workspace_id) if workspace_id else None,
+    )
 
 
 _MP_ENV_VARS = (
@@ -209,21 +276,14 @@ def sample_credentials() -> dict[str, str]:
 
 
 @pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for API client testing."""
-    from mixpanel_data._internal.config import Credentials
-
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
+def mock_session() -> Session:
+    """Create a mock Session for API client testing."""
+    return make_session()
 
 
 @pytest.fixture
 def mock_client_factory(
-    mock_credentials: Credentials,
+    mock_session: Session,
 ) -> Callable[[Callable[[httpx.Request], httpx.Response]], MixpanelAPIClient]:
     """Factory for creating mock API clients.
 
@@ -242,7 +302,7 @@ def mock_client_factory(
         handler: Callable[[httpx.Request], httpx.Response],
     ) -> MixpanelAPIClient:
         transport = httpx.MockTransport(handler)
-        return MixpanelAPIClient(mock_credentials, _transport=transport)
+        return MixpanelAPIClient(session=mock_session, _transport=transport)
 
     return factory
 

@@ -136,7 +136,7 @@ to switch accounts, projects, workspaces, or saved targets after initial setup.
 
 ### Breaking changes from 4.x → 5.0
 
-Plugin 5.0.0 ships against the `mixpanel_data` 0.4.0 v3 auth redesign:
+Plugin 5.0.0 ships against the `mixpanel_data` 0.4.0 auth surface:
 
 - The slash command vocabulary changed from `auth list/add/switch/migrate/...`
   to a hierarchical `auth account|project|workspace|target|session|bridge`
@@ -144,9 +144,9 @@ Plugin 5.0.0 ships against the `mixpanel_data` 0.4.0 v3 auth redesign:
 - `auth_manager.py` now emits stable JSON (`schema_version: 1`) with a
   discriminated `state` field (`ok` / `needs_account` / `needs_project` /
   `error`). No more `if version >= 2` branches anywhere.
-- Legacy v1 / v2 config files are NO longer auto-detected. A clean install
-  on `mixpanel_data 0.4.0` writes only the v3 schema; existing v1/v2 files
-  surface a Pydantic validation error pointing at the offending key. Wipe
+- Legacy config files from `mixpanel_data` 0.3.x are NO longer auto-detected.
+  A clean install writes only the current schema; older files surface a
+  Pydantic validation error pointing at the offending key. Wipe
   `~/.mp/config.toml` and run `mp account add ...` to recover.
 - Cowork bridge file format is v2 (full `Account` record + tokens embedded).
   Use `mp account export-bridge --to PATH` on the host machine instead of

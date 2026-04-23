@@ -252,38 +252,31 @@ class TestUseAccountEnvVarPriority:
         assert ws.workspace.id == 987
 
 
-class TestUseSyncsLegacyShimAndClearsCaches:
-    """``ws.use(...)`` MUST sync ``_credentials`` and clear lazy services.
+class TestUseUpdatesSessionAndClearsCaches:
+    """``ws.use(...)`` MUST update the bound Session and clear lazy services.
 
-    Regression: ``use()`` previously updated only ``_v3_session``, leaving
-    ``current_project`` / ``current_credential`` / ``discover_workspaces``
-    reading the prior account's ``_credentials.project_id`` and
-    ``_me_svc`` / ``_discovery`` / ``_live_query`` serving cached state
-    from before the swap.
+    Regression: ``use()`` previously updated only the API client's session,
+    leaving ``_me_svc`` / ``_discovery`` / ``_live_query`` serving cached
+    state from before the swap.
     """
 
-    def test_use_project_updates_credentials_project_id(
+    def test_use_project_updates_session_project_id(
         self, two_accounts: ConfigManager
     ) -> None:
-        """After ``use(project=X)``, ``self._credentials.project_id == X``."""
+        """After ``use(project=X)``, ``self.session.project.id == X``."""
         ws = Workspace(account="team", project="3713224")
-        assert ws._credentials is not None  # noqa: SLF001
-        assert ws._credentials.project_id == "3713224"  # noqa: SLF001
+        assert ws.session.project.id == "3713224"
         ws.use(project="9999999")
-        assert ws._credentials is not None  # noqa: SLF001
-        assert ws._credentials.project_id == "9999999"  # noqa: SLF001
+        assert ws.session.project.id == "9999999"
 
-    def test_use_account_updates_credentials_for_current_credential(
+    def test_use_account_updates_session_region(
         self, two_accounts: ConfigManager
     ) -> None:
-        """After ``use(account=B)``, ``current_credential`` reflects B."""
+        """After ``use(account=B)``, the bound session reflects B's region."""
         ws = Workspace(account="team", project="3713224")
         ws.use(account="other")
-        # `current_credential` reads `self._credentials` for the legacy
-        # synth path; if the shim isn't synced it'd still report 'team'.
-        assert ws._credentials is not None  # noqa: SLF001
         # `other` is in eu region per the fixture.
-        assert ws._credentials.region == "eu"  # noqa: SLF001
+        assert ws.session.account.region == "eu"
 
     def test_use_clears_discovery_and_me_service_caches(
         self, two_accounts: ConfigManager
@@ -314,8 +307,7 @@ class TestUseSyncsLegacyShimAndClearsCaches:
         assert ws._discovery is not None  # noqa: SLF001
         ws.use(target="ecom")
         assert ws._discovery is None  # noqa: SLF001
-        assert ws._credentials is not None  # noqa: SLF001
-        assert ws._credentials.project_id == "3018488"  # noqa: SLF001
+        assert ws.session.project.id == "3018488"
 
     def test_use_account_updates_me_cache_account_name(
         self, two_accounts: ConfigManager

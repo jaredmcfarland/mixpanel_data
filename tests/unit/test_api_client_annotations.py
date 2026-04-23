@@ -14,10 +14,10 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -25,20 +25,13 @@ from mixpanel_data._internal.config import AuthMethod, Credentials
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport.
@@ -54,7 +47,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    client = MixpanelAPIClient(credentials, _transport=transport)
+    client = MixpanelAPIClient(session=credentials, _transport=transport)
     return client
 
 
@@ -104,7 +97,7 @@ def _tag_result(
 class TestListAnnotations:
     """Tests for list_annotations() API client method."""
 
-    def test_returns_annotation_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_annotation_list(self, oauth_credentials: Session) -> None:
         """list_annotations() returns a list of annotation dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -128,7 +121,7 @@ class TestListAnnotations:
         assert result[0]["id"] == 1
         assert result[1]["description"] == "Second"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """list_annotations() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -143,7 +136,7 @@ class TestListAnnotations:
 
         assert "/annotations/" in captured_urls[0]
 
-    def test_from_date_camel_case(self, oauth_credentials: Credentials) -> None:
+    def test_from_date_camel_case(self, oauth_credentials: Session) -> None:
         """list_annotations(from_date=...) passes fromDate query param."""
         captured_urls: list[str] = []
 
@@ -158,7 +151,7 @@ class TestListAnnotations:
 
         assert "fromDate=2026-01-01" in captured_urls[0]
 
-    def test_to_date_camel_case(self, oauth_credentials: Credentials) -> None:
+    def test_to_date_camel_case(self, oauth_credentials: Session) -> None:
         """list_annotations(to_date=...) passes toDate query param."""
         captured_urls: list[str] = []
 
@@ -173,7 +166,7 @@ class TestListAnnotations:
 
         assert "toDate=2026-03-31" in captured_urls[0]
 
-    def test_tags_filter(self, oauth_credentials: Credentials) -> None:
+    def test_tags_filter(self, oauth_credentials: Session) -> None:
         """list_annotations(tags=[1, 2]) passes comma-separated tag IDs."""
         captured_urls: list[str] = []
 
@@ -191,7 +184,7 @@ class TestListAnnotations:
         assert "1" in url
         assert "2" in url
 
-    def test_empty_result(self, oauth_credentials: Credentials) -> None:
+    def test_empty_result(self, oauth_credentials: Session) -> None:
         """list_annotations() returns empty list when no annotations exist."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -204,7 +197,7 @@ class TestListAnnotations:
 
         assert result == []
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_annotations() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -223,7 +216,7 @@ class TestListAnnotations:
 class TestCreateAnnotation:
     """Tests for create_annotation() API client method."""
 
-    def test_creates_annotation(self, oauth_credentials: Credentials) -> None:
+    def test_creates_annotation(self, oauth_credentials: Session) -> None:
         """create_annotation() sends POST and returns annotation dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -248,7 +241,7 @@ class TestCreateAnnotation:
         assert captured[0][1]["description"] == "New annotation"
         assert result["id"] == 1
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """create_annotation() posts to the annotations endpoint."""
         captured_urls: list[str] = []
 
@@ -270,7 +263,7 @@ class TestCreateAnnotation:
 class TestGetAnnotation:
     """Tests for get_annotation() API client method."""
 
-    def test_gets_annotation_by_id(self, oauth_credentials: Credentials) -> None:
+    def test_gets_annotation_by_id(self, oauth_credentials: Session) -> None:
         """get_annotation() sends GET with annotation ID in path."""
         captured_urls: list[str] = []
 
@@ -292,7 +285,7 @@ class TestGetAnnotation:
         assert "/annotations/42/" in captured_urls[0]
         assert result["id"] == 42
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """get_annotation() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -314,7 +307,7 @@ class TestGetAnnotation:
 class TestUpdateAnnotation:
     """Tests for update_annotation() API client method."""
 
-    def test_updates_annotation(self, oauth_credentials: Credentials) -> None:
+    def test_updates_annotation(self, oauth_credentials: Session) -> None:
         """update_annotation() sends PATCH with body."""
         captured: list[tuple[str, Any]] = []
 
@@ -337,7 +330,7 @@ class TestUpdateAnnotation:
         assert captured[0][1]["description"] == "Updated"
         assert result["description"] == "Updated"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """update_annotation() targets the correct annotation ID in URL."""
         captured_urls: list[str] = []
 
@@ -359,7 +352,7 @@ class TestUpdateAnnotation:
 class TestDeleteAnnotation:
     """Tests for delete_annotation() API client method."""
 
-    def test_deletes_annotation(self, oauth_credentials: Credentials) -> None:
+    def test_deletes_annotation(self, oauth_credentials: Session) -> None:
         """delete_annotation() sends DELETE request."""
         captured_methods: list[str] = []
 
@@ -374,7 +367,7 @@ class TestDeleteAnnotation:
 
         assert captured_methods[0] == "DELETE"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """delete_annotation() targets the correct annotation ID in URL."""
         captured_urls: list[str] = []
 
@@ -398,7 +391,7 @@ class TestDeleteAnnotation:
 class TestListAnnotationTags:
     """Tests for list_annotation_tags() API client method."""
 
-    def test_returns_tag_list(self, oauth_credentials: Credentials) -> None:
+    def test_returns_tag_list(self, oauth_credentials: Session) -> None:
         """list_annotation_tags() returns a list of tag dicts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -422,7 +415,7 @@ class TestListAnnotationTags:
         assert result[0]["name"] == "releases"
         assert result[1]["name"] == "deployments"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """list_annotation_tags() uses the tags sub-path."""
         captured_urls: list[str] = []
 
@@ -437,7 +430,7 @@ class TestListAnnotationTags:
 
         assert "/annotations/tags/" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_annotation_tags() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -456,7 +449,7 @@ class TestListAnnotationTags:
 class TestCreateAnnotationTag:
     """Tests for create_annotation_tag() API client method."""
 
-    def test_creates_tag(self, oauth_credentials: Credentials) -> None:
+    def test_creates_tag(self, oauth_credentials: Session) -> None:
         """create_annotation_tag() sends POST and returns tag dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -480,7 +473,7 @@ class TestCreateAnnotationTag:
         assert result["id"] == 3
         assert result["name"] == "new-tag"
 
-    def test_url_path(self, oauth_credentials: Credentials) -> None:
+    def test_url_path(self, oauth_credentials: Session) -> None:
         """create_annotation_tag() posts to the tags sub-path."""
         captured_urls: list[str] = []
 

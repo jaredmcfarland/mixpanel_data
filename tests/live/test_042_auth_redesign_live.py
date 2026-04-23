@@ -63,7 +63,7 @@ from tests.live.conftest_042 import (  # noqa: F401 — fixture imports
     require_oauth_browser_available,
     require_oauth_token_available,
     require_sa_env_available,
-    tmp_v3_home,
+    tmp_mp_home,
 )
 
 # Module-level marker — every test below requires `-m live`.
@@ -80,7 +80,7 @@ class TestCatA_ServiceAccount:
 
     def test_A1_01_workspace_from_env_quad_authenticates(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         live_sa_creds: dict[str, str],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -99,7 +99,7 @@ class TestCatA_ServiceAccount:
 
     def test_A1_02_persisted_sa_account_authenticates(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         live_sa_creds: dict[str, str],
     ) -> None:
         """A1.02 — `mp.accounts.add(..service_account..)` then Workspace(account=) hits API."""
@@ -120,7 +120,7 @@ class TestCatA_ServiceAccount:
 
     def test_A1_03_cli_round_trip_no_secret_in_stderr(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         live_sa_creds: dict[str, str],
     ) -> None:
         """A1.03 — `mp account add` then `mp inspect events` round-trips; secret never leaks."""
@@ -128,8 +128,8 @@ class TestCatA_ServiceAccount:
         env.update(
             {
                 "MP_SECRET": live_sa_creds["secret"],
-                "HOME": str(tmp_v3_home),
-                "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
+                "HOME": str(tmp_mp_home),
+                "MP_CONFIG_PATH": str(tmp_mp_home / ".mp" / "config.toml"),
             }
         )
         # Add the account. Service-account add requires --project (FR enforced
@@ -207,7 +207,7 @@ def _seed_oauth_browser_account(
     """Seed a v3 oauth_browser account using the user's real on-disk tokens.
 
     Args:
-        home: Tmp $HOME root from the ``tmp_v3_home`` fixture.
+        home: Tmp $HOME root from the ``tmp_mp_home`` fixture.
         name: Account name to create in the v3 config.
         project_id: Project ID to set in [active]; defaults to the
             project from the user's real config.
@@ -228,11 +228,11 @@ class TestCatB_OAuthBrowser:
 
     def test_B1_01_workspace_reads_on_disk_token_and_authenticates(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_browser_available: None,
     ) -> None:
         """B1.01 — Tokens copied from legacy path; Workspace() authenticates."""
-        _seed_oauth_browser_account(tmp_v3_home)
+        _seed_oauth_browser_account(tmp_mp_home)
         ws = Workspace()
         try:
             events = ws.events()
@@ -240,13 +240,13 @@ class TestCatB_OAuthBrowser:
         finally:
             ws.close()
 
-    def test_B1_02_v3_path_actually_taken(
+    def test_canonical_path_actually_taken(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_browser_available: None,
     ) -> None:
         """B1.02 — `Workspace.account` is OAuthBrowserAccount (not legacy fallback)."""
-        _seed_oauth_browser_account(tmp_v3_home)
+        _seed_oauth_browser_account(tmp_mp_home)
         ws = Workspace()
         try:
             assert isinstance(ws.account, OAuthBrowserAccount)
@@ -256,7 +256,7 @@ class TestCatB_OAuthBrowser:
 
     def test_B1_03_corrupted_tokens_surface_clean_error(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_browser_available: None,
     ) -> None:
         """B1.03 — Corrupted tokens.json → ``Workspace()`` raises OAuthError.
@@ -266,9 +266,9 @@ class TestCatB_OAuthBrowser:
         placeholder. Bad tokens fail loudly at construction time so users get
         an actionable error instead of a confusing 401 later.
         """
-        _seed_oauth_browser_account(tmp_v3_home)
+        _seed_oauth_browser_account(tmp_mp_home)
         # Corrupt BEFORE Workspace construction.
-        tokens_path = tmp_v3_home / ".mp" / "accounts" / "personal" / "tokens.json"
+        tokens_path = tmp_mp_home / ".mp" / "accounts" / "personal" / "tokens.json"
         tokens_path.write_text('{"access_token":', encoding="utf-8")
         with pytest.raises((OAuthError, AuthenticationError)) as excinfo:
             Workspace()
@@ -287,7 +287,7 @@ class TestCatC_OAuthToken:
 
     def test_C1_01_workspace_from_env_token(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         live_oauth_token_creds: dict[str, str],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -304,7 +304,7 @@ class TestCatC_OAuthToken:
 
     def test_C1_02_persisted_token_env_account_authenticates(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         live_oauth_token_creds: dict[str, str],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -328,7 +328,7 @@ class TestCatC_OAuthToken:
 
     def test_C1_03_inline_token_authenticates(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         live_oauth_token_creds: dict[str, str],
     ) -> None:
         """C1.03 — Inline token (SecretStr) round-trips and authenticates."""
@@ -351,7 +351,7 @@ class TestCatC_OAuthToken:
 
     def test_C1_04_empty_env_token_surfaces_clean_error(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_token_available: None,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -389,7 +389,7 @@ class TestCatD_CrossModeSwitching:
 
     def test_D1_01_three_mode_switch_preserves_http_transport(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_browser_available: None,
         live_sa_creds: dict[str, str],
         live_oauth_token_creds: dict[str, str],
@@ -409,7 +409,7 @@ class TestCatD_CrossModeSwitching:
             username=live_sa_creds["username"],
             secret=SecretStr(live_sa_creds["secret"]),
         )
-        copy_user_oauth_tokens_to_account(tmp_v3_home, "personal")
+        copy_user_oauth_tokens_to_account(tmp_mp_home, "personal")
         ConfigManager().add_account(
             "personal",
             type="oauth_browser",
@@ -454,7 +454,7 @@ class TestCatD_CrossModeSwitching:
 
     def test_D1_04_persist_writes_to_active(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_browser_available: None,
         live_sa_creds: dict[str, str],
     ) -> None:
@@ -467,7 +467,7 @@ class TestCatD_CrossModeSwitching:
             username=live_sa_creds["username"],
             secret=SecretStr(live_sa_creds["secret"]),
         )
-        copy_user_oauth_tokens_to_account(tmp_v3_home, "personal")
+        copy_user_oauth_tokens_to_account(tmp_mp_home, "personal")
         ConfigManager().add_account(
             "personal",
             type="oauth_browser",
@@ -504,16 +504,16 @@ class TestCatE_CliEndToEnd:
 
     def test_E1_01_cli_oauth_round_trip(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_browser_available: None,
     ) -> None:
         """E1.01 — `mp account add → mp project use → mp inspect events` round-trips."""
-        copy_user_oauth_tokens_to_account(tmp_v3_home, "personal-cli")
+        copy_user_oauth_tokens_to_account(tmp_mp_home, "personal-cli")
         env = os.environ.copy()
         env.update(
             {
-                "HOME": str(tmp_v3_home),
-                "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
+                "HOME": str(tmp_mp_home),
+                "MP_CONFIG_PATH": str(tmp_mp_home / ".mp" / "config.toml"),
             }
         )
         # Register the account.
@@ -562,16 +562,16 @@ class TestCatE_CliEndToEnd:
 
     def test_E1_05_cli_session_json_output(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_browser_available: None,
     ) -> None:
         """E1.05 — `mp session --format json` matches ActiveSession.model_dump()."""
-        _seed_oauth_browser_account(tmp_v3_home, name="personal-json")
+        _seed_oauth_browser_account(tmp_mp_home, name="personal-json")
         env = os.environ.copy()
         env.update(
             {
-                "HOME": str(tmp_v3_home),
-                "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
+                "HOME": str(tmp_mp_home),
+                "MP_CONFIG_PATH": str(tmp_mp_home / ".mp" / "config.toml"),
             }
         )
         result = subprocess.run(
@@ -588,14 +588,14 @@ class TestCatE_CliEndToEnd:
 
     def test_E1_04_cli_target_account_mutex_exits_3(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
     ) -> None:
         """E1.04 — `mp --target X --account Y session` exits 3 with mutex error."""
         env = os.environ.copy()
         env.update(
             {
-                "HOME": str(tmp_v3_home),
-                "MP_CONFIG_PATH": str(tmp_v3_home / ".mp" / "config.toml"),
+                "HOME": str(tmp_mp_home),
+                "MP_CONFIG_PATH": str(tmp_mp_home / ".mp" / "config.toml"),
             }
         )
         result = subprocess.run(
@@ -629,7 +629,7 @@ class TestCatF_Bridge:
 
     def test_F1_01_bridge_oauth_browser_authenticates(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         require_oauth_browser_available: None,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -646,9 +646,9 @@ class TestCatF_Bridge:
         from tests.live.conftest_042 import LEGACY_TOKENS_PATH
 
         legacy_tokens = json.loads(LEGACY_TOKENS_PATH.read_text(encoding="utf-8"))
-        copy_user_oauth_tokens_to_account(tmp_v3_home, "bridged")
+        copy_user_oauth_tokens_to_account(tmp_mp_home, "bridged")
 
-        bridge_path = tmp_v3_home / "bridge.json"
+        bridge_path = tmp_mp_home / "bridge.json"
         pid = get_user_active_project_id() or "1"
         bridge_payload = {
             "version": 2,
@@ -693,7 +693,7 @@ class TestCatG_LiveEdgeCases:
 
     def test_G1_02_sa_quad_beats_oauth_token_env(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         live_sa_creds: dict[str, str],
         live_oauth_token_creds: dict[str, str],
         monkeypatch: pytest.MonkeyPatch,
@@ -719,7 +719,7 @@ class TestCatG_LiveEdgeCases:
 
     def test_G1_04_invalid_workspace_id_strict_validation(
         self,
-        tmp_v3_home: Path,
+        tmp_mp_home: Path,
         live_sa_creds: dict[str, str],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:

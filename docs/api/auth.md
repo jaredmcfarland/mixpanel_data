@@ -10,7 +10,7 @@ The auth module provides credential management, configuration, and OAuth 2.0 aut
 ## Overview
 
 ```python
-from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
+from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data.auth_types import Account, ServiceAccount
 
 # Manage service accounts
@@ -25,22 +25,17 @@ config.add_account(
 )
 accounts = config.list_accounts()  # list[AccountSummary]
 
-# Inspect a single account (returns the v3 ``Account`` discriminated union)
+# Inspect a single account (returns the canonical ``Account`` discriminated union)
 account: Account = config.get_account("production")
 if isinstance(account, ServiceAccount):
     print(f"SA {account.name} → project {account.default_project}")
-
-# Check auth method on a Credentials instance held by the API client
-creds = Credentials(username="...", secret="...", project_id="12345", region="us")
-if creds.auth_method == AuthMethod.oauth:
-    print(f"Using OAuth: {creds.auth_header()[:20]}...")
 ```
 
 ## ConfigManager
 
-Manages the v3 single-schema TOML config file (`~/.mp/config.toml`) — accounts, targets, and the `[active]` session axes. Higher-level workflows (`mp account add`, `mp account use`, `mp login`) live in `mixpanel_data.accounts` and `mixpanel_data.session`.
+Manages the single-schema TOML config file (`~/.mp/config.toml`) — accounts, targets, and the `[active]` session axes. Higher-level workflows (`mp account add`, `mp account use`, `mp login`) live in `mixpanel_data.accounts` and `mixpanel_data.session`.
 
-::: mixpanel_data.auth.ConfigManager
+::: mixpanel_data._internal.config.ConfigManager
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -57,49 +52,11 @@ Manages the v3 single-schema TOML config file (`~/.mp/config.toml`) — accounts
         - clear_active
         - apply_target
 
-## AuthMethod
+## Authentication
 
-Enum for authentication method selection.
+Authentication is dispatched on the account variant — see the [Account discriminated union](#account-discriminated-union) below. To drive a `Workspace` with a raw OAuth bearer token, set `MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION` env vars and let `Workspace()` resolve them — see [Configuration → Raw OAuth Bearer Token](../getting-started/configuration.md#raw-oauth-bearer-token).
 
-::: mixpanel_data._internal.config.AuthMethod
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-## Credentials
-
-Immutable container for authentication credentials. Supports both Basic Auth (service accounts) and OAuth Bearer token authentication.
-
-**Key fields:**
-
-- `username`, `secret`, `project_id`, `region` — Standard credential fields
-- `auth_method` — `AuthMethod.basic` (default) or `AuthMethod.oauth`
-- `oauth_access_token` — OAuth access token (required when `auth_method` is `oauth`)
-
-**Key methods:**
-
-- `auth_header()` — Returns the appropriate `Authorization` header value (`"Basic <base64>"` or `"Bearer <token>"`)
-- `from_oauth_token(token, project_id, region)` — Class method factory for building OAuth-method `Credentials` from a pre-obtained bearer token (skips the PKCE browser flow). Strips surrounding whitespace defensively and rejects tokens containing control characters.
-
-```python
-from mixpanel_data.auth import Credentials
-
-creds = Credentials.from_oauth_token(
-    token="my-bearer-token",
-    project_id="12345",
-    region="us",
-)
-assert creds.auth_header() == "Bearer my-bearer-token"
-```
-
-To drive a `Workspace` with these credentials, set the corresponding `MP_OAUTH_TOKEN` + `MP_PROJECT_ID` + `MP_REGION` env vars and let `Workspace()` resolve them — see [Configuration → Raw OAuth Bearer Token](../getting-started/configuration.md#raw-oauth-bearer-token).
-
-::: mixpanel_data.auth.Credentials
-    options:
-      show_root_heading: true
-      show_root_toc_entry: true
-
-## Account (v3 discriminated union)
+## Account (discriminated union)
 
 `Account` is the canonical persisted representation of a configured Mixpanel account. It is a Pydantic discriminated union dispatched on the `type` field — the runtime types are the three concrete variant classes below. Use `mixpanel_data.auth_types.Account` as the type hint and `pydantic.TypeAdapter(Account)` to construct from a raw dict.
 

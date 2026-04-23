@@ -498,3 +498,36 @@ class TestGlobals:
         """``--workspace`` is accepted as a global override."""
         result = runner.invoke(app, ["--workspace", "42", "session"])
         assert result.exit_code == 0
+
+
+class TestErrorRendering:
+    """The ``handle_errors`` decorator must not Rich-eat ``[brackets]`` in messages."""
+
+    def test_configerror_preserves_block_brackets_in_output(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """ConfigError messages containing ``[accounts.NAME]`` round-trip intact.
+
+        The ConfigError raised when validating a malformed account block
+        embeds ``[accounts.NAME]`` in its message. Rich would otherwise
+        parse those brackets as markup tags and silently elide them,
+        leaving users with ``Invalid  block:`` (note the double space) and
+        no clue which block is bad. We must escape the message before
+        handing it to the Rich console.
+        """
+        config_path = tmp_path / ".mp" / "config.toml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        # Legacy v2 account block — surfaces brackets in the error message.
+        config_path.write_text(
+            "[accounts.fake-shack]\n"
+            'username = "u"\n'
+            'secret = "s"\n'
+            'project_id = "111"\n'
+            'region = "us"\n',
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(app, ["account", "list"])
+
+        assert result.exit_code != 0
+        assert "[accounts.fake-shack]" in result.output

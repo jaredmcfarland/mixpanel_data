@@ -17,11 +17,11 @@ from urllib.parse import unquote
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data.exceptions import MixpanelDataError
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -29,24 +29,17 @@ from mixpanel_data.exceptions import MixpanelDataError
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing.
 
     Returns:
         Credentials configured with OAuth auth method and a test access token.
     """
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport (no workspace ID set).
@@ -61,7 +54,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -72,7 +65,7 @@ def create_mock_client(
 class TestListSchemaRegistry:
     """Tests for list_schema_registry() API client method."""
 
-    def test_returns_list_all_schemas(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list_all_schemas(self, oauth_credentials: Session) -> None:
         """list_schema_registry() with no entity_type returns all schemas."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -105,7 +98,7 @@ class TestListSchemaRegistry:
         assert result[1]["entity_type"] == "profile"
 
     def test_returns_list_filtered_by_entity_type(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """list_schema_registry(entity_type='event') returns only event schemas."""
 
@@ -133,7 +126,7 @@ class TestListSchemaRegistry:
         assert result[0]["entity_type"] == "event"
 
     def test_uses_base_path_when_no_entity_type(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """list_schema_registry() without entity_type targets schemas/ path."""
         captured_urls: list[str] = []
@@ -152,9 +145,7 @@ class TestListSchemaRegistry:
         path = url.split("?")[0]
         assert path.rstrip("/").endswith("schemas")
 
-    def test_uses_entity_type_path_segment(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_uses_entity_type_path_segment(self, oauth_credentials: Session) -> None:
         """list_schema_registry(entity_type='event') targets schemas/event/ path."""
         captured_urls: list[str] = []
 
@@ -169,7 +160,7 @@ class TestListSchemaRegistry:
 
         assert "/schemas/event" in captured_urls[0]
 
-    def test_uses_get_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_get_method(self, oauth_credentials: Session) -> None:
         """list_schema_registry() uses GET HTTP method."""
         captured_methods: list[str] = []
 
@@ -184,7 +175,7 @@ class TestListSchemaRegistry:
 
         assert captured_methods[0] == "GET"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """list_schema_registry() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -199,7 +190,7 @@ class TestListSchemaRegistry:
 
         assert "/projects/12345/" in captured_urls[0]
 
-    def test_empty_result(self, oauth_credentials: Credentials) -> None:
+    def test_empty_result(self, oauth_credentials: Session) -> None:
         """list_schema_registry() returns empty list when no schemas exist."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -221,7 +212,7 @@ class TestListSchemaRegistry:
 class TestCreateSchema:
     """Tests for create_schema() API client method."""
 
-    def test_returns_created_schema(self, oauth_credentials: Credentials) -> None:
+    def test_returns_created_schema(self, oauth_credentials: Session) -> None:
         """create_schema() returns the created schema dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -253,7 +244,7 @@ class TestCreateSchema:
         assert result["schema"]["properties"]["amount"]["type"] == "number"
 
     def test_path_includes_entity_type_and_name(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """create_schema() builds path with entity_type and entity_name segments."""
         captured_urls: list[str] = []
@@ -272,9 +263,7 @@ class TestCreateSchema:
 
         assert "/schemas/event/Purchase" in captured_urls[0]
 
-    def test_special_chars_percent_encoded(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_special_chars_percent_encoded(self, oauth_credentials: Session) -> None:
         """create_schema() percent-encodes special characters in entity_name."""
         captured_urls: list[str] = []
 
@@ -298,7 +287,7 @@ class TestCreateSchema:
         path_after_schemas = url.split("/schemas/")[1]
         assert " " not in path_after_schemas.split("?")[0]
 
-    def test_uses_post_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_post_method(self, oauth_credentials: Session) -> None:
         """create_schema() uses POST HTTP method."""
         captured_methods: list[str] = []
 
@@ -313,7 +302,7 @@ class TestCreateSchema:
 
         assert captured_methods[0] == "POST"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """create_schema() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -328,7 +317,7 @@ class TestCreateSchema:
 
         assert "/projects/12345/" in captured_urls[0]
 
-    def test_sends_schema_json_in_body(self, oauth_credentials: Credentials) -> None:
+    def test_sends_schema_json_in_body(self, oauth_credentials: Session) -> None:
         """create_schema() sends schema_json as the request body."""
         captured_bodies: list[Any] = []
 
@@ -353,9 +342,7 @@ class TestCreateSchema:
 class TestCreateSchemasBulk:
     """Tests for create_schemas_bulk() API client method."""
 
-    def test_returns_added_and_deleted_counts(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_returns_added_and_deleted_counts(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() returns dict with added and deleted counts."""
         captured: list[tuple[str, Any]] = []
 
@@ -399,7 +386,7 @@ class TestCreateSchemasBulk:
         assert result["added"] == 3
         assert result["deleted"] == 0
 
-    def test_truncate_mode(self, oauth_credentials: Credentials) -> None:
+    def test_truncate_mode(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() with truncate=true reports deleted count."""
         captured_bodies: list[Any] = []
 
@@ -433,7 +420,7 @@ class TestCreateSchemasBulk:
         assert result["deleted"] == 5
         assert result["added"] == 1
 
-    def test_empty_entries(self, oauth_credentials: Credentials) -> None:
+    def test_empty_entries(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() with empty entries list returns zero counts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -455,7 +442,7 @@ class TestCreateSchemasBulk:
         assert result["added"] == 0
         assert result["deleted"] == 0
 
-    def test_truncate_with_empty_entries(self, oauth_credentials: Credentials) -> None:
+    def test_truncate_with_empty_entries(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() with truncate=true and empty entries deletes all."""
         captured_bodies: list[Any] = []
 
@@ -480,7 +467,7 @@ class TestCreateSchemasBulk:
         assert captured_bodies[0]["entries"] == []
         assert result["deleted"] == 10
 
-    def test_duplicate_entries(self, oauth_credentials: Credentials) -> None:
+    def test_duplicate_entries(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() with duplicate entries sends them as-is to API."""
         captured_bodies: list[Any] = []
 
@@ -508,7 +495,7 @@ class TestCreateSchemasBulk:
 
         assert len(captured_bodies[0]["entries"]) == 2
 
-    def test_uses_base_schemas_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_base_schemas_path(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() targets schemas/ base path (no entity segments)."""
         captured_urls: list[str] = []
 
@@ -528,7 +515,7 @@ class TestCreateSchemasBulk:
         path = url.split("?")[0]
         assert path.rstrip("/").endswith("schemas")
 
-    def test_uses_post_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_post_method(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() uses POST HTTP method."""
         captured_methods: list[str] = []
 
@@ -546,7 +533,7 @@ class TestCreateSchemasBulk:
 
         assert captured_methods[0] == "POST"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -573,7 +560,7 @@ class TestCreateSchemasBulk:
 class TestUpdateSchema:
     """Tests for update_schema() API client method."""
 
-    def test_returns_updated_schema(self, oauth_credentials: Credentials) -> None:
+    def test_returns_updated_schema(self, oauth_credentials: Session) -> None:
         """update_schema() returns the updated schema dict."""
         captured: list[tuple[str, Any]] = []
 
@@ -615,7 +602,7 @@ class TestUpdateSchema:
         assert "currency" in result["schema"]["properties"]
 
     def test_path_includes_entity_type_and_name(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """update_schema() builds path with entity_type and entity_name segments."""
         captured_urls: list[str] = []
@@ -631,7 +618,7 @@ class TestUpdateSchema:
 
         assert "/schemas/event/Purchase" in captured_urls[0]
 
-    def test_uses_patch_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_patch_method(self, oauth_credentials: Session) -> None:
         """update_schema() uses PATCH HTTP method."""
         captured_methods: list[str] = []
 
@@ -646,7 +633,7 @@ class TestUpdateSchema:
 
         assert captured_methods[0] == "PATCH"
 
-    def test_sends_schema_json_in_body(self, oauth_credentials: Credentials) -> None:
+    def test_sends_schema_json_in_body(self, oauth_credentials: Session) -> None:
         """update_schema() sends schema_json as the request body."""
         captured_bodies: list[Any] = []
 
@@ -662,7 +649,7 @@ class TestUpdateSchema:
 
         assert captured_bodies[0] == schema
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """update_schema() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -686,7 +673,7 @@ class TestUpdateSchema:
 class TestUpdateSchemasBulk:
     """Tests for update_schemas_bulk() API client method."""
 
-    def test_returns_list_of_results(self, oauth_credentials: Credentials) -> None:
+    def test_returns_list_of_results(self, oauth_credentials: Session) -> None:
         """update_schemas_bulk() returns a list of per-entry result dicts."""
         captured: list[tuple[str, Any]] = []
 
@@ -735,7 +722,7 @@ class TestUpdateSchemasBulk:
         assert len(result) == 2
         assert result[0]["status"] == "ok"
 
-    def test_mixed_ok_and_error_results(self, oauth_credentials: Credentials) -> None:
+    def test_mixed_ok_and_error_results(self, oauth_credentials: Session) -> None:
         """update_schemas_bulk() returns results with mixed ok/error statuses."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -784,7 +771,7 @@ class TestUpdateSchemasBulk:
         assert result[1]["status"] == "error"
         assert result[1]["error"] == "Schema not found"
 
-    def test_uses_base_schemas_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_base_schemas_path(self, oauth_credentials: Session) -> None:
         """update_schemas_bulk() targets schemas/ base path."""
         captured_urls: list[str] = []
 
@@ -801,7 +788,7 @@ class TestUpdateSchemasBulk:
         path = url.split("?")[0]
         assert path.rstrip("/").endswith("schemas")
 
-    def test_uses_patch_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_patch_method(self, oauth_credentials: Session) -> None:
         """update_schemas_bulk() uses PATCH HTTP method."""
         captured_methods: list[str] = []
 
@@ -816,7 +803,7 @@ class TestUpdateSchemasBulk:
 
         assert captured_methods[0] == "PATCH"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """update_schemas_bulk() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -840,7 +827,7 @@ class TestUpdateSchemasBulk:
 class TestDeleteSchemas:
     """Tests for delete_schemas() API client method."""
 
-    def test_delete_all_schemas(self, oauth_credentials: Credentials) -> None:
+    def test_delete_all_schemas(self, oauth_credentials: Session) -> None:
         """delete_schemas() with no args deletes all schemas and returns count."""
         captured_methods: list[str] = []
 
@@ -862,7 +849,7 @@ class TestDeleteSchemas:
         assert captured_methods[0] == "DELETE"
         assert result["delete_count"] == 15
 
-    def test_delete_by_entity_type(self, oauth_credentials: Credentials) -> None:
+    def test_delete_by_entity_type(self, oauth_credentials: Session) -> None:
         """delete_schemas(entity_type='event') deletes all event schemas."""
         captured_urls: list[str] = []
 
@@ -884,9 +871,7 @@ class TestDeleteSchemas:
         assert "/schemas/event" in captured_urls[0]
         assert result["delete_count"] == 5
 
-    def test_delete_by_entity_type_and_name(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_delete_by_entity_type_and_name(self, oauth_credentials: Session) -> None:
         """delete_schemas(entity_type='event', entity_name='Signup') deletes one."""
         captured_urls: list[str] = []
 
@@ -908,7 +893,7 @@ class TestDeleteSchemas:
         assert "/schemas/event/Signup" in captured_urls[0]
         assert result["delete_count"] == 1
 
-    def test_delete_all_path(self, oauth_credentials: Credentials) -> None:
+    def test_delete_all_path(self, oauth_credentials: Session) -> None:
         """delete_schemas() with no args targets schemas/ base path."""
         captured_urls: list[str] = []
 
@@ -928,7 +913,7 @@ class TestDeleteSchemas:
         assert path.rstrip("/").endswith("schemas")
 
     def test_delete_with_entity_name_only_raises(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """delete_schemas(entity_name=X) without entity_type raises error.
 
@@ -953,7 +938,7 @@ class TestDeleteSchemas:
         ):
             client.delete_schemas(entity_name="Signup")
 
-    def test_uses_delete_method(self, oauth_credentials: Credentials) -> None:
+    def test_uses_delete_method(self, oauth_credentials: Session) -> None:
         """delete_schemas() uses DELETE HTTP method."""
         captured_methods: list[str] = []
 
@@ -971,7 +956,7 @@ class TestDeleteSchemas:
 
         assert captured_methods[0] == "DELETE"
 
-    def test_uses_maybe_scoped_path(self, oauth_credentials: Credentials) -> None:
+    def test_uses_maybe_scoped_path(self, oauth_credentials: Session) -> None:
         """delete_schemas() uses maybe_scoped_path for URL building."""
         captured_urls: list[str] = []
 
@@ -998,9 +983,7 @@ class TestDeleteSchemas:
 class TestCreateSchemaAlreadyExists:
     """Tests for create_schema() when schema already exists."""
 
-    def test_api_error_for_existing_schema(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_api_error_for_existing_schema(self, oauth_credentials: Session) -> None:
         """create_schema() propagates API error when schema already exists.
 
         When creating a schema for an entity that already has a schema defined,
@@ -1026,7 +1009,7 @@ class TestCreateSchemaAlreadyExists:
 class TestCreateSchemasBulkDuplicateEntries:
     """Tests for create_schemas_bulk() with duplicate entries in the same request."""
 
-    def test_sends_duplicates_to_api(self, oauth_credentials: Credentials) -> None:
+    def test_sends_duplicates_to_api(self, oauth_credentials: Session) -> None:
         """create_schemas_bulk() does not deduplicate on client side.
 
         The client sends duplicate entries as-is to the API, which decides

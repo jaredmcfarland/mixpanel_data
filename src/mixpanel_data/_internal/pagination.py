@@ -122,7 +122,7 @@ def paginate_all(
 
         # Make the raw request to get full response with pagination
         url = client._build_url("app", path)
-        auth_header = client._credentials.auth_header()
+        auth_header = client._get_auth_header()
         headers = {"Authorization": auth_header}
 
         http_client = client._ensure_client()

@@ -19,7 +19,7 @@ This will:
 1. Verify Python 3.10+ is available
 2. Install `mixpanel_data`, `pandas`, `numpy`, `matplotlib`, `seaborn`, `networkx>=3.0`, `anytree>=2.8.0`, `scipy`, and `pyarrow>=17.0` on Python 3.11+ (tries uv, pip in order)
 3. Verify all packages import successfully (including pyarrow on 3.11+, networkx, anytree, and scipy)
-4. Check for configured Mixpanel credentials (single v3 schema — Account → Project → Workspace)
+4. Check for configured Mixpanel credentials (single schema — Account → Project → Workspace)
 
 ## Check Credentials
 

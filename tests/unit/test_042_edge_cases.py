@@ -660,19 +660,23 @@ class TestSecretLeakage:
     ) -> None:
         """An OAuthBrowserAccount with no on-disk tokens fails fast.
 
-        The prior placeholder (``pending-login``) silently produced a
-        ``Credentials`` shim that would 401 on every request. Fix 6 makes
-        ``session_to_credentials`` propagate ``OAuthError`` at construction
-        so the user sees an actionable ``Run mp account login NAME``
-        message instead of a confusing 401 later.
+        Constructing a ``MixpanelAPIClient`` with such a session must
+        propagate ``OAuthError`` at construction so the user sees an
+        actionable "Run mp account login NAME" message instead of a
+        confusing 401 later.
         """
         monkeypatch.setenv("HOME", str(tmp_path))
-        from mixpanel_data._internal.api_client import session_to_credentials
+        from mixpanel_data._internal.api_client import MixpanelAPIClient
         from mixpanel_data.exceptions import OAuthError
 
         s = Session(
             account=OAuthBrowserAccount(name="me", region="us"),
             project=Project(id="3713224"),
         )
+        # ServiceAccount-only header caching means OAuth construction
+        # itself succeeds; the OAuthError surfaces on the first request.
+        # Verify that the eager bearer probe (via .current_auth_header)
+        # raises immediately.
+        client = MixpanelAPIClient(session=s)
         with pytest.raises(OAuthError):
-            session_to_credentials(s)
+            _ = client.current_auth_header

@@ -1,17 +1,8 @@
-"""Configuration management for ``mixpanel_data`` — v3 schema.
+"""Configuration management for ``mixpanel_data``.
 
-Owns the v3 single-schema TOML config file (``~/.mp/config.toml``) with
+Owns the single-schema TOML config file (``~/.mp/config.toml``) with
 ``[active]``, ``[accounts.NAME]``, ``[targets.NAME]``, ``[settings]``
-sections, and the legacy :class:`Credentials` / :class:`AuthMethod`
-shim types still consumed by :class:`MixpanelAPIClient`.
-
-The legacy v1/v2 :class:`ConfigManager` (``resolve_credentials``,
-``resolve_session``, ``add_account(project_id=)``, etc.) and its
-auxiliary dataclasses (``AccountInfo``, ``CredentialInfo``,
-``ActiveContext``, ``ProjectAlias``, ``MigrationResult``) were removed
-in B1 (Fix 9) — alpha "free to break" lets us delete the bridge layer
-outright. The v3 ``ConfigManager`` below is the only configuration
-surface from this point on.
+sections.
 
 Reference:
     ``specs/042-auth-architecture-redesign/contracts/config-schema.md`` §1.
@@ -19,14 +10,12 @@ Reference:
 
 from __future__ import annotations
 
-import base64
 import logging
 import os
 import stat
 import sys
 from collections.abc import Generator
 from contextlib import contextmanager, suppress
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -41,13 +30,9 @@ else:  # pragma: no cover - py3.10 fallback (tomllib added in 3.11)
 
 import tomli_w
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     SecretStr,
     TypeAdapter,
     ValidationError,
-    field_validator,
-    model_validator,
 )
 
 from mixpanel_data._internal.auth.account import (
@@ -69,155 +54,13 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG_PATH = Path.home() / ".mp" / "config.toml"
 
-# Region constraint shared between the legacy ``Credentials`` validator
-# and the v3 ``Region`` Literal in ``_internal/auth/account.py``. The
-# Literal is the single source of truth in v3; this tuple just enables
-# the runtime ``in`` check used by the field validator below. (Inlined
-# here in B2 / T048 when the legacy ``_internal/auth_credential.py``
-# module — the prior home of these constants — was deleted.)
-RegionType = Region
+# Region constants for runtime validation; ``Region`` is the type-level
+# source of truth in :mod:`mixpanel_data._internal.auth.account`.
 VALID_REGIONS: tuple[Region, ...] = ("us", "eu", "in")
 
 
 # =============================================================================
-# Legacy Credentials shim (used by MixpanelAPIClient — A1 will remove)
-# =============================================================================
-
-
-class AuthMethod(str, Enum):
-    """Authentication method for Mixpanel API requests.
-
-    Determines how the ``Authorization`` header is constructed:
-
-    - ``basic``: HTTP Basic Auth with service-account username/secret.
-    - ``oauth``: OAuth 2.0 Bearer token.
-    """
-
-    basic = "basic"
-    """HTTP Basic Auth with service account credentials."""
-
-    oauth = "oauth"
-    """OAuth 2.0 Bearer token authentication."""
-
-
-class Credentials(BaseModel):
-    """Immutable credential container consumed by :class:`MixpanelAPIClient`.
-
-    Built either directly from environment variables or — under the 042
-    redesign — by :func:`mixpanel_data._internal.api_client.session_to_credentials`
-    as a thin shim over a v3 :class:`Session`. Cluster A1 (Fix 18) is
-    expected to retire this type entirely once the API client consumes
-    a Session directly.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    username: str
-    """Service-account username (may be empty for OAuth)."""
-
-    secret: SecretStr
-    """Service-account secret (redacted in output; may be empty for OAuth)."""
-
-    project_id: str
-    """Mixpanel project identifier (numeric string)."""
-
-    region: RegionType
-    """Data residency region (``us`` / ``eu`` / ``in``)."""
-
-    auth_method: AuthMethod = AuthMethod.basic
-    """Authentication method (``basic`` or ``oauth``)."""
-
-    oauth_access_token: SecretStr | None = None
-    """OAuth 2.0 access token, required when ``auth_method == oauth``."""
-
-    @field_validator("region", mode="before")
-    @classmethod
-    def validate_region(cls, v: str) -> str:
-        """Validate and normalize region to lowercase.
-
-        Args:
-            v: Candidate region string.
-
-        Returns:
-            The lowercased region.
-
-        Raises:
-            ValueError: If ``v`` is not a string or not a known region.
-        """
-        if not isinstance(v, str):
-            raise ValueError(f"Region must be a string. Got: {type(v).__name__}")
-        v_lower = v.lower()
-        if v_lower not in VALID_REGIONS:
-            valid = ", ".join(VALID_REGIONS)
-            raise ValueError(f"Region must be one of: {valid}. Got: {v}")
-        return v_lower
-
-    @model_validator(mode="after")
-    def validate_credentials(self) -> Credentials:
-        """Validate credential fields based on the auth method.
-
-        Returns:
-            The validated :class:`Credentials` instance.
-
-        Raises:
-            ValueError: Required fields missing for the chosen ``auth_method``.
-        """
-        if not self.project_id or not self.project_id.strip():
-            raise ValueError("project_id cannot be empty")
-
-        if self.auth_method == AuthMethod.basic:
-            if not self.username or not self.username.strip():
-                raise ValueError("username cannot be empty for basic auth")
-            if not self.secret.get_secret_value():
-                raise ValueError("secret cannot be empty for basic auth")
-        elif self.auth_method == AuthMethod.oauth:
-            if self.oauth_access_token is None:
-                raise ValueError(
-                    "oauth_access_token is required when auth_method is oauth"
-                )
-            token_value = self.oauth_access_token.get_secret_value()
-            if not token_value:
-                raise ValueError("oauth_access_token cannot be empty for oauth auth")
-            if any(ord(c) < 0x20 or ord(c) == 0x7F for c in token_value):
-                raise ValueError(
-                    "oauth_access_token contains control characters "
-                    "(check for embedded newlines, tabs, or other non-printable bytes)"
-                )
-        return self
-
-    def auth_header(self) -> str:
-        """Build the ``Authorization`` header value for API requests.
-
-        Returns:
-            For basic auth: ``"Basic <base64(username:secret)>"``.
-            For OAuth: ``"Bearer <access_token>"``.
-
-        Raises:
-            ValueError: If ``auth_method == oauth`` but no access token is set.
-        """
-        if self.auth_method == AuthMethod.oauth:
-            if self.oauth_access_token is None:
-                raise ValueError("No OAuth access token available")
-            return f"Bearer {self.oauth_access_token.get_secret_value()}"
-
-        raw = f"{self.username}:{self.secret.get_secret_value()}"
-        encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
-        return f"Basic {encoded}"
-
-    def __repr__(self) -> str:
-        """Return string representation with redacted secret."""
-        return (
-            f"Credentials(username={self.username!r}, secret=***, "
-            f"project_id={self.project_id!r}, region={self.region!r})"
-        )
-
-    def __str__(self) -> str:
-        """Return string representation with redacted secret."""
-        return self.__repr__()
-
-
-# =============================================================================
-# v3 ConfigManager
+# ConfigManager
 # =============================================================================
 
 
@@ -273,7 +116,7 @@ def _account_to_block(account: Account) -> dict[str, Any]:
 
 
 class ConfigManager:
-    """V3 single-schema configuration manager.
+    """Single-schema configuration manager.
 
     Wraps a single ``~/.mp/config.toml`` file (or ``MP_CONFIG_PATH`` override).
     All operations re-read the file from disk, so concurrent edits are safe
@@ -282,8 +125,8 @@ class ConfigManager:
 
     Notes:
         - File creation enforces mode ``0o600`` and parent dir ``0o700``.
-        - Legacy v1/v2 configs fail at Pydantic validation with an
-          "unexpected key" error (no migration path — wipe and re-add).
+        - Unknown keys are rejected at Pydantic validation (no migration
+          path — wipe and re-add via ``mp account add``).
     """
 
     def __init__(self, *, config_path: Path | None = None) -> None:
@@ -355,15 +198,44 @@ class ConfigManager:
         ``_apply_*`` mutations within a single transaction so the
         end-to-end operation is atomic, not just per-mutator.
 
+        Before the write, ``_validate_raw`` runs a whole-file pass over
+        every account block. The per-mutator helpers only validate the
+        block they touched, so this is the safety net that keeps an
+        externally-corrupted file (legacy v1/v2 schema, hand-edit, future
+        migration bug) from being silently rewritten with a fresh-but-
+        incomplete repair.
+
         Yields:
             The parsed raw dict, mutated in place.
 
         Raises:
-            ConfigError: Propagated from ``_read_raw`` or ``_apply_*`` helpers.
+            ConfigError: Propagated from ``_read_raw``, ``_apply_*``
+                helpers, or the exit-time ``_validate_raw`` pass.
         """
         raw = self._read_raw()
         yield raw
+        self._validate_raw(raw)
         self._write_raw(raw)
+
+    @staticmethod
+    def _validate_raw(raw: dict[str, Any]) -> None:
+        """Validate every account block in ``raw`` against the schema.
+
+        Whole-file safety net for ``_mutate``. Catches malformed blocks
+        the per-mutator helpers never touched (legacy v1/v2 cruft left
+        behind after an upgrade, hand-edited files, etc.) so we never
+        persist a write on top of a known-bad sibling.
+
+        Args:
+            raw: Parsed TOML dict to validate.
+
+        Raises:
+            ConfigError: Any account block fails schema validation.
+                Re-raises the wrapping that ``_account_from_block`` emits.
+        """
+        for name, block in (raw.get("accounts", {}) or {}).items():
+            if isinstance(block, dict):
+                _account_from_block(name, block)
 
     @staticmethod
     def _apply_set_active(
@@ -1171,7 +1043,5 @@ class ConfigManager:
 
 
 __all__ = [
-    "AuthMethod",
     "ConfigManager",
-    "Credentials",
 ]

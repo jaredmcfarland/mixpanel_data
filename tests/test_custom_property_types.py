@@ -19,7 +19,6 @@ from pydantic import SecretStr
 from mixpanel_data import Workspace
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import Credentials
 from mixpanel_data.exceptions import BookmarkValidationError
 from mixpanel_data.types import (
     CustomPropertyRef,
@@ -29,6 +28,7 @@ from mixpanel_data.types import (
     Metric,
     PropertyInput,
 )
+from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -294,9 +294,7 @@ class TestTypeWidening:
 @pytest.fixture
 def ws() -> Workspace:
     """Create a Workspace instance with mocked dependencies."""
-    creds = Credentials(
-        username="u", secret=SecretStr("s"), project_id="1", region="us"
-    )
+    creds = make_session(username="u", secret="s", project_id="1", region="us")
     mgr = MagicMock()
     mgr.config_version.return_value = 1
     mgr.resolve_credentials.return_value = creds

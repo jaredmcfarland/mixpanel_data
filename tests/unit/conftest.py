@@ -5,26 +5,18 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from pydantic import SecretStr
 
-from mixpanel_data._internal.config import Credentials
-
-
-@pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for testing."""
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
+from mixpanel_data._internal.auth.session import Session
+from tests.conftest import make_session
 
 
 @pytest.fixture
-def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
-    """Create mock ConfigManager that returns credentials."""
-    manager = MagicMock()
-    manager.config_version.return_value = 1
-    manager.resolve_credentials.return_value = mock_credentials
-    return manager
+def mock_session() -> Session:
+    """Create a mock Session for testing."""
+    return make_session()
+
+
+@pytest.fixture
+def mock_config_manager() -> MagicMock:
+    """Create a stub ConfigManager (legacy fixture; unused by current code paths)."""
+    return MagicMock()

@@ -23,6 +23,7 @@ import jq  # type: ignore[import-not-found]
 import pydantic
 import typer
 from rich.console import Console
+from rich.markup import escape as rich_escape
 
 from mixpanel_data.exceptions import (
     AccountExistsError,
@@ -248,7 +249,11 @@ def handle_errors(func: F) -> F:
                 err_console.print(f"  [dim]Code:[/dim] {e.code}")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except ConfigError as e:
-            err_console.print(f"[red]Configuration error:[/red] {e.message}")
+            # Escape the message so block names like ``[accounts.NAME]`` are
+            # rendered literally instead of being parsed as Rich markup.
+            err_console.print(
+                f"[red]Configuration error:[/red] {rich_escape(e.message)}"
+            )
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except MixpanelDataError as e:
             err_console.print(f"[red]Error:[/red] {e.message}")

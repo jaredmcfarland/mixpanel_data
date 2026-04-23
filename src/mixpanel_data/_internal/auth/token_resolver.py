@@ -9,8 +9,7 @@ tokens from inline ``SecretStr`` fields or environment variables.
 
 Browser-token refresh delegates to
 :meth:`mixpanel_data._internal.auth.flow.OAuthFlow.refresh_tokens` and
-persists the new payload back to the per-account path atomically (Fix 16
-of the 042 plan).
+persists the new payload back to the per-account path atomically.
 
 Reference: ``specs/042-auth-architecture-redesign/data-model.md``,
 ``contracts/python-api.md`` §5.

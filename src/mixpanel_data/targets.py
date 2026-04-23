@@ -1,6 +1,6 @@
 """Public ``mp.targets`` namespace.
 
-Thin wrapper around :class:`~mixpanel_data._internal.config_v3.ConfigManager`
+Thin wrapper around :class:`~mixpanel_data._internal.config.ConfigManager`
 exposing target CRUD and activation. Targets are saved
 (account, project, workspace?) triples used as named cursor positions:
 ``mp.targets.use("ecom")`` writes all three axes to ``[active]`` in a

@@ -5,7 +5,7 @@ The namespace mirrors the spec ``contracts/python-api.md §5``:
 ``login``, ``logout``, ``token``, ``export_bridge``, ``remove_bridge``.
 
 Tests focus on the wiring + delegation behavior; the underlying
-``ConfigManager`` is exercised in ``test_config_v3.py``.
+``ConfigManager`` is exercised in ``test_config.py``.
 
 Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 """

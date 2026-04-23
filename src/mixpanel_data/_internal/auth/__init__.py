@@ -46,7 +46,6 @@ from mixpanel_data._internal.auth.storage import (
     OAuthStorage,
     account_dir,
     ensure_account_dir,
-    legacy_token_path,
 )
 from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
 from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
@@ -75,6 +74,5 @@ __all__ = [
     "default_bridge_search_paths",
     "ensure_account_dir",
     "ensure_client_registered",
-    "legacy_token_path",
     "load_bridge",
 ]

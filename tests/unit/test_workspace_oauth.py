@@ -26,12 +26,9 @@ from pydantic import SecretStr
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import (
-    AuthMethod,
-    Credentials,
-)
 from mixpanel_data.types import PublicWorkspace
 from mixpanel_data.workspace import Workspace
+from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -50,7 +47,7 @@ def _make_oauth_credentials(
     project_id: str = "12345",
     region: str = "us",
     access_token: str = "test-oauth-token",
-) -> Credentials:
+) -> Session:
     """Create OAuth Credentials for testing.
 
     Args:
@@ -61,20 +58,17 @@ def _make_oauth_credentials(
     Returns:
         A Credentials instance with auth_method=oauth.
     """
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
+    return make_session(
         project_id=project_id,
         region=region,
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr(access_token),
+        oauth_token=access_token,
     )
 
 
 def _make_basic_credentials(
     project_id: str = "12345",
     region: str = "us",
-) -> Credentials:
+) -> Session:
     """Create Basic Auth Credentials for testing.
 
     Args:
@@ -84,9 +78,9 @@ def _make_basic_credentials(
     Returns:
         A Credentials instance with auth_method=basic.
     """
-    return Credentials(
+    return make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id=project_id,
         region=region,
     )
@@ -169,7 +163,7 @@ class TestWorkspaceConstructionWithOAuth:
 
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
+        client = MixpanelAPIClient(session=oauth_creds, _transport=transport)
         oauth_session = Session(
             account=OAuthTokenAccount(
                 name="test_account",
@@ -181,20 +175,22 @@ class TestWorkspaceConstructionWithOAuth:
         )
         ws = Workspace(session=oauth_session, _api_client=client)
 
-        assert ws._credentials is not None
-        assert ws._credentials.auth_method == AuthMethod.oauth
+        from mixpanel_data._internal.auth.account import OAuthTokenAccount
+
+        assert isinstance(ws.session.account, OAuthTokenAccount)
 
     def test_workspace_backward_compat_basic_auth(self) -> None:
-        """A service-account Session yields ``_credentials.auth_method == basic``."""
+        """A service-account Session resolves through the ServiceAccount path."""
+        from mixpanel_data._internal.auth.account import ServiceAccount
+
         basic_creds = _make_basic_credentials()
         transport = httpx.MockTransport(lambda _r: httpx.Response(200, json=[]))
-        client = MixpanelAPIClient(basic_creds, _transport=transport)
+        client = MixpanelAPIClient(session=basic_creds, _transport=transport)
 
         ws = Workspace(session=_TEST_SESSION, _api_client=client)
 
-        assert ws._credentials is not None
-        assert ws._credentials.auth_method == AuthMethod.basic
-        assert ws._credentials.username == "test_user"
+        assert isinstance(ws.session.account, ServiceAccount)
+        assert ws.session.account.username == "test_user"
 
 
 class TestWorkspaceListWorkspaces:
@@ -207,7 +203,7 @@ class TestWorkspaceListWorkspaces:
         """list_workspaces() returns a list of PublicWorkspace objects."""
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
+        client = MixpanelAPIClient(session=oauth_creds, _transport=transport)
         ws = Workspace(
             session=_TEST_SESSION,
             _api_client=client,
@@ -244,7 +240,7 @@ class TestWorkspaceListWorkspaces:
 
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(handler)
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
+        client = MixpanelAPIClient(session=oauth_creds, _transport=transport)
         ws = Workspace(
             session=_TEST_SESSION,
             _api_client=client,
@@ -264,7 +260,7 @@ class TestWorkspaceResolveWorkspaceId:
         """resolve_workspace_id() returns the default workspace ID."""
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
-        client = MixpanelAPIClient(oauth_creds, _transport=transport)
+        client = MixpanelAPIClient(session=oauth_creds, _transport=transport)
         ws = Workspace(
             session=_TEST_SESSION,
             _api_client=client,

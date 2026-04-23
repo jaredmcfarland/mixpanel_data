@@ -1,4 +1,4 @@
-"""Public auth-types module — single source of truth for the v3 auth surface.
+"""Public auth-types module — single source of truth for the auth surface.
 
 Consolidates the stable types from the ``_internal/auth/*`` package into
 one importable module so callers can ``from mixpanel_data.auth_types
@@ -11,8 +11,7 @@ import path. ``mixpanel_data.__init__`` imports from here too, which
 keeps the top-level ``mp.Account`` / ``mp.Session`` / etc. names backed
 by the same single source.
 
-Reference: ``specs/042-auth-architecture-redesign/contracts/python-api.md``,
-PR #126 review Fix 27.
+Reference: ``specs/042-auth-architecture-redesign/contracts/python-api.md``.
 """
 
 from mixpanel_data._internal.auth.account import (

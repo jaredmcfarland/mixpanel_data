@@ -21,7 +21,6 @@ from mixpanel_data import Workspace
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import Credentials
 from mixpanel_data.types import (
     Formula,
     FunnelStep,
@@ -29,6 +28,7 @@ from mixpanel_data.types import (
     PerUserAggregation,
     RetentionMathType,
 )
+from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -165,9 +165,9 @@ def _make_workspace() -> Workspace:
     Returns:
         Workspace instance with mocked config and API client.
     """
-    creds = Credentials(
+    creds = make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id="12345",
         region="us",
     )

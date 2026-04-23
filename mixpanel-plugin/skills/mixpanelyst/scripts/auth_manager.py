@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plugin auth manager — JSON wrapper around the v3 mixpanel_data namespaces.
+"""Plugin auth manager — JSON wrapper around the mixpanel_data auth namespaces.
 
 Subcommands map 1:1 to ``mp account / project / workspace / target /
 session / bridge`` per

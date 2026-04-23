@@ -25,6 +25,7 @@ from mixpanel_data.types import (
     InlineCustomProperty,
     PropertyInput,
 )
+from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -368,15 +369,10 @@ class TestMeasurementPropertyBuilder:
         """T034: Plain string Metric.property produces unchanged measurement (backward compat)."""
         from unittest.mock import MagicMock
 
-        from pydantic import SecretStr
-
         from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import Credentials
         from mixpanel_data.types import Metric
 
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
+        creds = make_session(username="u", secret="s", project_id="1", region="us")
         mgr = MagicMock()
         mgr.config_version.return_value = 1
         mgr.resolve_credentials.return_value = creds
@@ -396,15 +392,10 @@ class TestMeasurementPropertyBuilder:
         """T035: CustomPropertyRef in measurement produces customPropertyId."""
         from unittest.mock import MagicMock
 
-        from pydantic import SecretStr
-
         from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import Credentials
         from mixpanel_data.types import Metric
 
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
+        creds = make_session(username="u", secret="s", project_id="1", region="us")
         mgr = MagicMock()
         mgr.config_version.return_value = 1
         mgr.resolve_credentials.return_value = creds
@@ -424,15 +415,10 @@ class TestMeasurementPropertyBuilder:
         """T036: InlineCustomProperty in measurement produces customProperty dict."""
         from unittest.mock import MagicMock
 
-        from pydantic import SecretStr
-
         from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import Credentials
         from mixpanel_data.types import Metric
 
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
+        creds = make_session(username="u", secret="s", project_id="1", region="us")
         mgr = MagicMock()
         mgr.config_version.return_value = 1
         mgr.resolve_credentials.return_value = creds
@@ -454,14 +440,9 @@ class TestMeasurementPropertyBuilder:
         """T037: Top-level math_property as plain string produces unchanged measurement."""
         from unittest.mock import MagicMock
 
-        from pydantic import SecretStr
-
         from mixpanel_data import Workspace
-        from mixpanel_data._internal.config import Credentials
 
-        creds = Credentials(
-            username="u", secret=SecretStr("s"), project_id="1", region="us"
-        )
+        creds = make_session(username="u", secret="s", project_id="1", region="us")
         mgr = MagicMock()
         mgr.config_version.return_value = 1
         mgr.resolve_credentials.return_value = creds

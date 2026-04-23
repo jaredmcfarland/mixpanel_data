@@ -289,7 +289,7 @@ class Workspace:
     ) -> None:
         """Create a new Workspace. Resolution per axis is independent
         (env > param > target > bridge > config); see
-        ``mixpanel_data.auth_types`` and the v3 resolver.
+        ``mixpanel_data.auth_types`` and the resolver.
 
         With ``session=`` supplied, all other axis kwargs are ignored
         (full bypass).

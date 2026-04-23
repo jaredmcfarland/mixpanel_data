@@ -1,6 +1,6 @@
 """Public ``mp.session`` namespace.
 
-Thin wrapper around :class:`~mixpanel_data._internal.config_v3.ConfigManager`
+Thin wrapper around :class:`~mixpanel_data._internal.config.ConfigManager`
 exposing the persisted ``[active]`` session and per-axis updates.
 
 Note: this module shadows the :class:`Session` value type. Public

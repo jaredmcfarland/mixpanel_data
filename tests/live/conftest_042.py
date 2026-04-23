@@ -29,7 +29,7 @@ LEGACY_CONFIG_PATH = Path.home() / ".mp" / "config.toml"
 
 
 @pytest.fixture
-def tmp_v3_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+def tmp_mp_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Yield a tmp ``$HOME`` with isolated v3 ``~/.mp/`` and ``MP_CONFIG_PATH``.
 
     Sets HOME, MP_CONFIG_PATH, MP_OAUTH_STORAGE_DIR; creates ~/.mp/ at
@@ -61,7 +61,7 @@ def copy_user_oauth_tokens_to_account(home: Path, account_name: str) -> Path:
     convention. Strips the legacy ``project_id`` field (Phase 4 drops it).
 
     Args:
-        home: The tmp $HOME path (from the ``tmp_v3_home`` fixture).
+        home: The tmp $HOME path (from the ``tmp_mp_home`` fixture).
         account_name: V3 account name to host the tokens under.
 
     Returns:
@@ -115,9 +115,9 @@ def get_user_active_project_id() -> str | None:
     if isinstance(pid, int):
         return str(pid)
     # v3 layout
-    pid_v3 = active.get("project")
-    if isinstance(pid_v3, str):
-        return pid_v3
+    pid = active.get("project")
+    if isinstance(pid, str):
+        return pid
     return None
 
 

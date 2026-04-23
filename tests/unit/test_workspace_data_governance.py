@@ -30,7 +30,6 @@ from pydantic import SecretStr
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import AuthMethod, Credentials
 from mixpanel_data.exceptions import AuthenticationError, MixpanelDataError
 from mixpanel_data.types import (
     BulkEventUpdate,
@@ -61,6 +60,7 @@ from mixpanel_data.types import (
     UploadLookupTableParams,
 )
 from mixpanel_data.workspace import Workspace
+from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -79,20 +79,13 @@ _TEST_SESSION = Session(
 # =============================================================================
 
 
-def _make_oauth_credentials() -> Credentials:
+def _make_oauth_credentials() -> Session:
     """Create OAuth Credentials for testing.
 
     Returns:
         A Credentials instance with auth_method=oauth.
     """
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-token")
 
 
 # _setup_config_with_account removed in B1 (Fix 9): the legacy v1
@@ -116,7 +109,7 @@ def _make_workspace(
     """
     creds = _make_oauth_credentials()
     transport = httpx.MockTransport(handler)
-    client = MixpanelAPIClient(creds, _transport=transport)
+    client = MixpanelAPIClient(session=creds, _transport=transport)
     return Workspace(
         session=_TEST_SESSION,
         _api_client=client,

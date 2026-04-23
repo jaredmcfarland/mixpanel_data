@@ -16,7 +16,6 @@ from pydantic import SecretStr
 from mixpanel_data import Workspace
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import Credentials
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -36,26 +35,6 @@ _TEST_SESSION = Session(
 
 
 @pytest.fixture
-def mock_credentials() -> Credentials:
-    """Create mock credentials for Workspace construction."""
-    return Credentials(
-        username="test_user",
-        secret=SecretStr("test_secret"),
-        project_id="12345",
-        region="us",
-    )
-
-
-@pytest.fixture
-def mock_config_manager(mock_credentials: Credentials) -> MagicMock:
-    """Create mock ConfigManager that returns mock credentials."""
-    manager = MagicMock()
-    manager.config_version.return_value = 1
-    manager.resolve_credentials.return_value = mock_credentials
-    return manager
-
-
-@pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for Workspace construction."""
     from mixpanel_data._internal.api_client import MixpanelAPIClient
@@ -66,7 +45,7 @@ def mock_api_client() -> MagicMock:
 
 
 @pytest.fixture
-def ws(mock_config_manager: MagicMock, mock_api_client: MagicMock) -> Workspace:
+def ws(mock_api_client: MagicMock) -> Workspace:
     """Create a Workspace instance with mocked dependencies.
 
     Uses dependency injection so no real credentials or network access

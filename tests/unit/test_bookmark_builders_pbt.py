@@ -22,8 +22,8 @@ from mixpanel_data._internal.bookmark_builders import (
     build_group_section,
     build_time_section,
 )
-from mixpanel_data._internal.config import Credentials
 from mixpanel_data.types import Filter, GroupBy
+from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -60,9 +60,9 @@ def _make_workspace() -> Workspace:
     Returns:
         Workspace instance with mock credentials.
     """
-    creds = Credentials(
+    creds = make_session(
         username="test",
-        secret=SecretStr("secret"),
+        secret="secret",
         project_id="12345",
         region="us",
     )

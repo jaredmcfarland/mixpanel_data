@@ -19,14 +19,13 @@ import httpx
 from httpx._types import SyncByteStream
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import (
     ENDPOINTS,
     MixpanelAPIClient,
     _iter_jsonl_lines,
 )
-from mixpanel_data._internal.config import Credentials
+from tests.conftest import make_session
 
 # =============================================================================
 # Custom Strategies
@@ -113,13 +112,13 @@ class TestAuthHeaderProperties:
             secret: Service account secret.
             region: Data residency region.
         """
-        creds = Credentials(
+        creds = make_session(
             username=username,
-            secret=SecretStr(secret),
-            project_id="test_project",
+            secret=secret,
+            project_id="12345",
             region=region,
         )
-        client = MixpanelAPIClient(creds)
+        client = MixpanelAPIClient(session=creds)
 
         try:
             header = client._get_auth_header()
@@ -176,13 +175,13 @@ class TestAuthHeaderProperties:
         # Build username with guaranteed colon
         username = f"{prefix}:{suffix}"
 
-        creds = Credentials(
+        creds = make_session(
             username=username,
-            secret=SecretStr(secret),
-            project_id="test_project",
+            secret=secret,
+            project_id="12345",
             region=region,
         )
-        client = MixpanelAPIClient(creds)
+        client = MixpanelAPIClient(session=creds)
 
         try:
             header = client._get_auth_header()
@@ -220,13 +219,13 @@ class TestBackoffProperties:
         Args:
             attempt: Zero-based attempt number.
         """
-        creds = Credentials(
+        creds = make_session(
             username="test",
-            secret=SecretStr("secret"),
+            secret="secret",
             project_id="123",
             region="us",
         )
-        client = MixpanelAPIClient(creds)
+        client = MixpanelAPIClient(session=creds)
 
         try:
             delay = client._calculate_backoff(attempt)
@@ -265,13 +264,13 @@ class TestBackoffProperties:
         Args:
             attempt: High attempt number (>= 10).
         """
-        creds = Credentials(
+        creds = make_session(
             username="test",
-            secret=SecretStr("secret"),
+            secret="secret",
             project_id="123",
             region="us",
         )
-        client = MixpanelAPIClient(creds)
+        client = MixpanelAPIClient(session=creds)
 
         try:
             delay = client._calculate_backoff(attempt)
@@ -305,13 +304,13 @@ class TestBackoffProperties:
         """
         assume(attempt1 < attempt2)
 
-        creds = Credentials(
+        creds = make_session(
             username="test",
-            secret=SecretStr("secret"),
+            secret="secret",
             project_id="123",
             region="us",
         )
-        client = MixpanelAPIClient(creds)
+        client = MixpanelAPIClient(session=creds)
 
         try:
             # Calculate expected base delays
@@ -350,13 +349,13 @@ class TestUrlBuildProperties:
             path: URL path segment.
             region: Data residency region.
         """
-        creds = Credentials(
+        creds = make_session(
             username="test",
-            secret=SecretStr("secret"),
+            secret="secret",
             project_id="123",
             region=region,
         )
-        client = MixpanelAPIClient(creds)
+        client = MixpanelAPIClient(session=creds)
 
         try:
             # Path with leading slash
@@ -386,13 +385,13 @@ class TestUrlBuildProperties:
             path: URL path segment.
             region: Data residency region.
         """
-        creds = Credentials(
+        creds = make_session(
             username="test",
-            secret=SecretStr("secret"),
+            secret="secret",
             project_id="123",
             region=region,
         )
-        client = MixpanelAPIClient(creds)
+        client = MixpanelAPIClient(session=creds)
 
         try:
             url = client._build_url(api_type, path)
@@ -417,13 +416,13 @@ class TestUrlBuildProperties:
             path: URL path segment.
             region: Data residency region.
         """
-        creds = Credentials(
+        creds = make_session(
             username="test",
-            secret=SecretStr("secret"),
+            secret="secret",
             project_id="123",
             region=region,
         )
-        client = MixpanelAPIClient(creds)
+        client = MixpanelAPIClient(session=creds)
 
         try:
             url = client._build_url(api_type, path)

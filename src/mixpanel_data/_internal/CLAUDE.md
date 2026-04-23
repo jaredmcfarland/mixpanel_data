@@ -6,12 +6,12 @@ Private infrastructure powering `mixpanel_data`'s programmable interface to Mixp
 
 | File | Purpose |
 |------|---------|
-| `config.py` | `ConfigManager` for `~/.mp/config.toml` — single v3 schema (`[accounts.NAME]` / `[active]` / `[targets.NAME]` / `[settings]`); legacy v1/v2 schemas are rejected with a clear error |
+| `config.py` | `ConfigManager` for `~/.mp/config.toml` — single schema (`[accounts.NAME]` / `[active]` / `[targets.NAME]` / `[settings]`); unknown keys are rejected with a clear error |
 | `api_client.py` | `MixpanelAPIClient` — HTTP client; takes a `Session`; preserves the underlying `httpx.Client` across in-session axis switches |
 | `me.py` | `MeService` + per-account `MeCache` (`~/.mp/accounts/{name}/me.json`) |
 | `pagination.py` | Cursor-based App API pagination |
 | `io_utils.py` | `atomic_write_bytes` — `O_EXCL` + `os.replace` writes with explicit mode bits |
-| `auth/` | The 042 v3 auth subsystem — see [`../auth_types.py`](../auth_types.py) for the public re-export and [`../../../context/auth-architecture-redesign.md`](../../../context/auth-architecture-redesign.md) for the design |
+| `auth/` | The auth subsystem — see [`../auth_types.py`](../auth_types.py) for the public re-export and [`../../../context/auth-architecture-redesign.md`](../../../context/auth-architecture-redesign.md) for the design |
 | `auth/account.py` | `Account` discriminated union (`ServiceAccount` / `OAuthBrowserAccount` / `OAuthTokenAccount`) + `TokenResolver` protocol |
 | `auth/session.py` | `Session`, `Project`, `WorkspaceRef`, `ActiveSession` |
 | `auth/resolver.py` | `resolve_session(...)` — single resolver with three independent axes (env → param → target → bridge → config) |

@@ -93,9 +93,9 @@ elif env_set:
 
 # Check config file
 try:
-    from mixpanel_data.auth import ConfigManager
+    from mixpanel_data._internal.config import ConfigManager
     cm = ConfigManager()
-    version = cm.config_version()
+    version = 1  # config schema version is fixed under the 0.4.0 layout
 
     if version >= 2:
         # v2 config: credential + project context

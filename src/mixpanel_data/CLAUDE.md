@@ -15,8 +15,7 @@ Public API for the Mixpanel data library. Import from here, not from `_internal`
 |------|---------|
 | `__init__.py` | Public exports (Workspace, exceptions, types) |
 | `workspace.py` | Main facade class orchestrating all operations |
-| `auth.py` | Thin re-export of legacy auth surface (ConfigManager, Credentials, AuthMethod, BridgeFile, load_bridge) |
-| `auth_types.py` | v3 auth surface (Account discriminated union + ServiceAccount/OAuthBrowserAccount/OAuthTokenAccount, Session, Region, OAuthTokens, etc.) |
+| `auth_types.py` | Auth surface (Account discriminated union + ServiceAccount/OAuthBrowserAccount/OAuthTokenAccount, Session, Region, OAuthTokens, etc.) |
 | `accounts.py` | Functional API for account lifecycle (`mp.accounts.add/use/login/...`) |
 | `session.py` | Functional API for active-session axes (`mp.session.show/use`) |
 | `targets.py` | Functional API for named targets (account+project+workspace bundles) |

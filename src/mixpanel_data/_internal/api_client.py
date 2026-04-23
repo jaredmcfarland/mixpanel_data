@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import quote
 
 import httpx
-from pydantic import SecretStr
 
 from mixpanel_data._internal.auth.account import (
     Account,
@@ -38,7 +37,6 @@ from mixpanel_data._internal.auth.session import (
     WorkspaceRef,
 )
 from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
-from mixpanel_data._internal.config import AuthMethod, Credentials
 from mixpanel_data.exceptions import (
     AuthenticationError,
     JQLSyntaxError,
@@ -54,73 +52,6 @@ if TYPE_CHECKING:
     from types import TracebackType
 
 logger = logging.getLogger(__name__)
-
-
-def session_to_credentials(
-    session: Session,
-    *,
-    token_resolver: TokenResolver | None = None,
-) -> Credentials:
-    """Project a redesigned :class:`Session` into legacy ``Credentials``.
-
-    Used by :class:`MixpanelAPIClient` so the session-aware path can reuse
-    the existing HTTP infrastructure that consumes ``Credentials``. For
-    OAuth accounts the bearer token is resolved up-front; if it cannot be
-    resolved, ``OAuthError`` propagates so the failure surfaces at the
-    construction call (typically ``Workspace()``) rather than at the next
-    HTTP request as a confusing 401.
-
-    The OAuth ``Credentials`` shim sets ``username=account.name`` so that
-    ``MeCache`` (scoped by ``credential_name``) keeps per-account cache
-    files in the same region — without this, two OAuth accounts in the
-    same region collide on a single ``me_<region>.json``.
-
-    Args:
-        session: Resolved session with account / project / optional workspace.
-        token_resolver: Used for OAuth accounts; defaults to
-            :class:`OnDiskTokenResolver`.
-
-    Returns:
-        Legacy ``Credentials`` shim usable by ``MixpanelAPIClient`` internals.
-
-    Raises:
-        OAuthError: An OAuth account's token cannot be resolved (no on-disk
-            tokens for ``oauth_browser`` — run ``mp account login NAME``;
-            missing env var for ``oauth_token``).
-    """
-    resolver = token_resolver or OnDiskTokenResolver()
-    account = session.account
-    if isinstance(account, ServiceAccount):
-        return Credentials(
-            username=account.username,
-            secret=account.secret,
-            project_id=session.project.id,
-            region=account.region,
-            auth_method=AuthMethod.basic,
-        )
-    if isinstance(account, OAuthBrowserAccount):
-        token = resolver.get_browser_token(account.name, account.region)
-        return Credentials(
-            username=account.name,
-            secret=SecretStr(""),
-            project_id=session.project.id,
-            region=account.region,
-            auth_method=AuthMethod.oauth,
-            oauth_access_token=SecretStr(token),
-        )
-    if isinstance(account, OAuthTokenAccount):
-        token = resolver.get_static_token(account)
-        return Credentials(
-            username=account.name,
-            secret=SecretStr(""),
-            project_id=session.project.id,
-            region=account.region,
-            auth_method=AuthMethod.oauth,
-            oauth_access_token=SecretStr(token),
-        )
-    raise TypeError(
-        f"Unsupported Account variant: {type(account).__name__}"
-    )  # pragma: no cover — Literal exhaustiveness
 
 
 def _iter_jsonl_lines(response: httpx.Response) -> Iterator[str]:
@@ -197,13 +128,12 @@ class MixpanelAPIClient:
 
     Example:
         ```python
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_data._internal.auth.resolver import resolve_session
         from mixpanel_data._internal.api_client import MixpanelAPIClient
 
-        config = ConfigManager()
-        credentials = config.resolve_credentials()
+        session = resolve_session()
 
-        with MixpanelAPIClient(credentials) as client:
+        with MixpanelAPIClient(session=session) as client:
             events = client.get_events()
             print(events)
         ```
@@ -211,9 +141,8 @@ class MixpanelAPIClient:
 
     def __init__(
         self,
-        credentials: Credentials | None = None,
         *,
-        session: Session | None = None,
+        session: Session,
         timeout: float = 120.0,
         export_timeout: float = 600.0,
         max_retries: int = 3,
@@ -222,64 +151,43 @@ class MixpanelAPIClient:
     ) -> None:
         """Initialize the API client.
 
-        Either ``credentials`` (legacy v1/v2 path) or ``session`` (042 redesign
-        path) must be supplied. When ``session`` is provided, internal
-        ``Credentials`` are built from the Session via
-        :func:`session_to_credentials` and the api client picks up the
-        Session-bound ``account`` / ``project`` / ``workspace``.
-
         Args:
-            credentials: Immutable authentication credentials (legacy path).
-            session: Resolved Session (path; mutually exclusive
-                with ``credentials``).
+            session: Resolved Session (account + project + optional workspace).
             timeout: Request timeout in seconds for regular requests.
             export_timeout: Request timeout for export operations.
             max_retries: Maximum retry attempts for rate-limited requests.
-            token_resolver: For OAuth accounts in ``session=``; defaults to
+            token_resolver: For OAuth accounts; defaults to
                 :class:`OnDiskTokenResolver`.
             _transport: Internal parameter for testing with MockTransport.
-
-        Raises:
-            TypeError: If neither ``credentials`` nor ``session`` is provided.
         """
-        if session is not None and credentials is not None:
-            raise TypeError(
-                "MixpanelAPIClient: pass either `credentials=` or `session=`, not both."
-            )
-        if session is None and credentials is None:
-            raise TypeError("MixpanelAPIClient: requires `credentials=` or `session=`.")
-
         self._token_resolver: TokenResolver = token_resolver or OnDiskTokenResolver()
-        self._session: Session | None = session
-        if session is not None:
-            self._credentials = session_to_credentials(
-                session, token_resolver=self._token_resolver
-            )
-        else:
-            assert credentials is not None
-            self._credentials = credentials
+        self._session: Session = session
+        # Cache the Basic auth header for service accounts so we don't
+        # base64-encode on every request. OAuth headers resolve per call
+        # via TokenResolver and are not cached here.
+        self._cached_basic_header: str | None = (
+            session.account.auth_header(token_resolver=self._token_resolver)
+            if isinstance(session.account, ServiceAccount)
+            else None
+        )
         self._timeout = timeout
         self._export_timeout = export_timeout
         self._max_retries = max_retries
         self._client: httpx.Client | None = None
         self._transport = _transport
         self._workspace_id: int | None = (
-            session.workspace.id if (session and session.workspace) else None
+            session.workspace.id if session.workspace else None
         )
         self._cached_workspace_id: int | None = None
-        self._resolved_workspace: WorkspaceRef | None = (
-            session.workspace if session else None
-        )
+        self._resolved_workspace: WorkspaceRef | None = session.workspace
 
     def _get_auth_header(self) -> str:
         """Generate the Authorization header value, resolving per request.
 
-        For session-bound OAuth accounts (browser or static token), delegates
-        to the bound :class:`TokenResolver` on every call so a refreshed
-        bearer (Fix 16) is picked up without rebuilding the API client.
-        Service accounts and the legacy ``credentials=`` path keep using
-        the cached :class:`Credentials.auth_header()` since Basic Auth has
-        no analogous freshness concern.
+        For OAuth accounts (browser or static token), delegates to the bound
+        :class:`TokenResolver` on every call so a refreshed bearer is picked
+        up without rebuilding the API client. Service accounts return the
+        cached ``Basic ...`` header since Basic Auth has no freshness concern.
 
         Returns:
             Authorization header value appropriate for the auth method.
@@ -287,20 +195,20 @@ class MixpanelAPIClient:
         Raises:
             OAuthError: An OAuth account's token cannot be re-resolved
                 (e.g. on-disk tokens deleted or refresh failed).
-            ValueError: Cached OAuth credentials are missing an access
-                token (legacy ``credentials=`` callers only).
         """
-        if self._session is not None:
-            account = self._session.account
-            if isinstance(account, OAuthBrowserAccount):
-                token = self._token_resolver.get_browser_token(
-                    account.name, account.region
-                )
-                return f"Bearer {token}"
-            if isinstance(account, OAuthTokenAccount):
-                token = self._token_resolver.get_static_token(account)
-                return f"Bearer {token}"
-        return self._credentials.auth_header()
+        account = self._session.account
+        if isinstance(account, ServiceAccount):
+            assert self._cached_basic_header is not None
+            return self._cached_basic_header
+        if isinstance(account, OAuthBrowserAccount):
+            token = self._token_resolver.get_browser_token(account.name, account.region)
+            return f"Bearer {token}"
+        if isinstance(account, OAuthTokenAccount):
+            token = self._token_resolver.get_static_token(account)
+            return f"Bearer {token}"
+        raise TypeError(  # pragma: no cover — Literal exhaustiveness
+            f"Unknown Account variant: {type(account).__name__}"
+        )
 
     def _build_url(self, api_type: str, path: str) -> str:
         """Build full URL for the given API type and path.
@@ -312,7 +220,7 @@ class MixpanelAPIClient:
         Returns:
             Full URL for the endpoint.
         """
-        region = self._credentials.region
+        region = self._session.account.region
         base = ENDPOINTS[region][api_type]
         # Ensure path starts with /
         if not path.startswith("/"):
@@ -721,7 +629,7 @@ class MixpanelAPIClient:
         if params is None:
             params = {}
         if inject_project_id:
-            params["project_id"] = self._credentials.project_id
+            params["project_id"] = self._session.project.id
 
         logger.debug(
             "_request - method: %s, url: %s, final params: %s",
@@ -798,25 +706,25 @@ class MixpanelAPIClient:
 
     @property
     def project_id(self) -> str:
-        """Get the project ID from credentials.
+        """Get the project ID from the bound Session.
 
         Useful when constructing URLs that require the project ID.
 
         Returns:
             The Mixpanel project ID.
         """
-        return self._credentials.project_id
+        return self._session.project.id
 
     @property
     def region(self) -> str:
-        """Get the configured region.
+        """Get the configured region from the bound Session.
 
         Useful when constructing regional URLs.
 
         Returns:
             The region code ('us', 'eu', or 'in').
         """
-        return self._credentials.region
+        return self._session.account.region
 
     # =========================================================================
     # 042 redesign: session-aware accessors and switching
@@ -828,16 +736,7 @@ class MixpanelAPIClient:
 
         Returns:
             The Session passed to ``__init__(session=...)``.
-
-        Raises:
-            RuntimeError: If the client was constructed via the legacy
-                ``credentials=`` path (no Session is bound).
         """
-        if self._session is None:
-            raise RuntimeError(
-                "MixpanelAPIClient was constructed via legacy credentials path; "
-                "no Session is bound. Construct via session= to use this accessor."
-            )
         return self._session
 
     @property
@@ -894,10 +793,6 @@ class MixpanelAPIClient:
             OAuthError: If new account auth header construction fails (the
                 previous header is preserved on failure).
         """
-        if self._session is None:
-            raise RuntimeError(
-                "MixpanelAPIClient.use() requires the session= construction path."
-            )
         project_obj: Project | None = (
             Project(id=project) if isinstance(project, str) else project
         )
@@ -907,15 +802,22 @@ class MixpanelAPIClient:
         new_session = self._session.replace(
             account=account, project=project_obj, workspace=workspace_obj
         )
-        # Build the new shim BEFORE swapping anything — atomic-on-success.
-        # ``session_to_credentials`` raises ``OAuthError`` if the new
-        # account has no usable token; the prior session/credentials stay
-        # in place because no assignment happens until both succeed.
-        new_credentials = session_to_credentials(
-            new_session, token_resolver=self._token_resolver
-        )
+        # Atomic-on-success: probe the new account's bearer BEFORE swapping
+        # anything. ServiceAccount returns the cached Basic header; OAuth
+        # variants delegate to TokenResolver — if no token is available the
+        # resolver raises OAuthError and the prior session/header survive.
+        new_cached_basic: str | None
+        if isinstance(new_session.account, ServiceAccount):
+            new_cached_basic = new_session.account.auth_header(
+                token_resolver=self._token_resolver
+            )
+        else:
+            # Probe OAuth resolver to surface missing-token errors here
+            # rather than at the next request. The result isn't cached.
+            new_session.account.auth_header(token_resolver=self._token_resolver)
+            new_cached_basic = None
         self._session = new_session
-        self._credentials = new_credentials
+        self._cached_basic_header = new_cached_basic
         if account is not None or project is not None:
             self._resolved_workspace = new_session.workspace
             self._cached_workspace_id = None
@@ -1258,10 +1160,10 @@ class MixpanelAPIClient:
         if not workspaces:
             raise WorkspaceScopeError(
                 "No workspaces found for project "
-                f"'{self._credentials.project_id}'. "
+                f"'{self._session.project.id}'. "
                 "Ensure you have access to at least one workspace.",
                 code="NO_WORKSPACES",
-                details={"project_id": self._credentials.project_id},
+                details={"project_id": self._session.project.id},
             )
 
         # Prefer the default workspace
@@ -1301,7 +1203,7 @@ class MixpanelAPIClient:
         """
         if self._workspace_id is not None:
             return f"/workspaces/{self._workspace_id}/{domain_path}"
-        return f"/projects/{self._credentials.project_id}/{domain_path}"
+        return f"/projects/{self._session.project.id}/{domain_path}"
 
     def require_scoped_path(self, domain_path: str) -> str:
         """Build a workspace-scoped API path, auto-discovering if needed.
@@ -1330,7 +1232,7 @@ class MixpanelAPIClient:
             ```
         """
         ws_id = self.resolve_workspace_id()
-        pid = self._credentials.project_id
+        pid = self._session.project.id
         return f"/projects/{pid}/workspaces/{ws_id}/{domain_path}"
 
     def with_project(
@@ -1354,28 +1256,23 @@ class MixpanelAPIClient:
 
         Example:
             ```python
-            original = MixpanelAPIClient(credentials)
+            original = MixpanelAPIClient(session=session)
             other = original.with_project("9999999", workspace_id=42)
             other.me()  # still uses the same auth
             ```
         """
-        from pydantic import SecretStr as _SecretStr
-
-        new_creds = Credentials(
-            username=self._credentials.username,
-            secret=_SecretStr(self._credentials.secret.get_secret_value()),
-            project_id=project_id,
-            region=self._credentials.region,
-            auth_method=self._credentials.auth_method,
-            oauth_access_token=self._credentials.oauth_access_token,
+        new_session = self._session.replace(
+            project=Project(id=project_id),
+            workspace=WorkspaceRef(id=workspace_id) if workspace_id else None,
         )
         # Share the existing HTTP transport when available
         transport: httpx.BaseTransport | None = self._transport
         new_client = MixpanelAPIClient(
-            new_creds,
+            session=new_session,
             timeout=self._timeout,
             export_timeout=self._export_timeout,
             max_retries=self._max_retries,
+            token_resolver=self._token_resolver,
             _transport=transport,
         )
         if workspace_id is not None:
@@ -1432,7 +1329,7 @@ class MixpanelAPIClient:
                     print(f"{ws.name} (id={ws.id}, default={ws.is_default})")
             ```
         """
-        pid = self._credentials.project_id
+        pid = self._session.project.id
         path = f"/projects/{pid}/workspaces/public"
         results = self.app_request("GET", path)
 
@@ -1484,7 +1381,7 @@ class MixpanelAPIClient:
         url = self._build_url("export", "/export")
 
         params: dict[str, Any] = {
-            "project_id": self._credentials.project_id,
+            "project_id": self._session.project.id,
             "from_date": from_date,
             "to_date": to_date,
         }
@@ -1696,7 +1593,7 @@ class MixpanelAPIClient:
 
         while True:
             params: dict[str, Any] = {
-                "project_id": self._credentials.project_id,
+                "project_id": self._session.project.id,
                 "page": page,
             }
             if session_id:
@@ -1824,7 +1721,7 @@ class MixpanelAPIClient:
         url = self._build_url("engage", "")
 
         params: dict[str, Any] = {
-            "project_id": self._credentials.project_id,
+            "project_id": self._session.project.id,
             "page": page,
         }
         if session_id:
@@ -1941,7 +1838,7 @@ class MixpanelAPIClient:
         url = self._build_url("engage", "stats")
 
         params: dict[str, Any] = {
-            "project_id": self._credentials.project_id,
+            "project_id": self._session.project.id,
             "action": action,
         }
         if where:
@@ -2528,7 +2425,7 @@ class MixpanelAPIClient:
         """
         url = self._build_url(
             "app",
-            f"/projects/{self._credentials.project_id}/bookmarks",
+            f"/projects/{self._session.project.id}/bookmarks",
         )
         params: dict[str, Any] = {"v": "2"}
         if bookmark_type is not None:
@@ -2835,9 +2732,9 @@ class MixpanelAPIClient:
         # entity_type is a path parameter, not a query parameter
         # URL structure: /api/app/projects/{projectId}/schemas/{entity_type}
         if entity_type is not None:
-            path = f"/projects/{self._credentials.project_id}/schemas/{entity_type}"
+            path = f"/projects/{self._session.project.id}/schemas/{entity_type}"
         else:
-            path = f"/projects/{self._credentials.project_id}/schemas"
+            path = f"/projects/{self._session.project.id}/schemas"
 
         url = self._build_url("app", path)
 
@@ -2884,7 +2781,7 @@ class MixpanelAPIClient:
         # URL structure: /api/app/projects/{projectId}/schemas/{entity_type}?entity_name={name}
         url = self._build_url(
             "app",
-            f"/projects/{self._credentials.project_id}/schemas/{entity_type}",
+            f"/projects/{self._session.project.id}/schemas/{entity_type}",
         )
         params = {"entity_name": name}
 
@@ -4777,7 +4674,7 @@ class MixpanelAPIClient:
                 limits = client.get_flag_limits()
             ```
         """
-        pid = self._credentials.project_id
+        pid = self._session.project.id
         path = f"/projects/{pid}/feature-flags/limits/"
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
@@ -7067,7 +6964,7 @@ class MixpanelAPIClient:
         """
         path = self.maybe_scoped_path("data-definitions/lookup-tables/")
         url = self._build_url("app", path)
-        auth_header = self._credentials.auth_header()
+        auth_header = self._get_auth_header()
         client = self._ensure_client()
         response = client.request(
             "POST",
@@ -7263,7 +7160,7 @@ class MixpanelAPIClient:
         """
         path = self.maybe_scoped_path("data-definitions/lookup-tables/download/")
         url = self._build_url("app", path)
-        auth_header = self._credentials.auth_header()
+        auth_header = self._get_auth_header()
         client = self._ensure_client()
         params: dict[str, str] = {
             "data-group-id": str(data_group_id),

@@ -149,7 +149,7 @@ def resolve_account_axis(
         target_account_name: When ``--target NAME`` was applied, the
             account name from that target block.
         bridge: Loaded bridge file, if any.
-        config: V3 ConfigManager (may have an empty ``[active]`` block).
+        config: ConfigManager (may have an empty ``[active]`` block).
 
     Returns:
         The resolved ``Account``, or ``None`` if no source produced a value.
@@ -235,7 +235,7 @@ def _resolve_workspace_axis(
         explicit: Value of ``workspace=`` kwarg.
         target_workspace: Workspace from ``--target NAME``, if applied.
         bridge: Loaded bridge file, if any.
-        config: V3 ConfigManager.
+        config: ConfigManager.
 
     Returns:
         Workspace ID, or ``None`` (lazy-resolve later).
@@ -277,7 +277,7 @@ def _resolve_headers(
 
     Args:
         bridge: Loaded bridge file, if any.
-        config: V3 ConfigManager.
+        config: ConfigManager.
 
     Returns:
         Headers map ready to attach to ``Session.headers``.
@@ -357,7 +357,7 @@ def resolve_session(
         workspace: Explicit workspace ID (e.g., from ``--workspace ID``).
         target: Named target whose three axes apply (mutually exclusive
             with ``account=``/``project=``/``workspace=``).
-        config: V3 ConfigManager. Defaults to a freshly constructed
+        config: ConfigManager. Defaults to a freshly constructed
             ``ConfigManager()`` reading ``MP_CONFIG_PATH`` or
             ``~/.mp/config.toml``.
         bridge: Pre-loaded bridge file. If ``None``, the resolver loads

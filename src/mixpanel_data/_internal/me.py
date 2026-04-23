@@ -226,7 +226,7 @@ class MeCache:
     ``0o700``.
 
     Args:
-        account_name: V3 account name — drives the per-account cache
+        account_name: Account name — drives the per-account cache
             directory layout (T043 of the 042 plan).
         storage_dir: Override the cache directory entirely. When provided,
             the cache file lives at ``{storage_dir}/me.json`` regardless
@@ -252,7 +252,7 @@ class MeCache:
         """Initialize MeCache.
 
         Args:
-            account_name: V3 account name. Cache files live at
+            account_name: Account name. Cache files live at
                 ``~/.mp/accounts/{account_name}/me.json`` unless
                 ``storage_dir`` overrides.
             storage_dir: Override cache directory (test injection).

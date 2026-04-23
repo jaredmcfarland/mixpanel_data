@@ -15,10 +15,9 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import ENDPOINTS, MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data.exceptions import (
     AuthenticationError,
     MixpanelDataError,
@@ -27,6 +26,7 @@ from mixpanel_data.exceptions import (
     WorkspaceScopeError,
 )
 from mixpanel_data.types import PublicWorkspace
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -34,31 +34,24 @@ from mixpanel_data.types import PublicWorkspace
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for App API testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 @pytest.fixture
-def basic_credentials() -> Credentials:
+def basic_credentials() -> Session:
     """Create Basic Auth credentials for App API testing."""
-    return Credentials(
+    return make_session(
         username="test_user",
-        secret=SecretStr("test_secret"),
+        secret="test_secret",
         project_id="12345",
         region="us",
     )
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport.
@@ -71,7 +64,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -82,7 +75,7 @@ def create_mock_client(
 class TestAppRequest:
     """Test app_request() method for App API calls."""
 
-    def test_uses_bearer_auth_header(self, oauth_credentials: Credentials) -> None:
+    def test_uses_bearer_auth_header(self, oauth_credentials: Session) -> None:
         """app_request() should use Bearer auth from credentials.auth_header()."""
         captured_headers: dict[str, str] = {}
 
@@ -96,9 +89,7 @@ class TestAppRequest:
 
         assert captured_headers["authorization"] == "Bearer test-oauth-token"
 
-    def test_uses_basic_auth_when_configured(
-        self, basic_credentials: Credentials
-    ) -> None:
+    def test_uses_basic_auth_when_configured(self, basic_credentials: Session) -> None:
         """app_request() should use Basic auth when credentials use basic method."""
         captured_headers: dict[str, str] = {}
 
@@ -112,7 +103,7 @@ class TestAppRequest:
 
         assert captured_headers["authorization"].startswith("Basic ")
 
-    def test_builds_correct_url(self, oauth_credentials: Credentials) -> None:
+    def test_builds_correct_url(self, oauth_credentials: Session) -> None:
         """app_request() should build URL from ENDPOINTS['app'] + path."""
         captured_urls: list[str] = []
 
@@ -127,7 +118,7 @@ class TestAppRequest:
         expected_base = ENDPOINTS["us"]["app"]
         assert captured_urls[0].startswith(f"{expected_base}/projects/12345/dashboards")
 
-    def test_unwraps_results_field(self, oauth_credentials: Credentials) -> None:
+    def test_unwraps_results_field(self, oauth_credentials: Session) -> None:
         """app_request() should unwrap 'results' field from response."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -146,7 +137,7 @@ class TestAppRequest:
         assert result == [{"id": 1, "name": "Dashboard 1"}]
 
     def test_returns_full_response_when_no_results_key(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """app_request() should return full body when no 'results' key."""
 
@@ -159,7 +150,7 @@ class TestAppRequest:
 
         assert result == {"status": "ok", "data": "something"}
 
-    def test_handles_204_no_content(self, oauth_credentials: Credentials) -> None:
+    def test_handles_204_no_content(self, oauth_credentials: Session) -> None:
         """app_request() should return {'status': 'ok'} for 204 No Content."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -171,7 +162,7 @@ class TestAppRequest:
 
         assert result == {"status": "ok"}
 
-    def test_maps_404_to_query_error(self, oauth_credentials: Credentials) -> None:
+    def test_maps_404_to_query_error(self, oauth_credentials: Session) -> None:
         """app_request() should raise QueryError on 404."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -183,7 +174,7 @@ class TestAppRequest:
 
         assert exc_info.value.status_code == 404
 
-    def test_maps_422_to_query_error(self, oauth_credentials: Credentials) -> None:
+    def test_maps_422_to_query_error(self, oauth_credentials: Session) -> None:
         """app_request() should raise QueryError on 422."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -197,9 +188,7 @@ class TestAppRequest:
 
         assert exc_info.value.status_code == 422
 
-    def test_maps_401_to_authentication_error(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_maps_401_to_authentication_error(self, oauth_credentials: Session) -> None:
         """app_request() should raise AuthenticationError on 401."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -209,7 +198,7 @@ class TestAppRequest:
         with client, pytest.raises(AuthenticationError):
             client.app_request("GET", "/projects/12345/dashboards")
 
-    def test_maps_5xx_to_server_error(self, oauth_credentials: Credentials) -> None:
+    def test_maps_5xx_to_server_error(self, oauth_credentials: Session) -> None:
         """app_request() should raise ServerError on 5xx."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -219,7 +208,7 @@ class TestAppRequest:
         with client, pytest.raises(ServerError):
             client.app_request("GET", "/projects/12345/dashboards")
 
-    def test_passes_query_params(self, oauth_credentials: Credentials) -> None:
+    def test_passes_query_params(self, oauth_credentials: Session) -> None:
         """app_request() should pass query params through."""
         captured_params: dict[str, str] = {}
 
@@ -235,7 +224,7 @@ class TestAppRequest:
 
         assert captured_params["page_size"] == "50"
 
-    def test_passes_json_body(self, oauth_credentials: Credentials) -> None:
+    def test_passes_json_body(self, oauth_credentials: Session) -> None:
         """app_request() should pass JSON body for POST/PATCH."""
         captured_body: dict[str, Any] = {}
 
@@ -258,14 +247,7 @@ class TestAppRequest:
 
     def test_eu_region_uses_eu_endpoint(self) -> None:
         """app_request() should use EU endpoint for EU credentials."""
-        eu_creds = Credentials(
-            username="",
-            secret=SecretStr(""),
-            project_id="12345",
-            region="eu",
-            auth_method=AuthMethod.oauth,
-            oauth_access_token=SecretStr("eu-token"),
-        )
+        eu_creds = make_session(project_id="12345", region="eu", oauth_token="eu-token")
         captured_urls: list[str] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -289,9 +271,7 @@ class TestAppRequestFormBody:
     bypass ``app_request`` and lose those protections.
     """
 
-    def test_form_body_sent_as_form_encoded(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_form_body_sent_as_form_encoded(self, oauth_credentials: Session) -> None:
         """form_body= produces application/x-www-form-urlencoded with the fields."""
         captured: list[httpx.Request] = []
 
@@ -319,7 +299,7 @@ class TestAppRequestFormBody:
         assert decoded["name"] == ["X"]
         assert decoded["alternatives"] == ['[{"event": "Y"}]']
 
-    def test_form_body_retries_on_429(self, oauth_credentials: Credentials) -> None:
+    def test_form_body_retries_on_429(self, oauth_credentials: Session) -> None:
         """form_body= callers go through the same 429 retry path as json_body=."""
         attempts: list[int] = []
 
@@ -346,7 +326,7 @@ class TestAppRequestFormBody:
         assert result == {"id": 1}
 
     def test_form_body_wraps_httpx_transport_error(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """form_body= callers surface httpx.HTTPError as MixpanelDataError."""
 
@@ -363,7 +343,7 @@ class TestAppRequestFormBody:
             )
 
     def test_form_body_and_json_body_mutually_exclusive(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """Passing both form_body and json_body raises ValueError."""
 
@@ -390,7 +370,7 @@ class TestWorkspaceScoping:
     """Test workspace scoping path helpers."""
 
     def test_maybe_scoped_path_without_workspace(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """maybe_scoped_path() returns project-scoped path when no workspace set."""
         client = create_mock_client(
@@ -399,9 +379,7 @@ class TestWorkspaceScoping:
         path = client.maybe_scoped_path("dashboards")
         assert path == "/projects/12345/dashboards"
 
-    def test_maybe_scoped_path_with_workspace(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_maybe_scoped_path_with_workspace(self, oauth_credentials: Session) -> None:
         """maybe_scoped_path() returns workspace-scoped path when workspace set."""
         client = create_mock_client(
             oauth_credentials, lambda _r: httpx.Response(200, json={})
@@ -411,7 +389,7 @@ class TestWorkspaceScoping:
         assert path == "/workspaces/789/dashboards"
 
     def test_maybe_scoped_path_with_workspace_none_resets(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """set_workspace_id(None) should reset to project-scoped paths."""
         client = create_mock_client(
@@ -423,7 +401,7 @@ class TestWorkspaceScoping:
         assert path == "/projects/12345/dashboards"
 
     def test_require_scoped_path_with_explicit_workspace(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """require_scoped_path() uses explicit workspace ID if set."""
         client = create_mock_client(
@@ -434,7 +412,7 @@ class TestWorkspaceScoping:
         assert path == "/projects/12345/workspaces/789/feature-flags"
 
     def test_require_scoped_path_auto_discovers_workspace(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """require_scoped_path() auto-discovers workspace when not set."""
         workspaces_response = {
@@ -454,7 +432,7 @@ class TestWorkspaceScoping:
         assert path == "/projects/12345/workspaces/100/feature-flags"
 
     def test_require_scoped_path_raises_on_no_workspaces(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """require_scoped_path() raises WorkspaceScopeError if no workspaces."""
         workspaces_response = {
@@ -470,7 +448,7 @@ class TestWorkspaceScoping:
             client.require_scoped_path("feature-flags")
 
     def test_require_scoped_path_caches_resolved_workspace(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """require_scoped_path() caches resolved workspace ID."""
         call_count = 0
@@ -503,9 +481,7 @@ class TestWorkspaceScoping:
 class TestResolveWorkspaceId:
     """Test resolve_workspace_id() method."""
 
-    def test_returns_explicit_workspace_id(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_returns_explicit_workspace_id(self, oauth_credentials: Session) -> None:
         """resolve_workspace_id() returns explicit ID when set."""
         client = create_mock_client(
             oauth_credentials, lambda _r: httpx.Response(200, json={})
@@ -513,9 +489,7 @@ class TestResolveWorkspaceId:
         client.set_workspace_id(42)
         assert client.resolve_workspace_id() == 42
 
-    def test_auto_discovers_default_workspace(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_auto_discovers_default_workspace(self, oauth_credentials: Session) -> None:
         """resolve_workspace_id() finds is_default=True workspace."""
         workspaces_response = {
             "status": "ok",
@@ -534,9 +508,7 @@ class TestResolveWorkspaceId:
 
         assert ws_id == 20
 
-    def test_falls_back_to_first_workspace(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_falls_back_to_first_workspace(self, oauth_credentials: Session) -> None:
         """resolve_workspace_id() uses first workspace when none is default."""
         workspaces_response = {
             "status": "ok",
@@ -555,7 +527,7 @@ class TestResolveWorkspaceId:
 
         assert ws_id == 10
 
-    def test_raises_on_empty_workspaces(self, oauth_credentials: Credentials) -> None:
+    def test_raises_on_empty_workspaces(self, oauth_credentials: Session) -> None:
         """resolve_workspace_id() raises WorkspaceScopeError when no workspaces."""
         workspaces_response = {
             "status": "ok",
@@ -571,7 +543,7 @@ class TestResolveWorkspaceId:
 
         assert exc_info.value.code == "NO_WORKSPACES"
 
-    def test_caches_resolved_id(self, oauth_credentials: Credentials) -> None:
+    def test_caches_resolved_id(self, oauth_credentials: Session) -> None:
         """resolve_workspace_id() caches the resolved ID for subsequent calls."""
         call_count = 0
         workspaces_response = {
@@ -598,9 +570,7 @@ class TestResolveWorkspaceId:
 class TestListWorkspaces:
     """Test list_workspaces() method."""
 
-    def test_returns_public_workspace_list(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_returns_public_workspace_list(self, oauth_credentials: Session) -> None:
         """list_workspaces() returns list of PublicWorkspace models."""
         workspaces_response = {
             "status": "ok",
@@ -635,7 +605,7 @@ class TestListWorkspaces:
         assert workspaces[1].id == 2
         assert workspaces[1].is_default is False
 
-    def test_calls_correct_endpoint(self, oauth_credentials: Credentials) -> None:
+    def test_calls_correct_endpoint(self, oauth_credentials: Session) -> None:
         """list_workspaces() calls /api/app/projects/{pid}/workspaces/public."""
         captured_urls: list[str] = []
 
@@ -655,7 +625,7 @@ class TestResolveWorkspace:
     """Test ``resolve_workspace()`` (returns the full WorkspaceRef)."""
 
     def test_calls_correct_endpoint_no_double_prefix(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """``resolve_workspace()`` hits ``{base}/projects/{pid}/workspaces/public`` exactly.
 
@@ -694,7 +664,7 @@ class TestResolveWorkspace:
         assert "/api/app/api/app" not in captured_urls[0]
 
     def test_writes_to_resolve_workspace_id_cache(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """A successful ``resolve_workspace()`` populates the int-id cache.
 
@@ -744,7 +714,7 @@ class TestAppApiEdgeCases:
     are technically valid integers but may indicate misconfiguration.
     """
 
-    def test_set_workspace_id_zero(self, oauth_credentials: Credentials) -> None:
+    def test_set_workspace_id_zero(self, oauth_credentials: Session) -> None:
         """Verify that workspace ID 0 is accepted and included in scoped paths.
 
         While workspace ID 0 is unusual, the client should not reject it.
@@ -757,7 +727,7 @@ class TestAppApiEdgeCases:
         path = client.maybe_scoped_path("dashboards")
         assert "/workspaces/0/" in path
 
-    def test_set_workspace_id_negative(self, oauth_credentials: Credentials) -> None:
+    def test_set_workspace_id_negative(self, oauth_credentials: Session) -> None:
         """Verify that a negative workspace ID is accepted and included in scoped paths.
 
         While workspace ID -1 is invalid in practice, the client does not
@@ -785,9 +755,7 @@ class TestListWorkspacesEdgeCases:
     API version mismatches or server bugs.
     """
 
-    def test_list_workspaces_string_response(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_list_workspaces_string_response(self, oauth_credentials: Session) -> None:
         """Verify list_workspaces() raises on non-list results.
 
         When the API returns ``{"results": "unexpected_string"}``,
@@ -809,7 +777,7 @@ class TestListWorkspacesEdgeCases:
             client.list_workspaces()
 
     def test_list_workspaces_missing_required_fields(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """Verify list_workspaces() raises ValidationError when fields are missing.
 

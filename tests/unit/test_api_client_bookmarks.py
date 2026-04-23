@@ -13,14 +13,15 @@ import httpx
 import pytest
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data.exceptions import AuthenticationError, QueryError
+from tests.conftest import make_session
 
 
 @pytest.fixture
-def test_credentials() -> Credentials:
+def test_credentials() -> Session:
     """Provide test credentials."""
-    return Credentials(
+    return make_session(
         username="test_user",
         secret="test_secret",
         project_id="12345",
@@ -29,7 +30,7 @@ def test_credentials() -> Credentials:
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response] | None = None,
 ) -> MixpanelAPIClient:
     """Create a MixpanelAPIClient with a mock transport."""
@@ -37,13 +38,13 @@ def create_mock_client(
         transport = httpx.MockTransport(lambda _: httpx.Response(200, json={}))
     else:
         transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 class TestListBookmarks:
     """Tests for MixpanelAPIClient.list_bookmarks()."""
 
-    def test_list_bookmarks_endpoint_url(self, test_credentials: Credentials) -> None:
+    def test_list_bookmarks_endpoint_url(self, test_credentials: Session) -> None:
         """list_bookmarks() should call correct endpoint with v=2."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -54,9 +55,7 @@ class TestListBookmarks:
         with create_mock_client(test_credentials, handler) as client:
             client.list_bookmarks()
 
-    def test_list_bookmarks_returns_results(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_list_bookmarks_returns_results(self, test_credentials: Session) -> None:
         """list_bookmarks() should return raw API response with results."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -92,9 +91,7 @@ class TestListBookmarks:
         assert result["results"][0]["name"] == "Weekly Active Users"
         assert result["results"][1]["type"] == "funnels"
 
-    def test_list_bookmarks_with_type_filter(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_list_bookmarks_with_type_filter(self, test_credentials: Session) -> None:
         """list_bookmarks() should pass type parameter when specified."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -121,7 +118,7 @@ class TestListBookmarks:
         assert len(result["results"]) == 1
         assert result["results"][0]["type"] == "insights"
 
-    def test_list_bookmarks_all_types(self, test_credentials: Credentials) -> None:
+    def test_list_bookmarks_all_types(self, test_credentials: Session) -> None:
         """list_bookmarks() should support all valid bookmark types."""
         bookmark_types = [
             "insights",
@@ -140,7 +137,7 @@ class TestListBookmarks:
                 # Should not raise
                 client.list_bookmarks(bookmark_type=bm_type)
 
-    def test_list_bookmarks_empty_results(self, test_credentials: Credentials) -> None:
+    def test_list_bookmarks_empty_results(self, test_credentials: Session) -> None:
         """list_bookmarks() should handle empty results."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -151,7 +148,7 @@ class TestListBookmarks:
 
         assert result["results"] == []
 
-    def test_list_bookmarks_full_metadata(self, test_credentials: Credentials) -> None:
+    def test_list_bookmarks_full_metadata(self, test_credentials: Session) -> None:
         """list_bookmarks() should return all bookmark metadata fields."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -196,9 +193,7 @@ class TestListBookmarks:
 class TestListBookmarksErrors:
     """Error handling tests for list_bookmarks()."""
 
-    def test_list_bookmarks_auth_error_on_401(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_list_bookmarks_auth_error_on_401(self, test_credentials: Session) -> None:
         """list_bookmarks() should raise AuthenticationError on 401."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -210,9 +205,7 @@ class TestListBookmarksErrors:
         ):
             client.list_bookmarks()
 
-    def test_list_bookmarks_query_error_on_403(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_list_bookmarks_query_error_on_403(self, test_credentials: Session) -> None:
         """list_bookmarks() should raise QueryError on 403 permission denied."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -226,9 +219,7 @@ class TestListBookmarksErrors:
 
         assert "Permission denied" in str(exc_info.value)
 
-    def test_list_bookmarks_query_error_on_400(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_list_bookmarks_query_error_on_400(self, test_credentials: Session) -> None:
         """list_bookmarks() should raise QueryError on 400 bad request."""
 
         def handler(_request: httpx.Request) -> httpx.Response:
@@ -246,9 +237,7 @@ class TestListBookmarksErrors:
 class TestQueryFlows:
     """Tests for MixpanelAPIClient.query_saved_flows()."""
 
-    def test_query_saved_flows_endpoint_url(
-        self, test_credentials: Credentials
-    ) -> None:
+    def test_query_saved_flows_endpoint_url(self, test_credentials: Session) -> None:
         """query_saved_flows() should call /api/query/arb_funnels with query_type=flows_sankey."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -269,7 +258,7 @@ class TestQueryFlows:
             client.query_saved_flows(bookmark_id=12345)
 
     def test_query_saved_flows_returns_raw_response(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_flows() should return raw API response."""
 
@@ -297,7 +286,7 @@ class TestQueryFlows:
         assert result["computed_at"] == "2024-01-15T10:00:00"
 
     def test_query_saved_flows_auth_error_on_401(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_flows() should raise AuthenticationError on 401."""
 
@@ -311,7 +300,7 @@ class TestQueryFlows:
             client.query_saved_flows(bookmark_id=12345)
 
     def test_query_saved_flows_query_error_on_404(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_flows() should raise QueryError on 404 (bookmark not found)."""
 
@@ -331,7 +320,7 @@ class TestQuerySavedReportRouting:
     """Tests for MixpanelAPIClient.query_saved_report() smart routing."""
 
     def test_query_saved_report_default_routes_to_insights(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report() without bookmark_type should call /insights."""
 
@@ -355,7 +344,7 @@ class TestQuerySavedReportRouting:
         assert result["headers"] == ["$metric"]
 
     def test_query_saved_report_insights_type_routes_to_insights(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='insights') should call /insights."""
 
@@ -375,7 +364,7 @@ class TestQuerySavedReportRouting:
             client.query_saved_report(bookmark_id=12345, bookmark_type="insights")
 
     def test_query_saved_report_funnels_routes_to_funnels_endpoint(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='funnels') should call /funnels."""
 
@@ -394,7 +383,7 @@ class TestQuerySavedReportRouting:
             client.query_saved_report(bookmark_id=12345, bookmark_type="funnels")
 
     def test_query_saved_report_funnels_uses_funnel_id_param(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='funnels') should use funnel_id parameter."""
 
@@ -414,7 +403,7 @@ class TestQuerySavedReportRouting:
             client.query_saved_report(bookmark_id=12345, bookmark_type="funnels")
 
     def test_query_saved_report_funnels_default_dates_last_30_days(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='funnels') defaults to last 30 days."""
         today = datetime.now().strftime("%Y-%m-%d")
@@ -437,7 +426,7 @@ class TestQuerySavedReportRouting:
             client.query_saved_report(bookmark_id=12345, bookmark_type="funnels")
 
     def test_query_saved_report_funnels_uses_provided_dates(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='funnels', from_date, to_date) uses provided dates."""
 
@@ -463,7 +452,7 @@ class TestQuerySavedReportRouting:
             )
 
     def test_query_saved_report_retention_routes_to_retention_endpoint(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='retention') should call /retention."""
 
@@ -481,7 +470,7 @@ class TestQuerySavedReportRouting:
             client.query_saved_report(bookmark_id=12345, bookmark_type="retention")
 
     def test_query_saved_report_flows_routes_to_arb_funnels(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='flows') should call /arb_funnels."""
 
@@ -504,7 +493,7 @@ class TestQuerySavedReportRouting:
             client.query_saved_report(bookmark_id=12345, bookmark_type="flows")
 
     def test_query_saved_report_funnels_only_to_date_derives_from_date(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='funnels', to_date) derives from_date correctly.
 
@@ -532,7 +521,7 @@ class TestQuerySavedReportRouting:
             )
 
     def test_query_saved_report_funnels_only_from_date_derives_to_date(
-        self, test_credentials: Credentials
+        self, test_credentials: Session
     ) -> None:
         """query_saved_report(bookmark_type='funnels', from_date) derives to_date correctly.
 

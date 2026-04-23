@@ -5,10 +5,6 @@ exposing account CRUD, switching, and probing operations as the canonical
 Python API for ``mp account ...`` CLI commands and the plugin's
 ``auth_manager.py``.
 
-``export_bridge`` / ``remove_bridge`` are still stubs (Cluster C2 of the
-042 plan delivers the v2 bridge writer); ``login`` and the OAuth refresh
-path are wired up as of Cluster A1 (Fix 16 / 17).
-
 Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 """
 

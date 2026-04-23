@@ -44,9 +44,9 @@ from mixpanel_data import FlowStep, FlowTreeNode, FlowQueryResult
 from mixpanel_data import UserQueryResult
 
 # Auth utilities
-from mixpanel_data.auth import ConfigManager, Credentials, AuthMethod
 from mixpanel_data.auth_types import (
     Account, ServiceAccount, OAuthBrowserAccount, OAuthTokenAccount,
+    Session, Project, WorkspaceRef, OAuthTokens, Region,
 )
 
 # OAuth and workspace exceptions

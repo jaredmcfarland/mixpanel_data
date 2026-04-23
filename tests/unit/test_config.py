@@ -604,12 +604,12 @@ class TestRemoveAccount:
         assert cm.get_active() == ActiveSession(account="active_one", workspace=42)
 
 
-class TestV3FixtureLoad:
-    """The v3 golden fixtures load cleanly with the expected shape."""
+class TestFixtureLoad:
+    """The golden fixtures load cleanly with the expected shape."""
 
-    def test_v3_simple(self, tmp_path: Path) -> None:
-        """``v3_simple.toml`` loads with project on the account, workspace in [active]."""
-        src = _FIXTURE_DIR / "v3_simple.toml"
+    def test_simple(self, tmp_path: Path) -> None:
+        """``simple.toml`` loads with project on the account, workspace in [active]."""
+        src = _FIXTURE_DIR / "simple.toml"
         dst = tmp_path / "config.toml"
         dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
         cm = ConfigManager(config_path=dst)
@@ -622,9 +622,9 @@ class TestV3FixtureLoad:
         loaded = cm.get_account("demo-sa")
         assert loaded.default_project == "3713224"
 
-    def test_v3_multi(self, tmp_path: Path) -> None:
-        """``v3_multi.toml`` loads three accounts of distinct types + two targets."""
-        src = _FIXTURE_DIR / "v3_multi.toml"
+    def test_multi(self, tmp_path: Path) -> None:
+        """``multi.toml`` loads three accounts of distinct types + two targets."""
+        src = _FIXTURE_DIR / "multi.toml"
         dst = tmp_path / "config.toml"
         dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
         cm = ConfigManager(config_path=dst)
@@ -720,3 +720,34 @@ class TestMutateTransaction:
         cm2 = ConfigManager(config_path=cm.config_path)
         account = cm2.get_account("x")
         assert account.default_project == "123"
+
+    def test_legacy_v2_blocks_block_writes_no_partial_persist(
+        self, tmp_path: Path
+    ) -> None:
+        """A v2-shaped on-disk config rejects new add_account writes — no partial persist.
+
+        Reproduces the latent flaw where ``_mutate`` would rewrite the
+        file with a new ``[accounts.NEW]`` block even when sibling on-disk
+        blocks were unparseable under the v3 schema (e.g., a leftover v2
+        account missing the ``type`` discriminator). The exit-time
+        whole-file validator must catch the bad sibling and skip the
+        write.
+        """
+        p = tmp_path / "config.toml"
+        # Legacy v2 account block missing the v3 ``type`` discriminator.
+        p.write_text(
+            "[accounts.legacy]\n"
+            'username = "u"\n'
+            'secret = "s"\n'
+            'project_id = "111"\n'
+            'region = "us"\n',
+            encoding="utf-8",
+        )
+        original = p.read_bytes()
+        cm = ConfigManager(config_path=p)
+
+        with pytest.raises(ConfigError, match=r"\[accounts\.legacy\]"):
+            cm.add_account("fresh", type="oauth_browser", region="us")
+
+        # File untouched — no partial mutation reached disk.
+        assert p.read_bytes() == original

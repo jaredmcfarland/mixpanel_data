@@ -35,21 +35,20 @@ Infrastructure           → ConfigManager, MixpanelAPIClient
 
 ```
 src/mixpanel_data/
-├── __init__.py              # Public API exports (incl. v3 auth surface)
+├── __init__.py              # Public API exports
 ├── workspace.py             # Workspace facade — `use(account=, project=, workspace=, target=)`
-├── auth_types.py            # v3 auth surface (Account union, Session, Region, OAuthTokens, …)
-├── auth.py                  # Thin re-export of legacy auth (ConfigManager, Credentials shim)
+├── auth_types.py            # Auth surface (Account union, Session, Region, OAuthTokens, …)
 ├── accounts.py              # `mp.accounts` — add/list/use/login/test/export-bridge/...
 ├── session.py               # `mp.session` — show/use the persisted [active] block
 ├── targets.py               # `mp.targets` — saved (account, project, workspace?) cursors
 ├── exceptions.py            # Exception hierarchy (incl. AccountInUseError, WorkspaceScopeError)
 ├── types.py                 # Result types (SegmentationResult, AccountSummary, …)
 ├── _internal/               # Private implementation (do not import directly)
-│   ├── config.py            # ConfigManager (TOML-backed), Credentials shim
+│   ├── config.py            # ConfigManager (TOML-backed)
 │   ├── api_client.py        # MixpanelAPIClient (Session-bound; per-request OAuth bearer)
 │   ├── me.py                # MeService + per-account MeCache (~/.mp/accounts/{name}/me.json)
 │   ├── pagination.py        # Cursor-based App API pagination
-│   ├── auth/                # v3 auth subsystem
+│   ├── auth/                # Auth subsystem
 │   │   ├── account.py       # Account discriminated union + TokenResolver protocol
 │   │   ├── session.py       # Session, Project, WorkspaceRef, ActiveSession
 │   │   ├── resolver.py      # resolve_session(...) — env > param > target > bridge > config

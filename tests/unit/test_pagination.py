@@ -12,10 +12,9 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
 from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.config import AuthMethod, Credentials
+from mixpanel_data._internal.auth.session import Session
 from mixpanel_data._internal.pagination import paginate_all
 from mixpanel_data.exceptions import (
     AuthenticationError,
@@ -23,6 +22,7 @@ from mixpanel_data.exceptions import (
     RateLimitError,
     ServerError,
 )
+from tests.conftest import make_session
 
 # =============================================================================
 # Fixtures
@@ -30,20 +30,13 @@ from mixpanel_data.exceptions import (
 
 
 @pytest.fixture
-def oauth_credentials() -> Credentials:
+def oauth_credentials() -> Session:
     """Create OAuth credentials for pagination testing."""
-    return Credentials(
-        username="",
-        secret=SecretStr(""),
-        project_id="12345",
-        region="us",
-        auth_method=AuthMethod.oauth,
-        oauth_access_token=SecretStr("test-oauth-token"),
-    )
+    return make_session(project_id="12345", region="us", oauth_token="test-oauth-token")
 
 
 def create_mock_client(
-    credentials: Credentials,
+    credentials: Session,
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> MixpanelAPIClient:
     """Create a client with mock transport.
@@ -56,7 +49,7 @@ def create_mock_client(
         MixpanelAPIClient configured with mock transport.
     """
     transport = httpx.MockTransport(handler)
-    return MixpanelAPIClient(credentials, _transport=transport)
+    return MixpanelAPIClient(session=credentials, _transport=transport)
 
 
 # =============================================================================
@@ -67,9 +60,7 @@ def create_mock_client(
 class TestPaginateAll:
     """Test paginate_all() cursor pagination helper."""
 
-    def test_yields_all_results_across_pages(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_yields_all_results_across_pages(self, oauth_credentials: Session) -> None:
         """paginate_all() should yield all results from multiple pages."""
         call_count = 0
 
@@ -114,9 +105,7 @@ class TestPaginateAll:
         assert items == [{"id": 1}, {"id": 2}, {"id": 3}]
         assert call_count == 2
 
-    def test_follows_next_cursor_until_none(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_follows_next_cursor_until_none(self, oauth_credentials: Session) -> None:
         """paginate_all() should stop when next_cursor is None."""
         cursors_seen: list[str | None] = []
 
@@ -168,7 +157,7 @@ class TestPaginateAll:
         assert len(items) == 3
         assert cursors_seen == [None, "c2", "c3"]
 
-    def test_handles_empty_results(self, oauth_credentials: Credentials) -> None:
+    def test_handles_empty_results(self, oauth_credentials: Session) -> None:
         """paginate_all() should handle empty results gracefully."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -190,9 +179,7 @@ class TestPaginateAll:
 
         assert items == []
 
-    def test_handles_missing_pagination_field(
-        self, oauth_credentials: Credentials
-    ) -> None:
+    def test_handles_missing_pagination_field(self, oauth_credentials: Session) -> None:
         """paginate_all() should treat missing pagination as single page."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -210,7 +197,7 @@ class TestPaginateAll:
 
         assert items == [{"id": 1}, {"id": 2}]
 
-    def test_respects_page_size_parameter(self, oauth_credentials: Credentials) -> None:
+    def test_respects_page_size_parameter(self, oauth_credentials: Session) -> None:
         """paginate_all() should pass page_size as query parameter."""
         captured_params: list[dict[str, str]] = []
 
@@ -231,7 +218,7 @@ class TestPaginateAll:
 
         assert captured_params[0]["page_size"] == "25"
 
-    def test_passes_additional_params(self, oauth_credentials: Credentials) -> None:
+    def test_passes_additional_params(self, oauth_credentials: Session) -> None:
         """paginate_all() should merge extra params with pagination params."""
         captured_params: list[dict[str, str]] = []
 
@@ -259,7 +246,7 @@ class TestPaginateAll:
         assert captured_params[0]["include_archived"] == "true"
 
     def test_handles_response_without_results_key(
-        self, oauth_credentials: Credentials
+        self, oauth_credentials: Session
     ) -> None:
         """paginate_all() should handle responses where app_request returns a list."""
 
@@ -284,7 +271,7 @@ class TestPaginateAll:
 class TestPaginateAllRobustness:
     """Test paginate_all() robustness against infinite loops and bad responses."""
 
-    def test_infinite_loop_same_cursor(self, oauth_credentials: Credentials) -> None:
+    def test_infinite_loop_same_cursor(self, oauth_credentials: Session) -> None:
         """Verify pagination terminates when the server returns the same cursor forever.
 
         A server that always returns the same next_cursor would cause an
@@ -323,7 +310,7 @@ class TestPaginateAllRobustness:
                     )
                 )
 
-    def test_non_json_response(self, oauth_credentials: Credentials) -> None:
+    def test_non_json_response(self, oauth_credentials: Session) -> None:
         """Verify pagination raises a clear error for non-JSON responses.
 
         If the server returns HTML or other non-JSON content, the function
@@ -349,7 +336,7 @@ class TestPaginateAllRobustness:
         with client, pytest.raises(MixpanelDataError, match="Non-JSON response"):
             list(paginate_all(client, "/projects/12345/items"))
 
-    def test_http_429_mid_pagination(self, oauth_credentials: Credentials) -> None:
+    def test_http_429_mid_pagination(self, oauth_credentials: Session) -> None:
         """Verify that a 429 on the second page raises RateLimitError.
 
         Rate limits can occur mid-pagination; the error should propagate
@@ -387,7 +374,7 @@ class TestPaginateAllRobustness:
         with client, pytest.raises(RateLimitError):
             list(paginate_all(client, "/projects/12345/items"))
 
-    def test_http_500_mid_pagination(self, oauth_credentials: Credentials) -> None:
+    def test_http_500_mid_pagination(self, oauth_credentials: Session) -> None:
         """Verify that a 500 on the second page raises ServerError.
 
         Server errors during pagination should be mapped to ServerError.
@@ -420,7 +407,7 @@ class TestPaginateAllRobustness:
         with client, pytest.raises(ServerError):
             list(paginate_all(client, "/projects/12345/items"))
 
-    def test_http_401_mid_pagination(self, oauth_credentials: Credentials) -> None:
+    def test_http_401_mid_pagination(self, oauth_credentials: Session) -> None:
         """Verify that a 401 on the second page raises AuthenticationError.
 
         Token expiry during pagination should be mapped to AuthenticationError.

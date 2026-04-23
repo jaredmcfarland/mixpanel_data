@@ -440,7 +440,7 @@ class TestGetWorkspace:
                 account="staging", project=None, workspace=None, target=None
             )
 
-    def test_target_routes_through_v3_axis_kwargs(self) -> None:
+    def test_target_routes_through_axis_kwargs(self) -> None:
         """``--target`` is forwarded as the ``target=`` kwarg."""
         ctx = MagicMock(spec=typer.Context)
         ctx.obj = {
