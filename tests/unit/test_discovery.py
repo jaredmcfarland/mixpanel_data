@@ -1248,3 +1248,138 @@ class TestListSubproperties:
         assert by_name["Coupon"].type == "string"
         assert None not in by_name["Coupon"].sample_values
         assert by_name["Coupon"].sample_values == ("FALL20",)
+
+    def test_iter_dict_rows_filters_non_dicts_in_lists(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Within a JSON list, non-dict items are silently filtered out.
+
+        E.g. ``[{"a": 1}, "junk", {"b": 2}]`` yields rows for the two
+        dicts only; the bare string is dropped.
+        """
+        values = [json.dumps([{"Brand": "nike"}, "junk", {"Brand": "puma"}])]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert [s.name for s in subs] == ["Brand"]
+        assert set(subs[0].sample_values) == {"nike", "puma"}
+
+    def test_mixed_shape_emits_warning_and_keeps_scalar(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """A sub-key seen with both scalar and dict shapes warns and reports scalar.
+
+        Regression: previously the dict row was silently dropped without
+        a warning, producing a misleading ``type='string'`` report.
+        """
+        import warnings
+
+        values = [
+            json.dumps({"X": 1}),
+            json.dumps({"X": {"nested": 2}}),  # dict — silently dropped previously
+            json.dumps({"X": 3}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            subs = discovery.list_subproperties("cart", event="X")
+        by_name = {s.name: s for s in subs}
+        assert by_name["X"].type == "number"  # scalar form retained
+        assert set(by_name["X"].sample_values) == {1, 3}
+        assert any("scalar and nested-object" in str(w.message) for w in captured), [
+            str(w.message) for w in captured
+        ]
+
+    def test_all_null_subproperty_warns_and_excluded(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """A sub-key with only null values warns and is excluded from output."""
+        import warnings
+
+        values = [
+            json.dumps({"Brand": "nike", "Coupon": None}),
+            json.dumps({"Brand": "puma", "Coupon": None}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            subs = discovery.list_subproperties("cart", event="X")
+        names = [s.name for s in subs]
+        assert "Coupon" not in names
+        assert "Brand" in names
+        assert any(
+            "all sampled values were null" in str(w.message) for w in captured
+        ), [str(w.message) for w in captured]
+
+    def test_invalid_calendar_date_classified_as_string(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """ISO-shaped strings with invalid calendar values fall back to 'string'."""
+        for bad in ("2025-13-99", "2025-04-23T25:99:99"):
+            values = [json.dumps({"X": bad})]
+            discovery = discovery_factory(self._values_handler(values))
+            subs = discovery.list_subproperties("cart", event="X")
+            assert subs[0].type == "string", f"{bad!r} should not be datetime"
+
+    def test_infer_scalar_type_empty_raises(self) -> None:
+        """``_infer_scalar_type([])`` raises ValueError instead of returning a phantom."""
+        from mixpanel_data._internal.services.discovery import _infer_scalar_type
+
+        with pytest.raises(ValueError, match="non-empty"):
+            _infer_scalar_type([])
+
+    def test_infer_scalar_type_mixed_int_bool_returns_string_with_warning(
+        self,
+    ) -> None:
+        """``_infer_scalar_type([True, 1])`` returns ('string', True) — bool/int overlap."""
+        from mixpanel_data._internal.services.discovery import _infer_scalar_type
+
+        inferred, mixed = _infer_scalar_type([True, 1])
+        assert inferred == "string"
+        assert mixed is True
+
+    def test_mixed_warning_stacklevel_points_at_user_frame(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Warning filename equals this test's __file__ via the documented chain.
+
+        Pins ``_USER_FRAME_STACKLEVEL`` against the documented user
+        chain ``user → Workspace.subproperties →
+        DiscoveryService.list_subproperties → _infer_subproperties →
+        warnings.warn``. ``discovery_factory`` gives us a
+        ``DiscoveryService`` directly (skipping Workspace), so we wrap
+        the call in ``workspace_subproperties_simulator`` to add the
+        frame that ``Workspace.subproperties`` contributes in
+        production. The wrapper call below is the "user" frame.
+        """
+        import warnings
+
+        # Mixed int/string values trigger _infer_scalar_type's mixed-types path.
+        values = [json.dumps({"X": 1}), json.dumps({"X": "abc"})]
+        discovery = discovery_factory(self._values_handler(values))
+
+        def workspace_subproperties_simulator() -> None:
+            """Adds the frame Workspace.subproperties contributes in production."""
+            discovery.list_subproperties("cart", event="X")
+
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            workspace_subproperties_simulator()  # user frame
+        # At least one captured warning must point to this test file.
+        assert any(w.filename == __file__ for w in captured), [
+            w.filename for w in captured
+        ]
