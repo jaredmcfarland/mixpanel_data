@@ -7746,6 +7746,32 @@ class Filter:
     _list_item_quantifier: Literal["any", "all"] | None = None
     """Quantifier for ``list_contains``: ``"any"`` (≥1 item matches) or ``"all"`` (every item matches)."""
 
+    def __post_init__(self) -> None:
+        """Validate Filter mode invariants.
+
+        Only validates the ``list_contains`` mode today. Other operator
+        modes rely on classmethod-only validation; expanding this
+        coverage is a separate concern from this PR's list_contains
+        feature.
+
+        Raises:
+            ValueError: If ``_operator == "list_contains"`` but
+                ``_list_item_filters`` or ``_list_item_quantifier`` is
+                ``None``. List-contains filters must be constructed
+                via ``Filter.list_contains(...)``.
+        """
+        if self._operator == "list_contains":
+            if self._list_item_filters is None:
+                raise ValueError(
+                    "list_contains Filter requires _list_item_filters; "
+                    "construct via Filter.list_contains(...)"
+                )
+            if self._list_item_quantifier is None:
+                raise ValueError(
+                    "list_contains Filter requires _list_item_quantifier; "
+                    "construct via Filter.list_contains(...)"
+                )
+
     @classmethod
     def equals(
         cls,
@@ -8655,13 +8681,17 @@ class Filter:
         (``"any"``, the default) or every item (``"all"``) must satisfy
         all inner conditions.
 
-        Two equivalent ways to specify inner conditions:
+        Two ways to specify inner conditions:
 
         - **Keyword shorthand** for the common equality case:
-          ``Filter.list_contains("cart", Brand="nike", Category="hats")``
+          ``Filter.list_contains("cart", Brand="nike", Category="hats")``.
+          Inner equality filters inherit the outer ``resource_type``.
         - **Explicit Filter instances** for any wire-format operator:
           ``Filter.list_contains("cart", Filter.equals("Brand", "nike"),
-          Filter.greater_than("Price", 50))``
+          Filter.greater_than("Price", 50))``. Each inner Filter carries
+          its own ``resource_type`` from its own factory call — pass
+          ``resource_type=`` explicitly on each inner factory if you
+          want them to match the outer.
 
         Mixing the two shapes in one call raises ``ValueError``.
 
@@ -8674,8 +8704,9 @@ class Filter:
                 ``"any"``.
             resource_type: Resource type. Default: ``"events"``.
             **equals: Keyword shorthand — each ``key=value`` becomes
-                ``Filter.equals(key, value)``. Mutually exclusive with
-                ``*item_filters``.
+                ``Filter.equals(key, value, resource_type=resource_type)``.
+                Mutually exclusive with ``*item_filters``. Values must
+                be ``str`` or ``list[str]``; keys must be non-empty.
 
         Returns:
             Filter that emits the ``listItemFilters`` bookmark structure
@@ -8683,9 +8714,15 @@ class Filter:
 
         Raises:
             ValueError: If both ``*item_filters`` and ``**equals`` are
-                provided, if no inner conditions are given, or if any
-                inner filter is itself a ``list_contains`` (nesting is
-                not supported).
+                provided, if ``quantifier`` is not ``"any"`` or
+                ``"all"``, if a kwarg key is empty, if no inner
+                conditions are given, or if any inner filter is itself
+                a ``list_contains`` (nesting is not supported).
+            TypeError: If a ``**equals`` value is not ``str`` or
+                ``list[str]`` (the wire format only supports string
+                equality; numeric/boolean comparisons require explicit
+                ``Filter.equals(...)`` / ``Filter.greater_than(...)``
+                positional inner filters).
 
         Example:
             ```python
@@ -8707,6 +8744,21 @@ class Filter:
                 "Filter.list_contains: pass either positional Filter instances "
                 "OR keyword equals shorthand, not both"
             )
+        if quantifier not in ("any", "all"):
+            raise ValueError(
+                f"Filter.list_contains quantifier must be 'any' or 'all', "
+                f"got {quantifier!r}"
+            )
+        for k, v in equals.items():
+            if not k.strip():
+                raise ValueError(
+                    "Filter.list_contains: kwarg keys must be non-empty strings"
+                )
+            if not isinstance(v, (str, list)):
+                raise TypeError(
+                    f"Filter.list_contains kwarg {k!r}: value must be str or "
+                    f"list[str], got {type(v).__name__}"
+                )
         sub_filters: tuple[Filter, ...] = (
             tuple(item_filters)
             if item_filters

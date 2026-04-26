@@ -1167,6 +1167,54 @@ class TestFilterListContains:
         for sub_entry in section[0]["listItemFilters"]:
             assert sub_entry["resourceType"] == "people"
 
+    def test_post_init_rejects_list_contains_without_filters(self) -> None:
+        """Direct construction with _operator='list_contains' but no filters raises."""
+        with pytest.raises(ValueError, match="_list_item_filters"):
+            Filter(
+                _property="cart",
+                _operator="list_contains",
+                _value=None,
+                _property_type="object",
+                _resource_type="events",
+                _list_item_filters=None,
+                _list_item_quantifier="any",
+            )
+
+    def test_post_init_rejects_list_contains_without_quantifier(self) -> None:
+        """Direct construction with _operator='list_contains' but no quantifier raises."""
+        with pytest.raises(ValueError, match="_list_item_quantifier"):
+            Filter(
+                _property="cart",
+                _operator="list_contains",
+                _value=None,
+                _property_type="object",
+                _resource_type="events",
+                _list_item_filters=(Filter.equals("Brand", "nike"),),
+                _list_item_quantifier=None,
+            )
+
+    def test_quantifier_runtime_rejects_invalid(self) -> None:
+        """Filter.list_contains rejects quantifier values outside any/all."""
+        with pytest.raises(ValueError, match="quantifier"):
+            Filter.list_contains("cart", quantifier="nope", X="y")  # type: ignore[arg-type]
+
+    def test_kwargs_value_must_be_str_or_list(self) -> None:
+        """Filter.list_contains rejects non-str/list kwarg values at construction."""
+        with pytest.raises(TypeError, match="Price"):
+            Filter.list_contains("cart", Price=99.99)  # type: ignore[arg-type]
+
+    def test_kwargs_empty_key_rejected(self) -> None:
+        """Filter.list_contains rejects empty kwarg keys.
+
+        Uses a dynamically-typed dict + ``# type: ignore`` because mypy
+        sees the empty key as a potential overlap with the
+        ``quantifier``/``resource_type`` kwargs and refuses on str type
+        grounds — irrelevant here since we're testing the runtime guard.
+        """
+        bad_kwargs: dict[str, str | list[str]] = {"": "value"}
+        with pytest.raises(ValueError, match="non-empty"):
+            Filter.list_contains("cart", **bad_kwargs)  # type: ignore[arg-type]
+
 
 class TestGroupByListItem:
     """Tests for GroupBy.list_item — break down by a list-item subproperty."""

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import date
-from typing import Any
+from typing import Any, Literal, cast
 
 from mixpanel_data._literal_types import QueryTimeUnit
 from mixpanel_data.types import (
@@ -538,10 +538,14 @@ def _build_list_contains_entry(f: Filter) -> dict[str, Any]:
     backfilled to ``"$mixpanel"`` since the wire format requires it on
     inner items even for plain string properties.
 
+    Trusts that ``Filter.__post_init__`` has already validated the
+    ``list_contains`` invariants (``_list_item_filters`` and
+    ``_list_item_quantifier`` non-None). Direct construction with the
+    ``list_contains`` operator that omits either field is rejected at
+    Filter construction time, so this builder never sees ``None``.
+
     Args:
         f: A ``Filter`` constructed via ``Filter.list_contains(...)``.
-            Must have ``_list_item_filters`` and ``_list_item_quantifier``
-            populated (the classmethod guarantees this).
 
     Returns:
         Bookmark filter dict carrying ``listItemFilters``,
@@ -549,18 +553,13 @@ def _build_list_contains_entry(f: Filter) -> dict[str, Any]:
         (``filterOperator: "true"``, ``filterValue: True``,
         ``filterType: "object"``, ``filterJoinType: "list"``).
     """
-    if f._list_item_filters is None:
-        raise ValueError(
-            "list_contains Filter requires _list_item_filters; "
-            "construct via Filter.list_contains(...)"
-        )
-    if f._list_item_quantifier is None:
-        raise ValueError(
-            "list_contains Filter requires _list_item_quantifier; "
-            "construct via Filter.list_contains(...)"
-        )
+    # Filter.__post_init__ guarantees these are non-None when
+    # _operator == "list_contains"; cast (not assert) makes this an
+    # explicit type-narrowing claim, not a redundant runtime check.
+    list_item_filters = cast(tuple[Filter, ...], f._list_item_filters)
+    list_item_quantifier = cast(Literal["any", "all"], f._list_item_quantifier)
     inner: list[dict[str, Any]] = []
-    for sub in f._list_item_filters:
+    for sub in list_item_filters:
         sub_entry = build_filter_entry(sub)
         sub_entry.setdefault("dataset", "$mixpanel")
         inner.append(sub_entry)
@@ -571,7 +570,7 @@ def _build_list_contains_entry(f: Filter) -> dict[str, Any]:
         "filterType": "object",
         "defaultType": "object",
         "filterJoinType": "list",
-        "listQuantifier": f._list_item_quantifier,
+        "listQuantifier": list_item_quantifier,
         "listItemFilters": inner,
         "filterOperator": "true",
         "filterValue": True,
