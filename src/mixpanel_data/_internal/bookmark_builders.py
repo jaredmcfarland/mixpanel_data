@@ -346,11 +346,17 @@ def build_group_section(
                     "unit": None,
                     "isHidden": False,
                 }
-            elif g._list_item_sub is not None:
-                # resourceType is hardcoded "events": list-of-object
-                # breakdowns are an event-property feature in the Mixpanel
-                # UI; there is no equivalent for people properties, hence
-                # GroupBy.list_item() exposes no resource_type parameter.
+            elif g._list_item_mode is not None:
+                # resourceType is hardcoded "events" and propertyType is
+                # hardcoded "object": GroupBy.list_item is event-only —
+                # the Mixpanel UI does not support list-of-object
+                # breakdowns for people properties, so the classmethod
+                # exposes no resource_type parameter. Asymmetric with
+                # Filter.list_contains, which DOES accept
+                # resource_type="people" because the wire format permits
+                # list-object filters on people properties (just not
+                # breakdowns).
+                mode = g._list_item_mode
                 group_entry = {
                     "dataset": "$mixpanel",
                     "value": prop,
@@ -359,9 +365,9 @@ def build_group_section(
                     "propertyType": "object",
                     "listItemGroup": {
                         "resourceType": "event",
-                        "propertyName": g._list_item_sub,
-                        "propertyDefaultType": g._list_item_sub_type,
-                        "propertyType": g._list_item_sub_type,
+                        "propertyName": mode.sub,
+                        "propertyDefaultType": mode.sub_type,
+                        "propertyType": mode.sub_type,
                     },
                 }
             else:

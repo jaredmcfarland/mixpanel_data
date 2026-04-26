@@ -27,6 +27,7 @@ from mixpanel_data.types import (
     Filter,
     GroupBy,
     InlineCustomProperty,
+    ListItemGroupMode,
     PropertyInput,
 )
 
@@ -1195,52 +1196,53 @@ class TestGroupByListItem:
         assert entry["listItemGroup"]["propertyType"] == "number"
         assert entry["listItemGroup"]["propertyDefaultType"] == "number"
 
-    def test_pins_property_type_to_object(self) -> None:
-        """The classmethod pins property_type='object' on the GroupBy."""
+    def test_pins_list_item_mode_set(self) -> None:
+        """The classmethod sets ``_list_item_mode`` and leaves property_type as default."""
         g = GroupBy.list_item("cart", "Brand")
-        assert g.property_type == "object"
-
-    def test_rejects_non_object_property_type_when_list_item(self) -> None:
-        """Manual instantiation with _list_item_sub but mismatched type raises."""
-        with pytest.raises(ValueError, match="property_type='object'"):
-            GroupBy(
-                property="cart",
-                property_type="string",
-                _list_item_sub="Brand",
-                _list_item_sub_type="string",
-            )
+        assert g._list_item_mode is not None
+        assert g._list_item_mode.sub == "Brand"
+        assert g._list_item_mode.sub_type == "string"
+        assert g.property_type == "string"  # default; wire builder hardcodes "object"
 
     def test_rejects_bucketing(self) -> None:
         """list_item with bucket_size raises in __post_init__."""
         with pytest.raises(ValueError, match="bucketing"):
             GroupBy(
                 property="cart",
-                property_type="object",
                 bucket_size=10,
-                _list_item_sub="Price",
-                _list_item_sub_type="number",
-            )
-
-    def test_rejects_missing_sub_type_on_direct_construction(self) -> None:
-        """_list_item_sub set but _list_item_sub_type=None raises (GB6)."""
-        with pytest.raises(ValueError, match="_list_item_sub_type"):
-            GroupBy(
-                property="cart",
-                property_type="object",
-                _list_item_sub="Brand",
-                _list_item_sub_type=None,
+                _list_item_mode=ListItemGroupMode(sub="Price", sub_type="number"),
             )
 
     def test_rejects_non_string_property_on_list_item(self) -> None:
-        """_list_item_sub set but property is not a plain str raises (GB7)."""
+        """``_list_item_mode`` set but property is not a plain str raises (GB5)."""
         ref = CustomPropertyRef(id=42)
         with pytest.raises(ValueError, match="plain str"):
             GroupBy(
                 property=ref,
-                property_type="object",
-                _list_item_sub="Brand",
-                _list_item_sub_type="string",
+                _list_item_mode=ListItemGroupMode(sub="Brand", sub_type="string"),
             )
+
+    def test_list_item_mode_validates_empty_sub(self) -> None:
+        """``ListItemGroupMode`` rejects empty/whitespace sub names."""
+        with pytest.raises(ValueError, match="non-empty"):
+            ListItemGroupMode(sub="", sub_type="string")
+        with pytest.raises(ValueError, match="non-empty"):
+            ListItemGroupMode(sub="   ", sub_type="string")
+
+    def test_list_item_mode_validates_sub_type_content(self) -> None:
+        """``ListItemGroupMode`` rejects sub_type values outside CustomPropertyType."""
+        with pytest.raises(ValueError, match="sub_type"):
+            ListItemGroupMode(sub="Brand", sub_type="bogus")  # type: ignore[arg-type]
+
+    def test_list_item_runtime_rejects_bad_sub_type(self) -> None:
+        """``GroupBy.list_item`` propagates ListItemGroupMode validation at construction."""
+        with pytest.raises(ValueError, match="sub_type"):
+            GroupBy.list_item("cart", "Brand", sub_type="bogus")  # type: ignore[arg-type]
+
+    def test_list_item_runtime_rejects_empty_sub(self) -> None:
+        """``GroupBy.list_item`` propagates ListItemGroupMode empty-sub validation."""
+        with pytest.raises(ValueError, match="non-empty"):
+            GroupBy.list_item("cart", "")
 
     def test_via_build_group_section_in_list(self) -> None:
         """list_item GroupBy mixed with other groups in a list."""

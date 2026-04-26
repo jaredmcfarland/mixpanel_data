@@ -8735,6 +8735,54 @@ class Filter:
 
 
 @dataclass(frozen=True)
+class ListItemGroupMode:
+    """Discriminator for ``GroupBy.list_item`` — sub-property name + scalar type.
+
+    Pairs the subproperty name with its inferred scalar type so they
+    cannot be set independently. Used as the optional ``_list_item_mode``
+    field on ``GroupBy``; presence of this field marks a GroupBy as a
+    list-item breakdown.
+
+    Attributes:
+        sub: Subproperty name (must be non-empty after stripping).
+        sub_type: Subproperty data type. One of the four
+            ``CustomPropertyType`` values.
+
+    Example:
+        ```python
+        from mixpanel_data import GroupBy, ListItemGroupMode
+
+        # Constructed indirectly via the classmethod (preferred)
+        g = GroupBy.list_item("cart", "Brand")
+        assert g._list_item_mode == ListItemGroupMode(sub="Brand", sub_type="string")
+        ```
+    """
+
+    sub: str
+    """Subproperty name as it appears inside each object."""
+
+    sub_type: CustomPropertyType
+    """Subproperty data type, matching :data:`CustomPropertyType`."""
+
+    def __post_init__(self) -> None:
+        """Validate sub is non-empty and sub_type is a known scalar type.
+
+        Raises:
+            ValueError: If ``sub`` is empty after stripping or
+                ``sub_type`` is not one of the four
+                ``CustomPropertyType`` values.
+        """
+        if not self.sub.strip():
+            raise ValueError("ListItemGroupMode.sub must be a non-empty string")
+        if self.sub_type not in ("string", "number", "boolean", "datetime"):
+            raise ValueError(
+                "ListItemGroupMode.sub_type must be one of "
+                "'string'/'number'/'boolean'/'datetime', "
+                f"got {self.sub_type!r}"
+            )
+
+
+@dataclass(frozen=True)
 class GroupBy:
     """Specifies a property breakdown with optional numeric bucketing.
 
@@ -8770,14 +8818,12 @@ class GroupBy:
     property: str | CustomPropertyRef | InlineCustomProperty
     """Property to break down by (name, ref, or inline)."""
 
-    property_type: Literal["string", "number", "boolean", "datetime", "object"] = (
-        "string"
-    )
-    """Data type of the property.
+    property_type: CustomPropertyType = "string"
+    """Data type of the property. One of the four scalar types.
 
-    ``"object"`` is reserved for ``GroupBy.list_item(...)`` (breaking
-    down by a subproperty of objects nested inside a list-of-objects
-    property); other consumers should use one of the scalar types.
+    Note: list-item breakdowns set ``_list_item_mode`` instead — the
+    wire builder hardcodes ``propertyType: "object"`` for that branch
+    independently of this field.
     """
 
     bucket_size: int | float | None = None
@@ -8789,11 +8835,8 @@ class GroupBy:
     bucket_max: int | float | None = None
     """Maximum value for numeric buckets."""
 
-    _list_item_sub: str | None = None
-    """Subproperty name for list-item breakdown (set by ``list_item()``)."""
-
-    _list_item_sub_type: CustomPropertyType | None = None
-    """Subproperty type for list-item breakdown."""
+    _list_item_mode: ListItemGroupMode | None = None
+    """List-item breakdown discriminator. Set by :meth:`list_item`."""
 
     def __post_init__(self) -> None:
         """Validate construction arguments.
@@ -8802,12 +8845,9 @@ class GroupBy:
             ValueError: If property is an empty string (GB1),
                 bucket_size is not positive (GB2),
                 bucket_min >= bucket_max (GB3),
-                ``_list_item_sub`` is set but ``property_type`` is not
-                ``"object"`` (GB4), ``_list_item_sub`` is combined with
-                bucketing (GB5), ``_list_item_sub`` is set but
-                ``_list_item_sub_type`` is ``None`` (GB6), or
-                ``_list_item_sub`` is set but ``property`` is not a
-                plain ``str`` (GB7).
+                ``_list_item_mode`` is combined with bucketing (GB4),
+                or ``_list_item_mode`` is set but ``property`` is not a
+                plain ``str`` (GB5).
         """
         if isinstance(self.property, str) and not self.property.strip():
             raise ValueError("GroupBy.property must be a non-empty string")
@@ -8824,27 +8864,17 @@ class GroupBy:
                 f"GroupBy.bucket_min ({self.bucket_min}) must be less than "
                 f"bucket_max ({self.bucket_max})"
             )
-        if self._list_item_sub is not None:
-            if self.property_type != "object":
-                raise ValueError(
-                    "GroupBy.list_item requires property_type='object', "
-                    f"got {self.property_type!r}"
-                )
-            if self._list_item_sub_type is None:
-                raise ValueError(
-                    "GroupBy.list_item requires _list_item_sub_type; "
-                    "construct via GroupBy.list_item(...)"
-                )
-            if not isinstance(self.property, str):
-                raise ValueError(
-                    "GroupBy.list_item requires property to be a plain str, "
-                    f"got {type(self.property).__name__}"
-                )
+        if self._list_item_mode is not None:
             if any(
                 b is not None
                 for b in (self.bucket_size, self.bucket_min, self.bucket_max)
             ):
                 raise ValueError("GroupBy.list_item is incompatible with bucketing")
+            if not isinstance(self.property, str):
+                raise ValueError(
+                    "GroupBy.list_item requires property to be a plain str, "
+                    f"got {type(self.property).__name__}"
+                )
 
     @classmethod
     def list_item(
@@ -8872,6 +8902,13 @@ class GroupBy:
             ``GroupBy`` whose serialization emits a ``listItemGroup``
             structure in the bookmark JSON.
 
+        Raises:
+            ValueError: If ``sub`` is empty after stripping (via
+                ``ListItemGroupMode.__post_init__``), if ``sub_type``
+                is not one of the four ``CustomPropertyType`` values,
+                or if any ``GroupBy.__post_init__`` invariant fails
+                (see :meth:`__post_init__` Raises section).
+
         Example:
             ```python
             from mixpanel_data import GroupBy
@@ -8885,9 +8922,7 @@ class GroupBy:
         """
         return cls(
             property=property,
-            property_type="object",
-            _list_item_sub=sub,
-            _list_item_sub_type=sub_type,
+            _list_item_mode=ListItemGroupMode(sub=sub, sub_type=sub_type),
         )
 
 
