@@ -505,12 +505,16 @@ InsightsMode = Literal["timeseries", "total", "table"]
 # Filter Types
 # =============================================================================
 
-FilterPropertyType = Literal["string", "number", "boolean", "datetime", "list"]
+FilterPropertyType = Literal[
+    "string", "number", "boolean", "datetime", "list", "object"
+]
 """Property data type for filter conditions.
 
-Includes ``"datetime"`` and ``"list"`` for API compatibility.
-Datetime factory methods (``Filter.on``, ``Filter.before``, etc.)
-produce filters with ``filterType="datetime"``.
+Includes ``"datetime"`` and ``"list"`` for API compatibility, and
+``"object"`` for ``Filter.list_contains`` (filtering on subproperties of
+objects nested inside a list-of-objects property). Datetime factory
+methods (``Filter.on``, ``Filter.before``, etc.) produce filters with
+``filterType="datetime"``.
 """
 
 CustomPropertyType = Literal["string", "number", "boolean", "datetime"]

@@ -18,6 +18,7 @@ from mixpanel_data import Workspace
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
 from mixpanel_data._internal.bookmark_builders import (
+    build_filter_entry,
     build_filter_section,
     build_group_section,
     build_time_section,
@@ -334,3 +335,55 @@ class TestGroupSectionEquivalence:
         )
         direct = build_group_section(None)
         assert params["sections"]["group"] == direct == []
+
+
+# =============================================================================
+# Round-trip invariants for Filter.list_contains
+# =============================================================================
+
+
+# Subproperty names: any non-empty identifier-like string. Hypothesis-generated
+# kwargs require valid Python identifiers, so restrict alphabet accordingly.
+_subprop_names = st.text(
+    min_size=1,
+    max_size=10,
+    alphabet=st.characters(categories=["L"]),  # letters only
+)
+
+
+class TestListContainsRoundTrip:
+    """Round-trip invariants for ``Filter.list_contains`` serialization."""
+
+    @given(
+        prop=property_names,
+        pairs=st.dictionaries(
+            keys=_subprop_names,
+            values=st.text(min_size=1, max_size=20),
+            min_size=1,
+            max_size=5,
+        ),
+        quantifier=st.sampled_from(["any", "all"]),
+    )
+    @settings(max_examples=50)
+    def test_kwargs_shape_invariants(
+        self, prop: str, pairs: dict[str, str], quantifier: str
+    ) -> None:
+        """Kwargs shorthand always emits the listItemFilters wire shape."""
+        f = Filter.list_contains(prop, quantifier=quantifier, **pairs)  # type: ignore[arg-type]
+        entry = build_filter_entry(f)
+        assert entry["filterType"] == "object"
+        assert entry["defaultType"] == "object"
+        assert entry["filterJoinType"] == "list"
+        assert entry["listQuantifier"] == quantifier
+        assert entry["filterOperator"] == "true"
+        assert entry["filterValue"] is True
+        assert entry["dataset"] == "$mixpanel"
+        assert entry["value"] == prop
+        assert len(entry["listItemFilters"]) == len(pairs)
+        for sub in entry["listItemFilters"]:
+            assert sub["dataset"] == "$mixpanel"
+            assert sub["filterOperator"] == "equals"
+            assert sub["filterType"] == "string"
+            # Each sub's value+filterValue should appear in the original pairs dict
+            assert sub["value"] in pairs
+            assert sub["filterValue"] == [pairs[sub["value"]]]

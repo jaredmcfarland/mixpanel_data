@@ -445,6 +445,35 @@ class TestFilterParams:
         )
         assert params["sections"]["filter"] == []
 
+    def test_list_contains_filter_through_build_query_params(
+        self, ws: Workspace
+    ) -> None:
+        """Filter.list_contains threads through _build_query_params end-to-end."""
+        from mixpanel_data import Filter
+
+        params = ws._build_query_params(
+            events=["Purchase Completed"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=90,
+            unit="day",
+            group_by=None,
+            where=[Filter.list_contains("cart", Brand="nike", Category="hats")],
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="total",
+        )
+        assert len(params["sections"]["filter"]) == 1
+        f = params["sections"]["filter"][0]
+        assert f["filterType"] == "object"
+        assert f["filterJoinType"] == "list"
+        assert f["listQuantifier"] == "any"
+        assert len(f["listItemFilters"]) == 2
+
 
 class TestGroupParams:
     """Tests for group params generation."""
@@ -545,6 +574,32 @@ class TestGroupParams:
             mode="timeseries",
         )
         assert len(params["sections"]["group"]) == 2
+
+    def test_list_item_groupby_through_build_query_params(self, ws: Workspace) -> None:
+        """GroupBy.list_item threads through _build_query_params end-to-end."""
+        from mixpanel_data import GroupBy
+
+        params = ws._build_query_params(
+            events=["Cart Viewed"],
+            math="total",
+            math_property=None,
+            per_user=None,
+            from_date=None,
+            to_date=None,
+            last=30,
+            unit="day",
+            group_by=GroupBy.list_item("cart", "Brand"),
+            where=None,
+            formulas=[],
+            rolling=None,
+            cumulative=False,
+            mode="timeseries",
+        )
+        g = params["sections"]["group"][0]
+        assert g["joinPropertyType"] == "list"
+        assert g["propertyType"] == "object"
+        assert g["listItemGroup"]["propertyName"] == "Brand"
+        assert g["listItemGroup"]["propertyType"] == "string"
 
 
 # =============================================================================

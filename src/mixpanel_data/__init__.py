@@ -240,6 +240,7 @@ from mixpanel_data.types import (
     SegmentationResult,
     ServingMethod,
     SetTestUsersParams,
+    SubPropertyInfo,
     Target,
     TimeComparison,
     TopEvent,
@@ -373,6 +374,7 @@ __all__ = [
     # Discovery types
     "FunnelInfo",
     "SavedCohort",
+    "SubPropertyInfo",
     "TopEvent",
     "EventCountsResult",
     "PropertyCountsResult",

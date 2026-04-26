@@ -12,12 +12,15 @@ Properties tested:
 
 from __future__ import annotations
 
+import json as _json
+import warnings as _warnings
 from typing import Any, get_args
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from mixpanel_data._internal.services.discovery import (
+    _infer_subproperties,
     _parse_bookmark_info,
     _parse_lexicon_metadata,
     _parse_lexicon_property,
@@ -605,3 +608,97 @@ class TestParseBookmarkInfoProperties:
             assert result.creator_name == data["creator_name"]
         else:
             assert result.creator_name is None
+
+
+# =============================================================================
+# Subproperty inference invariants
+# =============================================================================
+
+
+# Subkey strategy: short identifier-like strings.
+_subkeys = st.text(min_size=1, max_size=10, alphabet=st.characters(categories=["L"]))
+
+
+class TestInferSubpropertiesInvariants:
+    """Round-trip invariants for ``_infer_subproperties``."""
+
+    @given(
+        rows=st.lists(
+            st.dictionaries(
+                keys=_subkeys,
+                values=st.text(min_size=1, max_size=20),
+                min_size=1,
+                max_size=4,
+            ),
+            min_size=1,
+            max_size=10,
+        )
+    )
+    @settings(max_examples=50)
+    def test_all_string_values_yield_string_type(
+        self, rows: list[dict[str, str]]
+    ) -> None:
+        """Subkeys whose values are always strings are reported as 'string'."""
+        raw = [_json.dumps(r) for r in rows]
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")  # PBT: any warning fails the run
+            subs = _infer_subproperties(raw)
+        for sp in subs:
+            assert sp.type == "string"
+        # Names are alphabetically sorted
+        names = [sp.name for sp in subs]
+        assert names == sorted(names)
+        # Sample values are distinct and capped at 5
+        for sp in subs:
+            assert len(set(sp.sample_values)) == len(sp.sample_values)
+            assert len(sp.sample_values) <= 5
+
+    @given(
+        rows=st.lists(
+            st.dictionaries(
+                keys=_subkeys,
+                values=st.integers(min_value=-(10**9), max_value=10**9),
+                min_size=1,
+                max_size=4,
+            ),
+            min_size=1,
+            max_size=10,
+        )
+    )
+    @settings(max_examples=50)
+    def test_all_int_values_yield_number_type(self, rows: list[dict[str, int]]) -> None:
+        """Subkeys whose values are always ints are reported as 'number'."""
+        raw = [_json.dumps(r) for r in rows]
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")
+            subs = _infer_subproperties(raw)
+        for sp in subs:
+            assert sp.type == "number"
+
+    @given(
+        rows=st.lists(
+            st.dictionaries(
+                keys=_subkeys,
+                values=st.booleans(),
+                min_size=1,
+                max_size=4,
+            ),
+            min_size=1,
+            max_size=10,
+        )
+    )
+    @settings(max_examples=50)
+    def test_all_bool_values_yield_boolean_type(
+        self, rows: list[dict[str, bool]]
+    ) -> None:
+        """Subkeys whose values are always bools are reported as 'boolean'.
+
+        Crucially, this also asserts booleans are NOT misclassified as
+        numbers (Python treats ``bool`` as a subclass of ``int``).
+        """
+        raw = [_json.dumps(r) for r in rows]
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("error")
+            subs = _infer_subproperties(raw)
+        for sp in subs:
+            assert sp.type == "boolean"

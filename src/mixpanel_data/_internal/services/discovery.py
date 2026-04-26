@@ -6,8 +6,11 @@ with session-scoped caching to avoid redundant API calls.
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import TYPE_CHECKING, Any
+import re
+import warnings
+from typing import TYPE_CHECKING, Any, Literal
 
 from mixpanel_data.exceptions import EventNotFoundError, QueryError
 from mixpanel_data.types import (
@@ -19,6 +22,7 @@ from mixpanel_data.types import (
     LexiconProperty,
     LexiconSchema,
     SavedCohort,
+    SubPropertyInfo,
     TopEvent,
 )
 
@@ -133,6 +137,131 @@ def _parse_bookmark_info(data: dict[str, Any]) -> BookmarkInfo:
         creator_id=data.get("creator_id"),
         creator_name=data.get("creator_name"),
     )
+
+
+# =============================================================================
+# Subproperty inference (for list-of-object event properties)
+# =============================================================================
+
+
+# ISO-8601 date or datetime patterns. Conservative — anchored to a plausible
+# Y/M/D shape; values that merely contain digits are not treated as dates.
+_DATE_PATTERN = re.compile(
+    r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+\-]\d{2}:?\d{2})?)?$"
+)
+
+# Maximum distinct sample values retained per subproperty.
+_MAX_SAMPLE_VALUES = 5
+
+
+def _infer_scalar_type(
+    values: list[str | int | float | bool],
+) -> tuple[Literal["string", "number", "boolean", "datetime"], bool]:
+    """Infer the type of a homogeneous-ish sequence of scalar sub-values.
+
+    Boolean is checked before number because Python treats ``bool`` as a
+    subclass of ``int``.
+
+    Args:
+        values: All scalar values observed for one subproperty across
+            sampled rows. Caller guarantees only scalars are present.
+
+    Returns:
+        Tuple of (inferred type, mixed_observed). When mixed types are
+        observed across the values, returns ``("string", True)`` so the
+        caller can emit a warning.
+    """
+    if all(isinstance(v, bool) for v in values):
+        return "boolean", False
+    if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
+        return "number", False
+    strs = [v for v in values if isinstance(v, str)]
+    if len(strs) == len(values):
+        if all(_DATE_PATTERN.match(s) for s in strs):
+            return "datetime", False
+        return "string", False
+    return "string", True
+
+
+def _iter_dict_rows(raw_values: list[str]) -> list[dict[str, Any]]:
+    """Parse raw property-value strings into dict rows.
+
+    Each raw value may be a JSON-encoded dict (one row), a JSON-encoded
+    list-of-dicts (multiple rows), or anything else (skipped).
+
+    Args:
+        raw_values: Strings as returned by the Mixpanel property-values
+            endpoint.
+
+    Returns:
+        Flat list of dict rows. Order preserved.
+    """
+    rows: list[dict[str, Any]] = []
+    for raw in raw_values:
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(parsed, dict):
+            rows.append(parsed)
+        elif isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, dict):
+                    rows.append(item)
+    return rows
+
+
+def _infer_subproperties(raw_values: list[str]) -> list[SubPropertyInfo]:
+    """Build a sorted list of SubPropertyInfo from sampled raw values.
+
+    Skips subproperties whose values are themselves dicts or lists —
+    only scalar sub-values are reportable since ``GroupBy.list_item``
+    and ``Filter.list_contains`` operate on scalar subproperty values
+    only.
+
+    Args:
+        raw_values: Raw strings returned by the property-values
+            endpoint.
+
+    Returns:
+        Alphabetically sorted list of SubPropertyInfo.
+    """
+    rows = _iter_dict_rows(raw_values)
+    if not rows:
+        return []
+    per_key: dict[str, list[Any]] = {}
+    for row in rows:
+        for key, value in row.items():
+            if isinstance(value, (dict, list)):
+                continue  # nested objects/lists out of scope
+            per_key.setdefault(key, []).append(value)
+    out: list[SubPropertyInfo] = []
+    for name in sorted(per_key):
+        values = per_key[name]
+        if not values:
+            continue
+        inferred, mixed = _infer_scalar_type(values)
+        if mixed:
+            warnings.warn(
+                f"Subproperty {name!r} has mixed value types across sampled rows; "
+                f"reporting as 'string'",
+                UserWarning,
+                stacklevel=4,
+            )
+        # Distinct sample values, preserving first-seen order, capped.
+        seen: set[Any] = set()
+        samples: list[str | int | float | bool] = []
+        for v in values:
+            if v in seen:
+                continue
+            seen.add(v)
+            samples.append(v)
+            if len(samples) >= _MAX_SAMPLE_VALUES:
+                break
+        out.append(
+            SubPropertyInfo(name=name, type=inferred, sample_values=tuple(samples))
+        )
+    return out
 
 
 class DiscoveryService:
@@ -284,6 +413,50 @@ class DiscoveryService:
             return [e for e, _ in word_matches[:5]]
 
         return []
+
+    def list_subproperties(
+        self,
+        property_name: str,
+        *,
+        event: str | None = None,
+        sample_size: int = 50,
+    ) -> list[SubPropertyInfo]:
+        """List inferred subproperties of a list-of-object event property.
+
+        Samples values via :meth:`list_property_values`, parses each as
+        JSON, walks dict rows, and infers a scalar type per subproperty
+        from the observed sub-values. Designed for properties like
+        ``cart`` whose values are objects with subkeys (``Brand``,
+        ``Category``, ``Price``, ``Item ID``).
+
+        Scope: only **scalar** subproperty values (string / number /
+        boolean / ISO datetime string) are reported. Subproperties whose
+        sub-values are themselves dicts or lists are silently skipped —
+        they cannot be used by ``GroupBy.list_item`` or
+        ``Filter.list_contains`` anyway.
+
+        Args:
+            property_name: Top-level list-of-object property name (e.g.
+                ``"cart"``).
+            event: Optional event name to scope the sample. Strongly
+                recommended; without it the API may return values from
+                across all events.
+            sample_size: Number of raw values to sample. Default: 50.
+
+        Returns:
+            List of :class:`SubPropertyInfo`, alphabetically sorted by
+            ``name``. Empty list if no parseable dict values were found.
+
+        Raises:
+            AuthenticationError: Invalid credentials.
+
+        Warns:
+            UserWarning: Emitted when a subproperty has values of mixed
+                types across rows; the reported ``type`` collapses to
+                ``"string"``.
+        """
+        raw = self.list_property_values(property_name, event=event, limit=sample_size)
+        return _infer_subproperties(raw)
 
     def list_property_values(
         self,

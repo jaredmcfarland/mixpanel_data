@@ -346,6 +346,20 @@ def build_group_section(
                     "unit": None,
                     "isHidden": False,
                 }
+            elif g._list_item_sub is not None:
+                group_entry = {
+                    "dataset": "$mixpanel",
+                    "value": prop,
+                    "resourceType": "events",
+                    "joinPropertyType": "list",
+                    "propertyType": "object",
+                    "listItemGroup": {
+                        "resourceType": "event",
+                        "propertyName": g._list_item_sub,
+                        "propertyDefaultType": g._list_item_sub_type,
+                        "propertyType": g._list_item_sub_type,
+                    },
+                }
             else:
                 group_entry = {
                     "value": prop,
@@ -467,6 +481,8 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
         #  "filterValue": ["US"], "filterOperator": "equals"}
         ```
     """
+    if f._operator == "list_contains":
+        return _build_list_contains_entry(f)
     prop = f._property
     entry: dict[str, Any] = {
         "resourceType": f._resource_type,
@@ -499,6 +515,55 @@ def build_filter_entry(f: Filter) -> dict[str, Any]:
     if f._date_unit is not None:
         entry["filterDateUnit"] = f._date_unit
     return entry
+
+
+def _build_list_contains_entry(f: Filter) -> dict[str, Any]:
+    """Build the bookmark entry for a ``Filter.list_contains`` filter.
+
+    Emits the ``listItemFilters`` wire structure used by Mixpanel
+    Insights to filter on subproperties of objects nested inside a list
+    property (e.g. ``cart`` is a list of ``{"Brand": str, ...}``
+    items). Each inner ``Filter`` is serialized via the same
+    :func:`build_filter_entry` recursively, then ``dataset`` is
+    backfilled to ``"$mixpanel"`` since the wire format requires it on
+    inner items even for plain string properties.
+
+    Args:
+        f: A ``Filter`` constructed via ``Filter.list_contains(...)``.
+            Must have ``_list_item_filters`` and ``_list_item_quantifier``
+            populated (the classmethod guarantees this).
+
+    Returns:
+        Bookmark filter dict carrying ``listItemFilters``,
+        ``listQuantifier``, and the constant outer wrapper
+        (``filterOperator: "true"``, ``filterValue: True``,
+        ``filterType: "object"``, ``filterJoinType: "list"``).
+    """
+    assert f._list_item_filters is not None, (
+        "list_contains Filter requires _list_item_filters; "
+        "construct via Filter.list_contains(...)"
+    )
+    assert f._list_item_quantifier is not None, (
+        "list_contains Filter requires _list_item_quantifier; "
+        "construct via Filter.list_contains(...)"
+    )
+    inner: list[dict[str, Any]] = []
+    for sub in f._list_item_filters:
+        sub_entry = build_filter_entry(sub)
+        sub_entry.setdefault("dataset", "$mixpanel")
+        inner.append(sub_entry)
+    return {
+        "dataset": "$mixpanel",
+        "value": f._property,
+        "resourceType": f._resource_type,
+        "filterType": "object",
+        "defaultType": "object",
+        "filterJoinType": "list",
+        "listQuantifier": f._list_item_quantifier,
+        "listItemFilters": inner,
+        "filterOperator": "true",
+        "filterValue": True,
+    }
 
 
 def build_flow_property_filter(

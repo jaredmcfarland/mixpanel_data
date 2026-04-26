@@ -823,6 +823,53 @@ class BookmarkInfo:
 
 
 @dataclass(frozen=True)
+class SubPropertyInfo:
+    """Discovered subproperty of a list-of-object event property.
+
+    Returned by :meth:`Workspace.subproperties` to describe the inner
+    structure of properties whose values are lists of objects (e.g.
+    ``cart`` is a list of ``{"Brand": str, "Category": str, "Price":
+    int}`` items). Use the ``name`` and ``type`` to construct
+    :meth:`GroupBy.list_item` and :meth:`Filter.list_contains` calls.
+
+    Attributes:
+        name: Subproperty name as it appears inside each object.
+        type: Inferred data type. Mixed sub-value types collapse to
+            ``"string"`` (a ``UserWarning`` is emitted at discovery
+            time).
+        sample_values: Up to 5 distinct sample values observed across
+            the sampled rows.
+
+    Example:
+        ```python
+        for sp in ws.subproperties("cart", event="Cart Viewed"):
+            print(sp.name, sp.type, sp.sample_values)
+        # Brand    string ('nike', 'puma', 'h&m')
+        # Category string ('hats', 'jeans', 'shoes')
+        # Item ID  number (35317, 35318)
+        # Price    number (51, 87, 102)
+        ```
+    """
+
+    name: str
+    """Subproperty name as it appears inside each object."""
+
+    type: Literal["string", "number", "boolean", "datetime"]
+    """Inferred data type, suitable for ``GroupBy.list_item(sub_type=...)``."""
+
+    sample_values: tuple[str | int | float | bool, ...]
+    """Up to 5 distinct sample values observed across the sampled rows."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON output."""
+        return {
+            "name": self.name,
+            "type": self.type,
+            "sample_values": list(self.sample_values),
+        }
+
+
+@dataclass(frozen=True)
 class TopEvent:
     """Today's event activity data.
 
@@ -7686,6 +7733,12 @@ class Filter:
     and absolute date filters.
     """
 
+    _list_item_filters: tuple[Filter, ...] | None = None
+    """Sub-filters for ``list_contains``, evaluated per-item against a list-of-objects property."""
+
+    _list_item_quantifier: Literal["any", "all"] | None = None
+    """Quantifier for ``list_contains``: ``"any"`` (≥1 item matches) or ``"all"`` (every item matches)."""
+
     @classmethod
     def equals(
         cls,
@@ -8575,6 +8628,102 @@ class Filter:
             _date_unit=date_unit,
         )
 
+    # --- List-of-object subproperty filters ---
+
+    @classmethod
+    def list_contains(
+        cls,
+        property: str,
+        *item_filters: Filter,
+        quantifier: Literal["any", "all"] = "any",
+        resource_type: Literal["events", "people"] = "events",
+        **equals: str,
+    ) -> Filter:
+        """Match events whose list-of-object property contains items satisfying inner conditions.
+
+        Used to filter on subproperties of objects nested inside a list
+        property (e.g. ``cart`` is a list of ``{"Brand": str, "Category":
+        str, "Price": int}``). Each inner condition is evaluated
+        per-item; the ``quantifier`` controls whether at least one item
+        (``"any"``, the default) or every item (``"all"``) must satisfy
+        all inner conditions.
+
+        Two equivalent ways to specify inner conditions:
+
+        - **Keyword shorthand** for the common equality case:
+          ``Filter.list_contains("cart", Brand="nike", Category="hats")``
+        - **Explicit Filter instances** for any wire-format operator:
+          ``Filter.list_contains("cart", Filter.equals("Brand", "nike"),
+          Filter.greater_than("Price", 50))``
+
+        Mixing the two shapes in one call raises ``ValueError``.
+
+        Args:
+            property: Name of the list-of-object property to filter on.
+            *item_filters: Inner ``Filter`` instances applied per list
+                item. Mutually exclusive with ``**equals``.
+            quantifier: ``"any"`` (≥1 item must match all inner
+                conditions) or ``"all"`` (every item must). Default:
+                ``"any"``.
+            resource_type: Resource type. Default: ``"events"``.
+            **equals: Keyword shorthand — each ``key=value`` becomes
+                ``Filter.equals(key, value)``. Mutually exclusive with
+                ``*item_filters``.
+
+        Returns:
+            Filter that emits the ``listItemFilters`` bookmark structure
+            on serialization.
+
+        Raises:
+            ValueError: If both ``*item_filters`` and ``**equals`` are
+                provided, if no inner conditions are given, or if any
+                inner filter is itself a ``list_contains`` (nesting is
+                not supported).
+
+        Example:
+            ```python
+            from mixpanel_data import Filter
+
+            # Cart contains a nike-branded hat
+            f1 = Filter.list_contains("cart", Brand="nike", Category="hats")
+
+            # Every cart item costs more than $50
+            f2 = Filter.list_contains(
+                "cart",
+                Filter.greater_than("Price", 50),
+                quantifier="all",
+            )
+            ```
+        """
+        if item_filters and equals:
+            raise ValueError(
+                "Filter.list_contains: pass either positional Filter instances "
+                "OR keyword equals shorthand, not both"
+            )
+        sub_filters: tuple[Filter, ...] = (
+            tuple(item_filters)
+            if item_filters
+            else tuple(cls.equals(k, v) for k, v in equals.items())
+        )
+        if not sub_filters:
+            raise ValueError(
+                "Filter.list_contains requires at least one inner condition"
+            )
+        for sub in sub_filters:
+            if sub._operator == "list_contains":
+                raise ValueError(
+                    "Filter.list_contains does not support nested list_contains filters"
+                )
+        return cls(
+            _property=property,
+            _operator="list_contains",
+            _value=None,
+            _property_type="object",
+            _resource_type=resource_type,
+            _list_item_filters=sub_filters,
+            _list_item_quantifier=quantifier,
+        )
+
 
 @dataclass(frozen=True)
 class GroupBy:
@@ -8612,8 +8761,15 @@ class GroupBy:
     property: str | CustomPropertyRef | InlineCustomProperty
     """Property to break down by (name, ref, or inline)."""
 
-    property_type: Literal["string", "number", "boolean", "datetime"] = "string"
-    """Data type of the property."""
+    property_type: Literal["string", "number", "boolean", "datetime", "object"] = (
+        "string"
+    )
+    """Data type of the property.
+
+    ``"object"`` is reserved for ``GroupBy.list_item(...)`` (breaking
+    down by a subproperty of objects nested inside a list-of-objects
+    property); other consumers should use one of the scalar types.
+    """
 
     bucket_size: int | float | None = None
     """Bucket width for numeric properties."""
@@ -8624,13 +8780,24 @@ class GroupBy:
     bucket_max: int | float | None = None
     """Maximum value for numeric buckets."""
 
+    _list_item_sub: str | None = None
+    """Subproperty name for list-item breakdown (set by ``list_item()``)."""
+
+    _list_item_sub_type: Literal["string", "number", "boolean", "datetime"] | None = (
+        None
+    )
+    """Subproperty type for list-item breakdown."""
+
     def __post_init__(self) -> None:
         """Validate construction arguments.
 
         Raises:
             ValueError: If property is an empty string (GB1),
-                bucket_size is not positive (GB2), or
-                bucket_min >= bucket_max (GB3).
+                bucket_size is not positive (GB2),
+                bucket_min >= bucket_max (GB3),
+                ``_list_item_sub`` is set but ``property_type`` is not
+                ``"object"`` (GB4), or ``_list_item_sub`` is combined
+                with bucketing (GB5).
         """
         if isinstance(self.property, str) and not self.property.strip():
             raise ValueError("GroupBy.property must be a non-empty string")
@@ -8647,6 +8814,61 @@ class GroupBy:
                 f"GroupBy.bucket_min ({self.bucket_min}) must be less than "
                 f"bucket_max ({self.bucket_max})"
             )
+        if self._list_item_sub is not None:
+            if self.property_type != "object":
+                raise ValueError(
+                    "GroupBy.list_item requires property_type='object', "
+                    f"got {self.property_type!r}"
+                )
+            if any(
+                b is not None
+                for b in (self.bucket_size, self.bucket_min, self.bucket_max)
+            ):
+                raise ValueError("GroupBy.list_item is incompatible with bucketing")
+
+    @classmethod
+    def list_item(
+        cls,
+        property: str,
+        sub: str,
+        *,
+        sub_type: Literal["string", "number", "boolean", "datetime"] = "string",
+    ) -> GroupBy:
+        """Break down by a subproperty of objects inside a list property.
+
+        Mirrors the Mixpanel UI's ``cart.Brand`` / ``cart.Category``
+        breakdown for list-of-object properties (e.g. ``cart`` is a
+        list of ``{"Brand": str, "Category": str, "Price": int}``
+        items). Each list item contributes one count per distinct
+        subproperty value it carries.
+
+        Args:
+            property: Name of the list-of-object property.
+            sub: Subproperty name to break down by.
+            sub_type: Data type of the subproperty. Default:
+                ``"string"``.
+
+        Returns:
+            ``GroupBy`` whose serialization emits a ``listItemGroup``
+            structure in the bookmark JSON.
+
+        Example:
+            ```python
+            from mixpanel_data import GroupBy
+
+            # Break down Cart Viewed events by cart.Brand
+            g1 = GroupBy.list_item("cart", "Brand")
+
+            # Break down by a numeric subproperty
+            g2 = GroupBy.list_item("cart", "Price", sub_type="number")
+            ```
+        """
+        return cls(
+            property=property,
+            property_type="object",
+            _list_item_sub=sub,
+            _list_item_sub_type=sub_type,
+        )
 
 
 # =============================================================================

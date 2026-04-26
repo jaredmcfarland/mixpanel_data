@@ -1016,3 +1016,216 @@ class TestListTopEvents:
         events = discovery.list_top_events()
 
         assert events == []
+
+
+class TestListSubproperties:
+    """Tests for DiscoveryService.list_subproperties()."""
+
+    @staticmethod
+    def _values_handler(
+        values: list[str],
+    ) -> Callable[[httpx.Request], httpx.Response]:
+        """Return a handler that always replies with `values`."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=values)
+
+        return handler
+
+    def test_extracts_string_subproperties_with_types(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Subproperties with string values are reported as type 'string'."""
+        import json as _json
+
+        values = [
+            _json.dumps({"Brand": "nike", "Category": "hats"}),
+            _json.dumps({"Brand": "puma", "Category": "shoes"}),
+            _json.dumps({"Brand": "h&m", "Category": "hats"}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="Cart Viewed")
+        names = {s.name for s in subs}
+        assert names == {"Brand", "Category"}
+        for s in subs:
+            assert s.type == "string"
+
+    def test_extracts_numeric_subproperties(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Subproperties with numeric values are reported as type 'number'."""
+        import json as _json
+
+        values = [
+            _json.dumps({"Price": 51, "Item ID": 35317}),
+            _json.dumps({"Price": 87.5, "Item ID": 35318}),
+            _json.dumps({"Price": 102, "Item ID": 35319}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = {s.name: s for s in discovery.list_subproperties("cart", event="X")}
+        assert subs["Price"].type == "number"
+        assert subs["Item ID"].type == "number"
+
+    def test_extracts_boolean_subproperties(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Boolean values are detected as 'boolean', not 'number'."""
+        import json as _json
+
+        values = [
+            _json.dumps({"on_sale": True}),
+            _json.dumps({"on_sale": False}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert len(subs) == 1
+        assert subs[0].name == "on_sale"
+        assert subs[0].type == "boolean"
+
+    def test_extracts_datetime_subproperties(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """ISO-formatted date/datetime strings are detected as 'datetime'."""
+        import json as _json
+
+        values = [
+            _json.dumps({"added_at": "2025-04-23"}),
+            _json.dumps({"added_at": "2025-04-24"}),
+            _json.dumps({"added_at": "2025-04-25T10:30:00Z"}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert subs[0].name == "added_at"
+        assert subs[0].type == "datetime"
+
+    def test_mixed_types_collapse_to_string_with_warning(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Mixed sub-value types report 'string' and emit UserWarning."""
+        import json as _json
+        import warnings
+
+        values = [
+            _json.dumps({"id": "abc"}),
+            _json.dumps({"id": 123}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            subs = discovery.list_subproperties("cart", event="X")
+        assert subs[0].type == "string"
+        assert any("mixed" in str(w.message).lower() for w in captured)
+
+    def test_returns_alphabetical_order(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Returned subproperties are sorted alphabetically by name."""
+        import json as _json
+
+        values = [_json.dumps({"Z": "z", "A": "a", "M": "m"})]
+        discovery = discovery_factory(self._values_handler(values))
+        names = [s.name for s in discovery.list_subproperties("cart", event="X")]
+        assert names == ["A", "M", "Z"]
+
+    def test_caps_sample_values_at_five_distinct(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """sample_values holds at most 5 distinct values."""
+        import json as _json
+
+        values = [_json.dumps({"Brand": f"b{i}"}) for i in range(20)]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert len(subs[0].sample_values) <= 5
+        # All distinct
+        assert len(set(subs[0].sample_values)) == len(subs[0].sample_values)
+
+    def test_skips_unparseable_values(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Non-JSON / non-dict values are silently skipped."""
+        import json as _json
+
+        values = [
+            "not json at all",
+            _json.dumps(["just", "a", "list"]),
+            _json.dumps({"Brand": "nike"}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert [s.name for s in subs] == ["Brand"]
+
+    def test_skips_nested_object_subvalues(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Nested dicts/lists inside item objects are skipped (scalars only)."""
+        import json as _json
+
+        values = [
+            _json.dumps(
+                {
+                    "Brand": "nike",
+                    "metadata": {"sku": "x"},  # nested dict — skip
+                    "tags": ["a", "b"],  # nested list — skip
+                }
+            ),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        names = {s.name for s in discovery.list_subproperties("cart", event="X")}
+        assert names == {"Brand"}
+
+    def test_empty_input_returns_empty_list(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """No values returns empty list, no error."""
+        discovery = discovery_factory(self._values_handler([]))
+        assert discovery.list_subproperties("cart", event="X") == []
+
+    def test_handles_list_of_dicts_value_shape(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """When a value is a JSON list of dicts, each dict is one row."""
+        import json as _json
+
+        values = [
+            _json.dumps([{"Brand": "nike"}, {"Brand": "puma"}]),
+            _json.dumps([{"Brand": "h&m"}]),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert subs[0].name == "Brand"
+        # Should have collected from all dicts in all values
+        assert len(subs[0].sample_values) >= 2

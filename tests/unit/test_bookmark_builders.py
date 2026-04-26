@@ -1054,3 +1054,164 @@ class TestBuildFlowPropertyFilter:
 
         with pytest.raises(ValueError, match="requires at least one filter"):
             build_flow_property_filter([])
+
+
+class TestFilterListContains:
+    """Tests for Filter.list_contains — list-of-object subproperty filters."""
+
+    def test_kwargs_shorthand_produces_two_inner_equals(self) -> None:
+        """Keyword arguments expand to one equals sub-filter per pair."""
+        f = Filter.list_contains("cart", Brand="nike", Category="hats")
+        entry = build_filter_entry(f)
+        assert entry["filterType"] == "object"
+        assert entry["filterJoinType"] == "list"
+        assert len(entry["listItemFilters"]) == 2
+        sub_values = {
+            (s["value"], tuple(s["filterValue"])) for s in entry["listItemFilters"]
+        }
+        assert sub_values == {("Brand", ("nike",)), ("Category", ("hats",))}
+        for sub in entry["listItemFilters"]:
+            assert sub["filterOperator"] == "equals"
+            assert sub["filterType"] == "string"
+
+    def test_positional_filter_instances_preserve_operators(self) -> None:
+        """Explicit Filter args support any operator the wire format allows."""
+        f = Filter.list_contains(
+            "cart",
+            Filter.equals("Brand", "nike"),
+            Filter.greater_than("Price", 50),
+        )
+        entry = build_filter_entry(f)
+        assert len(entry["listItemFilters"]) == 2
+        ops = {s["filterOperator"] for s in entry["listItemFilters"]}
+        assert ops == {"equals", "is greater than"}
+
+    def test_default_quantifier_is_any(self) -> None:
+        """Quantifier defaults to 'any' (≥1 list item must match)."""
+        f = Filter.list_contains("cart", Brand="nike")
+        entry = build_filter_entry(f)
+        assert entry["listQuantifier"] == "any"
+
+    def test_quantifier_all(self) -> None:
+        """quantifier='all' propagates to listQuantifier."""
+        f = Filter.list_contains("cart", Brand="nike", quantifier="all")
+        entry = build_filter_entry(f)
+        assert entry["listQuantifier"] == "all"
+
+    def test_inner_items_have_dataset(self) -> None:
+        """The wire format requires dataset='$mixpanel' on each inner filter."""
+        f = Filter.list_contains("cart", Brand="nike", Category="hats")
+        entry = build_filter_entry(f)
+        for sub in entry["listItemFilters"]:
+            assert sub["dataset"] == "$mixpanel"
+
+    def test_outer_constants(self) -> None:
+        """Outer dict carries fixed wire-format constants for list-contains filters."""
+        f = Filter.list_contains("cart", Brand="nike")
+        entry = build_filter_entry(f)
+        assert entry["dataset"] == "$mixpanel"
+        assert entry["value"] == "cart"
+        assert entry["resourceType"] == "events"
+        assert entry["filterType"] == "object"
+        assert entry["defaultType"] == "object"
+        assert entry["filterJoinType"] == "list"
+        assert entry["filterOperator"] == "true"
+        assert entry["filterValue"] is True
+
+    def test_resource_type_propagates(self) -> None:
+        """resource_type='people' overrides the default 'events'."""
+        f = Filter.list_contains("attrs", role="admin", resource_type="people")
+        entry = build_filter_entry(f)
+        assert entry["resourceType"] == "people"
+
+    def test_zero_conditions_raises(self) -> None:
+        """No sub-conditions raises ValueError."""
+        with pytest.raises(ValueError, match="at least one"):
+            Filter.list_contains("cart")
+
+    def test_mixing_kwargs_and_positional_raises(self) -> None:
+        """Mixing positional Filter args and keyword equals raises ValueError."""
+        with pytest.raises(ValueError, match="either"):
+            Filter.list_contains(
+                "cart", Filter.equals("Brand", "nike"), Category="hats"
+            )
+
+    def test_nested_list_contains_raises(self) -> None:
+        """A list_contains filter inside another list_contains raises ValueError."""
+        inner = Filter.list_contains("inner", X="y")
+        with pytest.raises(ValueError, match="nested"):
+            Filter.list_contains("cart", inner)
+
+    def test_via_build_filter_section(self) -> None:
+        """End-to-end through dispatch in build_filter_section."""
+        f = Filter.list_contains("cart", Brand="nike")
+        section = build_filter_section(f)
+        assert len(section) == 1
+        assert section[0]["filterType"] == "object"
+        assert len(section[0]["listItemFilters"]) == 1
+
+
+class TestGroupByListItem:
+    """Tests for GroupBy.list_item — break down by a list-item subproperty."""
+
+    def test_basic_string_sub_emits_listItemGroup(self) -> None:
+        """list_item('cart','Brand') produces the listItemGroup wire shape."""
+        g = GroupBy.list_item("cart", "Brand")
+        section = build_group_section(g)
+        assert len(section) == 1
+        entry = section[0]
+        assert entry["dataset"] == "$mixpanel"
+        assert entry["value"] == "cart"
+        assert entry["resourceType"] == "events"
+        assert entry["joinPropertyType"] == "list"
+        assert entry["propertyType"] == "object"
+        assert entry["listItemGroup"] == {
+            "resourceType": "event",
+            "propertyName": "Brand",
+            "propertyDefaultType": "string",
+            "propertyType": "string",
+        }
+
+    def test_number_sub_type(self) -> None:
+        """sub_type='number' propagates into listItemGroup."""
+        g = GroupBy.list_item("cart", "Price", sub_type="number")
+        entry = build_group_section(g)[0]
+        assert entry["listItemGroup"]["propertyType"] == "number"
+        assert entry["listItemGroup"]["propertyDefaultType"] == "number"
+
+    def test_pins_property_type_to_object(self) -> None:
+        """The classmethod pins property_type='object' on the GroupBy."""
+        g = GroupBy.list_item("cart", "Brand")
+        assert g.property_type == "object"
+
+    def test_rejects_non_object_property_type_when_list_item(self) -> None:
+        """Manual instantiation with _list_item_sub but mismatched type raises."""
+        with pytest.raises(ValueError, match="property_type='object'"):
+            GroupBy(
+                property="cart",
+                property_type="string",
+                _list_item_sub="Brand",
+                _list_item_sub_type="string",
+            )
+
+    def test_rejects_bucketing(self) -> None:
+        """list_item with bucket_size raises in __post_init__."""
+        with pytest.raises(ValueError, match="bucketing"):
+            GroupBy(
+                property="cart",
+                property_type="object",
+                bucket_size=10,
+                _list_item_sub="Price",
+                _list_item_sub_type="number",
+            )
+
+    def test_via_build_group_section_in_list(self) -> None:
+        """list_item GroupBy mixed with other groups in a list."""
+        groups: list[str | GroupBy] = [
+            "platform",
+            GroupBy.list_item("cart", "Brand"),
+        ]
+        section = build_group_section(groups)
+        assert len(section) == 2
+        assert section[0]["value"] == "platform"
+        assert "listItemGroup" in section[1]
