@@ -347,6 +347,10 @@ def build_group_section(
                     "isHidden": False,
                 }
             elif g._list_item_sub is not None:
+                # resourceType is hardcoded "events": list-of-object
+                # breakdowns are an event-property feature in the Mixpanel
+                # UI; there is no equivalent for people properties, hence
+                # GroupBy.list_item() exposes no resource_type parameter.
                 group_entry = {
                     "dataset": "$mixpanel",
                     "value": prop,
@@ -539,14 +543,16 @@ def _build_list_contains_entry(f: Filter) -> dict[str, Any]:
         (``filterOperator: "true"``, ``filterValue: True``,
         ``filterType: "object"``, ``filterJoinType: "list"``).
     """
-    assert f._list_item_filters is not None, (
-        "list_contains Filter requires _list_item_filters; "
-        "construct via Filter.list_contains(...)"
-    )
-    assert f._list_item_quantifier is not None, (
-        "list_contains Filter requires _list_item_quantifier; "
-        "construct via Filter.list_contains(...)"
-    )
+    if f._list_item_filters is None:
+        raise ValueError(
+            "list_contains Filter requires _list_item_filters; "
+            "construct via Filter.list_contains(...)"
+        )
+    if f._list_item_quantifier is None:
+        raise ValueError(
+            "list_contains Filter requires _list_item_quantifier; "
+            "construct via Filter.list_contains(...)"
+        )
     inner: list[dict[str, Any]] = []
     for sub in f._list_item_filters:
         sub_entry = build_filter_entry(sub)

@@ -861,7 +861,13 @@ class SubPropertyInfo:
     """Up to 5 distinct sample values observed across the sampled rows."""
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for JSON output."""
+        """Serialize the subproperty info as a plain dict for JSON output.
+
+        Returns:
+            Dict with ``name`` (str), ``type`` (str), and
+            ``sample_values`` (list of scalars) keys, suitable for
+            JSON serialization.
+        """
         return {
             "name": self.name,
             "type": self.type,
@@ -8637,7 +8643,7 @@ class Filter:
         *item_filters: Filter,
         quantifier: Literal["any", "all"] = "any",
         resource_type: Literal["events", "people"] = "events",
-        **equals: str,
+        **equals: str | list[str],
     ) -> Filter:
         """Match events whose list-of-object property contains items satisfying inner conditions.
 
@@ -8703,7 +8709,9 @@ class Filter:
         sub_filters: tuple[Filter, ...] = (
             tuple(item_filters)
             if item_filters
-            else tuple(cls.equals(k, v) for k, v in equals.items())
+            else tuple(
+                cls.equals(k, v, resource_type=resource_type) for k, v in equals.items()
+            )
         )
         if not sub_filters:
             raise ValueError(
@@ -8796,8 +8804,11 @@ class GroupBy:
                 bucket_size is not positive (GB2),
                 bucket_min >= bucket_max (GB3),
                 ``_list_item_sub`` is set but ``property_type`` is not
-                ``"object"`` (GB4), or ``_list_item_sub`` is combined
-                with bucketing (GB5).
+                ``"object"`` (GB4), ``_list_item_sub`` is combined with
+                bucketing (GB5), ``_list_item_sub`` is set but
+                ``_list_item_sub_type`` is ``None`` (GB6), or
+                ``_list_item_sub`` is set but ``property`` is not a
+                plain ``str`` (GB7).
         """
         if isinstance(self.property, str) and not self.property.strip():
             raise ValueError("GroupBy.property must be a non-empty string")
@@ -8819,6 +8830,16 @@ class GroupBy:
                 raise ValueError(
                     "GroupBy.list_item requires property_type='object', "
                     f"got {self.property_type!r}"
+                )
+            if self._list_item_sub_type is None:
+                raise ValueError(
+                    "GroupBy.list_item requires _list_item_sub_type; "
+                    "construct via GroupBy.list_item(...)"
+                )
+            if not isinstance(self.property, str):
+                raise ValueError(
+                    "GroupBy.list_item requires property to be a plain str, "
+                    f"got {type(self.property).__name__}"
                 )
             if any(
                 b is not None

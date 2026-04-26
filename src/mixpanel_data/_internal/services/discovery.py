@@ -229,11 +229,13 @@ def _infer_subproperties(raw_values: list[str]) -> list[SubPropertyInfo]:
     rows = _iter_dict_rows(raw_values)
     if not rows:
         return []
-    per_key: dict[str, list[Any]] = {}
+    per_key: dict[str, list[str | int | float | bool]] = {}
     for row in rows:
         for key, value in row.items():
             if isinstance(value, (dict, list)):
                 continue  # nested objects/lists out of scope
+            if value is None:
+                continue  # treat null sub-values as missing data, not a type
             per_key.setdefault(key, []).append(value)
     out: list[SubPropertyInfo] = []
     for name in sorted(per_key):
@@ -242,6 +244,11 @@ def _infer_subproperties(raw_values: list[str]) -> list[SubPropertyInfo]:
             continue
         inferred, mixed = _infer_scalar_type(values)
         if mixed:
+            # stacklevel=4 targets user code via the chain
+            # user → Workspace.subproperties → DiscoveryService.list_subproperties
+            # → _infer_subproperties → warnings.warn. Direct calls to
+            # list_subproperties (e.g. tests) will see the warning point one
+            # frame too high; tests typically use catch_warnings so this is moot.
             warnings.warn(
                 f"Subproperty {name!r} has mixed value types across sampled rows; "
                 f"reporting as 'string'",

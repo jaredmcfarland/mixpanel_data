@@ -5,6 +5,7 @@ Tests use httpx.MockTransport for deterministic HTTP mocking.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -1039,12 +1040,11 @@ class TestListSubproperties:
         ],
     ) -> None:
         """Subproperties with string values are reported as type 'string'."""
-        import json as _json
 
         values = [
-            _json.dumps({"Brand": "nike", "Category": "hats"}),
-            _json.dumps({"Brand": "puma", "Category": "shoes"}),
-            _json.dumps({"Brand": "h&m", "Category": "hats"}),
+            json.dumps({"Brand": "nike", "Category": "hats"}),
+            json.dumps({"Brand": "puma", "Category": "shoes"}),
+            json.dumps({"Brand": "h&m", "Category": "hats"}),
         ]
         discovery = discovery_factory(self._values_handler(values))
         subs = discovery.list_subproperties("cart", event="Cart Viewed")
@@ -1060,12 +1060,11 @@ class TestListSubproperties:
         ],
     ) -> None:
         """Subproperties with numeric values are reported as type 'number'."""
-        import json as _json
 
         values = [
-            _json.dumps({"Price": 51, "Item ID": 35317}),
-            _json.dumps({"Price": 87.5, "Item ID": 35318}),
-            _json.dumps({"Price": 102, "Item ID": 35319}),
+            json.dumps({"Price": 51, "Item ID": 35317}),
+            json.dumps({"Price": 87.5, "Item ID": 35318}),
+            json.dumps({"Price": 102, "Item ID": 35319}),
         ]
         discovery = discovery_factory(self._values_handler(values))
         subs = {s.name: s for s in discovery.list_subproperties("cart", event="X")}
@@ -1079,11 +1078,10 @@ class TestListSubproperties:
         ],
     ) -> None:
         """Boolean values are detected as 'boolean', not 'number'."""
-        import json as _json
 
         values = [
-            _json.dumps({"on_sale": True}),
-            _json.dumps({"on_sale": False}),
+            json.dumps({"on_sale": True}),
+            json.dumps({"on_sale": False}),
         ]
         discovery = discovery_factory(self._values_handler(values))
         subs = discovery.list_subproperties("cart", event="X")
@@ -1098,12 +1096,11 @@ class TestListSubproperties:
         ],
     ) -> None:
         """ISO-formatted date/datetime strings are detected as 'datetime'."""
-        import json as _json
 
         values = [
-            _json.dumps({"added_at": "2025-04-23"}),
-            _json.dumps({"added_at": "2025-04-24"}),
-            _json.dumps({"added_at": "2025-04-25T10:30:00Z"}),
+            json.dumps({"added_at": "2025-04-23"}),
+            json.dumps({"added_at": "2025-04-24"}),
+            json.dumps({"added_at": "2025-04-25T10:30:00Z"}),
         ]
         discovery = discovery_factory(self._values_handler(values))
         subs = discovery.list_subproperties("cart", event="X")
@@ -1117,12 +1114,11 @@ class TestListSubproperties:
         ],
     ) -> None:
         """Mixed sub-value types report 'string' and emit UserWarning."""
-        import json as _json
         import warnings
 
         values = [
-            _json.dumps({"id": "abc"}),
-            _json.dumps({"id": 123}),
+            json.dumps({"id": "abc"}),
+            json.dumps({"id": 123}),
         ]
         discovery = discovery_factory(self._values_handler(values))
         with warnings.catch_warnings(record=True) as captured:
@@ -1138,9 +1134,8 @@ class TestListSubproperties:
         ],
     ) -> None:
         """Returned subproperties are sorted alphabetically by name."""
-        import json as _json
 
-        values = [_json.dumps({"Z": "z", "A": "a", "M": "m"})]
+        values = [json.dumps({"Z": "z", "A": "a", "M": "m"})]
         discovery = discovery_factory(self._values_handler(values))
         names = [s.name for s in discovery.list_subproperties("cart", event="X")]
         assert names == ["A", "M", "Z"]
@@ -1152,9 +1147,8 @@ class TestListSubproperties:
         ],
     ) -> None:
         """sample_values holds at most 5 distinct values."""
-        import json as _json
 
-        values = [_json.dumps({"Brand": f"b{i}"}) for i in range(20)]
+        values = [json.dumps({"Brand": f"b{i}"}) for i in range(20)]
         discovery = discovery_factory(self._values_handler(values))
         subs = discovery.list_subproperties("cart", event="X")
         assert len(subs[0].sample_values) <= 5
@@ -1168,12 +1162,11 @@ class TestListSubproperties:
         ],
     ) -> None:
         """Non-JSON / non-dict values are silently skipped."""
-        import json as _json
 
         values = [
             "not json at all",
-            _json.dumps(["just", "a", "list"]),
-            _json.dumps({"Brand": "nike"}),
+            json.dumps(["just", "a", "list"]),
+            json.dumps({"Brand": "nike"}),
         ]
         discovery = discovery_factory(self._values_handler(values))
         subs = discovery.list_subproperties("cart", event="X")
@@ -1186,10 +1179,9 @@ class TestListSubproperties:
         ],
     ) -> None:
         """Nested dicts/lists inside item objects are skipped (scalars only)."""
-        import json as _json
 
         values = [
-            _json.dumps(
+            json.dumps(
                 {
                     "Brand": "nike",
                     "metadata": {"sku": "x"},  # nested dict — skip
@@ -1218,14 +1210,41 @@ class TestListSubproperties:
         ],
     ) -> None:
         """When a value is a JSON list of dicts, each dict is one row."""
-        import json as _json
 
         values = [
-            _json.dumps([{"Brand": "nike"}, {"Brand": "puma"}]),
-            _json.dumps([{"Brand": "h&m"}]),
+            json.dumps([{"Brand": "nike"}, {"Brand": "puma"}]),
+            json.dumps([{"Brand": "h&m"}]),
         ]
         discovery = discovery_factory(self._values_handler(values))
         subs = discovery.list_subproperties("cart", event="X")
         assert subs[0].name == "Brand"
         # Should have collected from all dicts in all values
         assert len(subs[0].sample_values) >= 2
+
+    def test_skips_null_subvalues_no_mixed_warning(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """JSON null sub-values are treated as missing, not mixed types.
+
+        Regression: previously a column of (str, None, str) collapsed to
+        type='string' with a 'mixed types' UserWarning. Nulls now skip
+        inference and never appear in ``sample_values``.
+        """
+        import warnings
+
+        values = [
+            json.dumps({"Brand": "nike", "Coupon": None}),
+            json.dumps({"Brand": "puma", "Coupon": "FALL20"}),
+            json.dumps({"Brand": "h&m", "Coupon": None}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            subs = discovery.list_subproperties("cart", event="X")
+        by_name = {s.name: s for s in subs}
+        assert by_name["Coupon"].type == "string"
+        assert None not in by_name["Coupon"].sample_values
+        assert by_name["Coupon"].sample_values == ("FALL20",)

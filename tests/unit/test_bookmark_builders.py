@@ -1150,6 +1150,22 @@ class TestFilterListContains:
         assert section[0]["filterType"] == "object"
         assert len(section[0]["listItemFilters"]) == 1
 
+    def test_kwargs_inherit_outer_resource_type_people(self) -> None:
+        """Keyword shorthand propagates resource_type='people' to inner equals filters.
+
+        Regression: previously the kwargs path called ``cls.equals(k, v)``
+        with no resource_type override, hardcoding inner filters to
+        ``"events"`` even when the outer filter targeted ``"people"``.
+        """
+        f = Filter.list_contains("addresses", resource_type="people", City="Brooklyn")
+        assert f._resource_type == "people"
+        assert f._list_item_filters is not None
+        assert all(sub._resource_type == "people" for sub in f._list_item_filters)
+        section = build_filter_section(f)
+        assert section[0]["resourceType"] == "people"
+        for sub_entry in section[0]["listItemFilters"]:
+            assert sub_entry["resourceType"] == "people"
+
 
 class TestGroupByListItem:
     """Tests for GroupBy.list_item — break down by a list-item subproperty."""
@@ -1203,6 +1219,27 @@ class TestGroupByListItem:
                 bucket_size=10,
                 _list_item_sub="Price",
                 _list_item_sub_type="number",
+            )
+
+    def test_rejects_missing_sub_type_on_direct_construction(self) -> None:
+        """_list_item_sub set but _list_item_sub_type=None raises (GB6)."""
+        with pytest.raises(ValueError, match="_list_item_sub_type"):
+            GroupBy(
+                property="cart",
+                property_type="object",
+                _list_item_sub="Brand",
+                _list_item_sub_type=None,
+            )
+
+    def test_rejects_non_string_property_on_list_item(self) -> None:
+        """_list_item_sub set but property is not a plain str raises (GB7)."""
+        ref = CustomPropertyRef(id=42)
+        with pytest.raises(ValueError, match="plain str"):
+            GroupBy(
+                property=ref,
+                property_type="object",
+                _list_item_sub="Brand",
+                _list_item_sub_type="string",
             )
 
     def test_via_build_group_section_in_list(self) -> None:

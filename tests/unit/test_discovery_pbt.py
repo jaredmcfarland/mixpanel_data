@@ -12,7 +12,7 @@ Properties tested:
 
 from __future__ import annotations
 
-import json as _json
+import json
 import warnings as _warnings
 from typing import Any, get_args
 
@@ -634,17 +634,22 @@ class TestInferSubpropertiesInvariants:
             max_size=10,
         )
     )
-    @settings(max_examples=50)
+    @settings(max_examples=100)
     def test_all_string_values_yield_string_type(
         self, rows: list[dict[str, str]]
     ) -> None:
-        """Subkeys whose values are always strings are reported as 'string'."""
-        raw = [_json.dumps(r) for r in rows]
+        """Subkeys whose values are always strings are reported as 'string'.
+
+        Allows ``"datetime"`` because ``_infer_subproperties`` classifies
+        ISO-8601-shaped strings as datetimes — a Hypothesis-generated
+        text could (extremely rarely) match the pattern.
+        """
+        raw = [json.dumps(r) for r in rows]
         with _warnings.catch_warnings():
             _warnings.simplefilter("error")  # PBT: any warning fails the run
             subs = _infer_subproperties(raw)
         for sp in subs:
-            assert sp.type == "string"
+            assert sp.type in ("string", "datetime")
         # Names are alphabetically sorted
         names = [sp.name for sp in subs]
         assert names == sorted(names)
@@ -665,10 +670,10 @@ class TestInferSubpropertiesInvariants:
             max_size=10,
         )
     )
-    @settings(max_examples=50)
+    @settings(max_examples=100)
     def test_all_int_values_yield_number_type(self, rows: list[dict[str, int]]) -> None:
         """Subkeys whose values are always ints are reported as 'number'."""
-        raw = [_json.dumps(r) for r in rows]
+        raw = [json.dumps(r) for r in rows]
         with _warnings.catch_warnings():
             _warnings.simplefilter("error")
             subs = _infer_subproperties(raw)
@@ -687,7 +692,7 @@ class TestInferSubpropertiesInvariants:
             max_size=10,
         )
     )
-    @settings(max_examples=50)
+    @settings(max_examples=100)
     def test_all_bool_values_yield_boolean_type(
         self, rows: list[dict[str, bool]]
     ) -> None:
@@ -696,7 +701,7 @@ class TestInferSubpropertiesInvariants:
         Crucially, this also asserts booleans are NOT misclassified as
         numbers (Python treats ``bool`` as a subclass of ``int``).
         """
-        raw = [_json.dumps(r) for r in rows]
+        raw = [json.dumps(r) for r in rows]
         with _warnings.catch_warnings():
             _warnings.simplefilter("error")
             subs = _infer_subproperties(raw)
