@@ -10,8 +10,9 @@ import json
 import logging
 import re
 import warnings
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
+from mixpanel_data._literal_types import CustomPropertyType
 from mixpanel_data.exceptions import EventNotFoundError, QueryError
 from mixpanel_data.types import (
     BookmarkInfo,
@@ -156,7 +157,7 @@ _MAX_SAMPLE_VALUES = 5
 
 def _infer_scalar_type(
     values: list[str | int | float | bool],
-) -> tuple[Literal["string", "number", "boolean", "datetime"], bool]:
+) -> tuple[CustomPropertyType, bool]:
     """Infer the type of a homogeneous-ish sequence of scalar sub-values.
 
     Boolean is checked before number because Python treats ``bool`` as a

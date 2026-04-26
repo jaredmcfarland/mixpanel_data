@@ -13,6 +13,7 @@ from mixpanel_data._literal_types import (
     CountType,
     CustomPropertyType,
     FilterDateUnit,
+    FilterOperator,
     FilterPropertyType,
     FiltersCombinator,
     FlowAnchorType,
@@ -328,6 +329,7 @@ __all__ = [
     "InsightsMode",
     # Type aliases — filter types
     "CustomPropertyType",
+    "FilterOperator",
     "FilterPropertyType",
     "FilterDateUnit",
     "FiltersCombinator",
@@ -538,6 +540,7 @@ __all__ = [
     "GroupBy",
     "CustomPropertyType",
     "FilterDateUnit",
+    "FilterOperator",
     "FilterPropertyType",
     "QueryResult",
     # Schema Registry & Data Governance types (Phase 028)

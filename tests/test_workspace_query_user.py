@@ -1340,7 +1340,7 @@ class TestQueryUserValueErrorWrapping:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """Unsupported filter operator raises BookmarkValidationError."""
-        f = Filter("prop", "unsupported_op", "val")
+        f = Filter("prop", "unsupported_op", "val")  # type: ignore[arg-type]
         ws = workspace_factory()
         try:
             with pytest.raises(BookmarkValidationError):

@@ -521,7 +521,44 @@ CustomPropertyType = Literal["string", "number", "boolean", "datetime"]
 """Output type for custom property definitions.
 
 Unlike ``FilterPropertyType``, excludes ``"list"`` which is not valid
-for custom property output types.
+for custom property output types. Also reused by ``SubPropertyInfo``
+and ``GroupBy.list_item`` since those operate on the same scalar
+type space.
+"""
+
+FilterOperator = Literal[
+    "contains",
+    "does not contain",
+    "does not equal",
+    "ends with",
+    "equals",
+    "false",
+    "is at least",
+    "is at most",
+    "is between",
+    "is greater than",
+    "is less than",
+    "is not set",
+    "is set",
+    "list_contains",
+    "not between",
+    "starts with",
+    "true",
+    "was before",
+    "was between",
+    "was in the",
+    "was in the next",
+    "was not between",
+    "was not in the",
+    "was not on",
+    "was on",
+    "was since",
+]
+"""All recognized values of ``Filter._operator``.
+
+Centralized so additions/removals stay in lockstep with the bookmark
+wire format and so mypy catches typos at every Filter classmethod
+factory call site.
 """
 
 FilterDateUnit = Literal["hour", "day", "week", "month"]
@@ -581,6 +618,8 @@ __all__ = [
     # Insights mode
     "InsightsMode",
     # Filter types
+    "CustomPropertyType",
+    "FilterOperator",
     "FilterPropertyType",
     "FilterDateUnit",
     "FiltersCombinator",

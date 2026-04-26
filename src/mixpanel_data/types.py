@@ -34,6 +34,7 @@ from mixpanel_data._literal_types import (
 from mixpanel_data._literal_types import ConversionWindowUnit as ConversionWindowUnit
 from mixpanel_data._literal_types import CustomPropertyType as CustomPropertyType
 from mixpanel_data._literal_types import FilterDateUnit as FilterDateUnit
+from mixpanel_data._literal_types import FilterOperator as FilterOperator
 from mixpanel_data._literal_types import FilterPropertyType as FilterPropertyType
 from mixpanel_data._literal_types import FiltersCombinator as FiltersCombinator
 from mixpanel_data._literal_types import FlowAnchorType, FlowNodeType, FlowSessionEvent
@@ -854,7 +855,7 @@ class SubPropertyInfo:
     name: str
     """Subproperty name as it appears inside each object."""
 
-    type: Literal["string", "number", "boolean", "datetime"]
+    type: CustomPropertyType
     """Inferred data type, suitable for ``GroupBy.list_item(sub_type=...)``."""
 
     sample_values: tuple[str | int | float | bool, ...]
@@ -7711,8 +7712,8 @@ class Filter:
     _property: str | CustomPropertyRef | InlineCustomProperty
     """Property to filter on (name, ref, or inline)."""
 
-    _operator: str
-    """Internal operator string."""
+    _operator: FilterOperator
+    """Internal operator string. Must be one of the values in :data:`FilterOperator`."""
 
     _value: (
         str | int | float | list[str] | list[int | float] | list[dict[str, Any]] | None
@@ -8282,7 +8283,7 @@ class Filter:
         """
         _validate_cohort_args(cohort, name)
 
-        operator = "does not contain" if negated else "contains"
+        operator: FilterOperator = "does not contain" if negated else "contains"
 
         # Build the cohort value structure
         cohort_entry: dict[str, Any] = {"negated": negated, "name": name or ""}
@@ -8791,9 +8792,7 @@ class GroupBy:
     _list_item_sub: str | None = None
     """Subproperty name for list-item breakdown (set by ``list_item()``)."""
 
-    _list_item_sub_type: Literal["string", "number", "boolean", "datetime"] | None = (
-        None
-    )
+    _list_item_sub_type: CustomPropertyType | None = None
     """Subproperty type for list-item breakdown."""
 
     def __post_init__(self) -> None:
@@ -8853,7 +8852,7 @@ class GroupBy:
         property: str,
         sub: str,
         *,
-        sub_type: Literal["string", "number", "boolean", "datetime"] = "string",
+        sub_type: CustomPropertyType = "string",
     ) -> GroupBy:
         """Break down by a subproperty of objects inside a list property.
 
