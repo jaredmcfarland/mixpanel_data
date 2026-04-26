@@ -845,10 +845,10 @@ class SubPropertyInfo:
         ```python
         for sp in ws.subproperties("cart", event="Cart Viewed"):
             print(sp.name, sp.type, sp.sample_values)
-        # Brand    string ('nike', 'puma', 'h&m')
+        # Brand string ('nike', 'puma', 'h&m')
         # Category string ('hats', 'jeans', 'shoes')
-        # Item ID  number (35317, 35318)
-        # Price    number (51, 87, 102)
+        # Item ID number (35317, 35318)
+        # Price number (51, 87, 102)
         ```
     """
 

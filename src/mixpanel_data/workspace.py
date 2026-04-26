@@ -1007,21 +1007,26 @@ class Workspace:
             Empty list if no parseable dict values were found.
 
         Raises:
-            ConfigError: If API credentials not available.
+            ConfigError: If API credentials cannot be resolved.
+            AuthenticationError: If credentials are configured but
+                rejected by Mixpanel.
 
         Warns:
-            UserWarning: When a subproperty has values of mixed types
-                across rows; the reported ``type`` collapses to
-                ``"string"``.
+            UserWarning: When a subproperty has values of mixed scalar
+                types across rows (collapses to ``"string"``); when a
+                sub-key is observed with both scalar and nested-object
+                shapes (reports the scalar form); or when a sub-key
+                is observed but all sampled values were ``null``
+                (excluded from output).
 
         Example:
             ```python
             for sp in ws.subproperties("cart", event="Cart Viewed"):
                 print(sp.name, sp.type, sp.sample_values)
-            # Brand    string ('nike', 'puma', 'h&m')
+            # Brand string ('nike', 'puma', 'h&m')
             # Category string ('hats', 'jeans')
-            # Item ID  number (35317, 35318)
-            # Price    number (51, 87, 102)
+            # Item ID number (35317, 35318)
+            # Price number (51, 87, 102)
             ```
         """
         return self._discovery_service.list_subproperties(

@@ -387,3 +387,8 @@ class TestListContainsRoundTrip:
             # Each sub's value+filterValue should appear in the original pairs dict
             assert sub["value"] in pairs
             assert sub["filterValue"] == [pairs[sub["value"]]]
+        # Completeness: every original kwarg must show up exactly once.
+        # set() de-duplicates if Hypothesis ever picks the same value
+        # for two keys; the count check above handles the per-key side.
+        emitted_keys = {sub["value"] for sub in entry["listItemFilters"]}
+        assert emitted_keys == set(pairs.keys())

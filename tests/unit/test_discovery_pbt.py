@@ -20,6 +20,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from mixpanel_data._internal.services.discovery import (
+    _DATE_PATTERN,
     _infer_subproperties,
     _parse_bookmark_info,
     _parse_lexicon_metadata,
@@ -626,7 +627,12 @@ class TestInferSubpropertiesInvariants:
         rows=st.lists(
             st.dictionaries(
                 keys=_subkeys,
-                values=st.text(min_size=1, max_size=20),
+                # Filter to exclude any string that even shape-matches
+                # the ISO date pattern, so the type assertion can stay
+                # strict ("string", not "string | datetime").
+                values=st.text(min_size=1, max_size=20).filter(
+                    lambda s: _DATE_PATTERN.match(s) is None
+                ),
                 min_size=1,
                 max_size=4,
             ),
@@ -638,18 +644,19 @@ class TestInferSubpropertiesInvariants:
     def test_all_string_values_yield_string_type(
         self, rows: list[dict[str, str]]
     ) -> None:
-        """Subkeys whose values are always strings are reported as 'string'.
+        """Subkeys whose values are always non-ISO strings are reported as 'string'.
 
-        Allows ``"datetime"`` because ``_infer_subproperties`` classifies
-        ISO-8601-shaped strings as datetimes — a Hypothesis-generated
-        text could (extremely rarely) match the pattern.
+        Strategy filters out ISO-8601 shape matches so the assertion
+        can stay strictly ``sp.type == "string"`` — a regression that
+        relaxes the date pattern would no longer slip past as
+        "datetime".
         """
         raw = [json.dumps(r) for r in rows]
         with _warnings.catch_warnings():
             _warnings.simplefilter("error")  # PBT: any warning fails the run
             subs = _infer_subproperties(raw)
         for sp in subs:
-            assert sp.type in ("string", "datetime")
+            assert sp.type == "string"
         # Names are alphabetically sorted
         names = [sp.name for sp in subs]
         assert names == sorted(names)
