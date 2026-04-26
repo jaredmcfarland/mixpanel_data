@@ -166,12 +166,13 @@ The library exports these type aliases:
 
 ```python
 from mixpanel_data import CountType, HourDayUnit, TimeUnit, FilterDateUnit
-from mixpanel_data import FlowCountType, FlowChartType
+from mixpanel_data import FilterOperator, FlowCountType, FlowChartType
 
 # CountType: Literal["general", "unique", "average", "median", "min", "max"]
 # HourDayUnit: Literal["hour", "day"]
 # TimeUnit: Literal["day", "week", "month", "quarter", "year"]
 # FilterDateUnit: Literal["hour", "day", "week", "month"]
+# FilterOperator: Literal[26 operator strings — see _literal_types.py]
 # FlowCountType: Literal["unique", "total", "session"]
 # FlowChartType: Literal["sankey", "paths", "tree"]
 ```

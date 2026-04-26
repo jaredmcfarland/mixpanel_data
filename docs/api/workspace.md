@@ -164,6 +164,7 @@ See [Auth → Workspace.use()](auth.md#workspaceuse-in-session-switching) for th
         - events
         - properties
         - property_values
+        - subproperties
         - funnels
         - cohorts
         - list_bookmarks

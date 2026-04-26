@@ -76,6 +76,46 @@ Sample values for a property:
     mp inspect values --property country --event Purchase --limit 10
     ```
 
+## Subproperties
+
+Some Mixpanel event properties are **lists of objects** — for example, a `cart` property whose value is `[{"Brand": "nike", "Category": "hats", "Price": 51}, ...]`. The `property_values()` endpoint returns these as JSON-encoded strings, which makes them awkward to inspect by eye. `subproperties()` parses a sample of those blobs and infers a scalar type per inner key.
+
+=== "Python"
+
+    ```python
+    for sp in ws.subproperties("cart", event="Cart Viewed"):
+        print(sp.name, sp.type, sp.sample_values)
+    # Brand string ('nike', 'puma', 'h&m')
+    # Category string ('hats', 'jeans')
+    # Item ID number (35317, 35318)
+    # Price number (51, 87, 102)
+    ```
+
+=== "CLI"
+
+    ```bash
+    mp inspect subproperties --property cart --event "Cart Viewed"
+
+    # Sample more rows (default: 50)
+    mp inspect subproperties -p cart -e "Cart Viewed" --sample-size 200
+
+    # Tabular output
+    mp inspect subproperties -p cart -e "Cart Viewed" --format table
+    ```
+
+Results are alphabetically sorted by `name`. Subproperties whose values are themselves dicts/lists are silently skipped (only scalar sub-values are reportable). When a sub-key is observed with mixed scalar shapes, with both scalar and dict shapes, or with only `null` values, the call emits a `UserWarning`.
+
+The discovered names and types feed directly into [`Filter.list_contains`](query.md#list-of-object-filters) and [`GroupBy.list_item`](query.md#list-of-object-breakdowns) for filtering and breaking down by subproperty values.
+
+### SubPropertyInfo
+
+```python
+sp.name           # "Brand"
+sp.type           # "string" | "number" | "boolean" | "datetime"
+sp.sample_values  # ('nike', 'puma', 'h&m')  — up to 5 distinct values
+sp.to_dict()      # {'name': 'Brand', 'type': 'string', 'sample_values': ['nike', ...]}
+```
+
 ## Saved Funnels
 
 List funnels defined in Mixpanel:
