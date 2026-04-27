@@ -9,7 +9,7 @@ default:
 # CI runs the same commands plus HYPOTHESIS_PROFILE=ci for tests; that
 # profile is the only documented difference (deterministic seed, 200 examples
 # vs default 100). Locally we use the default profile for faster iteration.
-check: lint fmt-check typecheck test-cov build
+check: lint fmt-check typecheck docstring-cov test-cov build
 
 # Install git hooks so commits are blocked on lint/format failures BEFORE
 # they reach CI. Run once after cloning the repo.
@@ -127,6 +127,13 @@ fmt-check:
 # Type check with mypy
 typecheck:
     uv run mypy src/ tests/
+
+# Docstring coverage — src is gated at 99% (see [tool.interrogate] in
+# pyproject.toml); tests is gated at 95% via the second invocation. Bump
+# either threshold up if coverage rises and you want to lock the gain in.
+docstring-cov:
+    uv run interrogate src/
+    uv run interrogate tests/ --fail-under=95
 
 # Sync dependencies
 sync:
