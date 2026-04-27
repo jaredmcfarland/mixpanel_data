@@ -512,6 +512,31 @@ class TestDiscovery:
         finally:
             ws.close()
 
+    def test_subproperties_delegation(
+        self,
+        workspace_factory: Callable[..., Workspace],
+    ) -> None:
+        """Workspace.subproperties() delegates to DiscoveryService.list_subproperties()."""
+        from mixpanel_data.types import SubPropertyInfo
+
+        ws = workspace_factory()
+        try:
+            mock_discovery = MagicMock()
+            mock_discovery.list_subproperties.return_value = [
+                SubPropertyInfo(name="Brand", type="string", sample_values=("nike",)),
+            ]
+            ws._discovery = mock_discovery
+
+            result = ws.subproperties("cart", event="Cart Viewed", sample_size=25)
+
+            assert len(result) == 1
+            assert result[0].name == "Brand"
+            mock_discovery.list_subproperties.assert_called_once_with(
+                "cart", event="Cart Viewed", sample_size=25
+            )
+        finally:
+            ws.close()
+
     def test_funnels_delegation(
         self,
         workspace_factory: Callable[..., Workspace],

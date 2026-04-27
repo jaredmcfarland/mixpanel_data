@@ -302,3 +302,140 @@ class TestJqEmptyResultsIntegration:
 
         assert result.exit_code == 0
         assert result.stdout.strip() == "[]"
+
+
+class TestInspectSubpropertiesWithJq:
+    """Integration tests for inspect subproperties (PR #128 follow-up)."""
+
+    def test_subproperties_happy_path_json(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Discovered subproperties serialize to JSON via SubPropertyInfo.to_dict."""
+        from mixpanel_data import SubPropertyInfo
+
+        mock_workspace.subproperties.return_value = [
+            SubPropertyInfo(name="Brand", type="string", sample_values=("nike",)),
+            SubPropertyInfo(name="Price", type="number", sample_values=(50, 80)),
+        ]
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "inspect",
+                    "subproperties",
+                    "-p",
+                    "cart",
+                    "-e",
+                    "Cart Viewed",
+                    "--format",
+                    "json",
+                ],
+            )
+        assert result.exit_code == 0
+        payload = json.loads(result.stdout)
+        assert payload == [
+            {"name": "Brand", "type": "string", "sample_values": ["nike"]},
+            {"name": "Price", "type": "number", "sample_values": [50, 80]},
+        ]
+        mock_workspace.subproperties.assert_called_once_with(
+            property_name="cart", event="Cart Viewed", sample_size=50
+        )
+
+    def test_subproperties_empty_result(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """Empty result list serializes to an empty JSON array."""
+        mock_workspace.subproperties.return_value = []
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["inspect", "subproperties", "-p", "cart", "--format", "json"],
+            )
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == []
+
+    def test_subproperties_with_jq_filter(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """jq filter applied to projected output runs end-to-end."""
+        from mixpanel_data import SubPropertyInfo
+
+        mock_workspace.subproperties.return_value = [
+            SubPropertyInfo(name="Brand", type="string", sample_values=("nike",)),
+            SubPropertyInfo(name="Category", type="string", sample_values=("hats",)),
+            SubPropertyInfo(name="Price", type="number", sample_values=(50,)),
+        ]
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "inspect",
+                    "subproperties",
+                    "-p",
+                    "cart",
+                    "--format",
+                    "json",
+                    "--jq",
+                    '[.[] | select(.type == "string") | .name]',
+                ],
+            )
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == ["Brand", "Category"]
+
+    def test_subproperties_table_format_succeeds(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """``--format table`` runs without crashing (table contents unsnapped)."""
+        from mixpanel_data import SubPropertyInfo
+
+        mock_workspace.subproperties.return_value = [
+            SubPropertyInfo(name="Brand", type="string", sample_values=("nike",)),
+        ]
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["inspect", "subproperties", "-p", "cart", "--format", "table"],
+            )
+        assert result.exit_code == 0
+        # Header columns appear in the rendered table
+        assert "name" in result.stdout.lower()
+        assert "Brand" in result.stdout
+
+    def test_subproperties_sample_size_passthrough(
+        self, cli_runner: CliRunner, mock_workspace: MagicMock
+    ) -> None:
+        """``--sample-size`` is forwarded to Workspace.subproperties()."""
+        mock_workspace.subproperties.return_value = []
+        with patch(
+            "mixpanel_data.cli.commands.inspect.get_workspace",
+            return_value=mock_workspace,
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "inspect",
+                    "subproperties",
+                    "-p",
+                    "cart",
+                    "-s",
+                    "200",
+                    "--format",
+                    "json",
+                ],
+            )
+        assert result.exit_code == 0
+        mock_workspace.subproperties.assert_called_once_with(
+            property_name="cart", event=None, sample_size=200
+        )

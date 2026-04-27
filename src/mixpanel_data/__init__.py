@@ -13,6 +13,7 @@ from mixpanel_data._literal_types import (
     CountType,
     CustomPropertyType,
     FilterDateUnit,
+    FilterOperator,
     FilterPropertyType,
     FiltersCombinator,
     FlowAnchorType,
@@ -201,6 +202,7 @@ from mixpanel_data.types import (
     LexiconProperty,
     LexiconSchema,
     LexiconTag,
+    ListItemGroupMode,
     LookupTable,
     LookupTableUploadUrl,
     MarkLookupTableReadyParams,
@@ -240,6 +242,7 @@ from mixpanel_data.types import (
     SegmentationResult,
     ServingMethod,
     SetTestUsersParams,
+    SubPropertyInfo,
     Target,
     TimeComparison,
     TopEvent,
@@ -273,7 +276,7 @@ from mixpanel_data.types import (
 )
 from mixpanel_data.workspace import Workspace
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 __all__ = [
     # Core
@@ -327,6 +330,7 @@ __all__ = [
     "InsightsMode",
     # Type aliases — filter types
     "CustomPropertyType",
+    "FilterOperator",
     "FilterPropertyType",
     "FilterDateUnit",
     "FiltersCombinator",
@@ -373,6 +377,7 @@ __all__ = [
     # Discovery types
     "FunnelInfo",
     "SavedCohort",
+    "SubPropertyInfo",
     "TopEvent",
     "EventCountsResult",
     "PropertyCountsResult",
@@ -534,8 +539,10 @@ __all__ = [
     "Filter",
     "Formula",
     "GroupBy",
+    "ListItemGroupMode",
     "CustomPropertyType",
     "FilterDateUnit",
+    "FilterOperator",
     "FilterPropertyType",
     "QueryResult",
     # Schema Registry & Data Governance types (Phase 028)

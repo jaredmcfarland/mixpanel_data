@@ -1981,3 +1981,25 @@ class TestCustomEventExports:
         assert "CreateCustomEventParams" in mixpanel_data.__all__
         assert "CustomEvent" in mixpanel_data.__all__
         assert "CustomEventAlternative" in mixpanel_data.__all__
+
+
+class TestSubPropertyInfo:
+    """Tests for SubPropertyInfo serialization (Phase 5 of PR #128 review)."""
+
+    def test_to_dict_returns_lists_for_sample_values(self) -> None:
+        """``to_dict()`` converts the immutable tuple to a JSON-serializable list."""
+        from mixpanel_data import SubPropertyInfo
+
+        sp = SubPropertyInfo(
+            name="Brand", type="string", sample_values=("nike", "puma")
+        )
+        result = sp.to_dict()
+        assert result == {
+            "name": "Brand",
+            "type": "string",
+            "sample_values": ["nike", "puma"],
+        }
+        # The sample_values value must be a list (not tuple) for JSON.
+        assert isinstance(result["sample_values"], list)
+        # And the result must round-trip through json.dumps without error.
+        assert json.loads(json.dumps(result)) == result

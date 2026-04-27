@@ -237,6 +237,7 @@ from mixpanel_data.types import (
     SchemaEntry,
     SegmentationResult,
     SetTestUsersParams,
+    SubPropertyInfo,
     TimeComparison,
     TopEvent,
     UpdateAlertParams,
@@ -969,6 +970,67 @@ class Workspace:
         """
         return self._discovery_service.list_property_values(
             property_name, event=event, limit=limit
+        )
+
+    def subproperties(
+        self,
+        property_name: str,
+        *,
+        event: str | None = None,
+        sample_size: int = 50,
+    ) -> list[SubPropertyInfo]:
+        """List inferred subproperties of a list-of-object event property.
+
+        Samples values via :meth:`property_values`, parses each as JSON,
+        and returns one :class:`SubPropertyInfo` per discovered scalar
+        subproperty. Designed for properties like ``cart`` whose values
+        are objects with subkeys (``Brand``, ``Category``, ``Price``,
+        ``Item ID``). The returned ``name`` and ``type`` plug directly
+        into :meth:`GroupBy.list_item` and :meth:`Filter.list_contains`.
+
+        Scope: only **scalar** subproperty values (string / number /
+        boolean / ISO datetime string) are reported. Subproperties whose
+        values are themselves dicts or lists are silently skipped — they
+        cannot be used by ``GroupBy.list_item`` or
+        ``Filter.list_contains`` anyway.
+
+        Args:
+            property_name: Top-level list-of-object property name (e.g.
+                ``"cart"``).
+            event: Optional event name to scope the sample. Strongly
+                recommended; without it the API may return values from
+                across all events.
+            sample_size: Number of raw values to sample. Default: 50.
+
+        Returns:
+            Alphabetically sorted list of :class:`SubPropertyInfo`.
+            Empty list if no parseable dict values were found.
+
+        Raises:
+            ConfigError: If API credentials cannot be resolved.
+            AuthenticationError: If credentials are configured but
+                rejected by Mixpanel.
+
+        Warns:
+            UserWarning: When a subproperty has values of mixed scalar
+                types across rows (collapses to ``"string"``); when a
+                sub-key is observed with both scalar and nested-object
+                shapes (reports the scalar form); or when a sub-key
+                is observed but all sampled values were ``null``
+                (excluded from output).
+
+        Example:
+            ```python
+            for sp in ws.subproperties("cart", event="Cart Viewed"):
+                print(sp.name, sp.type, sp.sample_values)
+            # Brand string ('nike', 'puma', 'h&m')
+            # Category string ('hats', 'jeans')
+            # Item ID number (35317, 35318)
+            # Price number (51, 87, 102)
+            ```
+        """
+        return self._discovery_service.list_subproperties(
+            property_name, event=event, sample_size=sample_size
         )
 
     def funnels(self) -> list[FunnelInfo]:

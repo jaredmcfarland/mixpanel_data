@@ -691,7 +691,7 @@ class TestTier2CrashPaths:
         """
         f = Filter(
             _property="fake",
-            _operator="unknown_op",
+            _operator="unknown_op",  # type: ignore[arg-type]
             _value=None,
             _property_type="string",
         )

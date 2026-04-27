@@ -34,6 +34,7 @@ from mixpanel_data._literal_types import (
 from mixpanel_data._literal_types import ConversionWindowUnit as ConversionWindowUnit
 from mixpanel_data._literal_types import CustomPropertyType as CustomPropertyType
 from mixpanel_data._literal_types import FilterDateUnit as FilterDateUnit
+from mixpanel_data._literal_types import FilterOperator as FilterOperator
 from mixpanel_data._literal_types import FilterPropertyType as FilterPropertyType
 from mixpanel_data._literal_types import FiltersCombinator as FiltersCombinator
 from mixpanel_data._literal_types import FlowAnchorType, FlowNodeType, FlowSessionEvent
@@ -820,6 +821,59 @@ class BookmarkInfo:
         if self.creator_name is not None:
             result["creator_name"] = self.creator_name
         return result
+
+
+@dataclass(frozen=True)
+class SubPropertyInfo:
+    """Discovered subproperty of a list-of-object event property.
+
+    Returned by :meth:`Workspace.subproperties` to describe the inner
+    structure of properties whose values are lists of objects (e.g.
+    ``cart`` is a list of ``{"Brand": str, "Category": str, "Price":
+    int}`` items). Use the ``name`` and ``type`` to construct
+    :meth:`GroupBy.list_item` and :meth:`Filter.list_contains` calls.
+
+    Attributes:
+        name: Subproperty name as it appears inside each object.
+        type: Inferred data type. Mixed sub-value types collapse to
+            ``"string"`` (a ``UserWarning`` is emitted at discovery
+            time).
+        sample_values: Up to 5 distinct sample values observed across
+            the sampled rows.
+
+    Example:
+        ```python
+        for sp in ws.subproperties("cart", event="Cart Viewed"):
+            print(sp.name, sp.type, sp.sample_values)
+        # Brand string ('nike', 'puma', 'h&m')
+        # Category string ('hats', 'jeans', 'shoes')
+        # Item ID number (35317, 35318)
+        # Price number (51, 87, 102)
+        ```
+    """
+
+    name: str
+    """Subproperty name as it appears inside each object."""
+
+    type: CustomPropertyType
+    """Inferred data type, suitable for ``GroupBy.list_item(sub_type=...)``."""
+
+    sample_values: tuple[str | int | float | bool, ...]
+    """Up to 5 distinct sample values observed across the sampled rows."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the subproperty info as a plain dict for JSON output.
+
+        Returns:
+            Dict with ``name`` (str), ``type`` (str), and
+            ``sample_values`` (list of scalars) keys, suitable for
+            JSON serialization.
+        """
+        return {
+            "name": self.name,
+            "type": self.type,
+            "sample_values": list(self.sample_values),
+        }
 
 
 @dataclass(frozen=True)
@@ -7658,8 +7712,8 @@ class Filter:
     _property: str | CustomPropertyRef | InlineCustomProperty
     """Property to filter on (name, ref, or inline)."""
 
-    _operator: str
-    """Internal operator string."""
+    _operator: FilterOperator
+    """Internal operator string. Must be one of the values in :data:`FilterOperator`."""
 
     _value: (
         str | int | float | list[str] | list[int | float] | list[dict[str, Any]] | None
@@ -7685,6 +7739,38 @@ class Filter:
     Maps to ``filterDateUnit`` in bookmark JSON. ``None`` for non-date
     and absolute date filters.
     """
+
+    _list_item_filters: tuple[Filter, ...] | None = None
+    """Sub-filters for ``list_contains``, evaluated per-item against a list-of-objects property."""
+
+    _list_item_quantifier: Literal["any", "all"] | None = None
+    """Quantifier for ``list_contains``: ``"any"`` (≥1 item matches) or ``"all"`` (every item matches)."""
+
+    def __post_init__(self) -> None:
+        """Validate Filter mode invariants.
+
+        Only validates the ``list_contains`` mode today. Other operator
+        modes rely on classmethod-only validation; expanding this
+        coverage is a separate concern from this PR's list_contains
+        feature.
+
+        Raises:
+            ValueError: If ``_operator == "list_contains"`` but
+                ``_list_item_filters`` or ``_list_item_quantifier`` is
+                ``None``. List-contains filters must be constructed
+                via ``Filter.list_contains(...)``.
+        """
+        if self._operator == "list_contains":
+            if self._list_item_filters is None:
+                raise ValueError(
+                    "list_contains Filter requires _list_item_filters; "
+                    "construct via Filter.list_contains(...)"
+                )
+            if self._list_item_quantifier is None:
+                raise ValueError(
+                    "list_contains Filter requires _list_item_quantifier; "
+                    "construct via Filter.list_contains(...)"
+                )
 
     @classmethod
     def equals(
@@ -8223,7 +8309,7 @@ class Filter:
         """
         _validate_cohort_args(cohort, name)
 
-        operator = "does not contain" if negated else "contains"
+        operator: FilterOperator = "does not contain" if negated else "contains"
 
         # Build the cohort value structure
         cohort_entry: dict[str, Any] = {"negated": negated, "name": name or ""}
@@ -8575,6 +8661,178 @@ class Filter:
             _date_unit=date_unit,
         )
 
+    # --- List-of-object subproperty filters ---
+
+    @classmethod
+    def list_contains(
+        cls,
+        property: str,
+        *item_filters: Filter,
+        quantifier: Literal["any", "all"] = "any",
+        resource_type: Literal["events", "people"] = "events",
+        **equals: str | list[str],
+    ) -> Filter:
+        """Match events whose list-of-object property contains items satisfying inner conditions.
+
+        Used to filter on subproperties of objects nested inside a list
+        property (e.g. ``cart`` is a list of ``{"Brand": str, "Category":
+        str, "Price": int}``). Each inner condition is evaluated
+        per-item; the ``quantifier`` controls whether at least one item
+        (``"any"``, the default) or every item (``"all"``) must satisfy
+        all inner conditions.
+
+        Two ways to specify inner conditions:
+
+        - **Keyword shorthand** for the common equality case:
+          ``Filter.list_contains("cart", Brand="nike", Category="hats")``.
+          Inner equality filters inherit the outer ``resource_type``.
+        - **Explicit Filter instances** for any wire-format operator:
+          ``Filter.list_contains("cart", Filter.equals("Brand", "nike"),
+          Filter.greater_than("Price", 50))``. Each inner Filter carries
+          its own ``resource_type`` from its own factory call — pass
+          ``resource_type=`` explicitly on each inner factory if you
+          want them to match the outer.
+
+        Mixing the two shapes in one call raises ``ValueError``.
+
+        Args:
+            property: Name of the list-of-object property to filter on.
+            *item_filters: Inner ``Filter`` instances applied per list
+                item. Mutually exclusive with ``**equals``.
+            quantifier: ``"any"`` (≥1 item must match all inner
+                conditions) or ``"all"`` (every item must). Default:
+                ``"any"``.
+            resource_type: Resource type. Default: ``"events"``.
+            **equals: Keyword shorthand — each ``key=value`` becomes
+                ``Filter.equals(key, value, resource_type=resource_type)``.
+                Mutually exclusive with ``*item_filters``. Values must
+                be ``str`` or ``list[str]``; keys must be non-empty.
+
+        Returns:
+            Filter that emits the ``listItemFilters`` bookmark structure
+            on serialization.
+
+        Raises:
+            ValueError: If both ``*item_filters`` and ``**equals`` are
+                provided, if ``quantifier`` is not ``"any"`` or
+                ``"all"``, if a kwarg key is empty, if no inner
+                conditions are given, or if any inner filter is itself
+                a ``list_contains`` (nesting is not supported).
+            TypeError: If a ``**equals`` value is not ``str`` or
+                ``list[str]`` (the wire format only supports string
+                equality; numeric/boolean comparisons require explicit
+                ``Filter.equals(...)`` / ``Filter.greater_than(...)``
+                positional inner filters).
+
+        Example:
+            ```python
+            from mixpanel_data import Filter
+
+            # Cart contains a nike-branded hat
+            f1 = Filter.list_contains("cart", Brand="nike", Category="hats")
+
+            # Every cart item costs more than $50
+            f2 = Filter.list_contains(
+                "cart",
+                Filter.greater_than("Price", 50),
+                quantifier="all",
+            )
+            ```
+        """
+        if item_filters and equals:
+            raise ValueError(
+                "Filter.list_contains: pass either positional Filter instances "
+                "OR keyword equals shorthand, not both"
+            )
+        if quantifier not in ("any", "all"):
+            raise ValueError(
+                f"Filter.list_contains quantifier must be 'any' or 'all', "
+                f"got {quantifier!r}"
+            )
+        for k, v in equals.items():
+            if not k.strip():
+                raise ValueError(
+                    "Filter.list_contains: kwarg keys must be non-empty strings"
+                )
+            if not isinstance(v, (str, list)):
+                raise TypeError(
+                    f"Filter.list_contains kwarg {k!r}: value must be str or "
+                    f"list[str], got {type(v).__name__}"
+                )
+        sub_filters: tuple[Filter, ...] = (
+            tuple(item_filters)
+            if item_filters
+            else tuple(
+                cls.equals(k, v, resource_type=resource_type) for k, v in equals.items()
+            )
+        )
+        if not sub_filters:
+            raise ValueError(
+                "Filter.list_contains requires at least one inner condition"
+            )
+        for sub in sub_filters:
+            if sub._operator == "list_contains":
+                raise ValueError(
+                    "Filter.list_contains does not support nested list_contains filters"
+                )
+        return cls(
+            _property=property,
+            _operator="list_contains",
+            _value=None,
+            _property_type="object",
+            _resource_type=resource_type,
+            _list_item_filters=sub_filters,
+            _list_item_quantifier=quantifier,
+        )
+
+
+@dataclass(frozen=True)
+class ListItemGroupMode:
+    """Discriminator for ``GroupBy.list_item`` — sub-property name + scalar type.
+
+    Pairs the subproperty name with its inferred scalar type so they
+    cannot be set independently. Used as the optional ``_list_item_mode``
+    field on ``GroupBy``; presence of this field marks a GroupBy as a
+    list-item breakdown.
+
+    Attributes:
+        sub: Subproperty name (must be non-empty after stripping).
+        sub_type: Subproperty data type. One of the four
+            ``CustomPropertyType`` values.
+
+    Example:
+        ```python
+        from mixpanel_data import GroupBy, ListItemGroupMode
+
+        # Constructed indirectly via the classmethod (preferred)
+        g = GroupBy.list_item("cart", "Brand")
+        assert g._list_item_mode == ListItemGroupMode(sub="Brand", sub_type="string")
+        ```
+    """
+
+    sub: str
+    """Subproperty name as it appears inside each object."""
+
+    sub_type: CustomPropertyType
+    """Subproperty data type, matching :data:`CustomPropertyType`."""
+
+    def __post_init__(self) -> None:
+        """Validate sub is non-empty and sub_type is a known scalar type.
+
+        Raises:
+            ValueError: If ``sub`` is empty after stripping or
+                ``sub_type`` is not one of the four
+                ``CustomPropertyType`` values.
+        """
+        if not self.sub.strip():
+            raise ValueError("ListItemGroupMode.sub must be a non-empty string")
+        if self.sub_type not in ("string", "number", "boolean", "datetime"):
+            raise ValueError(
+                "ListItemGroupMode.sub_type must be one of "
+                "'string'/'number'/'boolean'/'datetime', "
+                f"got {self.sub_type!r}"
+            )
+
 
 @dataclass(frozen=True)
 class GroupBy:
@@ -8612,8 +8870,13 @@ class GroupBy:
     property: str | CustomPropertyRef | InlineCustomProperty
     """Property to break down by (name, ref, or inline)."""
 
-    property_type: Literal["string", "number", "boolean", "datetime"] = "string"
-    """Data type of the property."""
+    property_type: CustomPropertyType = "string"
+    """Data type of the property. One of the four scalar types.
+
+    Note: list-item breakdowns set ``_list_item_mode`` instead — the
+    wire builder hardcodes ``propertyType: "object"`` for that branch
+    independently of this field.
+    """
 
     bucket_size: int | float | None = None
     """Bucket width for numeric properties."""
@@ -8624,13 +8887,19 @@ class GroupBy:
     bucket_max: int | float | None = None
     """Maximum value for numeric buckets."""
 
+    _list_item_mode: ListItemGroupMode | None = None
+    """List-item breakdown discriminator. Set by :meth:`list_item`."""
+
     def __post_init__(self) -> None:
         """Validate construction arguments.
 
         Raises:
             ValueError: If property is an empty string (GB1),
-                bucket_size is not positive (GB2), or
-                bucket_min >= bucket_max (GB3).
+                bucket_size is not positive (GB2),
+                bucket_min >= bucket_max (GB3),
+                ``_list_item_mode`` is combined with bucketing (GB4),
+                or ``_list_item_mode`` is set but ``property`` is not a
+                plain ``str`` (GB5).
         """
         if isinstance(self.property, str) and not self.property.strip():
             raise ValueError("GroupBy.property must be a non-empty string")
@@ -8647,6 +8916,66 @@ class GroupBy:
                 f"GroupBy.bucket_min ({self.bucket_min}) must be less than "
                 f"bucket_max ({self.bucket_max})"
             )
+        if self._list_item_mode is not None:
+            if any(
+                b is not None
+                for b in (self.bucket_size, self.bucket_min, self.bucket_max)
+            ):
+                raise ValueError("GroupBy.list_item is incompatible with bucketing")
+            if not isinstance(self.property, str):
+                raise ValueError(
+                    "GroupBy.list_item requires property to be a plain str, "
+                    f"got {type(self.property).__name__}"
+                )
+
+    @classmethod
+    def list_item(
+        cls,
+        property: str,
+        sub: str,
+        *,
+        sub_type: CustomPropertyType = "string",
+    ) -> GroupBy:
+        """Break down by a subproperty of objects inside a list property.
+
+        Mirrors the Mixpanel UI's ``cart.Brand`` / ``cart.Category``
+        breakdown for list-of-object properties (e.g. ``cart`` is a
+        list of ``{"Brand": str, "Category": str, "Price": int}``
+        items). Each list item contributes one count per distinct
+        subproperty value it carries.
+
+        Args:
+            property: Name of the list-of-object property.
+            sub: Subproperty name to break down by.
+            sub_type: Data type of the subproperty. Default:
+                ``"string"``.
+
+        Returns:
+            ``GroupBy`` whose serialization emits a ``listItemGroup``
+            structure in the bookmark JSON.
+
+        Raises:
+            ValueError: If ``sub`` is empty after stripping (via
+                ``ListItemGroupMode.__post_init__``), if ``sub_type``
+                is not one of the four ``CustomPropertyType`` values,
+                or if any ``GroupBy.__post_init__`` invariant fails
+                (see :meth:`__post_init__` Raises section).
+
+        Example:
+            ```python
+            from mixpanel_data import GroupBy
+
+            # Break down Cart Viewed events by cart.Brand
+            g1 = GroupBy.list_item("cart", "Brand")
+
+            # Break down by a numeric subproperty
+            g2 = GroupBy.list_item("cart", "Price", sub_type="number")
+            ```
+        """
+        return cls(
+            property=property,
+            _list_item_mode=ListItemGroupMode(sub=sub, sub_type=sub_type),
+        )
 
 
 # =============================================================================

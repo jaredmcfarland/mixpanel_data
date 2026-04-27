@@ -5,6 +5,7 @@ Tests use httpx.MockTransport for deterministic HTTP mocking.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -1016,3 +1017,369 @@ class TestListTopEvents:
         events = discovery.list_top_events()
 
         assert events == []
+
+
+class TestListSubproperties:
+    """Tests for DiscoveryService.list_subproperties()."""
+
+    @staticmethod
+    def _values_handler(
+        values: list[str],
+    ) -> Callable[[httpx.Request], httpx.Response]:
+        """Return a handler that always replies with `values`."""
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=values)
+
+        return handler
+
+    def test_extracts_string_subproperties_with_types(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Subproperties with string values are reported as type 'string'."""
+
+        values = [
+            json.dumps({"Brand": "nike", "Category": "hats"}),
+            json.dumps({"Brand": "puma", "Category": "shoes"}),
+            json.dumps({"Brand": "h&m", "Category": "hats"}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="Cart Viewed")
+        names = {s.name for s in subs}
+        assert names == {"Brand", "Category"}
+        for s in subs:
+            assert s.type == "string"
+
+    def test_extracts_numeric_subproperties(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Subproperties with numeric values are reported as type 'number'."""
+
+        values = [
+            json.dumps({"Price": 51, "Item ID": 35317}),
+            json.dumps({"Price": 87.5, "Item ID": 35318}),
+            json.dumps({"Price": 102, "Item ID": 35319}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = {s.name: s for s in discovery.list_subproperties("cart", event="X")}
+        assert subs["Price"].type == "number"
+        assert subs["Item ID"].type == "number"
+
+    def test_extracts_boolean_subproperties(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Boolean values are detected as 'boolean', not 'number'."""
+
+        values = [
+            json.dumps({"on_sale": True}),
+            json.dumps({"on_sale": False}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert len(subs) == 1
+        assert subs[0].name == "on_sale"
+        assert subs[0].type == "boolean"
+
+    def test_extracts_datetime_subproperties(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """ISO-formatted date/datetime strings are detected as 'datetime'."""
+
+        values = [
+            json.dumps({"added_at": "2025-04-23"}),
+            json.dumps({"added_at": "2025-04-24"}),
+            json.dumps({"added_at": "2025-04-25T10:30:00Z"}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert subs[0].name == "added_at"
+        assert subs[0].type == "datetime"
+
+    def test_mixed_types_collapse_to_string_with_warning(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Mixed sub-value types report 'string' and emit UserWarning."""
+        import warnings
+
+        values = [
+            json.dumps({"id": "abc"}),
+            json.dumps({"id": 123}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            subs = discovery.list_subproperties("cart", event="X")
+        assert subs[0].type == "string"
+        assert any("mixed" in str(w.message).lower() for w in captured)
+
+    def test_returns_alphabetical_order(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Returned subproperties are sorted alphabetically by name."""
+
+        values = [json.dumps({"Z": "z", "A": "a", "M": "m"})]
+        discovery = discovery_factory(self._values_handler(values))
+        names = [s.name for s in discovery.list_subproperties("cart", event="X")]
+        assert names == ["A", "M", "Z"]
+
+    def test_caps_sample_values_at_five_distinct(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """sample_values holds at most 5 distinct values."""
+
+        values = [json.dumps({"Brand": f"b{i}"}) for i in range(20)]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert len(subs[0].sample_values) <= 5
+        # All distinct
+        assert len(set(subs[0].sample_values)) == len(subs[0].sample_values)
+
+    def test_skips_unparseable_values(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Non-JSON / non-dict values are silently skipped."""
+
+        values = [
+            "not json at all",
+            json.dumps(["just", "a", "list"]),
+            json.dumps({"Brand": "nike"}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert [s.name for s in subs] == ["Brand"]
+
+    def test_skips_nested_object_subvalues(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Nested dicts/lists inside item objects are skipped (scalars only)."""
+
+        values = [
+            json.dumps(
+                {
+                    "Brand": "nike",
+                    "metadata": {"sku": "x"},  # nested dict — skip
+                    "tags": ["a", "b"],  # nested list — skip
+                }
+            ),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        names = {s.name for s in discovery.list_subproperties("cart", event="X")}
+        assert names == {"Brand"}
+
+    def test_empty_input_returns_empty_list(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """No values returns empty list, no error."""
+        discovery = discovery_factory(self._values_handler([]))
+        assert discovery.list_subproperties("cart", event="X") == []
+
+    def test_handles_list_of_dicts_value_shape(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """When a value is a JSON list of dicts, each dict is one row."""
+
+        values = [
+            json.dumps([{"Brand": "nike"}, {"Brand": "puma"}]),
+            json.dumps([{"Brand": "h&m"}]),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert subs[0].name == "Brand"
+        # Should have collected from all dicts in all values
+        assert len(subs[0].sample_values) >= 2
+
+    def test_skips_null_subvalues_no_mixed_warning(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """JSON null sub-values are treated as missing, not mixed types.
+
+        Regression: previously a column of (str, None, str) collapsed to
+        type='string' with a 'mixed types' UserWarning. Nulls now skip
+        inference and never appear in ``sample_values``.
+        """
+        import warnings
+
+        values = [
+            json.dumps({"Brand": "nike", "Coupon": None}),
+            json.dumps({"Brand": "puma", "Coupon": "FALL20"}),
+            json.dumps({"Brand": "h&m", "Coupon": None}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            subs = discovery.list_subproperties("cart", event="X")
+        by_name = {s.name: s for s in subs}
+        assert by_name["Coupon"].type == "string"
+        assert None not in by_name["Coupon"].sample_values
+        assert by_name["Coupon"].sample_values == ("FALL20",)
+
+    def test_iter_dict_rows_filters_non_dicts_in_lists(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Within a JSON list, non-dict items are silently filtered out.
+
+        E.g. ``[{"a": 1}, "junk", {"b": 2}]`` yields rows for the two
+        dicts only; the bare string is dropped.
+        """
+        values = [json.dumps([{"Brand": "nike"}, "junk", {"Brand": "puma"}])]
+        discovery = discovery_factory(self._values_handler(values))
+        subs = discovery.list_subproperties("cart", event="X")
+        assert [s.name for s in subs] == ["Brand"]
+        assert set(subs[0].sample_values) == {"nike", "puma"}
+
+    def test_mixed_shape_emits_warning_and_keeps_scalar(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """A sub-key seen with both scalar and dict shapes warns and reports scalar.
+
+        Regression: previously the dict row was silently dropped without
+        a warning, producing a misleading ``type='string'`` report.
+        """
+        import warnings
+
+        values = [
+            json.dumps({"X": 1}),
+            json.dumps({"X": {"nested": 2}}),  # dict — silently dropped previously
+            json.dumps({"X": 3}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            subs = discovery.list_subproperties("cart", event="X")
+        by_name = {s.name: s for s in subs}
+        assert by_name["X"].type == "number"  # scalar form retained
+        assert set(by_name["X"].sample_values) == {1, 3}
+        assert any("scalar and nested-object" in str(w.message) for w in captured), [
+            str(w.message) for w in captured
+        ]
+
+    def test_all_null_subproperty_warns_and_excluded(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """A sub-key with only null values warns and is excluded from output."""
+        import warnings
+
+        values = [
+            json.dumps({"Brand": "nike", "Coupon": None}),
+            json.dumps({"Brand": "puma", "Coupon": None}),
+        ]
+        discovery = discovery_factory(self._values_handler(values))
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            subs = discovery.list_subproperties("cart", event="X")
+        names = [s.name for s in subs]
+        assert "Coupon" not in names
+        assert "Brand" in names
+        assert any(
+            "all sampled values were null" in str(w.message) for w in captured
+        ), [str(w.message) for w in captured]
+
+    def test_invalid_calendar_date_classified_as_string(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """ISO-shaped strings with invalid calendar values fall back to 'string'."""
+        for bad in ("2025-13-99", "2025-04-23T25:99:99"):
+            values = [json.dumps({"X": bad})]
+            discovery = discovery_factory(self._values_handler(values))
+            subs = discovery.list_subproperties("cart", event="X")
+            assert subs[0].type == "string", f"{bad!r} should not be datetime"
+
+    def test_infer_scalar_type_empty_raises(self) -> None:
+        """``_infer_scalar_type([])`` raises ValueError instead of returning a phantom."""
+        from mixpanel_data._internal.services.discovery import _infer_scalar_type
+
+        with pytest.raises(ValueError, match="non-empty"):
+            _infer_scalar_type([])
+
+    def test_infer_scalar_type_mixed_int_bool_returns_string_with_warning(
+        self,
+    ) -> None:
+        """``_infer_scalar_type([True, 1])`` returns ('string', True) — bool/int overlap."""
+        from mixpanel_data._internal.services.discovery import _infer_scalar_type
+
+        inferred, mixed = _infer_scalar_type([True, 1])
+        assert inferred == "string"
+        assert mixed is True
+
+    def test_mixed_warning_stacklevel_points_at_user_frame(
+        self,
+        discovery_factory: Callable[
+            [Callable[[httpx.Request], httpx.Response]], DiscoveryService
+        ],
+    ) -> None:
+        """Warning filename equals this test's __file__ via the documented chain.
+
+        Pins ``_USER_FRAME_STACKLEVEL`` against the documented user
+        chain ``user → Workspace.subproperties →
+        DiscoveryService.list_subproperties → _infer_subproperties →
+        warnings.warn``. ``discovery_factory`` gives us a
+        ``DiscoveryService`` directly (skipping Workspace), so we wrap
+        the call in ``workspace_subproperties_simulator`` to add the
+        frame that ``Workspace.subproperties`` contributes in
+        production. The wrapper call below is the "user" frame.
+        """
+        import warnings
+
+        # Mixed int/string values trigger _infer_scalar_type's mixed-types path.
+        values = [json.dumps({"X": 1}), json.dumps({"X": "abc"})]
+        discovery = discovery_factory(self._values_handler(values))
+
+        def workspace_subproperties_simulator() -> None:
+            """Adds the frame Workspace.subproperties contributes in production."""
+            discovery.list_subproperties("cart", event="X")
+
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            workspace_subproperties_simulator()  # user frame
+        # At least one captured warning must point to this test file.
+        assert any(w.filename == __file__ for w in captured), [
+            w.filename for w in captured
+        ]

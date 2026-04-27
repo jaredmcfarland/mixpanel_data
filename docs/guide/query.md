@@ -280,6 +280,50 @@ Filter.is_true("is_premium")                  # boolean true
 Filter.is_false("is_trial")                   # boolean false
 ```
 
+### List-of-object filters
+
+When a property's value is a list of objects (e.g. `cart` is a list of `{Brand, Category, Price}` items), use `Filter.list_contains` to filter on a subproperty. Discover valid subproperty names and types via [`Workspace.subproperties()`](discovery.md#subproperties) first.
+
+**Keyword shorthand** for the common equality case — each `key=value` becomes an inner equality filter. All inner conditions must match the same item:
+
+```python
+# Cart contains a nike-branded hat
+result = ws.query(
+    "Cart Viewed",
+    where=Filter.list_contains("cart", Brand="nike", Category="hats"),
+)
+```
+
+**Explicit `Filter` instances** for any non-equality operator:
+
+```python
+# Cart contains an item costing more than $50
+result = ws.query(
+    "Cart Viewed",
+    where=Filter.list_contains("cart", Filter.greater_than("Price", 50)),
+)
+```
+
+**Quantifier** — `"any"` (default) requires at least one item to satisfy all inner conditions; `"all"` requires every item to:
+
+```python
+# Every cart item costs more than $50
+where = Filter.list_contains(
+    "cart",
+    Filter.greater_than("Price", 50),
+    quantifier="all",
+)
+```
+
+**Resource type** — `Filter.list_contains` accepts `resource_type="people"` for list-of-object people properties (e.g. `addresses`). When using kwarg shorthand, the inner equality filters inherit the outer `resource_type`. When passing positional `Filter` instances, each carries its own `resource_type` from its own factory call — pass `resource_type=` explicitly on each inner factory if you want them to match the outer.
+
+```python
+# Filter people by a list-of-object property
+where = Filter.list_contains("addresses", resource_type="people", City="Brooklyn")
+```
+
+Cannot be nested (a `list_contains` cannot appear inside another `list_contains`). Mixing the kwarg and positional shapes in one call raises `ValueError`.
+
 ### Per-Metric Filters
 
 Apply filters to individual metrics using `Metric.filters`:
@@ -395,6 +439,34 @@ result = ws.query(
     ],
 )
 ```
+
+### List-of-object breakdowns
+
+Mirror `Filter.list_contains` for breakdowns: when a property is a list of objects, break down by one of its subproperties via `GroupBy.list_item`. Discover valid subproperty names and types via [`Workspace.subproperties()`](discovery.md#subproperties).
+
+```python
+from mixpanel_data import GroupBy
+
+# Break down Cart Viewed events by cart.Brand
+result = ws.query("Cart Viewed", group_by=GroupBy.list_item("cart", "Brand"))
+
+# Break down by a numeric subproperty (sub_type controls aggregation)
+result = ws.query(
+    "Cart Viewed",
+    group_by=GroupBy.list_item("cart", "Price", sub_type="number"),
+)
+
+# Mix list-item with regular breakdowns
+result = ws.query(
+    "Cart Viewed",
+    group_by=["country", GroupBy.list_item("cart", "Brand")],
+)
+```
+
+`sub_type` accepts the four scalar values from `CustomPropertyType` (`"string"`, `"number"`, `"boolean"`, `"datetime"`). Bucketing (`bucket_size`/`bucket_min`/`bucket_max`) is incompatible with list-item breakdowns.
+
+!!! note "Asymmetric with `Filter.list_contains`"
+    `GroupBy.list_item` is **events-only** — there is no `resource_type` parameter, because Mixpanel's UI does not support list-of-object breakdowns for people properties. `Filter.list_contains` accepts `resource_type="people"` because the wire format permits list-object filters on people properties (just not breakdowns).
 
 ## Formulas
 

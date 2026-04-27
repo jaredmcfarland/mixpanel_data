@@ -6,6 +6,7 @@ Live (calls Mixpanel API):
 - events: List event names from Mixpanel
 - properties: List properties for an event
 - values: List values for a property
+- subproperties: Discover subproperties of a list-of-object property
 - funnels: List saved funnels
 - cohorts: List saved cohorts
 - top-events: List today's top events
@@ -43,8 +44,8 @@ inspect_app = typer.Typer(
     name="inspect",
     help="Inspect Mixpanel project schema.",
     epilog="""Live (calls Mixpanel API):
-  events, properties, values, funnels, cohorts, top-events, bookmarks,
-  lexicon-schemas, lexicon-schema
+  events, properties, values, subproperties, funnels, cohorts, top-events,
+  bookmarks, lexicon-schemas, lexicon-schema
 
 JQL-based Remote Discovery:
   distribution, numeric, daily, engagement, coverage""",
@@ -175,6 +176,72 @@ def inspect_values(
             limit=limit,
         )
     output_result(ctx, values, format=format, jq_filter=jq_filter)
+
+
+@inspect_app.command("subproperties")
+@handle_errors
+def inspect_subproperties(
+    ctx: typer.Context,
+    property_name: Annotated[
+        str,
+        typer.Option("--property", "-p", help="List-of-object property name."),
+    ],
+    event: Annotated[
+        str | None,
+        typer.Option("--event", "-e", help="Event name (strongly recommended)."),
+    ] = None,
+    sample_size: Annotated[
+        int,
+        typer.Option("--sample-size", "-s", help="Number of raw values to sample."),
+    ] = 50,
+    format: FormatOption = "json",
+    jq_filter: JqOption = None,
+) -> None:
+    """Discover subproperties of a list-of-object event property.
+
+    Samples raw values via the Mixpanel property-values endpoint, parses
+    each as JSON, and infers a scalar type per discovered subproperty.
+    Use this when an event property like ``cart`` is a list of objects
+    (e.g. ``[{"Brand": "nike", "Price": 50}, ...]``) — the discovered
+    subproperty names and types feed directly into ``Filter.list_contains``
+    and ``GroupBy.list_item`` (Python API).
+
+    Output Structure (JSON):
+
+        [
+          {"name": "Brand", "type": "string", "sample_values": ["nike", "puma"]},
+          {"name": "Category", "type": "string", "sample_values": ["hats", "jeans"]},
+          {"name": "Price", "type": "number", "sample_values": [51, 87, 102]}
+        ]
+
+    Examples:
+
+        mp inspect subproperties -p cart -e "Cart Viewed"
+        mp inspect subproperties -p line_items -e Purchase --sample-size 100
+        mp inspect subproperties -p cart -e "Cart Viewed" --format table
+
+    **jq Examples:**
+
+        --jq '[.[] | select(.type == "number")]'      # Numeric subproperties only
+        --jq '[.[].name]'                              # Subproperty names only
+        --jq '.[] | select(.name == "Brand")'          # Find a specific subproperty
+        --jq '[.[] | {name, type}]'                    # Drop sample_values
+    """
+    workspace = get_workspace(ctx)
+    with status_spinner(ctx, "Sampling subproperties..."):
+        subs = workspace.subproperties(
+            property_name=property_name,
+            event=event,
+            sample_size=sample_size,
+        )
+    data = [sp.to_dict() for sp in subs]
+    output_result(
+        ctx,
+        data,
+        columns=["name", "type", "sample_values"],
+        format=format,
+        jq_filter=jq_filter,
+    )
 
 
 @inspect_app.command("funnels")

@@ -176,10 +176,15 @@ class TestSegfilterNumberOperators:
         assert result["filter"]["operand"] == "42"
 
     def test_is_equal_to_number(self) -> None:
-        """Number 'is equal to' maps to '==' with stringified operand."""
+        """Number 'is equal to' maps to '==' with stringified operand.
+
+        Exercises segfilter's backward-compat dispatch for the
+        ``"is equal to"`` alias (no Filter classmethod produces this
+        value, hence the type: ignore).
+        """
         f = Filter(
             _property="count",
-            _operator="is equal to",
+            _operator="is equal to",  # type: ignore[arg-type]
             _value=42,
             _property_type="number",
             _resource_type="events",
@@ -490,7 +495,7 @@ class TestSegfilterEdgeCases:
         """Unknown operator for a property type raises ValueError."""
         f = Filter(
             _property="x",
-            _operator="magical_unicorn",
+            _operator="magical_unicorn",  # type: ignore[arg-type]
             _value="y",
             _property_type="string",
             _resource_type="events",
@@ -502,7 +507,7 @@ class TestSegfilterEdgeCases:
         """Unknown number operator raises ValueError."""
         f = Filter(
             _property="x",
-            _operator="magical_unicorn",
+            _operator="magical_unicorn",  # type: ignore[arg-type]
             _value=1,
             _property_type="number",
             _resource_type="events",
@@ -514,7 +519,7 @@ class TestSegfilterEdgeCases:
         """Unknown datetime operator raises ValueError."""
         f = Filter(
             _property="x",
-            _operator="magical_unicorn",
+            _operator="magical_unicorn",  # type: ignore[arg-type]
             _value="2026-01-01",
             _property_type="datetime",
             _resource_type="events",
