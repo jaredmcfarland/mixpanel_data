@@ -289,14 +289,6 @@ Suppressing stderr causes silent failures and makes it impossible to diagnose is
 - Hypothesis (property-based testing), mutmut (mutation testing)
 - uv (package manager), just (command runner)
 
-## Reference Documentation
-
-Design documents in `context/`:
-- [mixpanel_data-project-brief.md](context/mixpanel_data-project-brief.md) — Vision and goals
-- [mixpanel_data-design.md](context/mixpanel_data-design.md) — Architecture and public API
-- [mp-cli-project-spec.md](context/mp-cli-project-spec.md) — CLI specification
-- [mixpanel-http-api-specification.md](context/mixpanel-http-api-specification.md) — Mixpanel API reference
-
 ## mixpanel-data Plugin (v4.1 — Distilled API Surface + Live Docs)
 
 This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin provides the `mixpanel_data` API surface and a live documentation system (`help.py`) for querying and analyzing Mixpanel data with Python.
