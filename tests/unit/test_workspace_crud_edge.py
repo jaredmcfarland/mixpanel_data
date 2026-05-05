@@ -114,10 +114,19 @@ class TestRequestBodySerialization:
                 )
             return httpx.Response(200, json={"status": "ok", "results": []})
 
+        # Use minimal valid funnel params so client-side schema
+        # validation passes; this test is about request body
+        # serialization (``bookmark_type`` → ``type`` alias), not about
+        # validation behavior.
+        from tests.unit.test_workspace_crud import MINIMAL_FUNNEL_PARAMS
+
         ws = _make_workspace(temp_dir, handler)
         ws.create_bookmark(
             CreateBookmarkParams(
-                name="X", bookmark_type="funnels", params={}, dashboard_id=99
+                name="X",
+                bookmark_type="funnels",
+                params=MINIMAL_FUNNEL_PARAMS,
+                dashboard_id=99,
             )
         )
 

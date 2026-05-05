@@ -74,6 +74,10 @@ from mixpanel_data._internal.bookmark_builders import (
     build_time_section,
     patch_custom_property_filters_for_transform,
 )
+from mixpanel_data._internal.bookmark_schema import (
+    get_root_model_for_bookmark_type,
+    validate_with_pydantic,
+)
 from mixpanel_data._internal.config import ConfigManager
 from mixpanel_data._internal.query.user_builders import (
     extract_cohort_filter,
@@ -96,6 +100,7 @@ from mixpanel_data._internal.validation import (
     validate_funnel_args,
     validate_query_args,
     validate_retention_args,
+    validate_sorting_block,
 )
 from mixpanel_data._literal_types import (
     ConversionWindowUnit,
@@ -5133,6 +5138,40 @@ class Workspace:
         raw = client.list_bookmarks_v2(bookmark_type=bookmark_type, ids=ids)
         return [Bookmark.model_validate(b) for b in raw]
 
+    @staticmethod
+    def _validate_bookmark_params_schema(
+        raw: dict[str, Any],
+        bookmark_type: str | None,
+    ) -> list[Any]:
+        """Validate a bookmark ``params`` dict against the canonical schema.
+
+        Helper shared by ``create_bookmark`` and ``update_bookmark``.
+        Dispatches via ``get_root_model_for_bookmark_type`` and falls back
+        to the sorting-only check when no canonical root model exists for
+        the given type (or when the type is unknown on update calls).
+
+        Args:
+            raw: The bookmark ``params`` dict to validate.
+            bookmark_type: The bookmark type (one of ``"insights"``,
+                ``"funnels"``, ``"retention"``, ``"flows"``, ``"user"``)
+                or ``None`` when unknown (e.g. on update calls where
+                ``UpdateBookmarkParams`` doesn't carry the type).
+
+        Returns:
+            List of ``ValidationError`` instances. Empty if the payload
+            validates cleanly.
+        """
+        if bookmark_type is not None:
+            root = get_root_model_for_bookmark_type(bookmark_type)
+            if root is not None:
+                return validate_with_pydantic(root, raw)
+        # Fallback: at least catch the sorting block (the original
+        # incident class) when we can't dispatch to a root model.
+        sorting = raw.get("sorting") if isinstance(raw, dict) else None
+        if sorting is not None:
+            return validate_sorting_block(sorting)
+        return []
+
     def create_bookmark(self, params: CreateBookmarkParams) -> Bookmark:
         """Create a new bookmark (saved report).
 
@@ -5172,6 +5211,17 @@ class Workspace:
                 "associated with a dashboard. Create a dashboard first "
                 "with create_dashboard(), then pass its ID here.",
             )
+
+        # Full Pydantic-schema validation against the canonical mirror
+        # of Mixpanel's bookmark schema — catches malformed shapes
+        # client-side before they're persisted with garbage that only
+        # surfaces later at chart-render time.
+        if params.params:
+            schema_errors = self._validate_bookmark_params_schema(
+                params.params, params.bookmark_type
+            )
+            if any(e.severity == "error" for e in schema_errors):
+                raise BookmarkValidationError(schema_errors)
 
         client = self._require_api_client()
         raw = client.create_bookmark(
@@ -5246,6 +5296,18 @@ class Workspace:
             )
             ```
         """
+        # Full Pydantic-schema validation against the canonical mirror.
+        # ``UpdateBookmarkParams.params`` doesn't carry ``bookmark_type``,
+        # so the helper falls back to a sorting-only check; callers that
+        # want full validation should use ``create_bookmark`` or pass the
+        # bookmark_type explicitly via the lower-level API client.
+        if params.params:
+            schema_errors = self._validate_bookmark_params_schema(
+                params.params, bookmark_type=None
+            )
+            if any(e.severity == "error" for e in schema_errors):
+                raise BookmarkValidationError(schema_errors)
+
         client = self._require_api_client()
         raw = client.update_bookmark(bookmark_id, params.model_dump(exclude_none=True))
         if raw is None:

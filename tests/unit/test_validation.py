@@ -759,3 +759,184 @@ class TestDataGroupIdValidationInsights:
         errors = validate_query_args(**_valid_args(data_group_id=False))
         dg_errors = [e for e in errors if e.code == "DG1_INVALID_DATA_GROUP_ID"]
         assert len(dg_errors) == 1
+
+
+# =============================================================================
+# Layer 2: sorting block validation
+# =============================================================================
+
+
+class TestValidateSortingBlock:
+    """Tests for the optional ``params['sorting']`` block validator.
+
+    The sorting block is mirrored from Mixpanel's server-side
+    ``SortByColumnsConfig`` / ``SortByValueConfig`` Pydantic schema. Bookmarks
+    that pass create-time but contain a malformed sorting block fail later at
+    query-time with messages like ``"sorting.bar.SortByColumnsConfig.sortBy
+    must be 'column'"``. These tests lock in client-side rejection of the
+    same shapes the server rejects.
+    """
+
+    def test_sorting_omitted_no_errors(self) -> None:
+        """Bookmark without a 'sorting' key produces no sorting errors."""
+        errors = validate_bookmark(_minimal_bookmark())
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []
+
+    def test_sorting_empty_dict_no_errors(self) -> None:
+        """``sorting: {}`` is valid (no per-chart-type overrides)."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {}
+        errors = validate_bookmark(bm)
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []
+
+    def test_sorting_canonical_column_config_passes(self) -> None:
+        """Canonical ``sortBy='column'`` config with empty colSortAttrs passes."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {"sortBy": "column", "colSortAttrs": []},
+        }
+        errors = validate_bookmark(bm)
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []
+
+    def test_sorting_value_config_with_attrs_passes(self) -> None:
+        """``sortBy='value'`` with non-empty colSortAttrs passes."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "column",
+                "colSortAttrs": [
+                    {
+                        "sortBy": "value",
+                        "sortOrder": "asc",
+                        "valueField": "averageValue",
+                    }
+                ],
+            },
+        }
+        errors = validate_bookmark(bm)
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []
+
+    def test_sorting_invalid_sort_by_caught(self) -> None:
+        """``sortBy`` outside {'column','value'} raises S1_INVALID_SORT_BY."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"bar": {"sortBy": "totally bogus", "colSortAttrs": []}}
+        errors = validate_bookmark(bm)
+        s1 = [e for e in errors if e.code == "S1_INVALID_SORT_BY"]
+        assert len(s1) == 1
+        assert s1[0].path == "sorting.bar.sortBy"
+
+    def test_sorting_extra_segmentation_field_caught(self) -> None:
+        """Server rejects unknown fields like ``segmentation`` — so do we."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "value",
+                "segmentation": "value",
+                "colSortAttrs": [],
+            }
+        }
+        errors = validate_bookmark(bm)
+        extra = [e for e in errors if e.code == "S3_UNKNOWN_FIELD"]
+        assert len(extra) == 1
+        assert extra[0].path == "sorting.bar.segmentation"
+
+    def test_sorting_missing_col_sort_attrs_caught(self) -> None:
+        """``colSortAttrs`` is required (server marks 'Field required')."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"bar": {"sortBy": "value"}}
+        errors = validate_bookmark(bm)
+        missing = [e for e in errors if e.code == "S2_MISSING_COL_SORT_ATTRS"]
+        assert len(missing) == 1
+        assert missing[0].path == "sorting.bar.colSortAttrs"
+
+    def test_sorting_collects_all_errors_my_actual_bug(self) -> None:
+        """Reproduce today's exact bug: ``{sortBy: value, segmentation: value}``.
+
+        This is the malformed sorting block I sent to Mixpanel earlier today
+        (mp_tool_call dashboard "jared scratch"). It produced "client has
+        issued a malformed request" in the UI and a server-side validator
+        rejection on ``query_saved_report``. The validator now catches it
+        without a server roundtrip.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "value",
+                "sortOrder": "asc",
+                "segmentation": "value",
+            },
+            "funnel-steps": {
+                "sortBy": "value",
+                "sortOrder": "asc",
+                "segmentation": "value",
+            },
+        }
+        errors = validate_bookmark(bm)
+        # Two missing colSortAttrs (one per chart-type config)
+        missing = [e for e in errors if e.code == "S2_MISSING_COL_SORT_ATTRS"]
+        assert len(missing) == 2
+        # Two extra "segmentation" fields (one per chart-type config). The
+        # extra "sortOrder" field is also caught.
+        extra_segs = [
+            e
+            for e in errors
+            if e.code == "S3_UNKNOWN_FIELD" and e.path.endswith(".segmentation")
+        ]
+        assert len(extra_segs) == 2
+
+    def test_sorting_unknown_chart_type_warning(self) -> None:
+        """Unknown chart-type key (e.g. typo 'barz') produces a warning."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"barz": {"sortBy": "column", "colSortAttrs": []}}
+        errors = validate_bookmark(bm)
+        unknown = [e for e in errors if e.code == "S4_UNKNOWN_CHART_TYPE"]
+        assert len(unknown) == 1
+        assert unknown[0].severity == "warning"
+        assert unknown[0].suggestion is not None
+        assert "bar" in unknown[0].suggestion
+
+    def test_sorting_chart_config_must_be_dict(self) -> None:
+        """Per-chart-type sorting value must be a dict, not a string/list."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"bar": "asc"}
+        errors = validate_bookmark(bm)
+        type_err = [e for e in errors if e.code == "S5_NOT_A_DICT"]
+        assert len(type_err) == 1
+        assert type_err[0].path == "sorting.bar"
+
+    def test_sorting_block_must_be_dict(self) -> None:
+        """The top-level ``sorting`` value must be a dict."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = ["asc"]
+        errors = validate_bookmark(bm)
+        type_err = [e for e in errors if e.code == "S5_NOT_A_DICT"]
+        assert len(type_err) == 1
+        assert type_err[0].path == "sorting"
+
+    def test_sorting_invalid_col_sort_attr_sort_order(self) -> None:
+        """``colSortAttrs[i].sortOrder`` outside {'asc','desc'} caught."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "column",
+                "colSortAttrs": [
+                    {"sortBy": "value", "sortOrder": "ascending", "valueField": "x"}
+                ],
+            }
+        }
+        errors = validate_bookmark(bm)
+        order_err = [e for e in errors if e.code == "S6_INVALID_SORT_ORDER"]
+        assert len(order_err) == 1
+
+    def test_sorting_col_sort_attrs_must_be_list(self) -> None:
+        """``colSortAttrs`` must be a list."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"bar": {"sortBy": "column", "colSortAttrs": {}}}
+        errors = validate_bookmark(bm)
+        # Whatever code lands, the path must point at the offending field.
+        all_errs = [e for e in errors if "colSortAttrs" in e.path]
+        assert len(all_errs) >= 1

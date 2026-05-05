@@ -24,7 +24,7 @@ from pydantic import SecretStr
 from mixpanel_data._internal.api_client import MixpanelAPIClient
 from mixpanel_data._internal.auth.account import ServiceAccount
 from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.exceptions import MixpanelDataError
+from mixpanel_data.exceptions import BookmarkValidationError, MixpanelDataError
 from mixpanel_data.types import (
     Bookmark,
     BookmarkHistoryResponse,
@@ -94,6 +94,70 @@ def _make_workspace(
         session=_TEST_SESSION,
         _api_client=client,
     )
+
+
+# =============================================================================
+# Minimal-valid bookmark params fixtures
+#
+# Smallest dicts that pass the canonical schema mirror in
+# ``mixpanel_data._internal.bookmark_schema``. CRUD tests pass these
+# instead of empty/garbage dicts so they exercise the full code path
+# (including client-side Pydantic validation) without false-rejection.
+# =============================================================================
+
+MINIMAL_INSIGHTS_PARAMS: dict[str, Any] = {
+    "displayOptions": {"chartType": "bar"},
+    "sections": {
+        "show": [
+            {
+                "type": "metric",
+                "behavior": {"type": "event", "name": "Login"},
+            }
+        ],
+        "time": [],
+    },
+}
+"""Minimal valid insights bookmark params dict."""
+
+MINIMAL_FUNNEL_PARAMS: dict[str, Any] = {
+    "displayOptions": {"chartType": "funnel-steps"},
+    "sections": {
+        "show": [
+            {
+                "type": "metric",
+                "behavior": {
+                    "type": "funnel",
+                    "behaviors": [
+                        {"type": "event", "name": "Signup"},
+                        {"type": "event", "name": "Purchase"},
+                    ],
+                },
+            }
+        ],
+        "time": [],
+    },
+}
+"""Minimal valid funnel bookmark params dict."""
+
+MINIMAL_RETENTION_PARAMS: dict[str, Any] = {
+    "displayOptions": {"chartType": "retention-curve"},
+    "sections": {
+        "show": [
+            {
+                "type": "metric",
+                "behavior": {
+                    "type": "retention",
+                    "behaviors": [
+                        {"type": "event", "name": "Signup"},
+                        {"type": "event", "name": "Login"},
+                    ],
+                },
+            }
+        ],
+        "time": [],
+    },
+}
+"""Minimal valid retention bookmark params dict."""
 
 
 # =============================================================================
@@ -628,7 +692,7 @@ class TestWorkspaceBookmarkCRUD:
         params = CreateBookmarkParams(
             name="New Bookmark",
             bookmark_type="insights",
-            params={"events": [{"event": "Signup"}]},
+            params=MINIMAL_INSIGHTS_PARAMS,
             dashboard_id=99,
         )
         bookmark = ws.create_bookmark(params)
@@ -654,7 +718,7 @@ class TestWorkspaceBookmarkCRUD:
         params = CreateBookmarkParams(
             name="Described BM",
             bookmark_type="funnels",
-            params={"events": []},
+            params=MINIMAL_INSIGHTS_PARAMS,
             description="A test bookmark",
             dashboard_id=99,
         )
@@ -679,7 +743,7 @@ class TestWorkspaceBookmarkCRUD:
         params = CreateBookmarkParams(
             name="On Dashboard",
             bookmark_type="insights",
-            params={"events": []},
+            params=MINIMAL_INSIGHTS_PARAMS,
             dashboard_id=99,
         )
         bookmark = ws.create_bookmark(params)
@@ -709,7 +773,7 @@ class TestWorkspaceBookmarkCRUD:
             CreateBookmarkParams(
                 name="Auto Add",
                 bookmark_type="insights",
-                params={"events": []},
+                params=MINIMAL_INSIGHTS_PARAMS,
                 dashboard_id=99,
             )
         )
@@ -738,10 +802,113 @@ class TestWorkspaceBookmarkCRUD:
         params = CreateBookmarkParams(
             name="No Dashboard",
             bookmark_type="insights",
-            params={"events": []},
+            params=MINIMAL_INSIGHTS_PARAMS,
         )
         with pytest.raises(MixpanelDataError, match="dashboard_id is required"):
             ws.create_bookmark(params)
+
+    def test_create_bookmark_rejects_malformed_sorting(self, temp_dir: Path) -> None:
+        """create_bookmark() rejects the exact malformed sorting block from
+        the dashboard incident before calling the API.
+
+        Regression: previously the v2 ``POST /bookmarks`` endpoint accepted
+        garbage in ``params['sorting']``, persisted the bookmark, and only
+        failed later on ``query_saved_report`` with "Bookmark failed
+        validation: sorting.bar.SortByColumnsConfig.sortBy must be 'column'".
+        Validation now blocks the create call entirely and the API mock
+        below is never reached.
+        """
+        api_calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture every API call so we can assert none were made."""
+            api_calls.append(request)
+            return httpx.Response(200, json={"status": "ok", "results": {}})
+
+        ws = _make_workspace(temp_dir, handler)
+        # Use a minimal-valid bookmark + the malformed sorting block so
+        # validation only fires on the sorting.
+        bad_params = dict(MINIMAL_INSIGHTS_PARAMS)
+        bad_params["sorting"] = {
+            "bar": {
+                "sortBy": "value",
+                "sortOrder": "asc",
+                "segmentation": "value",
+            }
+        }
+        params = CreateBookmarkParams(
+            name="Bad Sort",
+            bookmark_type="insights",
+            params=bad_params,
+            dashboard_id=99,
+        )
+        with pytest.raises(BookmarkValidationError) as excinfo:
+            ws.create_bookmark(params)
+
+        # Pydantic adapter maps ``missing`` → B0_MISSING_FIELD and
+        # ``extra_forbidden`` → S3_UNKNOWN_FIELD.
+        codes = {e.code for e in excinfo.value.errors}
+        assert "B0_MISSING_FIELD" in codes  # missing colSortAttrs
+        assert "S3_UNKNOWN_FIELD" in codes  # extra segmentation field
+        assert api_calls == []
+
+    def test_update_bookmark_rejects_malformed_sorting(self, temp_dir: Path) -> None:
+        """update_bookmark() rejects malformed sorting before calling the API."""
+        api_calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture every API call so we can assert none were made."""
+            api_calls.append(request)
+            return httpx.Response(200, json={"status": "ok", "results": {}})
+
+        ws = _make_workspace(temp_dir, handler)
+        params = UpdateBookmarkParams(
+            params={"sorting": {"bar": {"sortBy": "value", "segmentation": "value"}}}
+        )
+        with pytest.raises(BookmarkValidationError):
+            ws.update_bookmark(1, params)
+
+        assert api_calls == []
+
+    def test_create_bookmark_allows_valid_sorting(self, temp_dir: Path) -> None:
+        """create_bookmark() accepts the canonical valid sorting block."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return success for both POST and the dashboard PATCH."""
+            if request.method == "PATCH":
+                return httpx.Response(
+                    200, json={"status": "ok", "results": _dashboard_json(id=99)}
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": _bookmark_json(77, "Good Sort", "insights"),
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        good_params = dict(MINIMAL_INSIGHTS_PARAMS)
+        good_params["sorting"] = {
+            "bar": {
+                "sortBy": "column",
+                "colSortAttrs": [
+                    {
+                        "sortBy": "value",
+                        "sortOrder": "asc",
+                        "valueField": "averageValue",
+                    }
+                ],
+            }
+        }
+        params = CreateBookmarkParams(
+            name="Good Sort",
+            bookmark_type="insights",
+            params=good_params,
+            dashboard_id=99,
+        )
+        bookmark = ws.create_bookmark(params)
+        assert bookmark.id == 77
 
     def test_get_bookmark(self, temp_dir: Path) -> None:
         """get_bookmark() returns a single Bookmark by ID."""
@@ -1082,7 +1249,7 @@ class TestWorkspaceBookmarkCRUD:
         params = CreateBookmarkParams(
             name="Funnel BM",
             bookmark_type="funnels",
-            params={"steps": []},
+            params=MINIMAL_FUNNEL_PARAMS,
             dashboard_id=99,
         )
         bookmark = ws.create_bookmark(params)
