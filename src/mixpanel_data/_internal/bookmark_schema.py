@@ -7,12 +7,13 @@ catching malformed shapes client-side before they reach Mixpanel. The
 at chart-render time (``GET /api/query/insights``); these models close
 that gap.
 
-**Source of truth**: ``/Users/jaredmcfarland/Developer/analytics`` —
-specifically the canonical Pydantic definitions under
-``lib/common/mxpnl/report/bookmarks/``. Each model in this file carries a
-``# Mirrors <path>:<line>`` comment naming its source. Drift detection
-against Mixpanel updates is a ``diff`` operation against that repo, not
-a production incident report.
+**Source of truth**: the canonical Pydantic definitions in Mixpanel's
+internal ``analytics`` repository under
+``lib/common/mxpnl/report/bookmarks/`` (and the sibling
+``mixpanel_mcp/mcp_server/types/reports/internal/`` package for flows).
+Each model in this file carries a ``# Mirrors <repo-relative-path>:<line>``
+comment naming its source. Drift detection against Mixpanel updates is a
+``diff`` operation against that repo, not a production incident report.
 
 The adapter ``validate_with_pydantic()`` translates Pydantic's structured
 errors into the package's existing ``ValidationError`` stream so callers
@@ -269,9 +270,9 @@ def get_root_model_for_bookmark_type(
 # =============================================================================
 # Sorting models
 #
-# Mirrors /Users/jaredmcfarland/Developer/analytics/lib/common/mxpnl/report/
-# bookmarks/insights/sorting.py. Diff against that file when bumping
-# schema versions.
+# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/sorting.py``
+# in the upstream ``analytics`` repository. Diff against that file when
+# bumping schema versions.
 # =============================================================================
 
 
@@ -440,12 +441,12 @@ class InsightsBookmarkSortConfig(BaseModel):
 # =============================================================================
 # Behavior tree
 #
-# Mirrors /Users/jaredmcfarland/Developer/analytics/lib/common/mxpnl/report/
-# bookmarks/insights/show.py (~400 LOC of nested classes). Long-tail
-# metadata models (MetricDisplay, Statsig, SRM, etc.) are mirrored
-# faithfully but their internals use ``JsonValue`` where the canonical
-# source itself does — this matches the ``filter.py`` /``time.py``
-# placeholder pattern used in the canonical tree.
+# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/show.py``
+# in the upstream ``analytics`` repository (~400 LOC of nested classes).
+# Long-tail metadata models (MetricDisplay, Statsig, SRM, etc.) are
+# mirrored faithfully but their internals use ``JsonValue`` where the
+# canonical source itself does — this matches the ``filter.py`` /
+# ``time.py`` placeholder pattern used in the canonical tree.
 # =============================================================================
 
 
@@ -728,10 +729,13 @@ class SubBehavior(BaseModel):
     id: int | None = None
     name: str | None = None
     renamed: str | None = None
-    filters: list[JsonValue] | None = []  # FilterClause = JsonValue in source
+    # FilterClause = JsonValue in source. Use default_factory to avoid the
+    # mutable-default smell while preserving ``| None`` for null-tolerance
+    # (older bookmarks send ``"filters": null``).
+    filters: list[JsonValue] | None = Field(default_factory=list)
     filtersDeterminer: FiltersDeterminerLiteral | None = "all"
     funnelOrder: FunnelOrderLiteral | None = None
-    behaviors: list[SubBehavior] | None = []
+    behaviors: list[SubBehavior] | None = Field(default_factory=list)
     display: MetricDisplay | None = None
     customEventSet: bool | None = None
 
@@ -760,7 +764,7 @@ class Behavior(BaseModel):
 
     resourceType: InsightsResourceTypeLiteral | None = None
 
-    behaviors: list[SubBehavior] | None = []
+    behaviors: list[SubBehavior] | None = Field(default_factory=list)
 
     # Inline cohort
     raw_cohort: JsonValue | None = None
@@ -866,7 +870,7 @@ class BehaviorShowClause(BaseModel):
     statsig: Statsig | None = None
     srm: SRM | None = None
 
-    comparisons: list[JsonValue] | None = []
+    comparisons: list[JsonValue] | None = Field(default_factory=list)
 
     display: MetricDisplay | None = None
     isHidden: bool | None = None
@@ -899,7 +903,7 @@ class FormulaShowClause(BaseModel):
     isExpanded: bool | None = None
     userNamed: bool | None = None
 
-    comparisons: list[JsonValue] | None = []
+    comparisons: list[JsonValue] | None = Field(default_factory=list)
 
     id: int | None = None
     definition: str | None = None
@@ -943,8 +947,8 @@ ShowClause = Annotated[
 # =============================================================================
 # Sections
 #
-# Mirrors /Users/jaredmcfarland/Developer/analytics/lib/common/mxpnl/report/
-# bookmarks/insights/sections.py:15.
+# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/sections.py:15``
+# in the upstream ``analytics`` repository.
 # ``filter`` and ``time`` are typed as ``JsonValue`` in the canonical
 # source itself (see ``filter.py`` / ``time.py`` placeholders) — we
 # follow that.
@@ -975,8 +979,8 @@ class Sections(BaseModel):
 # =============================================================================
 # DisplayOptions
 #
-# Mirrors /Users/jaredmcfarland/Developer/analytics/lib/common/mxpnl/report/
-# bookmarks/insights/display_options.py.
+# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/display_options.py``
+# in the upstream ``analytics`` repository.
 # =============================================================================
 
 
@@ -1084,8 +1088,8 @@ class DisplayOptions(BaseModel):
 # =============================================================================
 # InsightsBookmarkParams root
 #
-# Mirrors /Users/jaredmcfarland/Developer/analytics/lib/common/mxpnl/report/
-# bookmarks/insights/bookmark.py:25.
+# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/bookmark.py:25``
+# in the upstream ``analytics`` repository.
 #
 # Long-tail dependent models (ColumnWidths, ForecastComparison,
 # InsightsLegend, LiftComparison, ExecutedMigration) are typed as
@@ -1154,9 +1158,9 @@ class InsightsBookmarkParams(BaseModel):
 # =============================================================================
 # Flows tree
 #
-# Mirrors /Users/jaredmcfarland/Developer/analytics/mixpanel_mcp/mcp_server/
-# types/reports/internal/bookmark.py:408-459.
-# Flat shape (no `sections` wrapper).
+# Mirrors ``analytics/mixpanel_mcp/mcp_server/types/reports/internal/bookmark.py:408-459``
+# in the upstream ``analytics`` repository. Flat shape (no `sections`
+# wrapper).
 # =============================================================================
 
 

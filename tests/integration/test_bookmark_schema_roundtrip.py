@@ -1,17 +1,24 @@
-"""Live integration tests: ``create_bookmark`` → ``query_saved_report`` round-trip.
+"""Live integration tests: ``create_bookmark`` → ``get_bookmark`` → ``delete``.
 
-Catches Mixpanel schema drift end-to-end. For each query type that has
-a canonical root model in our schema mirror, we:
+Catches Mixpanel **bookmark-storage** schema drift end-to-end. For each
+query type that has a canonical root model in our schema mirror, we:
 
 1. Create a minimal-valid bookmark via ``Workspace.create_bookmark``
-2. Execute it via ``Workspace.query_saved_report`` to confirm the server
-   accepts the persisted shape
-3. Delete the bookmark to keep the workspace clean
+   (asserts both our client-side Pydantic check and the server's
+   create-time validation accept the payload)
+2. Read it back via ``Workspace.get_bookmark`` to confirm persistence
+3. Delete the bookmark to keep the workspace clean (best-effort)
 
-If our local schema drifts from Mixpanel's server schema (e.g. they add
-a required field, change a discriminator value, etc.), the
-``query_saved_report`` call will fail with a server-side validation
-error and these tests will surface it.
+We intentionally **do not** call ``query_saved_report`` here — the
+query-execution endpoint runs separate (legacy voluptuous-based)
+validation that diverges from the bookmark-storage Pydantic schema we
+mirror. A query-time rejection signals upstream Mixpanel-internal
+schema drift, not a bug in our mirror, and conflating the two would
+make these tests flaky against the wrong target.
+
+If our local schema drifts from the server's bookmark-storage schema
+(e.g. they add a required field, change a discriminator value, etc.),
+the ``create_bookmark`` call will fail and these tests will surface it.
 
 Skipped by default — opt in with ``MP_LIVE_TESTS=1``. Run via:
 

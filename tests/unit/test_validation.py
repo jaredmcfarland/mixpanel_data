@@ -879,8 +879,10 @@ class TestValidateSortingBlock:
         # Two missing colSortAttrs (one per chart-type config)
         missing = [e for e in errors if e.code == "S2_MISSING_COL_SORT_ATTRS"]
         assert len(missing) == 2
-        # Two extra "segmentation" fields (one per chart-type config). The
-        # extra "sortOrder" field is also caught.
+        # Two extra "segmentation" fields (one per chart-type config).
+        # ``sortOrder`` is part of the canonical sort config (declared on
+        # ``SortByValueConfig``, tolerated on ``SortByColumnsConfig``) so
+        # it is NOT flagged.
         extra_segs = [
             e
             for e in errors
@@ -933,10 +935,49 @@ class TestValidateSortingBlock:
         assert len(order_err) == 1
 
     def test_sorting_col_sort_attrs_must_be_list(self) -> None:
-        """``colSortAttrs`` must be a list."""
+        """``colSortAttrs`` must be a list. Code is ``S7_NOT_A_LIST``."""
         bm = _minimal_bookmark()
         bm["sorting"] = {"bar": {"sortBy": "column", "colSortAttrs": {}}}
         errors = validate_bookmark(bm)
-        # Whatever code lands, the path must point at the offending field.
-        all_errs = [e for e in errors if "colSortAttrs" in e.path]
-        assert len(all_errs) >= 1
+        not_a_list = [e for e in errors if e.code == "S7_NOT_A_LIST"]
+        assert len(not_a_list) == 1
+        assert not_a_list[0].path == "sorting.bar.colSortAttrs"
+
+    def test_sorting_value_config_with_canonical_top_level_fields_passes(
+        self,
+    ) -> None:
+        """``sortOrder``/``valueField``/``viewNLimit`` are valid at the
+        sort-config level (not just inside ``colSortAttrs``).
+
+        ``SortByValueConfig`` declares them explicitly; ``SortByColumnsConfig``
+        tolerates them via ``Ignore[T]``. Layer 2 must not flag them as
+        ``S3_UNKNOWN_FIELD`` — the Pydantic schema would accept them, so
+        rejecting them here would create a behavioral split between
+        ``create_bookmark`` (Pydantic) and ``update_bookmark`` (Layer 2).
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "value",
+                "sortOrder": "asc",
+                "valueField": "averageValue",
+                "viewNLimit": 50,
+                "colSortAttrs": [],
+            }
+        }
+        errors = validate_bookmark(bm)
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []
+
+    def test_sorting_lift_comparison_value_accepted(self) -> None:
+        """Deprecated ``sortBy='liftComparisonValue'`` must not be rejected.
+
+        ``SortByValueConfig.sortBy`` accepts the deprecated alias; older
+        saved bookmarks carry it. Layer 2 used to raise ``S1_INVALID_SORT_BY``
+        on it, false-rejecting valid bookmarks.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"bar": {"sortBy": "liftComparisonValue", "colSortAttrs": []}}
+        errors = validate_bookmark(bm)
+        s1 = [e for e in errors if e.code == "S1_INVALID_SORT_BY"]
+        assert s1 == []

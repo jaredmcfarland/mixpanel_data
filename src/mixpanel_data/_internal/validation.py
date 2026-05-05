@@ -3028,12 +3028,23 @@ def _validate_group_clause(
 
 # Mirrors Mixpanel's server-side discriminator on
 # ``SortByColumnsConfig.sortBy`` / ``SortByValueConfig.sortBy``.
-_VALID_SORT_BY: frozenset[str] = frozenset({"column", "value"})
+# ``"liftComparisonValue"`` is a deprecated alias the canonical
+# ``SortByValueConfig.sortBy`` Literal still accepts; older saved
+# bookmarks carry it and must not be false-rejected.
+_VALID_SORT_BY: frozenset[str] = frozenset({"column", "value", "liftComparisonValue"})
 
 # Allowed fields on each per-chart-type sorting config. The server uses
 # Pydantic ``extra='forbid'``; sending anything else raises
-# "Extra inputs are not permitted".
-_ALLOWED_SORT_CONFIG_FIELDS: frozenset[str] = frozenset({"sortBy", "colSortAttrs"})
+# "Extra inputs are not permitted". The set below is the union of the
+# explicit + ``Ignore[T]``-tolerated fields across ``SortByColumnsConfig``
+# and ``SortByValueConfig`` (see ``bookmark_schema.py``):
+#   - ``sortBy``, ``colSortAttrs``: declared on both
+#   - ``valueField``: declared on both
+#   - ``sortOrder``, ``viewNLimit``: declared on Value variant; tolerated
+#     on Columns variant via ``Ignore[T]``
+_ALLOWED_SORT_CONFIG_FIELDS: frozenset[str] = frozenset(
+    {"sortBy", "colSortAttrs", "sortOrder", "valueField", "viewNLimit"}
+)
 
 # Allowed fields on each ``colSortAttrs[i]`` entry.
 _ALLOWED_COL_SORT_ATTR_FIELDS: frozenset[str] = frozenset(
@@ -3173,7 +3184,7 @@ def _validate_sort_config(
                 ValidationError(
                     path=f"{path}.colSortAttrs",
                     message="'colSortAttrs' must be a list",
-                    code="S5_NOT_A_DICT",
+                    code="S7_NOT_A_LIST",
                 )
             )
         else:

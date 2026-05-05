@@ -41,6 +41,11 @@ from mixpanel_data.types import (
 )
 from mixpanel_data.workspace import Workspace
 from tests.conftest import make_session
+from tests.unit._bookmark_fixtures import (
+    MINIMAL_FUNNEL_PARAMS,
+    MINIMAL_INSIGHTS_PARAMS,
+    MINIMAL_RETENTION_PARAMS,
+)
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -96,68 +101,15 @@ def _make_workspace(
     )
 
 
-# =============================================================================
-# Minimal-valid bookmark params fixtures
-#
-# Smallest dicts that pass the canonical schema mirror in
-# ``mixpanel_data._internal.bookmark_schema``. CRUD tests pass these
-# instead of empty/garbage dicts so they exercise the full code path
-# (including client-side Pydantic validation) without false-rejection.
-# =============================================================================
-
-MINIMAL_INSIGHTS_PARAMS: dict[str, Any] = {
-    "displayOptions": {"chartType": "bar"},
-    "sections": {
-        "show": [
-            {
-                "type": "metric",
-                "behavior": {"type": "event", "name": "Login"},
-            }
-        ],
-        "time": [],
-    },
-}
-"""Minimal valid insights bookmark params dict."""
-
-MINIMAL_FUNNEL_PARAMS: dict[str, Any] = {
-    "displayOptions": {"chartType": "funnel-steps"},
-    "sections": {
-        "show": [
-            {
-                "type": "metric",
-                "behavior": {
-                    "type": "funnel",
-                    "behaviors": [
-                        {"type": "event", "name": "Signup"},
-                        {"type": "event", "name": "Purchase"},
-                    ],
-                },
-            }
-        ],
-        "time": [],
-    },
-}
-"""Minimal valid funnel bookmark params dict."""
-
-MINIMAL_RETENTION_PARAMS: dict[str, Any] = {
-    "displayOptions": {"chartType": "retention-curve"},
-    "sections": {
-        "show": [
-            {
-                "type": "metric",
-                "behavior": {
-                    "type": "retention",
-                    "behaviors": [
-                        {"type": "event", "name": "Signup"},
-                        {"type": "event", "name": "Login"},
-                    ],
-                },
-            }
-        ],
-        "time": [],
-    },
-}
-"""Minimal valid retention bookmark params dict."""
+# Re-export the shared minimal-valid fixtures so external test modules
+# that historically imported them from this file continue to work
+# (kept for backward-compat; new code should import from
+# ``tests.unit._bookmark_fixtures`` directly).
+__all__ = [
+    "MINIMAL_FUNNEL_PARAMS",
+    "MINIMAL_INSIGHTS_PARAMS",
+    "MINIMAL_RETENTION_PARAMS",
+]
 
 
 # =============================================================================
@@ -718,7 +670,7 @@ class TestWorkspaceBookmarkCRUD:
         params = CreateBookmarkParams(
             name="Described BM",
             bookmark_type="funnels",
-            params=MINIMAL_INSIGHTS_PARAMS,
+            params=MINIMAL_FUNNEL_PARAMS,
             description="A test bookmark",
             dashboard_id=99,
         )

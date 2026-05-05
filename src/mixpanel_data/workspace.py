@@ -5142,7 +5142,7 @@ class Workspace:
     def _validate_bookmark_params_schema(
         raw: dict[str, Any],
         bookmark_type: str | None,
-    ) -> list[Any]:
+    ) -> list[ValidationError]:
         """Validate a bookmark ``params`` dict against the canonical schema.
 
         Helper shared by ``create_bookmark`` and ``update_bookmark``.
@@ -5215,8 +5215,11 @@ class Workspace:
         # Full Pydantic-schema validation against the canonical mirror
         # of Mixpanel's bookmark schema — catches malformed shapes
         # client-side before they're persisted with garbage that only
-        # surfaces later at chart-render time.
-        if params.params:
+        # surfaces later at chart-render time. ``CreateBookmarkParams.params``
+        # is required, so an empty ``{}`` is reachable; ``is not None``
+        # routes that case through validation (which will surface the
+        # required-field errors the API would have reported anyway).
+        if params.params is not None:
             schema_errors = self._validate_bookmark_params_schema(
                 params.params, params.bookmark_type
             )
@@ -5296,12 +5299,16 @@ class Workspace:
             )
             ```
         """
-        # Full Pydantic-schema validation against the canonical mirror.
-        # ``UpdateBookmarkParams.params`` doesn't carry ``bookmark_type``,
-        # so the helper falls back to a sorting-only check; callers that
-        # want full validation should use ``create_bookmark`` or pass the
-        # bookmark_type explicitly via the lower-level API client.
-        if params.params:
+        # Sorting-only client-side validation. Note: full Pydantic schema
+        # validation is intentionally NOT applied here because the
+        # Mixpanel update endpoint accepts *partial* updates (e.g.
+        # ``{"name": "Renamed"}``) — running ``InsightsBookmarkParams``
+        # against a partial ``params`` would B0_MISSING_FIELD-spam every
+        # legitimate partial update since ``displayOptions`` and
+        # ``sections`` are required on the canonical root model.
+        # The sorting-block check is safe because it only runs when
+        # ``"sorting"`` is present, and that key is self-contained.
+        if params.params is not None:
             schema_errors = self._validate_bookmark_params_schema(
                 params.params, bookmark_type=None
             )

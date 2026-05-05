@@ -1,9 +1,10 @@
 """Unit tests for ``src/mixpanel_data/_internal/bookmark_schema.py`` models.
 
 Each model in ``bookmark_schema.py`` mirrors a canonical Pydantic class
-in ``/Users/jaredmcfarland/Developer/analytics/lib/common/mxpnl/report/
-bookmarks/`` (and its sibling MCP package). These tests verify, for
-each model:
+in Mixpanel's upstream ``analytics`` repository under
+``lib/common/mxpnl/report/bookmarks/`` (and its sibling
+``mixpanel_mcp/mcp_server/types/reports/internal/`` package for flows).
+These tests verify, for each model:
 
 - valid input passes without errors
 - required fields rejected when missing
@@ -25,8 +26,8 @@ from pydantic import ValidationError as PydanticValidationError
 
 # =============================================================================
 # Sorting models — mirrors
-# /Users/jaredmcfarland/Developer/analytics/lib/common/mxpnl/report/
-# bookmarks/insights/sorting.py
+# ``analytics/lib/common/mxpnl/report/bookmarks/insights/sorting.py``
+# in the upstream ``analytics`` repository.
 # =============================================================================
 
 

@@ -118,7 +118,7 @@ class TestRequestBodySerialization:
         # validation passes; this test is about request body
         # serialization (``bookmark_type`` → ``type`` alias), not about
         # validation behavior.
-        from tests.unit.test_workspace_crud import MINIMAL_FUNNEL_PARAMS
+        from tests.unit._bookmark_fixtures import MINIMAL_FUNNEL_PARAMS
 
         ws = _make_workspace(temp_dir, handler)
         ws.create_bookmark(
