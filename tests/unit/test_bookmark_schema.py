@@ -32,7 +32,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 
 class TestSortByColumnsConfig:
-    """Tests mirroring sorting.py:61 ``SortByColumnsConfig``.
+    """Tests mirroring sorting.py ``SortByColumnsConfig``.
 
     Discriminator ``sortBy=Literal["column"]``, requires ``colSortAttrs``,
     tolerates legacy ``sortOrder`` and ``viewNLimit`` via ``Ignore[T]``.
@@ -106,7 +106,7 @@ class TestSortByColumnsConfig:
 
 
 class TestSortByValueConfig:
-    """Tests mirroring sorting.py:74 ``SortByValueConfig``.
+    """Tests mirroring sorting.py ``SortByValueConfig``.
 
     Discriminator ``sortBy=Literal["value", "liftComparisonValue"]``;
     ``colSortAttrs`` required, ``sortOrder`` optional. Deprecated
@@ -155,8 +155,12 @@ class TestSortByValueConfig:
         assert m.sortBy == "liftComparisonValue"
 
     def test_extra_segmentation_field_rejected(self) -> None:
-        """The ``segmentation`` field that triggered the production
-        incident must be rejected client-side."""
+        """Extra ``segmentation`` key on ``SortByValueConfig`` is rejected.
+
+        Mirrors server ``extra='forbid'`` policy; sending it produces
+        ``extra_forbidden`` at parse time rather than a server-side
+        rejection at chart-render time.
+        """
         from mixpanel_data._internal.bookmark_schema import SortByValueConfig
 
         with pytest.raises(PydanticValidationError) as exc:
@@ -176,7 +180,7 @@ class TestSortByValueConfig:
 
 class TestFlatSortConfigs:
     """Tests for ``FlatLabelSortConfig`` and ``FlatValueSortConfig``
-    mirroring sorting.py:36-58.
+    mirroring sorting.py.
 
     These appear inside ``colSortAttrs`` lists on both column and value
     sort configs. Discriminator on ``sortBy``: ``"label"`` vs
@@ -213,7 +217,7 @@ class TestFlatSortConfigs:
 
 
 class TestInsightsBookmarkSortConfig:
-    """Tests mirroring sorting.py:115 ``InsightsBookmarkSortConfig``.
+    """Tests mirroring sorting.py ``InsightsBookmarkSortConfig``.
 
     The wrapper at ``params['sorting']`` — keys are chart-type strings
     (kebab-case wire form, snake_case Python field). Each key holds an
@@ -274,10 +278,12 @@ class TestInsightsBookmarkSortConfig:
                 {"barz": {"sortBy": "column", "colSortAttrs": []}}
             )
 
-    def test_my_actual_bug_caught(self) -> None:
-        """Reproduces the production incident from the dashboard render
-        failure: ``{bar: {sortBy: 'value', segmentation: 'value'}}`` —
-        missing ``colSortAttrs`` AND extra ``segmentation`` field.
+    def test_invalid_sorting_combinations_collected(self) -> None:
+        """All per-chart-type errors are collected without short-circuiting.
+
+        Two malformed configs (``bar``, ``funnel-steps``) — each missing
+        ``colSortAttrs`` and carrying extra ``segmentation`` — produce
+        four errors total via Pydantic's batch error collection.
         """
         from mixpanel_data._internal.bookmark_schema import (
             InsightsBookmarkSortConfig,
@@ -308,3 +314,261 @@ class TestInsightsBookmarkSortConfig:
             if e["type"] == "extra_forbidden" and "segmentation" in e["loc"]
         ]
         assert len(extras) >= 2
+
+
+class TestPydanticAdapter:
+    """Direct tests for the Pydantic-error → ``ValidationError`` adapter.
+
+    The adapter (``validate_with_pydantic``, ``_translate_pydantic_error``,
+    ``_loc_to_jsonpath``) is the load-bearing translation layer between
+    Pydantic and the package's stable ``B*``/``S*`` codes. Bugs here
+    propagate to every caller and break agent-grep workflows.
+    """
+
+    def test_loc_to_jsonpath_top_level(self) -> None:
+        """Single-segment loc renders as the segment name."""
+        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+
+        assert _loc_to_jsonpath(("sortBy",), "") == "sortBy"
+
+    def test_loc_to_jsonpath_nested_with_index(self) -> None:
+        """List-index ints attach to the previous segment as ``[i]``."""
+        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+
+        assert (
+            _loc_to_jsonpath(("show", 0, "behavior", "type"), "sections")
+            == "sections.show[0].behavior.type"
+        )
+
+    def test_loc_to_jsonpath_with_prefix(self) -> None:
+        """``prefix`` is prepended verbatim (no trailing dot needed)."""
+        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+
+        assert _loc_to_jsonpath(("bar", "sortBy"), "sorting") == "sorting.bar.sortBy"
+
+    def test_loc_to_jsonpath_leading_index(self) -> None:
+        """A leading int (no preceding segment) renders as ``[i]``."""
+        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+
+        assert _loc_to_jsonpath((0, "name"), "") == "[0].name"
+
+    def test_loc_to_jsonpath_strips_discriminator_tags(self) -> None:
+        """Pydantic ``Tag`` names are filtered out of the JSONPath.
+
+        ``Discriminator(...)+Tag(...)`` causes Pydantic to insert the Tag
+        name into ``loc`` for discriminated-union failures. Those names
+        are internal model class names and shouldn't leak to callers.
+        """
+        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+
+        loc = ("line", "FlatLabelSortConfig", "sortOrder")
+        assert _loc_to_jsonpath(loc, "sorting") == "sorting.line.sortOrder"
+
+    def test_unmapped_error_falls_through_to_validation_error(self) -> None:
+        """Default mapper returns ``"VALIDATION_ERROR"`` for unknown types."""
+        from mixpanel_data._internal.bookmark_schema import _default_code_mapper
+
+        assert _default_code_mapper("totally_made_up_type", ()) == "VALIDATION_ERROR"
+
+    def test_default_code_mapper_uses_default_map(self) -> None:
+        """Known Pydantic error types map via ``_DEFAULT_CODE_MAP``."""
+        from mixpanel_data._internal.bookmark_schema import _default_code_mapper
+
+        assert _default_code_mapper("missing", ()) == "B0_MISSING_FIELD"
+        assert _default_code_mapper("extra_forbidden", ()) == "S3_UNKNOWN_FIELD"
+        assert _default_code_mapper("literal_error", ()) == "B0_INVALID_LITERAL"
+
+    def test_sorting_code_mapper_path_disambiguation(self) -> None:
+        """Sorting mapper distinguishes ``missing`` codes by terminal field."""
+        from mixpanel_data._internal.bookmark_schema import _sorting_code_mapper
+
+        assert (
+            _sorting_code_mapper("missing", ("bar", "colSortAttrs"))
+            == "S2_MISSING_COL_SORT_ATTRS"
+        )
+        assert (
+            _sorting_code_mapper("missing", ("bar", "colSortAttrs", 0, "sortBy"))
+            == "S8_MISSING_SORT_BY"
+        )
+        assert (
+            _sorting_code_mapper("missing", ("line", "sortOrder"))
+            == "S9_MISSING_SORT_ORDER"
+        )
+
+    def test_validate_with_pydantic_uses_code_mapper_when_provided(self) -> None:
+        """Custom ``code_mapper`` overrides the default mapping."""
+        from mixpanel_data._internal.bookmark_schema import (
+            SortByValueConfig,
+            validate_with_pydantic,
+        )
+
+        def my_mapper(err_type: str, loc: tuple[Any, ...]) -> str:
+            return "CUSTOM_CODE"
+
+        errs = validate_with_pydantic(
+            SortByValueConfig, {"sortBy": "value"}, code_mapper=my_mapper
+        )
+        assert len(errs) >= 1
+        assert all(e.code == "CUSTOM_CODE" for e in errs)
+
+    def test_validate_with_pydantic_path_prefix_prepended(self) -> None:
+        """``path_prefix`` is prepended to every translated error path."""
+        from mixpanel_data._internal.bookmark_schema import (
+            SortByValueConfig,
+            validate_with_pydantic,
+        )
+
+        errs = validate_with_pydantic(
+            SortByValueConfig,
+            {"sortBy": "value"},
+            path_prefix="custom.prefix",
+        )
+        assert len(errs) >= 1
+        assert all(e.path.startswith("custom.prefix.") for e in errs)
+
+    def test_validate_with_pydantic_no_errors_returns_empty(self) -> None:
+        """Valid input produces an empty error list."""
+        from mixpanel_data._internal.bookmark_schema import (
+            FlatLabelSortConfig,
+            validate_with_pydantic,
+        )
+
+        errs = validate_with_pydantic(
+            FlatLabelSortConfig, {"sortBy": "label", "sortOrder": "asc"}
+        )
+        assert errs == []
+
+
+class TestEnumParity:
+    """Frozenset/Literal parity tests (Issue 16).
+
+    Each ``Literal[...]`` alias in ``bookmark_schema`` has a sibling
+    ``frozenset[str]`` constant in ``bookmark_enums``. The two must
+    match exactly; otherwise the runtime check (frozenset) and the
+    type-time check (Literal) silently disagree and one path becomes
+    stricter than the other. Drift here is invisible without a test.
+    """
+
+    @pytest.mark.parametrize(
+        ("literal_name", "frozen_name"),
+        [
+            ("MathTypeLiteral", "VALID_MATH_TYPES"),
+            ("ChartTypeLiteral", "VALID_CHART_TYPES"),
+            ("MetricTypeLiteral", "VALID_METRIC_TYPES"),
+            ("TimeUnitLiteral", "VALID_TIME_UNITS"),
+            ("InsightsResourceTypeLiteral", "VALID_RESOURCE_TYPES"),
+            ("FiltersDeterminerLiteral", "VALID_FILTERS_DETERMINER"),
+        ],
+    )
+    def test_literal_matches_frozenset(
+        self, literal_name: str, frozen_name: str
+    ) -> None:
+        """``Literal`` args match the corresponding frozenset members."""
+        from typing import get_args
+
+        from mixpanel_data._internal import bookmark_enums, bookmark_schema
+
+        literal_alias = getattr(bookmark_schema, literal_name)
+        frozen_set = getattr(bookmark_enums, frozen_name)
+        assert frozenset(get_args(literal_alias)) == frozen_set, (
+            f"{literal_name} (in bookmark_schema) and {frozen_name} "
+            f"(in bookmark_enums) diverged. Update both together to keep "
+            f"the runtime frozenset check and the type-time Literal in sync."
+        )
+
+
+class TestBookmarkTypeLiteral:
+    """Tests for ``CreateBookmarkParams.bookmark_type`` Literal tightening (Issue 14)."""
+
+    def test_create_bookmark_params_rejects_unknown_type(self) -> None:
+        """Typo in ``bookmark_type`` is rejected at construction time."""
+        from mixpanel_data.types import CreateBookmarkParams
+
+        with pytest.raises(PydanticValidationError) as exc:
+            CreateBookmarkParams(
+                name="Test",
+                bookmark_type="insightz",  # typo
+                params={},
+            )
+        assert any(
+            e["type"] == "literal_error"
+            and "bookmark_type" in str(e["loc"])
+            or "type" in str(e["loc"])
+            for e in exc.value.errors()
+        )
+
+    def test_create_bookmark_params_accepts_canonical_types(self) -> None:
+        """All five canonical bookmark types are accepted."""
+        from mixpanel_data.types import CreateBookmarkParams
+
+        for bt in ("insights", "funnels", "retention", "flows", "user"):
+            CreateBookmarkParams(name="X", bookmark_type=bt, params={})
+
+
+class TestMathAndChartTypeTightening:
+    """Tests for ``BehaviorMeasurement.math`` and ``DisplayOptions.chartType``
+    Literal tightening (Issue 9).
+    """
+
+    def test_behavior_measurement_rejects_invalid_math(self) -> None:
+        """``math='totl'`` (typo for ``'total'``) is rejected at parse time."""
+        from mixpanel_data._internal.bookmark_schema import BehaviorMeasurement
+
+        with pytest.raises(PydanticValidationError):
+            BehaviorMeasurement.model_validate({"math": "totl"})
+
+    def test_behavior_measurement_accepts_valid_math(self) -> None:
+        """A canonical math operator validates."""
+        from mixpanel_data._internal.bookmark_schema import BehaviorMeasurement
+
+        m = BehaviorMeasurement.model_validate({"math": "total"})
+        assert m.math == "total"
+
+    def test_display_options_rejects_invalid_chart_type(self) -> None:
+        """``chartType='lien'`` (typo for ``'line'``) is rejected at parse time."""
+        from mixpanel_data._internal.bookmark_schema import DisplayOptions
+
+        with pytest.raises(PydanticValidationError):
+            DisplayOptions.model_validate({"chartType": "lien"})
+
+    def test_display_options_accepts_valid_chart_type(self) -> None:
+        """A canonical chart type validates."""
+        from mixpanel_data._internal.bookmark_schema import DisplayOptions
+
+        m = DisplayOptions.model_validate({"chartType": "bar"})
+        assert m.chartType == "bar"
+
+
+class TestFlowsBookmarkParams:
+    """Tests pinning the current ``FlowsBookmarkParams`` behavior (Issue 10)."""
+
+    def test_flows_bookmark_params_currently_allows_extras(self) -> None:
+        """Pin the ``extra='allow'`` decision so it can't silently change.
+
+        FlowsBookmarkParams uses ``extra='allow'`` (not ``'forbid'``)
+        because the canonical MCP source itself doesn't forbid extras
+        and the wire format carries many UI-only fields. Tightening
+        requires corpus-driven enumeration (see TODO in source).
+
+        This test fails if someone changes the model_config without
+        also updating the corpus enumeration — forcing a deliberate
+        choice rather than a silent regression.
+        """
+        from mixpanel_data._internal.bookmark_schema import FlowsBookmarkParams
+
+        m = FlowsBookmarkParams.model_validate(
+            {
+                "steps": [{"event": "Login"}],
+                "date_range": {"from_date": "2025-01-01"},
+                "totally_unknown_ui_field": 12345,
+            }
+        )
+        # extra="allow" stores unknowns on the model; "forbid" would raise.
+        assert hasattr(m, "totally_unknown_ui_field") or hasattr(m, "model_extra")
+
+    def test_flows_step_bool_op_rejects_invalid(self) -> None:
+        """``FlowsBookmarkStep.bool_op`` is now a Literal — typos rejected."""
+        from mixpanel_data._internal.bookmark_schema import FlowsBookmarkStep
+
+        with pytest.raises(PydanticValidationError):
+            FlowsBookmarkStep.model_validate({"event": "X", "bool_op": "annd"})

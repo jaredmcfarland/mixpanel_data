@@ -44,7 +44,6 @@ from tests.conftest import make_session
 from tests.unit._bookmark_fixtures import (
     MINIMAL_FUNNEL_PARAMS,
     MINIMAL_INSIGHTS_PARAMS,
-    MINIMAL_RETENTION_PARAMS,
 )
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
@@ -99,17 +98,6 @@ def _make_workspace(
         session=_TEST_SESSION,
         _api_client=client,
     )
-
-
-# Re-export the shared minimal-valid fixtures so external test modules
-# that historically imported them from this file continue to work
-# (kept for backward-compat; new code should import from
-# ``tests.unit._bookmark_fixtures`` directly).
-__all__ = [
-    "MINIMAL_FUNNEL_PARAMS",
-    "MINIMAL_INSIGHTS_PARAMS",
-    "MINIMAL_RETENTION_PARAMS",
-]
 
 
 # =============================================================================
@@ -760,15 +748,12 @@ class TestWorkspaceBookmarkCRUD:
             ws.create_bookmark(params)
 
     def test_create_bookmark_rejects_malformed_sorting(self, temp_dir: Path) -> None:
-        """create_bookmark() rejects the exact malformed sorting block from
-        the dashboard incident before calling the API.
+        """create_bookmark() raises BookmarkValidationError before any API call.
 
-        Regression: previously the v2 ``POST /bookmarks`` endpoint accepted
-        garbage in ``params['sorting']``, persisted the bookmark, and only
-        failed later on ``query_saved_report`` with "Bookmark failed
-        validation: sorting.bar.SortByColumnsConfig.sortBy must be 'column'".
-        Validation now blocks the create call entirely and the API mock
-        below is never reached.
+        Pinning: malformed ``params['sorting']`` (missing ``colSortAttrs``,
+        extra ``segmentation``) must be rejected client-side. Without this
+        check, the v2 ``POST /bookmarks`` endpoint accepts and persists
+        the garbage; failure surfaces only later at chart-render time.
         """
         api_calls: list[httpx.Request] = []
 
@@ -797,10 +782,10 @@ class TestWorkspaceBookmarkCRUD:
         with pytest.raises(BookmarkValidationError) as excinfo:
             ws.create_bookmark(params)
 
-        # Pydantic adapter maps ``missing`` → B0_MISSING_FIELD and
-        # ``extra_forbidden`` → S3_UNKNOWN_FIELD.
+        # Sorting wrapper produces granular S* codes (single source of
+        # truth: same Pydantic mirror as create-path uses for the rest).
         codes = {e.code for e in excinfo.value.errors}
-        assert "B0_MISSING_FIELD" in codes  # missing colSortAttrs
+        assert "S2_MISSING_COL_SORT_ATTRS" in codes
         assert "S3_UNKNOWN_FIELD" in codes  # extra segmentation field
         assert api_calls == []
 
@@ -821,6 +806,123 @@ class TestWorkspaceBookmarkCRUD:
             ws.update_bookmark(1, params)
 
         assert api_calls == []
+
+    def test_update_bookmark_rejects_malformed_display_options(
+        self, temp_dir: Path
+    ) -> None:
+        """update_bookmark() rejects malformed displayOptions (Issue 4 regression).
+
+        Previously update_bookmark() only validated ``sorting`` — every other
+        malformation slipped through. With partial-aware validation, malformed
+        sub-models (e.g. ``displayOptions`` with an invalid ``chartType``) are
+        caught before the API call.
+        """
+        api_calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture every API call so we can assert none were made."""
+            api_calls.append(request)
+            return httpx.Response(200, json={"status": "ok", "results": {}})
+
+        ws = _make_workspace(temp_dir, handler)
+        # displayOptions missing required chartType → B0_MISSING_FIELD
+        params = UpdateBookmarkParams(
+            params={"displayOptions": {"plotStyle": "stacked"}}
+        )
+        with pytest.raises(BookmarkValidationError) as excinfo:
+            ws.update_bookmark(1, params)
+
+        codes = {e.code for e in excinfo.value.errors}
+        assert "B0_MISSING_FIELD" in codes  # missing displayOptions.chartType
+        assert api_calls == []
+
+    def test_update_bookmark_partial_name_only_no_validation(
+        self, temp_dir: Path
+    ) -> None:
+        """update_bookmark() with partial=name-only does not false-reject.
+
+        Validation must NOT trigger for legitimate partial updates that
+        omit ``sections`` / ``displayOptions``. The API is reached.
+        """
+        api_calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture API calls and return a valid bookmark."""
+            api_calls.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": _bookmark_json(1, "Renamed", "insights"),
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        ws.update_bookmark(1, UpdateBookmarkParams(name="Renamed"))
+        assert len(api_calls) == 1
+
+    def test_update_bookmark_warning_only_does_not_raise(self, temp_dir: Path) -> None:
+        """update_bookmark() with warning-only schema_errors does NOT raise.
+
+        ``S4_UNKNOWN_CHART_TYPE`` is severity=warning. The
+        ``any(e.severity == "error" ...)`` gate must let the call through.
+        """
+        api_calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a valid bookmark; capture API calls to assert it's reached."""
+            api_calls.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": _bookmark_json(1, "X", "insights"),
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        params = UpdateBookmarkParams(
+            params={"sorting": {"barz": {"sortBy": "column", "colSortAttrs": []}}}
+        )
+        ws.update_bookmark(1, params)  # MUST NOT raise
+        assert len(api_calls) == 1
+
+    def test_create_bookmark_warning_logged(
+        self, temp_dir: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """create_bookmark() logs warnings (instead of dropping silently)."""
+        import logging
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return success for both POST and the dashboard PATCH."""
+            if request.method == "PATCH":
+                return httpx.Response(
+                    200, json={"status": "ok", "results": _dashboard_json(id=99)}
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": _bookmark_json(77, "WarnTest", "insights"),
+                },
+            )
+
+        ws = _make_workspace(temp_dir, handler)
+        good_params = dict(MINIMAL_INSIGHTS_PARAMS)
+        good_params["sorting"] = {"barz": {"sortBy": "column", "colSortAttrs": []}}
+        params = CreateBookmarkParams(
+            name="WarnTest",
+            bookmark_type="insights",
+            params=good_params,
+            dashboard_id=99,
+        )
+        with caplog.at_level(logging.WARNING, logger="mixpanel_data.workspace"):
+            ws.create_bookmark(params)
+
+        warning_messages = [
+            r.message for r in caplog.records if r.levelno == logging.WARNING
+        ]
+        assert any("S4_UNKNOWN_CHART_TYPE" in m for m in warning_messages)
 
     def test_create_bookmark_allows_valid_sorting(self, temp_dir: Path) -> None:
         """create_bookmark() accepts the canonical valid sorting block."""

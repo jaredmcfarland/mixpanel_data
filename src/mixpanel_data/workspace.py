@@ -75,6 +75,7 @@ from mixpanel_data._internal.bookmark_builders import (
     patch_custom_property_filters_for_transform,
 )
 from mixpanel_data._internal.bookmark_schema import (
+    PARTIAL_UPDATE_SUB_MODELS,
     get_root_model_for_bookmark_type,
     validate_with_pydantic,
 )
@@ -5142,35 +5143,63 @@ class Workspace:
     def _validate_bookmark_params_schema(
         raw: dict[str, Any],
         bookmark_type: str | None,
+        *,
+        partial: bool = False,
     ) -> list[ValidationError]:
         """Validate a bookmark ``params`` dict against the canonical schema.
 
         Helper shared by ``create_bookmark`` and ``update_bookmark``.
-        Dispatches via ``get_root_model_for_bookmark_type`` and falls back
-        to the sorting-only check when no canonical root model exists for
-        the given type (or when the type is unknown on update calls).
+        Two modes:
+
+        - ``partial=False`` (create-path): when ``bookmark_type`` resolves
+          to a canonical root model (insights/funnels/retention/flows),
+          validates the entire ``raw`` (minus ``sorting``) against that
+          model. Required-field rules apply.
+        - ``partial=True`` (update-path): validates each present top-level
+          key in ``raw`` against its canonical sub-model. Missing keys
+          are intentional and not flagged — partial updates legitimately
+          omit fields.
+
+        ``sorting`` is always routed through ``validate_sorting_block``
+        (regardless of mode) so the ``S4_UNKNOWN_CHART_TYPE`` warning
+        surfaces consistently. Pydantic alone would emit a hard
+        ``S3_UNKNOWN_FIELD`` error for unknown chart-type keys.
 
         Args:
             raw: The bookmark ``params`` dict to validate.
             bookmark_type: The bookmark type (one of ``"insights"``,
                 ``"funnels"``, ``"retention"``, ``"flows"``, ``"user"``)
-                or ``None`` when unknown (e.g. on update calls where
-                ``UpdateBookmarkParams`` doesn't carry the type).
+                or ``None`` when unknown (e.g. on update calls).
+            partial: When True, run per-key sub-model validation; when
+                False (default), run full root-model validation.
 
         Returns:
-            List of ``ValidationError`` instances. Empty if the payload
-            validates cleanly.
+            List of ``ValidationError`` instances (errors and warnings).
+            Empty if the payload validates cleanly.
         """
-        if bookmark_type is not None:
+        errors: list[ValidationError] = []
+
+        # Sorting is always validated via the wrapper so unknown chart
+        # types surface as S4 warnings, not S3 errors. Strip from raw
+        # so root/sub-model validation doesn't double-validate it.
+        sorting = raw.get("sorting")
+        if sorting is not None:
+            errors.extend(validate_sorting_block(sorting))
+        raw_no_sorting = {k: v for k, v in raw.items() if k != "sorting"}
+
+        if not partial and bookmark_type is not None:
             root = get_root_model_for_bookmark_type(bookmark_type)
             if root is not None:
-                return validate_with_pydantic(root, raw)
-        # Fallback: at least catch the sorting block (the original
-        # incident class) when we can't dispatch to a root model.
-        sorting = raw.get("sorting") if isinstance(raw, dict) else None
-        if sorting is not None:
-            return validate_sorting_block(sorting)
-        return []
+                errors.extend(validate_with_pydantic(root, raw_no_sorting))
+                return errors
+
+        # Partial mode (or unknown root): per-key sub-model validation.
+        for key, model in PARTIAL_UPDATE_SUB_MODELS.items():
+            if key in raw_no_sorting:
+                errors.extend(
+                    validate_with_pydantic(model, raw_no_sorting[key], path_prefix=key)
+                )
+        return errors
 
     def create_bookmark(self, params: CreateBookmarkParams) -> Bookmark:
         """Create a new bookmark (saved report).
@@ -5185,6 +5214,9 @@ class Workspace:
         Raises:
             MixpanelDataError: If ``params.dashboard_id`` is ``None``
                 (required by the Mixpanel v2 API).
+            BookmarkValidationError: If ``params.params`` fails
+                client-side schema validation (mirrors Mixpanel's
+                canonical Pydantic schema; raised before the API call).
             ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid parameters (400, 422).
@@ -5215,16 +5247,18 @@ class Workspace:
         # Full Pydantic-schema validation against the canonical mirror
         # of Mixpanel's bookmark schema — catches malformed shapes
         # client-side before they're persisted with garbage that only
-        # surfaces later at chart-render time. ``CreateBookmarkParams.params``
-        # is required, so an empty ``{}`` is reachable; ``is not None``
-        # routes that case through validation (which will surface the
-        # required-field errors the API would have reported anyway).
-        if params.params is not None:
-            schema_errors = self._validate_bookmark_params_schema(
-                params.params, params.bookmark_type
+        # surfaces later at chart-render time.
+        schema_errors = self._validate_bookmark_params_schema(
+            params.params, params.bookmark_type
+        )
+        if any(e.severity == "error" for e in schema_errors):
+            raise BookmarkValidationError(schema_errors)
+        for w in (e for e in schema_errors if e.severity == "warning"):
+            logger.warning(
+                "create_bookmark validation warning: %s [%s]",
+                w.message,
+                w.code,
             )
-            if any(e.severity == "error" for e in schema_errors):
-                raise BookmarkValidationError(schema_errors)
 
         client = self._require_api_client()
         raw = client.create_bookmark(
@@ -5286,6 +5320,10 @@ class Workspace:
             The updated ``Bookmark``.
 
         Raises:
+            BookmarkValidationError: If ``params.params`` (when supplied)
+                fails partial-mode client-side schema validation
+                (mirrors Mixpanel's canonical schema for the keys that
+                ARE present; raised before the API call).
             ConfigError: If credentials are not available.
             AuthenticationError: Invalid credentials (401).
             QueryError: Bookmark not found or invalid params (400, 404).
@@ -5299,21 +5337,24 @@ class Workspace:
             )
             ```
         """
-        # Sorting-only client-side validation. Note: full Pydantic schema
-        # validation is intentionally NOT applied here because the
-        # Mixpanel update endpoint accepts *partial* updates (e.g.
-        # ``{"name": "Renamed"}``) — running ``InsightsBookmarkParams``
-        # against a partial ``params`` would B0_MISSING_FIELD-spam every
-        # legitimate partial update since ``displayOptions`` and
-        # ``sections`` are required on the canonical root model.
-        # The sorting-block check is safe because it only runs when
-        # ``"sorting"`` is present, and that key is self-contained.
+        # Partial-aware Pydantic validation: each present top-level key
+        # in ``params.params`` is checked against its canonical sub-model.
+        # Missing top-level keys are intentional (partial updates) and
+        # not flagged. Catches the same malformations the create-path
+        # catches on the keys that ARE present (chartType typos,
+        # missing colSortAttrs, extra segmentation field, etc.).
         if params.params is not None:
             schema_errors = self._validate_bookmark_params_schema(
-                params.params, bookmark_type=None
+                params.params, bookmark_type=None, partial=True
             )
             if any(e.severity == "error" for e in schema_errors):
                 raise BookmarkValidationError(schema_errors)
+            for w in (e for e in schema_errors if e.severity == "warning"):
+                logger.warning(
+                    "update_bookmark validation warning: %s [%s]",
+                    w.message,
+                    w.code,
+                )
 
         client = self._require_api_client()
         raw = client.update_bookmark(bookmark_id, params.model_dump(exclude_none=True))

@@ -47,6 +47,11 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_RETENTION_UNITS,
     VALID_TIME_UNITS,
 )
+from mixpanel_data._internal.bookmark_schema import (
+    InsightsBookmarkSortConfig,
+    _sorting_code_mapper,
+    validate_with_pydantic,
+)
 
 # Import specific types needed for isinstance checks at runtime.
 from mixpanel_data._literal_types import (
@@ -2301,23 +2306,14 @@ def validate_bookmark(
         List of validation errors. Empty list means the bookmark is valid.
 
     Note:
-        This Layer 2 function uses hand-written sub-validators with
-        granular ``B*`` / ``S*`` error codes that callers (and agents)
-        may grep for. A full Pydantic schema mirror lives in
-        ``mixpanel_data._internal.bookmark_schema`` and is invoked from
-        ``Workspace.create_bookmark()`` / ``Workspace.update_bookmark()``
-        at the API boundary. The two paths catch overlapping but not
-        identical errors:
-
-        - This function: best for the build-path (``ws.build_params(...)``)
-          where consumers know the granular ``B1_MISSING_SECTIONS`` /
-          ``B9_INVALID_MATH`` / etc. codes.
-        - The Pydantic schema: best for the API-call boundary where
-          we want strict 1:1 fidelity with Mixpanel's server schema
-          (proven against a 200-bookmark live corpus).
-
-        Unifying the two is intentionally deferred — see corpus parity
-        evidence in ``scripts/validate_corpus.py``.
+        Layer 2 hand-written sub-validators emit granular ``B*`` / ``S*``
+        codes for the build-path. The sorting subset is now a thin
+        wrapper over the Pydantic mirror in ``bookmark_schema`` (single
+        source of truth — Layer 1 and Layer 2 cannot drift on sorting).
+        The Pydantic mirror is also invoked at the API boundary by
+        ``Workspace.create_bookmark`` / ``update_bookmark`` for strict
+        1:1 fidelity with Mixpanel's server schema (drift-checked via
+        ``scripts/validate_corpus.py``).
 
     Example:
         ```python
@@ -3024,73 +3020,53 @@ def _validate_group_clause(
 
 # =============================================================================
 # Layer 2: sorting block validator
+#
+# This is now a thin wrapper over the Pydantic mirror in bookmark_schema:
+# the FlatOrColumnSortConfig discriminator + extra="forbid" do all the
+# structural work. The wrapper adds two things on top:
+#
+#   1. S4_UNKNOWN_CHART_TYPE warnings (Pydantic would emit an error for
+#      unknown chart-type keys; we want a warning + suggestion instead).
+#   2. The S* code translation (via _sorting_code_mapper in bookmark_schema).
+#
+# By construction, validation here cannot drift from the canonical mirror.
 # =============================================================================
-
-# Mirrors Mixpanel's server-side discriminator on
-# ``SortByColumnsConfig.sortBy`` / ``SortByValueConfig.sortBy``.
-# ``"liftComparisonValue"`` is a deprecated alias the canonical
-# ``SortByValueConfig.sortBy`` Literal still accepts; older saved
-# bookmarks carry it and must not be false-rejected.
-_VALID_SORT_BY: frozenset[str] = frozenset({"column", "value", "liftComparisonValue"})
-
-# Allowed fields on each per-chart-type sorting config. The server uses
-# Pydantic ``extra='forbid'``; sending anything else raises
-# "Extra inputs are not permitted". The set below is the union of the
-# explicit + ``Ignore[T]``-tolerated fields across ``SortByColumnsConfig``
-# and ``SortByValueConfig`` (see ``bookmark_schema.py``):
-#   - ``sortBy``, ``colSortAttrs``: declared on both
-#   - ``valueField``: declared on both
-#   - ``sortOrder``, ``viewNLimit``: declared on Value variant; tolerated
-#     on Columns variant via ``Ignore[T]``
-_ALLOWED_SORT_CONFIG_FIELDS: frozenset[str] = frozenset(
-    {"sortBy", "colSortAttrs", "sortOrder", "valueField", "viewNLimit"}
-)
-
-# Allowed fields on each ``colSortAttrs[i]`` entry.
-_ALLOWED_COL_SORT_ATTR_FIELDS: frozenset[str] = frozenset(
-    {"sortBy", "sortOrder", "valueField", "viewNLimit"}
-)
-
-_VALID_SORT_ORDER: frozenset[str] = frozenset({"asc", "desc"})
 
 
 def validate_sorting_block(sorting: Any) -> list[ValidationError]:
     """Validate the optional ``params['sorting']`` block.
 
-    The sorting block maps chart-type strings (e.g. ``"bar"``,
-    ``"funnel-steps"``) to per-chart-type sort configs. The shape mirrors
-    Mixpanel's server-side ``SortByColumnsConfig`` / ``SortByValueConfig``
-    Pydantic models; bookmarks that pass create-time but contain a malformed
-    sorting block fail later at query-time. Catching them here removes the
-    server roundtrip from the failure path.
+    Wraps ``validate_with_pydantic(InsightsBookmarkSortConfig, ...)``
+    with a sorting-aware code mapper that recovers the package's stable
+    ``S*`` codes. Unknown chart-type keys are filtered out and reported
+    as ``S4_UNKNOWN_CHART_TYPE`` warnings (rather than ``extra_forbidden``
+    errors) so callers can keep producing best-effort output for partial
+    chart-type coverage.
 
     Args:
         sorting: The raw value at ``params['sorting']``. May be any type;
             this function reports a structural error if it is not a dict.
 
     Returns:
-        List of validation errors. Empty when the block is well-formed (or
-        omitted at the call site — callers gate on key presence).
+        List of validation errors. Empty when the block is well-formed
+        (or omitted at the call site — callers gate on key presence).
     """
-    errors: list[ValidationError] = []
-
     if not isinstance(sorting, dict):
-        errors.append(
+        return [
             ValidationError(
                 path="sorting",
                 message="'sorting' must be a dict",
                 code="S5_NOT_A_DICT",
             )
-        )
-        return errors
+        ]
 
+    errors: list[ValidationError] = []
+    known: dict[str, Any] = {}
     for chart_type, config in sorting.items():
-        chart_path = f"sorting.{chart_type}"
-
         if chart_type not in VALID_CHART_TYPES:
             errors.append(
                 _enum_error(
-                    path=chart_path,
+                    path=f"sorting.{chart_type}",
                     field="chart type",
                     value=str(chart_type),
                     valid=VALID_CHART_TYPES,
@@ -3098,156 +3074,19 @@ def validate_sorting_block(sorting: Any) -> list[ValidationError]:
                     severity="warning",
                 )
             )
-
-        errors.extend(_validate_sort_config(config, chart_path))
-
-    return errors
-
-
-def _validate_sort_config(
-    config: Any,
-    path: str,
-) -> list[ValidationError]:
-    """Validate a single per-chart-type sort config.
-
-    A sort config is a dict with discriminated shape:
-
-    - ``{"sortBy": "column", "colSortAttrs": [...]}``
-      (``SortByColumnsConfig`` — empty ``colSortAttrs`` is allowed)
-    - ``{"sortBy": "value",  "colSortAttrs": [...]}``
-      (``SortByValueConfig`` — ``colSortAttrs`` is required and validated
-      element-wise)
-
-    Args:
-        config: The per-chart-type config value. May be any type; reports
-            a structural error if not a dict.
-        path: JSONPath-like prefix for error messages (e.g. ``"sorting.bar"``).
-
-    Returns:
-        List of validation errors for this config.
-    """
-    errors: list[ValidationError] = []
-
-    if not isinstance(config, dict):
-        errors.append(
-            ValidationError(
-                path=path,
-                message="Per-chart-type sort config must be a dict",
-                code="S5_NOT_A_DICT",
-            )
-        )
-        return errors
-
-    # S1: sortBy must be one of {"column", "value"}.
-    sort_by = config.get("sortBy")
-    if sort_by is not None and sort_by not in _VALID_SORT_BY:
-        errors.append(
-            _enum_error(
-                path=f"{path}.sortBy",
-                field="sortBy",
-                value=str(sort_by),
-                valid=_VALID_SORT_BY,
-                code="S1_INVALID_SORT_BY",
-            )
-        )
-
-    # S2: colSortAttrs is required (server marks "Field required" on both
-    # the Column and Value config variants — sending one without the other
-    # field still trips the missing-field rule).
-    if "colSortAttrs" not in config:
-        errors.append(
-            ValidationError(
-                path=f"{path}.colSortAttrs",
-                message="'colSortAttrs' is required on sort config",
-                code="S2_MISSING_COL_SORT_ATTRS",
-                fix={"colSortAttrs": []},
-            )
-        )
-
-    # S3: extra fields are forbidden by the server schema.
-    for key in config:
-        if key not in _ALLOWED_SORT_CONFIG_FIELDS:
-            errors.append(
-                ValidationError(
-                    path=f"{path}.{key}",
-                    message=f"Unknown field '{key}' is not permitted on sort config",
-                    code="S3_UNKNOWN_FIELD",
-                    suggestion=_suggest(key, _ALLOWED_SORT_CONFIG_FIELDS),
-                )
-            )
-
-    # Element-wise validation of colSortAttrs entries.
-    col_sort_attrs = config.get("colSortAttrs")
-    if col_sort_attrs is not None:
-        if not isinstance(col_sort_attrs, list):
-            errors.append(
-                ValidationError(
-                    path=f"{path}.colSortAttrs",
-                    message="'colSortAttrs' must be a list",
-                    code="S7_NOT_A_LIST",
-                )
-            )
         else:
-            for i, attr in enumerate(col_sort_attrs):
-                errors.extend(
-                    _validate_col_sort_attr(attr, f"{path}.colSortAttrs[{i}]")
-                )
+            known[chart_type] = config
+
+    if known:
+        errors.extend(
+            validate_with_pydantic(
+                InsightsBookmarkSortConfig,
+                known,
+                path_prefix="sorting",
+                code_mapper=_sorting_code_mapper,
+            )
+        )
 
     return errors
-
-
-def _validate_col_sort_attr(
-    attr: Any,
-    path: str,
-) -> list[ValidationError]:
-    """Validate a single ``colSortAttrs[i]`` entry.
-
-    Each entry is a dict with fields ``sortBy``, ``sortOrder``,
-    ``valueField``, and an optional ``viewNLimit``. Unknown fields are
-    rejected to mirror the server-side ``extra='forbid'`` behavior.
-
-    Args:
-        attr: The sort attribute entry. May be any type.
-        path: JSONPath-like location for error messages.
-
-    Returns:
-        List of validation errors for this entry.
-    """
-    errors: list[ValidationError] = []
-
-    if not isinstance(attr, dict):
-        errors.append(
-            ValidationError(
-                path=path,
-                message="colSortAttrs entry must be a dict",
-                code="S5_NOT_A_DICT",
-            )
-        )
-        return errors
-
-    # S6: sortOrder must be {"asc", "desc"} when present.
-    sort_order = attr.get("sortOrder")
-    if sort_order is not None and sort_order not in _VALID_SORT_ORDER:
-        errors.append(
-            _enum_error(
-                path=f"{path}.sortOrder",
-                field="sortOrder",
-                value=str(sort_order),
-                valid=_VALID_SORT_ORDER,
-                code="S6_INVALID_SORT_ORDER",
-            )
-        )
-
-    # S3: extra fields are forbidden.
-    for key in attr:
-        if key not in _ALLOWED_COL_SORT_ATTR_FIELDS:
-            errors.append(
-                ValidationError(
-                    path=f"{path}.{key}",
-                    message=f"Unknown field '{key}' is not permitted on colSortAttrs",
-                    code="S3_UNKNOWN_FIELD",
-                    suggestion=_suggest(key, _ALLOWED_COL_SORT_ATTR_FIELDS),
-                )
-            )
 
     return errors

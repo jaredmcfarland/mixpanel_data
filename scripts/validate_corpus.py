@@ -23,26 +23,71 @@ import json
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any
 
 from mixpanel_data._internal.bookmark_schema import (
     get_root_model_for_bookmark_type,
     validate_with_pydantic,
 )
+from mixpanel_data.exceptions import ValidationError
+
+_KNOWN_BOOKMARK_TYPES: frozenset[str] = frozenset(
+    {"insights", "funnels", "retention", "flows", "user"}
+)
 
 
-def _validate_one_file(path: Path) -> tuple[str, list[Any]]:
-    """Validate one corpus file and return ``(bookmark_type, errors)``."""
+def _validate_one_file(
+    path: Path,
+) -> tuple[str, list[ValidationError], bool]:
+    """Validate one corpus file.
+
+    Returns:
+        ``(bookmark_type, errors, skipped)`` where ``skipped`` indicates
+        the file was intentionally not validated (e.g. user bookmarks
+        with no canonical schema). Malformed corpus entries (non-dict
+        params, unknown bookmark_type) produce ``CORPUS_*`` errors —
+        not silent passes.
+    """
     raw = json.loads(path.read_text(encoding="utf-8"))
     bookmark_type = raw.get("bookmark_type", path.parent.name)
-    params = raw.get("params") or {}
+
+    if bookmark_type not in _KNOWN_BOOKMARK_TYPES:
+        return (
+            bookmark_type,
+            [
+                ValidationError(
+                    path="bookmark_type",
+                    message=(
+                        f"Unknown bookmark_type {bookmark_type!r}; "
+                        f"expected one of {sorted(_KNOWN_BOOKMARK_TYPES)}"
+                    ),
+                    code="CORPUS_UNKNOWN_TYPE",
+                )
+            ],
+            False,
+        )
+
+    params = raw.get("params")
     if not isinstance(params, dict):
-        return bookmark_type, []
+        return (
+            bookmark_type,
+            [
+                ValidationError(
+                    path="params",
+                    message=(f"params is {type(params).__name__}, expected dict"),
+                    code="CORPUS_NOT_A_DICT",
+                )
+            ],
+            False,
+        )
+
     root = get_root_model_for_bookmark_type(bookmark_type)
     if root is None:
-        return bookmark_type, []
+        # No canonical schema (e.g. user bookmarks). Counted as skipped,
+        # not passed.
+        return bookmark_type, [], True
+
     errors = validate_with_pydantic(root, params)
-    return bookmark_type, errors
+    return bookmark_type, errors, False
 
 
 def main() -> int:
@@ -68,9 +113,7 @@ def main() -> int:
 
     if not args.corpus.exists():
         print(f"Corpus directory not found: {args.corpus}")
-        print(
-            "Run scripts/capture_bookmark_corpus.py first to populate it."
-        )
+        print("Run scripts/capture_bookmark_corpus.py first to populate it.")
         return 1
 
     files = sorted(args.corpus.glob("*/*.json"))
@@ -83,12 +126,16 @@ def main() -> int:
 
     by_type_total: Counter[str] = Counter()
     by_type_errored: Counter[str] = Counter()
+    by_type_skipped: Counter[str] = Counter()
     code_counts: Counter[str] = Counter()
     rejection_paths: Counter[str] = Counter()
 
     for path in files:
-        bookmark_type, errors = _validate_one_file(path)
+        bookmark_type, errors, skipped = _validate_one_file(path)
         by_type_total[bookmark_type] += 1
+        if skipped:
+            by_type_skipped[bookmark_type] += 1
+            continue
         if errors:
             by_type_errored[bookmark_type] += 1
             for e in errors:
@@ -99,12 +146,18 @@ def main() -> int:
                 for e in errors[:5]:
                     print(f"    {e.code}: {e.path}: {e.message[:80]}")
 
-    print("Per-type summary:")
+    print("Per-type summary (passed / total, skipped):")
     for bt in sorted(by_type_total):
         total = by_type_total[bt]
         errored = by_type_errored[bt]
-        pct = 100.0 * (total - errored) / total if total else 0.0
-        print(f"  {bt:>10}: {total - errored} / {total} pass ({pct:.1f}%)")
+        skipped = by_type_skipped[bt]
+        considered = total - skipped
+        passed = considered - errored
+        pct = 100.0 * passed / considered if considered else 0.0
+        print(
+            f"  {bt:>10}: {passed} / {considered} pass ({pct:.1f}%)"
+            + (f"  [skipped: {skipped}]" if skipped else "")
+        )
 
     if code_counts:
         print()

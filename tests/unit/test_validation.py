@@ -853,14 +853,15 @@ class TestValidateSortingBlock:
         assert len(missing) == 1
         assert missing[0].path == "sorting.bar.colSortAttrs"
 
-    def test_sorting_collects_all_errors_my_actual_bug(self) -> None:
-        """Reproduce today's exact bug: ``{sortBy: value, segmentation: value}``.
+    def test_sorting_collects_missing_col_sort_attrs_and_extra_segmentation(
+        self,
+    ) -> None:
+        """Two malformed sort configs produce four errors total.
 
-        This is the malformed sorting block I sent to Mixpanel earlier today
-        (mp_tool_call dashboard "jared scratch"). It produced "client has
-        issued a malformed request" in the UI and a server-side validator
-        rejection on ``query_saved_report``. The validator now catches it
-        without a server roundtrip.
+        Each chart-type config (``bar``, ``funnel-steps``) is missing
+        ``colSortAttrs`` AND carries an extra ``segmentation`` field.
+        The validator must collect all four errors — no per-config
+        short-circuit — so callers can fix the whole bookmark in one pass.
         """
         bm = _minimal_bookmark()
         bm["sorting"] = {
@@ -981,3 +982,257 @@ class TestValidateSortingBlock:
         errors = validate_bookmark(bm)
         s1 = [e for e in errors if e.code == "S1_INVALID_SORT_BY"]
         assert s1 == []
+
+    def test_sorting_line_flat_label_config_accepted(self) -> None:
+        """Line charts accept ``FlatLabelSortConfig`` (no colSortAttrs).
+
+        Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/
+        sorting.py:122`` — ``line: Optional[FlatOrColumnSortConfig]``
+        admits ``FlatLabelSortConfig`` (``sortBy='label'``) and
+        ``FlatValueSortConfig`` alongside the column/value SortConfig.
+        Rejecting the flat shape would create a behavioral split: the
+        Pydantic schema (Layer 1) accepts it for ``create_bookmark``,
+        so the fallback validator (Layer 2) used by ``update_bookmark``
+        must accept it too.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"line": {"sortBy": "label", "sortOrder": "asc"}}
+        errors = validate_bookmark(bm)
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []
+
+    def test_sorting_line_flat_value_config_accepted(self) -> None:
+        """Line charts accept ``FlatValueSortConfig`` (no colSortAttrs)."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "line": {
+                "sortBy": "value",
+                "sortOrder": "desc",
+                "valueField": "averageValue",
+            }
+        }
+        errors = validate_bookmark(bm)
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []
+
+    def test_sorting_line_column_config_still_requires_col_sort_attrs(
+        self,
+    ) -> None:
+        """Line + ``sortBy='column'`` is ``SortByColumnsConfig`` —
+        ``colSortAttrs`` is still required (this is not the flat path).
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"line": {"sortBy": "column"}}
+        errors = validate_bookmark(bm)
+        missing = [e for e in errors if e.code == "S2_MISSING_COL_SORT_ATTRS"]
+        assert len(missing) == 1
+        assert missing[0].path == "sorting.line.colSortAttrs"
+
+    def test_sorting_line_invalid_sort_by_caught(self) -> None:
+        """Line ``sortBy`` must still be one of the four valid values.
+
+        The line-specific union accepts ``label`` in addition to the
+        normal ``column``/``value``/``liftComparisonValue``, but bogus
+        values must still be rejected.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"line": {"sortBy": "totally bogus", "sortOrder": "asc"}}
+        errors = validate_bookmark(bm)
+        s1 = [e for e in errors if e.code == "S1_INVALID_SORT_BY"]
+        assert len(s1) == 1
+        assert s1[0].path == "sorting.line.sortBy"
+
+    def test_sorting_non_line_label_still_rejected(self) -> None:
+        """``sortBy='label'`` is invalid at the top level for non-line charts.
+
+        Only ``line`` admits the flat configs; ``bar``/``pie``/etc. must
+        be ``SortConfig`` (column/value/liftComparisonValue).
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"bar": {"sortBy": "label", "colSortAttrs": []}}
+        errors = validate_bookmark(bm)
+        s1 = [e for e in errors if e.code == "S1_INVALID_SORT_BY"]
+        assert len(s1) == 1
+        assert s1[0].path == "sorting.bar.sortBy"
+
+    def test_col_sort_attr_missing_sort_by_caught(self) -> None:
+        """``colSortAttrs[i]`` must declare ``sortBy``.
+
+        Mirrors canonical ``FlatSortConfig`` discriminator: ``sortBy``
+        is required on both ``FlatLabelSortConfig`` and
+        ``FlatValueSortConfig``. An entry like ``{"sortOrder": "asc"}``
+        cannot be discriminated and would fail at render time.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "column",
+                "colSortAttrs": [{"sortOrder": "asc"}],
+            }
+        }
+        errors = validate_bookmark(bm)
+        missing = [e for e in errors if e.code == "S8_MISSING_SORT_BY"]
+        assert len(missing) == 1
+        assert missing[0].path == "sorting.bar.colSortAttrs[0].sortBy"
+
+    def test_col_sort_attr_invalid_sort_by_caught(self) -> None:
+        """``colSortAttrs[i].sortBy`` must be in {label, value, liftComparisonValue}.
+
+        ``FlatSortConfig`` does not admit ``"column"`` (that's a
+        top-level discriminator only). A bogus value must be rejected.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "column",
+                "colSortAttrs": [{"sortBy": "bogus", "sortOrder": "asc"}],
+            }
+        }
+        errors = validate_bookmark(bm)
+        s1 = [e for e in errors if e.code == "S1_INVALID_SORT_BY"]
+        assert len(s1) == 1
+        assert s1[0].path == "sorting.bar.colSortAttrs[0].sortBy"
+
+    def test_col_sort_attr_column_sort_by_rejected(self) -> None:
+        """``"column"`` is a top-level-only ``sortBy``; rejected inside colSortAttrs."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "column",
+                "colSortAttrs": [{"sortBy": "column", "sortOrder": "asc"}],
+            }
+        }
+        errors = validate_bookmark(bm)
+        s1 = [e for e in errors if e.code == "S1_INVALID_SORT_BY"]
+        assert len(s1) == 1
+        assert s1[0].path == "sorting.bar.colSortAttrs[0].sortBy"
+
+    def test_col_sort_attr_missing_sort_order_caught(self) -> None:
+        """``colSortAttrs[i]`` must declare ``sortOrder``.
+
+        Both ``FlatLabelSortConfig`` and ``FlatValueSortConfig`` mark
+        ``sortOrder`` as required; an entry that omits it fails server-
+        side validation at render time.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "column",
+                "colSortAttrs": [{"sortBy": "value", "valueField": "x"}],
+            }
+        }
+        errors = validate_bookmark(bm)
+        missing = [e for e in errors if e.code == "S9_MISSING_SORT_ORDER"]
+        assert len(missing) == 1
+        assert missing[0].path == "sorting.bar.colSortAttrs[0].sortOrder"
+
+    def test_col_sort_attr_label_sort_by_accepted(self) -> None:
+        """``sortBy='label'`` is valid inside ``colSortAttrs`` (FlatLabelSortConfig)."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "column",
+                "colSortAttrs": [{"sortBy": "label", "sortOrder": "asc"}],
+            }
+        }
+        errors = validate_bookmark(bm)
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []
+
+    # ------------------------------------------------------------------
+    # Layer 1 / Layer 2 parity regressions (gap tests for Phase 1)
+    # ------------------------------------------------------------------
+
+    def test_sorting_invalid_top_level_sort_order_rejected(self) -> None:
+        """Top-level ``sortOrder`` value is validated (was Layer-2 gap).
+
+        Previously ``{sortBy: value, sortOrder: ascending, colSortAttrs: []}``
+        was accepted by Layer 2 (only the value was unchecked) but rejected
+        by Layer 1 — a behavioral split. With unification both reject.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "bar": {
+                "sortBy": "value",
+                "sortOrder": "ascending",
+                "colSortAttrs": [],
+            }
+        }
+        errors = validate_bookmark(bm)
+        s6 = [e for e in errors if e.code == "S6_INVALID_SORT_ORDER"]
+        assert len(s6) == 1
+        assert s6[0].path == "sorting.bar.sortOrder"
+
+    def test_sorting_unhashable_sort_by_does_not_crash(self) -> None:
+        """``sortBy`` as a list/dict no longer raises raw ``TypeError``.
+
+        Previously ``sort_by in frozenset(...)`` crashed when sort_by was
+        unhashable. The unified Pydantic path returns a typed error.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"bar": {"sortBy": [], "colSortAttrs": []}}
+        errors = validate_bookmark(bm)
+        s1 = [e for e in errors if e.code == "S1_INVALID_SORT_BY"]
+        assert len(s1) == 1
+        assert s1[0].path == "sorting.bar.sortBy"
+
+    def test_sorting_col_sort_attrs_none_rejected(self) -> None:
+        """``colSortAttrs: None`` is rejected (not silently accepted).
+
+        Previously Layer 2 treated ``"colSortAttrs" in config`` as True
+        for ``None``-valued keys and skipped both S2 and S7 checks. The
+        unified path catches it as a list_type error → S7.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"bar": {"sortBy": "column", "colSortAttrs": None}}
+        errors = validate_bookmark(bm)
+        s7 = [e for e in errors if e.code == "S7_NOT_A_LIST"]
+        assert len(s7) == 1
+        assert s7[0].path == "sorting.bar.colSortAttrs"
+
+    def test_sorting_line_flat_missing_sort_order_caught(self) -> None:
+        """Line ``{sortBy: 'label'}`` (no sortOrder) → S9 at top level."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"line": {"sortBy": "label"}}
+        errors = validate_bookmark(bm)
+        s9 = [e for e in errors if e.code == "S9_MISSING_SORT_ORDER"]
+        assert len(s9) == 1
+        assert s9[0].path == "sorting.line.sortOrder"
+
+    def test_sorting_line_flat_extra_field_caught(self) -> None:
+        """Flat-path ``segmentation`` extra field caught (was uncovered)."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "line": {"sortBy": "label", "sortOrder": "asc", "segmentation": "x"}
+        }
+        errors = validate_bookmark(bm)
+        s3 = [e for e in errors if e.code == "S3_UNKNOWN_FIELD"]
+        assert len(s3) == 1
+        assert s3[0].path == "sorting.line.segmentation"
+
+    def test_sorting_line_label_with_col_sort_attrs_rejected(self) -> None:
+        """``line + label + colSortAttrs=[]`` is invalid.
+
+        ``label`` is unique to flat path; ``colSortAttrs`` is unique to
+        SortConfig path. Combining them is contradictory — discriminator
+        routes by sortBy and Pydantic rejects extra ``colSortAttrs``.
+        """
+        bm = _minimal_bookmark()
+        bm["sorting"] = {
+            "line": {"sortBy": "label", "sortOrder": "asc", "colSortAttrs": []}
+        }
+        errors = validate_bookmark(bm)
+        # FlatLabelSortConfig forbids colSortAttrs
+        s3 = [e for e in errors if e.code == "S3_UNKNOWN_FIELD"]
+        assert len(s3) == 1
+        assert s3[0].path == "sorting.line.colSortAttrs"
+
+    def test_sorting_line_value_with_col_sort_attrs_routes_to_sort_config(
+        self,
+    ) -> None:
+        """``line + value + colSortAttrs=[]`` is valid (SortByValueConfig path)."""
+        bm = _minimal_bookmark()
+        bm["sorting"] = {"line": {"sortBy": "value", "colSortAttrs": []}}
+        errors = validate_bookmark(bm)
+        sort_errors = [e for e in errors if e.code.startswith("S")]
+        assert sort_errors == []

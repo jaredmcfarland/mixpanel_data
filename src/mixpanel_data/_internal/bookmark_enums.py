@@ -199,7 +199,7 @@ VALID_PROPERTY_TYPES: frozenset[str] = frozenset(
         "list",
         "object",
         "undefined",
-        # Canonical additions (insights/definitions.py:59 PropertyType)
+        # Canonical additions (insights/definitions.py PropertyType)
         "dimension",  # property is a dimension join key
         "other",  # NonProperty
         "unknown",
@@ -208,7 +208,7 @@ VALID_PROPERTY_TYPES: frozenset[str] = frozenset(
 """Valid property data types for filter and group-by clauses.
 
 Mirrors ``PropertyType`` in
-``analytics/lib/common/mxpnl/report/bookmarks/insights/definitions.py:59``.
+``analytics/lib/common/mxpnl/report/bookmarks/insights/definitions.py``.
 ``"undefined"`` retained as legacy alias for ``"unknown"`` for back-compat
 with older bookmarks.
 """
@@ -240,7 +240,7 @@ VALID_TIME_UNITS: frozenset[str] = frozenset(
 
 Mirrors ``TimeUnit`` (union of ``BaseTimeUnit``, ``ExtendedTimeUnit``,
 ``NonStandardTimeUnit``, ``SpecialTimeUnit``) in
-``analytics/lib/common/mxpnl/report/bookmarks/common/definitions.py:84``.
+``analytics/lib/common/mxpnl/report/bookmarks/common/definitions.py``.
 """
 
 VALID_QUERY_TIME_UNITS: frozenset[str] = frozenset(
@@ -274,7 +274,7 @@ VALID_RESOURCE_TYPES: frozenset[str] = frozenset(
         "event",
         "user",
         "cohort",
-        # Canonical additions (insights/definitions.py:23 InsightsResourceType)
+        # Canonical additions (insights/definitions.py InsightsResourceType)
         "all",
         "formulas",
     }
@@ -282,7 +282,7 @@ VALID_RESOURCE_TYPES: frozenset[str] = frozenset(
 """Valid resource types for filters, groups, and show clauses.
 
 Mirrors ``InsightsResourceType`` in
-``analytics/lib/common/mxpnl/report/bookmarks/insights/definitions.py:23``,
+``analytics/lib/common/mxpnl/report/bookmarks/insights/definitions.py``,
 plus legacy singular aliases (``"event"``, ``"user"``, ``"cohort"``)
 the server still accepts.
 """
@@ -301,7 +301,7 @@ VALID_METRIC_TYPES: frozenset[str] = frozenset(
         "funnel",
         "retention",
         "formula",
-        # Canonical additions (insights/definitions.py:9 MetricType)
+        # Canonical additions (insights/definitions.py MetricType)
         "retention-frequency",
         "saved-metric",
         "verified",
@@ -313,24 +313,9 @@ VALID_METRIC_TYPES: frozenset[str] = frozenset(
 """Valid behavior/metric types in show clause behavior blocks.
 
 Mirrors ``MetricType`` in
-``analytics/lib/common/mxpnl/report/bookmarks/insights/definitions.py:9``.
+``analytics/lib/common/mxpnl/report/bookmarks/insights/definitions.py``.
 Includes ``"addiction"`` and ``"metric"`` as legacy values that may appear
 in older saved bookmarks.
-"""
-
-VALID_TOP_LEVEL_METRIC_TYPES: frozenset[str] = frozenset(
-    {
-        "metric",
-        "formula",
-        "metric-entry",
-    }
-)
-"""Valid ``type`` values on top-level show clauses (sections.show[].type).
-
-Mirrors persisted values from ``TopLevelMetricType`` in
-``analytics/lib/common/mxpnl/report/bookmarks/common/definitions.py:89``.
-``"new-metric-entry"`` and ``"new-formula-entry"`` are excluded as they
-are UI-only and not persisted in saved bookmarks.
 """
 
 # =============================================================================
@@ -383,7 +368,7 @@ VALID_CHART_TYPES: frozenset[str] = frozenset(
 """Valid chart types for displayOptions.chartType.
 
 Mirrors ``ChartType`` in
-``analytics/lib/common/mxpnl/report/bookmarks/common/definitions.py:14``,
+``analytics/lib/common/mxpnl/report/bookmarks/common/definitions.py``,
 plus ``"frequency-curve"`` retained as a legacy local addition for
 back-compat.
 """

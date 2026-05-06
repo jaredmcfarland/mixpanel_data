@@ -72,24 +72,26 @@ def _capture_one_type(
     print(f"  {bookmark_type}: listing...", flush=True)
     bookmarks = ws.list_bookmarks_v2(bookmark_type=bookmark_type)
     targets = bookmarks[:limit]
-    print(f"  {bookmark_type}: fetching {len(targets)} of {len(bookmarks)} bookmarks...")
+    print(
+        f"  {bookmark_type}: fetching {len(targets)} of {len(bookmarks)} bookmarks..."
+    )
 
     captured = 0
     errored = 0
     for bm in targets:
         try:
             full = ws.get_bookmark(bm.id)
+            # Preserve original params shape — let validate_corpus.py
+            # flag malformed entries explicitly. Coercing None/falsy → {}
+            # would silently corrupt the parity evidence.
+            params: Any = full.params
+            if isinstance(params, str):
+                params = json.loads(params)
             payload: dict[str, Any] = {
                 "id": full.id,
                 "name": full.name,
                 "bookmark_type": full.bookmark_type,
-                "params": (
-                    full.params
-                    if isinstance(full.params, dict)
-                    else json.loads(full.params)
-                    if full.params
-                    else {}
-                ),
+                "params": params,
             }
             (type_dir / f"{full.id}.json").write_text(
                 json.dumps(payload, indent=2, sort_keys=True),
@@ -132,7 +134,9 @@ def main() -> int:
     print()
 
     ws = mp.Workspace()
-    print(f"Authenticated as: {ws.account.username if hasattr(ws.account, 'username') else ws.account.name}")
+    print(
+        f"Authenticated as: {ws.account.username if hasattr(ws.account, 'username') else ws.account.name}"
+    )
     print(f"Project: {ws.project.id}")
     print()
 

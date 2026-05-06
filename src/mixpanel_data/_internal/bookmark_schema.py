@@ -1,31 +1,26 @@
 """Pydantic schema models mirroring Mixpanel's canonical bookmark schema.
 
-These models validate the ``params`` dict passed to
-``Workspace.create_bookmark()`` and ``Workspace.update_bookmark()``,
-catching malformed shapes client-side before they reach Mixpanel. The
-``POST /bookmarks`` endpoint accepts garbage and only rejects it later
-at chart-render time (``GET /api/query/insights``); these models close
-that gap.
-
-**Source of truth**: the canonical Pydantic definitions in Mixpanel's
-internal ``analytics`` repository under
-``lib/common/mxpnl/report/bookmarks/`` (and the sibling
-``mixpanel_mcp/mcp_server/types/reports/internal/`` package for flows).
-Each model in this file carries a ``# Mirrors <repo-relative-path>:<line>``
-comment naming its source. Drift detection against Mixpanel updates is a
-``diff`` operation against that repo, not a production incident report.
+Source of truth: the canonical Pydantic definitions in Mixpanel's internal
+``analytics`` repo under ``lib/common/mxpnl/report/bookmarks/`` (and the
+sibling ``mixpanel_mcp/mcp_server/types/reports/internal/`` package for
+flows). Each model carries a ``# Mirrors <repo-relative-path> <ClassName>``
+comment naming its canonical source — drift detection is a ``diff``
+operation against that repo (grep by class name, not line number).
 
 The adapter ``validate_with_pydantic()`` translates Pydantic's structured
 errors into the package's existing ``ValidationError`` stream so callers
-keep getting the stable ``B*`` / ``S*`` error codes already documented for
-agents.
+keep getting the stable ``B*`` / ``S*`` error codes documented for agents.
+The wrapper in ``validation.validate_sorting_block`` uses
+``_sorting_code_mapper`` to recover the granular ``S*`` codes — one source
+of truth, no Layer 1 vs Layer 2 drift.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated, Any, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Discriminator, Field, JsonValue, Tag
 from pydantic import ValidationError as PydanticValidationError
 from pydantic.json_schema import SkipJsonSchema
 
@@ -36,7 +31,7 @@ from mixpanel_data.exceptions import ValidationError
 # =============================================================================
 
 # Mirrors ``BasePydanticModel`` in
-# ``analytics/lib/common/mxpnl/pydantic/base_pydantic_model.py:6`` —
+# ``analytics/lib/common/mxpnl/pydantic/base_pydantic_model.py`` —
 # ``extra="forbid"`` matches the server's strict acceptance policy.
 # ``populate_by_name=True`` lets us keep snake_case Python field names
 # while accepting camelCase / kebab-case wire keys via ``alias=...``.
@@ -52,7 +47,7 @@ _BASE_CONFIG: ConfigDict = ConfigDict(
 _T = TypeVar("_T")
 
 # Mirrors ``Ignore[T]`` in
-# ``analytics/lib/common/mxpnl/report/bookmarks/common/utils.py:1-31``.
+# ``analytics/lib/common/mxpnl/report/bookmarks/common/utils.py``.
 # Used to declare fields the server tolerates (e.g. legacy keys still
 # present on older saved bookmarks) without rejecting them and without
 # exposing them in our typed surface. ``SkipJsonSchema`` keeps them out
@@ -100,11 +95,83 @@ _DEFAULT_CODE_MAP: dict[str, str] = {
 }
 
 
+CodeMapper = Callable[[str, tuple[Any, ...]], str]
+"""Path-aware code mapper: ``(pydantic_error_type, loc) -> package_code``.
+
+Lets a caller produce different package codes for the same Pydantic error
+type depending on where in the model the error fired. The default mapper
+(``_default_code_mapper``) ignores ``loc`` and looks up
+``_DEFAULT_CODE_MAP`` — preserving the original behavior. Sorting-aware
+callers pass ``_sorting_code_mapper`` to recover the granular ``S*`` codes
+that the hand-written Layer 2 validator used to produce.
+"""
+
+
+def _default_code_mapper(err_type: str, _loc: tuple[Any, ...]) -> str:
+    """Default ``CodeMapper`` — ignores ``loc``, falls back to ``_DEFAULT_CODE_MAP``.
+
+    Args:
+        err_type: Pydantic error ``type`` (e.g. ``"missing"``, ``"literal_error"``).
+        _loc: Pydantic ``loc`` tuple (unused by the default mapper; the
+            ``CodeMapper`` protocol requires it for path-aware mappers).
+
+    Returns:
+        A package error code (``B*``/``S*``) or ``"VALIDATION_ERROR"``.
+    """
+    return _DEFAULT_CODE_MAP.get(err_type, "VALIDATION_ERROR")
+
+
+def _sorting_code_mapper(err_type: str, loc: tuple[Any, ...]) -> str:
+    """Path-aware code mapper for sorting-block validation errors.
+
+    Recovers the granular ``S*`` codes the hand-written Layer 2 sorting
+    validator used to produce, using the ``loc`` tuple to disambiguate
+    e.g. ``missing`` at ``colSortAttrs`` (S2) vs ``sortBy`` (S8) vs
+    ``sortOrder`` (S9).
+
+    Args:
+        err_type: Pydantic error ``type`` (``"missing"``, ``"literal_error"``,
+            ``"extra_forbidden"``, ``"list_type"``, ``"dict_type"``,
+            ``"model_type"``, ``"union_tag_invalid"``, ``"union_tag_not_found"``,
+            and the primitive-type variants).
+        loc: Pydantic ``loc`` tuple. The last element typically names the
+            field; intermediate elements are list indices or model tags.
+
+    Returns:
+        A package ``S*`` code when the path identifies a sorting-specific
+        rule, otherwise the default mapping (``B*`` or ``"VALIDATION_ERROR"``).
+    """
+    last = loc[-1] if loc else None
+    if err_type == "missing":
+        if last == "colSortAttrs":
+            return "S2_MISSING_COL_SORT_ATTRS"
+        if last == "sortBy":
+            return "S8_MISSING_SORT_BY"
+        if last == "sortOrder":
+            return "S9_MISSING_SORT_ORDER"
+    if err_type == "literal_error":
+        if last == "sortBy":
+            return "S1_INVALID_SORT_BY"
+        if last == "sortOrder":
+            return "S6_INVALID_SORT_ORDER"
+    if err_type in ("union_tag_invalid", "union_tag_not_found"):
+        # Discriminated-union failure on FlatSortConfig / SortConfig: the
+        # discriminator lives on `sortBy`. Treat as invalid sortBy.
+        return "S1_INVALID_SORT_BY"
+    if err_type == "extra_forbidden":
+        return "S3_UNKNOWN_FIELD"
+    if err_type == "list_type" and last == "colSortAttrs":
+        return "S7_NOT_A_LIST"
+    if err_type in ("dict_type", "model_type"):
+        return "S5_NOT_A_DICT"
+    return _DEFAULT_CODE_MAP.get(err_type, "VALIDATION_ERROR")
+
+
 def validate_with_pydantic(
     model_cls: type[BaseModel],
     raw: Any,
     *,
-    code_map: dict[str, str] | None = None,
+    code_mapper: CodeMapper | None = None,
     path_prefix: str = "",
 ) -> list[ValidationError]:
     """Validate ``raw`` against ``model_cls`` and translate errors.
@@ -116,8 +183,12 @@ def validate_with_pydantic(
     Args:
         model_cls: The Pydantic model class to validate against.
         raw: The raw dict (or any value) to validate.
-        code_map: Optional override for Pydantic-error-type → package
-            error-code mapping. Merged on top of ``_DEFAULT_CODE_MAP``.
+        code_mapper: Optional path-aware mapper from
+            ``(pydantic_error_type, loc)`` to a package error code.
+            Defaults to a mapper that consults ``_DEFAULT_CODE_MAP`` and
+            falls back to ``"VALIDATION_ERROR"``. Sorting-block callers
+            pass ``_sorting_code_mapper`` to recover the granular ``S*``
+            codes the hand-written Layer 2 used to produce.
         path_prefix: JSONPath-like prefix prepended to every error's
             ``path`` (e.g. ``"params"`` so leaves become
             ``"params.sections.show[0].behavior.type"``).
@@ -134,19 +205,16 @@ def validate_with_pydantic(
             {"sortBy": "value"},
             path_prefix="sorting.bar",
         )
-        # → [ValidationError(path="sorting.bar.sortBy",
-        #                    code="B0_INVALID_LITERAL", ...)]
+        # returns: [ValidationError(path="sorting.bar.sortBy",
+        #                           code="B0_INVALID_LITERAL", ...)]
         ```
     """
-    effective_codes = dict(_DEFAULT_CODE_MAP)
-    if code_map:
-        effective_codes.update(code_map)
-
+    mapper = code_mapper or _default_code_mapper
     try:
         model_cls.model_validate(raw)
     except PydanticValidationError as exc:
         return [
-            _translate_pydantic_error(dict(err), effective_codes, path_prefix)
+            _translate_pydantic_error(dict(err), mapper, path_prefix)
             for err in exc.errors()
         ]
     return []
@@ -154,7 +222,7 @@ def validate_with_pydantic(
 
 def _translate_pydantic_error(
     err: dict[str, Any],
-    code_map: dict[str, str],
+    code_mapper: CodeMapper,
     path_prefix: str,
 ) -> ValidationError:
     """Convert one ``pydantic.ValidationError.errors()`` entry.
@@ -162,7 +230,7 @@ def _translate_pydantic_error(
     Args:
         err: A single error dict from Pydantic's ``.errors()`` output
             (contains ``loc``, ``type``, ``msg``, ``input``).
-        code_map: Pydantic-error-type → package-error-code mapping.
+        code_mapper: Path-aware mapper from ``(err_type, loc)`` to package code.
         path_prefix: JSONPath-like prefix to prepend to the translated path.
 
     Returns:
@@ -173,13 +241,34 @@ def _translate_pydantic_error(
     msg: str = str(err.get("msg", "Validation failed"))
 
     path = _loc_to_jsonpath(loc, path_prefix)
-    code = code_map.get(err_type, "VALIDATION_ERROR")
+    code = code_mapper(err_type, loc)
 
     return ValidationError(
         path=path,
         message=msg,
         code=code,
     )
+
+
+# Tag names from `Discriminator(...) + Tag(...)` annotations that Pydantic
+# inserts into `loc` for discriminated-union failures. These are model
+# class names — they aren't part of the user-facing JSONPath and would
+# leak as `sorting.line.FlatLabelSortConfig.sortOrder` if not filtered.
+_DISCRIMINATOR_TAGS: frozenset[str] = frozenset(
+    {
+        # FlatSortConfig (colSortAttrs[i])
+        "FlatLabelSortConfig",
+        "FlatValueSortConfig",
+        # SortConfig (per-chart-type sort)
+        "SortByColumnsConfig",
+        "SortByValueConfig",
+        # TableSortConfig (table chart only)
+        "OldTableSortByValue",
+        # ShowClause
+        "FormulaShowClause",
+        "BehaviorShowClause",
+    }
+)
 
 
 def _loc_to_jsonpath(loc: tuple[Any, ...], prefix: str) -> str:
@@ -190,7 +279,8 @@ def _loc_to_jsonpath(loc: tuple[Any, ...], prefix: str) -> str:
     + bracketed style our existing ``ValidationError.path`` strings use,
     so error messages from the Pydantic layer and the legacy manual
     sub-validators look indistinguishable to callers and to the
-    ``_suggest()`` fuzzy matcher.
+    ``_suggest()`` fuzzy matcher. Discriminated-union ``Tag`` names are
+    stripped (they're internal to the schema, not part of the JSONPath).
 
     Args:
         loc: Pydantic location tuple (e.g. ``("sections", "show", 0,
@@ -204,15 +294,17 @@ def _loc_to_jsonpath(loc: tuple[Any, ...], prefix: str) -> str:
     Example:
         ```python
         _loc_to_jsonpath(("sorting", "bar", "sortBy"), "")
-        # → "sorting.bar.sortBy"
+        # returns: "sorting.bar.sortBy"
         _loc_to_jsonpath(("show", 0, "behavior", "type"), "sections")
-        # → "sections.show[0].behavior.type"
+        # returns: "sections.show[0].behavior.type"
         ```
     """
     parts: list[str] = []
     if prefix:
         parts.append(prefix)
     for item in loc:
+        if isinstance(item, str) and item in _DISCRIMINATOR_TAGS:
+            continue
         if isinstance(item, int):
             if not parts:
                 parts.append(f"[{item}]")
@@ -267,6 +359,16 @@ def get_root_model_for_bookmark_type(
     }.get(bookmark_type)
 
 
+# Public constant for partial-update validation; populated at module bottom
+# after the sub-model classes (Sections, DisplayOptions) are defined.
+# Maps top-level keys in an ``UpdateBookmarkParams.params`` payload to the
+# canonical sub-model that validates that key's value. ``sorting`` is
+# intentionally excluded — callers route it through ``validate_sorting_block``
+# (which adds the ``S4_UNKNOWN_CHART_TYPE`` warning + chart-type pre-filter
+# on top of the same Pydantic mirror).
+PARTIAL_UPDATE_SUB_MODELS: dict[str, type[BaseModel]] = {}
+
+
 # =============================================================================
 # Sorting models
 #
@@ -276,17 +378,17 @@ def get_root_model_for_bookmark_type(
 # =============================================================================
 
 
-# Mirrors sorting.py:19 ``SortOrder``.
+# Mirrors sorting.py ``SortOrder``.
 SortOrderLiteral = Literal["asc", "desc"]
 
-# Mirrors sorting.py:12 ``SortBy``. The discriminated unions below pin
+# Mirrors sorting.py ``SortBy``. The discriminated unions below pin
 # specific values per variant; this alias names the full set for the
 # rare consumer that needs the union directly.
 SortByLiteral = Literal["value", "label", "column", "liftComparisonValue"]
 
 
 class FlatLabelSortConfig(BaseModel):
-    """Mirrors sorting.py:36 ``FlatLabelSortConfig``.
+    """Mirrors sorting.py ``FlatLabelSortConfig``.
 
     Used inside ``colSortAttrs`` lists to sort a column by its label.
     """
@@ -300,7 +402,7 @@ class FlatLabelSortConfig(BaseModel):
 
 
 class FlatValueSortConfig(BaseModel):
-    """Mirrors sorting.py:43 ``FlatValueSortConfig``.
+    """Mirrors sorting.py ``FlatValueSortConfig``.
 
     Used inside ``colSortAttrs`` lists to sort a column by value.
     Accepts the deprecated ``"liftComparisonValue"`` alongside ``"value"``.
@@ -320,15 +422,38 @@ class FlatValueSortConfig(BaseModel):
     viewNLimit: int | None = None
 
 
-# Mirrors sorting.py:56 ``FlatSortConfig`` — discriminated by ``sortBy``.
+def _flat_sort_discriminator(v: Any) -> str:
+    """Discriminator callable for ``FlatSortConfig`` (``colSortAttrs[i]``).
+
+    Routes by ``sortBy``: ``"label"`` selects ``FlatLabelSortConfig``;
+    everything else (``"value"`` / ``"liftComparisonValue"``) selects
+    ``FlatValueSortConfig``. Using a callable + ``Tag(...)`` (rather than
+    ``Field(discriminator="sortBy")``) means error ``loc`` carries the
+    Tag name, which ``_DISCRIMINATOR_TAGS`` filters out — keeping the
+    user-facing JSONPath free of internal model names.
+
+    Args:
+        v: The candidate value (dict during validation).
+
+    Returns:
+        The ``Tag`` name of the selected variant.
+    """
+    sort_by = v.get("sortBy") if isinstance(v, dict) else getattr(v, "sortBy", None)
+    if sort_by == "label":
+        return "FlatLabelSortConfig"
+    return "FlatValueSortConfig"
+
+
+# Mirrors sorting.py ``FlatSortConfig`` — discriminated by ``sortBy``.
 FlatSortConfig = Annotated[
-    FlatLabelSortConfig | FlatValueSortConfig,
-    Field(discriminator="sortBy"),
+    Annotated[FlatLabelSortConfig, Tag("FlatLabelSortConfig")]
+    | Annotated[FlatValueSortConfig, Tag("FlatValueSortConfig")],
+    Discriminator(_flat_sort_discriminator),
 ]
 
 
 class SortByColumnsConfig(BaseModel):
-    """Mirrors sorting.py:61 ``SortByColumnsConfig``.
+    """Mirrors sorting.py ``SortByColumnsConfig``.
 
     Sort by segment columns (segment-grouped sort). Tolerates legacy
     ``sortOrder`` and ``viewNLimit`` keys via ``Ignore[T]`` — these are
@@ -350,7 +475,7 @@ class SortByColumnsConfig(BaseModel):
 
 
 class SortByValueConfig(BaseModel):
-    """Mirrors sorting.py:74 ``SortByValueConfig``.
+    """Mirrors sorting.py ``SortByValueConfig``.
 
     Sort by a single value column (flat sort). ``colSortAttrs`` is still
     persisted so that switching back to ``SortByColumnsConfig`` preserves
@@ -372,15 +497,38 @@ class SortByValueConfig(BaseModel):
     viewNLimit: int | None = None
 
 
-# Mirrors sorting.py:93 ``SortConfig`` — discriminated by ``sortBy``.
+def _sort_config_discriminator(v: Any) -> str:
+    """Discriminator callable for ``SortConfig`` (per-chart-type sort).
+
+    Routes by ``sortBy``: ``"column"`` selects ``SortByColumnsConfig``;
+    everything else (``"value"`` / ``"liftComparisonValue"``) selects
+    ``SortByValueConfig``. Callable + ``Tag(...)`` (rather than declarative
+    ``Field(discriminator=...)``) so error ``loc`` carries Tag names that
+    ``_DISCRIMINATOR_TAGS`` strips — keeping the user-facing JSONPath
+    free of internal model class names.
+
+    Args:
+        v: The candidate value (dict during validation).
+
+    Returns:
+        The ``Tag`` name of the selected variant.
+    """
+    sort_by = v.get("sortBy") if isinstance(v, dict) else getattr(v, "sortBy", None)
+    if sort_by == "column":
+        return "SortByColumnsConfig"
+    return "SortByValueConfig"
+
+
+# Mirrors sorting.py ``SortConfig`` — discriminated by ``sortBy``.
 SortConfig = Annotated[
-    SortByColumnsConfig | SortByValueConfig,
-    Field(discriminator="sortBy"),
+    Annotated[SortByColumnsConfig, Tag("SortByColumnsConfig")]
+    | Annotated[SortByValueConfig, Tag("SortByValueConfig")],
+    Discriminator(_sort_config_discriminator),
 ]
 
 
 class OldTableSortByValue(BaseModel):
-    """Mirrors sorting.py:100 ``OldTableSortByValue``.
+    """Mirrors sorting.py ``OldTableSortByValue``.
 
     Legacy table-sort variant kept on ``InsightsBookmarkSortConfig.table``
     for back-compat. Same as ``SortByValueConfig`` but uses ``sortColumn``
@@ -396,16 +544,109 @@ class OldTableSortByValue(BaseModel):
     colSortAttrs: list[FlatSortConfig]
 
 
+def _flat_or_column_sort_discriminator(v: Any) -> str:
+    """Discriminator callable for the line-chart ``FlatOrColumnSortConfig``.
+
+    Line charts admit four config shapes that share a partial field set:
+    two flat (``FlatLabelSortConfig`` / ``FlatValueSortConfig`` — no
+    ``colSortAttrs``) and two column/value (``SortByColumnsConfig`` /
+    ``SortByValueConfig`` — ``colSortAttrs`` required). The shape is
+    unambiguous: presence of ``colSortAttrs`` selects the SortConfig pair
+    and ``sortBy`` discriminates within it; absence selects the flat pair
+    and ``sortBy`` discriminates within that.
+
+    Mirrors the runtime branching the hand-written Layer 2 validator
+    used to perform — by living on the schema, the discrimination cannot
+    drift between Layer 1 and Layer 2.
+
+    Args:
+        v: The candidate value (dict during validation, model instance
+            during serialization).
+
+    Returns:
+        The ``Tag`` name of the selected variant. ``sortBy='column'``
+        is unique to ``SortByColumnsConfig`` and routes there regardless
+        of ``colSortAttrs`` (so missing ``colSortAttrs`` produces a
+        targeted ``S2`` rather than mis-routing to flat). ``sortBy='label'``
+        is unique to ``FlatLabelSortConfig`` (flat-only). For ``"value"``
+        / ``"liftComparisonValue"`` (admitted by both flat and SortConfig
+        Value variants), ``colSortAttrs`` presence disambiguates.
+    """
+    if isinstance(v, dict):
+        sort_by = v.get("sortBy")
+        has_cols = v.get("colSortAttrs") is not None
+    else:
+        sort_by = getattr(v, "sortBy", None)
+        has_cols = getattr(v, "colSortAttrs", None) is not None
+    # ``column`` is unique to SortByColumnsConfig — always route there.
+    if sort_by == "column":
+        return "SortByColumnsConfig"
+    # ``label`` is unique to FlatLabelSortConfig — always route there.
+    if sort_by == "label":
+        return "FlatLabelSortConfig"
+    # Ambiguous sortBy (``value`` / ``liftComparisonValue``): disambiguate
+    # by colSortAttrs presence (required on SortByValueConfig, forbidden
+    # on FlatValueSortConfig).
+    if has_cols:
+        return "SortByValueConfig"
+    return "FlatValueSortConfig"
+
+
 # Union of FlatSortConfig and SortConfig for the ``line`` field on
 # ``InsightsBookmarkSortConfig`` (line charts can carry either the old
-# flat sort or the new column/value sort).
-FlatOrColumnSortConfig = (
-    FlatLabelSortConfig | FlatValueSortConfig | SortByColumnsConfig | SortByValueConfig
-)
+# flat sort or the new column/value sort). Discriminated by
+# ``_flat_or_column_sort_discriminator`` so a single bad config produces
+# one targeted error per field rather than 6-8 smart-mode errors.
+FlatOrColumnSortConfig = Annotated[
+    Annotated[FlatLabelSortConfig, Tag("FlatLabelSortConfig")]
+    | Annotated[FlatValueSortConfig, Tag("FlatValueSortConfig")]
+    | Annotated[SortByColumnsConfig, Tag("SortByColumnsConfig")]
+    | Annotated[SortByValueConfig, Tag("SortByValueConfig")],
+    Discriminator(_flat_or_column_sort_discriminator),
+]
+
+
+def _table_sort_discriminator(v: Any) -> str:
+    """Discriminator callable for ``InsightsBookmarkSortConfig.table``.
+
+    The ``table`` field admits three variants:
+    ``SortByColumnsConfig`` (``sortBy='column'``), ``SortByValueConfig``
+    (``sortBy='value'``, no ``sortColumn``), and ``OldTableSortByValue``
+    (``sortBy='value'`` plus a required ``sortColumn`` field — legacy
+    table-sort variant). Discriminated by ``sortBy`` and the presence of
+    ``sortColumn``.
+
+    Args:
+        v: The candidate value (dict during validation).
+
+    Returns:
+        The ``Tag`` name of the selected variant.
+    """
+    if isinstance(v, dict):
+        sort_by = v.get("sortBy")
+        has_sort_column = "sortColumn" in v
+    else:
+        sort_by = getattr(v, "sortBy", None)
+        has_sort_column = getattr(v, "sortColumn", None) is not None
+    if sort_by == "column":
+        return "SortByColumnsConfig"
+    if has_sort_column:
+        return "OldTableSortByValue"
+    return "SortByValueConfig"
+
+
+# 3-way union for the ``table`` field. Callable + Tag(...) so loc carries
+# Tag names that ``_DISCRIMINATOR_TAGS`` filters out.
+TableSortConfig = Annotated[
+    Annotated[SortByColumnsConfig, Tag("SortByColumnsConfig")]
+    | Annotated[SortByValueConfig, Tag("SortByValueConfig")]
+    | Annotated[OldTableSortByValue, Tag("OldTableSortByValue")],
+    Discriminator(_table_sort_discriminator),
+]
 
 
 class InsightsBookmarkSortConfig(BaseModel):
-    """Mirrors sorting.py:115 ``InsightsBookmarkSortConfig``.
+    """Mirrors sorting.py ``InsightsBookmarkSortConfig``.
 
     The wrapper at ``params['sorting']``. Keys are chart-type strings in
     kebab-case wire form (``funnel-steps``, ``retention-curve``,
@@ -413,7 +654,7 @@ class InsightsBookmarkSortConfig(BaseModel):
     ``alias_generator`` so ``populate_by_name`` accepts both forms.
     """
 
-    # Mirrors sorting.py:118 — kebab-case wire keys, snake_case Python.
+    # Mirrors sorting.py — kebab-case wire keys, snake_case Python.
     model_config = ConfigDict(
         populate_by_name=True,
         extra="forbid",
@@ -421,7 +662,7 @@ class InsightsBookmarkSortConfig(BaseModel):
     )
 
     bar: SortConfig | None = None
-    table: SortByColumnsConfig | SortByValueConfig | OldTableSortByValue | None = None
+    table: TableSortConfig | None = None
     line: FlatOrColumnSortConfig | None = Field(
         default=None,
         description=(
@@ -450,35 +691,35 @@ class InsightsBookmarkSortConfig(BaseModel):
 # =============================================================================
 
 
-# Mirrors show.py:27 ``FiltersDeterminer``.
+# Mirrors show.py ``FiltersDeterminer``.
 FiltersDeterminerLiteral = Literal["all", "any"]
 
-# Mirrors show.py:32 ``ConversionWindowUnit``.
+# Mirrors show.py ``ConversionWindowUnit``.
 ConversionWindowUnitLiteral = Literal[
     "second", "minute", "hour", "day", "week", "month", "session"
 ]
 
-# Mirrors show.py:42 ``FunnelReentryModeType``.
+# Mirrors show.py ``FunnelReentryModeType``.
 FunnelReentryModeLiteral = Literal["default", "basic", "aggressive", "optimized"]
 
-# Mirrors show.py:49 ``FunnelOrder``.
+# Mirrors show.py ``FunnelOrder``.
 FunnelOrderLiteral = Literal["loose", "any"]
 
-# Mirrors show.py:54 ``RetentionType``.
+# Mirrors show.py ``RetentionType``.
 RetentionTypeLiteral = Literal["compounded", "birth", "addiction"]
 
-# Mirrors show.py:61 ``RetentionAlignmentType``.
+# Mirrors show.py ``RetentionAlignmentType``.
 RetentionAlignmentLiteral = Literal["birth", "interval_start"]
 
-# Mirrors show.py:66 ``RetentionUnboundedModeType``.
+# Mirrors show.py ``RetentionUnboundedModeType``.
 RetentionUnboundedModeLiteral = Literal[
     "none", "carry_back", "carry_forward", "consecutive_forward"
 ]
 
-# Mirrors show.py:73 ``COUNT_USERS_ONCE_TYPE`` (segmentMethod values).
+# Mirrors show.py ``COUNT_USERS_ONCE_TYPE`` (segmentMethod values).
 SegmentMethodLiteral = Literal["all", "first", "last"]
 
-# Mirrors show.py:79 ``MultiAttributionType``.
+# Mirrors show.py ``MultiAttributionType``.
 MultiAttributionTypeLiteral = Literal[
     "first_touch",
     "last_touch",
@@ -492,16 +733,16 @@ MultiAttributionTypeLiteral = Literal[
     "session_replay_last",
 ]
 
-# Mirrors show.py:124 ``START_END_TYPE``.
+# Mirrors show.py ``START_END_TYPE``.
 StartEndLiteral = Literal["start", "end"]
 
-# Mirrors show.py:129 ``FiltersOperator``.
+# Mirrors show.py ``FiltersOperator``.
 FiltersOperatorLiteral = Literal["and", "or", "or_all", "and_any", "then"]
 
-# Mirrors show.py:170 ``AxisAssignment``.
+# Mirrors show.py ``AxisAssignment``.
 AxisAssignmentLiteral = Literal["primary", "secondary"]
 
-# Mirrors common/definitions.py:9 ``MetricType``.
+# Mirrors common/definitions.py ``MetricType``.
 MetricTypeLiteral = Literal[
     "cohort",
     "custom-event",
@@ -519,11 +760,7 @@ MetricTypeLiteral = Literal[
     "metric",
 ]
 
-# Mirrors common/definitions.py:89 ``TopLevelMetricType`` persisted values
-# (``new-metric-entry`` / ``new-formula-entry`` are UI-only and excluded).
-TopLevelMetricTypeLiteral = Literal["metric", "formula", "metric-entry"]
-
-# Mirrors insights/definitions.py:23 ``InsightsResourceType``.
+# Mirrors insights/definitions.py ``InsightsResourceType``.
 InsightsResourceTypeLiteral = Literal[
     "all",
     "cohort",
@@ -536,7 +773,7 @@ InsightsResourceTypeLiteral = Literal[
     "user",
 ]
 
-# Mirrors common/definitions.py:84 ``TimeUnit``.
+# Mirrors common/definitions.py ``TimeUnit``.
 TimeUnitLiteral = Literal[
     "hour",
     "day",
@@ -551,9 +788,54 @@ TimeUnitLiteral = Literal[
     "day_of_week",
 ]
 
+# Mirrors common/definitions.py ``MATH_TYPE`` union (PRIMITIVE + NUMERIC +
+# XAU + PER_USER + FUNNELS + RETENTION). Parity with
+# ``bookmark_enums.VALID_MATH_TYPES`` is enforced by
+# ``test_literal_matches_frozenset`` (see test_bookmark_schema.py).
+MathTypeLiteral = Literal[
+    # Core counting
+    "total",
+    "unique",
+    "cumulative_unique",
+    "sessions",
+    # Active users
+    "dau",
+    "wau",
+    "mau",
+    # Property aggregation
+    "average",
+    "median",
+    "min",
+    "max",
+    # Percentiles
+    "p25",
+    "p75",
+    "p90",
+    "p99",
+    "custom_percentile",
+    # Advanced
+    "histogram",
+    "unique_values",
+    "most_frequent",
+    "first_value",
+    "multi_attribution",
+    "numeric_summary",
+    # Per-user-only aggregation operator
+    "session_replay_id_value",
+    # Legacy / context-specific
+    "general",
+    "session",
+    # Conversion (funnel/retention context)
+    "conversion_rate",
+    "conversion_rate_unique",
+    "conversion_rate_total",
+    "conversion_rate_session",
+    "retention_rate",
+]
+
 
 class RollingMeasurement(BaseModel):
-    """Mirrors show.py:92 ``RollingMeasurement``."""
+    """Mirrors show.py ``RollingMeasurement``."""
 
     model_config = _BASE_CONFIG
 
@@ -561,7 +843,7 @@ class RollingMeasurement(BaseModel):
 
 
 class MultiAttributionWeights(BaseModel):
-    """Mirrors show.py:96 ``MultiAttributionWeights``."""
+    """Mirrors show.py ``MultiAttributionWeights``."""
 
     model_config = _BASE_CONFIG
 
@@ -571,7 +853,7 @@ class MultiAttributionWeights(BaseModel):
 
 
 class CustomMultiAttribution(BaseModel):
-    """Mirrors show.py:102 ``CustomMultiAttribution``."""
+    """Mirrors show.py ``CustomMultiAttribution``."""
 
     model_config = _BASE_CONFIG
 
@@ -581,7 +863,7 @@ class CustomMultiAttribution(BaseModel):
 
 
 class PredefinedMultiAttribution(BaseModel):
-    """Mirrors show.py:110 ``PredefinedMultiAttribution``."""
+    """Mirrors show.py ``PredefinedMultiAttribution``."""
 
     model_config = _BASE_CONFIG
 
@@ -592,7 +874,7 @@ class PredefinedMultiAttribution(BaseModel):
 
 
 class StepRange(BaseModel):
-    """Mirrors show.py:161 ``StepRange``.
+    """Mirrors show.py ``StepRange``.
 
     Uses ``from_step`` / ``to_step`` as Python field names with aliases
     ``from`` / ``to`` because ``from`` is a Python keyword.
@@ -605,7 +887,7 @@ class StepRange(BaseModel):
 
 
 class FunnelStep(BaseModel):
-    """Mirrors show.py:137 ``FunnelStep``.
+    """Mirrors show.py ``FunnelStep``.
 
     Used inside ``Behavior.exclusions``. Tolerates legacy keys via
     ``Ignore[T]``.
@@ -634,13 +916,13 @@ class FunnelStep(BaseModel):
 
 
 class ExclusionFunnelStep(FunnelStep):
-    """Mirrors show.py:166 ``ExclusionFunnelStep``."""
+    """Mirrors show.py ``ExclusionFunnelStep``."""
 
     steps: StepRange
 
 
 class MetricDisplay(BaseModel):
-    """Mirrors show.py:175 ``MetricDisplay``."""
+    """Mirrors show.py ``MetricDisplay``."""
 
     model_config = _BASE_CONFIG
 
@@ -655,7 +937,7 @@ class MetricDisplay(BaseModel):
 
 
 class Bucket(BaseModel):
-    """Mirrors insights/definitions.py:77 ``Bucket``."""
+    """Mirrors insights/definitions.py ``Bucket``."""
 
     model_config = _BASE_CONFIG
 
@@ -669,7 +951,7 @@ class Bucket(BaseModel):
 
 
 class Winsorization(BaseModel):
-    """Mirrors show.py:304 ``Winsorization``."""
+    """Mirrors show.py ``Winsorization``."""
 
     model_config = _BASE_CONFIG
 
@@ -679,7 +961,7 @@ class Winsorization(BaseModel):
 
 
 class Statsig(BaseModel):
-    """Mirrors show.py:310 ``Statsig``."""
+    """Mirrors show.py ``Statsig``."""
 
     model_config = _BASE_CONFIG
 
@@ -694,7 +976,7 @@ class Statsig(BaseModel):
 
 
 class SRM(BaseModel):
-    """Mirrors show.py:322 ``SRM``."""
+    """Mirrors show.py ``SRM``."""
 
     model_config = _BASE_CONFIG
 
@@ -702,7 +984,7 @@ class SRM(BaseModel):
 
 
 class Goal(BaseModel):
-    """Mirrors common/definitions.py:185 ``Goal``."""
+    """Mirrors common/definitions.py ``Goal``."""
 
     model_config = _BASE_CONFIG
 
@@ -717,7 +999,7 @@ class Goal(BaseModel):
 
 
 class SubBehavior(BaseModel):
-    """Mirrors show.py:186 ``SubBehavior``.
+    """Mirrors show.py ``SubBehavior``.
 
     Used inside ``Behavior.behaviors`` for funnel-step nesting.
     Constrained ``type`` to event/custom-event/funnel.
@@ -741,7 +1023,7 @@ class SubBehavior(BaseModel):
 
 
 class Behavior(BaseModel):
-    """Mirrors show.py:209 ``Behavior``.
+    """Mirrors show.py ``Behavior``.
 
     Single class with ``type`` field that selects the variant. The
     canonical source treats this as one wide model rather than a
@@ -804,17 +1086,17 @@ class Behavior(BaseModel):
     hasUnsavedChanges: bool | None = False
 
 
-# Discriminated multi-attribution union mirroring show.py:274.
+# Discriminated multi-attribution union mirroring show.py.
 MultiAttribution = PredefinedMultiAttribution | CustomMultiAttribution
 
 
 class BehaviorMeasurement(BaseModel):
-    """Mirrors show.py:277 ``BehaviorMeasurement``."""
+    """Mirrors show.py ``BehaviorMeasurement``."""
 
     model_config = _BASE_CONFIG
 
     dataGroupId: str | None = None
-    math: str | None = None  # MATH_TYPE union — kept loose to allow drift
+    math: MathTypeLiteral | None = None
     property: JsonValue | None = None
     cumulative: bool | None = None
     perUserAggregation: str | None = None
@@ -838,7 +1120,7 @@ class BehaviorMeasurement(BaseModel):
 
 
 class FormulaMeasurement(BaseModel):
-    """Mirrors show.py:326 ``FormulaMeasurement``."""
+    """Mirrors show.py ``FormulaMeasurement``."""
 
     model_config = _BASE_CONFIG
 
@@ -848,7 +1130,7 @@ class FormulaMeasurement(BaseModel):
 
 
 class BehaviorShowClause(BaseModel):
-    """Mirrors show.py:332 ``BehaviorShowClause``.
+    """Mirrors show.py ``BehaviorShowClause``.
 
     Discriminator: ``type=Literal["metric"]``. Selected by
     ``show_clause_discriminator`` when ``type == "metric"`` and no
@@ -884,7 +1166,7 @@ class BehaviorShowClause(BaseModel):
 
 
 class FormulaShowClause(BaseModel):
-    """Mirrors show.py:364 ``FormulaShowClause``.
+    """Mirrors show.py ``FormulaShowClause``.
 
     Discriminator: presence of ``formula`` key OR
     ``type == "formula"``. Selected by ``show_clause_discriminator``.
@@ -916,7 +1198,7 @@ class FormulaShowClause(BaseModel):
 
 
 def _show_clause_discriminator(v: Any) -> str:
-    """Mirrors show.py:394 ``show_clause_discriminator``.
+    """Mirrors show.py ``show_clause_discriminator``.
 
     Selects the ``ShowClause`` variant based on the ``type`` value or
     the presence of a ``formula`` key.
@@ -934,9 +1216,7 @@ def _show_clause_discriminator(v: Any) -> str:
     )
 
 
-# Mirrors show.py:409 ``ShowClause`` discriminated union.
-from pydantic import Discriminator, Tag  # noqa: E402  (after model defs)
-
+# Mirrors show.py ``ShowClause`` discriminated union.
 ShowClause = Annotated[
     Annotated[FormulaShowClause, Tag("FormulaShowClause")]
     | Annotated[BehaviorShowClause, Tag("BehaviorShowClause")],
@@ -947,7 +1227,7 @@ ShowClause = Annotated[
 # =============================================================================
 # Sections
 #
-# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/sections.py:15``
+# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/sections.py``
 # in the upstream ``analytics`` repository.
 # ``filter`` and ``time`` are typed as ``JsonValue`` in the canonical
 # source itself (see ``filter.py`` / ``time.py`` placeholders) — we
@@ -956,7 +1236,7 @@ ShowClause = Annotated[
 
 
 class Sections(BaseModel):
-    """Mirrors sections.py:15 ``Sections``.
+    """Mirrors sections.py ``Sections``.
 
     ``show`` and ``time`` are required. All other fields optional.
     Uses ``JsonValue`` for filter/time/group/cohort lists pending the
@@ -984,28 +1264,66 @@ class Sections(BaseModel):
 # =============================================================================
 
 
-# Mirrors display_options.py:36 ``ChartPlotStyle``.
+# Mirrors display_options.py ``ChartPlotStyle``.
 ChartPlotStyleLiteral = Literal["standard", "stacked"]
 
-# Mirrors display_options.py:41 ``AnalysisType``.
+# Mirrors display_options.py ``AnalysisType``.
 AnalysisTypeLiteral = Literal["linear", "logarithmic", "rolling", "cumulative"]
 
-# Mirrors display_options.py:48 ``ValueRepresentationType``.
+# Mirrors display_options.py ``ValueRepresentationType``.
 ValueRepresentationLiteral = Literal["absolute", "relative"]
 
-# Mirrors display_options.py:53 ``TableSummaryAggregation``.
+# Mirrors display_options.py ``TableSummaryAggregation``.
 TableSummaryAggregationLiteral = Literal["average", "sum", "min", "max", "median"]
 
-# Mirrors display_options.py:17 ``InsightsChartType`` — the constrained
-# subset of ``ChartType`` accepted on insights bookmarks. Wider chart
-# types still surface on funnels / retention / flows, so this is kept
-# permissive as a regular string here; the dispatch layer enforces the
-# narrower per-type constraint.
-ChartTypeLiteral = str  # keep loose; per-type roots can tighten later
+# Mirrors common/definitions.py ``ChartType`` union — the union of all
+# chart types across insights, funnels, retention, flows, and impact.
+# Parity with ``bookmark_enums.VALID_CHART_TYPES`` is enforced by
+# ``test_literal_matches_frozenset`` (see test_bookmark_schema.py).
+ChartTypeLiteral = Literal[
+    # Insights chart types
+    "bar",
+    "line",
+    "pie",
+    "bar-stacked",
+    "stacked-line",
+    "table",
+    "insights-metric",
+    "column",
+    "stacked-column",
+    "metric",
+    # Flows chart types
+    "sankey",
+    "flows",
+    "paths",
+    # Funnel chart types
+    "funnel-top-paths",
+    "funnel-steps",
+    "funnel-steps-metric",
+    "funnel-trend",
+    "funnel-frequency-line",
+    "funnel-frequency-bar",
+    "funnel-ttc-line",
+    "funnel-ttc-bar",
+    "funnel-median-ttc",
+    # Retention chart types
+    "line-retention",
+    "retention-trend",
+    "retention-trend-metric",
+    "retention-table",
+    "retention-curve",
+    "frequency",
+    # Impact chart types
+    "impact-adoption",
+    "impact-trends",
+    "impact-propensity",
+    # Legacy local additions
+    "frequency-curve",
+]
 
 
 class AnnotationOptions(BaseModel):
-    """Mirrors display_options.py:66 ``AnnotationOptions``."""
+    """Mirrors display_options.py ``AnnotationOptions``."""
 
     model_config = _BASE_CONFIG
 
@@ -1017,7 +1335,7 @@ class AnnotationOptions(BaseModel):
 
 
 class CommentOptions(BaseModel):
-    """Mirrors display_options.py:74 ``CommentOptions``."""
+    """Mirrors display_options.py ``CommentOptions``."""
 
     model_config = _BASE_CONFIG
 
@@ -1025,7 +1343,7 @@ class CommentOptions(BaseModel):
 
 
 class SegmentId(BaseModel):
-    """Mirrors display_options.py:78 ``SegmentId``."""
+    """Mirrors display_options.py ``SegmentId``."""
 
     model_config = _BASE_CONFIG
 
@@ -1035,7 +1353,7 @@ class SegmentId(BaseModel):
 
 
 class FunnelStepsSelectedTableColumns(BaseModel):
-    """Mirrors display_options.py:96 ``FunnelStepsSelectedTableColumns``.
+    """Mirrors display_options.py ``FunnelStepsSelectedTableColumns``.
 
     Kebab-case wire keys (``conv-first-step``) map to snake_case Python
     fields (``conv_first_step``) via ``alias_generator``.
@@ -1056,7 +1374,7 @@ class FunnelStepsSelectedTableColumns(BaseModel):
 
 
 class DisplayOptions(BaseModel):
-    """Mirrors display_options.py:110 ``DisplayOptions``.
+    """Mirrors display_options.py ``DisplayOptions``.
 
     ``chartType`` is required. All other fields optional. ``axisAssignments``
     is tolerated via ``Ignore[T]``.
@@ -1064,7 +1382,7 @@ class DisplayOptions(BaseModel):
 
     model_config = _BASE_CONFIG
 
-    chartType: str  # InsightsChartType in source; loose here to span query types
+    chartType: ChartTypeLiteral
     plotStyle: ChartPlotStyleLiteral | None = None
     analysis: AnalysisTypeLiteral | None = None
     value: ValueRepresentationLiteral | None = None
@@ -1088,7 +1406,7 @@ class DisplayOptions(BaseModel):
 # =============================================================================
 # InsightsBookmarkParams root
 #
-# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/bookmark.py:25``
+# Mirrors ``analytics/lib/common/mxpnl/report/bookmarks/insights/bookmark.py``
 # in the upstream ``analytics`` repository.
 #
 # Long-tail dependent models (ColumnWidths, ForecastComparison,
@@ -1099,7 +1417,7 @@ class DisplayOptions(BaseModel):
 
 
 class InsightsBookmarkParams(BaseModel):
-    """Mirrors bookmark.py:25 ``InsightsBookmarkParams``.
+    """Mirrors bookmark.py ``InsightsBookmarkParams``.
 
     Root model for insights / funnels / retention bookmarks. Includes
     the 27 ``Ignore[T]`` legacy fields from the source so older bookmarks
@@ -1120,7 +1438,7 @@ class InsightsBookmarkParams(BaseModel):
     versions: list[str] | None = None
     executedMigrations: list[JsonValue] | None = None
 
-    # Tolerated legacy fields (mirrors bookmark.py:45-76, 27 entries).
+    # Tolerated legacy fields (mirrors bookmark.py, 27 entries).
     alignment: Ignore[JsonValue]
     anchor_position: Ignore[JsonValue]
     anchorPosition: Ignore[JsonValue]
@@ -1158,14 +1476,14 @@ class InsightsBookmarkParams(BaseModel):
 # =============================================================================
 # Flows tree
 #
-# Mirrors ``analytics/mixpanel_mcp/mcp_server/types/reports/internal/bookmark.py:408-459``
+# Mirrors ``analytics/mixpanel_mcp/mcp_server/types/reports/internal/bookmark.py``
 # in the upstream ``analytics`` repository. Flat shape (no `sections`
 # wrapper).
 # =============================================================================
 
 
 class FlowsBookmarkStep(BaseModel):
-    """Mirrors mixpanel_mcp/.../bookmark.py:408 ``FlowsBookmarkStep``."""
+    """Mirrors mixpanel_mcp/.../bookmark.py ``FlowsBookmarkStep``."""
 
     model_config = _BASE_CONFIG
 
@@ -1176,19 +1494,24 @@ class FlowsBookmarkStep(BaseModel):
     step_label: str | None = None
     forward: int = 0
     reverse: int = 0
-    bool_op: str = "and"
+    bool_op: FiltersOperatorLiteral = "and"
     property_filter_params_list: list[JsonValue] = Field(default_factory=list)
 
 
 class FlowsBookmarkParams(BaseModel):
-    """Mirrors mixpanel_mcp/.../bookmark.py:422 ``FlowsBookmarkParams``."""
+    """Mirrors mixpanel_mcp/.../bookmark.py FlowsBookmarkParams.
 
+    The canonical MCP source uses ``MixpanelBaseModel`` which does NOT
+    default to ``extra="forbid"`` — so the structural mirror here also
+    uses ``extra="allow"``. Tightening to ``"forbid"`` requires
+    enumerating UI-only fields via a corpus run; current behavior is
+    pinned by ``test_flows_bookmark_params_currently_allows_extras``.
+    """
+
+    # TODO(corpus parity): tighten to extra="forbid" once
+    # `scripts/capture_bookmark_corpus.py` + `scripts/validate_corpus.py`
+    # have enumerated the UI-only fields that need Ignore[T] tolerance.
     model_config = ConfigDict(populate_by_name=True, extra="allow")
-    # NOTE: Flows bookmarks in the wild carry many UI-only fields not
-    # documented in the canonical mirror. Use ``extra="allow"`` here
-    # rather than ``extra="forbid"`` to avoid false-rejection of valid
-    # bookmarks. The MCP source itself uses ``MixpanelBaseModel`` which
-    # does NOT default to ``extra="forbid"``.
 
     steps: list[FlowsBookmarkStep]
     date_range: dict[str, Any]
@@ -1216,3 +1539,15 @@ class FlowsBookmarkParams(BaseModel):
 
     # UI compatibility
     chartType: str | None = None
+
+
+# =============================================================================
+# Module-bottom population of forward-referenced public constants
+# =============================================================================
+
+PARTIAL_UPDATE_SUB_MODELS.update(
+    {
+        "sections": Sections,
+        "displayOptions": DisplayOptions,
+    }
+)
