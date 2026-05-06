@@ -58,7 +58,7 @@ jobs:
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
 
       - name: 'Run Gemini pull request review'
-        uses: 'google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489' # v0
+        uses: 'jaredmixpanel/run-gemini-cli@dc0f750388421b8ab57151bc6fe876dd8bebf8f6' # v0.1.22-pinned-1
         id: 'gemini_pr_review'
         env:
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
