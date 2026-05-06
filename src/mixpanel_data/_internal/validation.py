@@ -3088,5 +3088,3 @@ def validate_sorting_block(sorting: Any) -> list[ValidationError]:
         )
 
     return errors
-
-    return errors
