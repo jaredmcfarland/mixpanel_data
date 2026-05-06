@@ -29,6 +29,7 @@ from mixpanel_data.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
     AuthenticationError,
+    BusinessContextValidationError,
     ConfigError,
     DateRangeTooLargeError,
     EventNotFoundError,
@@ -291,6 +292,14 @@ def handle_errors(func: F) -> F:
                 f"[red]Configuration error:[/red] {rich_escape(e.message)}"
             )
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
+        except BusinessContextValidationError as e:
+            # Client-side input validation rejection (oversize content) —
+            # map to INVALID_ARGS (3) rather than GENERAL_ERROR (1) since
+            # the failure was the caller's input, not an unknown error.
+            err_console.print(
+                f"[red]Business context too long:[/red] {rich_escape(e.message)}"
+            )
+            raise typer.Exit(ExitCode.INVALID_ARGS) from None
         except MixpanelDataError as e:
             err_console.print(f"[red]Error:[/red] {rich_escape(e.message)}")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None

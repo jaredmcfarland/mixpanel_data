@@ -147,15 +147,22 @@ class TestGet:
         assert "markdown!" in result.stdout
 
     @patch("mixpanel_data.cli.commands.business_context.get_workspace")
-    def test_invalid_level_exits_3(self, mock_get_ws: MagicMock) -> None:
-        """Bogus --level value exits with INVALID_ARGS (3)."""
+    def test_invalid_level_exits_2(self, mock_get_ws: MagicMock) -> None:
+        """Bogus --level value exits with Click's usage error code (2).
+
+        ``--level`` is now a ``click.Choice`` so Click validates it
+        before our handler runs and exits with its standard usage-error
+        code 2 (``UsageError`` → ``SystemExit(2)``), matching every
+        other ``click.Choice``-validated option in the CLI (e.g.
+        ``--format``).
+        """
         mock_get_ws.return_value = MagicMock()
 
         result = runner.invoke(
             app,
             ["business-context", "get", "--level", "bogus"],
         )
-        assert result.exit_code == 3
+        assert result.exit_code == 2
 
     @patch("mixpanel_data.cli.commands.business_context.get_workspace")
     def test_auth_error_exits_2(self, mock_get_ws: MagicMock) -> None:
@@ -275,20 +282,43 @@ class TestSet:
         assert result.exit_code == 3
 
     @patch("mixpanel_data.cli.commands.business_context.get_workspace")
-    def test_no_content_no_pipe_exits_3(self, mock_get_ws: MagicMock) -> None:
-        """No flags + TTY stdin → INVALID_ARGS (3)."""
-        mock_get_ws.return_value = MagicMock()
+    def test_empty_stdin_refuses_silent_clear(self, mock_get_ws: MagicMock) -> None:
+        """Empty / whitespace-only stdin → INVALID_ARGS (3) deterministically.
 
-        # CliRunner without `input` simulates a TTY-like empty stdin;
-        # explicitly pass input=None to keep stdin a TTY for the tool.
-        result = runner.invoke(app, ["business-context", "set"])
-        # In CliRunner, sys.stdin is replaced by a non-tty buffer when
-        # input is None. We expect either INVALID_ARGS (3) or success
-        # with empty content (set "" — equivalent to clear). Document
-        # the current behavior: when CliRunner supplies an empty
-        # stream, isatty() returns False so we treat it as piped empty
-        # input — which is "" — and the call goes through.
-        assert result.exit_code in (0, 3)
+        Regression guard for the CI/cron `</dev/null` footgun: we must
+        never silently send `{"content": ""}` from an empty stdin.
+        Clearing context must be explicit (`clear` subcommand, or
+        `--content ""`).
+        """
+        ws = MagicMock()
+        mock_get_ws.return_value = ws
+
+        result = runner.invoke(app, ["business-context", "set"], input="")
+        assert result.exit_code == 3
+        ws.set_business_context.assert_not_called()
+
+        # Whitespace-only stdin is also rejected (no real intent to write).
+        result = runner.invoke(app, ["business-context", "set"], input="   \n")
+        assert result.exit_code == 3
+        ws.set_business_context.assert_not_called()
+
+    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    def test_explicit_empty_content_clears(self, mock_get_ws: MagicMock) -> None:
+        """`--content ""` is the explicit way to clear via `set`."""
+        ws = MagicMock()
+        ws.set_business_context.return_value = _ctx_mock(content="")
+        mock_get_ws.return_value = ws
+
+        result = runner.invoke(
+            app,
+            ["business-context", "set", "--content", ""],
+        )
+        assert result.exit_code == 0
+        ws.set_business_context.assert_called_once_with(
+            "",
+            level="project",
+            organization_id=None,
+        )
 
     @patch("mixpanel_data.cli.commands.business_context.get_workspace")
     def test_missing_file_exits_3(self, mock_get_ws: MagicMock) -> None:
@@ -302,10 +332,14 @@ class TestSet:
         assert result.exit_code == 3
 
     @patch("mixpanel_data.cli.commands.business_context.get_workspace")
-    def test_oversize_content_exits_via_handle_errors(
-        self, mock_get_ws: MagicMock
-    ) -> None:
-        """BusinessContextValidationError from set → GENERAL_ERROR (1)."""
+    def test_oversize_content_exits_invalid_args(self, mock_get_ws: MagicMock) -> None:
+        """BusinessContextValidationError from set → INVALID_ARGS (3).
+
+        @handle_errors has an explicit branch for
+        BusinessContextValidationError that maps to INVALID_ARGS,
+        because the failure is client-side input validation rather
+        than an unknown library error.
+        """
         ws = MagicMock()
         ws.set_business_context.side_effect = BusinessContextValidationError(
             "too long",
@@ -317,10 +351,7 @@ class TestSet:
             app,
             ["business-context", "set", "--content", "x" * 60_000],
         )
-        # BusinessContextValidationError inherits from MixpanelDataError →
-        # the @handle_errors decorator's MixpanelDataError branch maps to
-        # GENERAL_ERROR (1).
-        assert result.exit_code == 1
+        assert result.exit_code == 3
 
     @patch("mixpanel_data.cli.commands.business_context.get_workspace")
     def test_org_level_set_forwards_org_id(self, mock_get_ws: MagicMock) -> None:

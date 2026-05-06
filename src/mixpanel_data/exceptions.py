@@ -988,24 +988,29 @@ class OAuthError(MixpanelDataError):
 
 
 class WorkspaceScopeError(MixpanelDataError):
-    """Workspace resolution error.
+    """Scope resolution error (workspace or organization).
 
-    Raised when workspace resolution fails during App API requests.
-    This can occur when no workspaces are found, multiple workspaces
-    exist without a clear default, or an explicit workspace ID doesn't
-    match any available workspace.
+    Raised when an auth-axis identifier cannot be resolved during App
+    API requests. Originally introduced for workspace resolution; also
+    raised when the organization ID for an org-scoped business-context
+    call cannot be auto-derived from the cached ``/me`` response.
 
     Error codes:
     - NO_WORKSPACES: Project has no accessible workspaces
     - AMBIGUOUS_WORKSPACE: Multiple workspaces, none default; must specify --workspace-id
     - WORKSPACE_NOT_FOUND: Explicit workspace ID doesn't match any workspace
+    - ORGANIZATION_AMBIGUOUS: Cannot auto-resolve the organization for an
+      org-scoped call (active project absent from /me AND >1 accessible
+      organization). The ``details`` dict carries ``project_id`` and
+      ``available_organizations``. Pass ``organization_id=N`` explicitly
+      to bypass auto-resolution.
 
     Example:
         ```python
         try:
             workspace_id = ws.resolve_workspace_id()
         except WorkspaceScopeError as e:
-            print(f"Workspace issue: {e.message} (code: {e.code})")
+            print(f"Scope issue: {e.message} (code: {e.code})")
         ```
     """
 
@@ -1020,7 +1025,8 @@ class WorkspaceScopeError(MixpanelDataError):
         Args:
             message: Human-readable error message.
             code: Machine-readable error code. One of: NO_WORKSPACES,
-                AMBIGUOUS_WORKSPACE, WORKSPACE_NOT_FOUND.
+                AMBIGUOUS_WORKSPACE, WORKSPACE_NOT_FOUND,
+                ORGANIZATION_AMBIGUOUS.
             details: Additional structured data about the error.
         """
         super().__init__(message, code=code, details=details)

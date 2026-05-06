@@ -119,6 +119,8 @@ If auto-resolution can't determine the org (e.g. the active project isn't in the
 
 The server exposes a `/business-context/chain` endpoint that returns both org and project context together, scoped to the active project. Use `get_business_context_chain()` (Python) or `mp business-context chain` (CLI) to avoid two round-trips.
 
+`organization.organization_id` on the returned chain is populated **best-effort** from the cached `/me` response (in-memory or disk). When the cache is cold the field is left as `None` — the chain endpoint deliberately does *not* trigger an extra `/me` fetch, preserving its single-network-round-trip property. Callers that need a guaranteed org ID should call `get_business_context(level="organization")`, which performs full resolution.
+
 === "Python"
 
     ```python
@@ -168,11 +170,11 @@ The server exposes a `/business-context/chain` endpoint that returns both org an
 
     The `set` command accepts content from three sources, in priority order:
 
-    1. `--content TEXT` — inline markdown (best for short content)
+    1. `--content TEXT` — inline markdown (best for short content; pass `""` to clear)
     2. `--file PATH` — read from a file on disk
     3. **stdin** — when no flags are given and stdin is not a TTY
 
-    `--content` and `--file` are mutually exclusive. Stdin is only consulted when neither flag is provided.
+    `--content` and `--file` are mutually exclusive. Stdin is only consulted when neither flag is provided. **Empty / whitespace-only stdin is rejected** (exit code 3) — use `mp business-context clear` to deliberately clear, so a CI/cron run with `</dev/null` can never silently wipe stored content.
 
     ```bash
     # Inline
@@ -213,7 +215,7 @@ The server exposes a `/business-context/chain` endpoint that returns both org an
     ```bash
     # Oversize content from a file
     mp business-context set --level project --file too_big.md
-    # → exits with code 1 (GENERAL_ERROR) and a clear message,
+    # → exits with code 3 (INVALID_ARGS) and a clear message,
     #   without making a network request
     ```
 
@@ -286,7 +288,7 @@ for project in ws.projects():
 | `project_id` | active project ID | `None` |
 | `organization_id` | `None` | resolved org ID |
 
-Two convenience properties (Python only — not in `model_dump()`):
+Two computed fields are also exposed and **appear in `model_dump()`** (so `--jq '.is_empty'` and `--jq '.character_count'` work directly from the CLI):
 
 - `is_empty: bool` — `True` when `content == ""`
 - `character_count: int` — `len(content)`; compare against `BUSINESS_CONTEXT_MAX_CHARS`

@@ -69,7 +69,14 @@ from mixpanel_data.auth_types import (
 if TYPE_CHECKING:
     import networkx as nx
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from pydantic.alias_generators import to_camel
 
 T = TypeVar("T")
@@ -12150,21 +12157,19 @@ class UserQueryResult(ResultWithDataFrame):
 
 
 # =============================================================================
-# Business Context (AIE-147)
+# Business Context
 # =============================================================================
 # Markdown documentation that grounds AI assistants in an organization's
 # structure and goals. Two scopes — "organization" (shared across all projects)
 # and "project" (per-project). Stored as plain markdown text (no images,
 # structured data, or links). The 50,000-character cap is enforced both
-# server-side and client-side; the same constant ships in
-# webapp/business_context/mutations.py::MAX_CONTENT_LENGTH.
+# server-side and client-side.
 
 
 BUSINESS_CONTEXT_MAX_CHARS: int = 50_000
 """Maximum allowed content length for business context, in characters.
 
-Mirrors ``MAX_CONTENT_LENGTH`` in
-``analytics/webapp/business_context/mutations.py`` — the server returns
+Mirrors the server's ``MAX_CONTENT_LENGTH`` constant — the API returns
 HTTP 400 with ``"content exceeds maximum length of 50000 characters"``
 above this threshold."""
 
@@ -12187,6 +12192,12 @@ class BusinessContext(BaseModel):
             ``level="organization"``, ``None`` otherwise.
         project_id: Owning project ID — populated when ``level="project"``,
             ``None`` otherwise.
+        is_empty: Computed — ``True`` when ``content == ""``. Visible
+            in ``model_dump()`` output so JSON consumers can use it
+            directly (no need to recompute).
+        character_count: Computed — ``len(content)``. Visible in
+            ``model_dump()`` output. Compare against
+            ``BUSINESS_CONTEXT_MAX_CHARS`` (50,000) to check headroom.
 
     Example:
         ```python
@@ -12212,18 +12223,26 @@ class BusinessContext(BaseModel):
     project_id: str | None = None
     """Owning project ID (set when ``level="project"``)."""
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_empty(self) -> bool:
         """``True`` when no content has been set at this scope.
+
+        Computed field — appears in ``model_dump()`` so JSON / CLI
+        consumers can ``--jq '.is_empty'`` directly.
 
         Returns:
             ``True`` if ``content`` is the empty string, ``False`` otherwise.
         """
         return not self.content
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def character_count(self) -> int:
         """Length of ``content`` in characters.
+
+        Computed field — appears in ``model_dump()`` so JSON / CLI
+        consumers can ``--jq '.character_count'`` directly.
 
         Returns:
             Number of Unicode characters in ``content``. Compare against

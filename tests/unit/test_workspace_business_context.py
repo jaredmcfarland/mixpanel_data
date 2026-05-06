@@ -1,8 +1,9 @@
-"""Unit tests for Workspace business context methods (AIE-147).
+"""Unit tests for Workspace business context methods.
 
 Covers all four facade methods plus the ``_resolve_organization_id``
-helper. Each method delegates to MixpanelAPIClient via httpx.MockTransport
-and returns typed BusinessContext / BusinessContextChain instances.
+and ``_cached_organization_id`` helpers. Each method delegates to
+MixpanelAPIClient via httpx.MockTransport and returns typed
+BusinessContext / BusinessContextChain instances.
 
 Verifies:
 
@@ -10,17 +11,19 @@ Verifies:
 - Org ID auto-resolution from /me cache (project lookup, sole-org fallback)
 - Org ID explicit override (no /me fetch)
 - Ambiguous-org raises WorkspaceScopeError
+- Invalid ``level`` raises ValueError before any HTTP call
 - 50,000-character boundary on set (client-side validation)
-- Chain endpoint parses both fields and populates org_id + project_id
+- Chain endpoint truly single-round-trip — no /me fetch
+- Chain populates org_id from cached /me on a best-effort basis
+- Cold-cache chain leaves organization_id=None
 - Server-side 400 surfaces as QueryError
+- Missing ``content`` / ``org_context`` / ``project_context`` raises
+  MixpanelDataError instead of being silently treated as empty
 """
-
-# ruff: noqa: ARG001, ARG005
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -31,6 +34,7 @@ from mixpanel_data._internal.auth.session import Session
 from mixpanel_data._internal.me import MeOrgInfo, MeProjectInfo, MeResponse
 from mixpanel_data.exceptions import (
     BusinessContextValidationError,
+    MixpanelDataError,
     QueryError,
     WorkspaceScopeError,
 )
@@ -80,6 +84,10 @@ def _stub_me(
 ) -> None:
     """Pre-populate ``ws._me_service`` with a canned MeResponse.
 
+    The stub implements both ``fetch()`` and ``peek()`` — ``fetch()``
+    is what ``_resolve_organization_id`` calls, ``peek()`` is what
+    ``_cached_organization_id`` (used by the chain endpoint) calls.
+
     Args:
         ws: Workspace whose MeService should be replaced.
         project_org: Owning organization ID for the active project
@@ -104,6 +112,10 @@ def _stub_me(
         def fetch(self, *, force_refresh: bool = False) -> MeResponse:
             """Return the canned response (cache parameters ignored)."""
             del force_refresh
+            return self._response
+
+        def peek(self) -> MeResponse:
+            """Return the canned response without triggering a fetch."""
             return self._response
 
     orgs: dict[str, MeOrgInfo] = {}
@@ -134,7 +146,7 @@ def _ok(results: dict[str, Any]) -> httpx.Response:
 class TestGetBusinessContextProject:
     """get_business_context(level='project') behavior."""
 
-    def test_returns_populated_context(self, temp_dir: Path) -> None:
+    def test_returns_populated_context(self) -> None:
         """GET returns BusinessContext with project_id and content."""
         seen: list[str] = []
 
@@ -155,11 +167,12 @@ class TestGetBusinessContextProject:
         assert ctx.character_count == len("# Project context\n\nHello.")
         assert seen == ["GET /api/app/projects/12345/business-context"]
 
-    def test_default_level_is_project(self, temp_dir: Path) -> None:
+    def test_default_level_is_project(self) -> None:
         """Calling without ``level`` defaults to 'project'."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return empty content."""
+            del request
             return _ok({"content": ""})
 
         ws = _make_workspace(handler)
@@ -167,11 +180,12 @@ class TestGetBusinessContextProject:
         assert ctx.level == "project"
         assert ctx.is_empty is True
 
-    def test_empty_content_yields_is_empty(self, temp_dir: Path) -> None:
+    def test_empty_content_yields_is_empty(self) -> None:
         """Empty string from API → BusinessContext.is_empty is True."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return the unset state."""
+            del request
             return _ok({"content": ""})
 
         ws = _make_workspace(handler)
@@ -179,6 +193,33 @@ class TestGetBusinessContextProject:
         assert ctx.content == ""
         assert ctx.is_empty is True
         assert ctx.character_count == 0
+
+    def test_invalid_level_raises_value_error(self) -> None:
+        """``level="org"`` (or any other non-literal) raises ValueError."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Should never run when validation rejects input."""
+            del request
+            raise AssertionError("HTTP must not be called for invalid level")
+
+        ws = _make_workspace(handler)
+        with pytest.raises(
+            ValueError, match=r"level must be 'organization' or 'project'"
+        ):
+            ws.get_business_context(level="org")  # type: ignore[arg-type]
+
+    def test_missing_content_raises_mixpanel_data_error(self) -> None:
+        """API response without ``content`` field → MixpanelDataError."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a malformed response (no ``content`` field)."""
+            del request
+            return _ok({"unexpected": "shape"})
+
+        ws = _make_workspace(handler)
+        with pytest.raises(MixpanelDataError) as exc_info:
+            ws.get_business_context(level="project")
+        assert "missing required field 'content'" in str(exc_info.value)
 
 
 # =============================================================================
@@ -189,7 +230,7 @@ class TestGetBusinessContextProject:
 class TestSetBusinessContextProject:
     """set_business_context(level='project') behavior."""
 
-    def test_sends_put_with_correct_body(self, temp_dir: Path) -> None:
+    def test_sends_put_with_correct_body(self) -> None:
         """SET issues PUT with ``{"content": ...}`` body."""
         seen: list[tuple[str, str, dict[str, Any]]] = []
 
@@ -213,12 +254,13 @@ class TestSetBusinessContextProject:
             ),
         ]
 
-    def test_validation_blocks_oversize_before_http(self, temp_dir: Path) -> None:
+    def test_validation_blocks_oversize_before_http(self) -> None:
         """50_001 chars → BusinessContextValidationError, no HTTP call."""
         called = False
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Should never be called when validation rejects input."""
+            del request
             nonlocal called
             called = True
             return _ok({"content": ""})
@@ -233,7 +275,7 @@ class TestSetBusinessContextProject:
         assert details["max"] == BUSINESS_CONTEXT_MAX_CHARS
         assert exc_info.value.code == "BUSINESS_CONTEXT_TOO_LONG"
 
-    def test_exact_max_length_is_accepted(self, temp_dir: Path) -> None:
+    def test_exact_max_length_is_accepted(self) -> None:
         """Exactly 50,000 chars passes client-side validation."""
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -246,11 +288,12 @@ class TestSetBusinessContextProject:
         ctx = ws.set_business_context(payload, level="project")
         assert ctx.character_count == BUSINESS_CONTEXT_MAX_CHARS
 
-    def test_server_400_surfaces_as_query_error(self, temp_dir: Path) -> None:
+    def test_server_400_surfaces_as_query_error(self) -> None:
         """A 400 from the API is mapped to QueryError."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return the server-side rejection shape."""
+            del request
             return httpx.Response(
                 400,
                 json={
@@ -263,11 +306,25 @@ class TestSetBusinessContextProject:
         with pytest.raises(QueryError):
             ws.set_business_context("# legal here", level="project")
 
+    def test_invalid_level_raises_value_error_before_http(self) -> None:
+        """``set`` with bogus ``level`` raises ValueError, no HTTP."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Should never run when validation rejects input."""
+            del request
+            raise AssertionError("HTTP must not be called for invalid level")
+
+        ws = _make_workspace(handler)
+        with pytest.raises(
+            ValueError, match=r"level must be 'organization' or 'project'"
+        ):
+            ws.set_business_context("x", level="oops")  # type: ignore[arg-type]
+
 
 class TestClearBusinessContextProject:
     """clear_business_context delegates to set with empty content."""
 
-    def test_clear_sends_empty_content_put(self, temp_dir: Path) -> None:
+    def test_clear_sends_empty_content_put(self) -> None:
         """CLEAR issues PUT with ``{"content": ""}``."""
         seen: list[dict[str, Any]] = []
 
@@ -293,7 +350,7 @@ class TestClearBusinessContextProject:
 class TestGetBusinessContextOrganization:
     """get_business_context(level='organization') behavior."""
 
-    def test_explicit_org_id_skips_me_fetch(self, temp_dir: Path) -> None:
+    def test_explicit_org_id_skips_me_fetch(self) -> None:
         """Passing organization_id avoids any /me lookup."""
         seen: list[str] = []
 
@@ -309,7 +366,12 @@ class TestGetBusinessContextOrganization:
 
             def fetch(self, *, force_refresh: bool = False) -> MeResponse:
                 """Should never be invoked when organization_id is explicit."""
+                del force_refresh
                 raise AssertionError("MeService.fetch should not be called")
+
+            def peek(self) -> MeResponse | None:
+                """Should never be invoked for an explicit-org-id call."""
+                raise AssertionError("MeService.peek should not be called")
 
         ws._me_service = _ExplodingMeSvc()  # type: ignore[assignment]
 
@@ -320,7 +382,7 @@ class TestGetBusinessContextOrganization:
         assert ctx.content == "# Org content"
         assert seen == ["GET /api/app/organizations/42/business-context"]
 
-    def test_auto_resolve_from_active_project(self, temp_dir: Path) -> None:
+    def test_auto_resolve_from_active_project(self) -> None:
         """Without explicit org_id, derives it from /me.projects[pid]."""
         seen: list[str] = []
 
@@ -336,7 +398,7 @@ class TestGetBusinessContextOrganization:
         assert ctx.organization_id == 100
         assert seen == ["/api/app/organizations/100/business-context"]
 
-    def test_auto_resolve_falls_through_to_sole_org(self, temp_dir: Path) -> None:
+    def test_auto_resolve_falls_through_to_sole_org(self) -> None:
         """When project missing from /me but only one org exists, use it."""
         seen: list[str] = []
 
@@ -357,11 +419,12 @@ class TestGetBusinessContextOrganization:
         assert ctx.organization_id == 77
         assert seen == ["/api/app/organizations/77/business-context"]
 
-    def test_ambiguous_org_raises_workspace_scope_error(self, temp_dir: Path) -> None:
+    def test_ambiguous_org_raises_workspace_scope_error(self) -> None:
         """Multiple orgs + project not in /me → WorkspaceScopeError."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Should never be called when resolution fails first."""
+            del request
             raise AssertionError("HTTP call should not happen on resolution failure")
 
         ws = _make_workspace(handler)
@@ -383,7 +446,7 @@ class TestGetBusinessContextOrganization:
 class TestSetBusinessContextOrganization:
     """set_business_context(level='organization') behavior."""
 
-    def test_set_org_uses_org_path(self, temp_dir: Path) -> None:
+    def test_set_org_uses_org_path(self) -> None:
         """Org SET hits /organizations/{id}/business-context."""
         seen: list[tuple[str, str, dict[str, Any]]] = []
 
@@ -420,7 +483,7 @@ class TestSetBusinessContextOrganization:
 class TestGetBusinessContextChain:
     """get_business_context_chain() behavior."""
 
-    def test_chain_parses_both_scopes(self, temp_dir: Path) -> None:
+    def test_chain_parses_both_scopes(self) -> None:
         """Chain returns BusinessContextChain with org + project content."""
         seen: list[str] = []
 
@@ -446,13 +509,15 @@ class TestGetBusinessContextChain:
         assert chain.project.level == "project"
         assert chain.project.project_id == "12345"
         assert chain.project.content == "# Project info"
+        # Single round-trip — the chain endpoint is the only HTTP call.
         assert seen == ["GET /api/app/projects/12345/business-context/chain"]
 
-    def test_chain_with_empty_scopes(self, temp_dir: Path) -> None:
+    def test_chain_with_empty_scopes(self) -> None:
         """Empty strings in chain response yield is_empty BusinessContexts."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return the unset state for both scopes."""
+            del request
             return _ok({"org_context": "", "project_context": ""})
 
         ws = _make_workspace(handler)
@@ -461,3 +526,58 @@ class TestGetBusinessContextChain:
         chain = ws.get_business_context_chain()
         assert chain.organization.is_empty is True
         assert chain.project.is_empty is True
+
+    def test_chain_does_not_fetch_me_when_cache_cold(self) -> None:
+        """Chain leaves organization_id=None when /me cache is cold.
+
+        Regression guard for the "single round-trip" guarantee — the
+        chain endpoint must not call ``_resolve_organization_id`` (which
+        would trigger a /me fetch). Best-effort enrichment via
+        ``peek()`` returns None on cold cache, so org_id stays None.
+        """
+        seen: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Capture method+path; would 404 a /me call if reached."""
+            seen.append(f"{request.method} {request.url.path}")
+            if request.url.path.endswith("/me"):
+                raise AssertionError("Chain endpoint must not trigger /me fetch")
+            return _ok({"org_context": "# Org", "project_context": "# Project"})
+
+        ws = _make_workspace(handler)
+        # Do NOT call _stub_me — leaves the real MeService with cold cache.
+        # The real MeService.peek() will check disk; in tests temp HOME isn't
+        # set so it would miss too. Either way: org_id should be None.
+
+        chain = ws.get_business_context_chain()
+        assert chain.organization.organization_id is None
+        assert chain.organization.content == "# Org"
+        assert chain.project.content == "# Project"
+        # Only the chain endpoint was hit — no /me.
+        assert seen == ["GET /api/app/projects/12345/business-context/chain"]
+
+    def test_chain_missing_org_context_raises(self) -> None:
+        """API response without ``org_context`` → MixpanelDataError."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a malformed chain response."""
+            del request
+            return _ok({"project_context": "# Project"})
+
+        ws = _make_workspace(handler)
+        with pytest.raises(MixpanelDataError) as exc_info:
+            ws.get_business_context_chain()
+        assert "missing required field 'org_context'" in str(exc_info.value)
+
+    def test_chain_missing_project_context_raises(self) -> None:
+        """API response without ``project_context`` → MixpanelDataError."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            """Return a malformed chain response."""
+            del request
+            return _ok({"org_context": "# Org"})
+
+        ws = _make_workspace(handler)
+        with pytest.raises(MixpanelDataError) as exc_info:
+            ws.get_business_context_chain()
+        assert "missing required field 'project_context'" in str(exc_info.value)

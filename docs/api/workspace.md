@@ -198,6 +198,10 @@ See [Auth → Workspace.use()](auth.md#workspaceuse-in-session-switching) for th
         - clear_discovery_cache
         - stream_events
         - stream_profiles
+        - get_business_context
+        - set_business_context
+        - clear_business_context
+        - get_business_context_chain
         - query
         - build_params
         - query_funnel

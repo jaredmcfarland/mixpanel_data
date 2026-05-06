@@ -9951,7 +9951,7 @@ class Workspace:
         return kwargs
 
     # =========================================================================
-    # BUSINESS CONTEXT (AIE-147)
+    # BUSINESS CONTEXT
     # =========================================================================
     # Markdown documentation that grounds AI assistants in the
     # organization's structure and goals. Two scopes:
@@ -9962,6 +9962,28 @@ class Workspace:
     # endpoint returns both at once. Server enforces a 50,000-char limit
     # (mirrored client-side as BUSINESS_CONTEXT_MAX_CHARS).
 
+    @staticmethod
+    def _validate_level(level: str) -> None:
+        """Reject any ``level`` value other than the two documented literals.
+
+        Python's ``Literal[...]`` type annotations are erased at runtime,
+        so without this check a caller passing ``level="org"`` would
+        silently take the project-scope branch. We validate explicitly
+        so the error surfaces at the call site.
+
+        Args:
+            level: The ``level`` argument from a public business-context
+                method.
+
+        Raises:
+            ValueError: ``level`` is not ``"organization"`` or
+                ``"project"``.
+        """
+        if level not in ("organization", "project"):
+            raise ValueError(
+                f"level must be 'organization' or 'project', got {level!r}"
+            )
+
     def _resolve_organization_id(self, explicit: int | None = None) -> int:
         """Resolve the organization ID for org-scoped business context calls.
 
@@ -9969,10 +9991,13 @@ class Workspace:
 
         1. ``explicit`` argument when not ``None`` (no I/O).
         2. ``MeResponse.projects[<active project id>].organization_id``
-           via the cached ``/me`` response (24h ``MeCache``).
+           via the cached ``/me`` response (24h ``MeCache``). This step
+           may trigger a ``/me`` API call when both in-memory and disk
+           caches miss.
         3. The single org in ``MeResponse.organizations`` when exactly
            one is accessible.
-        4. Raise ``WorkspaceScopeError`` listing the available org IDs.
+        4. Raise ``WorkspaceScopeError`` (``code="ORGANIZATION_AMBIGUOUS"``)
+           listing the available org IDs.
 
         Args:
             explicit: Optional explicit organization ID. When provided,
@@ -9989,13 +10014,6 @@ class Workspace:
             WorkspaceScopeError: ``explicit`` was not provided AND the
                 current project is not present in ``/me`` AND there is
                 not exactly one accessible organization to fall back to.
-
-        Example:
-            ```python
-            ws = Workspace()
-            org_id = ws._resolve_organization_id()         # auto-resolve
-            org_id = ws._resolve_organization_id(42)       # explicit
-            ```
         """
         if explicit is not None:
             return explicit
@@ -10016,6 +10034,72 @@ class Workspace:
                 "available_organizations": sorted(me.organizations.keys()),
             },
         )
+
+    def _cached_organization_id(self) -> int | None:
+        """Return ``organization_id`` from cached ``/me``, never fetching.
+
+        Used by ``get_business_context_chain()`` to enrich the response
+        with ``organization_id`` *only when free* — preserving the
+        chain endpoint's single-network-round-trip guarantee. If the
+        cache is cold (neither in-memory nor on-disk), returns ``None``
+        rather than triggering a ``/me`` API call. Callers that need a
+        guaranteed org ID should use ``get_business_context(level=
+        "organization")`` instead.
+
+        Returns:
+            Cached organization ID for the active project, the sole
+            accessible org if exactly one exists, or ``None`` when the
+            cache is cold or the project is not in the cached ``/me``
+            and there are multiple orgs.
+        """
+        if self._me_service is None:
+            return None
+        me = self._me_service.peek()
+        if me is None:
+            return None
+        project_info = me.projects.get(self._session.project.id)
+        if project_info is not None:
+            return int(project_info.organization_id)
+        if len(me.organizations) == 1:
+            sole = next(iter(me.organizations.values()))
+            return int(sole.id)
+        return None
+
+    @staticmethod
+    def _require_str_field(raw: dict[str, Any], key: str, *, method: str) -> str:
+        """Read a required string field from an App API response.
+
+        Treats a missing key as a server-contract violation (raises
+        ``MixpanelDataError``) rather than silently substituting the
+        empty string, which would mask renames or schema drift on the
+        server side.
+
+        Args:
+            raw: The unwrapped ``results`` dict returned by ``app_request``.
+            key: Field name expected in ``raw``.
+            method: Caller method name, embedded in the error message.
+
+        Returns:
+            The string value at ``raw[key]``. Empty strings are valid
+            (unset business context returns ``""``).
+
+        Raises:
+            MixpanelDataError: ``key`` is absent from ``raw`` or its
+                value is not a string.
+        """
+        if key not in raw:
+            raise MixpanelDataError(
+                f"Unexpected response from {method}: missing required field {key!r}",
+                details={"missing_field": key, "response": raw},
+            )
+        value = raw[key]
+        if not isinstance(value, str):
+            raise MixpanelDataError(
+                f"Unexpected response from {method}: field {key!r} "
+                f"is {type(value).__name__}, expected str",
+                details={"field": key, "response": raw},
+            )
+        return value
 
     def get_business_context(
         self,
@@ -10038,8 +10122,9 @@ class Workspace:
                 across all projects in the organization.
             organization_id: Optional explicit org ID, only honored
                 when ``level="organization"``. When omitted, the org ID
-                is auto-resolved from the cached ``/me`` response — see
-                :meth:`_resolve_organization_id`.
+                is auto-resolved from the cached ``/me`` response
+                (which may trigger a ``/me`` API call when the cache
+                is cold).
 
         Returns:
             ``BusinessContext`` whose ``content`` reflects the server's
@@ -10047,12 +10132,15 @@ class Workspace:
             org-level returns; ``project_id`` for project-level.
 
         Raises:
+            ValueError: ``level`` is not ``"organization"`` or ``"project"``.
             ConfigError: Credentials are not available.
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400, 403, 404).
             ServerError: Server-side errors (5xx).
             WorkspaceScopeError: ``level="organization"`` and the org
                 ID could not be auto-resolved.
+            MixpanelDataError: API response is missing the ``content``
+                field.
 
         Example:
             ```python
@@ -10064,19 +10152,28 @@ class Workspace:
             print(project_ctx.content)
             ```
         """
+        self._validate_level(level)
         client = self._require_api_client()
         if level == "organization":
             org_id = self._resolve_organization_id(organization_id)
             raw = client.get_business_context(organization_id=org_id)
             return BusinessContext(
                 level="organization",
-                content=raw.get("content", ""),
+                content=self._require_str_field(
+                    raw,
+                    "content",
+                    method="get_business_context",
+                ),
                 organization_id=org_id,
             )
         raw = client.get_business_context()
         return BusinessContext(
             level="project",
-            content=raw.get("content", ""),
+            content=self._require_str_field(
+                raw,
+                "content",
+                method="get_business_context",
+            ),
             project_id=self._session.project.id,
         )
 
@@ -10097,7 +10194,7 @@ class Workspace:
         ``PUT /api/app/organizations/{org_id}/business-context`` (org).
 
         The PUT is full-replace — pass an empty string to clear (or use
-        :meth:`clear_business_context` for clarity).
+        ``clear_business_context`` for clarity).
 
         Args:
             content: New markdown content. Empty string clears the
@@ -10111,6 +10208,7 @@ class Workspace:
             ``BusinessContext`` echoing the server's saved content.
 
         Raises:
+            ValueError: ``level`` is not ``"organization"`` or ``"project"``.
             BusinessContextValidationError: ``len(content) > 50_000``
                 (client-side check, no HTTP call made).
             ConfigError: Credentials are not available.
@@ -10120,6 +10218,8 @@ class Workspace:
             ServerError: Server-side errors (5xx).
             WorkspaceScopeError: ``level="organization"`` and the org
                 ID could not be auto-resolved.
+            MixpanelDataError: API response is missing the ``content``
+                field.
 
         Example:
             ```python
@@ -10130,6 +10230,7 @@ class Workspace:
             )
             ```
         """
+        self._validate_level(level)
         if len(content) > BUSINESS_CONTEXT_MAX_CHARS:
             raise BusinessContextValidationError(
                 f"content exceeds maximum length of "
@@ -10145,13 +10246,21 @@ class Workspace:
             raw = client.set_business_context(content, organization_id=org_id)
             return BusinessContext(
                 level="organization",
-                content=raw.get("content", ""),
+                content=self._require_str_field(
+                    raw,
+                    "content",
+                    method="set_business_context",
+                ),
                 organization_id=org_id,
             )
         raw = client.set_business_context(content)
         return BusinessContext(
             level="project",
-            content=raw.get("content", ""),
+            content=self._require_str_field(
+                raw,
+                "content",
+                method="set_business_context",
+            ),
             project_id=self._session.project.id,
         )
 
@@ -10178,6 +10287,7 @@ class Workspace:
             echoed back from the server).
 
         Raises:
+            ValueError: ``level`` is not ``"organization"`` or ``"project"``.
             ConfigError: Credentials are not available.
             AuthenticationError: Invalid credentials (401).
             QueryError: Caller lacks ``edit_project_info`` permission
@@ -10201,17 +10311,22 @@ class Workspace:
     def get_business_context_chain(self) -> BusinessContextChain:
         """Read both organization and project business context together.
 
-        Calls ``GET /api/app/projects/{pid}/business-context/chain`` —
+        Issues exactly one App API request to
+        ``GET /api/app/projects/{pid}/business-context/chain`` —
         a server-side convenience that returns both scopes for the
-        active project in a single round-trip. The returned
-        ``organization`` field reflects the org that owns the active
-        project; its ``organization_id`` is auto-resolved via the same
-        path as :meth:`_resolve_organization_id`.
+        active project. ``organization.organization_id`` is populated
+        on a best-effort basis from the cached ``/me`` response (in-memory
+        or disk); when the cache is cold it is left as ``None`` rather
+        than triggering an extra ``/me`` round-trip. Callers that need a
+        guaranteed org ID should use ``get_business_context(level=
+        "organization")``, which performs full resolution.
 
         Returns:
             ``BusinessContextChain`` with populated ``organization`` and
             ``project`` fields. Either ``content`` may be empty when no
             context is set at that scope.
+            ``organization.organization_id`` may be ``None`` when the
+            ``/me`` cache is cold (see method description).
 
         Raises:
             ConfigError: Credentials are not available.
@@ -10219,10 +10334,8 @@ class Workspace:
             QueryError: Caller lacks project access (403, 404) or
                 other API error (400).
             ServerError: Server-side errors (5xx).
-            WorkspaceScopeError: Org ID could not be auto-resolved
-                (the chain endpoint returns content but the response
-                does not echo the org ID, so we resolve it ourselves
-                to populate ``organization.organization_id``).
+            MixpanelDataError: API response is missing ``org_context``
+                or ``project_context``.
 
         Example:
             ```python
@@ -10234,16 +10347,26 @@ class Workspace:
         """
         client = self._require_api_client()
         raw = client.get_business_context_chain()
-        org_id = self._resolve_organization_id()
+        org_content = self._require_str_field(
+            raw,
+            "org_context",
+            method="get_business_context_chain",
+        )
+        project_content = self._require_str_field(
+            raw,
+            "project_context",
+            method="get_business_context_chain",
+        )
+        org_id = self._cached_organization_id()
         return BusinessContextChain(
             organization=BusinessContext(
                 level="organization",
-                content=raw.get("org_context", ""),
+                content=org_content,
                 organization_id=org_id,
             ),
             project=BusinessContext(
                 level="project",
-                content=raw.get("project_context", ""),
+                content=project_content,
                 project_id=self._session.project.id,
             ),
         )

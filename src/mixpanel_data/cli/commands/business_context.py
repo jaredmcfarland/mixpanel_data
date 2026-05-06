@@ -2,15 +2,14 @@
 
 This module provides commands for reading and writing the markdown
 documentation that grounds AI assistants in your organization's
-structure and goals — the same content the official Mixpanel MCP
-server's ``Get-Business-Context`` and ``Update-Business-Context``
-tools manage.
+structure and goals.
 
 Subcommands:
 
 - ``get``:   Read context at a given scope (org or project).
 - ``set``:   Replace context at a given scope. Accepts content from
-  ``--content``, ``--file``, or stdin (mutually exclusive).
+  ``--content``, ``--file``, or stdin (mutually exclusive). Empty
+  stdin is rejected — use ``clear`` to deliberately clear.
 - ``clear``: Convenience for ``set`` with empty content.
 - ``chain``: Read both org-level and project-level context together
   in a single round-trip via the ``/business-context/chain`` endpoint.
@@ -22,6 +21,7 @@ import sys
 from pathlib import Path
 from typing import Annotated, Literal, cast
 
+import click
 import typer
 
 from mixpanel_data.cli.options import FormatOption, JqOption
@@ -41,33 +41,24 @@ business_context_app = typer.Typer(
 )
 
 
-_LEVEL_HELP = "Which scope to operate on: 'project' (default) or 'organization'."
+# ``LevelOption`` mirrors the codebase pattern in ``cli/options.py::FormatOption``:
+# accept a ``str`` with ``click_type=click.Choice([...])`` so Click validates the
+# value and produces nice ``--help`` like ``[organization|project]``. We use
+# this here rather than a Python ``Enum`` because some Typer versions raise on
+# ``Literal`` annotations and the project already standardizes on ``click.Choice``.
+LevelOption = Annotated[
+    str,
+    typer.Option(
+        "--level",
+        help="Which scope to operate on.",
+        click_type=click.Choice(["organization", "project"]),
+    ),
+]
+
 _ORG_ID_HELP = (
     "Organization ID for --level organization. When omitted, auto-resolved "
     "from the current session's project via the cached /me response."
 )
-
-
-def _coerce_level(value: str) -> Literal["organization", "project"]:
-    """Validate and narrow a CLI ``--level`` value to the literal type.
-
-    Args:
-        value: Raw string value from the CLI option.
-
-    Returns:
-        The same value typed as ``Literal["organization", "project"]``.
-
-    Raises:
-        typer.Exit: ``value`` was not one of the two valid options.
-            Exits with ``ExitCode.INVALID_ARGS``.
-    """
-    if value not in ("organization", "project"):
-        err_console.print(
-            f"[red]Invalid --level value:[/red] {value!r}. "
-            "Must be 'organization' or 'project'."
-        )
-        raise typer.Exit(code=ExitCode.INVALID_ARGS)
-    return cast("Literal['organization', 'project']", value)
 
 
 def _read_set_content(
@@ -76,10 +67,14 @@ def _read_set_content(
 ) -> str:
     """Resolve the markdown content to send for the ``set`` command.
 
-    Precedence: ``--content`` > ``--file`` > stdin. ``--content`` and
-    ``--file`` are mutually exclusive — passing both is a usage error.
-    Stdin is read only when both flags are absent and stdin is not a
-    TTY (i.e. content was actually piped in).
+    Precedence: ``--content`` > ``--file`` > stdin (when piped).
+    ``--content`` and ``--file`` are mutually exclusive — passing both
+    is a usage error. Stdin is read only when both flags are absent
+    AND stdin is not a TTY (i.e. content was actually piped in). An
+    empty / whitespace-only stdin is rejected — clearing context must
+    be explicit (``mp business-context clear`` or
+    ``--content ""``) to prevent silent data loss in CI / cron where
+    stdin may be redirected from ``/dev/null``.
 
     Args:
         content: Inline content from ``--content``, or ``None``.
@@ -90,9 +85,9 @@ def _read_set_content(
 
     Raises:
         typer.Exit: Both ``--content`` and ``--file`` were provided,
-            the file does not exist, or no content source was supplied
-            (no flags AND stdin is a TTY). Exits with
-            ``ExitCode.INVALID_ARGS``.
+            the file does not exist, no content source was supplied,
+            or the piped stdin was empty / whitespace-only. Exits
+            with ``ExitCode.INVALID_ARGS``.
     """
     if content is not None and file is not None:
         err_console.print("[red]--content and --file are mutually exclusive.[/red]")
@@ -106,7 +101,19 @@ def _read_set_content(
             raise typer.Exit(code=ExitCode.INVALID_ARGS)
         return file.read_text(encoding="utf-8")
     if not sys.stdin.isatty():
-        return sys.stdin.read()
+        payload = sys.stdin.read()
+        if not payload.strip():
+            # Defend against the CI/cron `</dev/null` footgun: an empty
+            # stdin would otherwise full-replace the stored context with
+            # the empty string — a silent destructive write. Force the
+            # caller to be explicit.
+            err_console.print(
+                "[red]Empty stdin.[/red] Refusing to write empty content "
+                "implicitly. To clear, use `mp business-context clear` "
+                'or pass `--content ""` explicitly.'
+            )
+            raise typer.Exit(code=ExitCode.INVALID_ARGS)
+        return payload
     err_console.print(
         "[red]No content provided.[/red] Pass --content TEXT, --file PATH, "
         "or pipe content via stdin."
@@ -118,10 +125,7 @@ def _read_set_content(
 @handle_errors
 def business_context_get(
     ctx: typer.Context,
-    level: Annotated[
-        str,
-        typer.Option("--level", help=_LEVEL_HELP),
-    ] = "project",
+    level: LevelOption = "project",
     organization_id: Annotated[
         int | None,
         typer.Option("--organization-id", help=_ORG_ID_HELP),
@@ -141,7 +145,9 @@ def business_context_get(
         format: Output format.
         jq_filter: Optional jq filter expression.
     """
-    typed_level = _coerce_level(level)
+    # ``LevelOption`` (click.Choice) guarantees one of the two literals at
+    # runtime, so the cast is safe.
+    typed_level = cast("Literal['organization', 'project']", level)
     workspace = get_workspace(ctx)
     with status_spinner(ctx, f"Fetching {typed_level} business context..."):
         result = workspace.get_business_context(
@@ -155,10 +161,7 @@ def business_context_get(
 @handle_errors
 def business_context_set(
     ctx: typer.Context,
-    level: Annotated[
-        str,
-        typer.Option("--level", help=_LEVEL_HELP),
-    ] = "project",
+    level: LevelOption = "project",
     organization_id: Annotated[
         int | None,
         typer.Option("--organization-id", help=_ORG_ID_HELP),
@@ -182,9 +185,11 @@ def business_context_set(
 ) -> None:
     """Replace business context content at the given scope.
 
-    Content can come from ``--content``, ``--file``, or stdin (when
-    neither flag is given and stdin is not a TTY). Pass an empty
-    string to clear (or use ``mp business-context clear`` for clarity).
+    Content can come from ``--content``, ``--file``, or piped stdin
+    (when neither flag is given and stdin is not a TTY). Empty /
+    whitespace-only stdin is rejected — use ``mp business-context clear``
+    or pass ``--content ""`` explicitly to clear, to prevent silent
+    destructive writes in CI / cron.
 
     The 50,000-character limit is enforced client-side BEFORE the HTTP
     call so over-long input fails immediately rather than wasting a
@@ -200,7 +205,7 @@ def business_context_set(
         format: Output format.
         jq_filter: Optional jq filter expression.
     """
-    typed_level = _coerce_level(level)
+    typed_level = cast("Literal['organization', 'project']", level)
     payload = _read_set_content(content, file)
     workspace = get_workspace(ctx)
     with status_spinner(ctx, f"Updating {typed_level} business context..."):
@@ -216,10 +221,7 @@ def business_context_set(
 @handle_errors
 def business_context_clear(
     ctx: typer.Context,
-    level: Annotated[
-        str,
-        typer.Option("--level", help=_LEVEL_HELP),
-    ] = "project",
+    level: LevelOption = "project",
     organization_id: Annotated[
         int | None,
         typer.Option("--organization-id", help=_ORG_ID_HELP),
@@ -240,7 +242,7 @@ def business_context_clear(
         format: Output format.
         jq_filter: Optional jq filter expression.
     """
-    typed_level = _coerce_level(level)
+    typed_level = cast("Literal['organization', 'project']", level)
     workspace = get_workspace(ctx)
     with status_spinner(ctx, f"Clearing {typed_level} business context..."):
         result = workspace.clear_business_context(
@@ -261,7 +263,9 @@ def business_context_chain(
 
     Calls the project-scoped ``/business-context/chain`` endpoint and
     returns a ``BusinessContextChain`` JSON document with both scopes
-    populated.
+    populated. ``organization.organization_id`` is populated only when
+    a cached ``/me`` response is available — this preserves the chain
+    endpoint's single-network-round-trip guarantee.
 
     Args:
         ctx: Typer context with global options.

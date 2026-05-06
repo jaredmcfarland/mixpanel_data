@@ -431,6 +431,33 @@ class MeService:
         self._region = region
         self._cached_response: MeResponse | None = None
 
+    def peek(self) -> MeResponse | None:
+        """Return the cached /me response without triggering a network call.
+
+        Checks the in-memory cache first, then the on-disk cache.
+        Returns ``None`` if neither is available — does NOT call the
+        API, even if the cache is empty or expired. Used by callers
+        that want best-effort enrichment without giving up the
+        single-round-trip property of an unrelated request (e.g.,
+        ``Workspace.get_business_context_chain()``).
+
+        Returns:
+            Cached MeResponse or None if both caches are empty.
+
+        Example:
+            ```python
+            svc = MeService(api_client, cache, "us")
+            me = svc.peek()
+            org_id = me.organizations["100"].id if me else None
+            ```
+        """
+        if self._cached_response is not None:
+            return self._cached_response
+        cached = self._cache.get()
+        if cached is not None:
+            self._cached_response = cached
+        return cached
+
     def fetch(self, *, force_refresh: bool = False) -> MeResponse:
         """Fetch the /me response, using cache when available.
 

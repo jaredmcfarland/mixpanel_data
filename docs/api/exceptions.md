@@ -134,15 +134,16 @@ Raised during OAuth 2.0 PKCE authentication flows.
       show_root_heading: true
       show_root_toc_entry: true
 
-## Workspace Exceptions
+## Workspace / Organization Scope Exceptions
 
-Raised when workspace resolution fails for App API endpoints.
+Raised when an auth-axis identifier (workspace or organization) cannot be resolved during App API requests.
 
 | Error Code | Raised When |
 |------------|-------------|
 | `NO_WORKSPACES` | No workspaces found for the project |
 | `AMBIGUOUS_WORKSPACE` | Multiple workspaces found and none is marked as default |
 | `WORKSPACE_NOT_FOUND` | Specified workspace ID does not exist |
+| `ORGANIZATION_AMBIGUOUS` | An org-scoped business-context call could not auto-resolve the organization (active project absent from `/me` AND >1 accessible organization). `details` carries `project_id` and `available_organizations`. Pass `organization_id=N` explicitly to bypass auto-resolution. |
 
 ::: mixpanel_data.WorkspaceScopeError
     options:
