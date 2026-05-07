@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from mixpanel_data._internal.services.live_query import LiveQueryService
-from mixpanel_data.types import FlowsResult, SavedReportResult
+from mixpanel_headless._internal.services.live_query import LiveQueryService
+from mixpanel_headless.types import FlowsResult, SavedReportResult
 
 
 class TestQueryFlows:

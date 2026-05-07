@@ -12,11 +12,15 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from mixpanel_data._internal.services.discovery import DiscoveryService
-from mixpanel_data.exceptions import AuthenticationError, EventNotFoundError, QueryError
+from mixpanel_headless._internal.services.discovery import DiscoveryService
+from mixpanel_headless.exceptions import (
+    AuthenticationError,
+    EventNotFoundError,
+    QueryError,
+)
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
 
 @pytest.fixture
@@ -1334,7 +1338,7 @@ class TestListSubproperties:
 
     def test_infer_scalar_type_empty_raises(self) -> None:
         """``_infer_scalar_type([])`` raises ValueError instead of returning a phantom."""
-        from mixpanel_data._internal.services.discovery import _infer_scalar_type
+        from mixpanel_headless._internal.services.discovery import _infer_scalar_type
 
         with pytest.raises(ValueError, match="non-empty"):
             _infer_scalar_type([])
@@ -1343,7 +1347,7 @@ class TestListSubproperties:
         self,
     ) -> None:
         """``_infer_scalar_type([True, 1])`` returns ('string', True) — bool/int overlap."""
-        from mixpanel_data._internal.services.discovery import _infer_scalar_type
+        from mixpanel_headless._internal.services.discovery import _infer_scalar_type
 
         inferred, mixed = _infer_scalar_type([True, 1])
         assert inferred == "string"

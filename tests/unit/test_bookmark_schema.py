@@ -1,4 +1,4 @@
-"""Unit tests for ``src/mixpanel_data/_internal/bookmark_schema.py`` models.
+"""Unit tests for ``src/mixpanel_headless/_internal/bookmark_schema.py`` models.
 
 Each model in ``bookmark_schema.py`` mirrors a canonical Pydantic class
 in Mixpanel's upstream ``analytics`` repository under
@@ -40,7 +40,7 @@ class TestSortByColumnsConfig:
 
     def test_valid_minimal_passes(self) -> None:
         """Minimal valid config: sortBy=column + empty colSortAttrs."""
-        from mixpanel_data._internal.bookmark_schema import SortByColumnsConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByColumnsConfig
 
         m = SortByColumnsConfig.model_validate({"sortBy": "column", "colSortAttrs": []})
         assert m.sortBy == "column"
@@ -48,7 +48,7 @@ class TestSortByColumnsConfig:
 
     def test_with_value_field_passes(self) -> None:
         """``valueField`` is optional and accepted when provided."""
-        from mixpanel_data._internal.bookmark_schema import SortByColumnsConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByColumnsConfig
 
         m = SortByColumnsConfig.model_validate(
             {"sortBy": "column", "colSortAttrs": [], "valueField": "averageValue"}
@@ -57,7 +57,7 @@ class TestSortByColumnsConfig:
 
     def test_missing_col_sort_attrs_rejected(self) -> None:
         """``colSortAttrs`` is required."""
-        from mixpanel_data._internal.bookmark_schema import SortByColumnsConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByColumnsConfig
 
         with pytest.raises(PydanticValidationError) as exc:
             SortByColumnsConfig.model_validate({"sortBy": "column"})
@@ -66,14 +66,14 @@ class TestSortByColumnsConfig:
 
     def test_wrong_sort_by_rejected(self) -> None:
         """``sortBy`` must be the literal ``"column"`` for this variant."""
-        from mixpanel_data._internal.bookmark_schema import SortByColumnsConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByColumnsConfig
 
         with pytest.raises(PydanticValidationError):
             SortByColumnsConfig.model_validate({"sortBy": "value", "colSortAttrs": []})
 
     def test_legacy_sort_order_tolerated(self) -> None:
         """``sortOrder`` is ``Ignore[T]`` on this variant — tolerated, hidden."""
-        from mixpanel_data._internal.bookmark_schema import SortByColumnsConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByColumnsConfig
 
         m = SortByColumnsConfig.model_validate(
             {"sortBy": "column", "colSortAttrs": [], "sortOrder": "asc"}
@@ -83,7 +83,7 @@ class TestSortByColumnsConfig:
 
     def test_legacy_view_n_limit_tolerated(self) -> None:
         """``viewNLimit`` is ``Ignore[T]`` on this variant — tolerated, hidden."""
-        from mixpanel_data._internal.bookmark_schema import SortByColumnsConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByColumnsConfig
 
         m = SortByColumnsConfig.model_validate(
             {"sortBy": "column", "colSortAttrs": [], "viewNLimit": 50}
@@ -92,7 +92,7 @@ class TestSortByColumnsConfig:
 
     def test_unknown_field_rejected(self) -> None:
         """Truly unknown fields rejected (mirrors server ``extra='forbid'``)."""
-        from mixpanel_data._internal.bookmark_schema import SortByColumnsConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByColumnsConfig
 
         with pytest.raises(PydanticValidationError) as exc:
             SortByColumnsConfig.model_validate(
@@ -115,14 +115,14 @@ class TestSortByValueConfig:
 
     def test_valid_minimal_passes(self) -> None:
         """Minimal valid config: sortBy=value + empty colSortAttrs."""
-        from mixpanel_data._internal.bookmark_schema import SortByValueConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByValueConfig
 
         m = SortByValueConfig.model_validate({"sortBy": "value", "colSortAttrs": []})
         assert m.sortBy == "value"
 
     def test_missing_col_sort_attrs_rejected(self) -> None:
         """``colSortAttrs`` is required."""
-        from mixpanel_data._internal.bookmark_schema import SortByValueConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByValueConfig
 
         with pytest.raises(PydanticValidationError):
             SortByValueConfig.model_validate({"sortBy": "value"})
@@ -130,14 +130,14 @@ class TestSortByValueConfig:
     def test_sort_order_optional(self) -> None:
         """``sortOrder`` is optional on this variant (canonical:
         ``Optional[SortOrder] = None``)."""
-        from mixpanel_data._internal.bookmark_schema import SortByValueConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByValueConfig
 
         m = SortByValueConfig.model_validate({"sortBy": "value", "colSortAttrs": []})
         assert m.sortOrder is None
 
     def test_sort_order_when_provided_validated(self) -> None:
         """``sortOrder`` must be ``"asc"``/``"desc"`` when provided."""
-        from mixpanel_data._internal.bookmark_schema import SortByValueConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByValueConfig
 
         with pytest.raises(PydanticValidationError):
             SortByValueConfig.model_validate(
@@ -147,7 +147,7 @@ class TestSortByValueConfig:
     def test_deprecated_lift_comparison_value_accepted(self) -> None:
         """``"liftComparisonValue"`` is deprecated but still accepted as
         ``sortBy`` per canonical model."""
-        from mixpanel_data._internal.bookmark_schema import SortByValueConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByValueConfig
 
         m = SortByValueConfig.model_validate(
             {"sortBy": "liftComparisonValue", "colSortAttrs": []}
@@ -161,7 +161,7 @@ class TestSortByValueConfig:
         ``extra_forbidden`` at parse time rather than a server-side
         rejection at chart-render time.
         """
-        from mixpanel_data._internal.bookmark_schema import SortByValueConfig
+        from mixpanel_headless._internal.bookmark_schema import SortByValueConfig
 
         with pytest.raises(PydanticValidationError) as exc:
             SortByValueConfig.model_validate(
@@ -189,7 +189,7 @@ class TestFlatSortConfigs:
 
     def test_flat_label_valid(self) -> None:
         """Label variant: requires sortOrder, valueField/viewNLimit optional."""
-        from mixpanel_data._internal.bookmark_schema import FlatLabelSortConfig
+        from mixpanel_headless._internal.bookmark_schema import FlatLabelSortConfig
 
         m = FlatLabelSortConfig.model_validate({"sortBy": "label", "sortOrder": "asc"})
         assert m.sortBy == "label"
@@ -197,7 +197,7 @@ class TestFlatSortConfigs:
 
     def test_flat_value_valid(self) -> None:
         """Value variant: requires sortOrder, valueField optional."""
-        from mixpanel_data._internal.bookmark_schema import FlatValueSortConfig
+        from mixpanel_headless._internal.bookmark_schema import FlatValueSortConfig
 
         m = FlatValueSortConfig.model_validate(
             {
@@ -210,7 +210,7 @@ class TestFlatSortConfigs:
 
     def test_flat_label_missing_sort_order_rejected(self) -> None:
         """``sortOrder`` is required on ``FlatLabelSortConfig``."""
-        from mixpanel_data._internal.bookmark_schema import FlatLabelSortConfig
+        from mixpanel_headless._internal.bookmark_schema import FlatLabelSortConfig
 
         with pytest.raises(PydanticValidationError):
             FlatLabelSortConfig.model_validate({"sortBy": "label"})
@@ -226,7 +226,7 @@ class TestInsightsBookmarkSortConfig:
 
     def test_empty_passes(self) -> None:
         """Empty sorting block is valid (no per-chart-type overrides)."""
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             InsightsBookmarkSortConfig,
         )
 
@@ -235,7 +235,7 @@ class TestInsightsBookmarkSortConfig:
 
     def test_bar_with_columns_config_passes(self) -> None:
         """Canonical valid bar config: sortBy=column + colSortAttrs."""
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             InsightsBookmarkSortConfig,
         )
 
@@ -247,7 +247,7 @@ class TestInsightsBookmarkSortConfig:
 
     def test_funnel_steps_kebab_alias_accepted(self) -> None:
         """``funnel-steps`` (kebab-case wire) maps to ``funnel_steps`` field."""
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             InsightsBookmarkSortConfig,
         )
 
@@ -258,7 +258,7 @@ class TestInsightsBookmarkSortConfig:
 
     def test_retention_curve_kebab_alias_accepted(self) -> None:
         """``retention-curve`` kebab alias works."""
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             InsightsBookmarkSortConfig,
         )
 
@@ -269,7 +269,7 @@ class TestInsightsBookmarkSortConfig:
 
     def test_unknown_chart_type_rejected(self) -> None:
         """Unknown top-level keys (e.g. typo ``"barz"``) rejected."""
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             InsightsBookmarkSortConfig,
         )
 
@@ -285,7 +285,7 @@ class TestInsightsBookmarkSortConfig:
         ``colSortAttrs`` and carrying extra ``segmentation`` — produce
         four errors total via Pydantic's batch error collection.
         """
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             InsightsBookmarkSortConfig,
         )
 
@@ -327,13 +327,13 @@ class TestPydanticAdapter:
 
     def test_loc_to_jsonpath_top_level(self) -> None:
         """Single-segment loc renders as the segment name."""
-        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+        from mixpanel_headless._internal.bookmark_schema import _loc_to_jsonpath
 
         assert _loc_to_jsonpath(("sortBy",), "") == "sortBy"
 
     def test_loc_to_jsonpath_nested_with_index(self) -> None:
         """List-index ints attach to the previous segment as ``[i]``."""
-        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+        from mixpanel_headless._internal.bookmark_schema import _loc_to_jsonpath
 
         assert (
             _loc_to_jsonpath(("show", 0, "behavior", "type"), "sections")
@@ -342,13 +342,13 @@ class TestPydanticAdapter:
 
     def test_loc_to_jsonpath_with_prefix(self) -> None:
         """``prefix`` is prepended verbatim (no trailing dot needed)."""
-        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+        from mixpanel_headless._internal.bookmark_schema import _loc_to_jsonpath
 
         assert _loc_to_jsonpath(("bar", "sortBy"), "sorting") == "sorting.bar.sortBy"
 
     def test_loc_to_jsonpath_leading_index(self) -> None:
         """A leading int (no preceding segment) renders as ``[i]``."""
-        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+        from mixpanel_headless._internal.bookmark_schema import _loc_to_jsonpath
 
         assert _loc_to_jsonpath((0, "name"), "") == "[0].name"
 
@@ -359,20 +359,20 @@ class TestPydanticAdapter:
         name into ``loc`` for discriminated-union failures. Those names
         are internal model class names and shouldn't leak to callers.
         """
-        from mixpanel_data._internal.bookmark_schema import _loc_to_jsonpath
+        from mixpanel_headless._internal.bookmark_schema import _loc_to_jsonpath
 
         loc = ("line", "FlatLabelSortConfig", "sortOrder")
         assert _loc_to_jsonpath(loc, "sorting") == "sorting.line.sortOrder"
 
     def test_unmapped_error_falls_through_to_validation_error(self) -> None:
         """Default mapper returns ``"VALIDATION_ERROR"`` for unknown types."""
-        from mixpanel_data._internal.bookmark_schema import _default_code_mapper
+        from mixpanel_headless._internal.bookmark_schema import _default_code_mapper
 
         assert _default_code_mapper("totally_made_up_type", ()) == "VALIDATION_ERROR"
 
     def test_default_code_mapper_uses_default_map(self) -> None:
         """Known Pydantic error types map via ``_DEFAULT_CODE_MAP``."""
-        from mixpanel_data._internal.bookmark_schema import _default_code_mapper
+        from mixpanel_headless._internal.bookmark_schema import _default_code_mapper
 
         assert _default_code_mapper("missing", ()) == "B0_MISSING_FIELD"
         assert _default_code_mapper("extra_forbidden", ()) == "S3_UNKNOWN_FIELD"
@@ -380,7 +380,7 @@ class TestPydanticAdapter:
 
     def test_sorting_code_mapper_path_disambiguation(self) -> None:
         """Sorting mapper distinguishes ``missing`` codes by terminal field."""
-        from mixpanel_data._internal.bookmark_schema import _sorting_code_mapper
+        from mixpanel_headless._internal.bookmark_schema import _sorting_code_mapper
 
         assert (
             _sorting_code_mapper("missing", ("bar", "colSortAttrs"))
@@ -397,7 +397,7 @@ class TestPydanticAdapter:
 
     def test_validate_with_pydantic_uses_code_mapper_when_provided(self) -> None:
         """Custom ``code_mapper`` overrides the default mapping."""
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             SortByValueConfig,
             validate_with_pydantic,
         )
@@ -413,7 +413,7 @@ class TestPydanticAdapter:
 
     def test_validate_with_pydantic_path_prefix_prepended(self) -> None:
         """``path_prefix`` is prepended to every translated error path."""
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             SortByValueConfig,
             validate_with_pydantic,
         )
@@ -428,7 +428,7 @@ class TestPydanticAdapter:
 
     def test_validate_with_pydantic_no_errors_returns_empty(self) -> None:
         """Valid input produces an empty error list."""
-        from mixpanel_data._internal.bookmark_schema import (
+        from mixpanel_headless._internal.bookmark_schema import (
             FlatLabelSortConfig,
             validate_with_pydantic,
         )
@@ -466,7 +466,7 @@ class TestEnumParity:
         """``Literal`` args match the corresponding frozenset members."""
         from typing import get_args
 
-        from mixpanel_data._internal import bookmark_enums, bookmark_schema
+        from mixpanel_headless._internal import bookmark_enums, bookmark_schema
 
         literal_alias = getattr(bookmark_schema, literal_name)
         frozen_set = getattr(bookmark_enums, frozen_name)
@@ -482,7 +482,7 @@ class TestBookmarkTypeLiteral:
 
     def test_create_bookmark_params_rejects_unknown_type(self) -> None:
         """Typo in ``bookmark_type`` is rejected at construction time."""
-        from mixpanel_data.types import CreateBookmarkParams
+        from mixpanel_headless.types import CreateBookmarkParams
 
         with pytest.raises(PydanticValidationError) as exc:
             CreateBookmarkParams(
@@ -499,7 +499,7 @@ class TestBookmarkTypeLiteral:
 
     def test_create_bookmark_params_accepts_canonical_types(self) -> None:
         """All five canonical bookmark types are accepted."""
-        from mixpanel_data.types import CreateBookmarkParams
+        from mixpanel_headless.types import CreateBookmarkParams
 
         for bt in ("insights", "funnels", "retention", "flows", "user"):
             CreateBookmarkParams(name="X", bookmark_type=bt, params={})
@@ -512,28 +512,28 @@ class TestMathAndChartTypeTightening:
 
     def test_behavior_measurement_rejects_invalid_math(self) -> None:
         """``math='totl'`` (typo for ``'total'``) is rejected at parse time."""
-        from mixpanel_data._internal.bookmark_schema import BehaviorMeasurement
+        from mixpanel_headless._internal.bookmark_schema import BehaviorMeasurement
 
         with pytest.raises(PydanticValidationError):
             BehaviorMeasurement.model_validate({"math": "totl"})
 
     def test_behavior_measurement_accepts_valid_math(self) -> None:
         """A canonical math operator validates."""
-        from mixpanel_data._internal.bookmark_schema import BehaviorMeasurement
+        from mixpanel_headless._internal.bookmark_schema import BehaviorMeasurement
 
         m = BehaviorMeasurement.model_validate({"math": "total"})
         assert m.math == "total"
 
     def test_display_options_rejects_invalid_chart_type(self) -> None:
         """``chartType='lien'`` (typo for ``'line'``) is rejected at parse time."""
-        from mixpanel_data._internal.bookmark_schema import DisplayOptions
+        from mixpanel_headless._internal.bookmark_schema import DisplayOptions
 
         with pytest.raises(PydanticValidationError):
             DisplayOptions.model_validate({"chartType": "lien"})
 
     def test_display_options_accepts_valid_chart_type(self) -> None:
         """A canonical chart type validates."""
-        from mixpanel_data._internal.bookmark_schema import DisplayOptions
+        from mixpanel_headless._internal.bookmark_schema import DisplayOptions
 
         m = DisplayOptions.model_validate({"chartType": "bar"})
         assert m.chartType == "bar"
@@ -554,7 +554,7 @@ class TestFlowsBookmarkParams:
         also updating the corpus enumeration — forcing a deliberate
         choice rather than a silent regression.
         """
-        from mixpanel_data._internal.bookmark_schema import FlowsBookmarkParams
+        from mixpanel_headless._internal.bookmark_schema import FlowsBookmarkParams
 
         m = FlowsBookmarkParams.model_validate(
             {
@@ -568,7 +568,7 @@ class TestFlowsBookmarkParams:
 
     def test_flows_step_bool_op_rejects_invalid(self) -> None:
         """``FlowsBookmarkStep.bool_op`` is now a Literal — typos rejected."""
-        from mixpanel_data._internal.bookmark_schema import FlowsBookmarkStep
+        from mixpanel_headless._internal.bookmark_schema import FlowsBookmarkStep
 
         with pytest.raises(PydanticValidationError):
             FlowsBookmarkStep.model_validate({"event": "X", "bool_op": "annd"})

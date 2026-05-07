@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 @pytest.fixture(autouse=True)

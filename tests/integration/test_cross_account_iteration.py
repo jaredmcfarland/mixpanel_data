@@ -19,13 +19,13 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import (
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.workspace import Workspace
 
 _ME_PAYLOAD = {
     "results": {

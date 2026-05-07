@@ -16,13 +16,13 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     OAuthTokenAccount,
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.resolver import resolve_session
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.exceptions import ConfigError
+from mixpanel_headless._internal.auth.resolver import resolve_session
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.exceptions import ConfigError
 
 
 @pytest.fixture(autouse=True)
@@ -283,8 +283,8 @@ class TestCrossSourceOrdering:
         workspace: int | None = None,
     ) -> Any:
         """Construct a ``BridgeFile`` pointing at a fresh service account."""
-        from mixpanel_data._internal.auth.account import ServiceAccount
-        from mixpanel_data._internal.auth.bridge import BridgeFile
+        from mixpanel_headless._internal.auth.account import ServiceAccount
+        from mixpanel_headless._internal.auth.bridge import BridgeFile
 
         return BridgeFile(
             account=ServiceAccount(

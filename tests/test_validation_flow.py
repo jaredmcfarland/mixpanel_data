@@ -29,11 +29,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from mixpanel_data._internal.validation import (
+from mixpanel_headless._internal.validation import (
     validate_flow_args,
     validate_flow_bookmark,
 )
-from mixpanel_data.exceptions import ValidationError
+from mixpanel_headless.exceptions import ValidationError
 
 # =============================================================================
 # Helpers
@@ -1008,7 +1008,7 @@ class TestValidateFlowArgsTimeComparison:
 
     def test_time_comparison_set_produces_error(self) -> None:
         """validate_flow_args() with time_comparison set produces a validation error."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.relative("month")
         args = _valid_flow_args(time_comparison=tc)
@@ -1025,7 +1025,7 @@ class TestValidateFlowArgsTimeComparison:
 
     def test_time_comparison_error_path(self) -> None:
         """The FL_TIME_COMPARISON_NOT_SUPPORTED error path points to 'time_comparison'."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.relative("month")
         args = _valid_flow_args(time_comparison=tc)

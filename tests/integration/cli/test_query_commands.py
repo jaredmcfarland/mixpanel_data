@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
-from mixpanel_data.types import (
+from mixpanel_headless.cli.main import app
+from mixpanel_headless.types import (
     ActivityFeedResult,
     CohortInfo,
     EventCountsResult,
@@ -48,7 +48,7 @@ class TestQuerySegmentation:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -87,7 +87,7 @@ class TestQuerySegmentation:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -130,7 +130,7 @@ class TestQuerySegmentation:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -177,7 +177,7 @@ class TestQuerySegmentation:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -223,7 +223,7 @@ class TestQuerySegmentation:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -277,7 +277,7 @@ class TestQueryFunnel:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -317,7 +317,7 @@ class TestQueryFunnel:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -362,7 +362,7 @@ class TestQueryRetention:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -405,7 +405,7 @@ class TestQueryRetention:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -447,7 +447,7 @@ class TestQueryJql:
         mock_workspace.jql.return_value = JQLResult(_raw=[])
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -475,7 +475,7 @@ class TestQueryJql:
         mock_workspace.jql.return_value = JQLResult(_raw=[{"event": "Test"}])
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -508,7 +508,7 @@ class TestQueryJql:
         mock_workspace.jql.return_value = JQLResult(_raw=["Signup"])
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -562,7 +562,7 @@ class TestQueryJql:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -597,7 +597,7 @@ class TestQueryJql:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -626,7 +626,7 @@ class TestQueryJql:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -665,7 +665,7 @@ class TestQueryEventCounts:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -705,7 +705,7 @@ class TestQueryEventCounts:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -751,7 +751,7 @@ class TestQueryPropertyCounts:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -795,7 +795,7 @@ class TestQueryPropertyCounts:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -844,7 +844,7 @@ class TestQueryActivityFeed:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -886,7 +886,7 @@ class TestQueryActivityFeed:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -931,7 +931,7 @@ class TestQuerySavedReport:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -961,7 +961,7 @@ class TestQueryFrequency:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -999,7 +999,7 @@ class TestQueryFrequency:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -1045,7 +1045,7 @@ class TestQuerySegmentationNumeric:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -1088,7 +1088,7 @@ class TestQuerySegmentationNumeric:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -1135,7 +1135,7 @@ class TestQuerySegmentationSum:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -1175,7 +1175,7 @@ class TestQuerySegmentationSum:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -1221,7 +1221,7 @@ class TestQuerySegmentationAverage:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -1261,7 +1261,7 @@ class TestQuerySegmentationAverage:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -1306,7 +1306,7 @@ class TestQueryFlows:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -1334,7 +1334,7 @@ class TestQueryFlows:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(

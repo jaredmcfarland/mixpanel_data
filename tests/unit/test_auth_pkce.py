@@ -16,7 +16,7 @@ import base64
 import hashlib
 import re
 
-from mixpanel_data._internal.auth.pkce import PkceChallenge
+from mixpanel_headless._internal.auth.pkce import PkceChallenge
 
 # Base64url alphabet: A-Z, a-z, 0-9, -, _ (no padding =)
 BASE64URL_NO_PAD_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")

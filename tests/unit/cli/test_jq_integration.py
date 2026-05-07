@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ class TestInspectEventsWithJq:
         mock_workspace.events.return_value = ["Sign Up", "Login", "Purchase"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -81,7 +81,7 @@ class TestInspectEventsWithJq:
         mock_workspace.events.return_value = ["Event A", "Event B", "Event C"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -105,7 +105,7 @@ class TestInspectEventsWithJq:
         mock_workspace.events.return_value = ["A", "B", "C", "D", "E"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -132,7 +132,7 @@ class TestJqWithIncompatibleFormat:
         mock_workspace.events.return_value = ["Test"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -158,7 +158,7 @@ class TestJqWithIncompatibleFormat:
         mock_workspace.events.return_value = ["Test"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -180,7 +180,7 @@ class TestJqWithIncompatibleFormat:
         mock_workspace.events.return_value = ["Test"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -206,7 +206,7 @@ class TestJqSyntaxErrorsIntegration:
         mock_workspace.events.return_value = ["Test"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -231,7 +231,7 @@ class TestJqSyntaxErrorsIntegration:
         mock_workspace.events.return_value = ["Test"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -257,7 +257,7 @@ class TestJqWithJsonlFormat:
         mock_workspace.events.return_value = ["Event A", "Event B"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -285,7 +285,7 @@ class TestJqEmptyResultsIntegration:
         mock_workspace.events.return_value = ["A", "B"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -311,14 +311,14 @@ class TestInspectSubpropertiesWithJq:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """Discovered subproperties serialize to JSON via SubPropertyInfo.to_dict."""
-        from mixpanel_data import SubPropertyInfo
+        from mixpanel_headless import SubPropertyInfo
 
         mock_workspace.subproperties.return_value = [
             SubPropertyInfo(name="Brand", type="string", sample_values=("nike",)),
             SubPropertyInfo(name="Price", type="number", sample_values=(50, 80)),
         ]
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -350,7 +350,7 @@ class TestInspectSubpropertiesWithJq:
         """Empty result list serializes to an empty JSON array."""
         mock_workspace.subproperties.return_value = []
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -364,7 +364,7 @@ class TestInspectSubpropertiesWithJq:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """jq filter applied to projected output runs end-to-end."""
-        from mixpanel_data import SubPropertyInfo
+        from mixpanel_headless import SubPropertyInfo
 
         mock_workspace.subproperties.return_value = [
             SubPropertyInfo(name="Brand", type="string", sample_values=("nike",)),
@@ -372,7 +372,7 @@ class TestInspectSubpropertiesWithJq:
             SubPropertyInfo(name="Price", type="number", sample_values=(50,)),
         ]
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -395,13 +395,13 @@ class TestInspectSubpropertiesWithJq:
         self, cli_runner: CliRunner, mock_workspace: MagicMock
     ) -> None:
         """``--format table`` runs without crashing (table contents unsnapped)."""
-        from mixpanel_data import SubPropertyInfo
+        from mixpanel_headless import SubPropertyInfo
 
         mock_workspace.subproperties.return_value = [
             SubPropertyInfo(name="Brand", type="string", sample_values=("nike",)),
         ]
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -419,7 +419,7 @@ class TestInspectSubpropertiesWithJq:
         """``--sample-size`` is forwarded to Workspace.subproperties()."""
         mock_workspace.subproperties.return_value = []
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(

@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import (
+from mixpanel_headless import (
     Workspace,
 )
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.types import (
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.types import (
     ActivityFeedResult,
     EventCountsResult,
     FrequencyResult,
@@ -63,7 +63,7 @@ def mock_config_manager() -> MagicMock:
 @pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()
@@ -517,7 +517,7 @@ class TestDiscovery:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """Workspace.subproperties() delegates to DiscoveryService.list_subproperties()."""
-        from mixpanel_data.types import SubPropertyInfo
+        from mixpanel_headless.types import SubPropertyInfo
 
         ws = workspace_factory()
         try:
@@ -760,7 +760,7 @@ class TestContextManager:
 # TestTestCredentials removed in B1 (Fix 9): Workspace.test_credentials
 # (a static method backed by the legacy ConfigManager.resolve_credentials
 # chain) is gone. Per FR-038 the capability lives at
-# ``mp.accounts.test(NAME)`` — see ``src/mixpanel_data/accounts.py``.
+# ``mp.accounts.test(NAME)`` — see ``src/mixpanel_headless/accounts.py``.
 
 
 # =============================================================================
@@ -831,8 +831,8 @@ class TestWorkspacesMethod:
         mock_api_client: MagicMock,
     ) -> None:
         """``ws.workspaces()`` returns ``list[WorkspaceRef]`` built from MeWorkspaceInfo."""
-        from mixpanel_data._internal.auth.session import WorkspaceRef
-        from mixpanel_data._internal.me import MeWorkspaceInfo
+        from mixpanel_headless._internal.auth.session import WorkspaceRef
+        from mixpanel_headless._internal.me import MeWorkspaceInfo
 
         ws = Workspace(
             session=_TEST_SESSION,
@@ -884,8 +884,8 @@ class TestProjectsMethod:
         mock_api_client: MagicMock,
     ) -> None:
         """``ws.projects()`` returns ``list[Project]`` built from MeProjectInfo tuples."""
-        from mixpanel_data._internal.auth.session import Project
-        from mixpanel_data._internal.me import MeProjectInfo
+        from mixpanel_headless._internal.auth.session import Project
+        from mixpanel_headless._internal.me import MeProjectInfo
 
         ws = Workspace(
             session=_TEST_SESSION,

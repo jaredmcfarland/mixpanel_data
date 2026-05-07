@@ -9,7 +9,7 @@ from datetime import date, datetime
 
 from rich.table import Table
 
-from mixpanel_data.cli.formatters import (
+from mixpanel_headless.cli.formatters import (
     _json_serializer,
     format_csv,
     format_json,

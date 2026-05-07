@@ -33,9 +33,9 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data import Workspace
-from mixpanel_data.exceptions import MixpanelDataError, QueryError, ServerError
-from mixpanel_data.types import (
+from mixpanel_headless import Workspace
+from mixpanel_headless.exceptions import MixpanelDataError, QueryError, ServerError
+from mixpanel_headless.types import (
     AuditResponse,
     AuditViolation,
     BulkCreateSchemasParams,

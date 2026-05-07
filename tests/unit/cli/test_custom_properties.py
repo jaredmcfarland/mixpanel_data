@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import typer.testing
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 runner = typer.testing.CliRunner()
 
@@ -25,7 +25,7 @@ runner = typer.testing.CliRunner()
 class TestCustomPropertiesList:
     """Tests for mp custom-properties list."""
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful list returns JSON list of custom properties."""
         mock_ws = MagicMock()
@@ -42,7 +42,7 @@ class TestCustomPropertiesList:
         assert len(data) == 2
         assert data[0]["name"] == "Revenue Per User"
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_empty_list(self, mock_get_ws: MagicMock) -> None:
         """Empty list returns empty JSON array."""
         mock_ws = MagicMock()
@@ -57,7 +57,7 @@ class TestCustomPropertiesList:
 class TestCustomPropertiesGet:
     """Tests for mp custom-properties get."""
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_get_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful get returns JSON dict of custom property."""
         mock_ws = MagicMock()
@@ -76,7 +76,7 @@ class TestCustomPropertiesGet:
         assert data["id"] == "cp1"
         assert data["name"] == "Revenue Per User"
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_get_passes_id(self, mock_get_ws: MagicMock) -> None:
         """The property ID is passed to the workspace method."""
         mock_ws = MagicMock()
@@ -92,7 +92,7 @@ class TestCustomPropertiesGet:
 class TestCustomPropertiesCreate:
     """Tests for mp custom-properties create."""
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_create_with_formula_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful create with formula returns JSON."""
         mock_ws = MagicMock()
@@ -125,7 +125,7 @@ class TestCustomPropertiesCreate:
         data = json.loads(result.stdout)
         assert data["name"] == "Revenue Per User"
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_create_with_behavior_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful create with behavior specification returns JSON."""
         mock_ws = MagicMock()
@@ -156,7 +156,7 @@ class TestCustomPropertiesCreate:
         data = json.loads(result.stdout)
         assert data["name"] == "First Touch UTM"
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_create_invalid_composed_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --composed-properties exits with code 3."""
         mock_ws = MagicMock()
@@ -179,7 +179,7 @@ class TestCustomPropertiesCreate:
         )
         assert result.exit_code == 3
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_create_invalid_behavior_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --behavior exits with code 3."""
         mock_ws = MagicMock()
@@ -204,7 +204,7 @@ class TestCustomPropertiesCreate:
 class TestCustomPropertiesUpdate:
     """Tests for mp custom-properties update."""
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful update returns JSON."""
         mock_ws = MagicMock()
@@ -221,7 +221,7 @@ class TestCustomPropertiesUpdate:
         data = json.loads(result.stdout)
         assert data["name"] == "Updated Name"
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_update_with_visibility(self, mock_get_ws: MagicMock) -> None:
         """Update with --no-is-visible passes is_visible=False."""
         mock_ws = MagicMock()
@@ -236,7 +236,7 @@ class TestCustomPropertiesUpdate:
         )
         assert result.exit_code == 0
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_update_invalid_composed_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --composed-properties on update exits with code 3."""
         mock_ws = MagicMock()
@@ -259,7 +259,7 @@ class TestCustomPropertiesUpdate:
 class TestCustomPropertiesDelete:
     """Tests for mp custom-properties delete."""
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_delete_succeeds(self, mock_get_ws: MagicMock) -> None:
         """Successful delete exits with code 0."""
         mock_ws = MagicMock()
@@ -274,7 +274,7 @@ class TestCustomPropertiesDelete:
 class TestCustomPropertiesValidate:
     """Tests for mp custom-properties validate."""
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_validate_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful validate returns JSON result."""
         mock_ws = MagicMock()
@@ -301,7 +301,7 @@ class TestCustomPropertiesValidate:
         data = json.loads(result.stdout)
         assert data["valid"] is True
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_validate_with_behavior(self, mock_get_ws: MagicMock) -> None:
         """Validate with --behavior passes behavior to workspace."""
         mock_ws = MagicMock()
@@ -324,7 +324,7 @@ class TestCustomPropertiesValidate:
         )
         assert result.exit_code == 0
 
-    @patch("mixpanel_data.cli.commands.custom_properties.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_properties.get_workspace")
     def test_validate_invalid_behavior_json_exits_3(
         self, mock_get_ws: MagicMock
     ) -> None:

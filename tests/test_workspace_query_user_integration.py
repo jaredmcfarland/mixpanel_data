@@ -26,16 +26,16 @@ import pandas as pd
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import (
+from mixpanel_headless import (
     CohortCriteria,
     CohortDefinition,
     Filter,
     Workspace,
 )
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.exceptions import BookmarkValidationError
-from mixpanel_data.types import ProfilePageResult, UserQueryResult
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.exceptions import BookmarkValidationError
+from mixpanel_headless.types import ProfilePageResult, UserQueryResult
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -139,7 +139,7 @@ RAW_PROFILE_NO_PLAN = _make_raw_profile(
 @pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mixpanel_data"
+name = "mixpanel-headless"
 dynamic = ["version"]
 description = "Python library for working with Mixpanel analytics data, designed for AI coding agents"
 readme = "README.md"
@@ -60,17 +60,17 @@ docs = [
 notebook = ["ipykernel>=6.0"]
 
 [tool.hatch.version]
-path = "src/mixpanel_data/__init__.py"
+path = "src/mixpanel_headless/__init__.py"
 
 [project.scripts]
-mp = "mixpanel_data.cli.main:app"
+mp = "mixpanel_headless.cli.main:app"
 
 [project.urls]
-Homepage = "https://github.com/jaredmcfarland/mixpanel_data"
-Repository = "https://github.com/jaredmcfarland/mixpanel_data"
+Homepage = "https://mixpanel.github.io/mixpanel-headless/"
+Repository = "https://github.com/mixpanel/mixpanel-headless"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mixpanel_data"]
+packages = ["src/mixpanel_headless"]
 
 [tool.hatch.build.targets.wheel.shared-data]
 "man" = "share/man/man1"
@@ -97,7 +97,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["mixpanel_data"]
+known-first-party = ["mixpanel_headless"]
 
 [tool.ruff.lint.per-file-ignores]
 # Test files routinely accept pytest fixtures as parameters whose only role
@@ -110,7 +110,7 @@ known-first-party = ["mixpanel_data"]
 # even when the body doesn't reference it. Stub commands (Phase-deferred
 # functionality) similarly accept their final-API arg shape. Both shapes
 # are deliberate, not bugs.
-"src/mixpanel_data/cli/commands/*.py" = ["ARG001"]
+"src/mixpanel_headless/cli/commands/*.py" = ["ARG001"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -142,7 +142,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src/mixpanel_data"]
+source = ["src/mixpanel_headless"]
 branch = true
 
 [tool.coverage.report]
@@ -153,7 +153,7 @@ exclude_lines = [
 ]
 
 [tool.mutmut]
-paths_to_mutate = ["src/mixpanel_data/"]
+paths_to_mutate = ["src/mixpanel_headless/"]
 pytest_add_cli_args_test_selection = ["tests/"]
 
 # Docstring coverage. Thresholds set just below the current measurement to

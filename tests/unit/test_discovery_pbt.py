@@ -19,7 +19,7 @@ from typing import Any, get_args
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.services.discovery import (
+from mixpanel_headless._internal.services.discovery import (
     _DATE_PATTERN,
     _infer_subproperties,
     _parse_bookmark_info,
@@ -27,7 +27,7 @@ from mixpanel_data._internal.services.discovery import (
     _parse_lexicon_property,
     _parse_lexicon_schema,
 )
-from mixpanel_data.types import BookmarkType
+from mixpanel_headless.types import BookmarkType
 
 # =============================================================================
 # Custom Strategies
@@ -68,7 +68,7 @@ iso_timestamps = st.datetimes().map(lambda dt: dt.isoformat())
 
 
 @st.composite
-def com_mixpanel_data(draw: st.DrawFn) -> dict[str, Any]:
+def com_mixpanel_headless(draw: st.DrawFn) -> dict[str, Any]:
     """Generate com.mixpanel metadata as returned by Mixpanel API.
 
     The API returns metadata in this format:
@@ -126,7 +126,7 @@ def lexicon_metadata_input(draw: st.DrawFn) -> dict[str, Any] | None:
         )
     else:
         # Dict with com.mixpanel key
-        mp_data = draw(com_mixpanel_data())
+        mp_data = draw(com_mixpanel_headless())
         other_data = draw(
             st.dictionaries(
                 st.text().filter(lambda s: s != "com.mixpanel"),
@@ -143,7 +143,7 @@ def valid_lexicon_metadata_input(draw: st.DrawFn) -> dict[str, Any]:
 
     Must have 'com.mixpanel' key with non-empty content.
     """
-    mp_data = draw(com_mixpanel_data())
+    mp_data = draw(com_mixpanel_headless())
     # Ensure at least one field is present
     if not mp_data:
         mp_data["displayName"] = draw(st.text())

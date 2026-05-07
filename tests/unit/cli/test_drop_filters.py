@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import typer.testing
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 runner = typer.testing.CliRunner()
 
@@ -24,7 +24,7 @@ runner = typer.testing.CliRunner()
 class TestDropFiltersList:
     """Tests for mp drop-filters list."""
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful list returns JSON list of drop filters."""
         mock_ws = MagicMock()
@@ -45,7 +45,7 @@ class TestDropFiltersList:
         assert len(data) == 2
         assert data[0]["event_name"] == "PageView"
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_empty_list(self, mock_get_ws: MagicMock) -> None:
         """Empty list returns empty JSON array."""
         mock_ws = MagicMock()
@@ -61,7 +61,7 @@ class TestDropFiltersList:
 class TestDropFiltersCreate:
     """Tests for mp drop-filters create."""
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_create_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful create returns JSON list of drop filters."""
         mock_ws = MagicMock()
@@ -88,7 +88,7 @@ class TestDropFiltersCreate:
         data = json.loads(result.stdout)
         assert isinstance(data, list)
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_create_invalid_filters_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --filters exits with code 3."""
         mock_ws = MagicMock()
@@ -111,7 +111,7 @@ class TestDropFiltersCreate:
 class TestDropFiltersUpdate:
     """Tests for mp drop-filters update."""
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful update returns JSON list of drop filters."""
         mock_ws = MagicMock()
@@ -130,7 +130,7 @@ class TestDropFiltersUpdate:
         data = json.loads(result.stdout)
         assert isinstance(data, list)
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_update_with_new_event_name(self, mock_get_ws: MagicMock) -> None:
         """Update with --event-name passes it to the workspace."""
         mock_ws = MagicMock()
@@ -145,7 +145,7 @@ class TestDropFiltersUpdate:
         )
         assert result.exit_code == 0
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_update_invalid_filters_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --filters on update exits with code 3."""
         mock_ws = MagicMock()
@@ -161,7 +161,7 @@ class TestDropFiltersUpdate:
 class TestDropFiltersDelete:
     """Tests for mp drop-filters delete."""
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_delete_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful delete returns the remaining drop filters as JSON."""
         mock_ws = MagicMock()
@@ -179,7 +179,7 @@ class TestDropFiltersDelete:
 class TestDropFiltersLimits:
     """Tests for mp drop-filters limits."""
 
-    @patch("mixpanel_data.cli.commands.drop_filters.get_workspace")
+    @patch("mixpanel_headless.cli.commands.drop_filters.get_workspace")
     def test_limits_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful limits returns JSON with count and max."""
         mock_ws = MagicMock()

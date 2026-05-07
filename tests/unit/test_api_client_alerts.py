@@ -15,8 +15,8 @@ from typing import Any
 import httpx
 import pytest
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.session import Session
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.session import Session
 from tests.conftest import make_session
 
 # =============================================================================

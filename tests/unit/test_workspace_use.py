@@ -16,10 +16,10 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import accounts as accounts_ns
-from mixpanel_data import targets as targets_ns
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless import accounts as accounts_ns
+from mixpanel_headless import targets as targets_ns
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.workspace import Workspace
 
 
 @pytest.fixture(autouse=True)
@@ -121,7 +121,7 @@ class TestUseAccount:
         project is provided, the call MUST fail loudly with the standard
         four-paths-to-fix message.
         """
-        from mixpanel_data.exceptions import ConfigError
+        from mixpanel_headless.exceptions import ConfigError
 
         accounts_ns.add("browser_only", type="oauth_browser", region="us")
         ws = Workspace(account="team", project="3018488")
@@ -396,7 +396,7 @@ class TestUseAccountWorkspaceEnvValidation:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """``MP_WORKSPACE_ID=-1`` must raise on account swap, not silently clear."""
-        from mixpanel_data.exceptions import ConfigError
+        from mixpanel_headless.exceptions import ConfigError
 
         ws = Workspace(account="team", project="3713224")
         monkeypatch.setenv("MP_WORKSPACE_ID", "-1")
@@ -409,7 +409,7 @@ class TestUseAccountWorkspaceEnvValidation:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """``MP_WORKSPACE_ID=abc`` must raise on account swap."""
-        from mixpanel_data.exceptions import ConfigError
+        from mixpanel_headless.exceptions import ConfigError
 
         ws = Workspace(account="team", project="3713224")
         monkeypatch.setenv("MP_WORKSPACE_ID", "abc")

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 class TestAlertsList:
@@ -17,7 +17,7 @@ class TestAlertsList:
     def test_list_json(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test alerts list in JSON format."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "list", "--format", "json"])
@@ -31,7 +31,7 @@ class TestAlertsList:
         """Test alerts list with no results."""
         mock_workspace.list_alerts.return_value = []
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "list", "--format", "json"])
@@ -44,7 +44,7 @@ class TestAlertsList:
     ) -> None:
         """Test alerts list with --bookmark-id filter."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "list", "--bookmark-id", "42"])
@@ -56,7 +56,7 @@ class TestAlertsList:
     ) -> None:
         """Test alerts list with --skip-user-filter flag."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "list", "--skip-user-filter"])
@@ -72,7 +72,7 @@ class TestAlertsCreate:
     ) -> None:
         """Test creating an alert with required options."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -99,7 +99,7 @@ class TestAlertsCreate:
     ) -> None:
         """Test creating an alert with invalid condition JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -126,7 +126,7 @@ class TestAlertsGet:
     def test_get(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting a single alert by ID."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "get", "1"])
@@ -144,7 +144,7 @@ class TestAlertsUpdate:
     ) -> None:
         """Test updating an alert name."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -160,7 +160,7 @@ class TestAlertsUpdate:
     ) -> None:
         """Test updating with invalid condition JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -176,7 +176,7 @@ class TestAlertsDelete:
     def test_delete(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test deleting an alert."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "delete", "1"])
@@ -192,7 +192,7 @@ class TestAlertsBulkDelete:
     ) -> None:
         """Test bulk-deleting alerts."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "bulk-delete", "--ids", "1,2,3"])
@@ -204,7 +204,7 @@ class TestAlertsBulkDelete:
     ) -> None:
         """Test bulk-delete with invalid IDs fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -217,7 +217,7 @@ class TestAlertsBulkDelete:
     ) -> None:
         """Test bulk-delete with empty IDs fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "bulk-delete", "--ids", ","])
@@ -230,7 +230,7 @@ class TestAlertsCount:
     def test_count(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting alert count."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "count"])
@@ -244,7 +244,7 @@ class TestAlertsCount:
     ) -> None:
         """Test getting alert count with --type filter."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "count", "--type", "anomaly"])
@@ -258,7 +258,7 @@ class TestAlertsHistory:
     def test_history(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting alert history."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["alerts", "history", "1"])
@@ -272,7 +272,7 @@ class TestAlertsHistory:
     ) -> None:
         """Test getting alert history with pagination options."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -299,7 +299,7 @@ class TestAlertsTest:
     def test_test_alert(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test sending a test alert."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -328,7 +328,7 @@ class TestAlertsScreenshot:
     def test_screenshot(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting alert screenshot URL."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -346,7 +346,7 @@ class TestAlertsValidate:
     def test_validate(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test validating alerts for a bookmark."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -371,7 +371,7 @@ class TestAlertsValidate:
     ) -> None:
         """Test validate with invalid bookmark-params JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -398,7 +398,7 @@ class TestAlertsCreateEdgeCases:
     ) -> None:
         """Test creating an alert with invalid subscriptions JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -425,7 +425,7 @@ class TestAlertsCreateEdgeCases:
     ) -> None:
         """Test creating an alert with invalid notification-windows JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -452,7 +452,7 @@ class TestAlertsCreateEdgeCases:
     ) -> None:
         """Test creating an alert with subscriptions JSON."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -479,7 +479,7 @@ class TestAlertsCreateEdgeCases:
     ) -> None:
         """Test creating a paused alert."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -511,7 +511,7 @@ class TestAlertsUpdateEdgeCases:
     ) -> None:
         """Test updating multiple fields at once."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -544,7 +544,7 @@ class TestAlertsUpdateEdgeCases:
     ) -> None:
         """Test update with invalid subscriptions JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -558,7 +558,7 @@ class TestAlertsUpdateEdgeCases:
     ) -> None:
         """Test update with invalid notification-windows JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -576,7 +576,7 @@ class TestAlertsTestEdgeCases:
     ) -> None:
         """Test alert test with invalid condition JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -601,7 +601,7 @@ class TestAlertsTestEdgeCases:
     ) -> None:
         """Test alert test with subscriptions."""
         with patch(
-            "mixpanel_data.cli.commands.alerts.get_workspace",
+            "mixpanel_headless.cli.commands.alerts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(

@@ -20,7 +20,7 @@ import networkx as nx
 import pandas as pd
 import pytest
 
-from mixpanel_data.types import Filter, FlowQueryResult, FlowStep, _safe_int
+from mixpanel_headless.types import Filter, FlowQueryResult, FlowStep, _safe_int
 
 # =============================================================================
 # T012: FlowStep
@@ -710,13 +710,13 @@ class TestRenameVerification:
 
     def test_query_flows_attribute_does_not_exist(self) -> None:
         """Workspace must not have a query_flows attribute after rename."""
-        from mixpanel_data import Workspace
+        from mixpanel_headless import Workspace
 
         assert not hasattr(Workspace, "query_flows")
 
     def test_query_saved_flows_exists(self) -> None:
         """Workspace must have query_saved_flows method after rename."""
-        from mixpanel_data import Workspace
+        from mixpanel_headless import Workspace
 
         assert hasattr(Workspace, "query_saved_flows")
         assert callable(Workspace.query_saved_flows)

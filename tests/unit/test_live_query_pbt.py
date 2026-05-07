@@ -15,7 +15,7 @@ from typing import Any
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.services.live_query import (
+from mixpanel_headless._internal.services.live_query import (
     _transform_funnel,
     _transform_retention,
 )

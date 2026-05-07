@@ -19,16 +19,16 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.validation import (
+from mixpanel_headless import Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless._internal.validation import (
     validate_group_by_args,
     validate_query_args,
     validate_time_args,
 )
-from mixpanel_data.exceptions import BookmarkValidationError
-from mixpanel_data.types import GroupBy
+from mixpanel_headless.exceptions import BookmarkValidationError
+from mixpanel_headless.types import GroupBy
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -289,14 +289,14 @@ class TestPerMetricValidation:
 
     def test_v13_metric_property_math_requires_property(self) -> None:
         """V13: Metric with property math requires property (caught at construction)."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         with pytest.raises(ValueError, match="requires a property"):
             Metric("Purchase", math="average")
 
     def test_v14_metric_non_property_math_rejects_property(self, ws: Workspace) -> None:
         """V14: Metric with non-property math rejects property."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         with pytest.raises(BookmarkValidationError, match="property is only valid"):
             ws.query(Metric("Login", math="unique", property="amount"))
@@ -305,7 +305,7 @@ class TestPerMetricValidation:
         """V14: Metric with math='total' + property is allowed (sum semantics)."""
         from unittest.mock import MagicMock
 
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         mock_api_client = MagicMock()
         mock_api_client.insights_query.return_value = {
@@ -323,14 +323,14 @@ class TestPerMetricValidation:
 
     def test_metric_per_user_with_dau(self, ws: Workspace) -> None:
         """Per-Metric per_user incompatible with DAU."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         with pytest.raises(BookmarkValidationError, match="per_user is incompatible"):
             ws.query(Metric("Login", math="dau", per_user="average"))
 
     def test_metric_per_user_requires_property(self, ws: Workspace) -> None:
         """Per-Metric per_user requires property to be set."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         with pytest.raises(BookmarkValidationError, match="per_user requires property"):
             ws.query(Metric("Login", math="total", per_user="average"))
@@ -407,7 +407,7 @@ class TestGroupByValidation:
 
     def test_v11_bucket_min_requires_bucket_size(self, ws: Workspace) -> None:
         """V11: bucket_min requires bucket_size."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         with pytest.raises(
             BookmarkValidationError, match="bucket_min/bucket_max require bucket_size"
@@ -416,7 +416,7 @@ class TestGroupByValidation:
 
     def test_v11_bucket_max_requires_bucket_size(self, ws: Workspace) -> None:
         """V11: bucket_max requires bucket_size."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         with pytest.raises(
             BookmarkValidationError, match="bucket_min/bucket_max require bucket_size"
@@ -425,21 +425,21 @@ class TestGroupByValidation:
 
     def test_v12_bucket_size_must_be_positive(self) -> None:
         """V12: bucket_size must be positive (caught at construction)."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         with pytest.raises(ValueError, match="bucket_size must be positive"):
             GroupBy("amount", bucket_size=0)
 
     def test_v12_bucket_size_negative(self) -> None:
         """V12: Negative bucket_size is caught at construction."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         with pytest.raises(ValueError, match="bucket_size must be positive"):
             GroupBy("amount", bucket_size=-10)
 
     def test_bucket_size_requires_numeric_type(self, ws: Workspace) -> None:
         """bucket_size with default string property_type returns validation error."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         with pytest.raises(
             BookmarkValidationError, match="bucket_size requires property_type='number'"
@@ -450,7 +450,7 @@ class TestGroupByValidation:
         """bucket_size with property_type='number' passes validation."""
         from unittest.mock import MagicMock
 
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         mock_api_client = MagicMock()
         mock_api_client.insights_query.return_value = {
@@ -477,7 +477,7 @@ class TestGroupByValidation:
 
     def test_bucket_size_requires_min_max(self, ws: Workspace) -> None:
         """bucket_size without bucket_min/bucket_max returns validation error."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         with pytest.raises(BookmarkValidationError, match="bucket_size requires both"):
             ws.query(
@@ -523,7 +523,7 @@ class TestFormulaInListValidation:
 
     def test_formula_alone_raises(self, ws: Workspace) -> None:
         """A Formula as the sole argument returns validation error."""
-        from mixpanel_data import Formula
+        from mixpanel_headless import Formula
 
         with pytest.raises(
             BookmarkValidationError, match="Formula cannot be the only item"
@@ -532,7 +532,7 @@ class TestFormulaInListValidation:
 
     def test_formula_with_top_level_raises(self, ws: Workspace) -> None:
         """Mixing Formula in list with top-level formula returns validation error."""
-        from mixpanel_data import Formula, Metric
+        from mixpanel_headless import Formula, Metric
 
         with pytest.raises(BookmarkValidationError, match="Cannot combine top-level"):
             ws.query(
@@ -542,7 +542,7 @@ class TestFormulaInListValidation:
 
     def test_formula_in_list_requires_two_events(self, ws: Workspace) -> None:
         """Formula in list with only 1 event triggers V4."""
-        from mixpanel_data import Formula
+        from mixpanel_headless import Formula
 
         with pytest.raises(
             BookmarkValidationError, match="formula requires at least 2 events"
@@ -598,7 +598,7 @@ class TestPercentileValidation:
 
     def test_v26_metric_percentile_requires_value(self) -> None:
         """V26: Metric with math='percentile' requires percentile_value (caught at construction)."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         with pytest.raises(ValueError, match="percentile_value"):
             Metric("Login", math="percentile", property="duration")
@@ -634,7 +634,7 @@ class TestHistogramValidation:
 
     def test_v27_metric_histogram_requires_per_user(self, ws: Workspace) -> None:
         """V27: Metric(math='histogram') requires per_user."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         with pytest.raises(BookmarkValidationError, match="requires per_user"):
             ws.build_params(Metric("Purchase", math="histogram", property="amount"))

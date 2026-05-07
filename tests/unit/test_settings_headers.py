@@ -20,11 +20,11 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.resolver import resolve_session
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.config import ConfigManager
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.resolver import resolve_session
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless._internal.config import ConfigManager
 
 
 @pytest.fixture(autouse=True)

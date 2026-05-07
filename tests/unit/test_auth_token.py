@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mixpanel_data._internal.auth.token import (
+from mixpanel_headless._internal.auth.token import (
     OAuthClientInfo,
     OAuthTokens,
     token_payload_bytes,
@@ -421,7 +421,7 @@ class TestOAuthTokensSecretRedactionExtended:
         (not raw tokens) produces a clean serializable dict. This is a positive
         test that error construction patterns do not leak secrets.
         """
-        from mixpanel_data.exceptions import OAuthError
+        from mixpanel_headless.exceptions import OAuthError
 
         error = OAuthError(
             message="Token refresh failed",

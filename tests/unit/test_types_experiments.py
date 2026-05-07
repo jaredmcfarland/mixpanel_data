@@ -1,4 +1,4 @@
-"""Tests for Phase 025 Experiment types in mixpanel_data.types.
+"""Tests for Phase 025 Experiment types in mixpanel_headless.types.
 
 Tests ExperimentStatus enum, ExperimentCreator, Experiment, and all
 experiment param types including frozen immutability, extra field
@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     CreateExperimentParams,
     DuplicateExperimentParams,
     Experiment,

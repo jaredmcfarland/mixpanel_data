@@ -20,12 +20,12 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.validation import validate_bookmark
-from mixpanel_data.exceptions import BookmarkValidationError, ValidationError
-from mixpanel_data.types import (
+from mixpanel_headless import Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless._internal.validation import validate_bookmark
+from mixpanel_headless.exceptions import BookmarkValidationError, ValidationError
+from mixpanel_headless.types import (
     CohortBreakdown,
     CohortCriteria,
     CohortDefinition,

@@ -37,7 +37,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     BulkCreateSchemasParams,
     BulkCreateSchemasResponse,
     BulkPatchResult,

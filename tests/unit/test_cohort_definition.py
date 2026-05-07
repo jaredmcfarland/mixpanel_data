@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     _FILTER_TO_SELECTOR_SUPPORTED,
     _PROPERTY_OPERATOR_MAP,
     CohortCriteria,

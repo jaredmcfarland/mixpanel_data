@@ -13,10 +13,10 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.types import BookmarkInfo
+from mixpanel_headless import Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.types import BookmarkInfo
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -34,7 +34,7 @@ _TEST_SESSION = Session(
 @pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()
@@ -215,7 +215,7 @@ class TestQuerySavedReport:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_report() should delegate to LiveQueryService."""
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         ws = workspace_factory()
         try:
@@ -247,7 +247,7 @@ class TestQuerySavedReport:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_report() should return insights report_type for standard reports."""
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         ws = workspace_factory()
         try:
@@ -273,7 +273,7 @@ class TestQuerySavedReport:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_report() should return retention report_type for retention reports."""
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         ws = workspace_factory()
         try:
@@ -299,7 +299,7 @@ class TestQuerySavedReport:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_report() should return funnel report_type for funnel reports."""
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         ws = workspace_factory()
         try:
@@ -325,7 +325,7 @@ class TestQuerySavedReport:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_report() should return SavedReportResult instance."""
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         ws = workspace_factory()
         try:
@@ -351,7 +351,7 @@ class TestQuerySavedReport:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_report() should pass bookmark_type to service."""
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         ws = workspace_factory()
         try:
@@ -382,7 +382,7 @@ class TestQuerySavedReport:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_report() should pass from_date/to_date to service."""
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         ws = workspace_factory()
         try:
@@ -418,7 +418,7 @@ class TestQuerySavedReport:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_report(bookmark_id) should work without new params."""
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         ws = workspace_factory()
         try:
@@ -455,7 +455,7 @@ class TestQueryFlows:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_flows() should delegate to LiveQueryService."""
-        from mixpanel_data.types import FlowsResult
+        from mixpanel_headless.types import FlowsResult
 
         ws = workspace_factory()
         try:
@@ -481,7 +481,7 @@ class TestQueryFlows:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_flows() should return FlowsResult instance."""
-        from mixpanel_data.types import FlowsResult
+        from mixpanel_headless.types import FlowsResult
 
         ws = workspace_factory()
         try:
@@ -503,7 +503,7 @@ class TestQueryFlows:
         workspace_factory: Callable[..., Workspace],
     ) -> None:
         """query_saved_flows() should return steps and breakdowns data."""
-        from mixpanel_data.types import FlowsResult
+        from mixpanel_headless.types import FlowsResult
 
         ws = workspace_factory()
         try:

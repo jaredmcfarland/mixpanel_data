@@ -3,7 +3,7 @@
 Tests the enhanced DataFrame conversion with real query results from January 2023.
 """
 
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # Create workspace with sinkapp-prod credentials
 ws = mp.Workspace(account="sinkapp-prod")

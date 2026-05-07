@@ -33,7 +33,7 @@ from unittest.mock import MagicMock, patch
 
 import typer.testing
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 runner = typer.testing.CliRunner()
 
@@ -46,7 +46,7 @@ runner = typer.testing.CliRunner()
 class TestEnforcementGet:
     """Tests for mp lexicon enforcement get."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful get returns JSON dict of enforcement settings."""
         mock_ws = MagicMock()
@@ -64,7 +64,7 @@ class TestEnforcementGet:
         assert data["ruleEvent"] == "Warn and Accept"
         assert data["enabled"] is True
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_passes_fields_filter(self, mock_get_ws: MagicMock) -> None:
         """Passing --fields includes it in the workspace call."""
         mock_ws = MagicMock()
@@ -84,7 +84,7 @@ class TestEnforcementGet:
 class TestEnforcementInit:
     """Tests for mp lexicon enforcement init."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_init_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful init returns JSON dict."""
         mock_ws = MagicMock()
@@ -107,7 +107,7 @@ class TestEnforcementInit:
 class TestEnforcementUpdate:
     """Tests for mp lexicon enforcement update."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful update returns JSON dict."""
         mock_ws = MagicMock()
@@ -126,7 +126,7 @@ class TestEnforcementUpdate:
         data = json.loads(result.stdout)
         assert data["ruleEvent"] == "Reject"
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_update_invalid_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --body exits with code 3 (INVALID_ARGS)."""
         mock_ws = MagicMock()
@@ -142,7 +142,7 @@ class TestEnforcementUpdate:
 class TestEnforcementReplace:
     """Tests for mp lexicon enforcement replace."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_replace_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful replace returns JSON dict."""
         mock_ws = MagicMock()
@@ -170,7 +170,7 @@ class TestEnforcementReplace:
         assert data["ruleEvent"] == "Block"
         assert data["enabled"] is False
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_replace_invalid_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --body exits with code 3 (INVALID_ARGS)."""
         mock_ws = MagicMock()
@@ -186,7 +186,7 @@ class TestEnforcementReplace:
 class TestEnforcementDelete:
     """Tests for mp lexicon enforcement delete."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_delete_confirms_and_succeeds(self, mock_get_ws: MagicMock) -> None:
         """Successful delete prompts for confirmation and exits with code 0."""
         mock_ws = MagicMock()
@@ -197,7 +197,7 @@ class TestEnforcementDelete:
         assert result.exit_code == 0
         mock_ws.delete_schema_enforcement.assert_called_once()
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_delete_aborts_on_no(self, mock_get_ws: MagicMock) -> None:
         """Delete aborts when user declines confirmation."""
         mock_ws = MagicMock()
@@ -216,7 +216,7 @@ class TestEnforcementDelete:
 class TestLexiconAudit:
     """Tests for mp lexicon audit."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_audit_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful audit returns JSON with violations and computed_at."""
         mock_ws = MagicMock()
@@ -246,7 +246,7 @@ class TestLexiconAudit:
         assert data["violations"][0]["count"] == 5
         assert data["computed_at"] == "2026-04-01T12:00:00Z"
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_audit_calls_run_audit(self, mock_get_ws: MagicMock) -> None:
         """Without --events-only, calls run_audit on the workspace."""
         mock_ws = MagicMock()
@@ -258,7 +258,7 @@ class TestLexiconAudit:
         runner.invoke(app, ["lexicon", "audit"])
         mock_ws.run_audit.assert_called_once()
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_audit_events_only(self, mock_get_ws: MagicMock) -> None:
         """With --events-only, calls run_audit_events_only."""
         mock_ws = MagicMock()
@@ -280,7 +280,7 @@ class TestLexiconAudit:
 class TestAnomaliesList:
     """Tests for mp lexicon anomalies list."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful list returns JSON list of anomalies."""
         mock_ws = MagicMock()
@@ -311,7 +311,7 @@ class TestAnomaliesList:
         assert len(data) == 2
         assert data[0]["status"] == "open"
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_passes_status_filter(self, mock_get_ws: MagicMock) -> None:
         """Passing --status includes it in query_params."""
         mock_ws = MagicMock()
@@ -327,7 +327,7 @@ class TestAnomaliesList:
 class TestAnomaliesUpdate:
     """Tests for mp lexicon anomalies update."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful update returns JSON dict."""
         mock_ws = MagicMock()
@@ -362,7 +362,7 @@ class TestAnomaliesUpdate:
 class TestAnomaliesBulkUpdate:
     """Tests for mp lexicon anomalies bulk-update."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_bulk_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful bulk update returns JSON dict."""
         mock_ws = MagicMock()
@@ -390,7 +390,7 @@ class TestAnomaliesBulkUpdate:
         data = json.loads(result.stdout)
         assert data["updated"] == 3
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_bulk_update_invalid_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --body exits with code 3 (INVALID_ARGS)."""
         mock_ws = MagicMock()
@@ -411,7 +411,7 @@ class TestAnomaliesBulkUpdate:
 class TestDeletionRequestsList:
     """Tests for mp lexicon deletion-requests list."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful list returns JSON list of deletion requests."""
         mock_ws = MagicMock()
@@ -440,7 +440,7 @@ class TestDeletionRequestsList:
 class TestDeletionRequestsCreate:
     """Tests for mp lexicon deletion-requests create."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_create_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful create returns JSON list of created requests."""
         mock_ws = MagicMock()
@@ -477,7 +477,7 @@ class TestDeletionRequestsCreate:
         assert data[0]["eventName"] == "Test"
         assert data[0]["id"] == 42
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_create_with_invalid_filters_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --filters exits with code 3 (INVALID_ARGS)."""
         mock_ws = MagicMock()
@@ -505,7 +505,7 @@ class TestDeletionRequestsCreate:
 class TestDeletionRequestsCancel:
     """Tests for mp lexicon deletion-requests cancel."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_cancel_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful cancel returns JSON list."""
         mock_ws = MagicMock()
@@ -526,7 +526,7 @@ class TestDeletionRequestsCancel:
         assert isinstance(data, list)
         assert data[0]["status"] == "cancelled"
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_cancel_passes_id_to_workspace(self, mock_get_ws: MagicMock) -> None:
         """Request ID is passed as an integer to the workspace method."""
         mock_ws = MagicMock()
@@ -540,7 +540,7 @@ class TestDeletionRequestsCancel:
 class TestDeletionRequestsPreview:
     """Tests for mp lexicon deletion-requests preview."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_preview_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful preview returns JSON list of matching data."""
         mock_ws = MagicMock()
@@ -569,7 +569,7 @@ class TestDeletionRequestsPreview:
         assert data[0]["eventName"] == "Test"
         assert data[0]["count"] == 150
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_preview_with_invalid_filters_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --filters exits with code 3 (INVALID_ARGS)."""
         mock_ws = MagicMock()

@@ -13,13 +13,13 @@ import pytest
 from httpx._types import SyncByteStream
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import (
+from mixpanel_headless._internal.api_client import (
     ENDPOINTS,
     MixpanelAPIClient,
     _iter_jsonl_lines,
 )
-from mixpanel_data._internal.auth.session import Session
-from mixpanel_data.exceptions import (
+from mixpanel_headless._internal.auth.session import Session
+from mixpanel_headless.exceptions import (
     AuthenticationError,
     QueryError,
     RateLimitError,
@@ -174,12 +174,12 @@ class TestAuthHeader:
         ``_get_auth_header()`` calls return DIFFERENT bearers — proving
         the bearer is not cached at construction time.
         """
-        from mixpanel_data._internal.auth.account import (
+        from mixpanel_headless._internal.auth.account import (
             OAuthBrowserAccount,
             Region,
             TokenResolver,
         )
-        from mixpanel_data._internal.auth.session import Project, Session
+        from mixpanel_headless._internal.auth.session import Project, Session
 
         class _CountingResolver(TokenResolver):
             """Returns a new bearer on each call so we can assert per-request resolution."""
@@ -222,12 +222,12 @@ class TestAuthHeader:
 
     def test_service_account_session_uses_basic_auth_no_resolver_call(self) -> None:
         """Service-account session keeps Basic auth + no per-request resolver call."""
-        from mixpanel_data._internal.auth.account import (
+        from mixpanel_headless._internal.auth.account import (
             Region,
             ServiceAccount,
             TokenResolver,
         )
-        from mixpanel_data._internal.auth.session import Project, Session
+        from mixpanel_headless._internal.auth.session import Project, Session
 
         class _NeverCalledResolver(TokenResolver):
             """Asserts neither token method is called for service-account sessions."""
@@ -1146,7 +1146,7 @@ class TestErrorHandling:
 
     def test_jql_syntax_error_on_412(self, test_credentials: Session) -> None:
         """Should raise JQLSyntaxError on 412 with parsed error details."""
-        from mixpanel_data.exceptions import JQLSyntaxError
+        from mixpanel_headless.exceptions import JQLSyntaxError
 
         raw_error = (
             "UserVisiblePreconditionFailedError: Uncaught exception TypeError: "
@@ -1187,7 +1187,7 @@ class TestErrorHandling:
         self, test_credentials: Session
     ) -> None:
         """JQLSyntaxError should include code snippet with caret."""
-        from mixpanel_data.exceptions import JQLSyntaxError
+        from mixpanel_headless.exceptions import JQLSyntaxError
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(
@@ -1259,7 +1259,7 @@ class TestServerErrors:
 
     def test_server_error_with_dict_body(self, test_credentials: Session) -> None:
         """Should raise ServerError with error message from dict."""
-        from mixpanel_data.exceptions import ServerError
+        from mixpanel_headless.exceptions import ServerError
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(500, json={"error": "Internal database error"})
@@ -1275,7 +1275,7 @@ class TestServerErrors:
 
     def test_server_error_with_string_body(self, test_credentials: Session) -> None:
         """Should raise ServerError with truncated string body."""
-        from mixpanel_data.exceptions import ServerError
+        from mixpanel_headless.exceptions import ServerError
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(503, text="Service temporarily unavailable")
@@ -1291,7 +1291,7 @@ class TestServerErrors:
 
     def test_server_error_with_empty_body(self, test_credentials: Session) -> None:
         """Should raise ServerError with status code only."""
-        from mixpanel_data.exceptions import ServerError
+        from mixpanel_headless.exceptions import ServerError
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(502, text="")
@@ -2410,7 +2410,7 @@ class TestExportProfilesPage:
 
     def test_result_type(self, test_credentials: Session) -> None:
         """Should return ProfilePageResult type."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         def handler(_request: httpx.Request) -> httpx.Response:
             return httpx.Response(
@@ -2833,7 +2833,7 @@ class TestWithProject:
 
     def test_with_project_preserves_auth(self, test_credentials: Session) -> None:
         """with_project should keep the same account."""
-        from mixpanel_data._internal.auth.account import ServiceAccount
+        from mixpanel_headless._internal.auth.account import ServiceAccount
 
         original = MixpanelAPIClient(session=test_credentials)
         new_client = original.with_project("9999999")
@@ -2893,7 +2893,7 @@ class TestWithProject:
 
     def test_with_project_preserves_oauth_credentials(self) -> None:
         """with_project should preserve the OAuth account."""
-        from mixpanel_data._internal.auth.account import OAuthTokenAccount
+        from mixpanel_headless._internal.auth.account import OAuthTokenAccount
 
         oauth_creds = make_session(
             project_id="12345", region="us", oauth_token="my-oauth-token"

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     AccountType,
     OAuthBrowserAccount,
     OAuthTokenAccount,
@@ -292,7 +292,7 @@ class TestAccountDiscrimination:
         """Pydantic dispatches ServiceAccount construction by type discriminator."""
         from pydantic import TypeAdapter
 
-        from mixpanel_data._internal.auth.account import Account
+        from mixpanel_headless._internal.auth.account import Account
 
         adapter: TypeAdapter[Account] = TypeAdapter(Account)
         data = {
@@ -309,7 +309,7 @@ class TestAccountDiscrimination:
         """Pydantic dispatches OAuthBrowserAccount construction by type discriminator."""
         from pydantic import TypeAdapter
 
-        from mixpanel_data._internal.auth.account import Account
+        from mixpanel_headless._internal.auth.account import Account
 
         adapter: TypeAdapter[Account] = TypeAdapter(Account)
         acct = adapter.validate_python(
@@ -321,7 +321,7 @@ class TestAccountDiscrimination:
         """Pydantic dispatches OAuthTokenAccount construction by type discriminator."""
         from pydantic import TypeAdapter
 
-        from mixpanel_data._internal.auth.account import Account
+        from mixpanel_headless._internal.auth.account import Account
 
         adapter: TypeAdapter[Account] = TypeAdapter(Account)
         acct = adapter.validate_python(
@@ -338,7 +338,7 @@ class TestAccountDiscrimination:
         """Unknown discriminator value is rejected."""
         from pydantic import TypeAdapter
 
-        from mixpanel_data._internal.auth.account import Account
+        from mixpanel_headless._internal.auth.account import Account
 
         adapter: TypeAdapter[Account] = TypeAdapter(Account)
         with pytest.raises(ValidationError):

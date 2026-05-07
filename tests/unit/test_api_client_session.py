@@ -14,11 +14,11 @@ from __future__ import annotations
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import (
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.session import (
+from mixpanel_headless._internal.auth.session import (
     Project,
     Session,
     WorkspaceRef,
@@ -173,11 +173,11 @@ class TestUseOAuthAtomicity:
         self, session_team: Session
     ) -> None:
         """Swap to a tokenless ``OAuthBrowserAccount`` raises, no commit."""
-        from mixpanel_data._internal.auth.account import (
+        from mixpanel_headless._internal.auth.account import (
             OAuthBrowserAccount,
             TokenResolver,
         )
-        from mixpanel_data.exceptions import OAuthError
+        from mixpanel_headless.exceptions import OAuthError
 
         class _Failing(TokenResolver):
             """Always fails — simulates a tokenless OAuth account."""
@@ -204,11 +204,11 @@ class TestUseOAuthAtomicity:
         self, session_team: Session
     ) -> None:
         """Swap to a tokenless ``OAuthTokenAccount`` raises and preserves state."""
-        from mixpanel_data._internal.auth.account import (
+        from mixpanel_headless._internal.auth.account import (
             OAuthTokenAccount,
             TokenResolver,
         )
-        from mixpanel_data.exceptions import OAuthError
+        from mixpanel_headless.exceptions import OAuthError
 
         class _Failing(TokenResolver):
             def get_browser_token(self, name: str, region: str) -> str:
@@ -239,7 +239,7 @@ class TestSessionAccountNameDrivesMeCacheScope:
 
     def test_distinct_oauth_browser_accounts_have_distinct_names(self) -> None:
         """Distinct OAuthBrowserAccount names yield distinct cache scope keys."""
-        from mixpanel_data._internal.auth.account import OAuthBrowserAccount
+        from mixpanel_headless._internal.auth.account import OAuthBrowserAccount
 
         s_a = Session(
             account=OAuthBrowserAccount(name="account_a", region="us"),
@@ -255,7 +255,7 @@ class TestSessionAccountNameDrivesMeCacheScope:
 
     def test_oauth_token_account_name_drives_cache_scope(self) -> None:
         """OAuthTokenAccount.name is used directly as the cache scope key."""
-        from mixpanel_data._internal.auth.account import OAuthTokenAccount
+        from mixpanel_headless._internal.auth.account import OAuthTokenAccount
 
         s = Session(
             account=OAuthTokenAccount(
@@ -282,7 +282,7 @@ class TestAppRequestUsesFreshAuthHeader:
         """A refreshed browser token reaches App API requests without rebuilding the client."""
         import httpx
 
-        from mixpanel_data._internal.auth.account import (
+        from mixpanel_headless._internal.auth.account import (
             OAuthBrowserAccount,
             Region,
             TokenResolver,
@@ -332,7 +332,7 @@ class TestAppRequestUsesFreshAuthHeader:
         """Static-token accounts also resolve per request via the TokenResolver."""
         import httpx
 
-        from mixpanel_data._internal.auth.account import (
+        from mixpanel_headless._internal.auth.account import (
             OAuthTokenAccount,
             Region,
             TokenResolver,

@@ -21,11 +21,11 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.exceptions import BookmarkValidationError, MixpanelDataError
-from mixpanel_data.types import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.exceptions import BookmarkValidationError, MixpanelDataError
+from mixpanel_headless.types import (
     Bookmark,
     BookmarkHistoryResponse,
     BulkUpdateBookmarkEntry,
@@ -39,7 +39,7 @@ from mixpanel_data.types import (
     UpdateCohortParams,
     UpdateDashboardParams,
 )
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless.workspace import Workspace
 from tests.conftest import make_session
 from tests.unit._bookmark_fixtures import (
     MINIMAL_FUNNEL_PARAMS,
@@ -916,7 +916,7 @@ class TestWorkspaceBookmarkCRUD:
             params=good_params,
             dashboard_id=99,
         )
-        with caplog.at_level(logging.WARNING, logger="mixpanel_data.workspace"):
+        with caplog.at_level(logging.WARNING, logger="mixpanel_headless.workspace"):
             ws.create_bookmark(params)
 
         warning_messages = [

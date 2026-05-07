@@ -28,7 +28,7 @@ def main() -> int:
 
     # 1. Setup credentials
     print("[1] Loading credentials...")
-    from mixpanel_data._internal.config import ConfigManager
+    from mixpanel_headless._internal.config import ConfigManager
 
     config = ConfigManager()
     try:
@@ -42,7 +42,7 @@ def main() -> int:
 
     # 2. Create API client
     print("\n[2] Creating API client...")
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     api_client = MixpanelAPIClient(creds)
     api_client.__enter__()
@@ -106,8 +106,8 @@ def main() -> int:
 
     # 5. Test JQLSyntaxError via LiveQueryService
     print("\n[6] Testing JQLSyntaxError via LiveQueryService...")
-    from mixpanel_data._internal.services.live_query import LiveQueryService
-    from mixpanel_data.exceptions import JQLSyntaxError
+    from mixpanel_headless._internal.services.live_query import LiveQueryService
+    from mixpanel_headless.exceptions import JQLSyntaxError
 
     live_query = LiveQueryService(api_client)
     try:

@@ -13,20 +13,20 @@ from typing import cast
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.bookmark_enums import (
+from mixpanel_headless._internal.bookmark_enums import (
     MATH_PROPERTY_OPTIONAL,
     MATH_REQUIRING_PROPERTY,
     VALID_MATH_FUNNELS,
     VALID_MATH_INSIGHTS,
 )
-from mixpanel_data._internal.validation import (
+from mixpanel_headless._internal.validation import (
     validate_flow_args,
     validate_funnel_args,
     validate_query_args,
     validate_retention_args,
     validate_time_args,
 )
-from mixpanel_data._literal_types import ConversionWindowUnit, FunnelMathType
+from mixpanel_headless._literal_types import ConversionWindowUnit, FunnelMathType
 
 # =============================================================================
 # Strategies (reused from test_query_validation_pbt.py)

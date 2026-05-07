@@ -21,11 +21,11 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     OAuthTokenAccount,
 )
-from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
-from mixpanel_data.exceptions import OAuthError
+from mixpanel_headless._internal.auth.token_resolver import OnDiskTokenResolver
+from mixpanel_headless.exceptions import OAuthError
 
 
 @pytest.fixture
@@ -215,9 +215,9 @@ class TestBrowserTokenRefresh:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """An expired token with a refresh token routes through ``OAuthFlow.refresh_tokens``."""
-        from mixpanel_data._internal.auth import flow as flow_mod
-        from mixpanel_data._internal.auth import storage as storage_mod
-        from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+        from mixpanel_headless._internal.auth import flow as flow_mod
+        from mixpanel_headless._internal.auth import storage as storage_mod
+        from mixpanel_headless._internal.auth.token import OAuthClientInfo, OAuthTokens
 
         past = datetime.now(timezone.utc) - timedelta(hours=1)
         path = _write_tokens_file(
@@ -292,9 +292,9 @@ class TestBrowserTokenRefresh:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """If the IdP omits a rotated refresh token the existing one is preserved."""
-        from mixpanel_data._internal.auth import flow as flow_mod
-        from mixpanel_data._internal.auth import storage as storage_mod
-        from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+        from mixpanel_headless._internal.auth import flow as flow_mod
+        from mixpanel_headless._internal.auth import storage as storage_mod
+        from mixpanel_headless._internal.auth.token import OAuthClientInfo, OAuthTokens
 
         past = datetime.now(timezone.utc) - timedelta(hours=1)
         path = _write_tokens_file(
@@ -338,7 +338,7 @@ class TestBrowserTokenRefresh:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Missing DCR client info surfaces an actionable ``OAUTH_REFRESH_ERROR``."""
-        from mixpanel_data._internal.auth import storage as storage_mod
+        from mixpanel_headless._internal.auth import storage as storage_mod
 
         past = datetime.now(timezone.utc) - timedelta(hours=1)
         _write_tokens_file(
@@ -403,9 +403,9 @@ class TestConcurrentRefresh:
         """Two threads race ``_refresh_and_persist``; assert the contract above."""
         import threading
 
-        from mixpanel_data._internal.auth import flow as flow_mod
-        from mixpanel_data._internal.auth import storage as storage_mod
-        from mixpanel_data._internal.auth.token import (
+        from mixpanel_headless._internal.auth import flow as flow_mod
+        from mixpanel_headless._internal.auth import storage as storage_mod
+        from mixpanel_headless._internal.auth.token import (
             OAuthClientInfo,
             OAuthTokens,
         )

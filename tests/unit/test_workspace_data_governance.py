@@ -27,11 +27,11 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.exceptions import AuthenticationError, MixpanelDataError
-from mixpanel_data.types import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.exceptions import AuthenticationError, MixpanelDataError
+from mixpanel_headless.types import (
     BulkEventUpdate,
     BulkPropertyUpdate,
     BulkUpdateEventsParams,
@@ -59,7 +59,7 @@ from mixpanel_data.types import (
     UpdateTagParams,
     UploadLookupTableParams,
 )
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless.workspace import Workspace
 from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
@@ -1551,7 +1551,7 @@ class TestUploadLookupTable:
         """
         import pytest
 
-        from mixpanel_data.exceptions import MixpanelDataError
+        from mixpanel_headless.exceptions import MixpanelDataError
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Always return PENDING to trigger timeout."""
@@ -1602,7 +1602,7 @@ class TestUploadLookupTable:
         """
         import pytest
 
-        from mixpanel_data.exceptions import MixpanelDataError
+        from mixpanel_headless.exceptions import MixpanelDataError
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return FAILURE on status poll."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 from hypothesis import given
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.expressions import normalize_on_expression
+from mixpanel_headless._internal.expressions import normalize_on_expression
 
 # Strategy for bare property names (no accessor patterns)
 bare_property_names = st.text(min_size=1).filter(

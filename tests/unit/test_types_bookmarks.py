@@ -1,4 +1,4 @@
-"""Tests for bookmark-related types in mixpanel_data.types.
+"""Tests for bookmark-related types in mixpanel_headless.types.
 
 Tests SavedReportResult, FlowsResult, and BookmarkInfo dataclasses
 including report_type detection and DataFrame conversion.
@@ -9,7 +9,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     BookmarkInfo,
     BookmarkType,
     FlowsResult,

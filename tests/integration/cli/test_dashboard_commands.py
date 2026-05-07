@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 class TestDashboardsList:
@@ -17,7 +17,7 @@ class TestDashboardsList:
     def test_list_json(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test dashboards list in JSON format."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "list", "--format", "json"])
@@ -32,7 +32,7 @@ class TestDashboardsList:
     ) -> None:
         """Test dashboards list filtered by IDs."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "list", "--ids", "1,2"])
@@ -44,7 +44,7 @@ class TestDashboardsList:
     ) -> None:
         """Test dashboards list in table format."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "list", "--format", "table"])
@@ -56,7 +56,7 @@ class TestDashboardsList:
     ) -> None:
         """Test dashboards list in CSV format."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "list", "--format", "csv"])
@@ -66,7 +66,7 @@ class TestDashboardsList:
         """Test dashboards list with no results."""
         mock_workspace.list_dashboards.return_value = []
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "list", "--format", "json"])
@@ -83,7 +83,7 @@ class TestDashboardsCreate:
     ) -> None:
         """Test creating a dashboard with only a title."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "create", "--title", "New"])
@@ -96,7 +96,7 @@ class TestDashboardsCreate:
     ) -> None:
         """Test creating a dashboard with all options."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -119,7 +119,7 @@ class TestDashboardsCreate:
     ) -> None:
         """Test creating a private dashboard sets is_private=True."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -135,7 +135,7 @@ class TestDashboardsCreate:
     ) -> None:
         """Test creating a non-private dashboard explicitly with --no-private."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -152,7 +152,7 @@ class TestDashboardsCreate:
     ) -> None:
         """Test creating a dashboard by duplicating an existing one."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -170,7 +170,7 @@ class TestDashboardsGetUpdateDelete:
     def test_get(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting a single dashboard by ID."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "get", "1"])
@@ -183,7 +183,7 @@ class TestDashboardsGetUpdateDelete:
     ) -> None:
         """Test updating a dashboard title."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -196,7 +196,7 @@ class TestDashboardsGetUpdateDelete:
     ) -> None:
         """Test updating a dashboard with --no-private sets is_private=False."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -209,7 +209,7 @@ class TestDashboardsGetUpdateDelete:
     def test_delete(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test deleting a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "delete", "1"])
@@ -224,7 +224,7 @@ class TestDashboardsBulkDelete:
     ) -> None:
         """Test bulk deleting multiple dashboards."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -238,7 +238,7 @@ class TestDashboardsBulkDelete:
     ) -> None:
         """Test bulk deleting a single dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -254,7 +254,7 @@ class TestDashboardsOrganization:
     def test_favorite(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test favoriting a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "favorite", "1"])
@@ -263,7 +263,7 @@ class TestDashboardsOrganization:
     def test_unfavorite(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test unfavoriting a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "unfavorite", "1"])
@@ -272,7 +272,7 @@ class TestDashboardsOrganization:
     def test_pin(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test pinning a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "pin", "1"])
@@ -281,7 +281,7 @@ class TestDashboardsOrganization:
     def test_unpin(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test unpinning a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "unpin", "1"])
@@ -292,7 +292,7 @@ class TestDashboardsOrganization:
     ) -> None:
         """Test removing a report from a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "remove-report", "1", "42"])
@@ -303,7 +303,7 @@ class TestDashboardsOrganization:
     def test_add_report(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test adding a report to a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "add-report", "1", "42"])
@@ -320,7 +320,7 @@ class TestDashboardsBlueprints:
     ) -> None:
         """Test listing blueprint templates."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "blueprints"])
@@ -333,7 +333,7 @@ class TestDashboardsBlueprints:
     ) -> None:
         """Test listing blueprint templates with include-reports flag."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -349,7 +349,7 @@ class TestDashboardsBlueprints:
     ) -> None:
         """Test creating a dashboard from a blueprint template."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -364,7 +364,7 @@ class TestDashboardsAdvanced:
     def test_rca(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test creating an RCA dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -385,7 +385,7 @@ class TestDashboardsAdvanced:
     ) -> None:
         """Test RCA with invalid JSON source data fails."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -404,7 +404,7 @@ class TestDashboardsAdvanced:
     def test_erf(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting ERF metrics for a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "erf", "1"])
@@ -415,7 +415,7 @@ class TestDashboardsAdvanced:
     ) -> None:
         """Test updating a report link on a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -436,7 +436,7 @@ class TestDashboardsAdvanced:
     ) -> None:
         """Test updating a text card on a dashboard."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -461,7 +461,7 @@ class TestDashboardsInputValidation:
     ) -> None:
         """Test that non-numeric IDs in --ids cause failure."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "list", "--ids", "1,abc"])
@@ -472,7 +472,7 @@ class TestDashboardsInputValidation:
     ) -> None:
         """Test that empty string --ids cause failure."""
         with patch(
-            "mixpanel_data.cli.commands.dashboards.get_workspace",
+            "mixpanel_headless.cli.commands.dashboards.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["dashboards", "bulk-delete", "--ids", ""])

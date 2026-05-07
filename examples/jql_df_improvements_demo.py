@@ -3,7 +3,7 @@
 This shows how the enhanced DataFrame conversion handles common JQL result patterns.
 """
 
-from mixpanel_data.types import JQLResult
+from mixpanel_headless.types import JQLResult
 
 # Example 1: groupBy with single key
 print("=" * 60)

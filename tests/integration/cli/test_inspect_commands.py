@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
-from mixpanel_data.types import (
+from mixpanel_headless.cli.main import app
+from mixpanel_headless.types import (
     DailyCount,
     DailyCountsResult,
     EngagementBucket,
@@ -37,7 +37,7 @@ class TestInspectEvents:
         mock_workspace.events.return_value = ["Event A", "Event B", "Event C"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["inspect", "events", "--format", "json"])
@@ -53,7 +53,7 @@ class TestInspectEvents:
         mock_workspace.events.return_value = ["Event A", "Event B"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["inspect", "events", "--format", "plain"])
@@ -73,7 +73,7 @@ class TestInspectProperties:
         mock_workspace.properties.return_value = ["prop1", "prop2", "prop3"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -96,7 +96,7 @@ class TestInspectValues:
         mock_workspace.property_values.return_value = ["value1", "value2"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -129,7 +129,7 @@ class TestInspectValues:
         mock_workspace.property_values.return_value = ["US", "EU", "APAC"]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -156,7 +156,7 @@ class TestInspectFunnels:
         ]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["inspect", "funnels", "--format", "json"])
@@ -195,7 +195,7 @@ class TestInspectCohorts:
         ]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["inspect", "cohorts", "--format", "json"])
@@ -221,7 +221,7 @@ class TestInspectTopEvents:
         ]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -242,7 +242,7 @@ class TestInspectTopEvents:
         mock_workspace.top_events.return_value = []
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -296,7 +296,7 @@ class TestInspectLexiconSchemas:
         ]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -328,7 +328,7 @@ class TestInspectLexiconSchemas:
         ]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -344,7 +344,7 @@ class TestInspectLexiconSchemas:
     ) -> None:
         """Test invalid entity type returns error."""
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -379,7 +379,7 @@ class TestInspectLexiconSchema:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -409,7 +409,7 @@ class TestInspectLexiconSchema:
     ) -> None:
         """Test invalid entity type returns error."""
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -453,7 +453,7 @@ class TestInspectDistribution:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -512,7 +512,7 @@ class TestInspectNumeric:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -570,7 +570,7 @@ class TestInspectDaily:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -640,7 +640,7 @@ class TestInspectEngagement:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -701,7 +701,7 @@ class TestInspectCoverage:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(

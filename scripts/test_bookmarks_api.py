@@ -3,7 +3,7 @@
 
 from pprint import pprint
 
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 
 def main():

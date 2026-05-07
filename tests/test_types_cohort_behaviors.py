@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     CohortBreakdown,
     CohortCriteria,
     CohortDefinition,
@@ -448,7 +448,7 @@ class TestSanitizeRawCohort:
 
     def test_removes_null_selector(self) -> None:
         """Null selector in event_selector is removed."""
-        from mixpanel_data.types import _sanitize_raw_cohort
+        from mixpanel_headless.types import _sanitize_raw_cohort
 
         raw: dict[str, Any] = {
             "behaviors": {
@@ -466,7 +466,7 @@ class TestSanitizeRawCohort:
 
     def test_preserves_valid_selector(self) -> None:
         """Non-null selector is preserved."""
-        from mixpanel_data.types import _sanitize_raw_cohort
+        from mixpanel_headless.types import _sanitize_raw_cohort
 
         raw: dict[str, Any] = {
             "behaviors": {
@@ -488,7 +488,7 @@ class TestSanitizeRawCohort:
 
     def test_no_behaviors_key(self) -> None:
         """Dict without behaviors key returns copy without error."""
-        from mixpanel_data.types import _sanitize_raw_cohort
+        from mixpanel_headless.types import _sanitize_raw_cohort
 
         raw: dict[str, Any] = {"name": "Test", "version": 1}
         result = _sanitize_raw_cohort(raw)
@@ -497,7 +497,7 @@ class TestSanitizeRawCohort:
 
     def test_multiple_behaviors_mixed_selectors(self) -> None:
         """Mixed null/valid selectors — only nulls are removed."""
-        from mixpanel_data.types import _sanitize_raw_cohort
+        from mixpanel_headless.types import _sanitize_raw_cohort
 
         raw: dict[str, Any] = {
             "behaviors": {
@@ -524,7 +524,7 @@ class TestSanitizeRawCohort:
 
     def test_deep_copy_semantics(self) -> None:
         """Original dict is not mutated."""
-        from mixpanel_data.types import _sanitize_raw_cohort
+        from mixpanel_headless.types import _sanitize_raw_cohort
 
         raw: dict[str, Any] = {
             "behaviors": {

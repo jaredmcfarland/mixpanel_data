@@ -69,7 +69,7 @@ def _run(
         "PYTHONPATH": str(REPO_ROOT / "src"),
     }
     # Preserve venv-related vars so the subprocess reaches the same
-    # ``mixpanel_data`` install that the parent test process has imported.
+    # ``mixpanel_headless`` install that the parent test process has imported.
     for key in ("VIRTUAL_ENV", "PYTHONUSERBASE", "PYTHONHOME"):
         if key in os.environ:
             env[key] = os.environ[key]

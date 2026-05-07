@@ -12,9 +12,9 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
-PATCH_TARGET = "mixpanel_data.cli.commands.reports.get_workspace"
+PATCH_TARGET = "mixpanel_headless.cli.commands.reports.get_workspace"
 
 
 class TestReportsList:

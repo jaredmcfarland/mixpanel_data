@@ -1,4 +1,4 @@
-"""Unit tests for mixpanel_data exception hierarchy."""
+"""Unit tests for mixpanel_headless exception hierarchy."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from mixpanel_data.exceptions import (
+from mixpanel_headless.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
     APIError,

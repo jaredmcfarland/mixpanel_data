@@ -1,7 +1,7 @@
 """Smoke tests for the ``mp target`` CLI command group.
 
 Verifies that each subcommand (``add`` / ``use`` / ``list`` / ``show`` /
-``remove``) round-trips through the underlying ``mixpanel_data.targets``
+``remove``) round-trips through the underlying ``mixpanel_headless.targets``
 namespace and that the on-disk ``[active]`` block reflects the applied
 target's three axes.
 
@@ -17,9 +17,9 @@ import pytest
 from pydantic import SecretStr
 from typer.testing import CliRunner
 
-from mixpanel_data import accounts as accounts_ns
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.cli.main import app
+from mixpanel_headless import accounts as accounts_ns
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.cli.main import app
 
 
 @pytest.fixture(autouse=True)

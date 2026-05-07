@@ -24,8 +24,8 @@ from hypothesis import settings as hyp_settings
 from hypothesis import strategies as st
 from pydantic import SecretStr
 
-from mixpanel_data._internal.auth.resolver import resolve_session
-from mixpanel_data._internal.config import ConfigManager
+from mixpanel_headless._internal.auth.resolver import resolve_session
+from mixpanel_headless._internal.config import ConfigManager
 
 _NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 account_names = st.text(alphabet=_NAME_ALPHABET, min_size=1, max_size=12)

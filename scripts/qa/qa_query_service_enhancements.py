@@ -30,9 +30,9 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
-    from mixpanel_data._internal.services.live_query import LiveQueryService
-    from mixpanel_data.types import (
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.services.live_query import LiveQueryService
+    from mixpanel_headless.types import (
         ActivityFeedResult,
         FrequencyResult,
         InsightsResult,
@@ -166,12 +166,14 @@ def main() -> int:
 
     # Test 1.1: Import modules
     def test_imports() -> dict[str, Any]:
-        from mixpanel_data._internal.api_client import MixpanelAPIClient  # noqa: F401
-        from mixpanel_data._internal.config import ConfigManager  # noqa: F401
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.api_client import (
+            MixpanelAPIClient,  # noqa: F401
+        )
+        from mixpanel_headless._internal.config import ConfigManager  # noqa: F401
+        from mixpanel_headless._internal.services.live_query import (
             LiveQueryService,  # noqa: F401
         )
-        from mixpanel_data.types import (
+        from mixpanel_headless.types import (
             ActivityFeedResult,  # noqa: F401
             FrequencyResult,  # noqa: F401
             InsightsResult,  # noqa: F401
@@ -191,7 +193,7 @@ def main() -> int:
 
     # Test 1.2: Resolve credentials
     def test_resolve_credentials() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials(account=ACCOUNT_NAME)
@@ -217,8 +219,8 @@ def main() -> int:
     # Test 2.1: Create API client
     def test_create_client() -> dict[str, Any]:
         nonlocal api_client
-        from mixpanel_data._internal.api_client import MixpanelAPIClient
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.api_client import MixpanelAPIClient
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials(account=ACCOUNT_NAME)
@@ -235,7 +237,7 @@ def main() -> int:
     # Test 2.2: Create LiveQueryService
     def test_create_live_query() -> dict[str, Any]:
         nonlocal live_query
-        from mixpanel_data._internal.services.live_query import LiveQueryService
+        from mixpanel_headless._internal.services.live_query import LiveQueryService
 
         assert api_client is not None
         live_query = LiveQueryService(api_client)
@@ -256,7 +258,7 @@ def main() -> int:
     # Test 3.1: Basic activity_feed call
     def test_activity_feed_basic() -> dict[str, Any]:
         nonlocal activity_result
-        from mixpanel_data.types import ActivityFeedResult
+        from mixpanel_headless.types import ActivityFeedResult
 
         assert live_query is not None
         activity_result = live_query.activity_feed(
@@ -275,7 +277,7 @@ def main() -> int:
 
     # Test 3.2: Verify UserEvent structure
     def test_user_event_structure() -> dict[str, Any]:
-        from mixpanel_data.types import UserEvent
+        from mixpanel_headless.types import UserEvent
 
         if activity_result is None or not activity_result.events:
             return {"skipped": "No events returned"}
@@ -403,7 +405,7 @@ def main() -> int:
     # Test 4.1: Basic insights call
     def test_insights_basic() -> dict[str, Any]:
         nonlocal insights_result
-        from mixpanel_data.types import InsightsResult
+        from mixpanel_headless.types import InsightsResult
 
         assert live_query is not None
         insights_result = live_query.insights(bookmark_id=INSIGHTS_BOOKMARK_ID)
@@ -510,7 +512,7 @@ def main() -> int:
 
     # Test 4.7: Invalid bookmark_id
     def test_insights_invalid_id() -> dict[str, Any]:
-        from mixpanel_data.exceptions import QueryError
+        from mixpanel_headless.exceptions import QueryError
 
         assert live_query is not None
         try:
@@ -532,7 +534,7 @@ def main() -> int:
     # Test 5.1: Basic frequency call
     def test_frequency_basic() -> dict[str, Any]:
         nonlocal frequency_result
-        from mixpanel_data.types import FrequencyResult
+        from mixpanel_headless.types import FrequencyResult
 
         assert live_query is not None
         frequency_result = live_query.frequency(
@@ -681,7 +683,7 @@ def main() -> int:
     # Test 6.1: Basic segmentation_numeric call
     def test_numeric_bucket_basic() -> dict[str, Any]:
         nonlocal numeric_bucket_result
-        from mixpanel_data.types import NumericBucketResult
+        from mixpanel_headless.types import NumericBucketResult
 
         assert live_query is not None
         numeric_bucket_result = live_query.segmentation_numeric(
@@ -789,7 +791,7 @@ def main() -> int:
     # Test 7.1: Basic segmentation_sum call
     def test_numeric_sum_basic() -> dict[str, Any]:
         nonlocal numeric_sum_result
-        from mixpanel_data.types import NumericSumResult
+        from mixpanel_headless.types import NumericSumResult
 
         assert live_query is not None
         numeric_sum_result = live_query.segmentation_sum(
@@ -895,7 +897,7 @@ def main() -> int:
     # Test 8.1: Basic segmentation_average call
     def test_numeric_avg_basic() -> dict[str, Any]:
         nonlocal numeric_avg_result
-        from mixpanel_data.types import NumericAverageResult
+        from mixpanel_headless.types import NumericAverageResult
 
         assert live_query is not None
         numeric_avg_result = live_query.segmentation_average(

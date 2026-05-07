@@ -22,9 +22,9 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
-    from mixpanel_data._internal.services.live_query import LiveQueryService
-    from mixpanel_data.types import (
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.services.live_query import LiveQueryService
+    from mixpanel_headless.types import (
         FunnelResult,
         JQLResult,
         RetentionResult,
@@ -159,7 +159,7 @@ def main() -> int:
 
     # Test 1.2: Config file exists
     def test_config_exists() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         path = config.config_path
@@ -175,7 +175,7 @@ def main() -> int:
     ACCOUNT_NAME = "sinkapp-prod"  # Change this to test different accounts
 
     def test_resolve_credentials() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials(account=ACCOUNT_NAME)
@@ -201,8 +201,8 @@ def main() -> int:
     # Test 2.1: Create API client
     def test_create_client() -> dict[str, Any]:
         nonlocal api_client
-        from mixpanel_data._internal.api_client import MixpanelAPIClient
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.api_client import MixpanelAPIClient
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials(account=ACCOUNT_NAME)
@@ -219,7 +219,7 @@ def main() -> int:
     # Test 2.2: Create LiveQueryService
     def test_create_live_query() -> dict[str, Any]:
         nonlocal live_query
-        from mixpanel_data._internal.services.live_query import LiveQueryService
+        from mixpanel_headless._internal.services.live_query import LiveQueryService
 
         assert api_client is not None
         live_query = LiveQueryService(api_client)
@@ -301,7 +301,7 @@ def main() -> int:
     # Test 4.1: Basic segmentation
     def test_segmentation_basic() -> dict[str, Any]:
         nonlocal segmentation_result
-        from mixpanel_data.types import SegmentationResult
+        from mixpanel_headless.types import SegmentationResult
 
         assert live_query is not None
         assert test_event is not None
@@ -467,7 +467,7 @@ def main() -> int:
 
         def test_funnel_basic() -> dict[str, Any]:
             nonlocal funnel_result
-            from mixpanel_data.types import FunnelResult
+            from mixpanel_headless.types import FunnelResult
 
             assert live_query is not None
             funnel_result = live_query.funnel(
@@ -534,7 +534,7 @@ def main() -> int:
 
     # Test 5.5: Invalid funnel ID
     def test_funnel_invalid_id() -> dict[str, Any]:
-        from mixpanel_data.exceptions import QueryError
+        from mixpanel_headless.exceptions import QueryError
 
         assert live_query is not None
         try:
@@ -562,7 +562,7 @@ def main() -> int:
 
     def test_retention_basic() -> dict[str, Any]:
         nonlocal retention_result, retention_available
-        from mixpanel_data.types import RetentionResult
+        from mixpanel_headless.types import RetentionResult
 
         assert live_query is not None
         assert test_event is not None
@@ -732,7 +732,7 @@ def main() -> int:
 
     def test_jql_basic() -> dict[str, Any]:
         nonlocal jql_result, jql_available
-        from mixpanel_data.types import JQLResult
+        from mixpanel_headless.types import JQLResult
 
         assert live_query is not None
         # Note: .limit() is not valid after .groupBy() in JQL
@@ -813,7 +813,7 @@ def main() -> int:
 
     # Test 7.4: Invalid JQL script
     def test_jql_invalid() -> dict[str, Any]:
-        from mixpanel_data.exceptions import QueryError
+        from mixpanel_headless.exceptions import QueryError
 
         assert live_query is not None
         try:

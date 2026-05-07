@@ -11,13 +11,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.services.live_query import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.services.live_query import (
     LiveQueryService,
     _transform_flow_result,
 )
-from mixpanel_data.exceptions import QueryError
-from mixpanel_data.types import FlowQueryResult
+from mixpanel_headless.exceptions import QueryError
+from mixpanel_headless.types import FlowQueryResult
 
 # =========================================================================
 # Fixtures
@@ -328,7 +328,7 @@ class TestParseTreeNode:
 
     def test_parses_root_node(self) -> None:
         """_parse_tree_node extracts event, type, counts from root dict."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _parse_tree_node,
         )
 
@@ -346,7 +346,7 @@ class TestParseTreeNode:
 
     def test_parses_children_recursively(self) -> None:
         """_parse_tree_node builds recursive children."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _parse_tree_node,
         )
 
@@ -361,7 +361,7 @@ class TestParseTreeNode:
 
     def test_parses_empty_children(self) -> None:
         """_parse_tree_node handles leaf nodes with empty children."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _parse_tree_node,
         )
 
@@ -384,7 +384,7 @@ class TestParseTreeNode:
 
     def test_parses_time_percentiles(self) -> None:
         """_parse_tree_node extracts time percentile dicts."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _parse_tree_node,
         )
 

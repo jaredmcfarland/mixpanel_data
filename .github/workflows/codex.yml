@@ -48,7 +48,7 @@ jobs:
             echo "# Codex mention response"
             echo ""
             echo "You were mentioned with \`@codex\` in a GitHub conversation on the"
-            echo "\`mixpanel-headless\` repository (home of the \`mixpanel_data\` Python"
+            echo "\`mixpanel-headless\` repository (home of the \`mixpanel_headless\` Python"
             echo "package)."
             echo ""
             echo "Read \`CLAUDE.md\` at the repo root for project conventions and"

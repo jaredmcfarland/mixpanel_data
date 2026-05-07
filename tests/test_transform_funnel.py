@@ -6,12 +6,12 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data._internal.services.live_query import (
+from mixpanel_headless._internal.services.live_query import (
     _extract_funnel_steps_from_series,
     _transform_funnel_result,
 )
-from mixpanel_data.exceptions import QueryError
-from mixpanel_data.types import FunnelQueryResult
+from mixpanel_headless.exceptions import QueryError
+from mixpanel_headless.types import FunnelQueryResult
 
 # =============================================================================
 # Shared fixtures

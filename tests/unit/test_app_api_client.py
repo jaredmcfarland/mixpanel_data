@@ -16,16 +16,16 @@ from typing import Any
 import httpx
 import pytest
 
-from mixpanel_data._internal.api_client import ENDPOINTS, MixpanelAPIClient
-from mixpanel_data._internal.auth.session import Session
-from mixpanel_data.exceptions import (
+from mixpanel_headless._internal.api_client import ENDPOINTS, MixpanelAPIClient
+from mixpanel_headless._internal.auth.session import Session
+from mixpanel_headless.exceptions import (
     AuthenticationError,
     MixpanelDataError,
     QueryError,
     ServerError,
     WorkspaceScopeError,
 )
-from mixpanel_data.types import PublicWorkspace
+from mixpanel_headless.types import PublicWorkspace
 from tests.conftest import make_session
 
 # =============================================================================

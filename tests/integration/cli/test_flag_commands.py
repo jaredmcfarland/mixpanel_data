@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 class TestFlagsList:
@@ -17,7 +17,7 @@ class TestFlagsList:
     def test_list_json(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test flags list in JSON format."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "list", "--format", "json"])
@@ -32,7 +32,7 @@ class TestFlagsList:
     ) -> None:
         """Test flags list in table format."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "list", "--format", "table"])
@@ -43,7 +43,7 @@ class TestFlagsList:
         """Test flags list with no results."""
         mock_workspace.list_feature_flags.return_value = []
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "list", "--format", "json"])
@@ -56,7 +56,7 @@ class TestFlagsList:
     ) -> None:
         """Test flags list with --include-archived flag."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "list", "--include-archived"])
@@ -72,7 +72,7 @@ class TestFlagsCreate:
     ) -> None:
         """Test creating a flag with only required options."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -88,7 +88,7 @@ class TestFlagsCreate:
     ) -> None:
         """Test creating a flag with all options."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -124,7 +124,7 @@ class TestFlagsCreate:
     ) -> None:
         """Test creating a flag with invalid ruleset JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -149,7 +149,7 @@ class TestFlagsGet:
     def test_get(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting a single flag by ID."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "get", "abc-123"])
@@ -167,7 +167,7 @@ class TestFlagsUpdate:
     ) -> None:
         """Test updating a flag with all required options."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -196,7 +196,7 @@ class TestFlagsUpdate:
     ) -> None:
         """Test updating a flag with invalid ruleset JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -222,7 +222,7 @@ class TestFlagsUpdate:
     ) -> None:
         """Test updating a flag with optional fields."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -259,7 +259,7 @@ class TestFlagsDelete:
     def test_delete(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test deleting a flag."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "delete", "abc-123"])
@@ -273,7 +273,7 @@ class TestFlagsArchive:
     def test_archive(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test archiving a flag."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "archive", "abc-123"])
@@ -287,7 +287,7 @@ class TestFlagsRestore:
     def test_restore(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test restoring an archived flag."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "restore", "abc-123"])
@@ -302,7 +302,7 @@ class TestFlagsDuplicate:
     def test_duplicate(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test duplicating a flag."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "duplicate", "abc-123"])
@@ -319,7 +319,7 @@ class TestFlagsSetTestUsers:
     ) -> None:
         """Test setting test users on a flag."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -340,7 +340,7 @@ class TestFlagsSetTestUsers:
     ) -> None:
         """Test set-test-users with invalid JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -362,7 +362,7 @@ class TestFlagsHistory:
     def test_history(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting flag history."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "history", "abc-123"])
@@ -376,7 +376,7 @@ class TestFlagsHistory:
     ) -> None:
         """Test getting flag history with pagination options."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -403,7 +403,7 @@ class TestFlagsLimits:
     def test_limits(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting flag limits."""
         with patch(
-            "mixpanel_data.cli.commands.flags.get_workspace",
+            "mixpanel_headless.cli.commands.flags.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["flags", "limits"])

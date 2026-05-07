@@ -20,9 +20,9 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data._internal.validation import validate_funnel_args
-from mixpanel_data.exceptions import ValidationError
-from mixpanel_data.types import Exclusion, FunnelStep, GroupBy
+from mixpanel_headless._internal.validation import validate_funnel_args
+from mixpanel_headless.exceptions import ValidationError
+from mixpanel_headless.types import Exclusion, FunnelStep, GroupBy
 
 # =============================================================================
 # Helper
@@ -1298,7 +1298,7 @@ class TestF8bHoldingConstantPropertyValidation:
     def test_empty_string_property_raises_at_construction(self) -> None:
         """HoldingConstant with empty property name raises ValueError at construction."""
 
-        from mixpanel_data.types import HoldingConstant
+        from mixpanel_headless.types import HoldingConstant
 
         with pytest.raises(
             ValueError, match="HoldingConstant.property must be a non-empty string"
@@ -1308,7 +1308,7 @@ class TestF8bHoldingConstantPropertyValidation:
     def test_whitespace_only_property_raises_at_construction(self) -> None:
         """HoldingConstant with whitespace-only property raises ValueError at construction."""
 
-        from mixpanel_data.types import HoldingConstant
+        from mixpanel_headless.types import HoldingConstant
 
         with pytest.raises(
             ValueError, match="HoldingConstant.property must be a non-empty string"
@@ -1317,7 +1317,7 @@ class TestF8bHoldingConstantPropertyValidation:
 
     def test_valid_property_no_error(self) -> None:
         """HoldingConstant with valid property name produces no F8b error."""
-        from mixpanel_data.types import HoldingConstant
+        from mixpanel_headless.types import HoldingConstant
 
         errors = validate_funnel_args(
             **_valid_funnel_args(
@@ -1329,7 +1329,7 @@ class TestF8bHoldingConstantPropertyValidation:
     def test_multiple_with_one_empty_raises_at_construction(self) -> None:
         """HoldingConstant("") raises ValueError at construction."""
 
-        from mixpanel_data.types import HoldingConstant
+        from mixpanel_headless.types import HoldingConstant
 
         # Valid one constructs fine
         valid = HoldingConstant("platform")

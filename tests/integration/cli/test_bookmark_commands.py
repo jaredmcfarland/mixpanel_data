@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
-from mixpanel_data.types import BookmarkInfo, FlowsResult, SavedReportResult
+from mixpanel_headless.cli.main import app
+from mixpanel_headless.types import BookmarkInfo, FlowsResult, SavedReportResult
 
 
 class TestInspectBookmarks:
@@ -41,7 +41,7 @@ class TestInspectBookmarks:
         ]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -71,7 +71,7 @@ class TestInspectBookmarks:
         ]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -97,7 +97,7 @@ class TestInspectBookmarks:
         ]
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -114,7 +114,7 @@ class TestInspectBookmarks:
         mock_workspace.list_bookmarks.return_value = []
 
         with patch(
-            "mixpanel_data.cli.commands.inspect.get_workspace",
+            "mixpanel_headless.cli.commands.inspect.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -143,7 +143,7 @@ class TestQuerySavedReport:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -170,7 +170,7 @@ class TestQuerySavedReport:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -195,7 +195,7 @@ class TestQuerySavedReport:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -226,7 +226,7 @@ class TestQueryFlows:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -254,7 +254,7 @@ class TestQueryFlows:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -278,7 +278,7 @@ class TestQueryFlows:
         )
 
         with patch(
-            "mixpanel_data.cli.commands.query.get_workspace",
+            "mixpanel_headless.cli.commands.query.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(

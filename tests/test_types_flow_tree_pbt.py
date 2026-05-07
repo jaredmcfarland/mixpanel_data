@@ -23,8 +23,8 @@ from anytree import PreOrderIter
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._literal_types import FlowNodeType
-from mixpanel_data.types import FlowQueryResult, FlowTreeNode
+from mixpanel_headless._literal_types import FlowNodeType
+from mixpanel_headless.types import FlowQueryResult, FlowTreeNode
 
 # =============================================================================
 # Custom Strategies

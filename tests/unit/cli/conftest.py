@@ -8,7 +8,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     SegmentationResult,
 )
 

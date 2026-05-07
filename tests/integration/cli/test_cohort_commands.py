@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 class TestCohortsList:
@@ -17,7 +17,7 @@ class TestCohortsList:
     def test_list_json(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Verify listing cohorts returns JSON array with id and name."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["cohorts", "list"])
@@ -34,7 +34,7 @@ class TestCohortsList:
     ) -> None:
         """Verify data-group-id option is forwarded to the workspace method."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -52,7 +52,7 @@ class TestCohortsList:
     ) -> None:
         """Verify filtering cohorts by comma-separated IDs succeeds."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["cohorts", "list", "--ids", "1,2"])
@@ -72,7 +72,7 @@ class TestCohortsCreate:
     ) -> None:
         """Verify creating a cohort with only a name returns JSON with id."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["cohorts", "create", "--name", "New"])
@@ -87,7 +87,7 @@ class TestCohortsCreate:
         """Verify creating a cohort with a JSON definition succeeds."""
         definition = json.dumps({"behavioral_filter": {}})
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -104,7 +104,7 @@ class TestCohortsCreate:
     ) -> None:
         """Verify invalid JSON definition causes a non-zero exit code."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -121,7 +121,7 @@ class TestCohortsGetUpdateDelete:
     def test_get(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Verify getting a cohort by ID returns JSON with matching id."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["cohorts", "get", "1"])
@@ -135,7 +135,7 @@ class TestCohortsGetUpdateDelete:
     ) -> None:
         """Verify updating a cohort name succeeds with exit code 0."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -151,7 +151,7 @@ class TestCohortsGetUpdateDelete:
         """Verify updating a cohort with a JSON definition succeeds."""
         definition = json.dumps({"filter": "x"})
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -164,7 +164,7 @@ class TestCohortsGetUpdateDelete:
     def test_delete(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Verify deleting a cohort by ID succeeds with exit code 0."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["cohorts", "delete", "1"])
@@ -181,7 +181,7 @@ class TestCohortsBulk:
     ) -> None:
         """Verify bulk-deleting cohorts by comma-separated IDs succeeds."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["cohorts", "bulk-delete", "--ids", "1,2"])
@@ -195,7 +195,7 @@ class TestCohortsBulk:
         """Verify bulk-updating cohorts with a JSON entries array succeeds."""
         entries = json.dumps([{"id": 1, "name": "Updated"}])
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -210,7 +210,7 @@ class TestCohortsBulk:
     ) -> None:
         """Verify invalid JSON in bulk-update entries causes a non-zero exit."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -228,7 +228,7 @@ class TestCohortsInputValidation:
     ) -> None:
         """Verify non-numeric IDs in list filter cause a non-zero exit code."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["cohorts", "list", "--ids", "abc"])
@@ -240,7 +240,7 @@ class TestCohortsInputValidation:
     ) -> None:
         """Verify empty IDs string in bulk-delete causes a non-zero exit code."""
         with patch(
-            "mixpanel_data.cli.commands.cohorts.get_workspace",
+            "mixpanel_headless.cli.commands.cohorts.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["cohorts", "bulk-delete", "--ids", ""])

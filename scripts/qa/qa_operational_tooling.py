@@ -170,7 +170,7 @@ def main() -> int:
     print("-" * 40)
 
     def test_imports() -> dict[str, Any]:
-        from mixpanel_data.types import (  # noqa: F401
+        from mixpanel_headless.types import (  # noqa: F401
             AlertCount,
             AlertHistoryPagination,
             AlertHistoryResponse,
@@ -206,7 +206,7 @@ def main() -> int:
         if not config_path.exists():
             raise FileNotFoundError(f"Config not found: {config_path}")
 
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         cm = ConfigManager()
         accounts = cm.list_accounts()
@@ -226,7 +226,7 @@ def main() -> int:
 
     def test_workspace() -> dict[str, Any]:
         nonlocal ws
-        from mixpanel_data import Workspace
+        from mixpanel_headless import Workspace
 
         ws = Workspace()
         info = ws.info()
@@ -306,7 +306,7 @@ def main() -> int:
 
         def test_create_tag() -> dict[str, Any]:
             nonlocal qa_tag_id
-            from mixpanel_data.types import CreateAnnotationTagParams
+            from mixpanel_headless.types import CreateAnnotationTagParams
 
             tag = ws.create_annotation_tag(
                 CreateAnnotationTagParams(name=f"{qa_prefix}-tag")
@@ -344,7 +344,7 @@ def main() -> int:
 
         def test_create_annotation() -> dict[str, Any]:
             nonlocal annotation_id
-            from mixpanel_data.types import CreateAnnotationParams
+            from mixpanel_headless.types import CreateAnnotationParams
 
             tag_ids = [qa_tag_id] if qa_tag_id else None
             ann = ws.create_annotation(
@@ -382,7 +382,7 @@ def main() -> int:
         def test_update_annotation() -> dict[str, Any]:
             if annotation_id is None:
                 raise RuntimeError("No annotation created")
-            from mixpanel_data.types import UpdateAnnotationParams
+            from mixpanel_headless.types import UpdateAnnotationParams
 
             updated = ws.update_annotation(
                 annotation_id,
@@ -556,7 +556,7 @@ def main() -> int:
 
         def test_create_webhook() -> dict[str, Any]:
             nonlocal webhook_id
-            from mixpanel_data.types import CreateWebhookParams
+            from mixpanel_headless.types import CreateWebhookParams
 
             result = ws.create_webhook(
                 CreateWebhookParams(
@@ -581,7 +581,7 @@ def main() -> int:
         def test_update_webhook() -> dict[str, Any]:
             if webhook_id is None:
                 raise RuntimeError("No webhook created")
-            from mixpanel_data.types import UpdateWebhookParams
+            from mixpanel_headless.types import UpdateWebhookParams
 
             result = ws.update_webhook(
                 webhook_id,
@@ -595,7 +595,7 @@ def main() -> int:
         runner.run_test("6.4 Update webhook", test_update_webhook)
 
         def test_webhook_connectivity() -> dict[str, Any]:
-            from mixpanel_data.types import WebhookTestParams
+            from mixpanel_headless.types import WebhookTestParams
 
             result = ws.test_webhook(WebhookTestParams(url="https://httpbin.org/post"))
             return {
@@ -609,7 +609,7 @@ def main() -> int:
         def test_webhook_mutation_result_structure() -> dict[str, Any]:
             if webhook_id is None:
                 raise RuntimeError("No webhook created")
-            from mixpanel_data.types import UpdateWebhookParams
+            from mixpanel_headless.types import UpdateWebhookParams
 
             result = ws.update_webhook(
                 webhook_id, UpdateWebhookParams(name=f"{qa_prefix}-webhook-final")
@@ -744,7 +744,7 @@ def main() -> int:
 
             def test_create_alert() -> dict[str, Any]:
                 nonlocal alert_id
-                from mixpanel_data.types import CreateAlertParams
+                from mixpanel_headless.types import CreateAlertParams
 
                 alert = ws.create_alert(
                     CreateAlertParams(
@@ -784,7 +784,7 @@ def main() -> int:
             def test_update_alert() -> dict[str, Any]:
                 if alert_id is None:
                     raise RuntimeError("No alert created")
-                from mixpanel_data.types import UpdateAlertParams
+                from mixpanel_headless.types import UpdateAlertParams
 
                 updated = ws.update_alert(
                     alert_id,
@@ -831,7 +831,7 @@ def main() -> int:
 
             def test_create_second_alert() -> dict[str, Any]:
                 nonlocal alert_id_2
-                from mixpanel_data.types import CreateAlertParams
+                from mixpanel_headless.types import CreateAlertParams
 
                 alert = ws.create_alert(
                     CreateAlertParams(
@@ -869,7 +869,7 @@ def main() -> int:
             )
 
             def test_test_alert() -> dict[str, Any]:
-                from mixpanel_data.types import CreateAlertParams
+                from mixpanel_headless.types import CreateAlertParams
 
                 result = ws.test_alert(
                     CreateAlertParams(
@@ -893,7 +893,7 @@ def main() -> int:
             def test_validate_alerts() -> dict[str, Any]:
                 if alert_id is None:
                     raise RuntimeError("No alert created")
-                from mixpanel_data.types import ValidateAlertsForBookmarkParams
+                from mixpanel_headless.types import ValidateAlertsForBookmarkParams
 
                 try:
                     result = ws.validate_alerts_for_bookmark(

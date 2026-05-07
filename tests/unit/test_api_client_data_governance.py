@@ -17,9 +17,9 @@ from typing import Any
 import httpx
 import pytest
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.session import Session
-from mixpanel_data.exceptions import MixpanelDataError, QueryError
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.session import Session
+from mixpanel_headless.exceptions import MixpanelDataError, QueryError
 from tests.conftest import make_session
 
 # =============================================================================
@@ -1706,7 +1706,7 @@ class TestCreateCustomEvent:
             "alternatives": '[{"event": "Unknown"}]',
         }
 
-    def test_non_dict_response_raises_mixpanel_data_error(
+    def test_non_dict_response_raises_mixpanel_headless_error(
         self, oauth_credentials: Session
     ) -> None:
         """create_custom_event() raises MixpanelDataError if response isn't a dict."""
@@ -1719,7 +1719,7 @@ class TestCreateCustomEvent:
         with client, pytest.raises(MixpanelDataError):
             client.create_custom_event({"name": "X", "alternatives": "[]"})
 
-    def test_non_json_response_raises_mixpanel_data_error(
+    def test_non_json_response_raises_mixpanel_headless_error(
         self, oauth_credentials: Session
     ) -> None:
         """create_custom_event() raises MixpanelDataError with INVALID_RESPONSE.

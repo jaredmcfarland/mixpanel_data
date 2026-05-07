@@ -18,18 +18,21 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.bookmark_builders import build_filter_entry
-from mixpanel_data._internal.bookmark_enums import (
+from mixpanel_headless import Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless._internal.bookmark_builders import build_filter_entry
+from mixpanel_headless._internal.bookmark_enums import (
     MATH_REQUIRING_PROPERTY,
     VALID_FILTER_OPERATORS,
     VALID_PROPERTY_TYPES,
     VALID_RESOURCE_TYPES,
 )
-from mixpanel_data._internal.validation import validate_bookmark, validate_query_args
-from mixpanel_data.types import (
+from mixpanel_headless._internal.validation import (
+    validate_bookmark,
+    validate_query_args,
+)
+from mixpanel_headless.types import (
     Filter,
     Formula,
     GroupBy,

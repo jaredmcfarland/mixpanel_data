@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from mixpanel_data._internal.services.live_query import LiveQueryService
-from mixpanel_data.exceptions import AuthenticationError, QueryError
+from mixpanel_headless._internal.services.live_query import LiveQueryService
+from mixpanel_headless.exceptions import AuthenticationError, QueryError
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
 
 @pytest.fixture
@@ -533,7 +533,7 @@ class TestExtractStepsFromDateData:
 
     def test_non_segmented_format_returns_steps(self) -> None:
         """Non-segmented format with 'steps' key returns step list."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 
@@ -551,7 +551,7 @@ class TestExtractStepsFromDateData:
 
     def test_segmented_format_returns_overall(self) -> None:
         """Segmented format with '$overall' key returns aggregate data."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 
@@ -578,7 +578,7 @@ class TestExtractStepsFromDateData:
 
     def test_empty_steps_list_returns_empty(self) -> None:
         """Empty steps list returns empty list."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 
@@ -588,7 +588,7 @@ class TestExtractStepsFromDateData:
 
     def test_empty_overall_returns_empty(self) -> None:
         """Empty $overall list returns empty list."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 
@@ -598,7 +598,7 @@ class TestExtractStepsFromDateData:
 
     def test_steps_non_list_type_returns_empty(self) -> None:
         """Non-list type for steps returns empty list."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 
@@ -608,7 +608,7 @@ class TestExtractStepsFromDateData:
 
     def test_overall_non_list_type_returns_empty(self) -> None:
         """Non-list type for $overall returns empty list."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 
@@ -618,7 +618,7 @@ class TestExtractStepsFromDateData:
 
     def test_unrecognized_format_returns_empty(self) -> None:
         """Unrecognized format without steps or $overall returns empty list."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 
@@ -628,7 +628,7 @@ class TestExtractStepsFromDateData:
 
     def test_empty_dict_returns_empty(self) -> None:
         """Empty dict returns empty list."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 
@@ -637,7 +637,7 @@ class TestExtractStepsFromDateData:
 
     def test_steps_takes_precedence_over_overall(self) -> None:
         """When both 'steps' and '$overall' exist, 'steps' takes precedence."""
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             _extract_steps_from_date_data,
         )
 

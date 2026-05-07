@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     BulkEventUpdate,
     BulkPropertyUpdate,
     BulkUpdateEventsParams,

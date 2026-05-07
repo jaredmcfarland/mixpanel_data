@@ -11,12 +11,12 @@ from __future__ import annotations
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.validation import (
+from mixpanel_headless._internal.validation import (
     validate_group_by_args,
     validate_query_args,
     validate_time_args,
 )
-from mixpanel_data.types import GroupBy
+from mixpanel_headless.types import GroupBy
 
 # =============================================================================
 # Strategies

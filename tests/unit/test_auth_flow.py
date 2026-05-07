@@ -22,11 +22,11 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.auth.callback_server import CallbackResult
-from mixpanel_data._internal.auth.flow import OAuthFlow, _parse_pasted_redirect
-from mixpanel_data._internal.auth.storage import OAuthStorage
-from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
-from mixpanel_data.exceptions import OAuthError
+from mixpanel_headless._internal.auth.callback_server import CallbackResult
+from mixpanel_headless._internal.auth.flow import OAuthFlow, _parse_pasted_redirect
+from mixpanel_headless._internal.auth.storage import OAuthStorage
+from mixpanel_headless._internal.auth.token import OAuthClientInfo, OAuthTokens
+from mixpanel_headless.exceptions import OAuthError
 
 
 def _make_token_response(
@@ -88,9 +88,9 @@ def _make_client_info(
 class TestOAuthFlowLogin:
     """Tests for OAuthFlow.login() full sequence."""
 
-    @patch("mixpanel_data._internal.auth.flow.webbrowser")
-    @patch("mixpanel_data._internal.auth.flow.start_callback_server")
-    @patch("mixpanel_data._internal.auth.flow.ensure_client_registered")
+    @patch("mixpanel_headless._internal.auth.flow.webbrowser")
+    @patch("mixpanel_headless._internal.auth.flow.start_callback_server")
+    @patch("mixpanel_headless._internal.auth.flow.ensure_client_registered")
     def test_full_login_sequence(
         self,
         mock_register: MagicMock,
@@ -141,9 +141,9 @@ class TestOAuthFlowLogin:
     # longer accepts a ``project_id`` kwarg. Project ID lives on
     # ``Account.default_project`` in v3.
 
-    @patch("mixpanel_data._internal.auth.flow.webbrowser")
-    @patch("mixpanel_data._internal.auth.flow.start_callback_server")
-    @patch("mixpanel_data._internal.auth.flow.ensure_client_registered")
+    @patch("mixpanel_headless._internal.auth.flow.webbrowser")
+    @patch("mixpanel_headless._internal.auth.flow.start_callback_server")
+    @patch("mixpanel_headless._internal.auth.flow.ensure_client_registered")
     def test_handles_missing_refresh_token(
         self,
         mock_register: MagicMock,
@@ -172,9 +172,9 @@ class TestOAuthFlowLogin:
         assert tokens.access_token.get_secret_value() == "access-tok-123"
         assert tokens.refresh_token is None
 
-    @patch("mixpanel_data._internal.auth.flow.webbrowser")
-    @patch("mixpanel_data._internal.auth.flow.start_callback_server")
-    @patch("mixpanel_data._internal.auth.flow.ensure_client_registered")
+    @patch("mixpanel_headless._internal.auth.flow.webbrowser")
+    @patch("mixpanel_headless._internal.auth.flow.start_callback_server")
+    @patch("mixpanel_headless._internal.auth.flow.ensure_client_registered")
     def test_open_browser_false_skips_webbrowser_and_prints_url(
         self,
         mock_register: MagicMock,
@@ -293,9 +293,9 @@ class TestOAuthFlowPasteFallback:
     and pastes it back to the still-running CLI process.
     """
 
-    @patch("mixpanel_data._internal.auth.flow.webbrowser")
-    @patch("mixpanel_data._internal.auth.flow.start_callback_server")
-    @patch("mixpanel_data._internal.auth.flow.ensure_client_registered")
+    @patch("mixpanel_headless._internal.auth.flow.webbrowser")
+    @patch("mixpanel_headless._internal.auth.flow.start_callback_server")
+    @patch("mixpanel_headless._internal.auth.flow.ensure_client_registered")
     def test_paste_fallback_succeeds_when_callback_blocked(
         self,
         mock_register: MagicMock,
@@ -759,9 +759,9 @@ class TestOAuthFlowGetValidToken:
 class TestOAuthFlowRegionUrls:
     """Tests for region-specific OAuth base URLs."""
 
-    @patch("mixpanel_data._internal.auth.flow.webbrowser")
-    @patch("mixpanel_data._internal.auth.flow.start_callback_server")
-    @patch("mixpanel_data._internal.auth.flow.ensure_client_registered")
+    @patch("mixpanel_headless._internal.auth.flow.webbrowser")
+    @patch("mixpanel_headless._internal.auth.flow.start_callback_server")
+    @patch("mixpanel_headless._internal.auth.flow.ensure_client_registered")
     def test_eu_region_authorize_url(
         self,
         mock_register: MagicMock,

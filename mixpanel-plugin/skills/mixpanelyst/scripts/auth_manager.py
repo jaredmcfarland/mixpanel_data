@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plugin auth manager — JSON wrapper around the mixpanel_data auth namespaces.
+"""Plugin auth manager — JSON wrapper around the mixpanel_headless auth namespaces.
 
 Subcommands map 1:1 to ``mp account / project / workspace / target /
 session / bridge`` per
@@ -19,18 +19,18 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from mixpanel_data import Workspace, accounts, targets
-from mixpanel_data import session as sess
-from mixpanel_data._internal.auth.bridge import (
+from mixpanel_headless import Workspace, accounts, targets
+from mixpanel_headless import session as sess
+from mixpanel_headless._internal.auth.bridge import (
     default_bridge_search_paths,
     load_bridge,
 )
-from mixpanel_data._internal.auth.resolver import (
+from mixpanel_headless._internal.auth.resolver import (
     resolve_account_axis,
     resolve_session,
 )
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.exceptions import AccountNotFoundError, ConfigError
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.exceptions import AccountNotFoundError, ConfigError
 
 # Error codes the user can act on (re-login, set env, run specific CLI cmd).
 # The slash command renders precise hints when ``actionable=True``.
@@ -126,7 +126,7 @@ def _with_workspace(extractor: Callable[[Any], dict[str, Any]]) -> dict[str, Any
 
 def _cached_user(account_name: str) -> dict[str, Any] | None:
     """Return ``{id,email}`` from MeCache without fetching (FR-046)."""
-    from mixpanel_data._internal.me import MeCache
+    from mixpanel_headless._internal.me import MeCache
 
     me = MeCache(account_name=account_name).get()
     if me is None or me.user_id is None or me.user_email is None:

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 class TestAnnotationsList:
@@ -17,7 +17,7 @@ class TestAnnotationsList:
     def test_list_json(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test annotations list in JSON format."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["annotations", "list", "--format", "json"])
@@ -32,7 +32,7 @@ class TestAnnotationsList:
     ) -> None:
         """Test annotations list in table format."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -45,7 +45,7 @@ class TestAnnotationsList:
         """Test annotations list with no results."""
         mock_workspace.list_annotations.return_value = []
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["annotations", "list", "--format", "json"])
@@ -58,7 +58,7 @@ class TestAnnotationsList:
     ) -> None:
         """Test annotations list with --from and --to date filters."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -82,7 +82,7 @@ class TestAnnotationsList:
     ) -> None:
         """Test annotations list with --tags filter."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["annotations", "list", "--tags", "1,2"])
@@ -100,7 +100,7 @@ class TestAnnotationsCreate:
     ) -> None:
         """Test creating an annotation with only required options."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -123,7 +123,7 @@ class TestAnnotationsCreate:
     ) -> None:
         """Test creating an annotation with all options."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -155,7 +155,7 @@ class TestAnnotationsGet:
     def test_get(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting a single annotation by ID."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["annotations", "get", "1"])
@@ -173,7 +173,7 @@ class TestAnnotationsUpdate:
     ) -> None:
         """Test updating an annotation's description."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -195,7 +195,7 @@ class TestAnnotationsUpdate:
     ) -> None:
         """Test updating an annotation's tags."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -213,7 +213,7 @@ class TestAnnotationsDelete:
     def test_delete(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test deleting an annotation."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["annotations", "delete", "1"])
@@ -227,7 +227,7 @@ class TestAnnotationTagsList:
     def test_tags_list(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test listing annotation tags."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -247,7 +247,7 @@ class TestAnnotationTagsCreate:
     ) -> None:
         """Test creating an annotation tag."""
         with patch(
-            "mixpanel_data.cli.commands.annotations.get_workspace",
+            "mixpanel_headless.cli.commands.annotations.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(

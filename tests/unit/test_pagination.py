@@ -13,10 +13,10 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.session import Session
-from mixpanel_data._internal.pagination import paginate_all
-from mixpanel_data.exceptions import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.session import Session
+from mixpanel_headless._internal.pagination import paginate_all
+from mixpanel_headless.exceptions import (
     AuthenticationError,
     MixpanelDataError,
     RateLimitError,
@@ -300,7 +300,7 @@ class TestPaginateAllRobustness:
             )
 
         # Use a small MAX_PAGES for the test to avoid long runtime
-        with patch("mixpanel_data._internal.pagination.MAX_PAGES", 50):
+        with patch("mixpanel_headless._internal.pagination.MAX_PAGES", 50):
             client = create_mock_client(oauth_credentials, handler)
             with client, pytest.raises(MixpanelDataError, match="maximum page limit"):
                 # Consume all items — should raise before 15000

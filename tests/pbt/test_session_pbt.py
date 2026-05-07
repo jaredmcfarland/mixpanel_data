@@ -16,14 +16,14 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import SecretStr, TypeAdapter
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     Account,
     OAuthBrowserAccount,
     OAuthTokenAccount,
     Region,
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.session import (
+from mixpanel_headless._internal.auth.session import (
     Project,
     Session,
     WorkspaceRef,
@@ -175,10 +175,10 @@ def test_session_auth_header_format(s: Session) -> None:
     A fake :class:`TokenResolver` is supplied so the OAuth variants don't
     need real on-disk tokens.
     """
-    from mixpanel_data._internal.auth.account import (
+    from mixpanel_headless._internal.auth.account import (
         OAuthTokenAccount as _OAuthTokenAccount,
     )
-    from mixpanel_data._internal.auth.account import (
+    from mixpanel_headless._internal.auth.account import (
         TokenResolver as _TokenResolver,
     )
 

@@ -20,7 +20,7 @@ from httpx._types import SyncByteStream
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.api_client import (
+from mixpanel_headless._internal.api_client import (
     ENDPOINTS,
     MixpanelAPIClient,
     _iter_jsonl_lines,

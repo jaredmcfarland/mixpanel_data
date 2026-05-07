@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mixpanel_data._internal.me import (
+from mixpanel_headless._internal.me import (
     MeCache,
     MeOrgInfo,
     MeProjectInfo,
@@ -26,7 +26,7 @@ from mixpanel_data._internal.me import (
     MeService,
     MeWorkspaceInfo,
 )
-from mixpanel_data.exceptions import AuthenticationError, ConfigError, QueryError
+from mixpanel_headless.exceptions import AuthenticationError, ConfigError, QueryError
 
 
 class TestMeOrgInfo:

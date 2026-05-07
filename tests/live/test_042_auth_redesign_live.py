@@ -41,15 +41,15 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data import accounts as accounts_ns
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless import Workspace
+from mixpanel_headless import accounts as accounts_ns
+from mixpanel_headless._internal.auth.account import (
     OAuthBrowserAccount,
     OAuthTokenAccount,
     ServiceAccount,
 )
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.exceptions import (
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.exceptions import (
     AuthenticationError,
     OAuthError,
 )
@@ -730,7 +730,7 @@ class TestCatG_LiveEdgeCases:
         ``ConfigError`` at ``Workspace()`` construction so misconfigured
         deployments fail loudly instead of silently scoping to None.
         """
-        from mixpanel_data.exceptions import ConfigError
+        from mixpanel_headless.exceptions import ConfigError
 
         monkeypatch.setenv("MP_USERNAME", live_sa_creds["username"])
         monkeypatch.setenv("MP_SECRET", live_sa_creds["secret"])

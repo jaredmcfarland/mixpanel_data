@@ -15,16 +15,16 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     OAuthBrowserAccount,
     OAuthTokenAccount,
     ServiceAccount,
     TargetName,
 )
-from mixpanel_data._internal.auth.session import ActiveSession
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.exceptions import ConfigError
-from mixpanel_data.types import AccountSummary, Target
+from mixpanel_headless._internal.auth.session import ActiveSession
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.exceptions import ConfigError
+from mixpanel_headless.types import AccountSummary, Target
 
 # Path to the fixture corpus (constructed from project root).
 _FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "configs"
@@ -525,7 +525,7 @@ class TestRemoveAccount:
 
     def test_remove_referenced_without_force_raises(self, cm: ConfigManager) -> None:
         """Removing a referenced account without ``force`` raises."""
-        from mixpanel_data.exceptions import AccountInUseError
+        from mixpanel_headless.exceptions import AccountInUseError
 
         cm.add_account(
             "x",
@@ -671,7 +671,9 @@ class TestMutateTransaction:
 
         from unittest.mock import patch
 
-        with patch("mixpanel_data._internal.config.atomic_write_bytes") as mock_write:
+        with patch(
+            "mixpanel_headless._internal.config.atomic_write_bytes"
+        ) as mock_write:
             with cm._mutate() as raw:
                 cm._apply_set_active(raw, account="x", workspace=42)
                 cm._apply_update_account(raw, "x", default_project="456")

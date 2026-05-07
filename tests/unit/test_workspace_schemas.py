@@ -25,17 +25,17 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.types import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.types import (
     BulkCreateSchemasParams,
     BulkCreateSchemasResponse,
     BulkPatchResult,
     DeleteSchemasResponse,
     SchemaEntry,
 )
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless.workspace import Workspace
 from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
@@ -861,7 +861,7 @@ class TestDeleteSchemas:
         Args:
             temp_dir: Pytest tmp_path fixture.
         """
-        from mixpanel_data.exceptions import MixpanelDataError
+        from mixpanel_headless.exceptions import MixpanelDataError
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Should never be called."""

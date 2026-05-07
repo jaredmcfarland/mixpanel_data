@@ -1,4 +1,4 @@
-"""Tests for Phase 024 Pydantic CRUD types in mixpanel_data.types.
+"""Tests for Phase 024 Pydantic CRUD types in mixpanel_headless.types.
 
 Tests Dashboard, Blueprint, Bookmark, and Cohort types including
 frozen immutability, extra field preservation, field aliasing/renaming,
@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     BlueprintCard,
     BlueprintConfig,
     BlueprintFinishParams,

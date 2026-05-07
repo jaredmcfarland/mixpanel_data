@@ -19,19 +19,19 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import accounts as accounts_ns
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless import accounts as accounts_ns
+from mixpanel_headless._internal.auth.account import (
     OAuthBrowserAccount,
     OAuthTokenAccount,
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.bridge import (
+from mixpanel_headless._internal.auth.bridge import (
     export_bridge,
     load_bridge,
     remove_bridge,
 )
-from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
-from mixpanel_data.exceptions import OAuthError
+from mixpanel_headless._internal.auth.token_resolver import OnDiskTokenResolver
+from mixpanel_headless.exceptions import OAuthError
 
 
 @pytest.fixture(autouse=True)
@@ -269,7 +269,7 @@ class TestAccountsNamespaceWiring:
         self, tmp_path: Path
     ) -> None:
         """``[settings].custom_header`` propagates into ``bridge.headers``."""
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         accounts_ns.add(
             "team",

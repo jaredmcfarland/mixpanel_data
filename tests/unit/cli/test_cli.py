@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.cli.main import app
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.cli.main import app
 
 
 @pytest.fixture(autouse=True)
@@ -170,7 +170,7 @@ class TestAccountLoginNoBrowser:
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """``--no-browser`` forwards to ``accounts_ns.login(open_browser=False)``."""
-        from mixpanel_data import accounts as accounts_ns
+        from mixpanel_headless import accounts as accounts_ns
 
         # Seed an oauth_browser account so the CLI command type-checks pass.
         runner.invoke(
@@ -194,7 +194,7 @@ class TestAccountLoginNoBrowser:
             # Return a minimal OAuthLoginResult so the CLI handler can render.
             from datetime import datetime, timezone
 
-            from mixpanel_data.types import OAuthLoginResult
+            from mixpanel_headless.types import OAuthLoginResult
 
             return OAuthLoginResult(
                 account_name=name,
@@ -282,7 +282,7 @@ class TestProjectCliList:
                 ``service_account`` requires ``--project`` at add time;
                 we strip it post-hoc via ConfigManager when None.
         """
-        from mixpanel_data._internal.me import (
+        from mixpanel_headless._internal.me import (
             MeCache,
             MeProjectInfo,
             MeResponse,
@@ -389,7 +389,7 @@ class TestProjectCliList:
         :meth:`Workspace.projects(refresh=)`).
         """
         self._seed_account_and_me_cache(runner, monkeypatch)
-        from mixpanel_data._internal import me as me_mod
+        from mixpanel_headless._internal import me as me_mod
 
         call_log: list[bool] = []
 

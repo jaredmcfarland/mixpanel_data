@@ -22,7 +22,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from mixpanel_data.types import UserQueryResult
+from mixpanel_headless.types import UserQueryResult
 
 # =============================================================================
 # Helpers

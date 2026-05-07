@@ -29,21 +29,21 @@ from typing import Any
 import httpx
 import pytest
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.session import Session
-from mixpanel_data._internal.me import MeOrgInfo, MeProjectInfo, MeResponse
-from mixpanel_data.exceptions import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.session import Session
+from mixpanel_headless._internal.me import MeOrgInfo, MeProjectInfo, MeResponse
+from mixpanel_headless.exceptions import (
     BusinessContextValidationError,
     MixpanelDataError,
     QueryError,
     WorkspaceScopeError,
 )
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     BUSINESS_CONTEXT_MAX_CHARS,
     BusinessContext,
     BusinessContextChain,
 )
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless.workspace import Workspace
 from tests.conftest import make_session
 
 # =============================================================================
@@ -208,7 +208,7 @@ class TestGetBusinessContextProject:
         ):
             ws.get_business_context(level="org")  # type: ignore[arg-type]
 
-    def test_missing_content_raises_mixpanel_data_error(self) -> None:
+    def test_missing_content_raises_mixpanel_headless_error(self) -> None:
         """API response without ``content`` field → MixpanelDataError."""
 
         def handler(request: httpx.Request) -> httpx.Response:

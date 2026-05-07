@@ -13,12 +13,12 @@ from __future__ import annotations
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     OAuthBrowserAccount,
     OAuthTokenAccount,
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.session import (
+from mixpanel_headless._internal.auth.session import (
     Project,
     Session,
     WorkspaceRef,
@@ -336,7 +336,7 @@ class TestPublicSurface:
         them as part of the supported surface while the prefix says otherwise.
         Internal callers can still import them directly by name.
         """
-        from mixpanel_data._internal.auth import session as session_mod
+        from mixpanel_headless._internal.auth import session as session_mod
 
         assert "_SENTINEL" not in session_mod.__all__
         assert "_SentinelType" not in session_mod.__all__

@@ -23,8 +23,8 @@ from typing import Any
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.query.user_builders import filter_to_selector
-from mixpanel_data.types import Filter, UserQueryResult
+from mixpanel_headless._internal.query.user_builders import filter_to_selector
+from mixpanel_headless.types import Filter, UserQueryResult
 
 # =============================================================================
 # Custom Strategies

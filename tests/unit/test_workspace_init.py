@@ -17,18 +17,18 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import accounts as accounts_ns
-from mixpanel_data import targets as targets_ns
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless import accounts as accounts_ns
+from mixpanel_headless import targets as targets_ns
+from mixpanel_headless._internal.auth.account import (
     Account,
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.session import (
+from mixpanel_headless._internal.auth.session import (
     Project,
     Session,
 )
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.workspace import Workspace
 
 
 @pytest.fixture(autouse=True)

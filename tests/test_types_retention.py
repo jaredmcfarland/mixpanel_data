@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data.types import Filter, RetentionEvent, RetentionQueryResult
+from mixpanel_headless.types import Filter, RetentionEvent, RetentionQueryResult
 
 # =============================================================================
 # T004: RetentionEvent
@@ -435,14 +435,14 @@ class TestRetentionMathType:
 
     def test_valid_values_in_enum(self) -> None:
         """VALID_MATH_RETENTION contains retention_rate and unique."""
-        from mixpanel_data._internal.bookmark_enums import VALID_MATH_RETENTION
+        from mixpanel_headless._internal.bookmark_enums import VALID_MATH_RETENTION
 
         assert "retention_rate" in VALID_MATH_RETENTION
         assert "unique" in VALID_MATH_RETENTION
 
     def test_insights_math_not_in_retention(self) -> None:
         """Insights-only math types are not in VALID_MATH_RETENTION."""
-        from mixpanel_data._internal.bookmark_enums import VALID_MATH_RETENTION
+        from mixpanel_headless._internal.bookmark_enums import VALID_MATH_RETENTION
 
         assert "dau" not in VALID_MATH_RETENTION
         assert "wau" not in VALID_MATH_RETENTION
@@ -451,7 +451,7 @@ class TestRetentionMathType:
 
     def test_retention_math_is_subset_of_all_math(self) -> None:
         """VALID_MATH_RETENTION must be a subset of VALID_MATH_TYPES."""
-        from mixpanel_data._internal.bookmark_enums import (
+        from mixpanel_headless._internal.bookmark_enums import (
             VALID_MATH_RETENTION,
             VALID_MATH_TYPES,
         )

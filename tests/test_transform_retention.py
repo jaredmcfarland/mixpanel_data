@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data._internal.services.live_query import _transform_retention_result
-from mixpanel_data.exceptions import QueryError
-from mixpanel_data.types import RetentionQueryResult
+from mixpanel_headless._internal.services.live_query import _transform_retention_result
+from mixpanel_headless.exceptions import QueryError
+from mixpanel_headless.types import RetentionQueryResult
 
 # =============================================================================
 # Shared fixtures
