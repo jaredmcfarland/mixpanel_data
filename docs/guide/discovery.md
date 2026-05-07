@@ -14,7 +14,7 @@ Get all event names in your project:
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -445,7 +445,7 @@ events3 = ws.events()
 A typical discovery workflow before analysis:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 

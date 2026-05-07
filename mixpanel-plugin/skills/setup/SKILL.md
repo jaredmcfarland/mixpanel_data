@@ -1,6 +1,6 @@
 ---
 name: mixpanel-data:setup
-description: This skill installs mixpanel_data, pandas, numpy, matplotlib, seaborn, networkx, anytree, scipy (and pyarrow on Python 3.11+), then verifies Mixpanel credentials. It should be invoked when setting up a new environment for Mixpanel data analysis, when dependencies are missing, or when configuring service account or OAuth credentials for the first time.
+description: This skill installs mixpanel_headless, pandas, numpy, matplotlib, seaborn, networkx, anytree, scipy (and pyarrow on Python 3.11+), then verifies Mixpanel credentials. It should be invoked when setting up a new environment for Mixpanel data analysis, when dependencies are missing, or when configuring service account or OAuth credentials for the first time.
 disable-model-invocation: true
 allowed-tools: Bash
 ---
@@ -17,7 +17,7 @@ bash ${CLAUDE_SKILL_DIR}/scripts/setup.sh
 
 This will:
 1. Verify Python 3.10+ is available
-2. Install `mixpanel_data`, `pandas`, `numpy`, `matplotlib`, `seaborn`, `networkx>=3.0`, `anytree>=2.8.0`, `scipy`, and `pyarrow>=17.0` on Python 3.11+ (tries uv, pip in order)
+2. Install `mixpanel_headless`, `pandas`, `numpy`, `matplotlib`, `seaborn`, `networkx>=3.0`, `anytree>=2.8.0`, `scipy`, and `pyarrow>=17.0` on Python 3.11+ (tries uv, pip in order)
 3. Verify all packages import successfully (including pyarrow on 3.11+, networkx, anytree, and scipy)
 4. Check for configured Mixpanel credentials (single schema — Account → Project → Workspace)
 
@@ -146,7 +146,7 @@ The user can also construct a Workspace targeting a specific account / project /
 workspace directly:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()                                  # default session
 ws = mp.Workspace(account="team")                    # named account

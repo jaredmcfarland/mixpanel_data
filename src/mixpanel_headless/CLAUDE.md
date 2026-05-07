@@ -1,4 +1,4 @@
-# mixpanel_data Package
+# mixpanel_headless Package
 
 A complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, streaming, and entity management.
 
@@ -54,7 +54,7 @@ and act as named cursor positions:
 ## Primary Entry Point
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # Default — resolves the active account/project/workspace from
 # `~/.mp/config.toml [active]` + the active account's default_project.

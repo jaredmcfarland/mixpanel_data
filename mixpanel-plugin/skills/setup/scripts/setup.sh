@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install mixpanel_data and pandas for CodeMode analytics
+# Install mixpanel_headless and pandas for CodeMode analytics
 set -euo pipefail
 
 echo "=== Mixpanel Data — CodeMode Setup ==="
@@ -27,8 +27,8 @@ if [ -z "$python_cmd" ]; then
 fi
 
 # Install packages
-# mixpanel_data is not on PyPI — install from GitHub
-MIXPANEL_DATA_PKG="git+https://github.com/mixpanel/mixpanel-headless.git"
+# mixpanel_headless is not on PyPI — install from GitHub
+MIXPANEL_HEADLESS_PKG="git+https://github.com/mixpanel/mixpanel-headless.git"
 DEPS=(pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy)
 
 # pyarrow is only needed on Python 3.11+ (for pandas 3.x Arrow-backed dtypes)
@@ -37,13 +37,13 @@ if [ "$minor" -ge 11 ]; then
 fi
 
 echo ""
-echo "Installing mixpanel_data (from GitHub) and dependencies..."
+echo "Installing mixpanel_headless (from GitHub) and dependencies..."
 if command -v uv &>/dev/null; then
   echo "  (using uv)"
-  uv pip install --python "$python_cmd" "$MIXPANEL_DATA_PKG" "${DEPS[@]}" || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_DATA_PKG" "${DEPS[@]}"; }
+  uv pip install --python "$python_cmd" "$MIXPANEL_HEADLESS_PKG" "${DEPS[@]}" || { echo "  ⚠ Virtualenv install failed, trying system install..."; uv pip install --system --python "$python_cmd" "$MIXPANEL_HEADLESS_PKG" "${DEPS[@]}"; }
 elif "$python_cmd" -m pip --version &>/dev/null; then
   echo "  (using pip via $python_cmd)"
-  "$python_cmd" -m pip install "$MIXPANEL_DATA_PKG" "${DEPS[@]}"
+  "$python_cmd" -m pip install "$MIXPANEL_HEADLESS_PKG" "${DEPS[@]}"
 else
   echo "✗ No package manager found. Install pip or uv."
   echo "  Recommended: https://docs.astral.sh/uv/"
@@ -55,7 +55,7 @@ echo ""
 echo "Verifying installation..."
 "$python_cmd" -c "
 import sys
-import mixpanel_data as mp
+import mixpanel_headless as mp
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -63,7 +63,7 @@ import seaborn as sns
 import networkx as nx
 import anytree
 import scipy
-print(f'✓ mixpanel_data installed')
+print(f'✓ mixpanel_headless installed')
 print(f'✓ pandas {pd.__version__}')
 if sys.version_info >= (3, 11):
     import pyarrow as pa
@@ -101,7 +101,7 @@ if len(oauth_set) == len(oauth_triple):
 
 # 3) Persisted accounts in ~/.mp/config.toml
 try:
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
     accounts = mp.accounts.list()
     if accounts:
         active = next((a for a in accounts if a.is_active), None)

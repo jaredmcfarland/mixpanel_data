@@ -1,6 +1,6 @@
 # Architecture
 
-mixpanel_data follows a layered architecture with clear separation of concerns.
+mixpanel_headless follows a layered architecture with clear separation of concerns.
 
 !!! tip "Explore on DeepWiki"
     🤖 **[Architecture Deep Dive →](https://deepwiki.com/mixpanel/mixpanel-headless/5-architecture)**
@@ -163,7 +163,7 @@ All services accept their dependencies as constructor arguments. This enables:
 ## Package Structure
 
 ```
-src/mixpanel_data/
+src/mixpanel_headless/
 ├── __init__.py              # Public exports (Workspace, Account, Session, namespaces, exceptions, types)
 ├── workspace.py             # Workspace facade with Workspace.use()
 ├── auth_types.py            # Public auth surface (Account union, Session, Region, OAuthTokens, BridgeFile, ...)

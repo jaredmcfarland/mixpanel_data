@@ -1,4 +1,4 @@
-site_name: mixpanel_data
+site_name: mixpanel_headless
 site_description: Python library for working with Mixpanel analytics data, designed for AI coding agents
 site_author: Jared McFarland
 site_url: https://mixpanel.github.io/mixpanel-headless/
@@ -125,7 +125,7 @@ plugins:
       # pawamoy's plugin - handles all llms.txt generation from HTML
       full_output: llms-full.txt
       markdown_description: |
-        mixpanel_data is a complete programmable interface to Mixpanel analytics.
+        mixpanel_headless is a complete programmable interface to Mixpanel analytics.
         Python library and CLI for discovery, querying, streaming, and entity management.
         Discover your schema, run live analytics (segmentation, funnels, retention, flows),
         execute JQL, and stream data for processing.

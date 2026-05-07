@@ -33,7 +33,7 @@ Use the legacy `funnel()` when:
 The simplest possible funnel — two steps with default settings (14-day conversion window, last 30 days):
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -75,7 +75,7 @@ At least 2 steps are required, up to a maximum of 100.
 For per-step configuration, use `FunnelStep` objects:
 
 ```python
-from mixpanel_data import FunnelStep, Filter
+from mixpanel_headless import FunnelStep, Filter
 
 result = ws.query_funnel([
     FunnelStep("Signup"),
@@ -111,7 +111,7 @@ result = ws.query_funnel([
 Apply filters to individual steps using `FunnelStep.filters`. These restrict which events count for that specific step:
 
 ```python
-from mixpanel_data import FunnelStep, Filter
+from mixpanel_headless import FunnelStep, Filter
 
 result = ws.query_funnel([
     FunnelStep("Signup", filters=[Filter.equals("source", "organic")]),
@@ -284,7 +284,7 @@ result = ws.query_funnel(
 Apply filters across all steps with `where=`:
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 # Filter the entire funnel
 result = ws.query_funnel(
@@ -311,7 +311,7 @@ See [Insights Queries — Available Filter Methods](query.md#available-filter-me
 Restrict the funnel to users in a cohort — saved or inline:
 
 ```python
-from mixpanel_data import Filter, CohortCriteria, CohortDefinition
+from mixpanel_headless import Filter, CohortCriteria, CohortDefinition
 
 # Saved cohort
 result = ws.query_funnel(
@@ -336,7 +336,7 @@ See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full 
 Use saved or inline custom properties in funnel filters:
 
 ```python
-from mixpanel_data import Filter, CustomPropertyRef
+from mixpanel_headless import Filter, CustomPropertyRef
 
 result = ws.query_funnel(
     ["Signup", "Purchase"],
@@ -354,7 +354,7 @@ See [Insights Queries — Custom Properties in Queries](query.md#custom-properti
 Break down funnel results by property values with `group_by`:
 
 ```python
-from mixpanel_data import GroupBy
+from mixpanel_headless import GroupBy
 
 # Simple string breakdown
 result = ws.query_funnel(["Signup", "Purchase"], group_by="platform")
@@ -374,7 +374,7 @@ result = ws.query_funnel(
 Segment funnel results by cohort membership:
 
 ```python
-from mixpanel_data import CohortBreakdown
+from mixpanel_headless import CohortBreakdown
 
 # Compare power users vs. everyone else through the funnel
 result = ws.query_funnel(
@@ -390,7 +390,7 @@ See [Insights Queries — Cohort Breakdowns](query.md#cohort-breakdowns) for inl
 Break down funnel results by a saved or inline custom property:
 
 ```python
-from mixpanel_data import GroupBy, InlineCustomProperty
+from mixpanel_headless import GroupBy, InlineCustomProperty
 
 result = ws.query_funnel(
     ["Signup", "Purchase"],
@@ -427,7 +427,7 @@ result = ws.query_funnel(
 For targeted exclusion between specific steps, use `Exclusion` objects:
 
 ```python
-from mixpanel_data import Exclusion
+from mixpanel_headless import Exclusion
 
 result = ws.query_funnel(
     ["Signup", "Add to Cart", "Checkout", "Purchase"],
@@ -476,7 +476,7 @@ result = ws.query_funnel(
 For user-profile properties, use `HoldingConstant` objects:
 
 ```python
-from mixpanel_data import HoldingConstant
+from mixpanel_headless import HoldingConstant
 
 result = ws.query_funnel(
     ["Signup", "Purchase"],
@@ -577,7 +577,7 @@ result = ws.query_funnel(
 Compare funnel conversion against a previous period using `TimeComparison`:
 
 ```python
-from mixpanel_data import TimeComparison
+from mixpanel_headless import TimeComparison
 
 # Compare this week's funnel against last week
 result = ws.query_funnel(
@@ -650,7 +650,7 @@ The DataFrame has one row per funnel step:
 The generated bookmark params can be saved as a Mixpanel report:
 
 ```python
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 
 result = ws.query_funnel(["Signup", "Purchase"], conversion_window=7, last=90)
 
@@ -699,8 +699,8 @@ print(json.dumps(result.params, indent=2))
 ### E-Commerce Funnel
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import FunnelStep, Filter, Exclusion, HoldingConstant
+import mixpanel_headless as mp
+from mixpanel_headless import FunnelStep, Filter, Exclusion, HoldingConstant
 
 ws = mp.Workspace()
 
@@ -769,7 +769,7 @@ import json
 print(json.dumps(params, indent=2))  # inspect the generated bookmark JSON
 
 # Save as a report directly from params
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 
 ws.create_bookmark(CreateBookmarkParams(
     name="Purchase Funnel (7d)",

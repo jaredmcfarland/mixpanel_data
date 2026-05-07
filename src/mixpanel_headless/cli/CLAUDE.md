@@ -1,6 +1,6 @@
 # CLI Package
 
-The `mp` command-line interface for `mixpanel_data`—a complete programmable interface to Mixpanel analytics. Built with Typer.
+The `mp` command-line interface for `mixpanel_headless`—a complete programmable interface to Mixpanel analytics. Built with Typer.
 
 ## Command Groups
 

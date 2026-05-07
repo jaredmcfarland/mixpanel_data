@@ -1,4 +1,4 @@
-# mixpanel_data
+# mixpanel_headless
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/github/license/mixpanel/mixpanel-headless)](LICENSE)
@@ -7,9 +7,9 @@
 
 A complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, streaming, and entity management.
 
-## Why mixpanel_data?
+## Why mixpanel_headless?
 
-Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_data** provides a unified interface: discover your schema, run analytics queries, stream data, and manage entities—all through consistent Python methods or CLI commands.
+Mixpanel's web UI is powerful for interactive exploration, but programmatic access requires navigating multiple REST endpoints with different conventions. **mixpanel_headless** provides a unified interface: discover your schema, run analytics queries, stream data, and manage entities—all through consistent Python methods or CLI commands.
 
 Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, breakdowns, cohort-scoped queries, period-over-period comparison, frequency analysis), typed funnel queries (ad-hoc steps, exclusions, conversion windows), typed retention queries (event pairs, custom buckets, alignment modes), typed flow queries (path analysis, direction controls, visualization modes), typed user profile queries (property filtering, sorting, parallel fetching, aggregate statistics), segmentation, saved reports—plus entity management (dashboards, reports, cohorts, feature flags, experiments), raw JQL execution, and streaming data extraction.
 
@@ -84,7 +84,7 @@ mp inspect funnels                     # Saved funnels
 ### 3. Run Analytics Queries
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -101,7 +101,7 @@ mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 --on co
 ### 4. Stream Data (Python API)
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
@@ -111,9 +111,9 @@ for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):
 ## Python API
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import Metric, Filter, Formula, GroupBy, RetentionEvent
-from mixpanel_data import TimeComparison, FrequencyBreakdown, FrequencyFilter
+import mixpanel_headless as mp
+from mixpanel_headless import Metric, Filter, Formula, GroupBy, RetentionEvent
+from mixpanel_headless import TimeComparison, FrequencyBreakdown, FrequencyFilter
 
 ws = mp.Workspace()
 
@@ -171,7 +171,7 @@ retention = ws.query_retention(
 print(retention.df.head())  # cohort_date | bucket | count | rate
 
 # Typed flow query — analyze user paths
-from mixpanel_data import FlowStep
+from mixpanel_headless import FlowStep
 flow_result = ws.query_flow("Purchase", forward=3, reverse=1)
 print(flow_result.nodes_df.head())   # step | event | type | count
 print(flow_result.top_transitions(5))
@@ -192,7 +192,7 @@ count = ws.query_user(where=Filter.is_set("$email"))
 print(f"Users with email: {count.value}")
 
 # Cohort-scoped queries — define cohorts inline, no UI needed
-from mixpanel_data import CohortCriteria, CohortDefinition, CohortBreakdown
+from mixpanel_headless import CohortCriteria, CohortDefinition, CohortBreakdown
 power_users = CohortDefinition(
     CohortCriteria.did_event("Purchase", at_least=3, within_days=30)
 )
@@ -352,7 +352,7 @@ Key design features:
 
 ## Claude Code Plugin
 
-This project includes a Claude Code plugin (v5.0) that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_data` + `pandas` rather than calling CLI commands or MCP tools.
+This project includes a Claude Code plugin (v5.0) that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_headless` + `pandas` rather than calling CLI commands or MCP tools.
 
 The plugin is built around the 5-engine query taxonomy — `query()`, `query_funnel()`, `query_retention()`, `query_flow()`, and `query_user()` — with full cohort-scoped query support. Claude translates natural language analytics questions into typed query calls with filters, breakdowns, formulas, cohort definitions, and aggregations, then interprets results as DataFrames.
 

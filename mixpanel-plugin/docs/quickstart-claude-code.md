@@ -1,4 +1,4 @@
-# Quick Start: mixpanel_data + Claude Code
+# Quick Start: mixpanel_headless + Claude Code
 
 Get Claude answering questions about your Mixpanel data in under 5 minutes. No coding required — Claude writes and runs the Python for you.
 
@@ -32,7 +32,7 @@ This installs the `mixpanel-data` plugin, which teaches Claude how to be a Mixpa
 /mixpanel-data:setup
 ```
 
-This installs the `mixpanel_data` Python package and all analysis dependencies (pandas, matplotlib, networkx, etc.). It takes about a minute.
+This installs the `mixpanel_headless` Python package and all analysis dependencies (pandas, matplotlib, networkx, etc.). It takes about a minute.
 
 At the end, setup checks for Mixpanel credentials. If you see a warning about missing credentials, continue to Step 3.
 
@@ -124,7 +124,7 @@ Build me a weekly KPI dashboard showing signups, activation, and revenue.
 Claude automatically:
 - Discovers your events and properties
 - Chooses the right query engine (Insights, Funnels, Retention, or Flows)
-- Writes and runs Python code using `mixpanel_data` + `pandas`
+- Writes and runs Python code using `mixpanel_headless` + `pandas`
 - Explains the results in plain language
 
 ---
@@ -134,7 +134,7 @@ Claude automatically:
 When you ask a question, Claude writes Python like this:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 

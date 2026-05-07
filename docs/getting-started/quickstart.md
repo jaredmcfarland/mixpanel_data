@@ -1,6 +1,6 @@
 # Quick Start
 
-This guide walks you through your first queries with mixpanel_data in about 5 minutes.
+This guide walks you through your first queries with mixpanel_headless in about 5 minutes.
 
 !!! tip "Explore on DeepWiki"
     🤖 **[Quick Start Tutorial →](https://deepwiki.com/mixpanel/mixpanel-headless/2.3-quick-start-tutorial)**
@@ -11,7 +11,7 @@ This guide walks you through your first queries with mixpanel_data in about 5 mi
 
 You'll need:
 
-- mixpanel_data installed (`pip install git+https://github.com/mixpanel/mixpanel-headless.git`)
+- mixpanel_headless installed (`pip install git+https://github.com/mixpanel/mixpanel-headless.git`)
 - **Either** a Mixpanel service account (username, secret, project ID) **or** a Mixpanel user account (for OAuth login)
 - Your project's data residency region (us, eu, or in)
 
@@ -97,7 +97,7 @@ After authenticating with a registered account (Options B or C above), select wh
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
     for project in ws.projects():
@@ -125,7 +125,7 @@ Verify credentials are working:
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     result = mp.accounts.test()  # AccountTestResult; never raises — check result.ok / result.error
     if result.ok:
@@ -149,7 +149,7 @@ Before writing queries, survey your data landscape. Discovery commands let you s
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
     events = ws.events()         # list[str]
@@ -239,8 +239,8 @@ This discovery workflow ensures your queries reference real event names, valid p
 Use `query()` for typed, composable analytics — DAU/WAU/MAU, formulas, filters, breakdowns, and more:
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import Metric, Filter
+import mixpanel_headless as mp
+from mixpanel_headless import Metric, Filter
 
 ws = mp.Workspace()
 
@@ -272,7 +272,7 @@ result = ws.query(
 Scope any query to a user segment — define cohorts inline without saving them first:
 
 ```python
-from mixpanel_data import CohortCriteria, CohortDefinition, Filter, CohortBreakdown
+from mixpanel_headless import CohortCriteria, CohortDefinition, Filter, CohortBreakdown
 
 # Define a cohort on the fly
 power_users = CohortDefinition(
@@ -293,7 +293,7 @@ Cohort filters work across all five query methods. See the [Insights Queries gui
 Define funnels inline with typed steps — no saved funnel required:
 
 ```python
-from mixpanel_data import FunnelStep, Filter
+from mixpanel_headless import FunnelStep, Filter
 
 # Simple funnel
 result = ws.query_funnel(["Signup", "Purchase"])
@@ -318,7 +318,7 @@ See the [Funnel Queries guide](../guide/query-funnels.md) for full coverage.
 Measure cohort retention with typed event pairs — no saved report required:
 
 ```python
-from mixpanel_data import RetentionEvent, Filter
+from mixpanel_headless import RetentionEvent, Filter
 
 # Simple retention: do signups come back?
 result = ws.query_retention("Signup", "Login", retention_unit="week", last=90)
@@ -343,7 +343,7 @@ See the [Retention Queries guide](../guide/query-retention.md) for full coverage
 Analyze user paths through your product — what do users do before and after key events:
 
 ```python
-from mixpanel_data import FlowStep, Filter
+from mixpanel_headless import FlowStep, Filter
 
 # What happens after Purchase?
 result = ws.query_flow("Purchase", forward=3, last=90)
@@ -366,7 +366,7 @@ See the [Flow Queries guide](../guide/query-flows.md) for full coverage.
 Search, filter, and aggregate user profiles stored in Mixpanel:
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 # Query user profiles
 result = ws.query_user(
@@ -403,7 +403,7 @@ For segmentation, funnels, and retention via the older Query API:
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -422,7 +422,7 @@ For segmentation, funnels, and retention via the older Query API:
 `Workspace.use()` swaps any axis without rebuilding the underlying HTTP client (O(1) per swap), so cross-project iteration is cheap:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -476,7 +476,7 @@ Create, update, and delete dashboards, reports, cohorts, feature flags, and expe
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -504,7 +504,7 @@ For ETL pipelines or data processing, stream data directly:
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
     for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):

@@ -4,12 +4,12 @@ This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-`mixpanel_data` is a complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, streaming, and entity management. Discover your schema, run live analytics (segmentation, funnels, retention), execute JQL, and manage entities via the Mixpanel App API.
+`mixpanel_headless` is a complete programmable interface to Mixpanel analytics—Python library and CLI for discovery, querying, streaming, and entity management. Discover your schema, run live analytics (segmentation, funnels, retention), execute JQL, and manage entities via the Mixpanel App API.
 
 | Context | Name | Example |
 |---------|------|---------|
-| PyPI package | `mixpanel_data` | `pip install mixpanel_data` |
-| Python import | `mixpanel_data` | `import mixpanel_data as mp` |
+| PyPI package | `mixpanel_headless` | `pip install mixpanel_headless` |
+| Python import | `mixpanel_headless` | `import mixpanel_headless as mp` |
 | CLI command | `mp` | `mp query segmentation -e Login --from 2025-01-01` |
 
 ## Architecture
@@ -34,7 +34,7 @@ Infrastructure           → ConfigManager, MixpanelAPIClient
 ## Package Structure
 
 ```
-src/mixpanel_data/
+src/mixpanel_headless/
 ├── __init__.py              # Public API exports
 ├── workspace.py             # Workspace facade — `use(account=, project=, workspace=, target=)`
 ├── auth_types.py            # Auth surface (Account union, Session, Region, OAuthTokens, …)
@@ -291,7 +291,7 @@ Suppressing stderr causes silent failures and makes it impossible to diagnose is
 
 ## mixpanel-data Plugin (v4.1 — Distilled API Surface + Live Docs)
 
-This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin provides the `mixpanel_data` API surface and a live documentation system (`help.py`) for querying and analyzing Mixpanel data with Python.
+This project includes a Claude Code plugin in `mixpanel-plugin/`. The plugin provides the `mixpanel_headless` API surface and a live documentation system (`help.py`) for querying and analyzing Mixpanel data with Python.
 
 ### Plugin Components
 

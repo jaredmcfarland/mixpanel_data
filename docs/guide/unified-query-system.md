@@ -3,7 +3,7 @@
 Five analytics engines. One Python vocabulary. Every query validated before it hits the network.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -130,7 +130,7 @@ Mix freely. Strings and objects can appear in the same query.
 Every filter is a class method on `Filter`. Autocomplete shows you every option:
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 # String comparisons
 Filter.equals("country", "US")
@@ -228,7 +228,7 @@ result.anytree                   # anytree AnyNode objects
 The general-purpose analytics engine. Counts, aggregations, DAU/WAU/MAU, formulas, rolling windows.
 
 ```python
-from mixpanel_data import Metric, Formula, Filter, GroupBy
+from mixpanel_headless import Metric, Formula, Filter, GroupBy
 
 # DAU over 90 days, weekly
 result = ws.query("Login", math="dau", last=90, unit="week")
@@ -300,7 +300,7 @@ result = ws.query([
 Step-by-step conversion analysis with conversion windows, exclusions, and step ordering.
 
 ```python
-from mixpanel_data import (
+from mixpanel_headless import (
     FunnelStep, Exclusion, HoldingConstant, Filter,
 )
 
@@ -363,7 +363,7 @@ result = ws.query_funnel(
 Cohort retention with custom buckets, alignment modes, and display options.
 
 ```python
-from mixpanel_data import RetentionEvent, Filter
+from mixpanel_headless import RetentionEvent, Filter
 
 # Weekly retention, last 90 days
 result = ws.query_retention(
@@ -417,7 +417,7 @@ result = ws.query_retention(
 Path analysis with forward/reverse tracing, three visualization modes, and graph algorithms.
 
 ```python
-from mixpanel_data import FlowStep, Filter
+from mixpanel_headless import FlowStep, Filter
 
 # What happens after Purchase?
 result = ws.query_flow("Purchase", forward=5)
@@ -553,7 +553,7 @@ UniqueDotExporter(root).to_picture("flow.png")
 Search, filter, sort, and aggregate user profiles stored in Mixpanel. Default mode is `"aggregate"` — use `mode="profiles"` to fetch individual records.
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 # Find premium users, sorted by lifetime value
 result = ws.query_user(
@@ -595,7 +595,7 @@ These features work across multiple engines through the same parameters.
 Three ways to use cohorts — all accept either a saved cohort ID or an inline `CohortDefinition`:
 
 ```python
-from mixpanel_data import (
+from mixpanel_headless import (
     Filter, CohortBreakdown, CohortMetric,
     CohortCriteria, CohortDefinition,
 )
@@ -706,7 +706,7 @@ Works with `query()` only.
 Use saved custom properties by ID or define computed properties inline at query time:
 
 ```python
-from mixpanel_data import (
+from mixpanel_headless import (
     CustomPropertyRef, InlineCustomProperty,
     GroupBy, Filter, Metric,
 )
@@ -848,7 +848,7 @@ result = ws.query("Login", last=2, unit="hour")
 Every query is validated **before** the API call. Invalid parameters raise `BookmarkValidationError` with all errors at once — no "fix one, discover the next" cycle:
 
 ```python
-from mixpanel_data import BookmarkValidationError
+from mixpanel_headless import BookmarkValidationError
 
 try:
     ws.query_funnel([""], conversion_window=-1)
@@ -879,7 +879,7 @@ Each error includes:
 You can also validate insights, funnel, or retention bookmark JSON directly (flow params are validated internally by `query_flow()`):
 
 ```python
-from mixpanel_data import validate_bookmark
+from mixpanel_headless import validate_bookmark
 
 errors = validate_bookmark(some_bookmark_dict)
 ```
@@ -912,7 +912,7 @@ print(json.dumps(params, indent=2))
 Save any query as a Mixpanel report:
 
 ```python
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 
 result = ws.query("Login", math="dau", group_by="platform", last=90)
 
@@ -936,7 +936,7 @@ Every B2B SaaS PM asks this. In the Mixpanel UI it requires creating a saved cus
 Here it's one call with zero pre-saved entities:
 
 ```python
-from mixpanel_data import (
+from mixpanel_headless import (
     Workspace, Metric, Filter,
     InlineCustomProperty,
     CohortCriteria, CohortDefinition,
@@ -988,7 +988,7 @@ print(result.df)
 # ...
 
 # Happy with it? Save as a Mixpanel report:
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 ws.create_bookmark(CreateBookmarkParams(
     name="ARPU by Plan (Activated Users)",
     bookmark_type="insights",
@@ -1018,8 +1018,8 @@ Change `within_days=14` to `within_days=7` and re-run. Swap `"plan"` for `"count
 A complete analysis combining multiple engines:
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import (
+import mixpanel_headless as mp
+from mixpanel_headless import (
     Metric, Formula, Filter, GroupBy,
     FunnelStep, Exclusion, RetentionEvent,
     CohortCriteria, CohortDefinition,
@@ -1199,7 +1199,7 @@ I = Insights, F = Funnels, R = Retention
 
 ```python
 # Everything you might need
-from mixpanel_data import (
+from mixpanel_headless import (
     # Core
     Workspace,
 

@@ -31,7 +31,7 @@ Use the legacy `retention()` when:
 The simplest possible retention query — weekly retention over the last 30 days:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -80,7 +80,7 @@ The first argument is the **born event** (defines cohort membership) and the sec
 For per-event configuration with filters, use `RetentionEvent` objects:
 
 ```python
-from mixpanel_data import RetentionEvent, Filter
+from mixpanel_headless import RetentionEvent, Filter
 
 result = ws.query_retention(
     RetentionEvent("Signup", filters=[Filter.equals("source", "organic")]),
@@ -110,7 +110,7 @@ result = ws.query_retention(
 Apply filters to individual events using `RetentionEvent.filters`. These restrict which events count for that specific role (born or return):
 
 ```python
-from mixpanel_data import RetentionEvent, Filter
+from mixpanel_headless import RetentionEvent, Filter
 
 result = ws.query_retention(
     RetentionEvent("Signup", filters=[Filter.equals("source", "organic")]),
@@ -235,7 +235,7 @@ result = ws.query_retention(
 Apply filters across the entire query with `where=`:
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 # Single filter
 result = ws.query_retention(
@@ -264,7 +264,7 @@ See [Insights Queries — Available Filter Methods](query.md#available-filter-me
 Restrict retention analysis to users in a cohort:
 
 ```python
-from mixpanel_data import Filter, CohortCriteria, CohortDefinition
+from mixpanel_headless import Filter, CohortCriteria, CohortDefinition
 
 # Do power users retain better?
 result = ws.query_retention(
@@ -293,7 +293,7 @@ See [Insights Queries — Cohort Filters](query.md#cohort-filters) for the full 
 Use saved or inline custom properties in retention filters:
 
 ```python
-from mixpanel_data import Filter, CustomPropertyRef
+from mixpanel_headless import Filter, CustomPropertyRef
 
 result = ws.query_retention(
     "Signup",
@@ -314,7 +314,7 @@ See [Insights Queries — Custom Properties in Queries](query.md#custom-properti
 Break down retention results by property values with `group_by`:
 
 ```python
-from mixpanel_data import GroupBy
+from mixpanel_headless import GroupBy
 
 # Simple string breakdown
 result = ws.query_retention("Signup", "Login", group_by="platform")
@@ -335,7 +335,7 @@ result = ws.query_retention(
 Segment retention by cohort membership — compare how a cohort retains vs. everyone else:
 
 ```python
-from mixpanel_data import CohortBreakdown
+from mixpanel_headless import CohortBreakdown
 
 result = ws.query_retention(
     "Signup",
@@ -356,7 +356,7 @@ See [Insights Queries — Cohort Breakdowns](query.md#cohort-breakdowns) for inl
 Break down retention results by a saved or inline custom property:
 
 ```python
-from mixpanel_data import GroupBy, CustomPropertyRef
+from mixpanel_headless import GroupBy, CustomPropertyRef
 
 result = ws.query_retention(
     "Signup",
@@ -482,7 +482,7 @@ result = ws.query_retention(
 Compare retention curves against a previous period using `TimeComparison`:
 
 ```python
-from mixpanel_data import TimeComparison
+from mixpanel_headless import TimeComparison
 
 # Compare this month's retention against last month
 result = ws.query_retention(
@@ -566,7 +566,7 @@ Each entry in `result.cohorts` is a dict with:
 The generated bookmark params can be saved as a Mixpanel report:
 
 ```python
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 
 result = ws.query_retention("Signup", "Login", retention_unit="week", last=90)
 
@@ -610,7 +610,7 @@ print(json.dumps(result.params, indent=2))
 Errors are collected — all validation issues are reported at once, not just the first:
 
 ```python
-from mixpanel_data import BookmarkValidationError
+from mixpanel_headless import BookmarkValidationError
 
 try:
     ws.query_retention("", "Login", bucket_sizes=[5, 3, 1])
@@ -626,8 +626,8 @@ except BookmarkValidationError as e:
 ### User Onboarding Retention
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import RetentionEvent, Filter
+import mixpanel_headless as mp
+from mixpanel_headless import RetentionEvent, Filter
 
 ws = mp.Workspace()
 
@@ -705,7 +705,7 @@ import json
 print(json.dumps(params, indent=2))  # inspect the generated bookmark JSON
 
 # Save as a report directly from params
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 
 ws.create_bookmark(CreateBookmarkParams(
     name="Signup → Login Retention (Custom Buckets)",

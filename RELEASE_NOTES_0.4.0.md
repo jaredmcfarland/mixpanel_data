@@ -1,5 +1,12 @@
 # mixpanel_data 0.4.0 — Auth Architecture Redesign
 
+> **Historical note:** This release shipped under the package name `mixpanel_data`
+> on the repo `jaredmcfarland/mixpanel_data`. The project was rebranded to
+> `mixpanel-headless` (Python import `mixpanel_headless`) in 0.5.x and moved to
+> `mixpanel/mixpanel-headless`. Repository URLs in this document have been
+> updated to the new location, but references to the old package name in the
+> body are preserved as historical record.
+
 > **Status:** alpha · **Released:** 2026-04-22 · **Spec:** [042-auth-architecture-redesign](specs/042-auth-architecture-redesign/spec.md) · **PR:** [#126](https://github.com/mixpanel/mixpanel-headless/pull/126)
 
 This release ships a **complete rewrite of the auth subsystem** — single

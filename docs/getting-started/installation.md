@@ -39,7 +39,7 @@ uv add git+https://github.com/mixpanel/mixpanel-headless.git
 If you want to build the documentation locally:
 
 ```bash
-pip install mixpanel_data[docs]
+pip install mixpanel_headless[docs]
 ```
 
 ## Verifying Installation
@@ -53,13 +53,13 @@ mp --version
 You should see output like:
 
 ```
-mixpanel_data 0.4.0
+mixpanel_headless 0.4.0
 ```
 
 Test the Python import:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 print(mp.__version__)
 ```
 

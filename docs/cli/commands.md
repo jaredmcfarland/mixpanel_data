@@ -8,7 +8,7 @@ Complete reference for the `mp` command-line interface.
     Ask questions about specific commands, explore options, or get examples for your use case.
 
 ::: mkdocs-typer
-    :module: mixpanel_data.cli.main
+    :module: mixpanel_headless.cli.main
     :command: app
     :prog_name: mp
     :depth: 2

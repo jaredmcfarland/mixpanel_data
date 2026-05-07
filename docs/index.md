@@ -1,4 +1,4 @@
-# mixpanel_data
+# mixpanel_headless
 
 A complete programmable interface to Mixpanel analytics—available as both a Python library and CLI. Supports service account and OAuth 2.0 authentication.
 
@@ -16,14 +16,14 @@ A complete programmable interface to Mixpanel analytics—available as both a Py
 
 Mixpanel's web UI is built for interactive exploration. But many workflows need something different: scripts that run unattended, notebooks that combine Mixpanel data with other sources, agents that query analytics programmatically, or pipelines that move data between systems.
 
-`mixpanel_data` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, typed retention queries, typed flow queries, typed user profile queries, segmentation, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
+`mixpanel_headless` provides direct programmatic access to Mixpanel's analytics platform. Core analytics—typed insights queries, typed funnel queries, typed retention queries, typed flow queries, typed user profile queries, segmentation, saved reports—plus capabilities like raw JQL execution and streaming data extraction are available as Python methods or shell commands.
 
 ## Two Interfaces, One Capability Set
 
 **Python Library** — For notebooks, scripts, and applications:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -58,7 +58,7 @@ enforcement = ws.get_schema_enforcement()
 audit = ws.run_audit()
 
 # Insights queries — typed, composable analytics
-from mixpanel_data import Metric, Filter, Formula
+from mixpanel_headless import Metric, Filter, Formula
 
 # Simple event query (last 30 days by default)
 result = ws.query("Login")
@@ -93,7 +93,7 @@ funnel_result = ws.query_funnel(
 print(funnel_result.overall_conversion_rate)
 
 # Typed retention query — cohort retention with event pairs
-from mixpanel_data import RetentionEvent
+from mixpanel_headless import RetentionEvent
 retention_result = ws.query_retention(
     "Signup",
     "Login",
@@ -103,13 +103,13 @@ retention_result = ws.query_retention(
 print(retention_result.df.head())  # cohort_date | bucket | count | rate
 
 # Typed flow query — analyze user paths through your product
-from mixpanel_data import FlowStep
+from mixpanel_headless import FlowStep
 flow_result = ws.query_flow("Purchase", forward=3, reverse=1)
 print(flow_result.nodes_df.head())   # step | event | type | count
 print(flow_result.top_transitions(5))
 
 # Typed user profile query — search and aggregate user profiles
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 result = ws.query_user(
     where=Filter.equals("plan", "premium"),
     properties=["$email", "$name", "ltv"],
@@ -121,7 +121,7 @@ print(f"{result.total} premium users")
 print(result.df)
 
 # Cohort-scoped queries — filter, break down, or track cohorts
-from mixpanel_data import CohortCriteria, CohortDefinition, CohortBreakdown, CohortMetric
+from mixpanel_headless import CohortCriteria, CohortDefinition, CohortBreakdown, CohortMetric
 
 # Define a cohort inline and use it immediately
 power_users = CohortDefinition(
@@ -275,7 +275,7 @@ Discovery commands let you survey what exists before writing queries—no guessi
 
 ## For Humans and Agents
 
-The structured output and deterministic command interface make `mixpanel_data` particularly effective for AI coding agents—the same properties that make it scriptable for humans make it reliable for automated workflows.
+The structured output and deterministic command interface make `mixpanel_headless` particularly effective for AI coding agents—the same properties that make it scriptable for humans make it reliable for automated workflows.
 
 Discovery commands are particularly valuable: an agent can rapidly survey your data landscape—listing events, inspecting properties, sampling values—then construct accurate queries based on what actually exists rather than guessing.
 

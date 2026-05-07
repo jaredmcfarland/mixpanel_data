@@ -1,4 +1,4 @@
-# Quick Start: mixpanel_data + Claude Cowork
+# Quick Start: mixpanel_headless + Claude Cowork
 
 Get your Mixpanel credentials working inside [Claude Cowork](https://docs.anthropic.com/en/docs/claude-code/cowork) sessions so Claude agents can query your analytics data autonomously.
 
@@ -154,7 +154,7 @@ mp account remove-bridge --at /custom/path/auth.json
 
 If you authenticated with OAuth (rather than a service account), the bridge file includes both an access token and a refresh token.
 
-- **Automatic refresh**: The `mixpanel_data` library refreshes expired OAuth tokens automatically inside Cowork — no browser needed
+- **Automatic refresh**: The `mixpanel_headless` library refreshes expired OAuth tokens automatically inside Cowork — no browser needed
 - **Refresh token rejected**: If the refresh token itself is rejected (e.g., revoked at the IdP), the library surfaces `OAuthError(code="OAUTH_REFRESH_REVOKED")`. You need to re-authenticate on your local machine and re-export:
 
 ```bash
@@ -233,7 +233,7 @@ Then start a new Cowork session.
 
 ### Can't run `mp account export-bridge` — "command not found"
 
-**Cause**: The `mixpanel_data` package isn't installed on your local machine.
+**Cause**: The `mixpanel_headless` package isn't installed on your local machine.
 
 **Fix**:
 ```bash

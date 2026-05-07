@@ -36,7 +36,7 @@ Time-series event counts with optional property segmentation:
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -498,7 +498,7 @@ For Mixpanel APIs not covered by the Workspace class, use the `api` property to 
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
     client = ws.api

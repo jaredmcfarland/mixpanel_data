@@ -1,6 +1,6 @@
 # Auth
 
-The auth surface in `mixpanel_data` 0.4.0 is organized around three independent axes — Account, Project, Workspace — with three first-class account types, a single resolver, fluent in-session switching via `Workspace.use()`, and a Cowork bridge for remote authentication.
+The auth surface in `mixpanel_headless` 0.4.0 is organized around three independent axes — Account, Project, Workspace — with three first-class account types, a single resolver, fluent in-session switching via `Workspace.use()`, and a Cowork bridge for remote authentication.
 
 !!! tip "Explore on DeepWiki"
     🤖 **[Configuration Reference →](https://deepwiki.com/mixpanel/mixpanel-headless/7.3-configuration-reference)** (updated for 0.4.0)
@@ -10,7 +10,7 @@ The auth surface in `mixpanel_data` 0.4.0 is organized around three independent 
 ## Overview
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # Construct a Workspace from active config
 ws = mp.Workspace()
@@ -40,7 +40,7 @@ See [Configuration](../getting-started/configuration.md) for the full setup walk
 `Account` is a Pydantic discriminated union over three first-class variants. The `type` field selects the variant; each variant carries the credentials it needs.
 
 ```python
-from mixpanel_data import (
+from mixpanel_headless import (
     Account,                      # discriminated union type
     ServiceAccount,               # type == "service_account"
     OAuthBrowserAccount,          # type == "oauth_browser"
@@ -65,7 +65,7 @@ if isinstance(account, ServiceAccount):
 
 Long-lived HTTP Basic Auth credentials. Best for CI / scripts / unattended automation.
 
-::: mixpanel_data.ServiceAccount
+::: mixpanel_headless.ServiceAccount
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -74,7 +74,7 @@ Long-lived HTTP Basic Auth credentials. Best for CI / scripts / unattended autom
 
 PKCE browser flow; access/refresh tokens persisted at `~/.mp/accounts/{name}/tokens.json` and auto-refreshed on expiry.
 
-::: mixpanel_data.OAuthBrowserAccount
+::: mixpanel_headless.OAuthBrowserAccount
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -83,7 +83,7 @@ PKCE browser flow; access/refresh tokens persisted at `~/.mp/accounts/{name}/tok
 
 Static bearer token (CI / agents) — supplied inline or via an env var (`token_env`).
 
-::: mixpanel_data.OAuthTokenAccount
+::: mixpanel_headless.OAuthTokenAccount
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -92,22 +92,22 @@ Static bearer token (CI / agents) — supplied inline or via an env var (`token_
 
 A `Session` is the immutable resolved state for a single Workspace at construction time — account, project, optional workspace, and the auth headers they generate.
 
-::: mixpanel_data.Session
+::: mixpanel_headless.Session
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.Project
+::: mixpanel_headless.Project
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.WorkspaceRef
+::: mixpanel_headless.WorkspaceRef
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.auth_types.ActiveSession
+::: mixpanel_headless.auth_types.ActiveSession
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -117,7 +117,7 @@ A `Session` is the immutable resolved state for a single Workspace at constructi
 `Workspace.use()` is the only in-session switching method. It returns `self` for fluent chaining and preserves the underlying `httpx.Client` and per-account `/me` cache across switches, so cross-project / cross-account iteration is O(1) per turn.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()                                # active session
 
@@ -138,7 +138,7 @@ result = ws.use(project="3018488").segmentation(
 
 Switching the active account clears the workspace (workspaces are project-scoped). The project re-resolves on account swap via `env > explicit > new account's default_project`. There is **no silent cross-axis fallback**: if an axis can't be resolved on the new account, `use()` raises `ConfigError`.
 
-::: mixpanel_data.Workspace.use
+::: mixpanel_headless.Workspace.use
     options:
       show_root_heading: false
       show_root_toc_entry: false
@@ -149,7 +149,7 @@ For parallel cross-project iteration, snapshot the resolved `Session` and constr
 
 ```python
 from concurrent.futures import ThreadPoolExecutor
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 sessions = [
@@ -166,13 +166,13 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 
 ## Functional Namespaces
 
-The auth surface exposes three module-level namespaces re-exported from `mixpanel_data`. These are the canonical Python API for managing accounts, the active session, and saved targets.
+The auth surface exposes three module-level namespaces re-exported from `mixpanel_headless`. These are the canonical Python API for managing accounts, the active session, and saved targets.
 
 ### `mp.accounts`
 
 Account lifecycle: register, switch, probe, OAuth flows, bridge export.
 
-::: mixpanel_data.accounts
+::: mixpanel_headless.accounts
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -194,7 +194,7 @@ Account lifecycle: register, switch, probe, OAuth flows, bridge export.
 
 Read and write the persisted `[active]` block.
 
-::: mixpanel_data.session
+::: mixpanel_headless.session
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -206,7 +206,7 @@ Read and write the persisted `[active]` block.
 
 Manage saved (account, project, optional workspace) cursor positions.
 
-::: mixpanel_data.targets
+::: mixpanel_headless.targets
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -223,28 +223,28 @@ Read-only structured results returned from the namespaces above.
 
 ### AccountSummary
 
-::: mixpanel_data.AccountSummary
+::: mixpanel_headless.AccountSummary
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
 ### AccountTestResult
 
-::: mixpanel_data.AccountTestResult
+::: mixpanel_headless.AccountTestResult
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
 ### OAuthLoginResult
 
-::: mixpanel_data.OAuthLoginResult
+::: mixpanel_headless.OAuthLoginResult
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
 ### Target
 
-::: mixpanel_data.Target
+::: mixpanel_headless.Target
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -268,7 +268,7 @@ The Cowork bridge is a v2 JSON file that lets a remote VM authenticate against M
 
 ```python
 from pathlib import Path
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # On the host
 mp.accounts.export_bridge(to=Path("~/.claude/mixpanel/auth.json").expanduser())
@@ -284,12 +284,12 @@ mp session --bridge          # show bridge-resolved state
 
 Default search order: `MP_AUTH_FILE` → `~/.claude/mixpanel/auth.json` → `./mixpanel_auth.json`.
 
-::: mixpanel_data.auth_types.BridgeFile
+::: mixpanel_headless.auth_types.BridgeFile
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.auth_types.load_bridge
+::: mixpanel_headless.auth_types.load_bridge
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -300,28 +300,28 @@ Low-level types for OAuth token handling. Most users never touch these directly 
 
 ### OAuthTokens
 
-::: mixpanel_data.auth_types.OAuthTokens
+::: mixpanel_headless.auth_types.OAuthTokens
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
 ### OAuthClientInfo
 
-::: mixpanel_data.auth_types.OAuthClientInfo
+::: mixpanel_headless.auth_types.OAuthClientInfo
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
 ### TokenResolver Protocol
 
-::: mixpanel_data.auth_types.TokenResolver
+::: mixpanel_headless.auth_types.TokenResolver
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
 ### OnDiskTokenResolver
 
-::: mixpanel_data.auth_types.OnDiskTokenResolver
+::: mixpanel_headless.auth_types.OnDiskTokenResolver
     options:
       show_root_heading: true
       show_root_toc_entry: true

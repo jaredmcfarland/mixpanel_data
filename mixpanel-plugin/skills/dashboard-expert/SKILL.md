@@ -27,7 +27,7 @@ Analyze, build, modify, and explain Mixpanel dashboards. Four modes — pick the
 
 ```python
 import json, re
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 dash = ws.get_dashboard(DASHBOARD_ID)
@@ -60,7 +60,7 @@ for cid, info in contents.get("report", {}).items():
 ## Quick Start: Build a New Dashboard
 
 ```python
-from mixpanel_data.types import CreateDashboardParams, DashboardRow, DashboardRowContent
+from mixpanel_headless.types import CreateDashboardParams, DashboardRow, DashboardRowContent
 import json
 
 ws = mp.Workspace()

@@ -1,6 +1,6 @@
-# Getting Started with mixpanel_data
+# Getting Started with mixpanel_headless
 
-A step-by-step guide to installing, configuring, and using `mixpanel_data` — the Python library, CLI, and Claude Code plugin for Mixpanel analytics.
+A step-by-step guide to installing, configuring, and using `mixpanel_headless` — the Python library, CLI, and Claude Code plugin for Mixpanel analytics.
 
 This guide is for anyone who wants to explore their Mixpanel data programmatically, whether through the command line, Python scripts, or conversational analytics with Claude.
 
@@ -39,7 +39,7 @@ For service accounts, you'll also need your **Mixpanel Project ID**, which you c
 
 ## Part 1: Install the Package
 
-The `mixpanel_data` package installs both the Python library and the `mp` command-line tool.
+The `mixpanel_headless` package installs both the Python library and the `mp` command-line tool.
 
 ### Option A: Install with pip
 
@@ -62,14 +62,14 @@ mp --version
 You should see a version number printed. If you get "command not found," make sure your Python scripts directory is on your `PATH`. You can also run the CLI with:
 
 ```bash
-python3 -m mixpanel_data --version
+python3 -m mixpanel_headless --version
 ```
 
 ---
 
 ## Part 2: Authenticate with Mixpanel
 
-You need to connect `mixpanel_data` to your Mixpanel project. There are two ways to do this: **OAuth login** (interactive, opens your browser) or **service account** (for scripts and automation).
+You need to connect `mixpanel_headless` to your Mixpanel project. There are two ways to do this: **OAuth login** (interactive, opens your browser) or **service account** (for scripts and automation).
 
 ### Option A: OAuth Login (Recommended for Personal Use)
 
@@ -80,7 +80,7 @@ mp account add personal --type oauth_browser --region us
 mp account login personal
 ```
 
-After logging in, `mixpanel_data` automatically backfills the account's `default_project` from the post-login `/me` probe. If you have multiple accessible projects and want to switch:
+After logging in, `mixpanel_headless` automatically backfills the account's `default_project` from the post-login `/me` probe. If you have multiple accessible projects and want to switch:
 
 ```bash
 mp project list                # See all your accessible projects
@@ -230,12 +230,12 @@ mp query segmentation --event "Login" --from YYYY-MM-DD --to YYYY-MM-DD --format
 
 ## Part 5: Use the Python API
 
-The Python library gives you the full power of `mixpanel_data` with pandas DataFrames for analysis.
+The Python library gives you the full power of `mixpanel_headless` with pandas DataFrames for analysis.
 
 ### Basic Setup
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # Creates a Workspace using your saved credentials
 ws = mp.Workspace()
@@ -264,7 +264,7 @@ print(result.df)  # pandas DataFrame
 ### Insights with Breakdown and Filter
 
 ```python
-from mixpanel_data import Filter, GroupBy
+from mixpanel_headless import Filter, GroupBy
 
 # Purchase revenue by plan type, filtered to US customers
 result = ws.query(
@@ -316,7 +316,7 @@ print(flow.drop_off_summary())     # Where users drop off
 ### User Profile Query
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 # Pull profile fields for high-value users
 result = ws.query_user(
@@ -367,7 +367,7 @@ After installing, run the setup skill to install dependencies and verify authent
 This will:
 
 1. Check that Python 3.10+ is available
-2. Install the `mixpanel_data` package and its dependencies (pandas, numpy, matplotlib, networkx, etc.)
+2. Install the `mixpanel_headless` package and its dependencies (pandas, numpy, matplotlib, networkx, etc.)
 3. Verify that your Mixpanel credentials are configured
 4. Report the status of your connection
 
@@ -405,7 +405,7 @@ The plugin ships three skills that Claude loads automatically when relevant:
 
 | Skill | Trigger | What It Does |
 |-------|---------|--------------|
-| **setup** | `/mixpanel-data:setup` (manual) | Installs `mixpanel_data` + analytics dependencies and verifies credentials. |
+| **setup** | `/mixpanel-data:setup` (manual) | Installs `mixpanel_headless` + analytics dependencies and verifies credentials. |
 | **mixpanelyst** | Auto-loads on analytics questions | Distilled `Workspace` API reference, discovery workflow, exploratory analysis playbook, and live `help.py` lookup for method signatures, types, and enums. |
 | **dashboard-expert** | Auto-loads on dashboard questions | Four-mode workflow (Analyze, Build, Modify, Explain) for Mixpanel dashboards, with 9 design templates, chart-type selection, and layout reference. |
 
@@ -415,7 +415,7 @@ The `/mixpanel-data:auth` slash command provides a guided wrapper around `mp acc
 
 ## Part 7: Set Up Claude Cowork
 
-[Claude Cowork](https://docs.anthropic.com/en/docs/claude-code/cowork) lets multiple Claude agents collaborate on tasks in sandboxed virtual machines. To use `mixpanel_data` in Cowork, you need to export your credentials from your local machine so the Cowork VM can access them.
+[Claude Cowork](https://docs.anthropic.com/en/docs/claude-code/cowork) lets multiple Claude agents collaborate on tasks in sandboxed virtual machines. To use `mixpanel_headless` in Cowork, you need to export your credentials from your local machine so the Cowork VM can access them.
 
 ### Step 1: Set Up the Credential Bridge (On Your Local Machine)
 
@@ -450,7 +450,7 @@ mp session --bridge
 
 This shows the resolved account, project, workspace, and any pinned headers from the bridge file.
 
-### Step 3: Use mixpanel_data in Cowork
+### Step 3: Use mixpanel_headless in Cowork
 
 Inside a Cowork session, run the setup skill:
 
@@ -503,7 +503,7 @@ If you authenticated with OAuth, the bridge file embeds your refresh token. The 
 ### Python API at a Glance
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -553,13 +553,13 @@ Every CLI command supports `--format`:
 Your Python scripts directory isn't on your `PATH`. Try running with the full path:
 
 ```bash
-python3 -m mixpanel_data --version
+python3 -m mixpanel_headless --version
 ```
 
 Or find where pip installed it:
 
 ```bash
-pip show mixpanel_data
+pip show mixpanel_headless
 ```
 
 If using `uv`, make sure the virtual environment is activated.

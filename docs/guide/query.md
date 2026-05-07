@@ -38,7 +38,7 @@ For ad-hoc flow path analysis with typed step definitions, see **[Flow Queries](
 The simplest possible query — total event count per day for the last 30 days:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -169,7 +169,7 @@ Control how events are counted per user with `Metric.segment_method`:
 - `"first"` — count only the first qualifying event per user
 
 ```python
-from mixpanel_data import Metric
+from mixpanel_headless import Metric
 
 # Only count each user's first purchase
 result = ws.query(Metric("Purchase", segment_method="first"), last=30)
@@ -180,7 +180,7 @@ result = ws.query(Metric("Purchase", segment_method="first"), last=30)
 When different events need different aggregation settings, use `Metric` objects instead of plain strings:
 
 ```python
-from mixpanel_data import Metric
+from mixpanel_headless import Metric
 
 # Different math per event
 result = ws.query([
@@ -223,7 +223,7 @@ ws.query([
 Apply filters across all metrics with `where=`. Construct filters using `Filter` class methods:
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 # Single filter
 result = ws.query(
@@ -329,7 +329,7 @@ Cannot be nested (a `list_contains` cannot appear inside another `list_contains`
 Apply filters to individual metrics using `Metric.filters`:
 
 ```python
-from mixpanel_data import Metric, Filter
+from mixpanel_headless import Metric, Filter
 
 # Different filters on each event
 result = ws.query([
@@ -361,7 +361,7 @@ result = ws.query(Metric(
 Filter by datetime properties using purpose-built factory methods:
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 # Absolute date filters
 Filter.on("created", "2025-01-15")              # exact date match
@@ -381,7 +381,7 @@ Filter.in_the_next("renewal_date", 30, "day")    # relative future date
 The relative date methods accept a `FilterDateUnit`: `"hour"`, `"day"`, `"week"`, or `"month"`.
 
 ```python
-from mixpanel_data import FilterDateUnit  # Literal["hour", "day", "week", "month"]
+from mixpanel_headless import FilterDateUnit  # Literal["hour", "day", "week", "month"]
 
 # Example: recent signups with purchases
 result = ws.query(
@@ -410,7 +410,7 @@ result = ws.query("Purchase", group_by=["country", "platform"])
 For numeric bucketing, boolean breakdowns, or explicit type annotations, use `GroupBy`:
 
 ```python
-from mixpanel_data import GroupBy
+from mixpanel_headless import GroupBy
 
 # Numeric breakdown with buckets
 result = ws.query(
@@ -445,7 +445,7 @@ result = ws.query(
 Mirror `Filter.list_contains` for breakdowns: when a property is a list of objects, break down by one of its subproperties via `GroupBy.list_item`. Discover valid subproperty names and types via [`Workspace.subproperties()`](discovery.md#subproperties).
 
 ```python
-from mixpanel_data import GroupBy
+from mixpanel_headless import GroupBy
 
 # Break down Cart Viewed events by cart.Brand
 result = ws.query("Cart Viewed", group_by=GroupBy.list_item("cart", "Brand"))
@@ -475,7 +475,7 @@ Compute derived metrics from multiple events. Letters A-Z reference events by th
 ### Top-Level `formula` Parameter
 
 ```python
-from mixpanel_data import Metric
+from mixpanel_headless import Metric
 
 # Conversion rate: purchases / signups * 100
 result = ws.query(
@@ -493,7 +493,7 @@ When `formula` is set, the underlying metrics are automatically hidden — only 
 For inline formula definitions, pass `Formula` objects alongside events:
 
 ```python
-from mixpanel_data import Metric, Formula
+from mixpanel_headless import Metric, Formula
 
 result = ws.query([
     Metric("Signup", math="unique"),
@@ -621,7 +621,7 @@ total = result.df["count"].iloc[0]
 Compare the current time range against a previous period using `TimeComparison`:
 
 ```python
-from mixpanel_data import TimeComparison
+from mixpanel_headless import TimeComparison
 
 # Compare against previous week
 result = ws.query("Login", time_comparison=TimeComparison.relative("week"), last=7)
@@ -660,7 +660,7 @@ Three factory methods:
 Break down results by how often users performed an event using `FrequencyBreakdown`:
 
 ```python
-from mixpanel_data import FrequencyBreakdown
+from mixpanel_headless import FrequencyBreakdown
 
 # How are logins distributed by purchase frequency?
 result = ws.query(
@@ -690,7 +690,7 @@ Parameters:
 Filter to users who performed an event a certain number of times using `FrequencyFilter`:
 
 ```python
-from mixpanel_data import FrequencyFilter
+from mixpanel_headless import FrequencyFilter
 
 # Only users who purchased at least 3 times
 result = ws.query(
@@ -777,7 +777,7 @@ For **total** mode, the DataFrame has columns `event`, `count` (no date).
 The generated bookmark params can be saved as a Mixpanel report:
 
 ```python
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 
 # Run query
 result = ws.query("Login", math="dau", group_by="platform", last=90)
@@ -825,8 +825,8 @@ print(json.dumps(result.params, indent=2))
 ### Revenue Dashboard Metrics
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import Metric, Filter, GroupBy
+import mixpanel_headless as mp
+from mixpanel_headless import Metric, Filter, GroupBy
 
 ws = mp.Workspace()
 
@@ -945,7 +945,7 @@ Scope any query to a user segment — filter by cohort membership, break down by
 Restrict queries to users in (or not in) a cohort using `Filter.in_cohort()` and `Filter.not_in_cohort()`:
 
 ```python
-from mixpanel_data import Filter, CohortCriteria, CohortDefinition
+from mixpanel_headless import Filter, CohortCriteria, CohortDefinition
 
 # Saved cohort
 result = ws.query("Purchase", where=Filter.in_cohort(123, "Power Users"))
@@ -973,7 +973,7 @@ Cohort filters work with all five query methods: `query()`, `query_funnel()`, `q
 Segment results by cohort membership using `CohortBreakdown` in the `group_by=` parameter:
 
 ```python
-from mixpanel_data import CohortBreakdown
+from mixpanel_headless import CohortBreakdown
 
 # Compare cohort vs. everyone else
 result = ws.query(
@@ -1008,7 +1008,7 @@ Cohort breakdowns work with `query()`, `query_funnel()`, and `query_retention()`
 Track cohort size over time as a metric — insights only:
 
 ```python
-from mixpanel_data import CohortMetric, Metric
+from mixpanel_headless import CohortMetric, Metric
 
 # Track cohort growth
 result = ws.query(CohortMetric(123, "Power Users"), last=90, unit="week")
@@ -1042,7 +1042,7 @@ To create and manage custom properties in Mixpanel, see [Data Governance — Cus
 Use `CustomPropertyRef` to reference a custom property that already exists in your Mixpanel project by its numeric ID:
 
 ```python
-from mixpanel_data import CustomPropertyRef, GroupBy, Filter, Metric
+from mixpanel_headless import CustomPropertyRef, GroupBy, Filter, Metric
 
 ref = CustomPropertyRef(42)
 
@@ -1063,7 +1063,7 @@ Find custom property IDs with `ws.list_custom_properties()` or `mp custom-proper
 Use `InlineCustomProperty` to define a computed property at query time — no need to save it to your project first. Formulas reference raw properties through single-letter variables (A–Z), each mapped to a `PropertyInput`:
 
 ```python
-from mixpanel_data import InlineCustomProperty, PropertyInput
+from mixpanel_headless import InlineCustomProperty, PropertyInput
 
 # Full constructor — explicit control over types
 revenue = InlineCustomProperty(
@@ -1090,7 +1090,7 @@ Both forms produce identical results. Use the full constructor when you need non
 Pass a custom property to `GroupBy.property` for breakdowns. Numeric bucketing works the same as with regular properties:
 
 ```python
-from mixpanel_data import GroupBy, CustomPropertyRef, InlineCustomProperty
+from mixpanel_headless import GroupBy, CustomPropertyRef, InlineCustomProperty
 
 # Saved custom property with numeric buckets
 result = ws.query(
@@ -1126,7 +1126,7 @@ result = ws.query(
 All 18 `Filter` factory methods accept custom properties in the `property` parameter:
 
 ```python
-from mixpanel_data import Filter, CustomPropertyRef, InlineCustomProperty
+from mixpanel_headless import Filter, CustomPropertyRef, InlineCustomProperty
 
 # Saved custom property
 result = ws.query(
@@ -1158,7 +1158,7 @@ result = ws.query(
 Aggregate a custom property as the metric value using `Metric(property=...)`:
 
 ```python
-from mixpanel_data import Metric, CustomPropertyRef, InlineCustomProperty
+from mixpanel_headless import Metric, CustomPropertyRef, InlineCustomProperty
 
 # Average of a saved custom property
 result = ws.query(
@@ -1206,7 +1206,7 @@ Custom properties are validated **before** any API call. Invalid configurations 
 | Input property name non-empty | `CP6_EMPTY_INPUT_NAME` | input {key!r} has an empty property name |
 
 ```python
-from mixpanel_data import BookmarkValidationError, CustomPropertyRef
+from mixpanel_headless import BookmarkValidationError, CustomPropertyRef
 
 try:
     ws.query("Purchase", group_by=GroupBy(property=CustomPropertyRef(0), property_type="number"))

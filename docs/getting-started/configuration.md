@@ -1,6 +1,6 @@
 # Configuration
 
-`mixpanel_data` organizes auth around three independent axes: **Account → Project → Workspace**.
+`mixpanel_headless` organizes auth around three independent axes: **Account → Project → Workspace**.
 
 - **Account** — *who* is authenticating. Three first-class types managed through one surface: `service_account` (Basic Auth), `oauth_browser` (PKCE flow with auto-refreshed tokens), and `oauth_token` (static bearer for CI / agents).
 - **Project** — *which* Mixpanel project the calls run against. Lives on the active account as `default_project`; can be overridden per call.
@@ -167,7 +167,7 @@ The first account added auto-promotes to active.
 The public surface lives in three functional namespaces:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # Add a service account
 mp.accounts.add(
@@ -241,7 +241,7 @@ Per-axis details:
 There is **no silent cross-axis fallback**: switching the active account clears the workspace (workspaces are project-scoped), and project doesn't carry forward to a new account. If an axis can't be resolved, the resolver raises `ConfigError` rather than silently falling back to a default.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # Default — resolve everything from config + env
 ws = mp.Workspace()
@@ -262,7 +262,7 @@ export MP_WORKSPACE_ID=3448414            # env-var override
 ```
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace(workspace=3448414)      # at construction
 ws.use(workspace=3448414)                 # in-session switch (returns self)
@@ -290,7 +290,7 @@ mp target use ecom
 Python:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 mp.targets.add("ecom", account="team", project="3018488", workspace=3448414)
 mp.targets.use("ecom")                            # writes [active] atomically
@@ -327,7 +327,7 @@ The bridge file embeds the full `Account` (with secrets), optional OAuth tokens 
 ```python
 from pathlib import Path
 
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 mp.accounts.export_bridge(to=Path("~/.claude/mixpanel/auth.json").expanduser())
 mp.accounts.remove_bridge()

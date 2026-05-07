@@ -1,6 +1,6 @@
 # Internal Implementation
 
-Private infrastructure powering `mixpanel_data`'s programmable interface to Mixpanel analytics. Do not import directly — use the public API from `mixpanel_data` (`Workspace`, `mp.accounts`, `mp.targets`, `mp.session`, `Account`, `Session`, etc.).
+Private infrastructure powering `mixpanel_headless`'s programmable interface to Mixpanel analytics. Do not import directly — use the public API from `mixpanel_headless` (`Workspace`, `mp.accounts`, `mp.targets`, `mp.session`, `Account`, `Session`, etc.).
 
 ## Files
 
