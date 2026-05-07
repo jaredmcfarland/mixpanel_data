@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mixpanel_data._internal.expressions import normalize_on_expression
+from mixpanel_headless._internal.expressions import normalize_on_expression
 
 
 class TestNormalizeOnExpression:

@@ -18,13 +18,13 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import accounts as accounts_ns
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.exceptions import (
+from mixpanel_headless import accounts as accounts_ns
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.exceptions import (
     AccountInUseError,
     ConfigError,
 )
-from mixpanel_data.types import AccountSummary
+from mixpanel_headless.types import AccountSummary
 
 
 @pytest.fixture(autouse=True)
@@ -394,7 +394,7 @@ class TestTest:
             username="u",
             secret=SecretStr("s"),
         )
-        from mixpanel_data._internal import api_client as api_client_mod
+        from mixpanel_headless._internal import api_client as api_client_mod
 
         def _fake_me(self: object) -> dict[str, object]:
             """Return canned /me payload with two projects + a user."""
@@ -428,8 +428,8 @@ class TestTest:
             username="u",
             secret=SecretStr("s"),
         )
-        from mixpanel_data._internal import api_client as api_client_mod
-        from mixpanel_data.exceptions import AuthenticationError
+        from mixpanel_headless._internal import api_client as api_client_mod
+        from mixpanel_headless.exceptions import AuthenticationError
 
         def _fail_me(self: object) -> dict[str, object]:
             """Raise a 401 to simulate stale credentials."""
@@ -454,7 +454,7 @@ class TestTest:
             secret=SecretStr("s"),
         )
         # First-account auto-promote → "team" is now [active].account
-        from mixpanel_data._internal import api_client as api_client_mod
+        from mixpanel_headless._internal import api_client as api_client_mod
 
         def _fake_me(self: object) -> dict[str, object]:
             """Minimal /me payload — just enough to succeed."""
@@ -547,9 +547,9 @@ class TestTestOAuthBrowser:
         import json as _json
         from datetime import datetime, timedelta, timezone
 
-        from mixpanel_data._internal.auth import flow as flow_mod
-        from mixpanel_data._internal.auth import storage as storage_mod
-        from mixpanel_data._internal.auth.token import OAuthClientInfo
+        from mixpanel_headless._internal.auth import flow as flow_mod
+        from mixpanel_headless._internal.auth import storage as storage_mod
+        from mixpanel_headless._internal.auth.token import OAuthClientInfo
 
         monkeypatch.setenv("HOME", str(tmp_path))
         self._add_oauth_browser_account(cm)
@@ -581,7 +581,7 @@ class TestTestOAuthBrowser:
             ),
         )
         # Stub refresh_tokens to raise the new OAUTH_REFRESH_REVOKED code.
-        from mixpanel_data.exceptions import OAuthError
+        from mixpanel_headless.exceptions import OAuthError
 
         def _revoked(
             self: object,
@@ -634,8 +634,8 @@ class TestLogin:
         """Successful PKCE flow writes per-account tokens.json and backfills default_project."""
         from datetime import datetime, timedelta, timezone
 
-        from mixpanel_data._internal.auth import flow as flow_mod
-        from mixpanel_data._internal.auth.token import OAuthTokens
+        from mixpanel_headless._internal.auth import flow as flow_mod
+        from mixpanel_headless._internal.auth.token import OAuthTokens
 
         accounts_ns.add("personal", type="oauth_browser", region="us")
 
@@ -664,7 +664,7 @@ class TestLogin:
         monkeypatch.setattr(flow_mod.OAuthFlow, "login", _fake_login)
 
         # Stub the /me probe to return a single project.
-        from mixpanel_data._internal import api_client as api_client_mod
+        from mixpanel_headless._internal import api_client as api_client_mod
 
         def _fake_me(self: object) -> dict[str, object]:
             """Return canned /me payload with one project + a user."""
@@ -714,8 +714,8 @@ class TestLogin:
         """
         from datetime import datetime, timedelta, timezone
 
-        from mixpanel_data._internal.auth import flow as flow_mod
-        from mixpanel_data._internal.auth.token import OAuthTokens
+        from mixpanel_headless._internal.auth import flow as flow_mod
+        from mixpanel_headless._internal.auth.token import OAuthTokens
 
         accounts_ns.add(
             "personal",
@@ -745,7 +745,7 @@ class TestLogin:
 
         monkeypatch.setattr(flow_mod.OAuthFlow, "login", _fake_login)
 
-        from mixpanel_data._internal import api_client as api_client_mod
+        from mixpanel_headless._internal import api_client as api_client_mod
 
         def _fake_me(self: object) -> dict[str, object]:
             """Return a minimal /me payload — login probe path."""
@@ -771,7 +771,7 @@ class TestPublicSurface:
         Both are documented public API and called by
         ``mixpanel-plugin/skills/mixpanelyst/scripts/auth_manager.py``.
         Omitting them from ``__all__`` hides them from ``help()``,
-        tab-completion, and ``from mixpanel_data.accounts import *``.
+        tab-completion, and ``from mixpanel_headless.accounts import *``.
         """
         assert "login" in accounts_ns.__all__
         assert "test" in accounts_ns.__all__
@@ -826,7 +826,7 @@ class TestSummaryTableDynamicWidth:
 
     def test_long_name_is_not_truncated(self, cm: ConfigManager) -> None:
         """A 64-char account name appears verbatim in the rendered table."""
-        from mixpanel_data.cli.commands.account import _format_summary_table
+        from mixpanel_headless.cli.commands.account import _format_summary_table
 
         long_name = "a" * 64
         accounts_ns.add(long_name, type="oauth_browser", region="us")

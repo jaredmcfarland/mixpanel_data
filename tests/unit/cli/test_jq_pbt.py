@@ -17,7 +17,7 @@ from typing import Any
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data.cli.utils import _apply_jq_filter
+from mixpanel_headless.cli.utils import _apply_jq_filter
 
 # =============================================================================
 # Custom Strategies

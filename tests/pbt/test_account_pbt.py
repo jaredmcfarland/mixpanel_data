@@ -15,7 +15,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import SecretStr, TypeAdapter, ValidationError
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     Account,
     OAuthBrowserAccount,
     OAuthTokenAccount,

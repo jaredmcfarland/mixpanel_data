@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Programmatic API documentation lookup for mixpanel_data.
+"""Programmatic API documentation lookup for mixpanel_headless.
 
 Usage:
     python help.py Workspace                    # List all Workspace methods
@@ -29,8 +29,8 @@ except ImportError:
 
 
 def get_obj(path: str) -> Any:
-    """Navigate a dotted path from mixpanel_data to find the target object."""
-    mod = importlib.import_module("mixpanel_data")
+    """Navigate a dotted path from mixpanel_headless to find the target object."""
+    mod = importlib.import_module("mixpanel_headless")
     parts = path.split(".")
     obj: Any = mod
     for part in parts:
@@ -160,8 +160,8 @@ def list_members(obj: Any, name: str) -> None:
 
 
 def list_types() -> None:
-    """List all public types exported by mixpanel_data."""
-    mod = importlib.import_module("mixpanel_data")
+    """List all public types exported by mixpanel_headless."""
+    mod = importlib.import_module("mixpanel_headless")
     types_list: list[tuple[str, str]] = []
     for name in sorted(dir(mod)):
         if name.startswith("_"):
@@ -176,14 +176,14 @@ def list_types() -> None:
             first_line = doc.split("\n")[0] if doc else ""
             types_list.append((name, first_line))
 
-    print(f"# mixpanel_data \u2014 {len(types_list)} public types\n")
+    print(f"# mixpanel_headless \u2014 {len(types_list)} public types\n")
     for name, desc in types_list:
         print(f"  {name:45s} {desc}")
 
 
 def list_exceptions() -> None:
-    """List all exception types from mixpanel_data."""
-    mod = importlib.import_module("mixpanel_data")
+    """List all exception types from mixpanel_headless."""
+    mod = importlib.import_module("mixpanel_headless")
     excs: list[tuple[str, str]] = []
     for name in sorted(dir(mod)):
         obj = getattr(mod, name)
@@ -192,7 +192,7 @@ def list_exceptions() -> None:
             first_line = doc.split("\n")[0] if doc else ""
             excs.append((name, first_line))
 
-    print(f"# mixpanel_data \u2014 {len(excs)} exception types\n")
+    print(f"# mixpanel_headless \u2014 {len(excs)} exception types\n")
     for name, desc in excs:
         print(f"  {name:35s} {desc}")
 
@@ -313,7 +313,7 @@ def show_related(type_name: str) -> None:
     Args:
         type_name: Simple class name to search for in method signatures.
     """
-    mod = importlib.import_module("mixpanel_data")
+    mod = importlib.import_module("mixpanel_headless")
     ws_cls = getattr(mod, "Workspace", None)
     if ws_cls is None:
         return
@@ -354,7 +354,7 @@ def show_related(type_name: str) -> None:
 
 
 def _show_referenced_types(obj: Any) -> None:
-    """Show types from mixpanel_data referenced in a callable's signature.
+    """Show types from mixpanel_headless referenced in a callable's signature.
 
     Scans the signature string for type names exported by the module
     and prints matching types with their one-line descriptions.
@@ -368,7 +368,7 @@ def _show_referenced_types(obj: Any) -> None:
         return
 
     sig_text = str(sig)
-    mod = importlib.import_module("mixpanel_data")
+    mod = importlib.import_module("mixpanel_headless")
     found: list[tuple[str, str]] = []
 
     for name in sorted(dir(mod)):
@@ -434,7 +434,7 @@ def _show_see_also(path: str) -> None:
     if not matched:
         return
 
-    mod = importlib.import_module("mixpanel_data")
+    mod = importlib.import_module("mixpanel_headless")
     ws_cls = getattr(mod, "Workspace", None)
     if ws_cls is None:
         return
@@ -491,7 +491,7 @@ def _get_all_names() -> list[tuple[str, str]]:
         List of (name, first_line_docstring) tuples covering
         module-level exports and Workspace members.
     """
-    mod = importlib.import_module("mixpanel_data")
+    mod = importlib.import_module("mixpanel_headless")
     names: list[tuple[str, str]] = []
 
     for name in sorted(dir(mod)):
@@ -557,7 +557,7 @@ def _suggest_similar(
 # Reference hints: ordered most-specific-first so e.g. "query_funnel" matches
 # funnels before "query" matches insights.  Each entry is
 # (trigger_keywords, hosted_docs_path, one-line description).
-_DOCS_BASE = "https://jaredmcfarland.github.io/mixpanel_data"
+_DOCS_BASE = "https://mixpanel.github.io/mixpanel-headless"
 
 _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
     (
@@ -776,7 +776,7 @@ def search(term: str) -> None:
     Args:
         term: Substring to search for (case-insensitive).
     """
-    mod = importlib.import_module("mixpanel_data")
+    mod = importlib.import_module("mixpanel_headless")
     needle = term.lower()
     results: list[tuple[str, str, str]] = []  # (category, name, description)
 
@@ -892,10 +892,10 @@ def main() -> None:
     query = sys.argv[1]
 
     try:
-        importlib.import_module("mixpanel_data")
+        importlib.import_module("mixpanel_headless")
     except ImportError:
-        print("Error: mixpanel_data is not installed.")
-        print("Run /mixpanel-data:setup to install it.")
+        print("Error: mixpanel_headless is not installed.")
+        print("Run /mixpanel-headless:setup to install it.")
         sys.exit(1)
 
     if query == "search":
@@ -923,7 +923,7 @@ def main() -> None:
             else:
                 show_detail(obj, query)
         except AttributeError:
-            print(f"Error: '{query}' not found in mixpanel_data")
+            print(f"Error: '{query}' not found in mixpanel_headless")
             if not _suggest_similar(query):
                 print(
                     "Try: Workspace, types, exceptions, or a dotted path"

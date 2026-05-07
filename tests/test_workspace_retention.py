@@ -14,10 +14,10 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.types import RetentionQueryResult
+from mixpanel_headless import Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.types import RetentionQueryResult
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()
@@ -225,7 +225,7 @@ class TestQueryRetentionWithFilters:
         mock_api_client: MagicMock,
     ) -> None:
         """Per-event filters on RetentionEvent must appear in bookmark behaviors."""
-        from mixpanel_data.types import Filter, RetentionEvent
+        from mixpanel_headless.types import Filter, RetentionEvent
 
         mock_api_client.insights_query.return_value = MOCK_RETENTION_RESPONSE
         ws = workspace_factory()

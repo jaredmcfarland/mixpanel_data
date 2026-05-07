@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from typer import Exit
 
-from mixpanel_data._literal_types import CountType, HourDayUnit, TimeUnit
-from mixpanel_data.cli.validators import (
+from mixpanel_headless._literal_types import CountType, HourDayUnit, TimeUnit
+from mixpanel_headless.cli.validators import (
     validate_count_type,
     validate_hour_day_unit,
     validate_literal,

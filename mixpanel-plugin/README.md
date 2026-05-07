@@ -1,11 +1,11 @@
-# mixpanel-data — CodeMode Analyst Plugin
+# mixpanel-headless — CodeMode Analyst Plugin
 
-Query and analyze Mixpanel data with Python. Provides the `mixpanel_data` API surface (5 query engines, discovery, entity CRUD) with a live documentation system (`help.py`) for method signatures, type lookup, fuzzy search, and hosted docs. Ask questions in natural language — Claude writes and executes Python to answer them.
+Query and analyze Mixpanel data with Python. Provides the `mixpanel_headless` API surface (5 query engines, discovery, entity CRUD) with a live documentation system (`help.py`) for method signatures, type lookup, fuzzy search, and hosted docs. Ask questions in natural language — Claude writes and executes Python to answer them.
 
 ## Quick Start
 
 ```
-1. /mixpanel-data:setup              # Install deps, verify auth
+1. /mixpanel-headless:setup              # Install deps, verify auth
 2. "How many signups last week?"      # Insights query
 3. "Where do users drop off?"         # Funnel analysis
 4. "Do users retain after onboarding?"# Retention curve
@@ -28,7 +28,7 @@ When you ask a question, Claude writes Python using the appropriate engine:
 ### Insights (trending metrics)
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 ws = mp.Workspace()
 result = ws.query("Signup", last=30, unit="day")
 df = result.df  # date, event, count
@@ -77,7 +77,7 @@ for tree in result.trees:
 ### Users (profile queries)
 
 ```python
-from mixpanel_data import Filter
+from mixpanel_headless import Filter
 
 result = ws.query_user(
     filters=Filter.greater_than("purchase_count", 10),
@@ -88,7 +88,7 @@ print(result.df)  # distinct_id, $name, $email, plan
 
 ## API Documentation
 
-Use `help.py` for live API docs extracted from library docstrings, or browse the [hosted documentation](https://jaredmcfarland.github.io/mixpanel_data/).
+Use `help.py` for live API docs extracted from library docstrings, or browse the [hosted documentation](https://mixpanel.github.io/mixpanel-headless/).
 
 ```bash
 python help.py Workspace.query        # method signature + docstring + referenced types
@@ -102,8 +102,8 @@ python help.py exceptions              # list all exceptions
 
 | Type | Name | Invocation |
 |------|------|------------|
-| Command | auth | `/mixpanel-data:auth` — manage account / project / workspace / target / session / bridge |
-| Skill | setup | `/mixpanel-data:setup` — install deps, verify auth |
+| Command | auth | `/mixpanel-headless:auth` — manage account / project / workspace / target / session / bridge |
+| Skill | setup | `/mixpanel-headless:setup` — install deps, verify auth |
 | Skill | mixpanelyst | Auto-triggered on analytics questions |
 | Skill | dashboard-expert | Auto-triggered on dashboard analysis, creation, and modification |
 
@@ -132,40 +132,22 @@ All entity methods require a workspace ID. Use `ws.resolve_workspace_id()` to au
 Three account types — `service_account` (Basic Auth), `oauth_browser` (PKCE
 browser flow), and `oauth_token` (static bearer for CI / agents) — managed
 through a single Account → Project → Workspace hierarchy. Run
-`/mixpanel-data:setup` for first-time configuration, or `/mixpanel-data:auth`
+`/mixpanel-headless:setup` for first-time configuration, or `/mixpanel-headless:auth`
 to switch accounts, projects, workspaces, or saved targets after initial setup.
-
-### Breaking changes from 4.x → 5.0
-
-Plugin 5.0.0 ships against the `mixpanel_data` 0.4.0 auth surface:
-
-- The slash command vocabulary changed from `auth list/add/switch/migrate/...`
-  to a hierarchical `auth account|project|workspace|target|session|bridge`
-  tree. Each verb maps 1:1 to a `mp` CLI command.
-- `auth_manager.py` now emits stable JSON (`schema_version: 1`) with a
-  discriminated `state` field (`ok` / `needs_account` / `needs_project` /
-  `error`). No more `if version >= 2` branches anywhere.
-- Legacy config files from `mixpanel_data` 0.3.x are NO longer auto-detected.
-  A clean install writes only the current schema; older files surface a
-  Pydantic validation error pointing at the offending key. Wipe
-  `~/.mp/config.toml` and run `mp account add ...` to recover.
-- Cowork bridge file format is v2 (full `Account` record + tokens embedded).
-  Use `mp account export-bridge --to PATH` on the host machine instead of
-  the old `mp auth cowork-setup` recipe.
 
 ## Installation
 
 ### From GitHub
 
 ```bash
-/plugin marketplace add jaredmcfarland/mixpanel_data
-/plugin install mixpanel-data@mixpanel-data-marketplace
+/plugin marketplace add mixpanel/mixpanel-headless
+/plugin install mixpanel-headless@mixpanel-headless-marketplace
 ```
 
 ### Local development
 
 ```bash
-claude --plugin-dir /path/to/mixpanel_data/mixpanel-plugin
+claude --plugin-dir /path/to/mixpanel_headless/mixpanel-plugin
 ```
 
 Use `/reload-plugins` to pick up changes without restarting.
@@ -184,7 +166,7 @@ mixpanel-plugin/
 │   └── plugin.json                     # Plugin manifest
 ├── skills/
 │   ├── setup/
-│   │   ├── SKILL.md                    # /mixpanel-data:setup
+│   │   ├── SKILL.md                    # /mixpanel-headless:setup
 │   │   └── scripts/
 │   │       └── setup.sh               # Dependency installer
 │   ├── dashboard-expert/
@@ -200,7 +182,7 @@ mixpanel-plugin/
 │           ├── help.py                 # Live API documentation lookup
 │           └── auth_manager.py         # Auth status and management
 ├── commands/
-│   └── auth.md                         # /mixpanel-data:auth command
+│   └── auth.md                         # /mixpanel-headless:auth command
 ├── docs/
 │   ├── quickstart-claude-code.md       # Getting started (Claude Code)
 │   ├── quickstart-claude-cowork.md     # Getting started (Cowork)
@@ -210,8 +192,8 @@ mixpanel-plugin/
 
 ## Links
 
-- [Library documentation](https://jaredmcfarland.github.io/mixpanel_data/)
-- [Source repository](https://github.com/jaredmcfarland/mixpanel_data)
+- [Library documentation](https://mixpanel.github.io/mixpanel-headless/)
+- [Source repository](https://github.com/mixpanel/mixpanel-headless)
 
 ## License
 

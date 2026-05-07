@@ -32,11 +32,11 @@ from unittest.mock import patch
 
 import pytest
 
-from mixpanel_data import Workspace
-from mixpanel_data import accounts as accounts_ns
-from mixpanel_data import session as session_ns
-from mixpanel_data import targets as targets_ns
-from mixpanel_data._internal.config import ConfigManager
+from mixpanel_headless import Workspace
+from mixpanel_headless import accounts as accounts_ns
+from mixpanel_headless import session as session_ns
+from mixpanel_headless import targets as targets_ns
+from mixpanel_headless._internal.config import ConfigManager
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

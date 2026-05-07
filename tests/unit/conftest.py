@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mixpanel_data._internal.auth.session import Session
+from mixpanel_headless._internal.auth.session import Session
 from tests.conftest import make_session
 
 

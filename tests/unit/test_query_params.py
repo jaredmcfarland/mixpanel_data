@@ -13,10 +13,10 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Filter, Formula, GroupBy, Metric, Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.bookmark_builders import build_filter_entry
+from mixpanel_headless import Filter, Formula, GroupBy, Metric, Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless._internal.bookmark_builders import build_filter_entry
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -299,7 +299,7 @@ class TestAggregationParams:
 
     def test_metric_overrides_top_level(self, ws: Workspace) -> None:
         """Metric objects override top-level math/property/per_user."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("Purchase", math="average", property="revenue")],
@@ -332,7 +332,7 @@ class TestFilterParams:
 
     def test_string_filter_format(self, ws: Workspace) -> None:
         """Filter.equals produces correct filter entry."""
-        from mixpanel_data import Filter
+        from mixpanel_headless import Filter
 
         params = ws._build_query_params(
             events=["Login"],
@@ -358,7 +358,7 @@ class TestFilterParams:
 
     def test_numeric_filter_scalar_value(self, ws: Workspace) -> None:
         """Filter.greater_than produces scalar filterValue."""
-        from mixpanel_data import Filter
+        from mixpanel_headless import Filter
 
         params = ws._build_query_params(
             events=["Purchase"],
@@ -382,7 +382,7 @@ class TestFilterParams:
 
     def test_contains_filter_plain_string(self, ws: Workspace) -> None:
         """Filter.contains produces plain string filterValue."""
-        from mixpanel_data import Filter
+        from mixpanel_headless import Filter
 
         params = ws._build_query_params(
             events=["Login"],
@@ -405,7 +405,7 @@ class TestFilterParams:
 
     def test_multiple_filters(self, ws: Workspace) -> None:
         """Multiple filters produce multiple entries."""
-        from mixpanel_data import Filter
+        from mixpanel_headless import Filter
 
         params = ws._build_query_params(
             events=["Purchase"],
@@ -449,7 +449,7 @@ class TestFilterParams:
         self, ws: Workspace
     ) -> None:
         """Filter.list_contains threads through _build_query_params end-to-end."""
-        from mixpanel_data import Filter
+        from mixpanel_headless import Filter
 
         params = ws._build_query_params(
             events=["Purchase Completed"],
@@ -502,7 +502,7 @@ class TestGroupParams:
 
     def test_typed_groupby(self, ws: Workspace) -> None:
         """GroupBy object produces correct group entry."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         params = ws._build_query_params(
             events=["Purchase"],
@@ -526,7 +526,7 @@ class TestGroupParams:
 
     def test_numeric_bucketing(self, ws: Workspace) -> None:
         """GroupBy with bucket_size produces customBucket."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         params = ws._build_query_params(
             events=["Purchase"],
@@ -577,7 +577,7 @@ class TestGroupParams:
 
     def test_list_item_groupby_through_build_query_params(self, ws: Workspace) -> None:
         """GroupBy.list_item threads through _build_query_params end-to-end."""
-        from mixpanel_data import GroupBy
+        from mixpanel_headless import GroupBy
 
         params = ws._build_query_params(
             events=["Cart Viewed"],
@@ -634,7 +634,7 @@ class TestMultiEventParams:
 
     def test_list_of_metrics(self, ws: Workspace) -> None:
         """List of Metric objects produces show entries with per-event math."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("Signup", math="unique"), Metric("Purchase", math="total")],
@@ -657,7 +657,7 @@ class TestMultiEventParams:
 
     def test_mixed_strings_and_metrics(self, ws: Workspace) -> None:
         """Mixed strings and Metrics: strings inherit top-level math."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=["Login", Metric("Purchase", math="total", property="amount")],
@@ -689,7 +689,7 @@ class TestFormulaParams:
 
     def test_formula_appended_to_show(self, ws: Workspace) -> None:
         """Formula entry appended to sections.show[]."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
@@ -716,7 +716,7 @@ class TestFormulaParams:
 
     def test_formula_hides_input_metrics(self, ws: Workspace) -> None:
         """Input metrics are marked isHidden when formula is present."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("A", math="unique"), Metric("B", math="unique")],
@@ -908,7 +908,7 @@ class TestPerMetricFilters:
 
     def test_per_metric_filter_in_behavior(self, ws: Workspace) -> None:
         """Metric.filters appear in behavior.filters, not sections.filter."""
-        from mixpanel_data import Filter, Metric
+        from mixpanel_headless import Filter, Metric
 
         params = ws._build_query_params(
             events=[Metric("Purchase", filters=[Filter.equals("country", "US")])],
@@ -938,7 +938,7 @@ class TestPerMetricFilters:
 
     def test_per_metric_filter_separate_from_global(self, ws: Workspace) -> None:
         """Per-metric filters and global where are in different locations."""
-        from mixpanel_data import Filter, Metric
+        from mixpanel_headless import Filter, Metric
 
         params = ws._build_query_params(
             events=[Metric("Purchase", filters=[Filter.equals("country", "US")])],
@@ -1009,7 +1009,7 @@ class TestFiltersCombinatorParams:
 
     def test_default_combinator_is_all(self, ws: Workspace) -> None:
         """Default filters_combinator='all' emits filtersDeterminer='all'."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("Login")],
@@ -1032,7 +1032,7 @@ class TestFiltersCombinatorParams:
 
     def test_any_combinator(self, ws: Workspace) -> None:
         """filters_combinator='any' emits filtersDeterminer='any'."""
-        from mixpanel_data import Filter, Metric
+        from mixpanel_headless import Filter, Metric
 
         params = ws._build_query_params(
             events=[
@@ -1091,7 +1091,7 @@ class TestFormulaObjectParams:
 
     def test_single_formula_object(self, ws: Workspace) -> None:
         """A Formula object produces a formula show clause."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("Signup", math="unique"), Metric("Purchase", math="unique")],
@@ -1117,7 +1117,7 @@ class TestFormulaObjectParams:
 
     def test_formula_without_label(self, ws: Workspace) -> None:
         """Formula without label omits name from show clause."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("A"), Metric("B")],
@@ -1141,7 +1141,7 @@ class TestFormulaObjectParams:
 
     def test_multiple_formulas(self, ws: Workspace) -> None:
         """Multiple Formula objects produce multiple formula show clauses."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("A"), Metric("B")],
@@ -1169,7 +1169,7 @@ class TestFormulaObjectParams:
 
     def test_formula_hides_metrics(self, ws: Workspace) -> None:
         """Metrics are hidden when formulas are present."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         params = ws._build_query_params(
             events=[Metric("A"), Metric("B")],
@@ -1541,7 +1541,7 @@ class TestFrequencyBreakdownInBuildParams:
 
     def test_frequency_breakdown_in_group_section(self, ws: Workspace) -> None:
         """build_params with FrequencyBreakdown produces frequency group entry."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         params = ws.build_params(
             "Login",
@@ -1558,7 +1558,7 @@ class TestFrequencyBreakdownInBuildParams:
 
     def test_frequency_breakdown_with_label(self, ws: Workspace) -> None:
         """build_params with labeled FrequencyBreakdown includes label in value."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         params = ws.build_params(
             "Login",
@@ -1569,7 +1569,7 @@ class TestFrequencyBreakdownInBuildParams:
 
     def test_frequency_breakdown_mixed_with_string(self, ws: Workspace) -> None:
         """build_params with mixed string and FrequencyBreakdown in list."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         params = ws.build_params(
             "Login",
@@ -1601,7 +1601,7 @@ class TestFrequencyFilterInBuildParams:
 
     def test_frequency_filter_in_filter_section(self, ws: Workspace) -> None:
         """build_params with FrequencyFilter produces frequency filter entry."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         params = ws.build_params(
             "Login",
@@ -1614,7 +1614,7 @@ class TestFrequencyFilterInBuildParams:
 
     def test_frequency_filter_mixed_with_filter(self, ws: Workspace) -> None:
         """build_params with mixed Filter and FrequencyFilter in list."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         params = ws.build_params(
             "Login",

@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mixpanel_data.types import (
+    from mixpanel_headless.types import (
         ActivityFeedResult,
         EventCountsResult,
         FrequencyResult,
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
         RetentionResult,
         SegmentationResult,
     )
-    from mixpanel_data.workspace import Workspace
+    from mixpanel_headless.workspace import Workspace
 
 
 @dataclass
@@ -181,9 +181,9 @@ def main() -> int:
 
     # Test 1.1: Import Workspace from public API
     def test_import_workspace() -> dict[str, Any]:
-        from mixpanel_data import Workspace  # noqa: F401
+        from mixpanel_headless import Workspace  # noqa: F401
 
-        return {"module": "mixpanel_data.Workspace imported successfully"}
+        return {"module": "mixpanel_headless.Workspace imported successfully"}
 
     result = runner.run_test("1.1 Import Workspace", test_import_workspace)
     if not result.passed:
@@ -193,7 +193,7 @@ def main() -> int:
 
     # Test 1.2: Import result types
     def test_import_types() -> dict[str, Any]:
-        from mixpanel_data.types import (
+        from mixpanel_headless.types import (
             ActivityFeedResult,  # noqa: F401
             EventCountsResult,  # noqa: F401
             FrequencyResult,  # noqa: F401
@@ -218,7 +218,7 @@ def main() -> int:
 
     # Test 1.3: Import exceptions
     def test_import_exceptions() -> dict[str, Any]:
-        from mixpanel_data.exceptions import (
+        from mixpanel_headless.exceptions import (
             AccountNotFoundError,  # noqa: F401
             ConfigError,  # noqa: F401
         )
@@ -229,7 +229,7 @@ def main() -> int:
 
     # Test 1.4: Verify account exists
     def test_verify_account() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials(account=ACCOUNT_NAME)
@@ -254,7 +254,7 @@ def main() -> int:
     # Test 2.1: Standard construction
     def test_standard_construction() -> dict[str, Any]:
         nonlocal ws
-        from mixpanel_data import Workspace
+        from mixpanel_headless import Workspace
 
         ws = Workspace(account=ACCOUNT_NAME)
         return {
@@ -269,7 +269,7 @@ def main() -> int:
 
     # Test 2.2: Context manager
     def test_context_manager() -> dict[str, Any]:
-        from mixpanel_data import Workspace
+        from mixpanel_headless import Workspace
 
         with Workspace(account=ACCOUNT_NAME) as ctx_ws:
             events = ctx_ws.events()
@@ -282,8 +282,8 @@ def main() -> int:
 
     # Test 2.3: Error - Invalid account
     def test_invalid_account_error() -> dict[str, Any]:
-        from mixpanel_data import Workspace
-        from mixpanel_data.exceptions import AccountNotFoundError
+        from mixpanel_headless import Workspace
+        from mixpanel_headless.exceptions import AccountNotFoundError
 
         try:
             Workspace(account="nonexistent_account_xyz_12345")
@@ -349,7 +349,7 @@ def main() -> int:
     # Test 3.4: funnels()
     def test_funnels() -> dict[str, Any]:
         nonlocal discovered_funnels
-        from mixpanel_data.types import FunnelInfo
+        from mixpanel_headless.types import FunnelInfo
 
         assert ws is not None
         funnels = ws.funnels()
@@ -367,7 +367,7 @@ def main() -> int:
 
     # Test 3.5: cohorts()
     def test_cohorts() -> dict[str, Any]:
-        from mixpanel_data.types import SavedCohort
+        from mixpanel_headless.types import SavedCohort
 
         assert ws is not None
         cohorts = ws.cohorts()
@@ -384,7 +384,7 @@ def main() -> int:
 
     # Test 3.6: top_events()
     def test_top_events() -> dict[str, Any]:
-        from mixpanel_data.types import TopEvent
+        from mixpanel_headless.types import TopEvent
 
         assert ws is not None
         top = ws.top_events(limit=5)
@@ -423,7 +423,7 @@ def main() -> int:
     # Test 4.1: segmentation()
     def test_segmentation() -> dict[str, Any]:
         nonlocal segmentation_result
-        from mixpanel_data.types import SegmentationResult
+        from mixpanel_headless.types import SegmentationResult
 
         assert ws is not None
         segmentation_result = ws.segmentation(
@@ -447,7 +447,7 @@ def main() -> int:
     # Test 4.2: event_counts()
     def test_event_counts() -> dict[str, Any]:
         nonlocal event_counts_result
-        from mixpanel_data.types import EventCountsResult
+        from mixpanel_headless.types import EventCountsResult
 
         assert ws is not None
         event_counts_result = ws.event_counts(
@@ -470,7 +470,7 @@ def main() -> int:
     # Test 4.3: property_counts()
     def test_property_counts() -> dict[str, Any]:
         nonlocal property_counts_result
-        from mixpanel_data.types import PropertyCountsResult
+        from mixpanel_headless.types import PropertyCountsResult
 
         assert ws is not None
         property_counts_result = ws.property_counts(
@@ -495,7 +495,7 @@ def main() -> int:
     # Test 4.4: funnel() - only if funnels exist
     def test_funnel() -> dict[str, Any]:
         nonlocal funnel_result
-        from mixpanel_data.types import FunnelResult
+        from mixpanel_headless.types import FunnelResult
 
         assert ws is not None
         if not discovered_funnels:
@@ -521,7 +521,7 @@ def main() -> int:
     # Test 4.5: retention()
     def test_retention() -> dict[str, Any]:
         nonlocal retention_result
-        from mixpanel_data.types import RetentionResult
+        from mixpanel_headless.types import RetentionResult
 
         assert ws is not None
         retention_result = ws.retention(
@@ -545,7 +545,7 @@ def main() -> int:
     # Test 4.6: jql()
     def test_jql() -> dict[str, Any]:
         nonlocal jql_result
-        from mixpanel_data.types import JQLResult
+        from mixpanel_headless.types import JQLResult
 
         assert ws is not None
         script = f"""
@@ -571,7 +571,7 @@ def main() -> int:
     # Test 4.7: activity_feed()
     def test_activity_feed() -> dict[str, Any]:
         nonlocal activity_result
-        from mixpanel_data.types import ActivityFeedResult
+        from mixpanel_headless.types import ActivityFeedResult
 
         assert ws is not None
         activity_result = ws.activity_feed(
@@ -589,7 +589,7 @@ def main() -> int:
     # Test 4.8: insights()
     def test_insights() -> dict[str, Any]:
         nonlocal insights_result
-        from mixpanel_data.types import InsightsResult
+        from mixpanel_headless.types import InsightsResult
 
         assert ws is not None
         insights_result = ws.insights(bookmark_id=INSIGHTS_BOOKMARK_ID)
@@ -607,7 +607,7 @@ def main() -> int:
     # Test 4.9: frequency()
     def test_frequency() -> dict[str, Any]:
         nonlocal frequency_result
-        from mixpanel_data.types import FrequencyResult
+        from mixpanel_headless.types import FrequencyResult
 
         assert ws is not None
         frequency_result = ws.frequency(
@@ -629,7 +629,7 @@ def main() -> int:
     # Test 4.10: segmentation_numeric()
     def test_segmentation_numeric() -> dict[str, Any]:
         nonlocal numeric_bucket_result
-        from mixpanel_data.types import NumericBucketResult
+        from mixpanel_headless.types import NumericBucketResult
 
         assert ws is not None
         numeric_bucket_result = ws.segmentation_numeric(
@@ -653,7 +653,7 @@ def main() -> int:
     # Test 4.11: segmentation_sum()
     def test_segmentation_sum() -> dict[str, Any]:
         nonlocal numeric_sum_result
-        from mixpanel_data.types import NumericSumResult
+        from mixpanel_headless.types import NumericSumResult
 
         assert ws is not None
         numeric_sum_result = ws.segmentation_sum(
@@ -677,7 +677,7 @@ def main() -> int:
     # Test 4.12: segmentation_average()
     def test_segmentation_average() -> dict[str, Any]:
         nonlocal numeric_avg_result
-        from mixpanel_data.types import NumericAverageResult
+        from mixpanel_headless.types import NumericAverageResult
 
         assert ws is not None
         numeric_avg_result = ws.segmentation_average(
@@ -928,7 +928,7 @@ def main() -> int:
 
     # Test 6.1: .api property
     def test_api_property() -> dict[str, Any]:
-        from mixpanel_data._internal.api_client import MixpanelAPIClient
+        from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
         assert ws is not None
         api = ws.api

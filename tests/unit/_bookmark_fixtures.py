@@ -1,7 +1,7 @@
 """Shared minimal-valid bookmark ``params`` fixtures for unit tests.
 
 Each constant is the smallest dict that passes the canonical schema mirror
-in ``mixpanel_data._internal.bookmark_schema``. CRUD tests pass these
+in ``mixpanel_headless._internal.bookmark_schema``. CRUD tests pass these
 instead of empty/garbage dicts so they exercise the full code path
 (including client-side Pydantic validation) without false-rejection.
 

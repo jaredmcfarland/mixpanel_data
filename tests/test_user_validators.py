@@ -15,12 +15,12 @@ from __future__ import annotations
 from datetime import date, timedelta
 from unittest.mock import MagicMock
 
-from mixpanel_data._internal.query.user_validators import (
+from mixpanel_headless._internal.query.user_validators import (
     validate_user_args,
     validate_user_params,
 )
-from mixpanel_data.exceptions import ValidationError
-from mixpanel_data.types import CohortCriteria, CohortDefinition, Filter
+from mixpanel_headless.exceptions import ValidationError
+from mixpanel_headless.types import CohortCriteria, CohortDefinition, Filter
 
 # =============================================================================
 # Helpers

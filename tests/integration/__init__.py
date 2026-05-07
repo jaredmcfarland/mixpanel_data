@@ -1,1 +1,1 @@
-"""Integration tests for mixpanel_data."""
+"""Integration tests for mixpanel_headless."""

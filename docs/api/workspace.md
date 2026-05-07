@@ -3,7 +3,7 @@
 The `Workspace` class is the unified entry point for all Mixpanel data operations.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Workspace Class Deep Dive →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.1-workspace-class)**
+    🤖 **[Workspace Class Deep Dive →](https://deepwiki.com/mixpanel/mixpanel-headless/3.2.1-workspace-class)**
 
     Ask questions about Workspace methods, explore usage patterns, or understand how services are orchestrated.
 
@@ -27,7 +27,7 @@ Workspace orchestrates internal services and provides direct App API access:
 Manage dashboards, reports (bookmarks), and cohorts programmatically via the Mixpanel App API (workspace-scoped):
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -57,7 +57,7 @@ Dashboard, report, and cohort operations require a workspace ID, set via `MP_WOR
 Manage feature flags and experiments programmatically. Unlike dashboards/reports/cohorts, these are **project-scoped** and do not require a workspace ID.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -86,7 +86,7 @@ Feature flag `update` uses **PUT semantics** (all required fields must be provid
 Manage Lexicon definitions, drop filters, custom properties, custom events, and lookup tables programmatically. All operations are **workspace-scoped**.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -122,7 +122,7 @@ See the [Data Governance guide](../guide/data-governance.md) for complete covera
 Read and write the markdown documentation that grounds AI assistants. Two scopes (`level="organization"` shared across the org, `level="project"` per-project), 50,000-character cap enforced client-side before any HTTP call.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -148,7 +148,7 @@ Project-scope writes require `edit_project_info` permission; org-scope writes re
 `Workspace.use()` swaps the active account, project, workspace, or target without rebuilding the underlying `httpx.Client` or per-account `/me` cache. It returns `self` for fluent chaining, so cross-project iteration is O(1) per swap.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 ws.use(account="team")                              # implicitly clears workspace
@@ -168,7 +168,7 @@ See [Auth → Workspace.use()](auth.md#workspaceuse-in-session-switching) for th
 
 ## Class Reference
 
-::: mixpanel_data.Workspace
+::: mixpanel_headless.Workspace
     options:
       show_root_heading: true
       show_root_toc_entry: true

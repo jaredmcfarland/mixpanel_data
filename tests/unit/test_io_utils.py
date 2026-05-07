@@ -1,6 +1,6 @@
 """Unit tests for the atomic-write helper.
 
-Tests :func:`mixpanel_data._internal.io_utils.atomic_write_bytes`, the
+Tests :func:`mixpanel_headless._internal.io_utils.atomic_write_bytes`, the
 foundation under all token / config writes that must survive a mid-write
 crash without leaving the on-disk file in a partial state.
 
@@ -28,7 +28,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mixpanel_data._internal.io_utils import atomic_write_bytes
+from mixpanel_headless._internal.io_utils import atomic_write_bytes
 
 
 def _tmp_glob(target: Path) -> list[Path]:
@@ -82,7 +82,7 @@ class TestAtomicWriteBytes:
         target = temp_dir / "config.toml"
         with (
             patch(
-                "mixpanel_data._internal.io_utils.os.replace",
+                "mixpanel_headless._internal.io_utils.os.replace",
                 side_effect=OSError("simulated"),
             ),
             pytest.raises(OSError, match="simulated"),
@@ -97,7 +97,7 @@ class TestAtomicWriteBytes:
         target.write_bytes(b"original")
         with (
             patch(
-                "mixpanel_data._internal.io_utils.os.replace",
+                "mixpanel_headless._internal.io_utils.os.replace",
                 side_effect=OSError("simulated"),
             ),
             pytest.raises(OSError, match="simulated"),
@@ -174,7 +174,7 @@ class TestAtomicWriteResilience:
         target.write_bytes(b"OLD_CONTENT")
         with (
             patch(
-                "mixpanel_data._internal.io_utils.os.replace",
+                "mixpanel_headless._internal.io_utils.os.replace",
                 side_effect=KeyboardInterrupt("simulated SIGKILL"),
             ),
             pytest.raises(KeyboardInterrupt),
@@ -194,7 +194,7 @@ class TestAtomicWriteResilience:
         target.write_bytes(b"OLD_CONTENT")
         with (
             patch(
-                "mixpanel_data._internal.io_utils.os.write",
+                "mixpanel_headless._internal.io_utils.os.write",
                 side_effect=OSError("disk full"),
             ),
             pytest.raises(OSError, match="disk full"),

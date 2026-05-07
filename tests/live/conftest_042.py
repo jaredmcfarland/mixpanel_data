@@ -210,7 +210,7 @@ def _probe_sa_credentials() -> tuple[bool, str | None]:
         _os.environ["MP_SECRET"] = _os.environ["MP_LIVE_SA_SECRET"]
         _os.environ["MP_PROJECT_ID"] = _os.environ["MP_LIVE_SA_PROJECT_ID"]
         _os.environ["MP_REGION"] = _os.environ["MP_LIVE_SA_REGION"]
-        from mixpanel_data import Workspace as _Workspace
+        from mixpanel_headless import Workspace as _Workspace
 
         ws = _Workspace()
         try:
@@ -252,7 +252,7 @@ def _probe_static_token() -> tuple[bool, str | None]:
         _os.environ["MP_OAUTH_TOKEN"] = _os.environ["MP_LIVE_OAUTH_TOKEN"]
         _os.environ["MP_PROJECT_ID"] = _os.environ["MP_LIVE_PROJECT_ID"]
         _os.environ["MP_REGION"] = _os.environ["MP_LIVE_REGION"]
-        from mixpanel_data import Workspace as _Workspace
+        from mixpanel_headless import Workspace as _Workspace
 
         ws = _Workspace()
         try:

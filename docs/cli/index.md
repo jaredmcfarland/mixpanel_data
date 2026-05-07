@@ -1,9 +1,9 @@
 # CLI Overview
 
-The `mp` command provides full access to mixpanel_data functionality from the command line.
+The `mp` command provides full access to mixpanel_headless functionality from the command line.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[CLI Usage Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.1-cli-usage)**
+    🤖 **[CLI Usage Guide →](https://deepwiki.com/mixpanel/mixpanel-headless/3.1-cli-usage)**
 
     Ask questions about CLI commands, explore options, or get help with specific workflows.
 
@@ -12,7 +12,7 @@ The `mp` command provides full access to mixpanel_data functionality from the co
 The CLI is installed automatically with the package:
 
 ```bash
-pip install mixpanel_data
+pip install mixpanel_headless
 ```
 
 Verify installation:
@@ -491,7 +491,7 @@ mp inspect events --format plain | wc -l
 | Code | Meaning | Exception |
 |------|---------|-----------|
 | 0 | Success | — |
-| 1 | General error | `MixpanelDataError`, `WorkspaceScopeError`, `AccountInUseError` |
+| 1 | General error | `MixpanelHeadlessError`, `WorkspaceScopeError`, `AccountInUseError` |
 | 2 | Authentication error | `AuthenticationError`, `OAuthError` |
 | 3 | Invalid arguments | `ConfigError`, validation errors |
 | 4 | Resource not found | `AccountNotFoundError`, `ProjectNotFoundError` |
@@ -550,7 +550,7 @@ mp query segmentation --event Login --from 2025-01-01 --to 2025-01-31 --format j
 Streaming is available through the Python API:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 

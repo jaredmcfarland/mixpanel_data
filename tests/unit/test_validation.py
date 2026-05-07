@@ -10,13 +10,13 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data._internal.validation import (
+from mixpanel_headless._internal.validation import (
     _suggest,
     validate_bookmark,
     validate_query_args,
 )
-from mixpanel_data.exceptions import BookmarkValidationError, ValidationError
-from mixpanel_data.types import GroupBy, Metric
+from mixpanel_headless.exceptions import BookmarkValidationError, ValidationError
+from mixpanel_headless.types import GroupBy, Metric
 
 # =============================================================================
 # Helpers
@@ -129,11 +129,11 @@ class TestBookmarkValidationError:
     """Tests for the BookmarkValidationError exception."""
 
     def test_inherits_from_base(self) -> None:
-        """BookmarkValidationError is a MixpanelDataError."""
-        from mixpanel_data.exceptions import MixpanelDataError
+        """BookmarkValidationError is a MixpanelHeadlessError."""
+        from mixpanel_headless.exceptions import MixpanelHeadlessError
 
         err = BookmarkValidationError([ValidationError(path="p", message="m")])
-        assert isinstance(err, MixpanelDataError)
+        assert isinstance(err, MixpanelHeadlessError)
 
     def test_error_count(self) -> None:
         """error_count counts severity='error' items."""

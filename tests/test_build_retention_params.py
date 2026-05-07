@@ -13,9 +13,9 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
+from mixpanel_headless import Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -37,7 +37,7 @@ _TEST_SESSION = Session(
 @pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for Workspace construction."""
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()
@@ -211,7 +211,7 @@ class TestBuildRetentionParamsPerEventFilters:
 
     def test_retention_event_with_filters(self, ws: Workspace) -> None:
         """RetentionEvent with filters must populate behavior[0].filters as non-empty list."""
-        from mixpanel_data.types import Filter, RetentionEvent
+        from mixpanel_headless.types import Filter, RetentionEvent
 
         born = RetentionEvent("Signup", filters=[Filter.equals("source", "organic")])
         result = ws.build_retention_params(born, RetentionEvent("Login"))
@@ -221,7 +221,7 @@ class TestBuildRetentionParamsPerEventFilters:
 
     def test_filters_combinator_maps_to_determiner(self, ws: Workspace) -> None:
         """filters_combinator='any' must map to filtersDeterminer='any' in behavior."""
-        from mixpanel_data.types import Filter, RetentionEvent
+        from mixpanel_headless.types import Filter, RetentionEvent
 
         born = RetentionEvent(
             "Signup",
@@ -234,7 +234,7 @@ class TestBuildRetentionParamsPerEventFilters:
 
     def test_no_filters_produces_empty_array(self, ws: Workspace) -> None:
         """Default RetentionEvent must have an empty filters array in behavior."""
-        from mixpanel_data.types import RetentionEvent
+        from mixpanel_headless.types import RetentionEvent
 
         result = ws.build_retention_params(
             RetentionEvent("Signup"), RetentionEvent("Login")
@@ -254,7 +254,7 @@ class TestBuildRetentionParamsGlobalFilters:
 
     def test_where_filter_populates_filter_section(self, ws: Workspace) -> None:
         """Passing where=Filter.equals(...) must populate sections.filter as non-empty."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         result = ws.build_retention_params(
             "Signup",

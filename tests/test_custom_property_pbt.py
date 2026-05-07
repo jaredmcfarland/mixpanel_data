@@ -20,8 +20,8 @@ from __future__ import annotations
 from hypothesis import given
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.bookmark_builders import _build_composed_properties
-from mixpanel_data.types import (
+from mixpanel_headless._internal.bookmark_builders import _build_composed_properties
+from mixpanel_headless.types import (
     CustomPropertyRef,
     InlineCustomProperty,
     PropertyInput,

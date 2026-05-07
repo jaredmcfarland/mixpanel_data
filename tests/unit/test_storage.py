@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from mixpanel_data._internal.auth.storage import (
+from mixpanel_headless._internal.auth.storage import (
     _storage_root,
     account_dir,
     ensure_account_dir,

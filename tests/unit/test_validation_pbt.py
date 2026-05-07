@@ -15,13 +15,17 @@ import re
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.validation import (
+from mixpanel_headless._internal.validation import (
     _suggest,
     _validate_custom_property,
     contains_control_chars,
     validate_time_args,
 )
-from mixpanel_data.types import CustomPropertyRef, InlineCustomProperty, PropertyInput
+from mixpanel_headless.types import (
+    CustomPropertyRef,
+    InlineCustomProperty,
+    PropertyInput,
+)
 
 # =============================================================================
 # Strategies

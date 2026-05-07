@@ -15,14 +15,14 @@ Read and write the markdown documentation that grounds AI assistants in your org
 | `organization` | The Mixpanel organization | Every project in the org |
 | `project` | A single project | That project only |
 
-`mixpanel_data` exposes both scopes through the same API, gated by a `level: Literal["organization", "project"]` argument.
+`mixpanel_headless` exposes both scopes through the same API, gated by a `level: Literal["organization", "project"]` argument.
 
 ## Quick reference
 
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -201,7 +201,7 @@ The server exposes a `/business-context/chain` endpoint that returns both org an
 === "Python"
 
     ```python
-    from mixpanel_data import BUSINESS_CONTEXT_MAX_CHARS
+    from mixpanel_headless import BUSINESS_CONTEXT_MAX_CHARS
     print(BUSINESS_CONTEXT_MAX_CHARS)  # 50000
 
     try:
@@ -251,7 +251,7 @@ mp business-context set --level project --file ./context.md
 ### Bootstrap a new project from the org default
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 chain = ws.get_business_context_chain()
@@ -265,7 +265,7 @@ if chain.project.is_empty and not chain.organization.is_empty:
 ### Audit context across many projects
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 for project in ws.projects():
@@ -279,7 +279,7 @@ for project in ws.projects():
 
 ## Result types
 
-`get_business_context` and `set_business_context` return [`BusinessContext`](../api/types.md#mixpanel_data.BusinessContext) — a frozen Pydantic model with the markdown content plus the scope-appropriate identifier:
+`get_business_context` and `set_business_context` return [`BusinessContext`](../api/types.md#mixpanel_headless.BusinessContext) — a frozen Pydantic model with the markdown content plus the scope-appropriate identifier:
 
 | Field | Project scope | Org scope |
 |---|---|---|
@@ -293,20 +293,20 @@ Two computed fields are also exposed and **appear in `model_dump()`** (so `--jq 
 - `is_empty: bool` — `True` when `content == ""`
 - `character_count: int` — `len(content)`; compare against `BUSINESS_CONTEXT_MAX_CHARS`
 
-`get_business_context_chain()` returns [`BusinessContextChain`](../api/types.md#mixpanel_data.BusinessContextChain), which is just `{organization: BusinessContext, project: BusinessContext}`.
+`get_business_context_chain()` returns [`BusinessContextChain`](../api/types.md#mixpanel_headless.BusinessContextChain), which is just `{organization: BusinessContext, project: BusinessContext}`.
 
 ## Error handling
 
 | Exception | Raised when |
 |---|---|
-| [`BusinessContextValidationError`](../api/exceptions.md#mixpanel_data.BusinessContextValidationError) | Client-side: content > 50,000 chars (no HTTP call made) |
-| [`QueryError`](../api/exceptions.md#mixpanel_data.QueryError) | Server-side 400 (malformed body, server-side oversize), 403 (missing `edit_project_info`), 404 (org/project not visible) |
-| [`AuthenticationError`](../api/exceptions.md#mixpanel_data.AuthenticationError) | 401 — credentials are invalid |
-| [`WorkspaceScopeError`](../api/exceptions.md#mixpanel_data.WorkspaceScopeError) | `level="organization"` and the org ID could not be auto-resolved (`code="ORGANIZATION_AMBIGUOUS"`) |
-| [`ServerError`](../api/exceptions.md#mixpanel_data.ServerError) | 5xx |
+| [`BusinessContextValidationError`](../api/exceptions.md#mixpanel_headless.BusinessContextValidationError) | Client-side: content > 50,000 chars (no HTTP call made) |
+| [`QueryError`](../api/exceptions.md#mixpanel_headless.QueryError) | Server-side 400 (malformed body, server-side oversize), 403 (missing `edit_project_info`), 404 (org/project not visible) |
+| [`AuthenticationError`](../api/exceptions.md#mixpanel_headless.AuthenticationError) | 401 — credentials are invalid |
+| [`WorkspaceScopeError`](../api/exceptions.md#mixpanel_headless.WorkspaceScopeError) | `level="organization"` and the org ID could not be auto-resolved (`code="ORGANIZATION_AMBIGUOUS"`) |
+| [`ServerError`](../api/exceptions.md#mixpanel_headless.ServerError) | 5xx |
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 try:

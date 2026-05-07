@@ -2,11 +2,11 @@
 
 How typed query results become dashboard reports. Every query method returns a result with a `.params` dict ready for `CreateBookmarkParams` -- no manual JSON construction needed.
 
-All code examples use the `mixpanel_data` Python library.
+All code examples use the `mixpanel_headless` Python library.
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data.types import (
+import mixpanel_headless as mp
+from mixpanel_headless.types import (
     CreateBookmarkParams,
     CreateDashboardParams,
     UpdateDashboardParams,
@@ -267,8 +267,8 @@ A complete example building a dashboard with one report from each query engine.
 
 ```python
 import json
-import mixpanel_data as mp
-from mixpanel_data.types import (
+import mixpanel_headless as mp
+from mixpanel_headless.types import (
     CreateDashboardParams,
     UpdateDashboardParams,
 )

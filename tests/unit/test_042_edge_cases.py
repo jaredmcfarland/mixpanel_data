@@ -25,24 +25,24 @@ import pytest
 from pydantic import SecretStr, TypeAdapter, ValidationError
 from typer.testing import CliRunner
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     Account,
     OAuthBrowserAccount,
     OAuthTokenAccount,
     ServiceAccount,
 )
-from mixpanel_data._internal.auth.bridge import BridgeFile, load_bridge
-from mixpanel_data._internal.auth.resolver import resolve_session
-from mixpanel_data._internal.auth.session import (
+from mixpanel_headless._internal.auth.bridge import BridgeFile, load_bridge
+from mixpanel_headless._internal.auth.resolver import resolve_session
+from mixpanel_headless._internal.auth.session import (
     Project,
     Session,
     WorkspaceRef,
 )
-from mixpanel_data._internal.auth.token_resolver import OnDiskTokenResolver
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.cli.main import app
-from mixpanel_data.cli.utils import ExitCode
-from mixpanel_data.exceptions import ConfigError, OAuthError
+from mixpanel_headless._internal.auth.token_resolver import OnDiskTokenResolver
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.cli.main import app
+from mixpanel_headless.cli.utils import ExitCode
+from mixpanel_headless.exceptions import ConfigError, OAuthError
 
 # =============================================================================
 # Account name boundary + character tests
@@ -462,13 +462,11 @@ class TestConfigManagerEdgeCases:
     def test_legacy_v2_config_no_longer_decodes_as_accounts(
         self, tmp_path: Path
     ) -> None:
-        """A v2-shaped TOML loads but yields no accounts.
+        """A TOML with an unknown ``config_version`` key yields no accounts.
 
-        Fix 11 deleted the friendly ``Legacy config schema detected``
-        message — under the alpha "free to break" lens there are no v1/v2
-        users to migrate. ``config_version = 2`` is now ignored as an
-        unknown key and ``list_accounts`` returns an empty list because
-        the v2 fixture has no ``[accounts]`` section.
+        ``config_version = 2`` is ignored as an unknown key and
+        ``list_accounts`` returns an empty list because the fixture has
+        no ``[accounts]`` section.
         """
         p = tmp_path / "config.toml"
         p.write_text("config_version = 2\n", encoding="utf-8")
@@ -666,8 +664,8 @@ class TestSecretLeakage:
         confusing 401 later.
         """
         monkeypatch.setenv("HOME", str(tmp_path))
-        from mixpanel_data._internal.api_client import MixpanelAPIClient
-        from mixpanel_data.exceptions import OAuthError
+        from mixpanel_headless._internal.api_client import MixpanelAPIClient
+        from mixpanel_headless.exceptions import OAuthError
 
         s = Session(
             account=OAuthBrowserAccount(name="me", region="us"),

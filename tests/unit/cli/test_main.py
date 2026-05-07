@@ -7,8 +7,8 @@ import signal
 import pytest
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import _handle_interrupt, app
-from mixpanel_data.cli.utils import ExitCode
+from mixpanel_headless.cli.main import _handle_interrupt, app
+from mixpanel_headless.cli.utils import ExitCode
 
 
 @pytest.fixture

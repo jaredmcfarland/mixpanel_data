@@ -2,11 +2,11 @@
 
 Exhaustive technical reference for Mixpanel dashboard creation, layout, content actions, text card formatting, time filters, and known gotchas. Consult this when you need exact parameter names, field types, API behaviors, or formatting rules.
 
-All code examples use the `mixpanel_data` Python library.
+All code examples use the `mixpanel_headless` Python library.
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data.types import (
+import mixpanel_headless as mp
+from mixpanel_headless.types import (
     CreateDashboardParams,
     UpdateDashboardParams,
     UpdateTextCardParams,
@@ -25,7 +25,7 @@ ws = mp.Workspace()
 
 #### CreateDashboardParams
 
-Import: `from mixpanel_data.types import CreateDashboardParams`
+Import: `from mixpanel_headless.types import CreateDashboardParams`
 
 | Field | Type | Default | Constraints |
 |---|---|---|---|
@@ -47,7 +47,7 @@ params = CreateDashboardParams(
 
 #### UpdateDashboardParams
 
-Import: `from mixpanel_data.types import UpdateDashboardParams`
+Import: `from mixpanel_headless.types import UpdateDashboardParams`
 
 All fields are optional. Only provided fields are sent to the API.
 
@@ -71,7 +71,7 @@ data = params.model_dump(exclude_none=True)
 
 #### UpdateTextCardParams
 
-Import: `from mixpanel_data.types import UpdateTextCardParams`
+Import: `from mixpanel_headless.types import UpdateTextCardParams`
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
@@ -85,7 +85,7 @@ params = UpdateTextCardParams(markdown="<h2>Section Title</h2><p>Description.</p
 
 #### UpdateReportLinkParams
 
-Import: `from mixpanel_data.types import UpdateReportLinkParams`
+Import: `from mixpanel_headless.types import UpdateReportLinkParams`
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
@@ -101,7 +101,7 @@ data = params.model_dump(by_alias=True, exclude_none=True)
 
 #### Dashboard (response model)
 
-Import: `from mixpanel_data.types import Dashboard`
+Import: `from mixpanel_headless.types import Dashboard`
 
 The `Dashboard` model uses `extra="allow"` so new API fields are preserved automatically. Key fields:
 
@@ -972,8 +972,8 @@ Pinned dashboards appear at the top of the dashboard list for all project member
 ### 7.4 Full lifecycle example
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data.types import CreateDashboardParams, UpdateDashboardParams
+import mixpanel_headless as mp
+from mixpanel_headless.types import CreateDashboardParams, UpdateDashboardParams
 import json
 
 ws = mp.Workspace()

@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.cli.main import app
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.cli.main import app
 
 
 @pytest.fixture(autouse=True)
@@ -170,7 +170,7 @@ class TestAccountLoginNoBrowser:
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """``--no-browser`` forwards to ``accounts_ns.login(open_browser=False)``."""
-        from mixpanel_data import accounts as accounts_ns
+        from mixpanel_headless import accounts as accounts_ns
 
         # Seed an oauth_browser account so the CLI command type-checks pass.
         runner.invoke(
@@ -194,7 +194,7 @@ class TestAccountLoginNoBrowser:
             # Return a minimal OAuthLoginResult so the CLI handler can render.
             from datetime import datetime, timezone
 
-            from mixpanel_data.types import OAuthLoginResult
+            from mixpanel_headless.types import OAuthLoginResult
 
             return OAuthLoginResult(
                 account_name=name,
@@ -282,7 +282,7 @@ class TestProjectCliList:
                 ``service_account`` requires ``--project`` at add time;
                 we strip it post-hoc via ConfigManager when None.
         """
-        from mixpanel_data._internal.me import (
+        from mixpanel_headless._internal.me import (
             MeCache,
             MeProjectInfo,
             MeResponse,
@@ -384,12 +384,11 @@ class TestProjectCliList:
     ) -> None:
         """``--refresh`` forces a /me re-fetch instead of using the disk cache.
 
-        The legacy ``--remote`` alias was dropped in 0.4.1 — ``--refresh`` is
-        the single canonical name (matches the Python API
-        :meth:`Workspace.projects(refresh=)`).
+        ``--refresh`` is the single canonical name (matches the Python API
+        :meth:`Workspace.projects(refresh=)`); there is no ``--remote`` alias.
         """
         self._seed_account_and_me_cache(runner, monkeypatch)
-        from mixpanel_data._internal import me as me_mod
+        from mixpanel_headless._internal import me as me_mod
 
         call_log: list[bool] = []
 
@@ -411,7 +410,7 @@ class TestProjectCliList:
     def test_list_remote_alias_removed(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``--remote`` was removed in 0.4.1 — usage now exits with usage error."""
+        """``--remote`` is not a valid option — usage exits with a usage error."""
         self._seed_account_and_me_cache(runner, monkeypatch)
         result = runner.invoke(app, ["project", "list", "--remote"])
         # Typer maps unknown options to exit code 2 with "No such option".
@@ -504,13 +503,11 @@ class TestSessionCli:
 
 
 class TestConfigCli:
-    """``mp config`` no longer exists (Fix 12 deleted the stub group).
+    """``mp config`` does not exist as a CLI command group.
 
-    Under the alpha "free to break" lens there are no v1/v2 users to
-    migrate, so the placeholder converter is gone instead of waiting
-    for Phase 10. A v1/v2 ``~/.mp/config.toml`` now fails at the
-    Pydantic validation layer with a generic-but-honest "unexpected key"
-    error and the user is told to delete and re-add.
+    A ``~/.mp/config.toml`` with unknown keys fails at the Pydantic
+    validation layer with a generic-but-honest "unexpected key" error
+    and the user is told to delete and re-add.
     """
 
     def test_no_mp_config_command(self, runner: CliRunner) -> None:

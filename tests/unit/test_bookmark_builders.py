@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mixpanel_data._internal.bookmark_builders import (
+from mixpanel_headless._internal.bookmark_builders import (
     build_date_range,
     build_filter_entry,
     build_filter_section,
@@ -21,7 +21,7 @@ from mixpanel_data._internal.bookmark_builders import (
     build_time_section,
     patch_custom_property_filters_for_transform,
 )
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     CohortBreakdown,
     CustomPropertyRef,
     Filter,
@@ -52,7 +52,7 @@ class TestBuildTimeSection:
 
     def test_from_only_fills_today(self) -> None:
         """Only from_date fills to_date with today's date."""
-        with patch("mixpanel_data._internal.bookmark_builders.date") as mock_date:
+        with patch("mixpanel_headless._internal.bookmark_builders.date") as mock_date:
             mock_date.today.return_value = date(2025, 6, 15)
             mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
             result = build_time_section(
@@ -475,8 +475,8 @@ class TestBuildTimeComparison:
 
     def test_relative_produces_correct_dict(self) -> None:
         """Relative time comparison produces {"type": "relative", "value": unit}."""
-        from mixpanel_data._internal.bookmark_builders import build_time_comparison
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless._internal.bookmark_builders import build_time_comparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.relative("month")
         result = build_time_comparison(tc)
@@ -484,8 +484,8 @@ class TestBuildTimeComparison:
 
     def test_absolute_start_produces_correct_dict(self) -> None:
         """Absolute-start produces {"type": "absolute-start", "value": date}."""
-        from mixpanel_data._internal.bookmark_builders import build_time_comparison
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless._internal.bookmark_builders import build_time_comparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.absolute_start("2026-01-01")
         result = build_time_comparison(tc)
@@ -493,8 +493,8 @@ class TestBuildTimeComparison:
 
     def test_absolute_end_produces_correct_dict(self) -> None:
         """Absolute-end produces {"type": "absolute-end", "value": date}."""
-        from mixpanel_data._internal.bookmark_builders import build_time_comparison
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless._internal.bookmark_builders import build_time_comparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.absolute_end("2026-12-31")
         result = build_time_comparison(tc)
@@ -502,8 +502,8 @@ class TestBuildTimeComparison:
 
     def test_relative_day_unit(self) -> None:
         """Relative with unit='day' produces correct value."""
-        from mixpanel_data._internal.bookmark_builders import build_time_comparison
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless._internal.bookmark_builders import build_time_comparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.relative("day")
         result = build_time_comparison(tc)
@@ -511,8 +511,8 @@ class TestBuildTimeComparison:
 
     def test_relative_year_unit(self) -> None:
         """Relative with unit='year' produces correct value."""
-        from mixpanel_data._internal.bookmark_builders import build_time_comparison
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless._internal.bookmark_builders import build_time_comparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.relative("year")
         result = build_time_comparison(tc)
@@ -551,10 +551,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_basic_structure(self) -> None:
         """FrequencyBreakdown produces correct group entry structure."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         result = build_frequency_group_entry(fb)
@@ -565,10 +565,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_behavior_dict_structure(self) -> None:
         """Behavior dict contains behaviorType, event object, and defaults."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         result = build_frequency_group_entry(fb)
@@ -582,10 +582,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_behaviortype_not_at_top_level(self) -> None:
         """behaviorType must be inside behavior, not at the top level."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         result = build_frequency_group_entry(fb)
@@ -594,10 +594,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_custom_bucket_default_values(self) -> None:
         """Default bucket config uses camelCase in customBucket object."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         result = build_frequency_group_entry(fb)
@@ -609,10 +609,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_custom_bucket_values(self) -> None:
         """Custom bucket params are reflected in customBucket object."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase", bucket_size=5, bucket_min=0, bucket_max=50)
         result = build_frequency_group_entry(fb)
@@ -624,10 +624,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_value_label_from_event_name(self) -> None:
         """Value field defaults to '<event> Frequency' when no label set."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         result = build_frequency_group_entry(fb)
@@ -635,10 +635,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_label_overrides_value(self) -> None:
         """Custom label overrides the default value field."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase", label="Buy Count")
         result = build_frequency_group_entry(fb)
@@ -646,10 +646,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_no_top_level_label_key(self) -> None:
         """Label is expressed via value field, not a separate label key."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase", label="Buy Count")
         result = build_frequency_group_entry(fb)
@@ -657,10 +657,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_no_snake_case_bucket_keys_in_behavior(self) -> None:
         """Old snake_case bucket keys must not appear in behavior dict."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase", bucket_size=5, bucket_min=0, bucket_max=50)
         result = build_frequency_group_entry(fb)
@@ -671,10 +671,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_event_object_uses_event_name_not_display_label(self) -> None:
         """Event object label/value must use raw event name, not display label."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase", label="Buy Count")
         result = build_frequency_group_entry(fb)
@@ -686,10 +686,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_data_group_id_default_none(self) -> None:
         """dataGroupId defaults to None when not specified."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         result = build_frequency_group_entry(fb)
@@ -697,10 +697,10 @@ class TestBuildFrequencyGroupEntry:
 
     def test_data_group_id_threaded(self) -> None:
         """dataGroupId is threaded when passed explicitly."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_group_entry,
         )
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         result = build_frequency_group_entry(fb, data_group_id=5)
@@ -717,10 +717,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_basic_structure(self) -> None:
         """FrequencyFilter produces correct filter entry structure."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=5)
         result = build_frequency_filter_entry(ff)
@@ -735,10 +735,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_custom_operator(self) -> None:
         """Custom operator is reflected in output."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", operator="is greater than", value=10)
         result = build_frequency_filter_entry(ff)
@@ -748,10 +748,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_with_date_range(self) -> None:
         """Date range is included when set."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter(
             "Login", value=5, date_range_value=30, date_range_unit="day"
@@ -764,10 +764,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_without_date_range(self) -> None:
         """Date range is omitted when not set."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=5)
         result = build_frequency_filter_entry(ff)
@@ -776,10 +776,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_with_event_filters(self) -> None:
         """Event filters are included when set."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter(
             "Purchase",
@@ -795,10 +795,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_without_event_filters(self) -> None:
         """Event filters key is omitted when not set."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=5)
         result = build_frequency_filter_entry(ff)
@@ -807,10 +807,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_label_included(self) -> None:
         """Label is included in output when set."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=5, label="Active Users")
         result = build_frequency_filter_entry(ff)
@@ -818,10 +818,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_label_omitted_when_none(self) -> None:
         """Label key is omitted when label is None."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=5)
         result = build_frequency_filter_entry(ff)
@@ -829,10 +829,10 @@ class TestBuildFrequencyFilterEntry:
 
     def test_multiple_event_filters(self) -> None:
         """Multiple event filters each produce a filter entry."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_frequency_filter_entry,
         )
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter(
             "Purchase",
@@ -859,7 +859,7 @@ class TestBuildGroupSectionFrequency:
 
     def test_frequency_breakdown_in_group_section(self) -> None:
         """FrequencyBreakdown produces frequency group entry in section."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         result = build_group_section(FrequencyBreakdown("Purchase"))
         assert len(result) == 1
@@ -868,7 +868,7 @@ class TestBuildGroupSectionFrequency:
 
     def test_mixed_groupby_and_frequency(self) -> None:
         """List with GroupBy and FrequencyBreakdown produces correct entries."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         result = build_group_section(["country", FrequencyBreakdown("Purchase")])
         assert len(result) == 2
@@ -879,7 +879,7 @@ class TestBuildGroupSectionFrequency:
 
     def test_data_group_id_threaded_to_frequency(self) -> None:
         """data_group_id is threaded into frequency group entries."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         result = build_group_section(FrequencyBreakdown("Purchase"), data_group_id=5)
         assert result[0]["dataGroupId"] == 5
@@ -895,7 +895,7 @@ class TestBuildFilterSectionFrequency:
 
     def test_frequency_filter_in_filter_section(self) -> None:
         """FrequencyFilter produces frequency filter entry in section."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         result = build_filter_section(FrequencyFilter("Login", value=5))
         assert len(result) == 1
@@ -904,7 +904,7 @@ class TestBuildFilterSectionFrequency:
 
     def test_mixed_filter_and_frequency(self) -> None:
         """List with Filter and FrequencyFilter produces correct entries."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         result = build_filter_section(
             [Filter.equals("country", "US"), FrequencyFilter("Login", value=5)]
@@ -985,7 +985,7 @@ class TestBuildFlowPropertyFilter:
 
     def test_single_filter_structure(self) -> None:
         """Single Filter produces correct filter_by_event structure."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_property_filter,
         )
 
@@ -1001,7 +1001,7 @@ class TestBuildFlowPropertyFilter:
 
     def test_multiple_filters_produce_children(self) -> None:
         """Multiple Filters produce a children array with one entry per filter."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_property_filter,
         )
 
@@ -1018,7 +1018,7 @@ class TestBuildFlowPropertyFilter:
 
     def test_filter_entry_uses_build_filter_entry(self) -> None:
         """Each child uses build_filter_entry structure (resourceType, filterType, etc.)."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_property_filter,
         )
 
@@ -1032,10 +1032,10 @@ class TestBuildFlowPropertyFilter:
 
     def test_custom_property_ref_raises_type_error(self) -> None:
         """build_flow_property_filter rejects CustomPropertyRef properties."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_property_filter,
         )
-        from mixpanel_data.types import CustomPropertyRef
+        from mixpanel_headless.types import CustomPropertyRef
 
         f = Filter(
             _property=CustomPropertyRef(id=123),
@@ -1049,7 +1049,7 @@ class TestBuildFlowPropertyFilter:
 
     def test_empty_list_raises_value_error(self) -> None:
         """build_flow_property_filter rejects empty filter list."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_property_filter,
         )
 

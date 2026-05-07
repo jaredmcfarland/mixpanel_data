@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import get_args
 
-from mixpanel_data._internal.bookmark_enums import (
+from mixpanel_headless._internal.bookmark_enums import (
     MATH_NO_PER_USER,
     MATH_PROPERTY_OPTIONAL,
     MATH_REQUIRING_PROPERTY,
@@ -34,7 +34,7 @@ from mixpanel_data._internal.bookmark_enums import (
     VALID_RETENTION_UNITS,
     VALID_TIME_UNITS,
 )
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     FilterPropertyType,
     MathType,
     PerUserAggregation,

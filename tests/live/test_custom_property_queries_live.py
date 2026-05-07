@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from mixpanel_data import (
+from mixpanel_headless import (
     CustomPropertyRef,
     Filter,
     GroupBy,
@@ -24,9 +24,9 @@ from mixpanel_data import (
     QueryResult,
     Workspace,
 )
-from mixpanel_data._internal.bookmark_builders import _build_composed_properties
-from mixpanel_data.exceptions import BookmarkValidationError
-from mixpanel_data.types import (
+from mixpanel_headless._internal.bookmark_builders import _build_composed_properties
+from mixpanel_headless.exceptions import BookmarkValidationError
+from mixpanel_headless.types import (
     CustomProperty,
     FunnelQueryResult,
     FunnelStep,

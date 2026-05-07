@@ -23,8 +23,8 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.auth.storage import OAuthStorage
-from mixpanel_data._internal.auth.token import OAuthClientInfo, OAuthTokens
+from mixpanel_headless._internal.auth.storage import OAuthStorage
+from mixpanel_headless._internal.auth.token import OAuthClientInfo, OAuthTokens
 
 
 def _utcnow() -> datetime:

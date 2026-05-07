@@ -19,7 +19,7 @@ from typing import Any
 from hypothesis import given
 from hypothesis import strategies as st
 
-from mixpanel_data.cli.formatters import (
+from mixpanel_headless.cli.formatters import (
     format_csv,
     format_json,
     format_jsonl,

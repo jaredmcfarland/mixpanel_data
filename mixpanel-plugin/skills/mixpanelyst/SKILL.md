@@ -4,12 +4,12 @@ description: This skill should be used when the user asks about Mixpanel product
 allowed-tools: Bash Read Write WebFetch
 ---
 
-# mixpanel_data API Reference
+# mixpanel_headless API Reference
 
-Analyze Mixpanel data by writing and executing Python code using the `mixpanel_data` library and `pandas`.
+Analyze Mixpanel data by writing and executing Python code using the `mixpanel_headless` library and `pandas`.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 ws = mp.Workspace()
 result = ws.query("Login", last=30)
 print(result.df.head())
@@ -37,8 +37,8 @@ Guessing event names causes silent empty results. Guessing API parameters causes
 ### Step 1: Discover the data schema
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import Filter, GroupBy, Metric
+import mixpanel_headless as mp
+from mixpanel_headless import Filter, GroupBy, Metric
 ws = mp.Workspace()
 
 # 1. Find real event names
@@ -86,7 +86,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types            # all public types
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions        # all exceptions
 ```
 
-For tutorials and guides: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")`
+For tutorials and guides: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/llms.txt")`
 
 ### Discovery method signatures
 
@@ -117,7 +117,7 @@ def lexicon_schemas(self, *, entity_type: EntityType | None = None) -> list[Lexi
 
 def clear_discovery_cache(self) -> None: ...
     # Clear cached discovery results.
-# User Guide: WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/discovery/index.md")
+# User Guide: WebFetch(url="https://mixpanel.github.io/mixpanel-headless/guide/discovery/index.md")
 ```
 
 ## Exploratory Analysis Workflow
@@ -127,7 +127,7 @@ When exploring an unfamiliar dataset or asked to "find insights," follow this sy
 ### Step 1: Orient — Map the Event Schema
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 ws = mp.Workspace()
 
 events = ws.events()
@@ -254,7 +254,7 @@ LET(s4, REGEX_REPLACE(s3, "_", " "),
 
 **Creating a custom property via the API:**
 ```python
-from mixpanel_data import CreateCustomPropertyParams, ComposedPropertyValue
+from mixpanel_headless import CreateCustomPropertyParams, ComposedPropertyValue
 
 params = CreateCustomPropertyParams(
     name="Clean Campaign Name",
@@ -289,7 +289,7 @@ class Workspace:
     ) -> None:
         """Create a new Workspace. Resolution per axis is independent
         (env > param > target > bridge > config); see
-        ``mixpanel_data.auth_types`` and the resolver.
+        ``mixpanel_headless.auth_types`` and the resolver.
 
         With ``session=`` supplied, all other axis kwargs are ignored
         (full bypass).
@@ -764,7 +764,7 @@ Raw data is rarely analysis-ready. These three tools transform raw events and pr
 - **Fallback chains** across multiple properties (display_name → username → "unknown")
 
 ```python
-from mixpanel_data import InlineCustomProperty, PropertyInput, GroupBy, Filter, Metric
+from mixpanel_headless import InlineCustomProperty, PropertyInput, GroupBy, Filter, Metric
 
 # Bucket revenue into tiers for breakdown
 revenue_tier = InlineCustomProperty(
@@ -792,7 +792,7 @@ Use `InlineCustomProperty` for ad-hoc exploration. When a formula proves valuabl
 **Inline Cohorts — define complex populations on-the-fly.** Every analytical question starts with "among WHICH users?" Simple property filters (`where=Filter.equals(...)`) answer "users with attribute X." Inline cohorts answer harder questions: "users who did X at least N times in the last D days AND did NOT do Y AND have property Z." Compose criteria with AND/OR logic:
 
 ```python
-from mixpanel_data import CohortDefinition, CohortCriteria, CohortBreakdown, CohortMetric
+from mixpanel_headless import CohortDefinition, CohortCriteria, CohortBreakdown, CohortMetric
 
 # "Power users": purchased 5+ times in 30 days, never contacted support
 power_users = CohortDefinition.all_of(
@@ -816,7 +816,7 @@ result = ws.query(
 **Frequency Breakdown/Filter — segment by behavioral intensity.** `FrequencyBreakdown` answers "how do users who did X once differ from users who did X ten times?" `FrequencyFilter` restricts queries to users meeting a frequency threshold. These bridge "what users did" with "who users are":
 
 ```python
-from mixpanel_data import FrequencyBreakdown, FrequencyFilter
+from mixpanel_headless import FrequencyBreakdown, FrequencyFilter
 
 # Break down login behavior by purchase frequency
 result = ws.query("Login", math='unique',
@@ -860,7 +860,7 @@ def segmentation_average(self, event: str, *, from_date: str, to_date: str, on: 
 ### Entity CRUD (App API)
 
 All entity methods require a workspace ID. Use `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.<method>` for full signatures and parameter types.
-User Guide: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/entity-management/index.md")`
+User Guide: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/guide/entity-management/index.md")`
 
 #### Dashboard (→ `Dashboard`)
 
@@ -931,7 +931,7 @@ Two scopes — `level="organization"` (shared across the whole org) and `level="
 Run `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py search business_context` to see all four methods, two types, and one exception.
 
 ```python
-from mixpanel_data import BUSINESS_CONTEXT_MAX_CHARS  # 50_000
+from mixpanel_headless import BUSINESS_CONTEXT_MAX_CHARS  # 50_000
 
 # Read
 project_ctx = ws.get_business_context(level="project")
@@ -963,12 +963,12 @@ print(f"{project_ctx.character_count}/{BUSINESS_CONTEXT_MAX_CHARS} chars; "
 
 **Permissions:** project-scope reads need any project access; project-scope writes need `edit_project_info` on the project. Org-scope writes need `edit_project_info` at the org level (typically OAuth, not service account). The `BusinessContextValidationError` exception is raised client-side BEFORE any HTTP call when content exceeds 50,000 chars, so use it to detect oversize input without burning a round-trip.
 
-User Guide: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/business-context/index.md")`
+User Guide: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/guide/business-context/index.md")`
 
 ## Key Types
 
 Run `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types` for the full list of all types. Use `help.py <TypeName>` for fields, constructors, and enum values.
-Full reference: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/api/types/index.md")`
+Full reference: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/api/types/index.md")`
 
 | Type | Purpose |
 |------|---------|
@@ -1039,11 +1039,11 @@ plt.close(fig)
 
 ## Exceptions
 
-Full reference: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/api/exceptions/index.md")`
+Full reference: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/api/exceptions/index.md")`
 
 | Exception | When |
 |-----------|------|
-| `MixpanelDataError` | Base for all errors |
+| `MixpanelHeadlessError` | Base for all errors |
 | `ConfigError` | No credentials resolved |
 | `AccountNotFoundError` | Named account doesn't exist |
 | `AuthenticationError` | Invalid credentials (401) |

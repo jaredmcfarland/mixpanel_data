@@ -15,14 +15,14 @@ from typing import Any
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.bookmark_enums import (
+from mixpanel_headless._internal.bookmark_enums import (
     VALID_CHART_TYPES,
     VALID_FILTER_OPERATORS,
     VALID_MATH_FUNNELS,
     VALID_MATH_INSIGHTS,
     VALID_MATH_RETENTION,
 )
-from mixpanel_data._internal.validation import (
+from mixpanel_headless._internal.validation import (
     validate_bookmark,
 )
 

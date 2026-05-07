@@ -19,12 +19,12 @@ from pathlib import Path
 import httpx
 import pytest
 
-from mixpanel_data._internal.auth.client_registration import (
+from mixpanel_headless._internal.auth.client_registration import (
     ensure_client_registered,
 )
-from mixpanel_data._internal.auth.storage import OAuthStorage
-from mixpanel_data._internal.auth.token import OAuthClientInfo
-from mixpanel_data.exceptions import OAuthError
+from mixpanel_headless._internal.auth.storage import OAuthStorage
+from mixpanel_headless._internal.auth.token import OAuthClientInfo
+from mixpanel_headless.exceptions import OAuthError
 
 
 def _make_register_transport(

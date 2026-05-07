@@ -8,7 +8,7 @@ import json
 import pandas as pd
 import pytest
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     Exclusion,
     Filter,
     FunnelQueryResult,

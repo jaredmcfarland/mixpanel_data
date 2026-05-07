@@ -35,7 +35,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 _BOOKMARK_TYPES: tuple[str, ...] = (
     "insights",

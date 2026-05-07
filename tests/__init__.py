@@ -1,1 +1,1 @@
-"""Test suite for mixpanel_data."""
+"""Test suite for mixpanel_headless."""

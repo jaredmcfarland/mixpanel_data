@@ -15,11 +15,11 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.exceptions import BookmarkValidationError
-from mixpanel_data.types import (
+from mixpanel_headless import Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.exceptions import BookmarkValidationError
+from mixpanel_headless.types import (
     CohortBreakdown,
     CohortCriteria,
     CohortDefinition,
@@ -50,7 +50,7 @@ _TEST_SESSION = Session(
 @pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for Workspace construction."""
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()
@@ -843,7 +843,7 @@ class TestBuildFlowCohortFilterDirect:
 
     def test_saved_cohort_filter(self) -> None:
         """Saved cohort filter produces dict with id."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_cohort_filter,
         )
 
@@ -855,7 +855,7 @@ class TestBuildFlowCohortFilterDirect:
 
     def test_inline_cohort_filter(self) -> None:
         """Inline cohort filter produces dict with raw_cohort."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_cohort_filter,
         )
 
@@ -868,7 +868,7 @@ class TestBuildFlowCohortFilterDirect:
 
     def test_not_in_cohort_negated(self) -> None:
         """not_in_cohort filter produces negated=True."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_cohort_filter,
         )
 
@@ -878,7 +878,7 @@ class TestBuildFlowCohortFilterDirect:
 
     def test_non_cohort_filter_raises(self) -> None:
         """Non-cohort filter raises ValueError."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_cohort_filter,
         )
 
@@ -887,7 +887,7 @@ class TestBuildFlowCohortFilterDirect:
 
     def test_multiple_filters_raises(self) -> None:
         """Multiple cohort filters raises ValueError."""
-        from mixpanel_data._internal.bookmark_builders import (
+        from mixpanel_headless._internal.bookmark_builders import (
             build_flow_cohort_filter,
         )
 

@@ -24,10 +24,10 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data.exceptions import BusinessContextValidationError
-from mixpanel_data.types import BUSINESS_CONTEXT_MAX_CHARS, BusinessContext
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless.exceptions import BusinessContextValidationError
+from mixpanel_headless.types import BUSINESS_CONTEXT_MAX_CHARS, BusinessContext
+from mixpanel_headless.workspace import Workspace
 from tests.conftest import make_session
 
 

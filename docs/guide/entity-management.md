@@ -17,7 +17,7 @@ Manage Mixpanel dashboards, reports (bookmarks), cohorts, feature flags, experim
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -468,7 +468,7 @@ Feature flags are **project-scoped** — no workspace ID required. They use **UU
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -624,7 +624,7 @@ Draft → Active (launch) → Concluded (conclude) → Success/Fail (decide)
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -787,7 +787,7 @@ Custom alerts monitor saved reports and notify when conditions are met. Alerts a
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -970,7 +970,7 @@ Timeline annotations mark important events (releases, incidents, campaigns) on y
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -1098,7 +1098,7 @@ Project webhooks receive HTTP notifications when events occur in your Mixpanel p
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 

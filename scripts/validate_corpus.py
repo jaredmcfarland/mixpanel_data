@@ -24,11 +24,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from mixpanel_data._internal.bookmark_schema import (
+from mixpanel_headless._internal.bookmark_schema import (
     get_root_model_for_bookmark_type,
     validate_with_pydantic,
 )
-from mixpanel_data.exceptions import ValidationError
+from mixpanel_headless.exceptions import ValidationError
 
 _KNOWN_BOOKMARK_TYPES: frozenset[str] = frozenset(
     {"insights", "funnels", "retention", "flows", "user"}

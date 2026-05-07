@@ -1,4 +1,4 @@
-"""Property-based tests for ``src/mixpanel_data/_internal/bookmark_schema.py``.
+"""Property-based tests for ``src/mixpanel_headless/_internal/bookmark_schema.py``.
 
 Properties verified:
 
@@ -21,7 +21,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError as PydanticValidationError
 
-from mixpanel_data._internal.bookmark_schema import (
+from mixpanel_headless._internal.bookmark_schema import (
     Behavior,
     BehaviorMeasurement,
     BehaviorShowClause,

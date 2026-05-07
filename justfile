@@ -1,4 +1,4 @@
-# mixpanel_data development commands
+# mixpanel_headless development commands
 # Run `just` to see available commands
 
 # Default: list available commands
@@ -96,7 +96,7 @@ mutate-check threshold="80":
 
 # Run tests with coverage (fails if below 90%)
 test-cov:
-    uv run pytest --cov=src/mixpanel_data --cov-report=term-missing --cov-fail-under=90
+    uv run pytest --cov=src/mixpanel_headless --cov-report=term-missing --cov-fail-under=90
 
 # === Hypothesis CLI ===
 
@@ -104,7 +104,7 @@ test-cov:
 hypo-codemod *args:
     uv run hypothesis codemod {{ args }}
 
-# Generate property-based tests for a module (e.g., just hypo-write mixpanel_data.types)
+# Generate property-based tests for a module (e.g., just hypo-write mixpanel_headless.types)
 hypo-write *args:
     uv run hypothesis write {{ args }}
 
@@ -154,7 +154,7 @@ build: clean
 
 # Generate man pages for the CLI
 man:
-    uv run python -c "from typer.main import get_command; from mixpanel_data.cli.main import app; from click_man.core import write_man_pages; write_man_pages('mp', get_command(app), target_dir='./man')"
+    uv run python -c "from typer.main import get_command; from mixpanel_headless.cli.main import app; from click_man.core import write_man_pages; write_man_pages('mp', get_command(app), target_dir='./man')"
 
 # Build documentation
 docs:

@@ -1,9 +1,9 @@
 # Architecture
 
-mixpanel_data follows a layered architecture with clear separation of concerns.
+mixpanel_headless follows a layered architecture with clear separation of concerns.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Architecture Deep Dive →](https://deepwiki.com/jaredmcfarland/mixpanel_data/5-architecture)**
+    🤖 **[Architecture Deep Dive →](https://deepwiki.com/mixpanel/mixpanel-headless/5-architecture)**
 
     Ask questions about the architecture, trace data flows, or explore component relationships interactively.
 
@@ -91,7 +91,7 @@ HTTP client with Mixpanel-specific features:
 
 ### Three-Axis Hierarchy
 
-The 0.4.0 redesign organizes auth around three independent axes:
+Auth is organized around three independent axes:
 
 - **Account** — *who* is authenticating. Three first-class types managed through one surface: `service_account` (Basic Auth), `oauth_browser` (PKCE flow, tokens auto-refreshed), `oauth_token` (static bearer for CI/agents).
 - **Project** — *which Mixpanel project* the calls run against. Lives on the active account as `default_project`; can be overridden per call.
@@ -163,7 +163,7 @@ All services accept their dependencies as constructor arguments. This enables:
 ## Package Structure
 
 ```
-src/mixpanel_data/
+src/mixpanel_headless/
 ├── __init__.py              # Public exports (Workspace, Account, Session, namespaces, exceptions, types)
 ├── workspace.py             # Workspace facade with Workspace.use()
 ├── auth_types.py            # Public auth surface (Account union, Session, Region, OAuthTokens, BridgeFile, ...)

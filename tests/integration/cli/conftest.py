@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from typer.testing import CliRunner
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     AlertCount,
     AlertHistoryPagination,
     AlertHistoryResponse,

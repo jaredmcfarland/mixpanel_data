@@ -6,7 +6,7 @@ Query Mixpanel's analytics APIs directly for real-time data.
     For DAU/WAU/MAU, multi-metric comparison, formulas, per-user aggregation, rolling windows, percentiles, typed filters, or numeric breakdowns, see **[Insights Queries](query.md)** — the recommended way to run analytics queries programmatically.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Querying Data Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.4-querying-data)**
+    🤖 **[Querying Data Guide →](https://deepwiki.com/mixpanel/mixpanel-headless/3.2.4-querying-data)**
 
     Ask questions about segmentation, funnels, retention, JQL, or other live query methods.
 
@@ -36,7 +36,7 @@ Time-series event counts with optional property segmentation:
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -498,7 +498,7 @@ For Mixpanel APIs not covered by the Workspace class, use the `api` property to 
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
     client = ws.api

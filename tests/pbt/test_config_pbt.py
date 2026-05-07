@@ -18,13 +18,13 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import SecretStr
 
-from mixpanel_data._internal.auth.account import (
+from mixpanel_headless._internal.auth.account import (
     OAuthBrowserAccount,
     OAuthTokenAccount,
     Region,
     ServiceAccount,
 )
-from mixpanel_data._internal.config import ConfigManager
+from mixpanel_headless._internal.config import ConfigManager
 
 _NAME_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 _SECRET_ALPHABET = (

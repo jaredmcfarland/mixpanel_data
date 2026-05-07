@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     ActivityFeedResult,
     FrequencyResult,
     NumericAverageResult,

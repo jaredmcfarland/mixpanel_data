@@ -12,12 +12,12 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from mixpanel_data._internal.services.live_query import LiveQueryService
-from mixpanel_data.exceptions import (
+from mixpanel_headless._internal.services.live_query import LiveQueryService
+from mixpanel_headless.exceptions import (
     AuthenticationError,
     QueryError,
 )
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     ActivityFeedResult,
     FrequencyResult,
     NumericAverageResult,
@@ -28,7 +28,7 @@ from mixpanel_data.types import (
 )
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
 
 @pytest.fixture

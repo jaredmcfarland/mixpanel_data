@@ -1,4 +1,4 @@
-"""Shared fixtures for mixpanel_data tests."""
+"""Shared fixtures for mixpanel_headless tests."""
 
 from __future__ import annotations
 
@@ -57,9 +57,9 @@ settings.register_profile(
 settings.load_profile(os.getenv("HYPOTHESIS_PROFILE", "default"))
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
-    from mixpanel_data._internal.auth.session import Session
-    from mixpanel_data._internal.config import ConfigManager
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.auth.session import Session
+    from mixpanel_headless._internal.config import ConfigManager
 
 
 def make_session(
@@ -94,15 +94,15 @@ def make_session(
 
     from pydantic import SecretStr
 
-    from mixpanel_data._internal.auth.account import Region
+    from mixpanel_headless._internal.auth.account import Region
 
     region_typed = cast("Region", region)
 
-    from mixpanel_data._internal.auth.account import (
+    from mixpanel_headless._internal.auth.account import (
         OAuthTokenAccount,
         ServiceAccount,
     )
-    from mixpanel_data._internal.auth.session import (
+    from mixpanel_headless._internal.auth.session import (
         Project,
         Session,
         WorkspaceRef,
@@ -253,7 +253,7 @@ def config_path(temp_dir: Path) -> Path:
 @pytest.fixture
 def config_manager(config_path: Path) -> ConfigManager:
     """Create a ConfigManager with a temporary config file."""
-    from mixpanel_data._internal.config import ConfigManager
+    from mixpanel_headless._internal.config import ConfigManager
 
     return ConfigManager(config_path=config_path)
 
@@ -296,7 +296,7 @@ def mock_client_factory(
             with client:
                 result = client.get_events()
     """
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     def factory(
         handler: Callable[[httpx.Request], httpx.Response],

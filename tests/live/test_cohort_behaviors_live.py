@@ -18,7 +18,7 @@ from collections.abc import Generator
 
 import pytest
 
-from mixpanel_data import (
+from mixpanel_headless import (
     CohortBreakdown,
     CohortCriteria,
     CohortDefinition,
@@ -30,8 +30,12 @@ from mixpanel_data import (
     QueryResult,
     Workspace,
 )
-from mixpanel_data.exceptions import BookmarkValidationError, QueryError
-from mixpanel_data.types import FlowQueryResult, FunnelQueryResult, RetentionQueryResult
+from mixpanel_headless.exceptions import BookmarkValidationError, QueryError
+from mixpanel_headless.types import (
+    FlowQueryResult,
+    FunnelQueryResult,
+    RetentionQueryResult,
+)
 
 pytestmark = pytest.mark.live
 

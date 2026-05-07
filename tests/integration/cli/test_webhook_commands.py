@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 class TestWebhooksList:
@@ -17,7 +17,7 @@ class TestWebhooksList:
     def test_list_json(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test webhooks list in JSON format."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["webhooks", "list", "--format", "json"])
@@ -32,7 +32,7 @@ class TestWebhooksList:
     ) -> None:
         """Test webhooks list in table format."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["webhooks", "list", "--format", "table"])
@@ -43,7 +43,7 @@ class TestWebhooksList:
         """Test webhooks list with no results."""
         mock_workspace.list_webhooks.return_value = []
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["webhooks", "list", "--format", "json"])
@@ -60,7 +60,7 @@ class TestWebhooksCreate:
     ) -> None:
         """Test creating a webhook with only required options."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -83,7 +83,7 @@ class TestWebhooksCreate:
     ) -> None:
         """Test creating a webhook with all options."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -118,7 +118,7 @@ class TestWebhooksUpdate:
     ) -> None:
         """Test updating a webhook name."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -134,7 +134,7 @@ class TestWebhooksUpdate:
     ) -> None:
         """Test enabling/disabling a webhook."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -152,7 +152,7 @@ class TestWebhooksDelete:
     def test_delete(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test deleting a webhook."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["webhooks", "delete", "wh-uuid-123"])
@@ -166,7 +166,7 @@ class TestWebhooksTest:
     def test_basic(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test basic webhook connectivity test."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -181,7 +181,7 @@ class TestWebhooksTest:
     def test_with_auth(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test webhook connectivity test with auth options."""
         with patch(
-            "mixpanel_data.cli.commands.webhooks.get_workspace",
+            "mixpanel_headless.cli.commands.webhooks.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(

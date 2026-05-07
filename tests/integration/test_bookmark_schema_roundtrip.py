@@ -40,8 +40,8 @@ from typing import Any
 
 import pytest
 
-import mixpanel_data as mp
-from mixpanel_data import (
+import mixpanel_headless as mp
+from mixpanel_headless import (
     CreateBookmarkParams,
     CreateDashboardParams,
 )
@@ -159,7 +159,7 @@ def scratch_dashboard_id(
     """
     dash = live_workspace.create_dashboard(
         CreateDashboardParams(
-            title=("[mixpanel_data CI] schema-roundtrip — safe to delete"),
+            title=("[mixpanel_headless CI] schema-roundtrip — safe to delete"),
             description=(
                 "Auto-created by tests/integration/"
                 "test_bookmark_schema_roundtrip.py. Auto-deleted on teardown."

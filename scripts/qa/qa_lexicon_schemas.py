@@ -32,10 +32,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mixpanel_data import Workspace
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
-    from mixpanel_data._internal.services.discovery import DiscoveryService
-    from mixpanel_data.types import (
+    from mixpanel_headless import Workspace
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.services.discovery import DiscoveryService
+    from mixpanel_headless.types import (
         LexiconSchema,
     )
 
@@ -151,13 +151,15 @@ def main() -> int:
 
     # Test 1.1: Import modules
     def test_imports() -> dict[str, Any]:
-        from mixpanel_data import Workspace  # noqa: F401
-        from mixpanel_data._internal.api_client import MixpanelAPIClient  # noqa: F401
-        from mixpanel_data._internal.config import ConfigManager  # noqa: F401
-        from mixpanel_data._internal.services.discovery import (
+        from mixpanel_headless import Workspace  # noqa: F401
+        from mixpanel_headless._internal.api_client import (
+            MixpanelAPIClient,  # noqa: F401
+        )
+        from mixpanel_headless._internal.config import ConfigManager  # noqa: F401
+        from mixpanel_headless._internal.services.discovery import (
             DiscoveryService,  # noqa: F401
         )
-        from mixpanel_data.types import (
+        from mixpanel_headless.types import (
             EntityType,  # noqa: F401
             LexiconDefinition,  # noqa: F401
             LexiconMetadata,  # noqa: F401
@@ -175,7 +177,7 @@ def main() -> int:
 
     # Test 1.2: Resolve credentials
     def test_resolve_credentials() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials()
@@ -193,7 +195,7 @@ def main() -> int:
 
     # Test 1.3: Verify app endpoint exists
     def test_app_endpoint() -> dict[str, Any]:
-        from mixpanel_data._internal.api_client import ENDPOINTS
+        from mixpanel_headless._internal.api_client import ENDPOINTS
 
         regions = ["us", "eu", "in"]
         for region in regions:
@@ -216,8 +218,8 @@ def main() -> int:
     # Test 2.1: Create API client
     def test_create_client() -> dict[str, Any]:
         nonlocal api_client
-        from mixpanel_data._internal.api_client import MixpanelAPIClient
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.api_client import MixpanelAPIClient
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials()
@@ -321,7 +323,7 @@ def main() -> int:
     # Test 3.1: Create DiscoveryService
     def test_create_discovery() -> dict[str, Any]:
         nonlocal discovery
-        from mixpanel_data._internal.services.discovery import DiscoveryService
+        from mixpanel_headless._internal.services.discovery import DiscoveryService
 
         assert api_client is not None
         discovery = DiscoveryService(api_client)
@@ -336,7 +338,7 @@ def main() -> int:
     # Test 3.2: list_schemas() returns list of LexiconSchema
     def test_list_schemas() -> dict[str, Any]:
         nonlocal all_schemas
-        from mixpanel_data.types import LexiconSchema
+        from mixpanel_headless.types import LexiconSchema
 
         assert discovery is not None
         all_schemas = discovery.list_schemas()
@@ -422,7 +424,7 @@ def main() -> int:
     # Test 3.7: get_schema() returns single LexiconSchema
     def test_get_schema() -> dict[str, Any]:
         nonlocal single_schema
-        from mixpanel_data.types import LexiconSchema
+        from mixpanel_headless.types import LexiconSchema
 
         assert discovery is not None
         if not all_schemas:
@@ -489,7 +491,7 @@ def main() -> int:
 
     # Test 4.2: LexiconDefinition structure
     def test_lexicon_definition_structure() -> dict[str, Any]:
-        from mixpanel_data.types import LexiconDefinition
+        from mixpanel_headless.types import LexiconDefinition
 
         if not all_schemas:
             return {"skipped": "No schemas in project"}
@@ -517,7 +519,7 @@ def main() -> int:
 
     # Test 4.3: LexiconProperty structure
     def test_lexicon_property_structure() -> dict[str, Any]:
-        from mixpanel_data.types import LexiconProperty
+        from mixpanel_headless.types import LexiconProperty
 
         if not all_schemas:
             return {"skipped": "No schemas in project"}
@@ -547,7 +549,7 @@ def main() -> int:
 
     # Test 4.4: LexiconMetadata structure (if present)
     def test_lexicon_metadata_structure() -> dict[str, Any]:
-        from mixpanel_data.types import LexiconMetadata
+        from mixpanel_headless.types import LexiconMetadata
 
         if not all_schemas:
             return {"skipped": "No schemas in project"}
@@ -665,7 +667,7 @@ def main() -> int:
     # Test 6.1: Create Workspace
     def test_create_workspace() -> dict[str, Any]:
         nonlocal workspace
-        from mixpanel_data import Workspace
+        from mixpanel_headless import Workspace
 
         workspace = Workspace()
         return {"status": "workspace created"}
@@ -682,7 +684,7 @@ def main() -> int:
 
     def test_ws_lexicon_schemas() -> dict[str, Any]:
         nonlocal ws_schemas
-        from mixpanel_data.types import LexiconSchema
+        from mixpanel_headless.types import LexiconSchema
 
         assert workspace is not None
         ws_schemas = workspace.lexicon_schemas()
@@ -730,7 +732,7 @@ def main() -> int:
 
     # Test 6.5: lexicon_schema() returns single schema
     def test_ws_lexicon_schema() -> dict[str, Any]:
-        from mixpanel_data.types import LexiconSchema
+        from mixpanel_headless.types import LexiconSchema
 
         assert workspace is not None
         if not ws_schemas:
@@ -756,7 +758,7 @@ def main() -> int:
 
     # Test 6.6: lexicon_schema() non-existent raises QueryError
     def test_ws_lexicon_schema_not_found() -> dict[str, Any]:
-        from mixpanel_data.exceptions import QueryError
+        from mixpanel_headless.exceptions import QueryError
 
         assert workspace is not None
         try:
@@ -859,7 +861,7 @@ def main() -> int:
             [
                 "python",
                 "-m",
-                "mixpanel_data.cli.main",
+                "mixpanel_headless.cli.main",
                 "inspect",
                 "lexicon-schemas",
                 "--help",
@@ -881,7 +883,7 @@ def main() -> int:
             [
                 "python",
                 "-m",
-                "mixpanel_data.cli.main",
+                "mixpanel_headless.cli.main",
                 "inspect",
                 "lexicon-schema",
                 "--help",
@@ -910,7 +912,7 @@ def main() -> int:
             [
                 "python",
                 "-m",
-                "mixpanel_data.cli.main",
+                "mixpanel_headless.cli.main",
                 "inspect",
                 "lexicon-schemas",
                 "--format",
@@ -942,7 +944,7 @@ def main() -> int:
             [
                 "python",
                 "-m",
-                "mixpanel_data.cli.main",
+                "mixpanel_headless.cli.main",
                 "inspect",
                 "lexicon-schemas",
                 "--type",
@@ -981,7 +983,7 @@ def main() -> int:
             [
                 "python",
                 "-m",
-                "mixpanel_data.cli.main",
+                "mixpanel_headless.cli.main",
                 "inspect",
                 "lexicon-schema",
                 "--type",
@@ -1018,7 +1020,7 @@ def main() -> int:
             [
                 "python",
                 "-m",
-                "mixpanel_data.cli.main",
+                "mixpanel_headless.cli.main",
                 "inspect",
                 "lexicon-schemas",
                 "--type",

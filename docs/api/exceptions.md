@@ -1,16 +1,16 @@
 # Exceptions
 
-All library exceptions inherit from `MixpanelDataError`, enabling callers to catch all library errors with a single except clause.
+All library exceptions inherit from `MixpanelHeadlessError`, enabling callers to catch all library errors with a single except clause.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Error Handling Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/7.4-error-codes-and-exceptions)**
+    🤖 **[Error Handling Guide →](https://deepwiki.com/mixpanel/mixpanel-headless/7.4-error-codes-and-exceptions)**
 
     Ask questions about specific exceptions, error recovery patterns, or debugging strategies.
 
 ## Exception Hierarchy
 
 ```
-MixpanelDataError
+MixpanelHeadlessError
 ├── ConfigError
 │   ├── AccountNotFoundError
 │   ├── AccountExistsError
@@ -30,7 +30,7 @@ MixpanelDataError
 ## Catching Errors
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 try:
     ws = mp.Workspace()
@@ -45,72 +45,72 @@ except mp.WorkspaceScopeError as e:
     print(f"Workspace error [{e.code}]: {e.message}")
 except mp.AccountInUseError as e:
     print(f"Account '{e.account_name}' referenced by targets: {e.referenced_by}")
-except mp.MixpanelDataError as e:
+except mp.MixpanelHeadlessError as e:
     print(f"Error [{e.code}]: {e.message}")
 ```
 
 ## Base Exception
 
-::: mixpanel_data.MixpanelDataError
+::: mixpanel_headless.MixpanelHeadlessError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
 ## API Exceptions
 
-::: mixpanel_data.APIError
+::: mixpanel_headless.APIError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.AuthenticationError
+::: mixpanel_headless.AuthenticationError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.RateLimitError
+::: mixpanel_headless.RateLimitError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.QueryError
+::: mixpanel_headless.QueryError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.ServerError
+::: mixpanel_headless.ServerError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.JQLSyntaxError
+::: mixpanel_headless.JQLSyntaxError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
 ## Configuration Exceptions
 
-::: mixpanel_data.ConfigError
+::: mixpanel_headless.ConfigError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.AccountNotFoundError
+::: mixpanel_headless.AccountNotFoundError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.AccountExistsError
+::: mixpanel_headless.AccountExistsError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.AccountInUseError
+::: mixpanel_headless.AccountInUseError
     options:
       show_root_heading: true
       show_root_toc_entry: true
 
-::: mixpanel_data.ProjectNotFoundError
+::: mixpanel_headless.ProjectNotFoundError
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -129,7 +129,7 @@ Raised during OAuth 2.0 PKCE authentication flows.
 | `OAUTH_PORT_ERROR` | Cannot bind to a local port for the callback server |
 | `OAUTH_BROWSER_ERROR` | Cannot open the authorization URL in the browser |
 
-::: mixpanel_data.OAuthError
+::: mixpanel_headless.OAuthError
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -145,7 +145,7 @@ Raised when an auth-axis identifier (workspace or organization) cannot be resolv
 | `WORKSPACE_NOT_FOUND` | Specified workspace ID does not exist |
 | `ORGANIZATION_AMBIGUOUS` | An org-scoped business-context call could not auto-resolve the organization (active project absent from `/me` AND >1 accessible organization). `details` carries `project_id` and `available_organizations`. Pass `organization_id=N` explicitly to bypass auto-resolution. |
 
-::: mixpanel_data.WorkspaceScopeError
+::: mixpanel_headless.WorkspaceScopeError
     options:
       show_root_heading: true
       show_root_toc_entry: true
@@ -160,7 +160,7 @@ Raised by `Workspace.set_business_context()` when content exceeds the 50,000-cha
 
 The `details` dict carries `length` (the actual content length) and `max` (the configured limit) for programmatic recovery.
 
-::: mixpanel_data.BusinessContextValidationError
+::: mixpanel_headless.BusinessContextValidationError
     options:
       show_root_heading: true
       show_root_toc_entry: true

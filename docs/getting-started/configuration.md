@@ -1,6 +1,6 @@
 # Configuration
 
-`mixpanel_data` organizes auth around three independent axes: **Account → Project → Workspace**.
+`mixpanel_headless` organizes auth around three independent axes: **Account → Project → Workspace**.
 
 - **Account** — *who* is authenticating. Three first-class types managed through one surface: `service_account` (Basic Auth), `oauth_browser` (PKCE flow with auto-refreshed tokens), and `oauth_token` (static bearer for CI / agents).
 - **Project** — *which* Mixpanel project the calls run against. Lives on the active account as `default_project`; can be overridden per call.
@@ -9,12 +9,9 @@
 In-session switching is a one-line operation: `Workspace.use(account=..., project=..., workspace=..., target=...)`. The underlying HTTP client and per-account `/me` cache are preserved across switches, so cross-project / cross-account iteration is O(1) per turn.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Authentication Setup →](https://deepwiki.com/jaredmcfarland/mixpanel_data/2.2-authentication-setup)** (updated for 0.4.0)
+    🤖 **[Authentication Setup →](https://deepwiki.com/mixpanel/mixpanel-headless/2.2-authentication-setup)**
 
     Ask questions about service accounts, OAuth, environment variables, or multi-account configuration.
-
-!!! info "Upgrading from 0.3.x?"
-    The 0.4.0 auth schema is a hard break — legacy `~/.mp/config.toml` files do not load. See [Migration → From 0.3.x to 0.4.0](../migration/0.4.0.md) for the recovery recipe.
 
 ## Account Types
 
@@ -167,7 +164,7 @@ The first account added auto-promotes to active.
 The public surface lives in three functional namespaces:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # Add a service account
 mp.accounts.add(
@@ -241,7 +238,7 @@ Per-axis details:
 There is **no silent cross-axis fallback**: switching the active account clears the workspace (workspaces are project-scoped), and project doesn't carry forward to a new account. If an axis can't be resolved, the resolver raises `ConfigError` rather than silently falling back to a default.
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 # Default — resolve everything from config + env
 ws = mp.Workspace()
@@ -262,7 +259,7 @@ export MP_WORKSPACE_ID=3448414            # env-var override
 ```
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace(workspace=3448414)      # at construction
 ws.use(workspace=3448414)                 # in-session switch (returns self)
@@ -290,7 +287,7 @@ mp target use ecom
 Python:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 mp.targets.add("ecom", account="team", project="3018488", workspace=3448414)
 mp.targets.use("ecom")                            # writes [active] atomically
@@ -327,7 +324,7 @@ The bridge file embeds the full `Account` (with secrets), optional OAuth tokens 
 ```python
 from pathlib import Path
 
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 mp.accounts.export_bridge(to=Path("~/.claude/mixpanel/auth.json").expanduser())
 mp.accounts.remove_bridge()
@@ -351,4 +348,3 @@ Mixpanel stores data in regional data centers. Use the correct region for your p
 - [Quick Start](quickstart.md) — Run your first queries
 - [API → Auth](../api/auth.md) — Full Python API reference for accounts, sessions, and targets
 - [CLI Reference](../cli/index.md) — Complete CLI command reference
-- [Migration → 0.3.x → 0.4.0](../migration/0.4.0.md) — Upgrade walkthrough

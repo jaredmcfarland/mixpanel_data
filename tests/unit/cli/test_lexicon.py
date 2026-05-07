@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import typer.testing
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 runner = typer.testing.CliRunner()
 
@@ -28,7 +28,7 @@ runner = typer.testing.CliRunner()
 class TestLexiconEventsGet:
     """Tests for mp lexicon events get."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json_output(self, mock_get_ws: MagicMock) -> None:
         """Successful get returns JSON list of event definitions."""
         mock_ws = MagicMock()
@@ -48,7 +48,7 @@ class TestLexiconEventsGet:
         assert data[0]["name"] == "Purchase"
         assert data[1]["name"] == "Signup"
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_passes_names_to_workspace(self, mock_get_ws: MagicMock) -> None:
         """Names are split and passed as a list to the workspace method."""
         mock_ws = MagicMock()
@@ -62,7 +62,7 @@ class TestLexiconEventsGet:
 class TestLexiconEventsUpdate:
     """Tests for mp lexicon events update."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful update returns the updated event definition as JSON."""
         mock_ws = MagicMock()
@@ -79,7 +79,7 @@ class TestLexiconEventsUpdate:
         data = json.loads(result.stdout)
         assert data["hidden"] is True
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_update_with_description(self, mock_get_ws: MagicMock) -> None:
         """Update with --description passes it to the workspace."""
         mock_ws = MagicMock()
@@ -108,7 +108,7 @@ class TestLexiconEventsUpdate:
 class TestLexiconEventsDelete:
     """Tests for mp lexicon events delete."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_delete_succeeds(self, mock_get_ws: MagicMock) -> None:
         """Successful delete exits with code 0."""
         mock_ws = MagicMock()
@@ -125,7 +125,7 @@ class TestLexiconEventsDelete:
 class TestLexiconEventsBulkUpdate:
     """Tests for mp lexicon events bulk-update."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_bulk_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful bulk update returns JSON list."""
         mock_ws = MagicMock()
@@ -143,7 +143,7 @@ class TestLexiconEventsBulkUpdate:
         data = json.loads(result.stdout)
         assert isinstance(data, list)
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_bulk_update_invalid_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --data exits with code 3 (INVALID_ARGS)."""
         mock_ws = MagicMock()
@@ -164,7 +164,7 @@ class TestLexiconEventsBulkUpdate:
 class TestLexiconPropertiesGet:
     """Tests for mp lexicon properties get."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json_output(self, mock_get_ws: MagicMock) -> None:
         """Successful get returns JSON list of property definitions."""
         mock_ws = MagicMock()
@@ -181,7 +181,7 @@ class TestLexiconPropertiesGet:
         assert isinstance(data, list)
         assert data[0]["name"] == "plan_type"
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_with_resource_type(self, mock_get_ws: MagicMock) -> None:
         """Passing --resource-type includes it in the workspace call."""
         mock_ws = MagicMock()
@@ -208,7 +208,7 @@ class TestLexiconPropertiesGet:
 class TestLexiconPropertiesUpdate:
     """Tests for mp lexicon properties update."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful property update returns JSON."""
         mock_ws = MagicMock()
@@ -225,7 +225,7 @@ class TestLexiconPropertiesUpdate:
         data = json.loads(result.stdout)
         assert data["sensitive"] is True
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_update_with_description(self, mock_get_ws: MagicMock) -> None:
         """Update with --description passes it through."""
         mock_ws = MagicMock()
@@ -252,7 +252,7 @@ class TestLexiconPropertiesUpdate:
 class TestLexiconPropertiesBulkUpdate:
     """Tests for mp lexicon properties bulk-update."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_bulk_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful bulk update returns JSON list."""
         mock_ws = MagicMock()
@@ -276,7 +276,7 @@ class TestLexiconPropertiesBulkUpdate:
         data = json.loads(result.stdout)
         assert isinstance(data, list)
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_bulk_update_invalid_json_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Invalid JSON for --data exits with code 3."""
         mock_ws = MagicMock()
@@ -297,7 +297,7 @@ class TestLexiconPropertiesBulkUpdate:
 class TestLexiconTagsList:
     """Tests for mp lexicon tags list."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful list returns JSON list of tags."""
         mock_ws = MagicMock()
@@ -317,7 +317,7 @@ class TestLexiconTagsList:
 class TestLexiconTagsCreate:
     """Tests for mp lexicon tags create."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_create_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful create returns the created tag as JSON."""
         mock_ws = MagicMock()
@@ -335,7 +335,7 @@ class TestLexiconTagsCreate:
 class TestLexiconTagsUpdate:
     """Tests for mp lexicon tags update."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful update returns the updated tag as JSON."""
         mock_ws = MagicMock()
@@ -355,7 +355,7 @@ class TestLexiconTagsUpdate:
 class TestLexiconTagsDelete:
     """Tests for mp lexicon tags delete."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_delete_succeeds(self, mock_get_ws: MagicMock) -> None:
         """Successful delete exits with code 0."""
         mock_ws = MagicMock()
@@ -375,7 +375,7 @@ class TestLexiconTagsDelete:
 class TestLexiconTrackingMetadata:
     """Tests for mp lexicon tracking-metadata."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful tracking-metadata returns JSON dict."""
         mock_ws = MagicMock()
@@ -396,7 +396,7 @@ class TestLexiconTrackingMetadata:
 class TestLexiconEventHistory:
     """Tests for mp lexicon event-history."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful event-history returns JSON."""
         mock_ws = MagicMock()
@@ -416,7 +416,7 @@ class TestLexiconEventHistory:
 class TestLexiconPropertyHistory:
     """Tests for mp lexicon property-history."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful property-history returns JSON."""
         mock_ws = MagicMock()
@@ -440,7 +440,7 @@ class TestLexiconPropertyHistory:
         data = json.loads(result.stdout)
         assert isinstance(data, list)
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_passes_entity_type(self, mock_get_ws: MagicMock) -> None:
         """Entity type is passed to the workspace method."""
         mock_ws = MagicMock()
@@ -464,7 +464,7 @@ class TestLexiconPropertyHistory:
 class TestLexiconExport:
     """Tests for mp lexicon export."""
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_export_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful export returns JSON."""
         mock_ws = MagicMock()
@@ -479,7 +479,7 @@ class TestLexiconExport:
         data = json.loads(result.stdout)
         assert "events" in data
 
-    @patch("mixpanel_data.cli.commands.lexicon.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lexicon.get_workspace")
     def test_export_with_types_filter(self, mock_get_ws: MagicMock) -> None:
         """Export with --types passes export_types to workspace."""
         mock_ws = MagicMock()

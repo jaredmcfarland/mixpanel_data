@@ -16,16 +16,16 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pytest
 
-from mixpanel_data._internal.api_client import ENDPOINTS
-from mixpanel_data._internal.services.discovery import (
+from mixpanel_headless._internal.api_client import ENDPOINTS
+from mixpanel_headless._internal.services.discovery import (
     DiscoveryService,
     _parse_lexicon_definition,
     _parse_lexicon_metadata,
     _parse_lexicon_property,
     _parse_lexicon_schema,
 )
-from mixpanel_data.exceptions import AuthenticationError, QueryError
-from mixpanel_data.types import (
+from mixpanel_headless.exceptions import AuthenticationError, QueryError
+from mixpanel_headless.types import (
     LexiconDefinition,
     LexiconMetadata,
     LexiconProperty,
@@ -33,7 +33,7 @@ from mixpanel_data.types import (
 )
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
 
 # =============================================================================

@@ -19,8 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import typer.testing
 
-from mixpanel_data.cli.main import app
-from mixpanel_data.exceptions import (
+from mixpanel_headless.cli.main import app
+from mixpanel_headless.exceptions import (
     AuthenticationError,
     BusinessContextValidationError,
     QueryError,
@@ -83,7 +83,7 @@ def _chain_mock() -> MagicMock:
 class TestGet:
     """``mp business-context get`` behavior."""
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_default_level_is_project(self, mock_get_ws: MagicMock) -> None:
         """No --level → project-scope GET, JSON includes project_id."""
         ws = MagicMock()
@@ -101,7 +101,7 @@ class TestGet:
         assert data["project_id"] == "12345"
         assert data["content"] == "# Hello"
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_organization_level_with_explicit_id(self, mock_get_ws: MagicMock) -> None:
         """--level organization --organization-id forwards both."""
         ws = MagicMock()
@@ -132,7 +132,7 @@ class TestGet:
         data = json.loads(result.stdout)
         assert data["organization_id"] == 42
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_jq_filter_extracts_content(self, mock_get_ws: MagicMock) -> None:
         """--jq '.content' produces the markdown body only."""
         ws = MagicMock()
@@ -146,7 +146,7 @@ class TestGet:
         assert result.exit_code == 0
         assert "markdown!" in result.stdout
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_invalid_level_exits_2(self, mock_get_ws: MagicMock) -> None:
         """Bogus --level value exits with Click's usage error code (2).
 
@@ -164,7 +164,7 @@ class TestGet:
         )
         assert result.exit_code == 2
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_auth_error_exits_2(self, mock_get_ws: MagicMock) -> None:
         """AuthenticationError from workspace → AUTH_ERROR (2)."""
         ws = MagicMock()
@@ -176,7 +176,7 @@ class TestGet:
         result = runner.invoke(app, ["business-context", "get"])
         assert result.exit_code == 2
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_workspace_scope_error_exits_1(self, mock_get_ws: MagicMock) -> None:
         """WorkspaceScopeError → GENERAL_ERROR (1)."""
         ws = MagicMock()
@@ -201,7 +201,7 @@ class TestGet:
 class TestSet:
     """``mp business-context set`` behavior."""
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_inline_content(self, mock_get_ws: MagicMock) -> None:
         """--content forwards the literal string to set_business_context."""
         ws = MagicMock()
@@ -219,7 +219,7 @@ class TestSet:
             organization_id=None,
         )
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_file_input(self, mock_get_ws: MagicMock, tmp_path: Path) -> None:
         """--file reads from disk and forwards content."""
         ws = MagicMock()
@@ -240,7 +240,7 @@ class TestSet:
             organization_id=None,
         )
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_stdin_input(self, mock_get_ws: MagicMock) -> None:
         """Piped stdin (no flags, non-tty) is forwarded as content."""
         ws = MagicMock()
@@ -259,7 +259,7 @@ class TestSet:
             organization_id=None,
         )
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_content_and_file_mutex_exits_3(
         self, mock_get_ws: MagicMock, tmp_path: Path
     ) -> None:
@@ -281,7 +281,7 @@ class TestSet:
         )
         assert result.exit_code == 3
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_empty_stdin_refuses_silent_clear(self, mock_get_ws: MagicMock) -> None:
         """Empty / whitespace-only stdin → INVALID_ARGS (3) deterministically.
 
@@ -302,7 +302,7 @@ class TestSet:
         assert result.exit_code == 3
         ws.set_business_context.assert_not_called()
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_explicit_empty_content_clears(self, mock_get_ws: MagicMock) -> None:
         """`--content ""` is the explicit way to clear via `set`."""
         ws = MagicMock()
@@ -320,7 +320,7 @@ class TestSet:
             organization_id=None,
         )
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_missing_file_exits_3(self, mock_get_ws: MagicMock) -> None:
         """--file pointing at a non-existent path → INVALID_ARGS (3)."""
         mock_get_ws.return_value = MagicMock()
@@ -331,7 +331,7 @@ class TestSet:
         )
         assert result.exit_code == 3
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_oversize_content_exits_invalid_args(self, mock_get_ws: MagicMock) -> None:
         """BusinessContextValidationError from set → INVALID_ARGS (3).
 
@@ -353,7 +353,7 @@ class TestSet:
         )
         assert result.exit_code == 3
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_org_level_set_forwards_org_id(self, mock_get_ws: MagicMock) -> None:
         """--level organization --organization-id forwards the int."""
         ws = MagicMock()
@@ -394,7 +394,7 @@ class TestSet:
 class TestClear:
     """``mp business-context clear`` behavior."""
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_clear_default_level(self, mock_get_ws: MagicMock) -> None:
         """clear with no flags clears project-level."""
         ws = MagicMock()
@@ -410,7 +410,7 @@ class TestClear:
         data = json.loads(result.stdout)
         assert data["content"] == ""
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_clear_organization(self, mock_get_ws: MagicMock) -> None:
         """clear --level organization --organization-id forwards both."""
         ws = MagicMock()
@@ -448,7 +448,7 @@ class TestClear:
 class TestChain:
     """``mp business-context chain`` behavior."""
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_chain_returns_both_scopes(self, mock_get_ws: MagicMock) -> None:
         """chain returns JSON with `organization` and `project` blocks."""
         ws = MagicMock()
@@ -462,7 +462,7 @@ class TestChain:
         assert data["organization"]["organization_id"] == 100
         assert data["project"]["project_id"] == "12345"
 
-    @patch("mixpanel_data.cli.commands.business_context.get_workspace")
+    @patch("mixpanel_headless.cli.commands.business_context.get_workspace")
     def test_chain_query_error_exits_3(self, mock_get_ws: MagicMock) -> None:
         """QueryError from chain → INVALID_ARGS (3)."""
         ws = MagicMock()

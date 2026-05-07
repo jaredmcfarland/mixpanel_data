@@ -10,11 +10,11 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from mixpanel_data import accounts as accounts_ns
-from mixpanel_data import targets as targets_ns
-from mixpanel_data._internal.config import ConfigManager
-from mixpanel_data.exceptions import ConfigError
-from mixpanel_data.types import Target
+from mixpanel_headless import accounts as accounts_ns
+from mixpanel_headless import targets as targets_ns
+from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless.exceptions import ConfigError
+from mixpanel_headless.types import Target
 
 
 @pytest.fixture(autouse=True)

@@ -1,4 +1,4 @@
-"""Unit tests for mixpanel_data result types."""
+"""Unit tests for mixpanel_headless result types."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import json
 import pandas as pd
 import pytest
 
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     CohortInfo,
     EventCountsResult,
     FunnelInfo,
@@ -931,7 +931,7 @@ class TestPropertyValueCount:
 
     def test_basic_creation(self) -> None:
         """Test creating a PropertyValueCount."""
-        from mixpanel_data.types import PropertyValueCount
+        from mixpanel_headless.types import PropertyValueCount
 
         pvc = PropertyValueCount(value="US", count=1000, percentage=45.2)
 
@@ -941,7 +941,7 @@ class TestPropertyValueCount:
 
     def test_with_none_value(self) -> None:
         """Test PropertyValueCount with None value."""
-        from mixpanel_data.types import PropertyValueCount
+        from mixpanel_headless.types import PropertyValueCount
 
         pvc = PropertyValueCount(value=None, count=50, percentage=2.5)
 
@@ -950,7 +950,7 @@ class TestPropertyValueCount:
 
     def test_with_numeric_value(self) -> None:
         """Test PropertyValueCount with numeric value."""
-        from mixpanel_data.types import PropertyValueCount
+        from mixpanel_headless.types import PropertyValueCount
 
         pvc = PropertyValueCount(value=42, count=100, percentage=10.0)
 
@@ -958,7 +958,7 @@ class TestPropertyValueCount:
 
     def test_immutable(self) -> None:
         """PropertyValueCount should be immutable (frozen)."""
-        from mixpanel_data.types import PropertyValueCount
+        from mixpanel_headless.types import PropertyValueCount
 
         pvc = PropertyValueCount(value="US", count=1000, percentage=45.2)
 
@@ -967,7 +967,7 @@ class TestPropertyValueCount:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import PropertyValueCount
+        from mixpanel_headless.types import PropertyValueCount
 
         pvc = PropertyValueCount(value="US", count=1000, percentage=45.2)
 
@@ -984,7 +984,10 @@ class TestPropertyDistributionResult:
 
     def test_basic_creation(self) -> None:
         """Test creating a PropertyDistributionResult."""
-        from mixpanel_data.types import PropertyDistributionResult, PropertyValueCount
+        from mixpanel_headless.types import (
+            PropertyDistributionResult,
+            PropertyValueCount,
+        )
 
         values = (
             PropertyValueCount(value="US", count=1000, percentage=50.0),
@@ -1007,7 +1010,7 @@ class TestPropertyDistributionResult:
 
     def test_empty_values(self) -> None:
         """Test PropertyDistributionResult with empty values."""
-        from mixpanel_data.types import PropertyDistributionResult
+        from mixpanel_headless.types import PropertyDistributionResult
 
         result = PropertyDistributionResult(
             event="Purchase",
@@ -1023,7 +1026,7 @@ class TestPropertyDistributionResult:
 
     def test_immutable(self) -> None:
         """PropertyDistributionResult should be immutable (frozen)."""
-        from mixpanel_data.types import PropertyDistributionResult
+        from mixpanel_headless.types import PropertyDistributionResult
 
         result = PropertyDistributionResult(
             event="Purchase",
@@ -1039,7 +1042,10 @@ class TestPropertyDistributionResult:
 
     def test_df_has_expected_columns(self) -> None:
         """df should have value, count, percentage columns."""
-        from mixpanel_data.types import PropertyDistributionResult, PropertyValueCount
+        from mixpanel_headless.types import (
+            PropertyDistributionResult,
+            PropertyValueCount,
+        )
 
         values = (
             PropertyValueCount(value="US", count=1000, percentage=50.0),
@@ -1062,7 +1068,7 @@ class TestPropertyDistributionResult:
 
     def test_df_empty_values(self) -> None:
         """df should handle empty values."""
-        from mixpanel_data.types import PropertyDistributionResult
+        from mixpanel_headless.types import PropertyDistributionResult
 
         result = PropertyDistributionResult(
             event="Purchase",
@@ -1079,7 +1085,7 @@ class TestPropertyDistributionResult:
 
     def test_df_cached(self) -> None:
         """df should be cached on first access."""
-        from mixpanel_data.types import PropertyDistributionResult
+        from mixpanel_headless.types import PropertyDistributionResult
 
         result = PropertyDistributionResult(
             event="Purchase",
@@ -1096,7 +1102,10 @@ class TestPropertyDistributionResult:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import PropertyDistributionResult, PropertyValueCount
+        from mixpanel_headless.types import (
+            PropertyDistributionResult,
+            PropertyValueCount,
+        )
 
         values = (PropertyValueCount(value="US", count=1000, percentage=100.0),)
         result = PropertyDistributionResult(
@@ -1121,7 +1130,7 @@ class TestNumericPropertySummaryResult:
 
     def test_basic_creation(self) -> None:
         """Test creating a NumericPropertySummaryResult."""
-        from mixpanel_data.types import NumericPropertySummaryResult
+        from mixpanel_headless.types import NumericPropertySummaryResult
 
         result = NumericPropertySummaryResult(
             event="Purchase",
@@ -1154,7 +1163,7 @@ class TestNumericPropertySummaryResult:
 
     def test_immutable(self) -> None:
         """NumericPropertySummaryResult should be immutable (frozen)."""
-        from mixpanel_data.types import NumericPropertySummaryResult
+        from mixpanel_headless.types import NumericPropertySummaryResult
 
         result = NumericPropertySummaryResult(
             event="Purchase",
@@ -1175,7 +1184,7 @@ class TestNumericPropertySummaryResult:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import NumericPropertySummaryResult
+        from mixpanel_headless.types import NumericPropertySummaryResult
 
         result = NumericPropertySummaryResult(
             event="Purchase",
@@ -1205,7 +1214,7 @@ class TestDailyCount:
 
     def test_basic_creation(self) -> None:
         """Test creating a DailyCount."""
-        from mixpanel_data.types import DailyCount
+        from mixpanel_headless.types import DailyCount
 
         dc = DailyCount(date="2024-01-01", event="Purchase", count=523)
 
@@ -1215,7 +1224,7 @@ class TestDailyCount:
 
     def test_immutable(self) -> None:
         """DailyCount should be immutable (frozen)."""
-        from mixpanel_data.types import DailyCount
+        from mixpanel_headless.types import DailyCount
 
         dc = DailyCount(date="2024-01-01", event="Purchase", count=100)
 
@@ -1224,7 +1233,7 @@ class TestDailyCount:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import DailyCount
+        from mixpanel_headless.types import DailyCount
 
         dc = DailyCount(date="2024-01-01", event="Purchase", count=523)
 
@@ -1241,7 +1250,7 @@ class TestDailyCountsResult:
 
     def test_basic_creation(self) -> None:
         """Test creating a DailyCountsResult."""
-        from mixpanel_data.types import DailyCount, DailyCountsResult
+        from mixpanel_headless.types import DailyCount, DailyCountsResult
 
         counts = (
             DailyCount(date="2024-01-01", event="Purchase", count=523),
@@ -1261,7 +1270,7 @@ class TestDailyCountsResult:
 
     def test_with_none_events(self) -> None:
         """Test DailyCountsResult with None events (all events)."""
-        from mixpanel_data.types import DailyCountsResult
+        from mixpanel_headless.types import DailyCountsResult
 
         result = DailyCountsResult(
             from_date="2024-01-01",
@@ -1274,7 +1283,7 @@ class TestDailyCountsResult:
 
     def test_immutable(self) -> None:
         """DailyCountsResult should be immutable (frozen)."""
-        from mixpanel_data.types import DailyCountsResult
+        from mixpanel_headless.types import DailyCountsResult
 
         result = DailyCountsResult(
             from_date="2024-01-01",
@@ -1288,7 +1297,7 @@ class TestDailyCountsResult:
 
     def test_df_has_expected_columns(self) -> None:
         """df should have date, event, count columns."""
-        from mixpanel_data.types import DailyCount, DailyCountsResult
+        from mixpanel_headless.types import DailyCount, DailyCountsResult
 
         counts = (
             DailyCount(date="2024-01-01", event="Purchase", count=100),
@@ -1309,7 +1318,7 @@ class TestDailyCountsResult:
 
     def test_df_cached(self) -> None:
         """df should be cached on first access."""
-        from mixpanel_data.types import DailyCountsResult
+        from mixpanel_headless.types import DailyCountsResult
 
         result = DailyCountsResult(
             from_date="2024-01-01",
@@ -1324,7 +1333,7 @@ class TestDailyCountsResult:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import DailyCount, DailyCountsResult
+        from mixpanel_headless.types import DailyCount, DailyCountsResult
 
         counts = (DailyCount(date="2024-01-01", event="Purchase", count=100),)
         result = DailyCountsResult(
@@ -1346,7 +1355,7 @@ class TestEngagementBucket:
 
     def test_basic_creation(self) -> None:
         """Test creating an EngagementBucket."""
-        from mixpanel_data.types import EngagementBucket
+        from mixpanel_headless.types import EngagementBucket
 
         bucket = EngagementBucket(
             bucket_min=1,
@@ -1362,7 +1371,7 @@ class TestEngagementBucket:
 
     def test_with_range_label(self) -> None:
         """Test EngagementBucket with range label."""
-        from mixpanel_data.types import EngagementBucket
+        from mixpanel_headless.types import EngagementBucket
 
         bucket = EngagementBucket(
             bucket_min=2,
@@ -1375,7 +1384,7 @@ class TestEngagementBucket:
 
     def test_immutable(self) -> None:
         """EngagementBucket should be immutable (frozen)."""
-        from mixpanel_data.types import EngagementBucket
+        from mixpanel_headless.types import EngagementBucket
 
         bucket = EngagementBucket(
             bucket_min=1,
@@ -1389,7 +1398,7 @@ class TestEngagementBucket:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import EngagementBucket
+        from mixpanel_headless.types import EngagementBucket
 
         bucket = EngagementBucket(
             bucket_min=1,
@@ -1411,7 +1420,10 @@ class TestEngagementDistributionResult:
 
     def test_basic_creation(self) -> None:
         """Test creating an EngagementDistributionResult."""
-        from mixpanel_data.types import EngagementBucket, EngagementDistributionResult
+        from mixpanel_headless.types import (
+            EngagementBucket,
+            EngagementDistributionResult,
+        )
 
         buckets = (
             EngagementBucket(
@@ -1435,7 +1447,7 @@ class TestEngagementDistributionResult:
 
     def test_with_filtered_events(self) -> None:
         """Test EngagementDistributionResult with filtered events."""
-        from mixpanel_data.types import EngagementDistributionResult
+        from mixpanel_headless.types import EngagementDistributionResult
 
         result = EngagementDistributionResult(
             from_date="2024-01-01",
@@ -1449,7 +1461,7 @@ class TestEngagementDistributionResult:
 
     def test_immutable(self) -> None:
         """EngagementDistributionResult should be immutable (frozen)."""
-        from mixpanel_data.types import EngagementDistributionResult
+        from mixpanel_headless.types import EngagementDistributionResult
 
         result = EngagementDistributionResult(
             from_date="2024-01-01",
@@ -1464,7 +1476,10 @@ class TestEngagementDistributionResult:
 
     def test_df_has_expected_columns(self) -> None:
         """df should have bucket_min, bucket_label, user_count, percentage columns."""
-        from mixpanel_data.types import EngagementBucket, EngagementDistributionResult
+        from mixpanel_headless.types import (
+            EngagementBucket,
+            EngagementDistributionResult,
+        )
 
         buckets = (
             EngagementBucket(
@@ -1491,7 +1506,7 @@ class TestEngagementDistributionResult:
 
     def test_df_cached(self) -> None:
         """df should be cached on first access."""
-        from mixpanel_data.types import EngagementDistributionResult
+        from mixpanel_headless.types import EngagementDistributionResult
 
         result = EngagementDistributionResult(
             from_date="2024-01-01",
@@ -1507,7 +1522,10 @@ class TestEngagementDistributionResult:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import EngagementBucket, EngagementDistributionResult
+        from mixpanel_headless.types import (
+            EngagementBucket,
+            EngagementDistributionResult,
+        )
 
         buckets = (
             EngagementBucket(
@@ -1535,7 +1553,7 @@ class TestPropertyCoverage:
 
     def test_basic_creation(self) -> None:
         """Test creating a PropertyCoverage."""
-        from mixpanel_data.types import PropertyCoverage
+        from mixpanel_headless.types import PropertyCoverage
 
         cov = PropertyCoverage(
             property="coupon_code",
@@ -1551,7 +1569,7 @@ class TestPropertyCoverage:
 
     def test_full_coverage(self) -> None:
         """Test PropertyCoverage with 100% coverage."""
-        from mixpanel_data.types import PropertyCoverage
+        from mixpanel_headless.types import PropertyCoverage
 
         cov = PropertyCoverage(
             property="distinct_id",
@@ -1565,7 +1583,7 @@ class TestPropertyCoverage:
 
     def test_immutable(self) -> None:
         """PropertyCoverage should be immutable (frozen)."""
-        from mixpanel_data.types import PropertyCoverage
+        from mixpanel_headless.types import PropertyCoverage
 
         cov = PropertyCoverage(
             property="test",
@@ -1579,7 +1597,7 @@ class TestPropertyCoverage:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import PropertyCoverage
+        from mixpanel_headless.types import PropertyCoverage
 
         cov = PropertyCoverage(
             property="coupon_code",
@@ -1600,7 +1618,7 @@ class TestPropertyCoverageResult:
 
     def test_basic_creation(self) -> None:
         """Test creating a PropertyCoverageResult."""
-        from mixpanel_data.types import PropertyCoverage, PropertyCoverageResult
+        from mixpanel_headless.types import PropertyCoverage, PropertyCoverageResult
 
         coverage = (
             PropertyCoverage("coupon_code", 2345, 7655, 23.45),
@@ -1621,7 +1639,7 @@ class TestPropertyCoverageResult:
 
     def test_empty_coverage(self) -> None:
         """Test PropertyCoverageResult with empty coverage."""
-        from mixpanel_data.types import PropertyCoverageResult
+        from mixpanel_headless.types import PropertyCoverageResult
 
         result = PropertyCoverageResult(
             event="Purchase",
@@ -1635,7 +1653,7 @@ class TestPropertyCoverageResult:
 
     def test_immutable(self) -> None:
         """PropertyCoverageResult should be immutable (frozen)."""
-        from mixpanel_data.types import PropertyCoverageResult
+        from mixpanel_headless.types import PropertyCoverageResult
 
         result = PropertyCoverageResult(
             event="Purchase",
@@ -1650,7 +1668,7 @@ class TestPropertyCoverageResult:
 
     def test_df_has_expected_columns(self) -> None:
         """df should have property, defined_count, null_count, coverage_percentage."""
-        from mixpanel_data.types import PropertyCoverage, PropertyCoverageResult
+        from mixpanel_headless.types import PropertyCoverage, PropertyCoverageResult
 
         coverage = (
             PropertyCoverage("prop1", 100, 0, 100.0),
@@ -1673,7 +1691,7 @@ class TestPropertyCoverageResult:
 
     def test_df_cached(self) -> None:
         """df should be cached on first access."""
-        from mixpanel_data.types import PropertyCoverageResult
+        from mixpanel_headless.types import PropertyCoverageResult
 
         result = PropertyCoverageResult(
             event="Purchase",
@@ -1689,7 +1707,7 @@ class TestPropertyCoverageResult:
 
     def test_to_dict_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import PropertyCoverage, PropertyCoverageResult
+        from mixpanel_headless.types import PropertyCoverage, PropertyCoverageResult
 
         coverage = (PropertyCoverage("coupon_code", 100, 900, 10.0),)
         result = PropertyCoverageResult(
@@ -1718,7 +1736,7 @@ class TestProfilePageResult:
 
     def test_create_with_profiles(self) -> None:
         """ProfilePageResult should hold page data and metadata."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         profiles = [
             {"$distinct_id": "user1", "$properties": {"name": "Alice"}},
@@ -1742,7 +1760,7 @@ class TestProfilePageResult:
 
     def test_create_last_page(self) -> None:
         """ProfilePageResult should handle last page with no session_id."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[{"$distinct_id": "user1"}],
@@ -1759,7 +1777,7 @@ class TestProfilePageResult:
 
     def test_to_dict(self) -> None:
         """to_dict should serialize all fields including profile_count."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         profiles = [
             {"$distinct_id": "user1"},
@@ -1787,7 +1805,7 @@ class TestProfilePageResult:
 
     def test_to_dict_json_serializable(self) -> None:
         """to_dict output should be JSON serializable."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[
@@ -1810,7 +1828,7 @@ class TestProfilePageResult:
 
     def test_frozen_dataclass(self) -> None:
         """ProfilePageResult should be immutable."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[],
@@ -1839,7 +1857,7 @@ class TestProfilePageResultPagination:
         The Mixpanel Engage API returns total count of matching profiles,
         which enables calculating total pages for parallel fetching.
         """
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[],
@@ -1857,7 +1875,7 @@ class TestProfilePageResultPagination:
         The API returns page_size (typically 1000), needed to calculate
         total number of pages.
         """
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[],
@@ -1874,7 +1892,7 @@ class TestProfilePageResultPagination:
 
         When total doesn't divide evenly, an extra partial page is needed.
         """
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[],
@@ -1889,7 +1907,7 @@ class TestProfilePageResultPagination:
 
     def test_num_pages_exact_division(self) -> None:
         """num_pages should be exact when total divides evenly by page_size."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[],
@@ -1907,7 +1925,7 @@ class TestProfilePageResultPagination:
 
         An empty result set has no pages to fetch.
         """
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[],
@@ -1921,7 +1939,7 @@ class TestProfilePageResultPagination:
 
     def test_num_pages_single_page(self) -> None:
         """num_pages should be 1 when total is less than page_size."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[{"$distinct_id": "user1"}],
@@ -1936,7 +1954,7 @@ class TestProfilePageResultPagination:
 
     def test_to_dict_includes_pagination_fields(self) -> None:
         """to_dict should include total, page_size, and num_pages."""
-        from mixpanel_data.types import ProfilePageResult
+        from mixpanel_headless.types import ProfilePageResult
 
         result = ProfilePageResult(
             profiles=[{"$distinct_id": "user1"}],
@@ -1958,29 +1976,29 @@ class TestCustomEventExports:
 
     def test_create_custom_event_params_importable(self) -> None:
         """CreateCustomEventParams is reachable via the top-level package."""
-        from mixpanel_data import CreateCustomEventParams
+        from mixpanel_headless import CreateCustomEventParams
 
         assert CreateCustomEventParams.__name__ == "CreateCustomEventParams"
 
     def test_custom_event_importable(self) -> None:
         """CustomEvent is reachable via the top-level package."""
-        from mixpanel_data import CustomEvent
+        from mixpanel_headless import CustomEvent
 
         assert CustomEvent.__name__ == "CustomEvent"
 
     def test_custom_event_alternative_importable(self) -> None:
         """CustomEventAlternative is reachable via the top-level package."""
-        from mixpanel_data import CustomEventAlternative
+        from mixpanel_headless import CustomEventAlternative
 
         assert CustomEventAlternative.__name__ == "CustomEventAlternative"
 
     def test_listed_in_dunder_all(self) -> None:
-        """All three custom event types are advertised in mixpanel_data.__all__."""
-        import mixpanel_data
+        """All three custom event types are advertised in mixpanel_headless.__all__."""
+        import mixpanel_headless
 
-        assert "CreateCustomEventParams" in mixpanel_data.__all__
-        assert "CustomEvent" in mixpanel_data.__all__
-        assert "CustomEventAlternative" in mixpanel_data.__all__
+        assert "CreateCustomEventParams" in mixpanel_headless.__all__
+        assert "CustomEvent" in mixpanel_headless.__all__
+        assert "CustomEventAlternative" in mixpanel_headless.__all__
 
 
 class TestSubPropertyInfo:
@@ -1988,7 +2006,7 @@ class TestSubPropertyInfo:
 
     def test_to_dict_returns_lists_for_sample_values(self) -> None:
         """``to_dict()`` converts the immutable tuple to a JSON-serializable list."""
-        from mixpanel_data import SubPropertyInfo
+        from mixpanel_headless import SubPropertyInfo
 
         sp = SubPropertyInfo(
             name="Brand", type="string", sample_values=("nike", "puma")

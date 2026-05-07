@@ -13,9 +13,9 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Workspace
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
+from mixpanel_headless import Workspace
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def mock_api_client() -> MagicMock:
     """Create mock API client for testing."""
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
 
     client = MagicMock(spec=MixpanelAPIClient)
     client.close = MagicMock()

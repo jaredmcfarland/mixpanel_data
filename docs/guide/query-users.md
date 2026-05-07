@@ -2,7 +2,7 @@
 
 Query user profiles from Mixpanel's Engage API — filter by properties, sort, select fields, count matching profiles, and fetch large result sets with parallel pagination. Uses the same `Filter` vocabulary as all other query engines.
 
-!!! tip "New in v0.2"
+!!! tip "Recommended"
     `Workspace.query_user()` is the 5th engine in the unified query system. It answers **identity** questions ("who are these users?") that complement the behavioral questions answered by insights, funnels, retention, and flows.
 
 ## When to Use `query_user()`
@@ -24,8 +24,8 @@ Use `stream_profiles()` when you need to iterate over raw profile dicts without 
 ## Getting Started
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import Filter
+import mixpanel_headless as mp
+from mixpanel_headless import Filter
 
 ws = mp.Workspace()
 
@@ -96,7 +96,7 @@ print(result.df)  # columns: segment, value
 Filter by behavioral criteria using the same `CohortDefinition` builders available across all engines:
 
 ```python
-from mixpanel_data import CohortDefinition, CohortCriteria
+from mixpanel_headless import CohortDefinition, CohortCriteria
 
 # Users who purchased 3+ times in 30 days
 result = ws.query_user(

@@ -25,9 +25,9 @@ import uuid
 
 import pytest
 
-from mixpanel_data import Workspace
-from mixpanel_data.exceptions import QueryError
-from mixpanel_data.types import (
+from mixpanel_headless import Workspace
+from mixpanel_headless.exceptions import QueryError
+from mixpanel_headless.types import (
     CreateExperimentParams,
     CreateFeatureFlagParams,
     DuplicateExperimentParams,

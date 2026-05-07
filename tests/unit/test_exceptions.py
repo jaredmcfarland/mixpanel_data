@@ -1,4 +1,4 @@
-"""Unit tests for mixpanel_data exception hierarchy."""
+"""Unit tests for mixpanel_headless exception hierarchy."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from mixpanel_data.exceptions import (
+from mixpanel_headless.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
     APIError,
@@ -15,19 +15,19 @@ from mixpanel_data.exceptions import (
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     QueryError,
     RateLimitError,
     ServerError,
 )
 
 
-class TestMixpanelDataError:
+class TestMixpanelHeadlessError:
     """Tests for the base exception class."""
 
     def test_basic_initialization(self) -> None:
         """Test basic exception creation."""
-        exc = MixpanelDataError("Something went wrong")
+        exc = MixpanelHeadlessError("Something went wrong")
         assert str(exc) == "Something went wrong"
         assert exc.message == "Something went wrong"
         assert exc.code == "UNKNOWN_ERROR"
@@ -35,7 +35,7 @@ class TestMixpanelDataError:
 
     def test_with_code_and_details(self) -> None:
         """Test exception with custom code and details."""
-        exc = MixpanelDataError(
+        exc = MixpanelHeadlessError(
             "Test error",
             code="TEST_ERROR",
             details={"key": "value", "count": 42},
@@ -45,7 +45,7 @@ class TestMixpanelDataError:
 
     def test_to_dict_serializable(self) -> None:
         """Test that to_dict output is JSON serializable."""
-        exc = MixpanelDataError(
+        exc = MixpanelHeadlessError(
             "Test error",
             code="TEST_ERROR",
             details={"nested": {"data": [1, 2, 3]}},
@@ -63,8 +63,8 @@ class TestMixpanelDataError:
 
     def test_repr(self) -> None:
         """Test string representation."""
-        exc = MixpanelDataError("Test error", code="TEST")
-        assert "MixpanelDataError" in repr(exc)
+        exc = MixpanelHeadlessError("Test error", code="TEST")
+        assert "MixpanelHeadlessError" in repr(exc)
         assert "Test error" in repr(exc)
         assert "TEST" in repr(exc)
 
@@ -76,7 +76,7 @@ class TestConfigError:
         """ConfigError should have CONFIG_ERROR code."""
         exc = ConfigError("Config issue")
         assert exc.code == "CONFIG_ERROR"
-        assert isinstance(exc, MixpanelDataError)
+        assert isinstance(exc, MixpanelHeadlessError)
 
     def test_account_not_found_with_available(self) -> None:
         """AccountNotFoundError should list available accounts."""
@@ -122,7 +122,7 @@ class TestOperationExceptions:
         exc = AuthenticationError("Invalid credentials")
 
         assert exc.code == "AUTH_FAILED"
-        assert isinstance(exc, MixpanelDataError)
+        assert isinstance(exc, MixpanelHeadlessError)
         assert "Invalid credentials" in str(exc)
 
     def test_authentication_error_default_message(self) -> None:
@@ -201,9 +201,9 @@ class TestEventNotFoundError:
         assert len(exc.similar_events) == 10
 
     def test_inherits_from_base(self) -> None:
-        """EventNotFoundError should inherit from MixpanelDataError."""
+        """EventNotFoundError should inherit from MixpanelHeadlessError."""
         exc = EventNotFoundError("test")
-        assert isinstance(exc, MixpanelDataError)
+        assert isinstance(exc, MixpanelHeadlessError)
 
     def test_to_dict_includes_event_info(self) -> None:
         """to_dict should include event name and suggestions."""
@@ -254,9 +254,9 @@ class TestDateRangeTooLargeError:
         assert "30 days" in str(exc)
 
     def test_inherits_from_base(self) -> None:
-        """DateRangeTooLargeError should inherit from MixpanelDataError."""
+        """DateRangeTooLargeError should inherit from MixpanelHeadlessError."""
         exc = DateRangeTooLargeError("2024-01-01", "2024-06-30", 182)
-        assert isinstance(exc, MixpanelDataError)
+        assert isinstance(exc, MixpanelHeadlessError)
 
     def test_to_dict_includes_date_info(self) -> None:
         """to_dict should include all date range information."""
@@ -284,8 +284,8 @@ class TestExceptionHierarchy:
     """Tests for exception inheritance."""
 
     def test_all_inherit_from_base(self) -> None:
-        """All exceptions should inherit from MixpanelDataError."""
-        exceptions: list[MixpanelDataError] = [
+        """All exceptions should inherit from MixpanelHeadlessError."""
+        exceptions: list[MixpanelHeadlessError] = [
             ConfigError("test"),
             AccountNotFoundError("test"),
             AccountExistsError("test"),
@@ -298,8 +298,8 @@ class TestExceptionHierarchy:
         ]
 
         for exc in exceptions:
-            assert isinstance(exc, MixpanelDataError), (
-                f"{exc.__class__.__name__} should inherit from MixpanelDataError"
+            assert isinstance(exc, MixpanelHeadlessError), (
+                f"{exc.__class__.__name__} should inherit from MixpanelHeadlessError"
             )
             assert isinstance(exc, Exception)
 
@@ -318,7 +318,7 @@ class TestExceptionHierarchy:
         ]
 
         for exc in exceptions_to_raise:
-            with pytest.raises(MixpanelDataError) as caught:
+            with pytest.raises(MixpanelHeadlessError) as caught:
                 raise exc
 
             assert caught.value.code is not None
@@ -338,7 +338,7 @@ class TestExceptionHierarchy:
         }
 
         for exc_class, expected_code in expected_codes.items():
-            exc: MixpanelDataError
+            exc: MixpanelHeadlessError
             if exc_class in (AccountNotFoundError, AccountExistsError):
                 exc = exc_class("test")
             elif exc_class is EventNotFoundError:
@@ -380,7 +380,7 @@ class TestJQLSyntaxError:
 
         assert exc.code == "JQL_SYNTAX_ERROR"
         assert isinstance(exc, QueryError)
-        assert isinstance(exc, MixpanelDataError)
+        assert isinstance(exc, MixpanelHeadlessError)
 
     def test_extracts_error_type(self) -> None:
         """Should extract JavaScript error type."""
@@ -489,8 +489,8 @@ class TestJQLSyntaxError:
         with pytest.raises(QueryError):
             raise exc
 
-        # Should be catchable with MixpanelDataError
-        with pytest.raises(MixpanelDataError):
+        # Should be catchable with MixpanelHeadlessError
+        with pytest.raises(MixpanelHeadlessError):
             raise JQLSyntaxError(raw_error="Test error")
 
 
@@ -516,9 +516,9 @@ class TestAPIError:
         assert exc.code == "API_ERROR"
 
     def test_inherits_from_base(self) -> None:
-        """APIError should inherit from MixpanelDataError."""
+        """APIError should inherit from MixpanelHeadlessError."""
         exc = APIError("Test", status_code=400)
-        assert isinstance(exc, MixpanelDataError)
+        assert isinstance(exc, MixpanelHeadlessError)
 
     def test_to_dict_includes_http_context(self) -> None:
         """to_dict should include all HTTP context."""
@@ -555,8 +555,8 @@ class TestAPIError:
         assert "request_method" not in exc.details
 
     def test_catchable_as_base(self) -> None:
-        """APIError should be catchable as MixpanelDataError."""
-        with pytest.raises(MixpanelDataError):
+        """APIError should be catchable as MixpanelHeadlessError."""
+        with pytest.raises(MixpanelHeadlessError):
             raise APIError("Test", status_code=500)
 
 
@@ -570,7 +570,7 @@ class TestServerError:
         assert exc.code == "SERVER_ERROR"
         assert exc.status_code == 500
         assert isinstance(exc, APIError)
-        assert isinstance(exc, MixpanelDataError)
+        assert isinstance(exc, MixpanelHeadlessError)
 
     def test_with_full_context(self) -> None:
         """ServerError should include request/response context."""

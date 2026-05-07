@@ -22,12 +22,12 @@ from collections.abc import Iterator
 
 import pytest
 
-from mixpanel_data import (
+from mixpanel_headless import (
     BookmarkValidationError,
     Filter,
     Workspace,
 )
-from mixpanel_data.types import UserQueryResult
+from mixpanel_headless.types import UserQueryResult
 
 # All tests require the `live` marker — skipped by default
 pytestmark = pytest.mark.live

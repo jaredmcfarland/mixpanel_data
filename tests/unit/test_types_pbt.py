@@ -1,4 +1,4 @@
-"""Property-based tests for mixpanel_data result types using Hypothesis.
+"""Property-based tests for mixpanel_headless result types using Hypothesis.
 
 These tests verify invariants that should hold for all possible inputs,
 rather than testing specific examples. This catches edge cases that
@@ -29,9 +29,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.bookmark_enums import VALID_FREQUENCY_FILTER_OPERATORS
-from mixpanel_data._literal_types import MathType, TimeComparisonUnit
-from mixpanel_data.types import (
+from mixpanel_headless._internal.bookmark_enums import VALID_FREQUENCY_FILTER_OPERATORS
+from mixpanel_headless._literal_types import MathType, TimeComparisonUnit
+from mixpanel_headless.types import (
     ActivityFeedResult,
     BookmarkInfo,
     CohortInfo,
@@ -2275,7 +2275,7 @@ class TestPkceChallengePBT:
     @given(st.integers(min_value=1, max_value=50))
     def test_verifier_always_86_chars(self, _n: int) -> None:
         """Every generated PKCE challenge has a 86-char verifier."""
-        from mixpanel_data._internal.auth.pkce import PkceChallenge
+        from mixpanel_headless._internal.auth.pkce import PkceChallenge
 
         challenge = PkceChallenge.generate()
         assert len(challenge.verifier) == 86
@@ -2283,7 +2283,7 @@ class TestPkceChallengePBT:
     @given(st.integers(min_value=1, max_value=50))
     def test_challenge_always_43_chars(self, _n: int) -> None:
         """Every generated PKCE challenge has a 43-char SHA-256 hash."""
-        from mixpanel_data._internal.auth.pkce import PkceChallenge
+        from mixpanel_headless._internal.auth.pkce import PkceChallenge
 
         challenge = PkceChallenge.generate()
         assert len(challenge.challenge) == 43
@@ -2293,7 +2293,7 @@ class TestPkceChallengePBT:
         """Verifier only contains base64url characters (no padding)."""
         import re
 
-        from mixpanel_data._internal.auth.pkce import PkceChallenge
+        from mixpanel_headless._internal.auth.pkce import PkceChallenge
 
         challenge = PkceChallenge.generate()
         assert re.match(r"^[A-Za-z0-9_-]+$", challenge.verifier)
@@ -2304,7 +2304,7 @@ class TestPkceChallengePBT:
         import base64
         import hashlib
 
-        from mixpanel_data._internal.auth.pkce import PkceChallenge
+        from mixpanel_headless._internal.auth.pkce import PkceChallenge
 
         pair = PkceChallenge.generate()
         expected = (
@@ -2319,7 +2319,7 @@ class TestPkceChallengePBT:
     @given(st.integers(min_value=1, max_value=20))
     def test_each_generation_unique(self, _n: int) -> None:
         """Two consecutive generations produce different verifiers."""
-        from mixpanel_data._internal.auth.pkce import PkceChallenge
+        from mixpanel_headless._internal.auth.pkce import PkceChallenge
 
         a = PkceChallenge.generate()
         b = PkceChallenge.generate()
@@ -2339,7 +2339,7 @@ class TestOAuthTokensRoundTripPBT:
     )
     def test_from_token_response_round_trip(self, scope: str, expires_in: int) -> None:
         """from_token_response always produces a valid OAuthTokens."""
-        from mixpanel_data._internal.auth.token import OAuthTokens
+        from mixpanel_headless._internal.auth.token import OAuthTokens
 
         data = {
             "access_token": "test_access_token",
@@ -2357,7 +2357,7 @@ class TestOAuthTokensRoundTripPBT:
     @given(buffer_seconds=st.integers(min_value=31, max_value=100000))
     def test_not_expired_when_far_future(self, buffer_seconds: int) -> None:
         """Tokens with expires_at far in the future are never expired."""
-        from mixpanel_data._internal.auth.token import OAuthTokens
+        from mixpanel_headless._internal.auth.token import OAuthTokens
 
         tokens = OAuthTokens.from_token_response(
             {
@@ -2376,7 +2376,7 @@ class TestOAuthTokensRoundTripPBT:
 
         from pydantic import SecretStr
 
-        from mixpanel_data._internal.auth.token import OAuthTokens
+        from mixpanel_headless._internal.auth.token import OAuthTokens
 
         now = dt_datetime.now(timezone.utc)
         tokens = OAuthTokens(
@@ -2414,8 +2414,8 @@ class TestOAuthTokensRoundTripPBT:
         """
         import tempfile
 
-        from mixpanel_data._internal.auth.storage import OAuthStorage
-        from mixpanel_data._internal.auth.token import OAuthTokens
+        from mixpanel_headless._internal.auth.storage import OAuthStorage
+        from mixpanel_headless._internal.auth.token import OAuthTokens
 
         tokens = OAuthTokens.from_token_response(
             {

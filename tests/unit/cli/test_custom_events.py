@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import typer.testing
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 runner = typer.testing.CliRunner()
 
@@ -22,7 +22,7 @@ runner = typer.testing.CliRunner()
 class TestCustomEventsList:
     """Tests for mp custom-events list."""
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful list returns JSON list of custom events."""
         mock_ws = MagicMock()
@@ -39,7 +39,7 @@ class TestCustomEventsList:
         assert len(data) == 2
         assert data[0]["name"] == "Activated"
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_empty_list(self, mock_get_ws: MagicMock) -> None:
         """Empty list returns empty JSON array."""
         mock_ws = MagicMock()
@@ -54,7 +54,7 @@ class TestCustomEventsList:
 class TestCustomEventsUpdate:
     """Tests for mp custom-events update."""
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_by_id_with_hidden_returns_json(
         self, mock_get_ws: MagicMock
     ) -> None:
@@ -78,7 +78,7 @@ class TestCustomEventsUpdate:
         assert called_id == 2044168
         assert called_params.hidden is True
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_by_id_with_description(self, mock_get_ws: MagicMock) -> None:
         """--description passes through to the params."""
         mock_ws = MagicMock()
@@ -102,7 +102,7 @@ class TestCustomEventsUpdate:
         data = json.loads(result.stdout)
         assert data["description"] == "User activated"
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_by_id_with_dropped(self, mock_get_ws: MagicMock) -> None:
         """--dropped flag passes dropped=True."""
         mock_ws = MagicMock()
@@ -119,10 +119,10 @@ class TestCustomEventsUpdate:
         data = json.loads(result.stdout)
         assert data["dropped"] is True
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_by_name_resolves_to_id(self, mock_get_ws: MagicMock) -> None:
         """--name resolves to the unique custom_event_id and passes it through."""
-        from mixpanel_data.types import EventDefinition
+        from mixpanel_headless.types import EventDefinition
 
         mock_ws = MagicMock()
         mock_ws.list_custom_events.return_value = [
@@ -145,7 +145,7 @@ class TestCustomEventsUpdate:
         assert called_id == 2044168
         assert called_params.verified is True
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_errors_when_name_not_found(self, mock_get_ws: MagicMock) -> None:
         """--name with no matching custom event errors out and names the query."""
         mock_ws = MagicMock()
@@ -160,10 +160,10 @@ class TestCustomEventsUpdate:
         combined = (result.stdout or "") + (result.stderr or "")
         assert "Nonexistent" in combined
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_errors_when_name_is_ambiguous(self, mock_get_ws: MagicMock) -> None:
         """--name matching multiple real custom events lists the colliding ids."""
-        from mixpanel_data.types import EventDefinition
+        from mixpanel_headless.types import EventDefinition
 
         mock_ws = MagicMock()
         mock_ws.list_custom_events.return_value = [
@@ -182,12 +182,12 @@ class TestCustomEventsUpdate:
         assert "222" in combined
         assert "--id" in combined
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_errors_when_name_only_matches_orphans(
         self, mock_get_ws: MagicMock
     ) -> None:
         """--name matching only orphan entries errors with an orphan-aware hint."""
-        from mixpanel_data.types import EventDefinition
+        from mixpanel_headless.types import EventDefinition
 
         mock_ws = MagicMock()
         mock_ws.list_custom_events.return_value = [
@@ -205,7 +205,7 @@ class TestCustomEventsUpdate:
         assert "orphan" in combined.lower()
         assert "--id" in combined
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_with_no_verified_passes_false(self, mock_get_ws: MagicMock) -> None:
         """--no-verified passes verified=False (not omitted)."""
         mock_ws = MagicMock()
@@ -222,7 +222,7 @@ class TestCustomEventsUpdate:
         _, called_params = mock_ws.update_custom_event.call_args[0]
         assert called_params.verified is False
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_update_without_verified_flag_omits_field(
         self, mock_get_ws: MagicMock
     ) -> None:
@@ -268,7 +268,7 @@ class TestCustomEventsUpdate:
 class TestCustomEventsDelete:
     """Tests for mp custom-events delete."""
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_delete_by_id_succeeds(self, mock_get_ws: MagicMock) -> None:
         """--id delete passes the int id straight to workspace.delete_custom_event."""
         mock_ws = MagicMock()
@@ -280,10 +280,10 @@ class TestCustomEventsDelete:
         mock_ws.delete_custom_event.assert_called_once_with(2044168)
         mock_ws.list_custom_events.assert_not_called()
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_delete_by_name_resolves_to_id(self, mock_get_ws: MagicMock) -> None:
         """--name resolves to the unique custom_event_id and deletes by id."""
-        from mixpanel_data.types import EventDefinition
+        from mixpanel_headless.types import EventDefinition
 
         mock_ws = MagicMock()
         mock_ws.list_custom_events.return_value = [
@@ -297,7 +297,7 @@ class TestCustomEventsDelete:
         assert result.exit_code == 0
         mock_ws.delete_custom_event.assert_called_once_with(2044168)
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_delete_errors_when_name_not_found(self, mock_get_ws: MagicMock) -> None:
         """--name with no matching custom event errors out, doesn't delete."""
         mock_ws = MagicMock()
@@ -312,10 +312,10 @@ class TestCustomEventsDelete:
         combined = (result.stdout or "") + (result.stderr or "")
         assert "Nonexistent" in combined
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_delete_errors_when_name_is_ambiguous(self, mock_get_ws: MagicMock) -> None:
         """--name matching multiple real custom events lists colliding ids and aborts."""
-        from mixpanel_data.types import EventDefinition
+        from mixpanel_headless.types import EventDefinition
 
         mock_ws = MagicMock()
         mock_ws.list_custom_events.return_value = [
@@ -332,12 +332,12 @@ class TestCustomEventsDelete:
         assert "222" in combined
         assert "--id" in combined
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_delete_errors_when_name_only_matches_orphans(
         self, mock_get_ws: MagicMock
     ) -> None:
         """--name matching only orphans aborts with an orphan-aware hint."""
-        from mixpanel_data.types import EventDefinition
+        from mixpanel_headless.types import EventDefinition
 
         mock_ws = MagicMock()
         mock_ws.list_custom_events.return_value = [
@@ -370,12 +370,12 @@ class TestCustomEventsDelete:
 class TestCustomEventsCreate:
     """Tests for mp custom-events create."""
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_create_with_single_alternative_returns_json(
         self, mock_get_ws: MagicMock
     ) -> None:
         """Successful create returns JSON with the new custom event."""
-        from mixpanel_data.types import CustomEvent, CustomEventAlternative
+        from mixpanel_headless.types import CustomEvent, CustomEventAlternative
 
         mock_ws = MagicMock()
         mock_ws.create_custom_event.return_value = CustomEvent(
@@ -406,12 +406,12 @@ class TestCustomEventsCreate:
         assert called_params.name == "Metric Tree Opened"
         assert called_params.alternatives == ["Enter room"]
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_create_with_multiple_alternatives_preserves_order(
         self, mock_get_ws: MagicMock
     ) -> None:
         """--alternative is repeatable and preserves order."""
-        from mixpanel_data.types import CustomEvent
+        from mixpanel_headless.types import CustomEvent
 
         mock_ws = MagicMock()
         mock_ws.create_custom_event.return_value = CustomEvent(
@@ -449,7 +449,7 @@ class TestCustomEventsCreate:
         result = runner.invoke(app, ["custom-events", "create", "--name", "X"])
         assert result.exit_code != 0
 
-    @patch("mixpanel_data.cli.commands.custom_events.get_workspace")
+    @patch("mixpanel_headless.cli.commands.custom_events.get_workspace")
     def test_create_empty_name_surfaces_as_input_error_not_api_error(
         self, mock_get_ws: MagicMock
     ) -> None:

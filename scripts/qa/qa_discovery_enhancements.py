@@ -31,10 +31,10 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
-    from mixpanel_data._internal.services.discovery import DiscoveryService
-    from mixpanel_data._internal.services.live_query import LiveQueryService
-    from mixpanel_data.types import (
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.services.discovery import DiscoveryService
+    from mixpanel_headless._internal.services.live_query import LiveQueryService
+    from mixpanel_headless.types import (
         EventCountsResult,
         FunnelInfo,
         PropertyCountsResult,
@@ -159,15 +159,17 @@ def main() -> int:
 
     # Test 1.1: Import modules
     def test_imports() -> dict[str, Any]:
-        from mixpanel_data._internal.api_client import MixpanelAPIClient  # noqa: F401
-        from mixpanel_data._internal.config import ConfigManager  # noqa: F401
-        from mixpanel_data._internal.services.discovery import (
+        from mixpanel_headless._internal.api_client import (
+            MixpanelAPIClient,  # noqa: F401
+        )
+        from mixpanel_headless._internal.config import ConfigManager  # noqa: F401
+        from mixpanel_headless._internal.services.discovery import (
             DiscoveryService,  # noqa: F401
         )
-        from mixpanel_data._internal.services.live_query import (
+        from mixpanel_headless._internal.services.live_query import (
             LiveQueryService,  # noqa: F401
         )
-        from mixpanel_data.types import (
+        from mixpanel_headless.types import (
             EventCountsResult,  # noqa: F401
             FunnelInfo,  # noqa: F401
             PropertyCountsResult,  # noqa: F401
@@ -185,7 +187,7 @@ def main() -> int:
 
     # Test 1.2: Resolve credentials
     def test_resolve_credentials() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials(account=ACCOUNT_NAME)
@@ -211,8 +213,8 @@ def main() -> int:
     # Test 2.1: Create API client
     def test_create_client() -> dict[str, Any]:
         nonlocal api_client
-        from mixpanel_data._internal.api_client import MixpanelAPIClient
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.api_client import MixpanelAPIClient
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials(account=ACCOUNT_NAME)
@@ -229,7 +231,7 @@ def main() -> int:
     # Test 2.2: Create DiscoveryService
     def test_create_discovery() -> dict[str, Any]:
         nonlocal discovery
-        from mixpanel_data._internal.services.discovery import DiscoveryService
+        from mixpanel_headless._internal.services.discovery import DiscoveryService
 
         assert api_client is not None
         discovery = DiscoveryService(api_client)
@@ -244,7 +246,7 @@ def main() -> int:
     # Test 2.3: Create LiveQueryService
     def test_create_live_query() -> dict[str, Any]:
         nonlocal live_query
-        from mixpanel_data._internal.services.live_query import LiveQueryService
+        from mixpanel_headless._internal.services.live_query import LiveQueryService
 
         assert api_client is not None
         live_query = LiveQueryService(api_client)
@@ -277,7 +279,7 @@ def main() -> int:
     # Test 3.1: list_funnels() basic call
     def test_list_funnels() -> dict[str, Any]:
         nonlocal funnels
-        from mixpanel_data.types import FunnelInfo
+        from mixpanel_headless.types import FunnelInfo
 
         assert discovery is not None
         funnels = discovery.list_funnels()
@@ -344,7 +346,7 @@ def main() -> int:
     # Test 4.1: list_cohorts() basic call
     def test_list_cohorts() -> dict[str, Any]:
         nonlocal cohorts
-        from mixpanel_data.types import SavedCohort
+        from mixpanel_headless.types import SavedCohort
 
         assert discovery is not None
         cohorts = discovery.list_cohorts()
@@ -438,7 +440,7 @@ def main() -> int:
     # Test 5.1: list_top_events() basic call
     def test_list_top_events() -> dict[str, Any]:
         nonlocal top_events
-        from mixpanel_data.types import TopEvent
+        from mixpanel_headless.types import TopEvent
 
         assert discovery is not None
         top_events = discovery.list_top_events()
@@ -546,7 +548,7 @@ def main() -> int:
     # Test 6.1: event_counts() basic call
     def test_event_counts_basic() -> dict[str, Any]:
         nonlocal event_counts_result
-        from mixpanel_data.types import EventCountsResult
+        from mixpanel_headless.types import EventCountsResult
 
         assert live_query is not None
         if not discovered_events:
@@ -690,7 +692,7 @@ def main() -> int:
     # Test 7.1: property_counts() basic call
     def test_property_counts_basic() -> dict[str, Any]:
         nonlocal property_counts_result
-        from mixpanel_data.types import PropertyCountsResult
+        from mixpanel_headless.types import PropertyCountsResult
 
         assert live_query is not None
         if not discovered_events:

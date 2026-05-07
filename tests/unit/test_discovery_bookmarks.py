@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mixpanel_data._internal.services.discovery import DiscoveryService
-from mixpanel_data.types import BookmarkInfo
+from mixpanel_headless._internal.services.discovery import DiscoveryService
+from mixpanel_headless.types import BookmarkInfo
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ import click.exceptions
 import pytest
 import typer
 
-from mixpanel_data.cli.utils import (
+from mixpanel_headless.cli.utils import (
     ExitCode,
     _apply_jq_filter,
     get_config,
@@ -18,7 +18,7 @@ from mixpanel_data.cli.utils import (
     handle_errors,
     output_result,
 )
-from mixpanel_data.exceptions import (
+from mixpanel_headless.exceptions import (
     AccountExistsError,
     AccountNotFoundError,
     AuthenticationError,
@@ -26,7 +26,7 @@ from mixpanel_data.exceptions import (
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     QueryError,
     RateLimitError,
     ServerError,
@@ -144,11 +144,11 @@ class TestHandleErrors:
         assert exc.value.exit_code == ExitCode.GENERAL_ERROR
 
     def test_generic_mixpanel_error_exits_with_code_1(self) -> None:
-        """Test generic MixpanelDataError maps to exit code 1."""
+        """Test generic MixpanelHeadlessError maps to exit code 1."""
 
         @handle_errors
         def generic_fail() -> None:
-            raise MixpanelDataError("Something went wrong")
+            raise MixpanelHeadlessError("Something went wrong")
 
         with pytest.raises(click.exceptions.Exit) as exc:
             generic_fail()
@@ -392,7 +392,7 @@ class TestGetWorkspace:
             "workspace": None,
         }
 
-        with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
+        with patch("mixpanel_headless.workspace.Workspace") as MockWorkspace:
             mock_ws = MagicMock()
             MockWorkspace.return_value = mock_ws
 
@@ -416,7 +416,7 @@ class TestGetWorkspace:
             "workspace": existing_ws,
         }
 
-        with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
+        with patch("mixpanel_headless.workspace.Workspace") as MockWorkspace:
             result = get_workspace(ctx)
 
             MockWorkspace.assert_not_called()
@@ -433,7 +433,7 @@ class TestGetWorkspace:
             "workspace": None,
         }
 
-        with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
+        with patch("mixpanel_headless.workspace.Workspace") as MockWorkspace:
             get_workspace(ctx)
 
             MockWorkspace.assert_called_once_with(
@@ -451,7 +451,7 @@ class TestGetWorkspace:
             "workspace": None,
         }
 
-        with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
+        with patch("mixpanel_headless.workspace.Workspace") as MockWorkspace:
             get_workspace(ctx)
             MockWorkspace.assert_called_once_with(
                 account=None, project=None, workspace=None, target="ecom"
@@ -468,7 +468,7 @@ class TestGetWorkspace:
             "workspace": None,
         }
 
-        with patch("mixpanel_data.workspace.Workspace") as MockWorkspace:
+        with patch("mixpanel_headless.workspace.Workspace") as MockWorkspace:
             get_workspace(ctx)
             MockWorkspace.assert_called_once_with(
                 account=None,
@@ -486,7 +486,7 @@ class TestGetConfig:
         ctx = MagicMock(spec=typer.Context)
         ctx.obj = {"config": None}
 
-        with patch("mixpanel_data._internal.config.ConfigManager") as MockConfig:
+        with patch("mixpanel_headless._internal.config.ConfigManager") as MockConfig:
             mock_config = MagicMock()
             MockConfig.return_value = mock_config
 
@@ -502,7 +502,7 @@ class TestGetConfig:
         existing_config = MagicMock()
         ctx.obj = {"config": existing_config}
 
-        with patch("mixpanel_data._internal.config.ConfigManager") as MockConfig:
+        with patch("mixpanel_headless._internal.config.ConfigManager") as MockConfig:
             result = get_config(ctx)
 
             MockConfig.assert_not_called()
@@ -531,7 +531,7 @@ class TestOutputResult:
         ctx = MagicMock(spec=typer.Context)
         ctx.obj = {"format": "table"}
 
-        with patch("mixpanel_data.cli.utils.console") as mock_console:
+        with patch("mixpanel_headless.cli.utils.console") as mock_console:
             output_result(ctx, [{"name": "test"}])
 
             mock_console.print.assert_called_once()

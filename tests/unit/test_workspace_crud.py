@@ -21,11 +21,11 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.exceptions import BookmarkValidationError, MixpanelDataError
-from mixpanel_data.types import (
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.exceptions import BookmarkValidationError, MixpanelHeadlessError
+from mixpanel_headless.types import (
     Bookmark,
     BookmarkHistoryResponse,
     BulkUpdateBookmarkEntry,
@@ -39,7 +39,7 @@ from mixpanel_data.types import (
     UpdateCohortParams,
     UpdateDashboardParams,
 )
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless.workspace import Workspace
 from tests.conftest import make_session
 from tests.unit._bookmark_fixtures import (
     MINIMAL_FUNNEL_PARAMS,
@@ -732,7 +732,7 @@ class TestWorkspaceBookmarkCRUD:
         assert patch_body["content"]["content_params"]["source_bookmark_id"] == 42
 
     def test_create_bookmark_requires_dashboard_id(self, temp_dir: Path) -> None:
-        """create_bookmark() raises MixpanelDataError when dashboard_id is missing."""
+        """create_bookmark() raises MixpanelHeadlessError when dashboard_id is missing."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Should not be called."""
@@ -744,7 +744,7 @@ class TestWorkspaceBookmarkCRUD:
             bookmark_type="insights",
             params=MINIMAL_INSIGHTS_PARAMS,
         )
-        with pytest.raises(MixpanelDataError, match="dashboard_id is required"):
+        with pytest.raises(MixpanelHeadlessError, match="dashboard_id is required"):
             ws.create_bookmark(params)
 
     def test_create_bookmark_rejects_malformed_sorting(self, temp_dir: Path) -> None:
@@ -916,7 +916,7 @@ class TestWorkspaceBookmarkCRUD:
             params=good_params,
             dashboard_id=99,
         )
-        with caplog.at_level(logging.WARNING, logger="mixpanel_data.workspace"):
+        with caplog.at_level(logging.WARNING, logger="mixpanel_headless.workspace"):
             ws.create_bookmark(params)
 
         warning_messages = [
@@ -1836,18 +1836,18 @@ class TestAddReportToDashboard:
         assert call_count == 1  # Single PATCH request
 
     def test_add_report_raises_on_unexpected_response(self, temp_dir: Path) -> None:
-        """add_report_to_dashboard() raises MixpanelDataError for non-dashboard response."""
+        """add_report_to_dashboard() raises MixpanelHeadlessError for non-dashboard response."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return 204-style response without dashboard payload."""
             return httpx.Response(204)
 
         ws = _make_workspace(temp_dir, handler)
-        with pytest.raises(MixpanelDataError, match="Unexpected response"):
+        with pytest.raises(MixpanelHeadlessError, match="Unexpected response"):
             ws.add_report_to_dashboard(1, 42)
 
     def test_add_report_raises_on_dict_without_id(self, temp_dir: Path) -> None:
-        """add_report_to_dashboard() raises MixpanelDataError when response dict lacks 'id'."""
+        """add_report_to_dashboard() raises MixpanelHeadlessError when response dict lacks 'id'."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return a dict response that is missing the 'id' key."""
@@ -1857,5 +1857,5 @@ class TestAddReportToDashboard:
             )
 
         ws = _make_workspace(temp_dir, handler)
-        with pytest.raises(MixpanelDataError, match="Unexpected response"):
+        with pytest.raises(MixpanelHeadlessError, match="Unexpected response"):
             ws.add_report_to_dashboard(1, 42)

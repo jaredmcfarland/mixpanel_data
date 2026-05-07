@@ -5,8 +5,8 @@ new auth file or a major code dump will fail this test, prompting the
 PR author to either (a) justify the new ceiling or (b) refactor.
 
 Scope (auth subsystem):
-    - ``src/mixpanel_data/_internal/auth/*.py`` (excluding ``__init__.py``)
-    - ``src/mixpanel_data/_internal/config.py``
+    - ``src/mixpanel_headless/_internal/auth/*.py`` (excluding ``__init__.py``)
+    - ``src/mixpanel_headless/_internal/config.py``
     - The five v3 CLI command groups:
       ``cli/commands/{account, project, workspace, target, session}.py``
 
@@ -38,18 +38,18 @@ def _auth_subsystem_files() -> list[Path]:
     """Return all files in scope for the auth-subsystem LoC budget."""
     auth_pkg = [
         Path(p)
-        for p in glob.glob(str(REPO_ROOT / "src/mixpanel_data/_internal/auth/*.py"))
+        for p in glob.glob(str(REPO_ROOT / "src/mixpanel_headless/_internal/auth/*.py"))
         if not p.endswith("__init__.py")
     ]
     return sorted(
         [
             *auth_pkg,
-            REPO_ROOT / "src/mixpanel_data/_internal/config.py",
-            REPO_ROOT / "src/mixpanel_data/cli/commands/account.py",
-            REPO_ROOT / "src/mixpanel_data/cli/commands/project.py",
-            REPO_ROOT / "src/mixpanel_data/cli/commands/workspace.py",
-            REPO_ROOT / "src/mixpanel_data/cli/commands/target.py",
-            REPO_ROOT / "src/mixpanel_data/cli/commands/session.py",
+            REPO_ROOT / "src/mixpanel_headless/_internal/config.py",
+            REPO_ROOT / "src/mixpanel_headless/cli/commands/account.py",
+            REPO_ROOT / "src/mixpanel_headless/cli/commands/project.py",
+            REPO_ROOT / "src/mixpanel_headless/cli/commands/workspace.py",
+            REPO_ROOT / "src/mixpanel_headless/cli/commands/target.py",
+            REPO_ROOT / "src/mixpanel_headless/cli/commands/session.py",
         ]
     )
 

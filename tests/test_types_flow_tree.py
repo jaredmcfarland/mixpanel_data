@@ -15,8 +15,8 @@ from typing import Any
 import pytest
 from anytree import AnyNode, PreOrderIter
 
-import mixpanel_data
-from mixpanel_data.types import FlowQueryResult, FlowTreeNode
+import mixpanel_headless
+from mixpanel_headless.types import FlowQueryResult, FlowTreeNode
 
 # =============================================================================
 # Helpers
@@ -485,7 +485,7 @@ class TestFlowTreeNodeToAnytree:
 
 def _make_tree_result(**overrides: Any) -> FlowQueryResult:
     """Build a default-valid FlowQueryResult in tree mode for testing."""
-    from mixpanel_data.types import FlowQueryResult
+    from mixpanel_headless.types import FlowQueryResult
 
     defaults: dict[str, Any] = {
         "computed_at": "2025-01-15T10:00:00",
@@ -519,7 +519,7 @@ class TestFlowQueryResultTreeMode:
 
     def test_trees_default_empty(self) -> None:
         """trees defaults to empty list when not provided."""
-        from mixpanel_data.types import FlowQueryResult
+        from mixpanel_headless.types import FlowQueryResult
 
         r = FlowQueryResult(
             computed_at="2025-01-15T10:00:00",
@@ -638,14 +638,14 @@ class TestFlowQueryResultTreeMode:
 
 
 class TestFlowTreeNodeExports:
-    """Tests for FlowTreeNode public export from mixpanel_data."""
+    """Tests for FlowTreeNode public export from mixpanel_headless."""
 
     def test_importable_from_package(self) -> None:
-        """FlowTreeNode can be imported from mixpanel_data."""
-        from mixpanel_data import FlowTreeNode as Imported
+        """FlowTreeNode can be imported from mixpanel_headless."""
+        from mixpanel_headless import FlowTreeNode as Imported
 
         assert Imported is FlowTreeNode
 
     def test_in_all(self) -> None:
-        """FlowTreeNode is listed in mixpanel_data.__all__."""
-        assert "FlowTreeNode" in mixpanel_data.__all__
+        """FlowTreeNode is listed in mixpanel_headless.__all__."""
+        assert "FlowTreeNode" in mixpanel_headless.__all__

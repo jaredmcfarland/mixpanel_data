@@ -1,4 +1,4 @@
-# Copilot Instructions for mixpanel_data
+# Copilot Instructions for mixpanel_headless
 
 > Python library + CLI for Mixpanel analytics: discovery, live queries, streaming, and entity management.
 
@@ -18,7 +18,7 @@ uv run pytest                                     # Run tests
 uv run pytest -k test_name
 
 # Tests with coverage (must be ≥90%)
-uv run pytest --cov=src/mixpanel_data --cov-fail-under=90
+uv run pytest --cov=src/mixpanel_headless --cov-fail-under=90
 ```
 
 ## Tech Stack
@@ -32,9 +32,9 @@ uv run pytest --cov=src/mixpanel_data --cov-fail-under=90
 ## Project Structure
 
 ```
-src/mixpanel_data/
+src/mixpanel_headless/
 ├── workspace.py        # Main facade (entry point for library)
-├── auth.py             # Public auth module
+├── auth_types.py       # Public auth module
 ├── exceptions.py       # Exception hierarchy
 ├── types.py            # Result types (frozen dataclasses)
 ├── _internal/          # PRIVATE: never import in public signatures
@@ -91,7 +91,7 @@ Every function/method/class needs:
 Use library hierarchy, never bare `Exception`:
 
 **Valid classes:**
-- `MixpanelDataError` (base)
+- `MixpanelHeadlessError` (base)
 - `ConfigError`
 - `AccountNotFoundError`
 - `AccountExistsError`
@@ -134,19 +134,19 @@ Use library hierarchy, never bare `Exception`:
 3. Run all checks: `uv run ruff format src/ tests/ && uv run ruff check src/ tests/ && uv run mypy src/ tests/ && uv run pytest`
 
 ### Adding CLI Command
-1. Add to `src/mixpanel_data/cli/commands/`
+1. Add to `src/mixpanel_headless/cli/commands/`
 2. Register in `main.py`
 3. Follow existing patterns (formatters, error handling)
 
 ### Modifying Public API
-1. Edit `workspace.py` or `auth.py`
+1. Edit `workspace.py` or `auth_types.py`
 2. Update `__init__.py` exports if needed
 3. Never expose `_internal` types in signatures
 
 ## DO NOT
 
 - Import from `_internal/` in public signatures
-- Use `except Exception:` (use `MixpanelDataError`)
+- Use `except Exception:` (use `MixpanelHeadlessError`)
 - Use mutable defaults (`list` → `field(default_factory=list)`)
 - Skip type annotations
 - Skip docstrings

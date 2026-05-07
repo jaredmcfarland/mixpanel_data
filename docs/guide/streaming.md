@@ -3,7 +3,7 @@
 Stream events and user profiles directly from Mixpanel. Ideal for ETL pipelines, data processing, exports, and Unix-style piping.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Data Flow Patterns →](https://deepwiki.com/jaredmcfarland/mixpanel_data/4.1-data-flow-patterns)**
+    🤖 **[Data Flow Patterns →](https://deepwiki.com/mixpanel/mixpanel-headless/4.1-data-flow-patterns)**
 
     Ask questions about streaming, memory-efficient processing, or ETL pipeline patterns.
 
@@ -14,7 +14,7 @@ Stream events and user profiles directly from Mixpanel. Ideal for ETL pipelines,
 Stream all events for a date range:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -196,7 +196,7 @@ Use Python to filter, count, and export streamed data:
 
 ```python
 import json
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -291,7 +291,7 @@ Profiles:
 Batch events and send to external system:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 from your_warehouse import send_batch
 
 ws = mp.Workspace()
@@ -316,7 +316,7 @@ Compute statistics without creating a local table:
 
 ```python
 from collections import Counter
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 event_counts = Counter()
@@ -333,7 +333,7 @@ ws.close()
 Use `with` for automatic cleanup:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 with mp.Workspace() as ws:
     for event in ws.stream_events(from_date="2025-01-01", to_date="2025-01-31"):

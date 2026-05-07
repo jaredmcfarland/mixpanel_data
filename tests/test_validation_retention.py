@@ -27,9 +27,9 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data._internal.validation import validate_retention_args
-from mixpanel_data.exceptions import ValidationError
-from mixpanel_data.types import GroupBy
+from mixpanel_headless._internal.validation import validate_retention_args
+from mixpanel_headless.exceptions import ValidationError
+from mixpanel_headless.types import GroupBy
 
 # =============================================================================
 # Helpers
@@ -922,7 +922,7 @@ class TestValidateBookmarkRetentionB20:
 
     def test_empty_filter_value_list_rejected(self) -> None:
         """filterValue=[] must produce B20_EMPTY_FILTER_VALUE."""
-        from mixpanel_data._internal.validation import validate_bookmark
+        from mixpanel_headless._internal.validation import validate_bookmark
 
         bookmark: dict[str, Any] = {
             "sections": {
@@ -960,7 +960,7 @@ class TestValidateBookmarkRetentionB21:
 
     def test_filter_value_too_many_rejected(self) -> None:
         """filterValue with >1000 entries must produce B21_FILTER_VALUE_TOO_MANY."""
-        from mixpanel_data._internal.validation import validate_bookmark
+        from mixpanel_headless._internal.validation import validate_bookmark
 
         bookmark: dict[str, Any] = {
             "sections": {
@@ -1007,7 +1007,7 @@ class TestValidateBookmarkRetentionB9MathDispatch:
 
     def test_insights_only_math_rejected_for_retention(self) -> None:
         """math='dau' must produce B9_INVALID_MATH for retention bookmarks."""
-        from mixpanel_data._internal.validation import validate_bookmark
+        from mixpanel_headless._internal.validation import validate_bookmark
 
         bookmark: dict[str, Any] = {
             "sections": {
@@ -1032,7 +1032,7 @@ class TestValidateBookmarkRetentionB9MathDispatch:
 
     def test_valid_retention_math_accepted(self) -> None:
         """math='retention_rate' must not produce B9_INVALID_MATH for retention."""
-        from mixpanel_data._internal.validation import validate_bookmark
+        from mixpanel_headless._internal.validation import validate_bookmark
 
         bookmark: dict[str, Any] = {
             "sections": {

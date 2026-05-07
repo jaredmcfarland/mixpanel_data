@@ -3,11 +3,11 @@
 Demonstrates the two supported flows for working across multiple Mixpanel
 projects within a single Python session:
 
-1. **Sequential mode** — mutate a single :class:`mixpanel_data.Workspace`
+1. **Sequential mode** — mutate a single :class:`mixpanel_headless.Workspace`
    in place via ``ws.use(project=...)``. The connection pool, auth header
    (when account is unchanged), and ``/me`` cache are all reused — each
    iteration is O(1) per FR-061 / SC-008.
-2. **Snapshot mode** — derive immutable :class:`mixpanel_data.Session`
+2. **Snapshot mode** — derive immutable :class:`mixpanel_headless.Session`
    snapshots via ``base_session.replace(project=...)`` and dispatch
    them across worker threads with :class:`ThreadPoolExecutor`. Each
    thread builds its own ``Workspace`` from the snapshot; nothing
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 
 def sequential_iteration() -> None:

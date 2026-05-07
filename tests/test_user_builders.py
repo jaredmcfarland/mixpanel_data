@@ -9,12 +9,12 @@ Task ID: T004
 
 from __future__ import annotations
 
-from mixpanel_data._internal.query.user_builders import (
+from mixpanel_headless._internal.query.user_builders import (
     extract_cohort_filter,
     filter_to_selector,
     filters_to_selector,
 )
-from mixpanel_data.types import CohortCriteria, CohortDefinition, Filter
+from mixpanel_headless.types import CohortCriteria, CohortDefinition, Filter
 
 # =============================================================================
 # filter_to_selector — individual operator mapping

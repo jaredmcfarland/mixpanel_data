@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import pytest
 
-from mixpanel_data._internal.segfilter import (
+from mixpanel_headless._internal.segfilter import (
     RESOURCE_TYPE_MAP,
     _convert_date_format,
     build_segfilter_entry,
 )
-from mixpanel_data.types import Filter
+from mixpanel_headless.types import Filter
 
 # =============================================================================
 # String Operators

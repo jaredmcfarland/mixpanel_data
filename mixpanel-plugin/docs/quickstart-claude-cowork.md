@@ -1,4 +1,4 @@
-# Quick Start: mixpanel_data + Claude Cowork
+# Quick Start: mixpanel_headless + Claude Cowork
 
 Get your Mixpanel credentials working inside [Claude Cowork](https://docs.anthropic.com/en/docs/claude-code/cowork) sessions so Claude agents can query your analytics data autonomously.
 
@@ -21,7 +21,7 @@ Cowork runs Claude agents in sandboxed virtual machines. These VMs don't have ac
 On your **local machine** (not inside Cowork), install the `mp` command-line tool:
 
 ```bash
-pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+pip install git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
 Then configure your Mixpanel credentials:
@@ -84,7 +84,7 @@ mp account export-bridge --to ~/.claude/mixpanel/auth.json --workspace 3448413
 Open a Cowork session and run the setup skill:
 
 ```
-/mixpanel-data:setup
+/mixpanel-headless:setup
 ```
 
 The setup script automatically detects the Cowork environment and reads credentials from the bridge file. You'll see output like:
@@ -154,7 +154,7 @@ mp account remove-bridge --at /custom/path/auth.json
 
 If you authenticated with OAuth (rather than a service account), the bridge file includes both an access token and a refresh token.
 
-- **Automatic refresh**: The `mixpanel_data` library refreshes expired OAuth tokens automatically inside Cowork — no browser needed
+- **Automatic refresh**: The `mixpanel_headless` library refreshes expired OAuth tokens automatically inside Cowork — no browser needed
 - **Refresh token rejected**: If the refresh token itself is rejected (e.g., revoked at the IdP), the library surfaces `OAuthError(code="OAUTH_REFRESH_REVOKED")`. You need to re-authenticate on your local machine and re-export:
 
 ```bash
@@ -233,11 +233,11 @@ Then start a new Cowork session.
 
 ### Can't run `mp account export-bridge` — "command not found"
 
-**Cause**: The `mixpanel_data` package isn't installed on your local machine.
+**Cause**: The `mixpanel_headless` package isn't installed on your local machine.
 
 **Fix**:
 ```bash
-pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+pip install git+https://github.com/mixpanel/mixpanel-headless.git
 mp --version   # verify
 ```
 
@@ -264,4 +264,4 @@ Always run these on your **local machine** before starting a Cowork session.
 
 - **Claude Code quick start**: [Claude Code Quick Start](quickstart-claude-code.md) — plugin setup and authentication
 - **Full getting started guide**: [Getting Started Guide](getting-started-guide.md) — Python library, CLI, and more
-- **Full documentation**: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarland.github.io/mixpanel_data/)
+- **Full documentation**: [mixpanel.github.io/mixpanel-headless](https://mixpanel.github.io/mixpanel-headless/)

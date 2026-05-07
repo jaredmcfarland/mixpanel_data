@@ -2,7 +2,7 @@
 
 Build typed flow path analysis against Mixpanel's Insights engine — define anchor events, control forward/reverse step depth, apply per-step filters, and analyze user paths inline without creating saved reports first.
 
-!!! tip "New in v0.5"
+!!! tip "Recommended"
     `Workspace.query_flow()` is the typed way to run flow analysis programmatically. It supports capabilities not available through the legacy `query_saved_flows()` method, including per-step filters, direction controls, multiple visualization modes, NetworkX graph output, and typed result analysis.
 
 ## When to Use `query_flow()`
@@ -32,7 +32,7 @@ Use the legacy `query_saved_flows()` when:
 The simplest possible flow query — what happens after a Purchase event, last 30 days:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 
@@ -88,7 +88,7 @@ Each string becomes an anchor step in the flow — Mixpanel traces user paths fo
 For per-step configuration with filters and direction overrides, use `FlowStep` objects:
 
 ```python
-from mixpanel_data import FlowStep, Filter
+from mixpanel_headless import FlowStep, Filter
 
 result = ws.query_flow(
     FlowStep(
@@ -125,7 +125,7 @@ result = ws.query_flow([
 Apply filters to individual steps using `FlowStep.filters`. These restrict which events count for that specific anchor:
 
 ```python
-from mixpanel_data import FlowStep, Filter
+from mixpanel_headless import FlowStep, Filter
 
 result = ws.query_flow(
     FlowStep(
@@ -160,7 +160,7 @@ See [Insights Queries — Filters](query.md#filters) for the full list of `Filte
 Restrict flow analysis to a subset of users using the `where=` parameter. Flows support both cohort filters and property filters:
 
 ```python
-from mixpanel_data import Filter, CohortCriteria, CohortDefinition
+from mixpanel_headless import Filter, CohortCriteria, CohortDefinition
 
 # Cohort filter — what do power users do after purchasing?
 result = ws.query_flow(
@@ -218,7 +218,7 @@ At least one direction must be nonzero — a flow with `forward=0, reverse=0` ra
 Each `FlowStep` can override the global direction settings:
 
 ```python
-from mixpanel_data import FlowStep
+from mixpanel_headless import FlowStep
 
 result = ws.query_flow(
     [
@@ -682,7 +682,7 @@ UniqueDotExporter(
 The generated bookmark params can be saved as a Mixpanel report:
 
 ```python
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 
 result = ws.query_flow("Purchase", forward=3, reverse=1)
 
@@ -725,7 +725,7 @@ print(json.dumps(result.params, indent=2))
 Errors are collected — all validation issues are reported at once, not just the first:
 
 ```python
-from mixpanel_data import BookmarkValidationError
+from mixpanel_headless import BookmarkValidationError
 
 try:
     ws.query_flow("", forward=10, reverse=-1)
@@ -742,8 +742,8 @@ except BookmarkValidationError as e:
 ### E-Commerce Checkout Flow
 
 ```python
-import mixpanel_data as mp
-from mixpanel_data import FlowStep, Filter
+import mixpanel_headless as mp
+from mixpanel_headless import FlowStep, Filter
 
 ws = mp.Workspace()
 
@@ -844,7 +844,7 @@ import json
 print(json.dumps(params, indent=2))  # inspect the generated bookmark JSON
 
 # Save as a report directly from params
-from mixpanel_data import CreateBookmarkParams
+from mixpanel_headless import CreateBookmarkParams
 
 ws.create_bookmark(CreateBookmarkParams(
     name="Purchase Flow (3 forward, 1 reverse)",
@@ -862,7 +862,7 @@ Break flow results down by a property, cohort, or frequency using the `segments`
 result = ws.query_flow("Purchase", segments="platform", last=30)
 
 # Segment by a GroupBy with bucketing
-from mixpanel_data import GroupBy
+from mixpanel_headless import GroupBy
 result = ws.query_flow(
     "Purchase",
     segments=GroupBy("revenue", property_type="number", bucket_size=50),
@@ -870,7 +870,7 @@ result = ws.query_flow(
 )
 
 # Segment by cohort membership
-from mixpanel_data import CohortBreakdown
+from mixpanel_headless import CohortBreakdown
 result = ws.query_flow(
     "Purchase",
     segments=CohortBreakdown(cohort_id=123, name="Power Users"),
@@ -901,7 +901,7 @@ Excluded events are removed from the flow graph — they won't appear as nodes o
 Anchor a flow step to a session boundary using `FlowStep.session_event`:
 
 ```python
-from mixpanel_data import FlowStep
+from mixpanel_headless import FlowStep
 
 # What happens after a session starts?
 result = ws.query_flow(

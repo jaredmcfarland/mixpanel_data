@@ -10,12 +10,12 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data._internal.bookmark_enums import (
+from mixpanel_headless._internal.bookmark_enums import (
     MATH_NO_PER_USER,
     MATH_PROPERTY_OPTIONAL,
     MATH_REQUIRING_PROPERTY,
 )
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     Filter,
     Formula,
     Metric,
@@ -522,7 +522,7 @@ class TestFilterConstruction:
 
     def test_equals_string(self) -> None:
         """Filter.equals creates correct filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.equals("country", "US")
         assert f._property == "country"
@@ -532,21 +532,21 @@ class TestFilterConstruction:
 
     def test_equals_list(self) -> None:
         """Filter.equals with list preserves list."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.equals("country", ["US", "CA"])
         assert f._value == ["US", "CA"]
 
     def test_not_equals(self) -> None:
         """Filter.not_equals creates correct filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.not_equals("browser", "IE")
         assert f._operator == "does not equal"
 
     def test_contains(self) -> None:
         """Filter.contains uses plain string value."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.contains("browser", "Chrome")
         assert f._operator == "contains"
@@ -554,14 +554,14 @@ class TestFilterConstruction:
 
     def test_not_contains(self) -> None:
         """Filter.not_contains creates correct filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.not_contains("url", "test")
         assert f._operator == "does not contain"
 
     def test_greater_than(self) -> None:
         """Filter.greater_than creates numeric filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.greater_than("age", 18)
         assert f._operator == "is greater than"
@@ -570,7 +570,7 @@ class TestFilterConstruction:
 
     def test_less_than(self) -> None:
         """Filter.less_than creates numeric filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.less_than("amount", 100)
         assert f._operator == "is less than"
@@ -578,7 +578,7 @@ class TestFilterConstruction:
 
     def test_between(self) -> None:
         """Filter.between creates range filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.between("age", 18, 65)
         assert f._operator == "is between"
@@ -586,7 +586,7 @@ class TestFilterConstruction:
 
     def test_is_set(self) -> None:
         """Filter.is_set creates existence filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.is_set("email")
         assert f._operator == "is set"
@@ -594,14 +594,14 @@ class TestFilterConstruction:
 
     def test_is_not_set(self) -> None:
         """Filter.is_not_set creates non-existence filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.is_not_set("phone")
         assert f._operator == "is not set"
 
     def test_is_true(self) -> None:
         """Filter.is_true creates boolean filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.is_true("verified")
         assert f._operator == "true"
@@ -609,14 +609,14 @@ class TestFilterConstruction:
 
     def test_is_false(self) -> None:
         """Filter.is_false creates boolean filter."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.is_false("opted_out")
         assert f._operator == "false"
 
     def test_immutability(self) -> None:
         """Filter is frozen."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.equals("country", "US")
         with pytest.raises(AttributeError):
@@ -624,14 +624,14 @@ class TestFilterConstruction:
 
     def test_resource_type_default(self) -> None:
         """Default resource_type is 'events'."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.equals("country", "US")
         assert f._resource_type == "events"
 
     def test_resource_type_people(self) -> None:
         """resource_type='people' is supported."""
-        from mixpanel_data.types import Filter
+        from mixpanel_headless.types import Filter
 
         f = Filter.equals("city", "SF", resource_type="people")
         assert f._resource_type == "people"
@@ -647,7 +647,7 @@ class TestGroupByConstruction:
 
     def test_string_property_defaults(self) -> None:
         """GroupBy with property only uses string type default."""
-        from mixpanel_data.types import GroupBy
+        from mixpanel_headless.types import GroupBy
 
         g = GroupBy("country")
         assert g.property == "country"
@@ -656,7 +656,7 @@ class TestGroupByConstruction:
 
     def test_numeric_with_buckets(self) -> None:
         """GroupBy with full numeric bucketing."""
-        from mixpanel_data.types import GroupBy
+        from mixpanel_headless.types import GroupBy
 
         g = GroupBy(
             "revenue",
@@ -672,7 +672,7 @@ class TestGroupByConstruction:
 
     def test_immutability(self) -> None:
         """GroupBy is frozen."""
-        from mixpanel_data.types import GroupBy
+        from mixpanel_headless.types import GroupBy
 
         g = GroupBy("country")
         with pytest.raises(AttributeError):
@@ -680,7 +680,7 @@ class TestGroupByConstruction:
 
     def test_equality(self) -> None:
         """Two GroupBys with same fields are equal."""
-        from mixpanel_data.types import GroupBy
+        from mixpanel_headless.types import GroupBy
 
         g1 = GroupBy("country")
         g2 = GroupBy("country")
@@ -1081,7 +1081,7 @@ class TestTimeComparison:
 
     def test_relative_factory_creates_correct_instance(self) -> None:
         """TimeComparison.relative('month') creates type='relative', unit='month'."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.relative("month")
         assert tc.type == "relative"
@@ -1090,7 +1090,7 @@ class TestTimeComparison:
 
     def test_absolute_start_factory_creates_correct_instance(self) -> None:
         """TimeComparison.absolute_start('2026-01-01') creates correct instance."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.absolute_start("2026-01-01")
         assert tc.type == "absolute-start"
@@ -1099,7 +1099,7 @@ class TestTimeComparison:
 
     def test_absolute_end_factory_creates_correct_instance(self) -> None:
         """TimeComparison.absolute_end('2026-12-31') creates correct instance."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.absolute_end("2026-12-31")
         assert tc.type == "absolute-end"
@@ -1108,63 +1108,63 @@ class TestTimeComparison:
 
     def test_tc1_relative_requires_unit(self) -> None:
         """TC1: type='relative' requires unit to be set."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         with pytest.raises(ValueError, match="unit"):
             TimeComparison(type="relative", unit=None, date=None)
 
     def test_tc1_relative_rejects_date(self) -> None:
         """TC1: type='relative' rejects date being set."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         with pytest.raises(ValueError, match="date"):
             TimeComparison(type="relative", unit="month", date="2026-01-01")
 
     def test_tc2_absolute_start_requires_date(self) -> None:
         """TC2: type='absolute-start' requires date to be set."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         with pytest.raises(ValueError, match="date"):
             TimeComparison(type="absolute-start", unit=None, date=None)
 
     def test_tc2_absolute_start_rejects_unit(self) -> None:
         """TC2: type='absolute-start' rejects unit being set."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         with pytest.raises(ValueError, match="unit"):
             TimeComparison(type="absolute-start", unit="month", date="2026-01-01")
 
     def test_tc2_absolute_end_requires_date(self) -> None:
         """TC2: type='absolute-end' requires date to be set."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         with pytest.raises(ValueError, match="date"):
             TimeComparison(type="absolute-end", unit=None, date=None)
 
     def test_tc2_absolute_end_rejects_unit(self) -> None:
         """TC2: type='absolute-end' rejects unit being set."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         with pytest.raises(ValueError, match="unit"):
             TimeComparison(type="absolute-end", unit="month", date="2026-12-31")
 
     def test_tc3_invalid_date_format_raises(self) -> None:
         """TC3: date must match YYYY-MM-DD format."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         with pytest.raises(ValueError, match="YYYY-MM-DD"):
             TimeComparison.absolute_start("01-01-2026")
 
     def test_tc3_invalid_date_format_partial(self) -> None:
         """TC3: date='2026-1-1' (missing leading zeros) is rejected."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         with pytest.raises(ValueError, match="YYYY-MM-DD"):
             TimeComparison.absolute_start("2026-1-1")
 
     def test_frozen_immutable(self) -> None:
         """TimeComparison is frozen and cannot be modified after construction."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         tc = TimeComparison.relative("month")
         with pytest.raises(AttributeError):
@@ -1172,7 +1172,7 @@ class TestTimeComparison:
 
     def test_equality_same_fields(self) -> None:
         """Two TimeComparisons with identical fields are equal."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         tc1 = TimeComparison.relative("month")
         tc2 = TimeComparison.relative("month")
@@ -1180,7 +1180,7 @@ class TestTimeComparison:
 
     def test_inequality_different_type(self) -> None:
         """TimeComparisons with different types are not equal."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         tc1 = TimeComparison.relative("month")
         tc2 = TimeComparison.absolute_start("2026-01-01")
@@ -1188,7 +1188,7 @@ class TestTimeComparison:
 
     def test_relative_all_valid_units(self) -> None:
         """All valid TimeComparisonUnit values create successfully."""
-        from mixpanel_data.types import TimeComparison
+        from mixpanel_headless.types import TimeComparison
 
         for unit in ("day", "week", "month", "quarter", "year"):
             tc = TimeComparison.relative(unit)
@@ -1205,7 +1205,7 @@ class TestFrequencyBreakdownConstruction:
 
     def test_event_only_uses_defaults(self) -> None:
         """FrequencyBreakdown('Purchase') uses default bucket params."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         assert fb.event == "Purchase"
@@ -1216,7 +1216,7 @@ class TestFrequencyBreakdownConstruction:
 
     def test_all_fields_set(self) -> None:
         """FrequencyBreakdown with all fields explicitly set."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown(
             "Purchase",
@@ -1233,7 +1233,7 @@ class TestFrequencyBreakdownConstruction:
 
     def test_immutability(self) -> None:
         """FrequencyBreakdown is frozen and cannot be modified."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb = FrequencyBreakdown("Purchase")
         with pytest.raises(AttributeError):
@@ -1241,7 +1241,7 @@ class TestFrequencyBreakdownConstruction:
 
     def test_equality_same_fields(self) -> None:
         """Two FrequencyBreakdowns with identical fields are equal."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         fb1 = FrequencyBreakdown("Purchase")
         fb2 = FrequencyBreakdown("Purchase")
@@ -1249,7 +1249,7 @@ class TestFrequencyBreakdownConstruction:
 
     def test_inequality_different_event(self) -> None:
         """FrequencyBreakdowns with different events are not equal."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         assert FrequencyBreakdown("Purchase") != FrequencyBreakdown("Login")
 
@@ -1259,49 +1259,49 @@ class TestFrequencyBreakdownValidation:
 
     def test_fb1_empty_event_raises(self) -> None:
         """FB1: event must be non-empty."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         with pytest.raises(ValueError, match="non-empty"):
             FrequencyBreakdown("")
 
     def test_fb1_whitespace_event_raises(self) -> None:
         """FB1: whitespace-only event must be rejected."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         with pytest.raises(ValueError, match="non-empty"):
             FrequencyBreakdown("   ")
 
     def test_fb2_zero_bucket_size_raises(self) -> None:
         """FB2: bucket_size must be positive (> 0)."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         with pytest.raises(ValueError, match="positive"):
             FrequencyBreakdown("Purchase", bucket_size=0)
 
     def test_fb2_negative_bucket_size_raises(self) -> None:
         """FB2: negative bucket_size must be rejected."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         with pytest.raises(ValueError, match="positive"):
             FrequencyBreakdown("Purchase", bucket_size=-1)
 
     def test_fb3_bucket_min_equals_max_raises(self) -> None:
         """FB3: bucket_min must be < bucket_max."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         with pytest.raises(ValueError, match="less than"):
             FrequencyBreakdown("Purchase", bucket_min=10, bucket_max=10)
 
     def test_fb3_bucket_min_greater_than_max_raises(self) -> None:
         """FB3: bucket_min > bucket_max must be rejected."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         with pytest.raises(ValueError, match="less than"):
             FrequencyBreakdown("Purchase", bucket_min=20, bucket_max=10)
 
     def test_fb4_negative_bucket_min_raises(self) -> None:
         """FB4: bucket_min must be >= 0."""
-        from mixpanel_data.types import FrequencyBreakdown
+        from mixpanel_headless.types import FrequencyBreakdown
 
         with pytest.raises(ValueError, match="non-negative"):
             FrequencyBreakdown("Purchase", bucket_min=-1)
@@ -1317,7 +1317,7 @@ class TestFrequencyFilterConstruction:
 
     def test_event_and_value_uses_defaults(self) -> None:
         """FrequencyFilter('Login', value=5) uses default operator."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=5)
         assert ff.event == "Login"
@@ -1330,7 +1330,7 @@ class TestFrequencyFilterConstruction:
 
     def test_all_fields_set(self) -> None:
         """FrequencyFilter with all fields explicitly set."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter(
             "Login",
@@ -1352,7 +1352,7 @@ class TestFrequencyFilterConstruction:
 
     def test_immutability(self) -> None:
         """FrequencyFilter is frozen and cannot be modified."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=5)
         with pytest.raises(AttributeError):
@@ -1360,7 +1360,7 @@ class TestFrequencyFilterConstruction:
 
     def test_equality_same_fields(self) -> None:
         """Two FrequencyFilters with identical fields are equal."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff1 = FrequencyFilter("Login", value=5)
         ff2 = FrequencyFilter("Login", value=5)
@@ -1368,14 +1368,14 @@ class TestFrequencyFilterConstruction:
 
     def test_float_value(self) -> None:
         """FrequencyFilter value accepts float."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=3.5)
         assert ff.value == 3.5
 
     def test_event_filters_list(self) -> None:
         """FrequencyFilter accepts multiple event_filters."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter(
             "Purchase",
@@ -1394,28 +1394,28 @@ class TestFrequencyFilterValidation:
 
     def test_ff1_empty_event_raises(self) -> None:
         """FF1: event must be non-empty."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="non-empty"):
             FrequencyFilter("", value=5)
 
     def test_ff1_whitespace_event_raises(self) -> None:
         """FF1: whitespace-only event must be rejected."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="non-empty"):
             FrequencyFilter("   ", value=5)
 
     def test_ff2_invalid_operator_raises(self) -> None:
         """FF2: operator must be in VALID_FREQUENCY_FILTER_OPERATORS."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="operator"):
             FrequencyFilter("Login", operator="invalid_op", value=5)  # type: ignore[arg-type]
 
     def test_ff2_all_valid_operators_accepted(self) -> None:
         """FF2: all valid operators are accepted."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         valid_ops = [
             "is at least",
@@ -1430,35 +1430,35 @@ class TestFrequencyFilterValidation:
 
     def test_ff3_negative_value_raises(self) -> None:
         """FF3: value must be non-negative (>= 0)."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="non-negative"):
             FrequencyFilter("Login", value=-1)
 
     def test_ff3_zero_value_accepted(self) -> None:
         """FF3: value=0 is valid."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=0)
         assert ff.value == 0
 
     def test_ff4_date_range_value_without_unit_raises(self) -> None:
         """FF4: date_range_value without date_range_unit raises."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="both.*set or both.*None"):
             FrequencyFilter("Login", value=5, date_range_value=30)
 
     def test_ff4_date_range_unit_without_value_raises(self) -> None:
         """FF4: date_range_unit without date_range_value raises."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="both.*set or both.*None"):
             FrequencyFilter("Login", value=5, date_range_unit="day")
 
     def test_ff4_both_none_accepted(self) -> None:
         """FF4: both date_range_value and date_range_unit None is valid."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter("Login", value=5)
         assert ff.date_range_value is None
@@ -1466,7 +1466,7 @@ class TestFrequencyFilterValidation:
 
     def test_ff4_both_set_accepted(self) -> None:
         """FF4: both date_range_value and date_range_unit set is valid."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         ff = FrequencyFilter(
             "Login", value=5, date_range_value=30, date_range_unit="day"
@@ -1476,14 +1476,14 @@ class TestFrequencyFilterValidation:
 
     def test_ff5_zero_date_range_value_raises(self) -> None:
         """FF5: date_range_value must be positive if set."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="positive"):
             FrequencyFilter("Login", value=5, date_range_value=0, date_range_unit="day")
 
     def test_ff5_negative_date_range_value_raises(self) -> None:
         """FF5: negative date_range_value must be rejected."""
-        from mixpanel_data.types import FrequencyFilter
+        from mixpanel_headless.types import FrequencyFilter
 
         with pytest.raises(ValueError, match="positive"):
             FrequencyFilter(

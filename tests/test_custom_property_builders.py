@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from pydantic import SecretStr
 
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data._internal.bookmark_builders import (
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless._internal.bookmark_builders import (
     _build_composed_properties,
     build_filter_entry,
     build_group_section,
 )
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     CohortBreakdown,
     CustomPropertyRef,
     Filter,
@@ -369,8 +369,8 @@ class TestMeasurementPropertyBuilder:
         """T034: Plain string Metric.property produces unchanged measurement (backward compat)."""
         from unittest.mock import MagicMock
 
-        from mixpanel_data import Workspace
-        from mixpanel_data.types import Metric
+        from mixpanel_headless import Workspace
+        from mixpanel_headless.types import Metric
 
         creds = make_session(username="u", secret="s", project_id="1", region="us")
         mgr = MagicMock()
@@ -392,8 +392,8 @@ class TestMeasurementPropertyBuilder:
         """T035: CustomPropertyRef in measurement produces customPropertyId."""
         from unittest.mock import MagicMock
 
-        from mixpanel_data import Workspace
-        from mixpanel_data.types import Metric
+        from mixpanel_headless import Workspace
+        from mixpanel_headless.types import Metric
 
         creds = make_session(username="u", secret="s", project_id="1", region="us")
         mgr = MagicMock()
@@ -415,8 +415,8 @@ class TestMeasurementPropertyBuilder:
         """T036: InlineCustomProperty in measurement produces customProperty dict."""
         from unittest.mock import MagicMock
 
-        from mixpanel_data import Workspace
-        from mixpanel_data.types import Metric
+        from mixpanel_headless import Workspace
+        from mixpanel_headless.types import Metric
 
         creds = make_session(username="u", secret="s", project_id="1", region="us")
         mgr = MagicMock()
@@ -440,7 +440,7 @@ class TestMeasurementPropertyBuilder:
         """T037: Top-level math_property as plain string produces unchanged measurement."""
         from unittest.mock import MagicMock
 
-        from mixpanel_data import Workspace
+        from mixpanel_headless import Workspace
 
         creds = make_session(username="u", secret="s", project_id="1", region="us")
         mgr = MagicMock()

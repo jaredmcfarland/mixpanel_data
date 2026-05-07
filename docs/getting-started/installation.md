@@ -3,7 +3,7 @@
 > **⚠️ Pre-release Software**: This package is under active development and not yet published to PyPI. Install directly from GitHub.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Installation Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/2.1-installation)**
+    🤖 **[Installation Guide →](https://deepwiki.com/mixpanel/mixpanel-headless/2.1-installation)**
 
     Ask questions about requirements, dependencies, or troubleshoot installation issues.
 
@@ -15,7 +15,7 @@
 ## Installing with pip
 
 ```bash
-pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+pip install git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
 ## Installing with uv
@@ -23,13 +23,13 @@ pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
 [uv](https://github.com/astral-sh/uv) is a fast Python package installer:
 
 ```bash
-uv pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+uv pip install git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
 Or add to your project:
 
 ```bash
-uv add git+https://github.com/jaredmcfarland/mixpanel_data.git
+uv add git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
 ## Optional Dependencies
@@ -39,7 +39,7 @@ uv add git+https://github.com/jaredmcfarland/mixpanel_data.git
 If you want to build the documentation locally:
 
 ```bash
-pip install mixpanel_data[docs]
+pip install mixpanel_headless[docs]
 ```
 
 ## Verifying Installation
@@ -50,16 +50,12 @@ After installation, verify the CLI is available:
 mp --version
 ```
 
-You should see output like:
-
-```
-mixpanel_data 0.4.0
-```
+You should see the installed version printed.
 
 Test the Python import:
 
 ```python
-import mixpanel_data as mp
+import mixpanel_headless as mp
 print(mp.__version__)
 ```
 

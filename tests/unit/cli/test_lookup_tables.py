@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import typer.testing
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 runner = typer.testing.CliRunner()
 
@@ -27,7 +27,7 @@ runner = typer.testing.CliRunner()
 class TestLookupTablesList:
     """Tests for mp lookup-tables list."""
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_returns_json_list(self, mock_get_ws: MagicMock) -> None:
         """Successful list returns JSON list of lookup tables."""
         mock_ws = MagicMock()
@@ -48,7 +48,7 @@ class TestLookupTablesList:
         assert isinstance(data, list)
         assert data[0]["name"] == "countries"
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_list_with_data_group_id(self, mock_get_ws: MagicMock) -> None:
         """List with --data-group-id passes it to workspace."""
         mock_ws = MagicMock()
@@ -58,7 +58,7 @@ class TestLookupTablesList:
         runner.invoke(app, ["lookup-tables", "list", "--data-group-id", "42"])
         mock_ws.list_lookup_tables.assert_called_once_with(data_group_id=42)
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_list_without_data_group_id(self, mock_get_ws: MagicMock) -> None:
         """List without --data-group-id passes None."""
         mock_ws = MagicMock()
@@ -72,7 +72,7 @@ class TestLookupTablesList:
 class TestLookupTablesUpload:
     """Tests for mp lookup-tables upload."""
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_upload_returns_json(self, mock_get_ws: MagicMock, tmp_path: Path) -> None:
         """Successful upload returns JSON."""
         csv_file = tmp_path / "data.csv"
@@ -103,7 +103,7 @@ class TestLookupTablesUpload:
         data = json.loads(result.stdout)
         assert data["name"] == "my-table"
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_upload_missing_file_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Missing CSV file exits with code 3 (INVALID_ARGS)."""
         mock_ws = MagicMock()
@@ -122,7 +122,7 @@ class TestLookupTablesUpload:
         )
         assert result.exit_code == 3
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_upload_with_data_group_id(
         self, mock_get_ws: MagicMock, tmp_path: Path
     ) -> None:
@@ -158,7 +158,7 @@ class TestLookupTablesUpload:
 class TestLookupTablesUpdate:
     """Tests for mp lookup-tables update."""
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_update_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful update returns JSON."""
         mock_ws = MagicMock()
@@ -182,7 +182,7 @@ class TestLookupTablesUpdate:
         data = json.loads(result.stdout)
         assert data["name"] == "renamed-table"
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_update_passes_params(self, mock_get_ws: MagicMock) -> None:
         """Update passes data_group_id and params to workspace."""
         mock_ws = MagicMock()
@@ -209,7 +209,7 @@ class TestLookupTablesUpdate:
 class TestLookupTablesDelete:
     """Tests for mp lookup-tables delete."""
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_delete_succeeds(self, mock_get_ws: MagicMock) -> None:
         """Successful delete exits with code 0."""
         mock_ws = MagicMock()
@@ -222,7 +222,7 @@ class TestLookupTablesDelete:
         assert result.exit_code == 0
         mock_ws.delete_lookup_tables.assert_called_once_with([1, 2, 3])
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_delete_invalid_ids_exits_3(self, mock_get_ws: MagicMock) -> None:
         """Non-integer data group IDs exit with code 3."""
         mock_ws = MagicMock()
@@ -237,7 +237,7 @@ class TestLookupTablesDelete:
 class TestLookupTablesUploadUrl:
     """Tests for mp lookup-tables upload-url."""
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_upload_url_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful upload-url returns JSON with URL info."""
         mock_ws = MagicMock()
@@ -255,7 +255,7 @@ class TestLookupTablesUploadUrl:
         data = json.loads(result.stdout)
         assert "url" in data
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_upload_url_with_content_type(self, mock_get_ws: MagicMock) -> None:
         """Upload-url with --content-type passes it to workspace."""
         mock_ws = MagicMock()
@@ -273,7 +273,7 @@ class TestLookupTablesUploadUrl:
 class TestLookupTablesDownload:
     """Tests for mp lookup-tables download."""
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_download_to_stdout(self, mock_get_ws: MagicMock) -> None:
         """Download without --output prints CSV to stdout."""
         mock_ws = MagicMock()
@@ -286,7 +286,7 @@ class TestLookupTablesDownload:
         assert result.exit_code == 0
         assert "id,name" in result.stdout
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_download_to_file(self, mock_get_ws: MagicMock, tmp_path: Path) -> None:
         """Download with --output writes CSV to file."""
         mock_ws = MagicMock()
@@ -309,7 +309,7 @@ class TestLookupTablesDownload:
         assert out_file.exists()
         assert out_file.read_text() == "id,name\n1,foo\n"
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_download_with_options(self, mock_get_ws: MagicMock) -> None:
         """Download passes file_name and limit to workspace."""
         mock_ws = MagicMock()
@@ -337,7 +337,7 @@ class TestLookupTablesDownload:
 class TestLookupTablesDownloadUrl:
     """Tests for mp lookup-tables download-url."""
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_download_url_returns_json(self, mock_get_ws: MagicMock) -> None:
         """Successful download-url returns JSON with url field."""
         mock_ws = MagicMock()
@@ -353,7 +353,7 @@ class TestLookupTablesDownloadUrl:
         data = json.loads(result.stdout)
         assert data["url"] == "https://storage.example.com/download/abc"
 
-    @patch("mixpanel_data.cli.commands.lookup_tables.get_workspace")
+    @patch("mixpanel_headless.cli.commands.lookup_tables.get_workspace")
     def test_download_url_passes_id(self, mock_get_ws: MagicMock) -> None:
         """Download-url passes data_group_id to workspace."""
         mock_ws = MagicMock()

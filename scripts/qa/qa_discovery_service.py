@@ -117,7 +117,7 @@ def main() -> int:
 
     # Test 1.2: Config file exists
     def test_config_exists() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         path = config.config_path
@@ -130,7 +130,7 @@ def main() -> int:
 
     # Test 1.3: Resolve credentials
     def test_resolve_credentials() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials()
@@ -158,8 +158,8 @@ def main() -> int:
     # Test 2.1: Create API client
     def test_create_client() -> dict[str, Any]:
         nonlocal api_client
-        from mixpanel_data._internal.api_client import MixpanelAPIClient
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.api_client import MixpanelAPIClient
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials()
@@ -241,7 +241,7 @@ def main() -> int:
     # Test 3.1: Create Discovery Service
     def test_create_discovery() -> dict[str, Any]:
         nonlocal discovery
-        from mixpanel_data._internal.services.discovery import DiscoveryService
+        from mixpanel_headless._internal.services.discovery import DiscoveryService
 
         assert api_client is not None
         discovery = DiscoveryService(api_client)

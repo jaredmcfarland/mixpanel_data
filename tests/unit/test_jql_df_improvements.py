@@ -10,7 +10,7 @@ These tests demonstrate handling of common JQL result structures:
 import pandas as pd
 import pytest
 
-from mixpanel_data.types import JQLResult
+from mixpanel_headless.types import JQLResult
 
 
 class TestJQLResultGroupByStructure:

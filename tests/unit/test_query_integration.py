@@ -12,12 +12,12 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import SecretStr
 
-from mixpanel_data import Filter, Formula, Metric, Workspace
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.exceptions import QueryError
-from mixpanel_data.types import QueryResult
+from mixpanel_headless import Filter, Formula, Metric, Workspace
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.exceptions import QueryError
+from mixpanel_headless.types import QueryResult
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
 _TEST_SESSION = Session(
@@ -270,7 +270,7 @@ class TestFormulaIntegration:
         self, ws: Workspace, mock_api_client: MagicMock
     ) -> None:
         """Formula query returns result with formula series."""
-        from mixpanel_data import Metric
+        from mixpanel_headless import Metric
 
         mock_api_client.insights_query.return_value = FORMULA_RESPONSE
         result = ws.query(

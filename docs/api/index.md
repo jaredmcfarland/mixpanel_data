@@ -1,9 +1,9 @@
 # API Overview
 
-The `mixpanel_data` Python API provides programmatic access to all library functionality.
+The `mixpanel_headless` Python API provides programmatic access to all library functionality.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Python API Reference →](https://deepwiki.com/jaredmcfarland/mixpanel_data/7.2-python-api-reference)**
+    🤖 **[Python API Reference →](https://deepwiki.com/mixpanel/mixpanel-headless/7.2-python-api-reference)**
 
     Ask questions about API methods, explore usage patterns, or get help with specific functionality.
 
@@ -11,72 +11,72 @@ The `mixpanel_data` Python API provides programmatic access to all library funct
 
 ```python
 # Recommended: import with alias
-import mixpanel_data as mp
+import mixpanel_headless as mp
 
 ws = mp.Workspace()
 result = ws.query("Login", math="unique", last=30)
 
 # Direct imports
-from mixpanel_data import Workspace, MixpanelDataError
+from mixpanel_headless import Workspace, MixpanelHeadlessError
 
 # Insights Query types
-from mixpanel_data import (
+from mixpanel_headless import (
     Metric, Filter, Formula, GroupBy, QueryResult,
     MathType, PerUserAggregation, FilterPropertyType,
 )
 
 # Cohort Query types (cross-engine)
-from mixpanel_data import (
+from mixpanel_headless import (
     CohortBreakdown, CohortMetric,
     CohortDefinition, CohortCriteria,
 )
 
 # Advanced Query types (cross-engine)
-from mixpanel_data import TimeComparison, FrequencyBreakdown, FrequencyFilter
+from mixpanel_headless import TimeComparison, FrequencyBreakdown, FrequencyFilter
 
 # Retention Query types
-from mixpanel_data import RetentionEvent, RetentionQueryResult
+from mixpanel_headless import RetentionEvent, RetentionQueryResult
 
 # Flow Query types
-from mixpanel_data import FlowStep, FlowTreeNode, FlowQueryResult
+from mixpanel_headless import FlowStep, FlowTreeNode, FlowQueryResult
 
 # User Profile Query types
-from mixpanel_data import UserQueryResult
+from mixpanel_headless import UserQueryResult
 
 # Auth surface — recommended top-level imports
-from mixpanel_data import (
+from mixpanel_headless import (
     Account, ServiceAccount, OAuthBrowserAccount, OAuthTokenAccount,
     Session, Project, WorkspaceRef, Region,
     AccountSummary, AccountTestResult, OAuthLoginResult, Target,
 )
 # Account/Session/WorkspaceRef/account variants are also available from
-# mixpanel_data.auth_types (single source of truth for the auth subsystem);
+# mixpanel_headless.auth_types (single source of truth for the auth subsystem);
 # the top-level form is canonical throughout the docs.
 
-# Low-level types live only under mixpanel_data.auth_types
-from mixpanel_data.auth_types import (
+# Low-level types live only under mixpanel_headless.auth_types
+from mixpanel_headless.auth_types import (
     OAuthTokens, OAuthClientInfo, TokenResolver, OnDiskTokenResolver,
     BridgeFile, load_bridge, ActiveSession,
 )
 
 # Functional namespaces
-from mixpanel_data import accounts, session, targets
+from mixpanel_headless import accounts, session, targets
 
 # OAuth and workspace exceptions
-from mixpanel_data import OAuthError, WorkspaceScopeError
+from mixpanel_headless import OAuthError, WorkspaceScopeError
 
 # App API types
-from mixpanel_data import PublicWorkspace, CursorPagination, PaginatedResponse
+from mixpanel_headless import PublicWorkspace, CursorPagination, PaginatedResponse
 
 # Entity CRUD types
-from mixpanel_data import (
+from mixpanel_headless import (
     Dashboard, CreateDashboardParams, UpdateDashboardParams,
     Bookmark, CreateBookmarkParams, UpdateBookmarkParams,
     Cohort, CreateCohortParams, UpdateCohortParams,
 )
 
 # Data governance types
-from mixpanel_data import (
+from mixpanel_headless import (
     EventDefinition, UpdateEventDefinitionParams,
     DropFilter, CreateDropFilterParams,
     CustomProperty, CreateCustomPropertyParams,
@@ -84,7 +84,7 @@ from mixpanel_data import (
 )
 
 # Schema governance types
-from mixpanel_data import (
+from mixpanel_headless import (
     SchemaEntry, BulkCreateSchemasParams,
     SchemaEnforcementConfig, AuditResponse,
     DataVolumeAnomaly, EventDeletionRequest,
@@ -111,17 +111,17 @@ The main entry point for all operations:
 
 ### Auth Surface
 
-Three first-class account types and three functional namespaces. Most are re-exported from `mixpanel_data`; a few low-level types live under `mixpanel_data.auth_types`:
+Three first-class account types and three functional namespaces. Most are re-exported from `mixpanel_headless`; a few low-level types live under `mixpanel_headless.auth_types`:
 
 - **`Account`** — Discriminated union over `ServiceAccount` (Basic Auth), `OAuthBrowserAccount` (PKCE flow, auto-refreshed), `OAuthTokenAccount` (static bearer for CI/agents)
 - **`Session` / `Project` / `WorkspaceRef`** — Immutable resolved-state types (top-level)
-- **`ActiveSession`** — Persisted `[active]`-block snapshot (only from `mixpanel_data.auth_types`)
+- **`ActiveSession`** — Persisted `[active]`-block snapshot (only from `mixpanel_headless.auth_types`)
 - **`mp.accounts`** — Account lifecycle: `add`, `list`, `use`, `show`, `test`, `login`, `logout`, `token`, `export_bridge`, `remove_bridge`, `update`, `remove`
 - **`mp.session`** — Read/write the persisted `[active]` block: `show`, `use`
 - **`mp.targets`** — Saved (account, project, optional workspace) cursor positions: `list`, `add`, `use`, `show`, `remove`
 - **`AccountSummary` / `AccountTestResult` / `OAuthLoginResult` / `Target`** — Result types
-- **`OAuthTokens`** — Low-level token type, available from `mixpanel_data.auth_types`
-- **`BridgeFile` / `load_bridge`** — Cowork bridge v2 integration, available from `mixpanel_data.auth_types`
+- **`OAuthTokens`** — Low-level token type, available from `mixpanel_headless.auth_types`
+- **`BridgeFile` / `load_bridge`** — Cowork bridge v2 integration, available from `mixpanel_headless.auth_types`
 
 [View Auth API](auth.md)
 
@@ -129,7 +129,7 @@ Three first-class account types and three functional namespaces. Most are re-exp
 
 Structured error handling:
 
-- **MixpanelDataError** — Base exception
+- **MixpanelHeadlessError** — Base exception
 - **APIError** — HTTP/API errors
 - **ConfigError** — Configuration errors
 - **OAuthError** — OAuth authentication errors
@@ -165,8 +165,8 @@ Typed results for all operations:
 The library exports these type aliases:
 
 ```python
-from mixpanel_data import CountType, HourDayUnit, TimeUnit, FilterDateUnit
-from mixpanel_data import FilterOperator, FlowCountType, FlowChartType
+from mixpanel_headless import CountType, HourDayUnit, TimeUnit, FilterDateUnit
+from mixpanel_headless import FilterOperator, FlowCountType, FlowChartType
 
 # CountType: Literal["general", "unique", "average", "median", "min", "max"]
 # HourDayUnit: Literal["hour", "day"]

@@ -23,11 +23,11 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from mixpanel_data._internal.api_client import MixpanelAPIClient
-from mixpanel_data._internal.auth.account import ServiceAccount
-from mixpanel_data._internal.auth.session import Project, Session
-from mixpanel_data.types import PublicWorkspace
-from mixpanel_data.workspace import Workspace
+from mixpanel_headless._internal.api_client import MixpanelAPIClient
+from mixpanel_headless._internal.auth.account import ServiceAccount
+from mixpanel_headless._internal.auth.session import Project, Session
+from mixpanel_headless.types import PublicWorkspace
+from mixpanel_headless.workspace import Workspace
 from tests.conftest import make_session
 
 # ---- 042 redesign: canonical fake Session for Workspace(session=…) ----
@@ -159,7 +159,7 @@ class TestWorkspaceConstructionWithOAuth:
 
     def test_workspace_with_oauth_credentials(self) -> None:
         """An OAuth-typed Session yields ``_credentials.auth_method == oauth``."""
-        from mixpanel_data._internal.auth.account import OAuthTokenAccount
+        from mixpanel_headless._internal.auth.account import OAuthTokenAccount
 
         oauth_creds = _make_oauth_credentials()
         transport = httpx.MockTransport(_make_workspace_handler())
@@ -175,13 +175,13 @@ class TestWorkspaceConstructionWithOAuth:
         )
         ws = Workspace(session=oauth_session, _api_client=client)
 
-        from mixpanel_data._internal.auth.account import OAuthTokenAccount
+        from mixpanel_headless._internal.auth.account import OAuthTokenAccount
 
         assert isinstance(ws.session.account, OAuthTokenAccount)
 
     def test_workspace_backward_compat_basic_auth(self) -> None:
         """A service-account Session resolves through the ServiceAccount path."""
-        from mixpanel_data._internal.auth.account import ServiceAccount
+        from mixpanel_headless._internal.auth.account import ServiceAccount
 
         basic_creds = _make_basic_credentials()
         transport = httpx.MockTransport(lambda _r: httpx.Response(200, json=[]))

@@ -20,11 +20,11 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from mixpanel_data._internal.bookmark_builders import (
+from mixpanel_headless._internal.bookmark_builders import (
     build_filter_entry,
     build_group_section,
 )
-from mixpanel_data.types import (
+from mixpanel_headless.types import (
     CohortBreakdown,
     CohortCriteria,
     CohortDefinition,

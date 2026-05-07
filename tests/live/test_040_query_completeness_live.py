@@ -29,7 +29,7 @@ from typing import Any
 
 import pytest
 
-from mixpanel_data import (
+from mixpanel_headless import (
     BookmarkValidationError,
     CohortCriteria,
     Filter,
@@ -45,7 +45,7 @@ from mixpanel_data import (
     TimeComparison,
     Workspace,
 )
-from mixpanel_data.exceptions import APIError, QueryError
+from mixpanel_headless.exceptions import APIError, QueryError
 
 # All tests require the `live` marker — skipped by default
 pytestmark = pytest.mark.live

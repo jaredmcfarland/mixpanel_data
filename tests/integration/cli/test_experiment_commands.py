@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from mixpanel_data.cli.main import app
+from mixpanel_headless.cli.main import app
 
 
 class TestExperimentsList:
@@ -17,7 +17,7 @@ class TestExperimentsList:
     def test_list_json(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test experiments list in JSON format."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "list", "--format", "json"])
@@ -32,7 +32,7 @@ class TestExperimentsList:
     ) -> None:
         """Test experiments list in table format."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -46,7 +46,7 @@ class TestExperimentsList:
     ) -> None:
         """Test experiments list with include-archived flag."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -59,7 +59,7 @@ class TestExperimentsList:
         """Test experiments list with no results."""
         mock_workspace.list_experiments.return_value = []
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "list", "--format", "json"])
@@ -76,7 +76,7 @@ class TestExperimentsCreate:
     ) -> None:
         """Test creating an experiment with only a name."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -91,7 +91,7 @@ class TestExperimentsCreate:
     ) -> None:
         """Test creating an experiment with all options."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -122,7 +122,7 @@ class TestExperimentsCreate:
     ) -> None:
         """Test creating an experiment with invalid JSON settings fails."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -145,7 +145,7 @@ class TestExperimentsGet:
     def test_get(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test getting a single experiment by ID."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "get", "xyz-456"])
@@ -162,7 +162,7 @@ class TestExperimentsUpdate:
     ) -> None:
         """Test updating an experiment name."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -175,7 +175,7 @@ class TestExperimentsUpdate:
     ) -> None:
         """Test updating an experiment with JSON fields."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -209,7 +209,7 @@ class TestExperimentsUpdate:
     ) -> None:
         """Test updating with invalid variants JSON fails."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -225,7 +225,7 @@ class TestExperimentsDelete:
     def test_delete(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test deleting an experiment."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "delete", "xyz-456"])
@@ -239,7 +239,7 @@ class TestExperimentsLaunch:
     def test_launch(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test launching an experiment."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "launch", "xyz-456"])
@@ -257,7 +257,7 @@ class TestExperimentsConclude:
     ) -> None:
         """Test concluding an experiment without an end date."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "conclude", "xyz-456"])
@@ -271,7 +271,7 @@ class TestExperimentsConclude:
     ) -> None:
         """Test concluding an experiment with an end date."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -291,7 +291,7 @@ class TestExperimentsDecide:
     ) -> None:
         """Test deciding an experiment as successful."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -318,7 +318,7 @@ class TestExperimentsDecide:
     ) -> None:
         """Test deciding an experiment as not successful."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -335,7 +335,7 @@ class TestExperimentsArchive:
     def test_archive(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test archiving an experiment."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "archive", "xyz-456"])
@@ -349,7 +349,7 @@ class TestExperimentsRestore:
     def test_restore(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test restoring an archived experiment."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "restore", "xyz-456"])
@@ -372,7 +372,7 @@ class TestExperimentsDuplicate:
     ) -> None:
         """Test duplicating an experiment with a name."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(
@@ -391,7 +391,7 @@ class TestExperimentsErf:
     def test_erf(self, cli_runner: CliRunner, mock_workspace: MagicMock) -> None:
         """Test listing ERF experiments."""
         with patch(
-            "mixpanel_data.cli.commands.experiments.get_workspace",
+            "mixpanel_headless.cli.commands.experiments.get_workspace",
             return_value=mock_workspace,
         ):
             result = cli_runner.invoke(app, ["experiments", "erf"])

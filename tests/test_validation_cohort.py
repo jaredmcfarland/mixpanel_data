@@ -18,12 +18,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mixpanel_data._internal.validation import (
+from mixpanel_headless._internal.validation import (
     validate_bookmark,
     validate_retention_args,
 )
-from mixpanel_data.exceptions import ValidationError
-from mixpanel_data.types import CohortBreakdown, GroupBy
+from mixpanel_headless.exceptions import ValidationError
+from mixpanel_headless.types import CohortBreakdown, GroupBy
 
 # =============================================================================
 # Helpers

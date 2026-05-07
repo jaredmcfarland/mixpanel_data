@@ -1,10 +1,10 @@
-site_name: mixpanel_data
+site_name: mixpanel_headless
 site_description: Python library for working with Mixpanel analytics data, designed for AI coding agents
 site_author: Jared McFarland
-site_url: https://jaredmcfarland.github.io/mixpanel_data/
+site_url: https://mixpanel.github.io/mixpanel-headless/
 
-repo_name: jaredmcfarland/mixpanel_data
-repo_url: https://github.com/jaredmcfarland/mixpanel_data
+repo_name: mixpanel/mixpanel-headless
+repo_url: https://github.com/mixpanel/mixpanel-headless
 
 theme:
   name: material
@@ -78,8 +78,6 @@ plugins:
           - getting-started/installation.md
           - getting-started/quickstart.md
           - getting-started/configuration.md
-        Migration:
-          - migration/0.4.0.md
         User Guide:
           - guide/unified-query-system.md
           - guide/discovery.md
@@ -125,7 +123,7 @@ plugins:
       # pawamoy's plugin - handles all llms.txt generation from HTML
       full_output: llms-full.txt
       markdown_description: |
-        mixpanel_data is a complete programmable interface to Mixpanel analytics.
+        mixpanel_headless is a complete programmable interface to Mixpanel analytics.
         Python library and CLI for discovery, querying, streaming, and entity management.
         Discover your schema, run live analytics (segmentation, funnels, retention, flows),
         execute JQL, and stream data for processing.
@@ -135,8 +133,6 @@ plugins:
           - getting-started/installation.md: "Install with pip or uv"
           - getting-started/quickstart.md: "First queries in 5 minutes"
           - getting-started/configuration.md: "Accounts, env vars, config files"
-        Migration:
-          - migration/0.4.0.md: "Upgrade from 0.3.x to 0.4.0 (auth architecture redesign)"
         User Guide:
           - guide/unified-query-system.md: "Unified query system — one vocabulary, four analytics engines"
           - guide/discovery.md: "Explore schema, events, properties, cohorts"
@@ -183,8 +179,6 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
-  - Migration:
-      - From 0.3.x to 0.4.0: migration/0.4.0.md
   - User Guide:
       - The Unified Query System: guide/unified-query-system.md
       - Data Discovery: guide/discovery.md
@@ -213,4 +207,4 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/jaredmcfarland/mixpanel_data
+      link: https://github.com/mixpanel/mixpanel-headless

@@ -17,7 +17,7 @@ Manage Mixpanel data governance programmatically: Lexicon definitions (events, p
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -352,7 +352,7 @@ Drop filters suppress events at ingestion time, preventing them from being store
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -453,7 +453,7 @@ Custom properties are computed properties defined by formulas or behaviors. They
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -594,7 +594,7 @@ The `/custom_events/` endpoints (used by `create_custom_event`) return the typed
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -617,7 +617,7 @@ Create a new custom event by giving it a display name and the list of underlying
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -703,7 +703,7 @@ Lookup tables are CSV-based reference data used to enrich event and profile prop
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 
@@ -867,7 +867,7 @@ Manage JSON Schema Draft 7 definitions in Mixpanel's schema registry. Schemas de
 === "Python"
 
     ```python
-    import mixpanel_data as mp
+    import mixpanel_headless as mp
 
     ws = mp.Workspace()
 

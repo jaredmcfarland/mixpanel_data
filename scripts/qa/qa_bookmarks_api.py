@@ -31,15 +31,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mixpanel_data._internal.api_client import MixpanelAPIClient
-    from mixpanel_data._internal.services.discovery import DiscoveryService
-    from mixpanel_data._internal.services.live_query import LiveQueryService
-    from mixpanel_data.types import (
+    from mixpanel_headless._internal.api_client import MixpanelAPIClient
+    from mixpanel_headless._internal.services.discovery import DiscoveryService
+    from mixpanel_headless._internal.services.live_query import LiveQueryService
+    from mixpanel_headless.types import (
         BookmarkInfo,
         FlowsResult,
         SavedReportResult,
     )
-    from mixpanel_data.workspace import Workspace
+    from mixpanel_headless.workspace import Workspace
 
 
 @dataclass
@@ -148,8 +148,8 @@ def main() -> int:
 
     # Test 1.1: Import Workspace and types
     def test_imports() -> dict[str, Any]:
-        from mixpanel_data import Workspace  # noqa: F401
-        from mixpanel_data.types import (
+        from mixpanel_headless import Workspace  # noqa: F401
+        from mixpanel_headless.types import (
             BookmarkInfo,  # noqa: F401
             BookmarkType,  # noqa: F401
             FlowsResult,  # noqa: F401
@@ -176,7 +176,7 @@ def main() -> int:
 
     # Test 1.2: Config file exists
     def test_config_exists() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         path = config.config_path
@@ -189,7 +189,7 @@ def main() -> int:
 
     # Test 1.3: Resolve credentials (uses default account)
     def test_resolve_credentials() -> dict[str, Any]:
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials()  # Use default account
@@ -214,8 +214,8 @@ def main() -> int:
     # Test 2.1: Create API client
     def test_create_client() -> dict[str, Any]:
         nonlocal api_client
-        from mixpanel_data._internal.api_client import MixpanelAPIClient
-        from mixpanel_data._internal.config import ConfigManager
+        from mixpanel_headless._internal.api_client import MixpanelAPIClient
+        from mixpanel_headless._internal.config import ConfigManager
 
         config = ConfigManager()
         creds = config.resolve_credentials()  # Use default account
@@ -232,7 +232,7 @@ def main() -> int:
     # Test 2.2: Create DiscoveryService
     def test_create_discovery() -> dict[str, Any]:
         nonlocal discovery
-        from mixpanel_data._internal.services.discovery import DiscoveryService
+        from mixpanel_headless._internal.services.discovery import DiscoveryService
 
         assert api_client is not None
         discovery = DiscoveryService(api_client)
@@ -247,7 +247,7 @@ def main() -> int:
     # Test 2.3: Create LiveQueryService
     def test_create_live_query() -> dict[str, Any]:
         nonlocal live_query
-        from mixpanel_data._internal.services.live_query import LiveQueryService
+        from mixpanel_headless._internal.services.live_query import LiveQueryService
 
         assert api_client is not None
         live_query = LiveQueryService(api_client)
@@ -262,7 +262,7 @@ def main() -> int:
     # Test 2.4: Create Workspace
     def test_create_workspace() -> dict[str, Any]:
         nonlocal ws
-        from mixpanel_data import Workspace
+        from mixpanel_headless import Workspace
 
         # Note: ephemeral() returns a context manager, so we use it as one
         ctx = Workspace.ephemeral()  # Use default account
@@ -299,7 +299,7 @@ def main() -> int:
     # Test 3.2: list_bookmarks() via DiscoveryService
     def test_discovery_list_bookmarks() -> dict[str, Any]:
         nonlocal all_bookmarks
-        from mixpanel_data.types import BookmarkInfo
+        from mixpanel_headless.types import BookmarkInfo
 
         assert discovery is not None
         all_bookmarks = discovery.list_bookmarks()
@@ -507,7 +507,7 @@ def main() -> int:
     # Test 4.2: query_saved_report() via LiveQueryService
     def test_live_query_saved_report() -> dict[str, Any]:
         nonlocal saved_report_result
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         assert live_query is not None
         assert test_bookmark_id is not None
@@ -534,7 +534,7 @@ def main() -> int:
 
     # Test 4.3: query_saved_report() via Workspace
     def test_workspace_query_saved_report() -> dict[str, Any]:
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         assert ws is not None
         assert test_bookmark_id is not None
@@ -637,7 +637,7 @@ def main() -> int:
 
     # Test 4.7: Query retention report (if available)
     def test_query_retention_report() -> dict[str, Any]:
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         if not retention_bookmarks:
             return {"skipped": "No retention bookmarks available"}
@@ -656,7 +656,7 @@ def main() -> int:
 
     # Test 4.8: Query funnel report (if available)
     def test_query_funnel_report() -> dict[str, Any]:
-        from mixpanel_data.types import SavedReportResult
+        from mixpanel_headless.types import SavedReportResult
 
         if not funnels_bookmarks:
             return {"skipped": "No funnel bookmarks available"}
@@ -699,7 +699,7 @@ def main() -> int:
     # Test 5.2: query_flows() via LiveQueryService
     def test_live_query_flows() -> dict[str, Any]:
         nonlocal flows_result
-        from mixpanel_data.types import FlowsResult
+        from mixpanel_headless.types import FlowsResult
 
         if not flows_bookmarks:
             return {"skipped": "No flows bookmarks available"}
@@ -720,7 +720,7 @@ def main() -> int:
 
     # Test 5.3: query_flows() via Workspace
     def test_workspace_query_flows() -> dict[str, Any]:
-        from mixpanel_data.types import FlowsResult
+        from mixpanel_headless.types import FlowsResult
 
         if not flows_bookmarks:
             return {"skipped": "No flows bookmarks available"}
@@ -811,7 +811,7 @@ def main() -> int:
 
     # Test 6.1: query_saved_report() with invalid bookmark ID
     def test_query_invalid_bookmark() -> dict[str, Any]:
-        from mixpanel_data.exceptions import QueryError
+        from mixpanel_headless.exceptions import QueryError
 
         assert live_query is not None
         try:
@@ -826,7 +826,7 @@ def main() -> int:
 
     # Test 6.2: query_flows() with invalid bookmark ID
     def test_query_flows_invalid_bookmark() -> dict[str, Any]:
-        from mixpanel_data.exceptions import QueryError
+        from mixpanel_headless.exceptions import QueryError
 
         assert live_query is not None
         try:
