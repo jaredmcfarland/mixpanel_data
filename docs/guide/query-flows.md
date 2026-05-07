@@ -2,7 +2,8 @@
 
 Build typed flow path analysis against Mixpanel's Insights engine — define anchor events, control forward/reverse step depth, apply per-step filters, and analyze user paths inline without creating saved reports first.
 
-`Workspace.query_flow()` is the typed way to run flow analysis programmatically. It supports capabilities not available through the legacy `query_saved_flows()` method, including per-step filters, direction controls, multiple visualization modes, NetworkX graph output, and typed result analysis.
+!!! tip "Recommended"
+    `Workspace.query_flow()` is the typed way to run flow analysis programmatically. It supports capabilities not available through the legacy `query_saved_flows()` method, including per-step filters, direction controls, multiple visualization modes, NetworkX graph output, and typed result analysis.
 
 ## When to Use `query_flow()`
 

@@ -2,7 +2,8 @@
 
 Build typed analytics queries against Mixpanel's Insights engine — the same engine that powers the Mixpanel web UI.
 
-`Workspace.query()` is the primary way to run analytics queries programmatically. It supports capabilities not available through the legacy query methods, including DAU/WAU/MAU, multi-metric comparison, formulas, per-user aggregation, rolling windows, and percentiles.
+!!! tip "Recommended"
+    `Workspace.query()` is the primary way to run analytics queries programmatically. It supports capabilities not available through the legacy query methods, including DAU/WAU/MAU, multi-metric comparison, formulas, per-user aggregation, rolling windows, and percentiles.
 
 ## When to Use `query()`
 
