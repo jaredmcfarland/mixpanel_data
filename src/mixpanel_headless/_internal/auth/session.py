@@ -311,9 +311,8 @@ class ActiveSession(BaseModel):
 
     Only ``account`` and ``workspace`` live in ``[active]``. Project lives
     on the account itself as ``Account.default_project`` — switching
-    accounts implicitly switches projects (per FR-033). Any legacy
-    ``[active].project`` field is rejected by ``extra="forbid"`` to surface
-    the migration loudly.
+    accounts implicitly switches projects. Unknown keys (including
+    ``project``) are rejected by ``extra="forbid"``.
 
     Both fields are optional — environment variables or per-command flags
     can supply each one independently.

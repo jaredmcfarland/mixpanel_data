@@ -50,11 +50,7 @@ After installation, verify the CLI is available:
 mp --version
 ```
 
-You should see output like:
-
-```
-mixpanel_headless 0.4.0
-```
+You should see the installed version printed.
 
 Test the Python import:
 

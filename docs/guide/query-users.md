@@ -2,8 +2,7 @@
 
 Query user profiles from Mixpanel's Engage API — filter by properties, sort, select fields, count matching profiles, and fetch large result sets with parallel pagination. Uses the same `Filter` vocabulary as all other query engines.
 
-!!! tip "New in v0.2"
-    `Workspace.query_user()` is the 5th engine in the unified query system. It answers **identity** questions ("who are these users?") that complement the behavioral questions answered by insights, funnels, retention, and flows.
+`Workspace.query_user()` is the 5th engine in the unified query system. It answers **identity** questions ("who are these users?") that complement the behavioral questions answered by insights, funnels, retention, and flows.
 
 ## When to Use `query_user()`
 

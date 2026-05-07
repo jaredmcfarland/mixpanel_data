@@ -2,8 +2,7 @@
 
 Build typed retention analysis against Mixpanel's Insights engine — define born/return event pairs, retention periods, custom buckets, and segmentation inline without creating saved reports first.
 
-!!! tip "New in v0.4"
-    `Workspace.query_retention()` is the typed way to run retention analysis programmatically. It supports capabilities not available through the legacy `retention()` method, including per-event filters, custom retention buckets, alignment modes, display modes, and typed breakdowns.
+`Workspace.query_retention()` is the typed way to run retention analysis programmatically. It supports capabilities not available through the legacy `retention()` method, including per-event filters, custom retention buckets, alignment modes, display modes, and typed breakdowns.
 
 ## When to Use `query_retention()`
 

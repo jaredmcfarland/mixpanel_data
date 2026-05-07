@@ -29,8 +29,6 @@ mp --version
 
 ## Quick Start
 
-> **What's new in 0.4.0:** Three first-class account types (`service_account` / `oauth_browser` / `oauth_token`), single resolver (`env > param > target > bridge > [active]`), fluent in-session switching via `Workspace.use(...)`, new CLI groups (`mp account` / `mp project` / `mp workspace` / `mp target` / `mp session`). **Hard break from 0.3.x** — see [Migration → 0.3.x to 0.4.0](docs/migration/0.4.0.md) for the upgrade walkthrough.
-
 ### 1. Authenticate
 
 **Option A: OAuth Login (interactive, recommended)**
@@ -352,7 +350,7 @@ Key design features:
 
 ## Claude Code Plugin
 
-This project includes a Claude Code plugin (v5.1) that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_headless` + `pandas` rather than calling CLI commands or MCP tools.
+This project includes a Claude Code plugin that turns Claude into a senior data analyst. The plugin is **CodeMode-first**: Claude writes Python code using `mixpanel_headless` + `pandas` rather than calling CLI commands or MCP tools.
 
 The plugin is built around the 5-engine query taxonomy — `query()`, `query_funnel()`, `query_retention()`, `query_flow()`, and `query_user()` — with full cohort-scoped query support. Claude translates natural language analytics questions into typed query calls with filters, breakdowns, formulas, cohort definitions, and aggregations, then interprets results as DataFrames.
 

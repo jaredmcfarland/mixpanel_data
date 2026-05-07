@@ -9,12 +9,9 @@
 In-session switching is a one-line operation: `Workspace.use(account=..., project=..., workspace=..., target=...)`. The underlying HTTP client and per-account `/me` cache are preserved across switches, so cross-project / cross-account iteration is O(1) per turn.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Authentication Setup →](https://deepwiki.com/mixpanel/mixpanel-headless/2.2-authentication-setup)** (updated for 0.4.0)
+    🤖 **[Authentication Setup →](https://deepwiki.com/mixpanel/mixpanel-headless/2.2-authentication-setup)**
 
     Ask questions about service accounts, OAuth, environment variables, or multi-account configuration.
-
-!!! info "Upgrading from 0.3.x?"
-    The 0.4.0 auth schema is a hard break — legacy `~/.mp/config.toml` files do not load. See [Migration → From 0.3.x to 0.4.0](../migration/0.4.0.md) for the recovery recipe.
 
 ## Account Types
 
@@ -351,4 +348,3 @@ Mixpanel stores data in regional data centers. Use the correct region for your p
 - [Quick Start](quickstart.md) — Run your first queries
 - [API → Auth](../api/auth.md) — Full Python API reference for accounts, sessions, and targets
 - [CLI Reference](../cli/index.md) — Complete CLI command reference
-- [Migration → 0.3.x → 0.4.0](../migration/0.4.0.md) — Upgrade walkthrough

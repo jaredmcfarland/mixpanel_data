@@ -504,13 +504,11 @@ class TestSessionCli:
 
 
 class TestConfigCli:
-    """``mp config`` no longer exists (Fix 12 deleted the stub group).
+    """``mp config`` does not exist as a CLI command group.
 
-    Under the alpha "free to break" lens there are no v1/v2 users to
-    migrate, so the placeholder converter is gone instead of waiting
-    for Phase 10. A v1/v2 ``~/.mp/config.toml`` now fails at the
-    Pydantic validation layer with a generic-but-honest "unexpected key"
-    error and the user is told to delete and re-add.
+    A ``~/.mp/config.toml`` with unknown keys fails at the Pydantic
+    validation layer with a generic-but-honest "unexpected key" error
+    and the user is told to delete and re-add.
     """
 
     def test_no_mp_config_command(self, runner: CliRunner) -> None:

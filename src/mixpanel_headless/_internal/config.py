@@ -129,8 +129,9 @@ class ConfigManager:
 
     Notes:
         - File creation enforces mode ``0o600`` and parent dir ``0o700``.
-        - Unknown keys are rejected at Pydantic validation (no migration
-          path — wipe and re-add via ``mp account add``).
+        - Unknown keys are rejected at Pydantic validation. To recover
+          from a corrupted config, delete it and re-add accounts via
+          ``mp account add``.
     """
 
     def __init__(self, *, config_path: Path | None = None) -> None:
@@ -205,9 +206,8 @@ class ConfigManager:
         Before the write, ``_validate_raw`` runs a whole-file pass over
         every account block. The per-mutator helpers only validate the
         block they touched, so this is the safety net that keeps an
-        externally-corrupted file (legacy v1/v2 schema, hand-edit, future
-        migration bug) from being silently rewritten with a fresh-but-
-        incomplete repair.
+        externally-corrupted file (hand-edit or future bug) from being
+        silently rewritten with a fresh-but-incomplete repair.
 
         Yields:
             The parsed raw dict, mutated in place.

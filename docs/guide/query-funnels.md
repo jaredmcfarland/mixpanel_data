@@ -2,8 +2,7 @@
 
 Build typed funnel conversion analysis against Mixpanel's Insights engine — define steps, exclusions, and conversion windows inline without creating saved funnels first.
 
-!!! tip "New in v0.3"
-    `Workspace.query_funnel()` is the typed way to run funnel analysis programmatically. It supports capabilities not available through the legacy `funnel()` method, including ad-hoc step definitions, per-step filters, exclusions, holding constant properties, and session-based conversion.
+`Workspace.query_funnel()` is the typed way to run funnel analysis programmatically. It supports capabilities not available through the legacy `funnel()` method, including ad-hoc step definitions, per-step filters, exclusions, holding constant properties, and session-based conversion.
 
 ## When to Use `query_funnel()`
 

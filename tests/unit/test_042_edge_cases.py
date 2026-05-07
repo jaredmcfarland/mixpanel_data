@@ -462,13 +462,11 @@ class TestConfigManagerEdgeCases:
     def test_legacy_v2_config_no_longer_decodes_as_accounts(
         self, tmp_path: Path
     ) -> None:
-        """A v2-shaped TOML loads but yields no accounts.
+        """A TOML with an unknown ``config_version`` key yields no accounts.
 
-        Fix 11 deleted the friendly ``Legacy config schema detected``
-        message — under the alpha "free to break" lens there are no v1/v2
-        users to migrate. ``config_version = 2`` is now ignored as an
-        unknown key and ``list_accounts`` returns an empty list because
-        the v2 fixture has no ``[accounts]`` section.
+        ``config_version = 2`` is ignored as an unknown key and
+        ``list_accounts`` returns an empty list because the fixture has
+        no ``[accounts]`` section.
         """
         p = tmp_path / "config.toml"
         p.write_text("config_version = 2\n", encoding="utf-8")
