@@ -3,7 +3,7 @@
 mixpanel_data follows a layered architecture with clear separation of concerns.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Architecture Deep Dive →](https://deepwiki.com/jaredmcfarland/mixpanel_data/5-architecture)**
+    🤖 **[Architecture Deep Dive →](https://deepwiki.com/mixpanel/mixpanel-headless/5-architecture)**
 
     Ask questions about the architecture, trace data flows, or explore component relationships interactively.
 

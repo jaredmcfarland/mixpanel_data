@@ -86,7 +86,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types            # all public types
 python3 ${CLAUDE_SKILL_DIR}/scripts/help.py exceptions        # all exceptions
 ```
 
-For tutorials and guides: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/llms.txt")`
+For tutorials and guides: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/llms.txt")`
 
 ### Discovery method signatures
 
@@ -117,7 +117,7 @@ def lexicon_schemas(self, *, entity_type: EntityType | None = None) -> list[Lexi
 
 def clear_discovery_cache(self) -> None: ...
     # Clear cached discovery results.
-# User Guide: WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/discovery/index.md")
+# User Guide: WebFetch(url="https://mixpanel.github.io/mixpanel-headless/guide/discovery/index.md")
 ```
 
 ## Exploratory Analysis Workflow
@@ -860,7 +860,7 @@ def segmentation_average(self, event: str, *, from_date: str, to_date: str, on: 
 ### Entity CRUD (App API)
 
 All entity methods require a workspace ID. Use `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py Workspace.<method>` for full signatures and parameter types.
-User Guide: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/entity-management/index.md")`
+User Guide: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/guide/entity-management/index.md")`
 
 #### Dashboard (→ `Dashboard`)
 
@@ -963,12 +963,12 @@ print(f"{project_ctx.character_count}/{BUSINESS_CONTEXT_MAX_CHARS} chars; "
 
 **Permissions:** project-scope reads need any project access; project-scope writes need `edit_project_info` on the project. Org-scope writes need `edit_project_info` at the org level (typically OAuth, not service account). The `BusinessContextValidationError` exception is raised client-side BEFORE any HTTP call when content exceeds 50,000 chars, so use it to detect oversize input without burning a round-trip.
 
-User Guide: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/guide/business-context/index.md")`
+User Guide: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/guide/business-context/index.md")`
 
 ## Key Types
 
 Run `python3 ${CLAUDE_SKILL_DIR}/scripts/help.py types` for the full list of all types. Use `help.py <TypeName>` for fields, constructors, and enum values.
-Full reference: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/api/types/index.md")`
+Full reference: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/api/types/index.md")`
 
 | Type | Purpose |
 |------|---------|
@@ -1039,7 +1039,7 @@ plt.close(fig)
 
 ## Exceptions
 
-Full reference: `WebFetch(url="https://jaredmcfarland.github.io/mixpanel_data/api/exceptions/index.md")`
+Full reference: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/api/exceptions/index.md")`
 
 | Exception | When |
 |-----------|------|

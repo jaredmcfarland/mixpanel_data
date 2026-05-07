@@ -3,7 +3,7 @@
 Stream events and user profiles directly from Mixpanel. Ideal for ETL pipelines, data processing, exports, and Unix-style piping.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Data Flow Patterns →](https://deepwiki.com/jaredmcfarland/mixpanel_data/4.1-data-flow-patterns)**
+    🤖 **[Data Flow Patterns →](https://deepwiki.com/mixpanel/mixpanel-headless/4.1-data-flow-patterns)**
 
     Ask questions about streaming, memory-efficient processing, or ETL pipeline patterns.
 

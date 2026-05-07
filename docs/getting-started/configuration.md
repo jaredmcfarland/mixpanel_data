@@ -9,7 +9,7 @@
 In-session switching is a one-line operation: `Workspace.use(account=..., project=..., workspace=..., target=...)`. The underlying HTTP client and per-account `/me` cache are preserved across switches, so cross-project / cross-account iteration is O(1) per turn.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Authentication Setup →](https://deepwiki.com/jaredmcfarland/mixpanel_data/2.2-authentication-setup)** (updated for 0.4.0)
+    🤖 **[Authentication Setup →](https://deepwiki.com/mixpanel/mixpanel-headless/2.2-authentication-setup)** (updated for 0.4.0)
 
     Ask questions about service accounts, OAuth, environment variables, or multi-account configuration.
 

@@ -3,7 +3,7 @@
 The auth surface in `mixpanel_data` 0.4.0 is organized around three independent axes — Account, Project, Workspace — with three first-class account types, a single resolver, fluent in-session switching via `Workspace.use()`, and a Cowork bridge for remote authentication.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Configuration Reference →](https://deepwiki.com/jaredmcfarland/mixpanel_data/7.3-configuration-reference)** (updated for 0.4.0)
+    🤖 **[Configuration Reference →](https://deepwiki.com/mixpanel/mixpanel-headless/7.3-configuration-reference)** (updated for 0.4.0)
 
     Ask questions about account types, session axes, OAuth, the Cowork bridge, or in-session switching.
 

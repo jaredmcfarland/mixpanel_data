@@ -6,7 +6,7 @@ Query Mixpanel's analytics APIs directly for real-time data.
     For DAU/WAU/MAU, multi-metric comparison, formulas, per-user aggregation, rolling windows, percentiles, typed filters, or numeric breakdowns, see **[Insights Queries](query.md)** — the recommended way to run analytics queries programmatically.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Querying Data Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.4-querying-data)**
+    🤖 **[Querying Data Guide →](https://deepwiki.com/mixpanel/mixpanel-headless/3.2.4-querying-data)**
 
     Ask questions about segmentation, funnels, retention, JQL, or other live query methods.
 

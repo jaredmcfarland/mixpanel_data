@@ -557,7 +557,7 @@ def _suggest_similar(
 # Reference hints: ordered most-specific-first so e.g. "query_funnel" matches
 # funnels before "query" matches insights.  Each entry is
 # (trigger_keywords, hosted_docs_path, one-line description).
-_DOCS_BASE = "https://jaredmcfarland.github.io/mixpanel_headless"
+_DOCS_BASE = "https://mixpanel.github.io/mixpanel-headless"
 
 _REFERENCE_HINTS: list[tuple[frozenset[str], str, str]] = [
     (

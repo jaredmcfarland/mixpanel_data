@@ -3,7 +3,7 @@
 All library exceptions inherit from `MixpanelDataError`, enabling callers to catch all library errors with a single except clause.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Error Handling Guide →](https://deepwiki.com/jaredmcfarland/mixpanel_data/7.4-error-codes-and-exceptions)**
+    🤖 **[Error Handling Guide →](https://deepwiki.com/mixpanel/mixpanel-headless/7.4-error-codes-and-exceptions)**
 
     Ask questions about specific exceptions, error recovery patterns, or debugging strategies.
 

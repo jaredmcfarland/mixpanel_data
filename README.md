@@ -1,7 +1,7 @@
 # mixpanel_data
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/github/license/jaredmcfarland/mixpanel_data)](LICENSE)
+[![License](https://img.shields.io/github/license/mixpanel/mixpanel-headless)](LICENSE)
 
 > **⚠️ Pre-release Software**: This package is under active development and not yet published to PyPI. APIs may change between versions.
 
@@ -18,7 +18,7 @@ Core analytics—typed Insights engine queries (DAU/WAU/MAU, formulas, filters, 
 Install directly from GitHub (package not yet published to PyPI):
 
 ```bash
-pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+pip install git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
 Requires Python 3.10+. Verify installation:
@@ -315,25 +315,25 @@ mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 \
 
 ```
 
-See [CLI Reference](https://jaredmcfarland.github.io/mixpanel_data/cli/) for complete documentation.
+See [CLI Reference](https://mixpanel.github.io/mixpanel-headless/cli/) for complete documentation.
 
 ## Documentation
 
-Full documentation: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarland.github.io/mixpanel_data/)
+Full documentation: [mixpanel.github.io/mixpanel-headless](https://mixpanel.github.io/mixpanel-headless/)
 
-- [Installation](https://jaredmcfarland.github.io/mixpanel_data/getting-started/installation/)
-- [Quick Start](https://jaredmcfarland.github.io/mixpanel_data/getting-started/quickstart/)
-- [Insights Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query/) — Typed analytics with DAU, formulas, filters, breakdowns
-- [Funnel Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-funnels/) — Typed funnel conversion analysis with steps, exclusions, conversion windows
-- [Retention Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-retention/) — Typed retention analysis with event pairs, custom buckets, alignment modes
-- [Flow Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-flows/) — Typed flow path analysis with direction controls, visualization modes
-- [User Profile Queries](https://jaredmcfarland.github.io/mixpanel_data/guide/query-users/) — Profile filtering, sorting, parallel fetching, aggregate statistics
-- [CLI Reference](https://jaredmcfarland.github.io/mixpanel_data/cli/)
-- [Python API](https://jaredmcfarland.github.io/mixpanel_data/api/)
-- [Streaming Guide](https://jaredmcfarland.github.io/mixpanel_data/guide/streaming/)
-- [Live Analytics](https://jaredmcfarland.github.io/mixpanel_data/guide/live-analytics/)
+- [Installation](https://mixpanel.github.io/mixpanel-headless/getting-started/installation/)
+- [Quick Start](https://mixpanel.github.io/mixpanel-headless/getting-started/quickstart/)
+- [Insights Queries](https://mixpanel.github.io/mixpanel-headless/guide/query/) — Typed analytics with DAU, formulas, filters, breakdowns
+- [Funnel Queries](https://mixpanel.github.io/mixpanel-headless/guide/query-funnels/) — Typed funnel conversion analysis with steps, exclusions, conversion windows
+- [Retention Queries](https://mixpanel.github.io/mixpanel-headless/guide/query-retention/) — Typed retention analysis with event pairs, custom buckets, alignment modes
+- [Flow Queries](https://mixpanel.github.io/mixpanel-headless/guide/query-flows/) — Typed flow path analysis with direction controls, visualization modes
+- [User Profile Queries](https://mixpanel.github.io/mixpanel-headless/guide/query-users/) — Profile filtering, sorting, parallel fetching, aggregate statistics
+- [CLI Reference](https://mixpanel.github.io/mixpanel-headless/cli/)
+- [Python API](https://mixpanel.github.io/mixpanel-headless/api/)
+- [Streaming Guide](https://mixpanel.github.io/mixpanel-headless/guide/streaming/)
+- [Live Analytics](https://mixpanel.github.io/mixpanel-headless/guide/live-analytics/)
 
-- [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/jaredmcfarland/mixpanel_data)
+- [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mixpanel/mixpanel-headless)
 
 ## For Humans and Agents
 

@@ -28,7 +28,7 @@ fi
 
 # Install packages
 # mixpanel_data is not on PyPI — install from GitHub
-MIXPANEL_DATA_PKG="git+https://github.com/jaredmcfarland/mixpanel_data.git"
+MIXPANEL_DATA_PKG="git+https://github.com/mixpanel/mixpanel-headless.git"
 DEPS=(pandas numpy matplotlib seaborn 'networkx>=3.0' 'anytree>=2.8.0' scipy)
 
 # pyarrow is only needed on Python 3.11+ (for pandas 3.x Arrow-backed dtypes)

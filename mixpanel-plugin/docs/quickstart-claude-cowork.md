@@ -21,7 +21,7 @@ Cowork runs Claude agents in sandboxed virtual machines. These VMs don't have ac
 On your **local machine** (not inside Cowork), install the `mp` command-line tool:
 
 ```bash
-pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+pip install git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
 Then configure your Mixpanel credentials:
@@ -237,7 +237,7 @@ Then start a new Cowork session.
 
 **Fix**:
 ```bash
-pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+pip install git+https://github.com/mixpanel/mixpanel-headless.git
 mp --version   # verify
 ```
 
@@ -264,4 +264,4 @@ Always run these on your **local machine** before starting a Cowork session.
 
 - **Claude Code quick start**: [Claude Code Quick Start](quickstart-claude-code.md) — plugin setup and authentication
 - **Full getting started guide**: [Getting Started Guide](getting-started-guide.md) — Python library, CLI, and more
-- **Full documentation**: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarland.github.io/mixpanel_data/)
+- **Full documentation**: [mixpanel.github.io/mixpanel-headless](https://mixpanel.github.io/mixpanel-headless/)

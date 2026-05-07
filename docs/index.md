@@ -3,12 +3,12 @@
 A complete programmable interface to Mixpanel analytics—available as both a Python library and CLI. Supports service account and OAuth 2.0 authentication.
 
 !!! tip "AI-Friendly Documentation"
-    🤖 **[Explore on DeepWiki →](https://deepwiki.com/jaredmcfarland/mixpanel_data)**
+    🤖 **[Explore on DeepWiki →](https://deepwiki.com/mixpanel/mixpanel-headless)**
 
     DeepWiki provides an AI-optimized view of this project—perfect for code assistants, agents, and LLM-powered workflows. Ask questions about the codebase, explore architecture, or get contextual help.
 
 !!! tip "Google Code Wiki"
-    🔍 **[Explore on Code Wiki →](https://codewiki.google/github.com/jaredmcfarland/mixpanel_data)**
+    🔍 **[Explore on Code Wiki →](https://codewiki.google/github.com/mixpanel/mixpanel-headless)**
 
     Google's Code Wiki offers another AI-optimized interface for exploring this codebase—search, understand, and navigate the project with natural language queries.
 
@@ -293,7 +293,7 @@ This documentation is built with AI consumption in mind. In addition to the stan
 
 Every page also has a **Copy Markdown** button in the upper right corner—click it to copy the page content as markdown, ready to paste into your AI assistant's context.
 
-For interactive exploration of the codebase itself, see [DeepWiki](https://deepwiki.com/jaredmcfarland/mixpanel_data).
+For interactive exploration of the codebase itself, see [DeepWiki](https://deepwiki.com/mixpanel/mixpanel-headless).
 
 ## Next Steps
 

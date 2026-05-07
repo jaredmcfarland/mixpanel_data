@@ -3,7 +3,7 @@
 This guide walks you through your first queries with mixpanel_data in about 5 minutes.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Quick Start Tutorial →](https://deepwiki.com/jaredmcfarland/mixpanel_data/2.3-quick-start-tutorial)**
+    🤖 **[Quick Start Tutorial →](https://deepwiki.com/mixpanel/mixpanel-headless/2.3-quick-start-tutorial)**
 
     Ask questions about getting started, explore example workflows, or troubleshoot common issues.
 
@@ -11,7 +11,7 @@ This guide walks you through your first queries with mixpanel_data in about 5 mi
 
 You'll need:
 
-- mixpanel_data installed (`pip install git+https://github.com/jaredmcfarland/mixpanel_data.git`)
+- mixpanel_data installed (`pip install git+https://github.com/mixpanel/mixpanel-headless.git`)
 - **Either** a Mixpanel service account (username, secret, project ID) **or** a Mixpanel user account (for OAuth login)
 - Your project's data residency region (us, eu, or in)
 

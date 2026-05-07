@@ -1,10 +1,10 @@
 site_name: mixpanel_data
 site_description: Python library for working with Mixpanel analytics data, designed for AI coding agents
 site_author: Jared McFarland
-site_url: https://jaredmcfarland.github.io/mixpanel_data/
+site_url: https://mixpanel.github.io/mixpanel-headless/
 
-repo_name: jaredmcfarland/mixpanel_data
-repo_url: https://github.com/jaredmcfarland/mixpanel_data
+repo_name: mixpanel/mixpanel-headless
+repo_url: https://github.com/mixpanel/mixpanel-headless
 
 theme:
   name: material
@@ -213,4 +213,4 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/jaredmcfarland/mixpanel_data
+      link: https://github.com/mixpanel/mixpanel-headless

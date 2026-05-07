@@ -3,7 +3,7 @@
 The `mixpanel_data` Python API provides programmatic access to all library functionality.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Python API Reference →](https://deepwiki.com/jaredmcfarland/mixpanel_data/7.2-python-api-reference)**
+    🤖 **[Python API Reference →](https://deepwiki.com/mixpanel/mixpanel-headless/7.2-python-api-reference)**
 
     Ask questions about API methods, explore usage patterns, or get help with specific functionality.
 

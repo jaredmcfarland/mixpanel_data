@@ -3,7 +3,7 @@
 The `Workspace` class is the unified entry point for all Mixpanel data operations.
 
 !!! tip "Explore on DeepWiki"
-    🤖 **[Workspace Class Deep Dive →](https://deepwiki.com/jaredmcfarland/mixpanel_data/3.2.1-workspace-class)**
+    🤖 **[Workspace Class Deep Dive →](https://deepwiki.com/mixpanel/mixpanel-headless/3.2.1-workspace-class)**
 
     Ask questions about Workspace methods, explore usage patterns, or understand how services are orchestrated.
 

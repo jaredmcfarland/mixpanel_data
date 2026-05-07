@@ -20,7 +20,7 @@ The repository includes a devcontainer with Python 3.10, uv, just, and all devel
 
 ```bash
 # Clone the repository
-git clone https://github.com/jaredmcfarland/mixpanel_data.git
+git clone https://github.com/mixpanel/mixpanel-headless.git
 cd mixpanel_data
 
 # Install dependencies

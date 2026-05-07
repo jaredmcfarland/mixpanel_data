@@ -1,6 +1,6 @@
 # mixpanel_data 0.4.0 — Auth Architecture Redesign
 
-> **Status:** alpha · **Released:** 2026-04-22 · **Spec:** [042-auth-architecture-redesign](specs/042-auth-architecture-redesign/spec.md) · **PR:** [#126](https://github.com/jaredmcfarland/mixpanel_data/pull/126)
+> **Status:** alpha · **Released:** 2026-04-22 · **Spec:** [042-auth-architecture-redesign](specs/042-auth-architecture-redesign/spec.md) · **PR:** [#126](https://github.com/mixpanel/mixpanel-headless/pull/126)
 
 This release ships a **complete rewrite of the auth subsystem** — single
 schema, single resolver, three first-class account types

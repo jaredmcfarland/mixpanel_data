@@ -88,7 +88,7 @@ print(result.df)  # distinct_id, $name, $email, plan
 
 ## API Documentation
 
-Use `help.py` for live API docs extracted from library docstrings, or browse the [hosted documentation](https://jaredmcfarland.github.io/mixpanel_data/).
+Use `help.py` for live API docs extracted from library docstrings, or browse the [hosted documentation](https://mixpanel.github.io/mixpanel-headless/).
 
 ```bash
 python help.py Workspace.query        # method signature + docstring + referenced types
@@ -158,7 +158,7 @@ Plugin 5.0.0 ships against the `mixpanel_data` 0.4.0 auth surface:
 ### From GitHub
 
 ```bash
-/plugin marketplace add jaredmcfarland/mixpanel_data
+/plugin marketplace add mixpanel/mixpanel-headless
 /plugin install mixpanel-data@mixpanel-data-marketplace
 ```
 
@@ -210,8 +210,8 @@ mixpanel-plugin/
 
 ## Links
 
-- [Library documentation](https://jaredmcfarland.github.io/mixpanel_data/)
-- [Source repository](https://github.com/jaredmcfarland/mixpanel_data)
+- [Library documentation](https://mixpanel.github.io/mixpanel-headless/)
+- [Source repository](https://github.com/mixpanel/mixpanel-headless)
 
 ## License
 

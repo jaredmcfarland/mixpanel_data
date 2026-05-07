@@ -44,13 +44,13 @@ The `mixpanel_data` package installs both the Python library and the `mp` comman
 ### Option A: Install with pip
 
 ```bash
-pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+pip install git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
 ### Option B: Install with uv (faster)
 
 ```bash
-uv pip install git+https://github.com/jaredmcfarland/mixpanel_data.git
+uv pip install git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
 ### Verify the Installation
@@ -352,7 +352,7 @@ The Claude Code plugin turns Claude into a Mixpanel data analyst. Instead of wri
 In your Claude Code session, run:
 
 ```
-/plugin marketplace add jaredmcfarland/mixpanel_data
+/plugin marketplace add mixpanel/mixpanel-headless
 /plugin install mixpanel-data@mixpanel-data-marketplace
 ```
 
@@ -611,14 +611,14 @@ mp account login <name>
 
 Now that you're set up, here's where to go next:
 
-- **Full documentation**: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarland.github.io/mixpanel_data/)
-- **Insights query guide**: [Query documentation](https://jaredmcfarland.github.io/mixpanel_data/guide/query/)
-- **Funnel queries**: [Funnel documentation](https://jaredmcfarland.github.io/mixpanel_data/guide/query-funnels/)
-- **Retention queries**: [Retention documentation](https://jaredmcfarland.github.io/mixpanel_data/guide/query-retention/)
-- **Flow queries**: [Flow documentation](https://jaredmcfarland.github.io/mixpanel_data/guide/query-flows/)
-- **CLI reference**: [CLI documentation](https://jaredmcfarland.github.io/mixpanel_data/cli/)
-- **Python API reference**: [API documentation](https://jaredmcfarland.github.io/mixpanel_data/api/)
-- **DeepWiki**: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/jaredmcfarland/mixpanel_data)
+- **Full documentation**: [mixpanel.github.io/mixpanel-headless](https://mixpanel.github.io/mixpanel-headless/)
+- **Insights query guide**: [Query documentation](https://mixpanel.github.io/mixpanel-headless/guide/query/)
+- **Funnel queries**: [Funnel documentation](https://mixpanel.github.io/mixpanel-headless/guide/query-funnels/)
+- **Retention queries**: [Retention documentation](https://mixpanel.github.io/mixpanel-headless/guide/query-retention/)
+- **Flow queries**: [Flow documentation](https://mixpanel.github.io/mixpanel-headless/guide/query-flows/)
+- **CLI reference**: [CLI documentation](https://mixpanel.github.io/mixpanel-headless/cli/)
+- **Python API reference**: [API documentation](https://mixpanel.github.io/mixpanel-headless/api/)
+- **DeepWiki**: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mixpanel/mixpanel-headless)
 
 For every CLI command, `--help` shows complete usage information:
 

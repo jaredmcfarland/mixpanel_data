@@ -18,7 +18,7 @@ Get Claude answering questions about your Mixpanel data in under 5 minutes. No c
 Open Claude Code and run:
 
 ```
-/plugin marketplace add jaredmcfarland/mixpanel_data
+/plugin marketplace add mixpanel/mixpanel-headless
 /plugin install mixpanel-data@mixpanel-data-marketplace
 ```
 
@@ -257,7 +257,7 @@ If you're behind a corporate proxy or firewall, you may need to configure `pip` 
 
 ## Next Steps
 
-- **Full documentation**: [jaredmcfarland.github.io/mixpanel_data](https://jaredmcfarland.github.io/mixpanel_data/)
-- **Plugin details**: [Plugin README](https://github.com/jaredmcfarland/mixpanel_data/blob/main/mixpanel-plugin/README.md)
+- **Full documentation**: [mixpanel.github.io/mixpanel-headless](https://mixpanel.github.io/mixpanel-headless/)
+- **Plugin details**: [Plugin README](https://github.com/mixpanel/mixpanel-headless/blob/main/mixpanel-plugin/README.md)
 - **Comprehensive getting started guide**: [Getting Started Guide](getting-started-guide.md) — covers the Python library and CLI in depth
 - **Using with Cowork**: [Cowork Quick Start](quickstart-claude-cowork.md)
