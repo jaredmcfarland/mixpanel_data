@@ -64,7 +64,7 @@ def _ok(**fields: Any) -> dict[str, Any]:
 def _err(exc: BaseException, *, actionable: bool | None = None) -> dict[str, Any]:
     """Wrap ``exc`` as a contracted ``state="error"`` envelope (P3).
 
-    Pulls structured context off ``MixpanelDataError`` subclasses (``code``,
+    Pulls structured context off ``MixpanelHeadlessError`` subclasses (``code``,
     ``details``) and preserves ``__cause__``. ``MP_VERBOSE=1`` adds a
     one-line traceback. ``actionable`` defaults to True for ``_ACTIONABLE_CODES``.
     """

@@ -1611,7 +1611,7 @@ class TestPublicRequest:
                 json_body={
                     "name": "test",
                     "value": 123,
-                    "query_origin": "mixpanel-headless-cli",
+                    "query_origin": "mixpanel-headless",
                 },
             )
 
@@ -1619,7 +1619,7 @@ class TestPublicRequest:
         assert captured_body == {
             "name": "test",
             "value": 123,
-            "query_origin": "mixpanel-headless-cli",
+            "query_origin": "mixpanel-headless",
         }
 
     def test_request_with_custom_headers(self, test_credentials: Session) -> None:
@@ -1660,7 +1660,31 @@ class TestPublicRequest:
                 "https://mixpanel.com/api/app/test",
             )
 
-        assert captured_params["query_origin"] == "mixpanel-headless-cli"
+        assert captured_params["query_origin"] == "mixpanel-headless"
+
+    def test_canonical_query_origin_wins_over_caller(
+        self, test_credentials: Session
+    ) -> None:
+        """Caller-supplied ``query_origin`` cannot override the canonical value.
+
+        The telemetry tag is non-negotiable: even if a caller passes a spoofed
+        ``query_origin`` in ``params``, the canonical ``mixpanel-headless``
+        value must win.
+        """
+        captured_params: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured_params.update(dict(request.url.params))
+            return httpx.Response(200, json={})
+
+        with create_mock_client(test_credentials, handler) as client:
+            client.request(
+                "GET",
+                "https://mixpanel.com/api/app/test",
+                params={"query_origin": "spoofed-by-caller"},
+            )
+
+        assert captured_params["query_origin"] == "mixpanel-headless"
 
     def test_request_does_not_inject_project_id(
         self, test_credentials: Session

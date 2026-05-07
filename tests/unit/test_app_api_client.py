@@ -20,7 +20,7 @@ from mixpanel_headless._internal.api_client import ENDPOINTS, MixpanelAPIClient
 from mixpanel_headless._internal.auth.session import Session
 from mixpanel_headless.exceptions import (
     AuthenticationError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     QueryError,
     ServerError,
     WorkspaceScopeError,
@@ -328,14 +328,14 @@ class TestAppRequestFormBody:
     def test_form_body_wraps_httpx_transport_error(
         self, oauth_credentials: Session
     ) -> None:
-        """form_body= callers surface httpx.HTTPError as MixpanelDataError."""
+        """form_body= callers surface httpx.HTTPError as MixpanelHeadlessError."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Raise a transport-level ConnectError."""
             raise httpx.ConnectError("connection refused")
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError):
+        with client, pytest.raises(MixpanelHeadlessError):
             client.app_request(
                 "POST",
                 "/projects/12345/custom_events/",
@@ -760,7 +760,7 @@ class TestListWorkspacesEdgeCases:
 
         When the API returns ``{"results": "unexpected_string"}``,
         ``app_request()`` unwraps results to the string ``"unexpected_string"``.
-        ``list_workspaces()`` validates the type and raises ``MixpanelDataError``.
+        ``list_workspaces()`` validates the type and raises ``MixpanelHeadlessError``.
         """
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -772,7 +772,7 @@ class TestListWorkspacesEdgeCases:
         client = create_mock_client(oauth_credentials, handler)
         with (
             client,
-            pytest.raises(MixpanelDataError, match="Unexpected response format"),
+            pytest.raises(MixpanelHeadlessError, match="Unexpected response format"),
         ):
             client.list_workspaces()
 

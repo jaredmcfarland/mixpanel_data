@@ -19,7 +19,7 @@ import pytest
 
 from mixpanel_headless._internal.api_client import MixpanelAPIClient
 from mixpanel_headless._internal.auth.session import Session
-from mixpanel_headless.exceptions import MixpanelDataError, QueryError
+from mixpanel_headless.exceptions import MixpanelHeadlessError, QueryError
 from tests.conftest import make_session
 
 # =============================================================================
@@ -1709,20 +1709,20 @@ class TestCreateCustomEvent:
     def test_non_dict_response_raises_mixpanel_headless_error(
         self, oauth_credentials: Session
     ) -> None:
-        """create_custom_event() raises MixpanelDataError if response isn't a dict."""
+        """create_custom_event() raises MixpanelHeadlessError if response isn't a dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return a non-dict JSON response."""
             return httpx.Response(200, json=[1, 2, 3])
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError):
+        with client, pytest.raises(MixpanelHeadlessError):
             client.create_custom_event({"name": "X", "alternatives": "[]"})
 
     def test_non_json_response_raises_mixpanel_headless_error(
         self, oauth_credentials: Session
     ) -> None:
-        """create_custom_event() raises MixpanelDataError with INVALID_RESPONSE.
+        """create_custom_event() raises MixpanelHeadlessError with INVALID_RESPONSE.
 
         The error must carry ``code="INVALID_RESPONSE"`` (so callers can
         distinguish "server returned junk" from other failures) and the
@@ -1735,7 +1735,7 @@ class TestCreateCustomEvent:
             return httpx.Response(200, content=b"not json at all")
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError) as exc_info:
+        with client, pytest.raises(MixpanelHeadlessError) as exc_info:
             client.create_custom_event({"name": "X", "alternatives": "[]"})
         assert exc_info.value.code == "INVALID_RESPONSE"
         message = str(exc_info.value)
@@ -1768,14 +1768,14 @@ class TestCreateCustomEvent:
         assert result["id"] == 1
 
     def test_wraps_httpx_transport_error(self, oauth_credentials: Session) -> None:
-        """create_custom_event() surfaces httpx.HTTPError as MixpanelDataError."""
+        """create_custom_event() surfaces httpx.HTTPError as MixpanelHeadlessError."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Raise a transport-level ConnectError."""
             raise httpx.ConnectError("connection refused")
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError):
+        with client, pytest.raises(MixpanelHeadlessError):
             client.create_custom_event({"name": "X", "alternatives": "[]"})
 
 
@@ -1850,7 +1850,7 @@ class TestUpdateCustomEvent:
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError) as exc_info:
+        with client, pytest.raises(MixpanelHeadlessError) as exc_info:
             client.update_custom_event(2044168, {"description": "X"})
         assert exc_info.value.code == "UPDATE_TARGET_MISMATCH"
         assert "99999" in str(exc_info.value)
@@ -2288,10 +2288,10 @@ class TestGetLookupUploadUrlMissingKeys:
     def test_get_lookup_upload_url_missing_keys(
         self, oauth_credentials: Session
     ) -> None:
-        """Test get_lookup_upload_url raises MixpanelDataError when keys are missing.
+        """Test get_lookup_upload_url raises MixpanelHeadlessError when keys are missing.
 
         The response dict must contain ``url``, ``path``, and ``key`` fields.
-        When any are missing, the method should raise MixpanelDataError to signal
+        When any are missing, the method should raise MixpanelHeadlessError to signal
         an invalid API response.
 
         Note: This test validates the fix that adds key validation to
@@ -2309,7 +2309,7 @@ class TestGetLookupUploadUrlMissingKeys:
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError):
+        with client, pytest.raises(MixpanelHeadlessError):
             client.get_lookup_upload_url()
 
 
@@ -2319,11 +2319,11 @@ class TestUploadToSignedUrlNetworkFailure:
     def test_upload_to_signed_url_network_failure(
         self, oauth_credentials: Session
     ) -> None:
-        """Test upload_to_signed_url wraps ConnectError in MixpanelDataError.
+        """Test upload_to_signed_url wraps ConnectError in MixpanelHeadlessError.
 
         When the PUT request to the signed URL fails with a network error
         (e.g., ``httpx.ConnectError``), the method should catch it and raise
-        ``MixpanelDataError`` instead.
+        ``MixpanelHeadlessError`` instead.
 
         Note: This test validates the fix that adds ConnectError handling to
         upload_to_signed_url(). It will fail until the fix is applied.
@@ -2334,7 +2334,7 @@ class TestUploadToSignedUrlNetworkFailure:
             raise httpx.ConnectError("Connection refused")
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError):
+        with client, pytest.raises(MixpanelHeadlessError):
             client.upload_to_signed_url(
                 "https://storage.example.com/upload", b"col1,col2\na,b"
             )
@@ -2346,10 +2346,10 @@ class TestRegisterLookupTableNonJsonResponse:
     def test_register_lookup_table_non_json_response(
         self, oauth_credentials: Session
     ) -> None:
-        """Test register_lookup_table raises MixpanelDataError for non-JSON 200 response.
+        """Test register_lookup_table raises MixpanelHeadlessError for non-JSON 200 response.
 
         When the server returns a 200 response with a body that is not valid JSON,
-        ``register_lookup_table()`` should raise ``MixpanelDataError`` instead of
+        ``register_lookup_table()`` should raise ``MixpanelHeadlessError`` instead of
         propagating the raw JSON decode error.
 
         Note: This test validates the fix that adds try/except around response.json()
@@ -2365,5 +2365,5 @@ class TestRegisterLookupTableNonJsonResponse:
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError):
+        with client, pytest.raises(MixpanelHeadlessError):
             client.register_lookup_table({"name": "Test Table"})

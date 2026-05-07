@@ -21,7 +21,7 @@ The repository includes a devcontainer with Python 3.10, uv, just, and all devel
 ```bash
 # Clone the repository
 git clone https://github.com/mixpanel/mixpanel-headless.git
-cd mixpanel_headless
+cd mixpanel-headless
 
 # Install dependencies
 uv sync --all-extras

@@ -20,7 +20,7 @@ import pytest
 
 from mixpanel_headless._internal.api_client import MixpanelAPIClient
 from mixpanel_headless._internal.auth.session import Session
-from mixpanel_headless.exceptions import MixpanelDataError
+from mixpanel_headless.exceptions import MixpanelHeadlessError
 from tests.conftest import make_session
 
 # =============================================================================
@@ -934,7 +934,9 @@ class TestDeleteSchemas:
         client = create_mock_client(oauth_credentials, handler)
         with (
             client,
-            pytest.raises(MixpanelDataError, match="entity_name requires entity_type"),
+            pytest.raises(
+                MixpanelHeadlessError, match="entity_name requires entity_type"
+            ),
         ):
             client.delete_schemas(entity_name="Signup")
 

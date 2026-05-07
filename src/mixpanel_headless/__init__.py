@@ -64,7 +64,7 @@ from mixpanel_headless.exceptions import (
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     OAuthError,
     ProjectNotFoundError,
     QueryError,
@@ -355,7 +355,7 @@ __all__ = [
     "FlowStepNode",
     "FlowEdge",
     # Exceptions
-    "MixpanelDataError",
+    "MixpanelHeadlessError",
     "BookmarkValidationError",
     "ValidationError",
     "APIError",

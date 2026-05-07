@@ -145,7 +145,7 @@ with mp.Workspace() as ws:
 ## Exception Hierarchy
 
 ```
-MixpanelDataError
+MixpanelHeadlessError
 ├── ConfigError
 │   ├── AccountNotFoundError
 │   └── AccountExistsError

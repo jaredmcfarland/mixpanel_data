@@ -1,6 +1,6 @@
 """Exception hierarchy for mixpanel_headless.
 
-All library exceptions inherit from MixpanelDataError, enabling callers to
+All library exceptions inherit from MixpanelHeadlessError, enabling callers to
 catch all library errors with a single except clause while still allowing
 fine-grained exception handling when needed.
 
@@ -19,11 +19,11 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 
-class MixpanelDataError(Exception):
+class MixpanelHeadlessError(Exception):
     """Base exception for all mixpanel_headless errors.
 
     All library exceptions inherit from this class, allowing callers to:
-    - Catch all library errors: except MixpanelDataError
+    - Catch all library errors: except MixpanelHeadlessError
     - Handle specific errors: except AccountNotFoundError
     - Serialize errors: error.to_dict()
     """
@@ -88,7 +88,7 @@ class MixpanelDataError(Exception):
 # API Exceptions - Base class for HTTP errors
 
 
-class APIError(MixpanelDataError):
+class APIError(MixpanelHeadlessError):
     """Base class for Mixpanel API HTTP errors.
 
     Provides structured access to HTTP request/response context for debugging
@@ -193,7 +193,7 @@ class APIError(MixpanelDataError):
 # Configuration Exceptions
 
 
-class ConfigError(MixpanelDataError):
+class ConfigError(MixpanelHeadlessError):
     """Base for configuration-related errors.
 
     Raised when there's a problem with configuration files, environment
@@ -519,7 +519,7 @@ class RateLimitError(APIError):
 # Query Exceptions
 
 
-class EventNotFoundError(MixpanelDataError):
+class EventNotFoundError(MixpanelHeadlessError):
     """Event name not found in Mixpanel project.
 
     Raised when an event name is not found. Includes suggestions for
@@ -871,7 +871,7 @@ class JQLSyntaxError(QueryError):
 # Validation Exceptions
 
 
-class DateRangeTooLargeError(MixpanelDataError):
+class DateRangeTooLargeError(MixpanelHeadlessError):
     """Date range exceeds maximum allowed by Mixpanel API.
 
     The Mixpanel Export API limits requests to 100 days maximum.
@@ -944,7 +944,7 @@ class DateRangeTooLargeError(MixpanelDataError):
 # OAuth Exceptions
 
 
-class OAuthError(MixpanelDataError):
+class OAuthError(MixpanelHeadlessError):
     """OAuth authentication flow error.
 
     Raised for failures during the OAuth 2.0 PKCE flow, including token
@@ -987,7 +987,7 @@ class OAuthError(MixpanelDataError):
         super().__init__(message, code=code, details=details)
 
 
-class WorkspaceScopeError(MixpanelDataError):
+class WorkspaceScopeError(MixpanelHeadlessError):
     """Scope resolution error (workspace or organization).
 
     Raised when an auth-axis identifier cannot be resolved during App
@@ -1035,7 +1035,7 @@ class WorkspaceScopeError(MixpanelDataError):
 # Business Context Validation
 
 
-class BusinessContextValidationError(MixpanelDataError):
+class BusinessContextValidationError(MixpanelHeadlessError):
     """Business context content failed client-side validation.
 
     Raised by ``Workspace.set_business_context()`` when the supplied
@@ -1158,13 +1158,13 @@ class ValidationError:
         return s
 
 
-class BookmarkValidationError(MixpanelDataError):
+class BookmarkValidationError(MixpanelHeadlessError):
     """Bookmark params failed validation.
 
     Contains all validation errors found, enabling agents to fix
     multiple issues in a single pass rather than one at a time.
-    Integrates into the ``MixpanelDataError`` hierarchy so callers
-    using ``except MixpanelDataError`` will catch these.
+    Integrates into the ``MixpanelHeadlessError`` hierarchy so callers
+    using ``except MixpanelHeadlessError`` will catch these.
 
     Attributes:
         errors: All validation errors found (both errors and warnings).

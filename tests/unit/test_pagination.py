@@ -18,7 +18,7 @@ from mixpanel_headless._internal.auth.session import Session
 from mixpanel_headless._internal.pagination import paginate_all
 from mixpanel_headless.exceptions import (
     AuthenticationError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     RateLimitError,
     ServerError,
 )
@@ -269,7 +269,41 @@ class TestPaginateAll:
         with client:
             list(paginate_all(client, "/projects/12345/dashboards"))
 
-        assert captured_params[0]["query_origin"] == "mixpanel-headless-cli"
+        assert captured_params[0]["query_origin"] == "mixpanel-headless"
+
+    def test_canonical_query_origin_wins_over_caller(
+        self, oauth_credentials: Session
+    ) -> None:
+        """Caller-supplied ``query_origin`` cannot override the canonical value.
+
+        The telemetry tag is non-negotiable: even if a caller passes a spoofed
+        ``query_origin`` in ``params``, the canonical ``mixpanel-headless``
+        value must win.
+        """
+        captured_params: list[dict[str, str]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured_params.append(dict(request.url.params))
+            return httpx.Response(
+                200,
+                json={
+                    "status": "ok",
+                    "results": [{"id": 1}],
+                    "pagination": {"page_size": 100, "next_cursor": None},
+                },
+            )
+
+        client = create_mock_client(oauth_credentials, handler)
+        with client:
+            list(
+                paginate_all(
+                    client,
+                    "/projects/12345/dashboards",
+                    params={"query_origin": "spoofed-by-caller"},
+                )
+            )
+
+        assert captured_params[0]["query_origin"] == "mixpanel-headless"
 
     def test_handles_response_without_results_key(
         self, oauth_credentials: Session
@@ -328,7 +362,10 @@ class TestPaginateAllRobustness:
         # Use a small MAX_PAGES for the test to avoid long runtime
         with patch("mixpanel_headless._internal.pagination.MAX_PAGES", 50):
             client = create_mock_client(oauth_credentials, handler)
-            with client, pytest.raises(MixpanelDataError, match="maximum page limit"):
+            with (
+                client,
+                pytest.raises(MixpanelHeadlessError, match="maximum page limit"),
+            ):
                 # Consume all items — should raise before 15000
                 list(
                     itertools.islice(
@@ -340,7 +377,7 @@ class TestPaginateAllRobustness:
         """Verify pagination raises a clear error for non-JSON responses.
 
         If the server returns HTML or other non-JSON content, the function
-        should raise MixpanelDataError rather than a raw JSONDecodeError.
+        should raise MixpanelHeadlessError rather than a raw JSONDecodeError.
         """
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -359,7 +396,7 @@ class TestPaginateAllRobustness:
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError, match="Non-JSON response"):
+        with client, pytest.raises(MixpanelHeadlessError, match="Non-JSON response"):
             list(paginate_all(client, "/projects/12345/items"))
 
     def test_http_429_mid_pagination(self, oauth_credentials: Session) -> None:

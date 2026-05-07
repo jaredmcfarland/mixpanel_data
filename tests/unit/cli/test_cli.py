@@ -384,9 +384,8 @@ class TestProjectCliList:
     ) -> None:
         """``--refresh`` forces a /me re-fetch instead of using the disk cache.
 
-        The legacy ``--remote`` alias was dropped in 0.4.1 — ``--refresh`` is
-        the single canonical name (matches the Python API
-        :meth:`Workspace.projects(refresh=)`).
+        ``--refresh`` is the single canonical name (matches the Python API
+        :meth:`Workspace.projects(refresh=)`); there is no ``--remote`` alias.
         """
         self._seed_account_and_me_cache(runner, monkeypatch)
         from mixpanel_headless._internal import me as me_mod
@@ -411,7 +410,7 @@ class TestProjectCliList:
     def test_list_remote_alias_removed(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``--remote`` was removed in 0.4.1 — usage now exits with usage error."""
+        """``--remote`` is not a valid option — usage exits with a usage error."""
         self._seed_account_and_me_cache(runner, monkeypatch)
         result = runner.invoke(app, ["project", "list", "--remote"])
         # Typer maps unknown options to exit code 2 with "No such option".

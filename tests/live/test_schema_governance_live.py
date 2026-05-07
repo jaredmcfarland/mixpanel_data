@@ -34,7 +34,7 @@ from typing import Any
 import pytest
 
 from mixpanel_headless import Workspace
-from mixpanel_headless.exceptions import MixpanelDataError, QueryError, ServerError
+from mixpanel_headless.exceptions import MixpanelHeadlessError, QueryError, ServerError
 from mixpanel_headless.types import (
     AuditResponse,
     AuditViolation,
@@ -219,7 +219,7 @@ class TestSchemaRegistryCRUD:
         """
         try:
             schemas = ws.list_schema_registry()
-        except MixpanelDataError as exc:
+        except MixpanelHeadlessError as exc:
             _skip_if_timeout(exc)
             raise
         assert isinstance(schemas, list)
@@ -237,7 +237,7 @@ class TestSchemaRegistryCRUD:
         """
         try:
             schemas = ws.list_schema_registry(entity_type="event")
-        except MixpanelDataError as exc:
+        except MixpanelHeadlessError as exc:
             _skip_if_timeout(exc)
             raise
         assert isinstance(schemas, list)
@@ -1005,7 +1005,7 @@ class TestDataVolumeAnomalies:
         """
         try:
             anomalies = ws.list_data_volume_anomalies(query_params={"status": "open"})
-        except (ServerError, MixpanelDataError):
+        except (ServerError, MixpanelHeadlessError):
             pytest.skip("Anomaly status filter returned server error (known API issue)")
             return
         assert isinstance(anomalies, list)
@@ -1020,7 +1020,7 @@ class TestDataVolumeAnomalies:
         """
         try:
             anomalies = ws.list_data_volume_anomalies(query_params={"status": "open"})
-        except (ServerError, MixpanelDataError):
+        except (ServerError, MixpanelHeadlessError):
             pytest.skip("Anomaly status filter returned server error")
             return
         if not anomalies:
@@ -1303,7 +1303,7 @@ class TestSchemaGovernanceEdgeCases:
         """
         try:
             schemas = ws.list_schema_registry()
-        except MixpanelDataError as exc:
+        except MixpanelHeadlessError as exc:
             _skip_if_timeout(exc)
             raise
         if not schemas:

@@ -1,6 +1,6 @@
 # Exceptions
 
-All library exceptions inherit from `MixpanelDataError`, enabling callers to catch all library errors with a single except clause.
+All library exceptions inherit from `MixpanelHeadlessError`, enabling callers to catch all library errors with a single except clause.
 
 !!! tip "Explore on DeepWiki"
     🤖 **[Error Handling Guide →](https://deepwiki.com/mixpanel/mixpanel-headless/7.4-error-codes-and-exceptions)**
@@ -10,7 +10,7 @@ All library exceptions inherit from `MixpanelDataError`, enabling callers to cat
 ## Exception Hierarchy
 
 ```
-MixpanelDataError
+MixpanelHeadlessError
 ├── ConfigError
 │   ├── AccountNotFoundError
 │   ├── AccountExistsError
@@ -45,13 +45,13 @@ except mp.WorkspaceScopeError as e:
     print(f"Workspace error [{e.code}]: {e.message}")
 except mp.AccountInUseError as e:
     print(f"Account '{e.account_name}' referenced by targets: {e.referenced_by}")
-except mp.MixpanelDataError as e:
+except mp.MixpanelHeadlessError as e:
     print(f"Error [{e.code}]: {e.message}")
 ```
 
 ## Base Exception
 
-::: mixpanel_headless.MixpanelDataError
+::: mixpanel_headless.MixpanelHeadlessError
     options:
       show_root_heading: true
       show_root_toc_entry: true

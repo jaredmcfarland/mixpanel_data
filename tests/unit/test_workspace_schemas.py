@@ -853,7 +853,7 @@ class TestDeleteSchemas:
         assert captured[0].method == "DELETE"
 
     def test_entity_name_without_type_raises(self, temp_dir: Path) -> None:
-        """delete_schemas(entity_name=X) without entity_type raises MixpanelDataError.
+        """delete_schemas(entity_name=X) without entity_type raises MixpanelHeadlessError.
 
         Providing entity_name without entity_type would silently delete all
         schemas instead of the intended single schema.
@@ -861,7 +861,7 @@ class TestDeleteSchemas:
         Args:
             temp_dir: Pytest tmp_path fixture.
         """
-        from mixpanel_headless.exceptions import MixpanelDataError
+        from mixpanel_headless.exceptions import MixpanelHeadlessError
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Should never be called."""
@@ -871,5 +871,7 @@ class TestDeleteSchemas:
             )
 
         ws = _make_workspace(temp_dir, handler)
-        with pytest.raises(MixpanelDataError, match="entity_name requires entity_type"):
+        with pytest.raises(
+            MixpanelHeadlessError, match="entity_name requires entity_type"
+        ):
             ws.delete_schemas(entity_name="Purchase")

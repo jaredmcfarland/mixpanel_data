@@ -17,7 +17,7 @@ ws = mp.Workspace()
 result = ws.query("Login", math="unique", last=30)
 
 # Direct imports
-from mixpanel_headless import Workspace, MixpanelDataError
+from mixpanel_headless import Workspace, MixpanelHeadlessError
 
 # Insights Query types
 from mixpanel_headless import (
@@ -129,7 +129,7 @@ Three first-class account types and three functional namespaces. Most are re-exp
 
 Structured error handling:
 
-- **MixpanelDataError** — Base exception
+- **MixpanelHeadlessError** — Base exception
 - **APIError** — HTTP/API errors
 - **ConfigError** — Configuration errors
 - **OAuthError** — OAuth authentication errors

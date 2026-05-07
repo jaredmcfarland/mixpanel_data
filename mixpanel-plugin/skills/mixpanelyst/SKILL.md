@@ -1043,7 +1043,7 @@ Full reference: `WebFetch(url="https://mixpanel.github.io/mixpanel-headless/api/
 
 | Exception | When |
 |-----------|------|
-| `MixpanelDataError` | Base for all errors |
+| `MixpanelHeadlessError` | Base for all errors |
 | `ConfigError` | No credentials resolved |
 | `AccountNotFoundError` | Named account doesn't exist |
 | `AuthenticationError` | Invalid credentials (401) |

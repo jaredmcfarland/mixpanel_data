@@ -85,7 +85,7 @@ Errors go to stderr via `err_console`.
 | `RateLimitError` | 5 |
 | `QueryError` | 3 |
 | `ConfigError` | 1 |
-| `MixpanelDataError` | 1 |
+| `MixpanelHeadlessError` | 1 |
 
 ## Adding New Commands
 

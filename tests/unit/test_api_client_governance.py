@@ -19,7 +19,7 @@ import pytest
 
 from mixpanel_headless._internal.api_client import MixpanelAPIClient
 from mixpanel_headless._internal.auth.session import Session
-from mixpanel_headless.exceptions import MixpanelDataError
+from mixpanel_headless.exceptions import MixpanelHeadlessError
 from tests.conftest import make_session
 
 # =============================================================================
@@ -449,7 +449,7 @@ class TestRunAudit:
         assert result[1]["computed_at"] == "2026-01-01T12:00:00Z"
 
     def test_non_list_results_raises(self, oauth_credentials: Session) -> None:
-        """run_audit() raises MixpanelDataError when results is not a list."""
+        """run_audit() raises MixpanelHeadlessError when results is not a list."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return non-list results."""
@@ -459,7 +459,7 @@ class TestRunAudit:
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError, match="expected list"):
+        with client, pytest.raises(MixpanelHeadlessError, match="expected list"):
             client.run_audit()
 
 
@@ -534,7 +534,7 @@ class TestRunAuditEventsOnly:
         assert captured_methods[0] == "GET"
 
     def test_non_list_results_raises(self, oauth_credentials: Session) -> None:
-        """run_audit_events_only() raises MixpanelDataError when results is not a list."""
+        """run_audit_events_only() raises MixpanelHeadlessError when results is not a list."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return non-list results."""
@@ -544,7 +544,7 @@ class TestRunAuditEventsOnly:
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError, match="expected list"):
+        with client, pytest.raises(MixpanelHeadlessError, match="expected list"):
             client.run_audit_events_only()
 
 
@@ -708,7 +708,10 @@ class TestListDataVolumeAnomalies:
             )
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError, match="missing 'anomalies' key"):
+        with (
+            client,
+            pytest.raises(MixpanelHeadlessError, match="missing 'anomalies' key"),
+        ):
             client.list_data_volume_anomalies()
 
 

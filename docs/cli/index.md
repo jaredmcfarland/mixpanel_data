@@ -491,7 +491,7 @@ mp inspect events --format plain | wc -l
 | Code | Meaning | Exception |
 |------|---------|-----------|
 | 0 | Success | — |
-| 1 | General error | `MixpanelDataError`, `WorkspaceScopeError`, `AccountInUseError` |
+| 1 | General error | `MixpanelHeadlessError`, `WorkspaceScopeError`, `AccountInUseError` |
 | 2 | Authentication error | `AuthenticationError`, `OAuthError` |
 | 3 | Invalid arguments | `ConfigError`, validation errors |
 | 4 | Resource not found | `AccountNotFoundError`, `ProjectNotFoundError` |

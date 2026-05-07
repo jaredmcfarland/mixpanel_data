@@ -34,7 +34,7 @@ from mixpanel_headless.exceptions import (
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     OAuthError,
     QueryError,
     RateLimitError,
@@ -85,7 +85,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 def handle_errors(func: F) -> F:
     """Decorator to convert library exceptions to CLI exit codes.
 
-    Maps MixpanelDataError subclasses to appropriate exit codes and
+    Maps MixpanelHeadlessError subclasses to appropriate exit codes and
     displays formatted error messages to stderr.
 
     Usage:
@@ -300,7 +300,7 @@ def handle_errors(func: F) -> F:
                 f"[red]Business context too long:[/red] {rich_escape(e.message)}"
             )
             raise typer.Exit(ExitCode.INVALID_ARGS) from None
-        except MixpanelDataError as e:
+        except MixpanelHeadlessError as e:
             err_console.print(f"[red]Error:[/red] {rich_escape(e.message)}")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
         except pydantic.ValidationError as e:

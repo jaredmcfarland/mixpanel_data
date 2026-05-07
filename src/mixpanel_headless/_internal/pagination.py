@@ -20,7 +20,7 @@ import httpx
 
 from mixpanel_headless.exceptions import (
     AuthenticationError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     RateLimitError,
     ServerError,
 )
@@ -84,7 +84,7 @@ def paginate_all(
         AuthenticationError: Invalid credentials (401).
         RateLimitError: Rate limit exceeded after max retries (429).
         ServerError: Server-side errors (5xx).
-        MixpanelDataError: Client errors (400, 404, 422), network/connection
+        MixpanelHeadlessError: Client errors (400, 404, 422), network/connection
             errors, or pagination limit exceeded.
 
     Example:
@@ -104,21 +104,19 @@ def paginate_all(
         page_count += 1
 
         if page_count > MAX_PAGES:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "Pagination exceeded maximum page limit",
                 code="PAGINATION_LIMIT",
                 details={"max_pages": MAX_PAGES, "path": path},
             )
 
-        # Build request params with query_origin
-        request_params: dict[str, str] = {
-            "page_size": str(page_size),
-            "query_origin": "mixpanel-headless-cli",
-        }
+        request_params: dict[str, str] = {"page_size": str(page_size)}
         if params:
             request_params.update(params)
         if next_cursor is not None:
             request_params["cursor"] = next_cursor
+        # query_origin is canonical telemetry — set last so caller params can't override it
+        request_params["query_origin"] = "mixpanel-headless"
 
         # Make the raw request to get full response with pagination
         url = client._build_url("app", path)
@@ -138,7 +136,7 @@ def paginate_all(
                     timeout=client._timeout,
                 )
             except httpx.HTTPError as exc:
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"Network error during pagination: {exc}",
                     code="NETWORK_ERROR",
                     details={"path": path, "error": str(exc)},
@@ -206,7 +204,7 @@ def paginate_all(
                     request_method="GET",
                     request_url=url,
                 ) from exc
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"HTTP {status} during pagination: {body}",
                 code="API_ERROR",
                 details={"status_code": status, "response_body": body},
@@ -215,7 +213,7 @@ def paginate_all(
         try:
             data = response.json()
         except Exception as exc:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Non-JSON response during pagination (content-type: "
                 f"{response.headers.get('content-type', 'unknown')})",
                 code="INVALID_RESPONSE",

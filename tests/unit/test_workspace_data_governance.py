@@ -30,7 +30,7 @@ from pydantic import SecretStr
 from mixpanel_headless._internal.api_client import MixpanelAPIClient
 from mixpanel_headless._internal.auth.account import ServiceAccount
 from mixpanel_headless._internal.auth.session import Project, Session
-from mixpanel_headless.exceptions import AuthenticationError, MixpanelDataError
+from mixpanel_headless.exceptions import AuthenticationError, MixpanelHeadlessError
 from mixpanel_headless.types import (
     BulkEventUpdate,
     BulkPropertyUpdate,
@@ -1136,7 +1136,7 @@ class TestUpdateCustomEvent:
 
         ws = _make_workspace(temp_dir, handler)
         params = UpdateEventDefinitionParams(description="Updated")
-        with pytest.raises(MixpanelDataError) as exc_info:
+        with pytest.raises(MixpanelHeadlessError) as exc_info:
             ws.update_custom_event(2044168, params)
         assert exc_info.value.code == "UPDATE_TARGET_MISMATCH"
         assert "99999" in str(exc_info.value)
@@ -1544,14 +1544,14 @@ class TestUploadLookupTable:
         assert poll_count[0] >= 2  # Polled at least twice
 
     def test_async_upload_timeout_raises(self, temp_dir: Path) -> None:
-        """upload_lookup_table() raises MixpanelDataError on async timeout.
+        """upload_lookup_table() raises MixpanelHeadlessError on async timeout.
 
         When polling exceeds max_poll_seconds, a clear timeout error
         should be raised with the upload ID for manual follow-up.
         """
         import pytest
 
-        from mixpanel_headless.exceptions import MixpanelDataError
+        from mixpanel_headless.exceptions import MixpanelHeadlessError
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Always return PENDING to trigger timeout."""
@@ -1591,18 +1591,18 @@ class TestUploadLookupTable:
         ws = _make_workspace(temp_dir, handler)
         params = UploadLookupTableParams(name="BigTable", file_path=str(csv_path))
 
-        with pytest.raises(MixpanelDataError, match="timed out"):
+        with pytest.raises(MixpanelHeadlessError, match="timed out"):
             ws.upload_lookup_table(params, poll_interval=0.01, max_poll_seconds=0.05)
 
     def test_async_upload_failure_raises(self, temp_dir: Path) -> None:
-        """upload_lookup_table() raises MixpanelDataError on async failure.
+        """upload_lookup_table() raises MixpanelHeadlessError on async failure.
 
         When the upload task fails (status FAILURE), a clear error should
         be raised with the failure details.
         """
         import pytest
 
-        from mixpanel_headless.exceptions import MixpanelDataError
+        from mixpanel_headless.exceptions import MixpanelHeadlessError
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return FAILURE on status poll."""
@@ -1641,7 +1641,7 @@ class TestUploadLookupTable:
         ws = _make_workspace(temp_dir, handler)
         params = UploadLookupTableParams(name="BadTable", file_path=str(csv_path))
 
-        with pytest.raises(MixpanelDataError, match="failed"):
+        with pytest.raises(MixpanelHeadlessError, match="failed"):
             ws.upload_lookup_table(params, poll_interval=0.01)
 
 

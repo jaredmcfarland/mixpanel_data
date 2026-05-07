@@ -40,7 +40,7 @@ from mixpanel_headless._internal.auth.token_resolver import OnDiskTokenResolver
 from mixpanel_headless.exceptions import (
     AuthenticationError,
     JQLSyntaxError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     QueryError,
     RateLimitError,
     ServerError,
@@ -439,7 +439,7 @@ class MixpanelAPIClient:
         try:
             return response.json()
         except json.JSONDecodeError as e:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Non-JSON response from {request_method} {request_url} "
                 f"(status {response.status_code}): {response.text[:500]}",
                 code="INVALID_RESPONSE",
@@ -503,13 +503,13 @@ class MixpanelAPIClient:
             QueryError: Invalid parameters (400).
             JQLSyntaxError: JQL script syntax/runtime error (412).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
         """
         client = self._ensure_client()
         request_body = json_data or form_data
         if params is None:
             params = {}
-        params["query_origin"] = "mixpanel-headless-cli"
+        params["query_origin"] = "mixpanel-headless"
         request_headers = self._request_headers(headers)
 
         for attempt in range(self._max_retries + 1):
@@ -567,7 +567,7 @@ class MixpanelAPIClient:
                 )
 
             except httpx.HTTPError as e:
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"HTTP error: {e}",
                     code="HTTP_ERROR",
                     details={
@@ -624,7 +624,7 @@ class MixpanelAPIClient:
             QueryError: Invalid parameters (400).
             JQLSyntaxError: JQL script syntax/runtime error (412).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
         """
         if params is None:
             params = {}
@@ -680,7 +680,7 @@ class MixpanelAPIClient:
             RateLimitError: Rate limit exceeded after max retries (429).
             QueryError: Invalid parameters (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             Get event schema from the Lexicon API::
@@ -939,7 +939,7 @@ class MixpanelAPIClient:
             RateLimitError: Rate limit exceeded after max retries (429).
             QueryError: Invalid parameters or resource not found (400, 404, 422).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -1074,7 +1074,7 @@ class MixpanelAPIClient:
                 return result
 
             except httpx.HTTPError as e:
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"HTTP error: {e}",
                     code="HTTP_ERROR",
                     details={
@@ -1296,7 +1296,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Permission denied or API error (403, 400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -1322,7 +1322,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400, 404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -1337,7 +1337,7 @@ class MixpanelAPIClient:
         results = self.app_request("GET", path)
 
         if not isinstance(results, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response format from list_workspaces: "
                 f"expected list, got {type(results).__name__}",
             )
@@ -1486,7 +1486,7 @@ class MixpanelAPIClient:
             except httpx.HTTPError as e:
                 # Network/connection errors - retry if attempts remain
                 if attempt >= self._max_retries:
-                    raise MixpanelDataError(
+                    raise MixpanelHeadlessError(
                         f"HTTP error during export: {e}",
                         code="HTTP_ERROR",
                         details={"error": str(e)},
@@ -2845,7 +2845,7 @@ class MixpanelAPIClient:
             path = self.maybe_scoped_path("schemas")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_schema_registry: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -2888,7 +2888,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"schemas/{et}/{en}")
         result = self.app_request("POST", path, json_body=schema_json)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_schema: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -2925,7 +2925,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("schemas")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_schemas_bulk: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -2968,7 +2968,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"schemas/{et}/{en}")
         result = self.app_request("PATCH", path, json_body=schema_json)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_schema: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3002,7 +3002,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("schemas")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_schemas_bulk: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -3042,7 +3042,7 @@ class MixpanelAPIClient:
             ```
         """
         if entity_name is not None and entity_type is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "entity_name requires entity_type: providing entity_name "
                 "without entity_type would delete all schemas",
             )
@@ -3054,7 +3054,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(base)
         result = self.app_request("DELETE", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from delete_schemas: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3081,7 +3081,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400, 404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3097,7 +3097,7 @@ class MixpanelAPIClient:
             params["ids"] = ",".join(str(i) for i in ids)
         result = self.app_request("GET", path, params=params if params else None)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_dashboards: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -3120,7 +3120,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid payload or missing required fields (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3132,7 +3132,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("dashboards")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_dashboard: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3155,7 +3155,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found (404) or invalid ID (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3167,7 +3167,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"dashboards/{dashboard_id}")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_dashboard: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3193,7 +3193,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found (404) or invalid payload (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3205,7 +3205,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"dashboards/{dashboard_id}")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_dashboard: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3227,7 +3227,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found (404) or invalid ID (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3254,7 +3254,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid IDs or API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3281,7 +3281,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3308,7 +3308,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3335,7 +3335,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3362,7 +3362,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3393,7 +3393,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard or report not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3411,7 +3411,7 @@ class MixpanelAPIClient:
         }
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from remove_report_from_dashboard: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3437,7 +3437,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard or bookmark not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3455,7 +3455,7 @@ class MixpanelAPIClient:
         }
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from add_report_to_dashboard: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3481,7 +3481,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3516,7 +3516,7 @@ class MixpanelAPIClient:
                 return templates
         if isinstance(result, list):
             return result
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             f"Unexpected response from list_blueprint_templates: "
             f"expected templates dict, got {type(result).__name__}",
         )
@@ -3539,7 +3539,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid template type (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3553,7 +3553,7 @@ class MixpanelAPIClient:
             "POST", path, json_body={"template_type": template_type}
         )
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_blueprint: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3576,7 +3576,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found or not a blueprint (404/400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3588,7 +3588,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"dashboards/{dashboard_id}/blueprint-config")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_blueprint_config: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3611,7 +3611,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid cohort mappings (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3641,7 +3641,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid payload or blueprint not found (400/404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3653,7 +3653,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("dashboards/blueprints/finish")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from finalize_blueprint: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3676,7 +3676,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid payload (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3692,7 +3692,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("dashboards/rca")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_rca_dashboard: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3714,7 +3714,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Bookmark not found (404) or invalid ID (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3728,7 +3728,7 @@ class MixpanelAPIClient:
         )
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_bookmark_dashboard_ids: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -3751,7 +3751,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard not found (404) or invalid ID (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3763,7 +3763,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"dashboards/{dashboard_id}/erf")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_dashboard_erf: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3790,7 +3790,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard or report link not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3824,7 +3824,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard or text card not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -3888,7 +3888,7 @@ class MixpanelAPIClient:
                 return inner
         if isinstance(result, list):
             return result
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             f"Unexpected response from list_bookmarks_v2: "
             f"expected list or v2 envelope, got {type(result).__name__}",
         )
@@ -3923,7 +3923,7 @@ class MixpanelAPIClient:
         body_v2 = {**body, "v": 2}
         result = self.app_request("POST", path, json_body=body_v2)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_bookmark: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3953,7 +3953,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}")
         result = self.app_request("GET", path, params={"v": "2"})
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_bookmark: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -3985,7 +3985,7 @@ class MixpanelAPIClient:
         body_v2 = {**body, "v": 2}
         result = self.app_request("PATCH", path, json_body=body_v2)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_bookmark: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4080,7 +4080,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"bookmarks/{bookmark_id}/linked-dashboard-ids")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from bookmark_linked_dashboard_ids: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -4141,7 +4141,7 @@ class MixpanelAPIClient:
             return {"results": inner, "pagination": None}
         if isinstance(result, list):
             return {"results": result, "pagination": None}
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             f"Unexpected response from get_bookmark_history: "
             f"expected dict, got {type(result).__name__}",
         )
@@ -4185,7 +4185,7 @@ class MixpanelAPIClient:
             params["ids"] = ",".join(str(i) for i in ids)
         result = self.app_request("GET", path, params=params if params else None)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_cohorts_app: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -4215,7 +4215,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"cohorts/{cohort_id}")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_cohort: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4245,7 +4245,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("cohorts")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_cohort: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4276,7 +4276,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"cohorts/{cohort_id}")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_cohort: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4369,7 +4369,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400, 404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4383,7 +4383,7 @@ class MixpanelAPIClient:
             params["include_archived"] = "true"
         result = self.app_request("GET", path, params=params if params else None)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_feature_flags: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -4404,7 +4404,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Duplicate key or invalid payload (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4415,7 +4415,7 @@ class MixpanelAPIClient:
         path = self.require_scoped_path("feature-flags/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_feature_flag: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4436,7 +4436,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Flag not found (404) or invalid ID (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4447,7 +4447,7 @@ class MixpanelAPIClient:
         path = self.require_scoped_path(f"feature-flags/{flag_id}/")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_feature_flag: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4469,7 +4469,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Flag not found (404) or invalid payload (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4480,7 +4480,7 @@ class MixpanelAPIClient:
         path = self.require_scoped_path(f"feature-flags/{flag_id}/")
         result = self.app_request("PUT", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_feature_flag: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4498,7 +4498,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Flag not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4521,7 +4521,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Flag not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4547,7 +4547,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Flag not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4558,7 +4558,7 @@ class MixpanelAPIClient:
         path = self.require_scoped_path(f"feature-flags/{flag_id}/archive/")
         result = self.app_request("DELETE", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from restore_feature_flag: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4579,7 +4579,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Flag not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4590,7 +4590,7 @@ class MixpanelAPIClient:
         path = self.require_scoped_path(f"feature-flags/{flag_id}/duplicate/")
         result = self.app_request("POST", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from duplicate_feature_flag: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4609,7 +4609,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Flag not found (404) or invalid payload (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4638,7 +4638,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Flag not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4649,7 +4649,7 @@ class MixpanelAPIClient:
         path = self.require_scoped_path(f"feature-flags/{flag_id}/history/")
         result = self.app_request("GET", path, params=params)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_flag_history: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4669,7 +4669,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4681,7 +4681,7 @@ class MixpanelAPIClient:
         path = f"/projects/{pid}/feature-flags/limits/"
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_flag_limits: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4709,7 +4709,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400, 404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4723,7 +4723,7 @@ class MixpanelAPIClient:
             params["include_archived"] = "true"
         result = self.app_request("GET", path, params=params if params else None)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_experiments: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -4745,7 +4745,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid payload (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4756,7 +4756,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("experiments/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_experiment: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4778,7 +4778,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Experiment not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4789,7 +4789,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"experiments/{experiment_id}")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_experiment: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4814,7 +4814,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Experiment not found (404) or invalid payload (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4825,7 +4825,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"experiments/{experiment_id}")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_experiment: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4844,7 +4844,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Experiment not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4871,7 +4871,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid state transition (400) or not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4882,7 +4882,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"experiments/{experiment_id}/launch")
         result = self.app_request("PUT", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from launch_experiment: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4908,7 +4908,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid state transition (400) or not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4919,7 +4919,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"experiments/{experiment_id}/force_conclude")
         result = self.app_request("PUT", path, json_body=body or {})
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from conclude_experiment: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4944,7 +4944,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid state transition (400) or not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -4955,7 +4955,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"experiments/{experiment_id}/decide")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from decide_experiment: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -4974,7 +4974,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Experiment not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5001,7 +5001,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Experiment not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5012,7 +5012,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"experiments/{experiment_id}/archive")
         result = self.app_request("DELETE", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from restore_experiment: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5037,7 +5037,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Experiment not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5048,7 +5048,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"experiments/{experiment_id}/duplicate")
         result = self.app_request("POST", path, json_body=body if body else None)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from duplicate_experiment: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5067,7 +5067,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5078,7 +5078,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("experiments/erf/")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_erf_experiments: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -5112,7 +5112,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5130,7 +5130,7 @@ class MixpanelAPIClient:
             params["tags"] = ",".join(str(t) for t in tags)
         result = self.app_request("GET", path, params=params if params else None)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_annotations: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -5152,7 +5152,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5165,7 +5165,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("annotations/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_annotation: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5187,7 +5187,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Annotation not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5198,7 +5198,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"annotations/{annotation_id}/")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_annotation: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5223,7 +5223,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Annotation not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5234,7 +5234,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"annotations/{annotation_id}/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_annotation: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5256,7 +5256,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Annotation not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5280,7 +5280,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5291,7 +5291,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("annotations/tags/")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_annotation_tags: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -5313,7 +5313,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5324,7 +5324,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("annotations/tags/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_annotation_tag: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5347,7 +5347,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400, 404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5358,7 +5358,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("webhooks/")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_webhooks: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -5380,7 +5380,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5391,7 +5391,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("webhooks/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_webhook: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5414,7 +5414,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Webhook not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5425,7 +5425,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"webhooks/{webhook_id}/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_webhook: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5444,7 +5444,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Webhook not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5471,7 +5471,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5482,7 +5482,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("webhooks/test/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from test_webhook: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5514,7 +5514,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5530,7 +5530,7 @@ class MixpanelAPIClient:
             params["skip_user_filter"] = str(skip_user_filter).lower()
         result = self.app_request("GET", path, params=params if params else None)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_alerts: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -5552,7 +5552,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5563,7 +5563,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("alerts/custom/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_alert: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5585,7 +5585,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Alert not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5596,7 +5596,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"alerts/custom/{alert_id}/")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_alert: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5619,7 +5619,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Alert not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5630,7 +5630,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"alerts/custom/{alert_id}/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_alert: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5649,7 +5649,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Alert not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5673,7 +5673,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5700,7 +5700,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5714,7 +5714,7 @@ class MixpanelAPIClient:
             params["type"] = alert_type
         result = self.app_request("GET", path, params=params if params else None)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_alert_count: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5747,7 +5747,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Alert not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5768,7 +5768,7 @@ class MixpanelAPIClient:
         )
         if isinstance(result, dict):
             if "results" not in result:
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     "Unexpected response from get_alert_history: "
                     "dict missing 'results' key",
                 )
@@ -5782,7 +5782,7 @@ class MixpanelAPIClient:
         elif isinstance(result, list):
             return {"results": result, "pagination": None}
 
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             f"Unexpected response from get_alert_history: "
             f"got {type(result).__name__} without results list",
         )
@@ -5803,7 +5803,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5814,7 +5814,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("alerts/custom/test/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from test_alert: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5836,7 +5836,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Screenshot not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5847,7 +5847,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("alerts/custom/screenshot/")
         result = self.app_request("GET", path, params={"gcs_key": gcs_key})
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_alert_screenshot_url: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5869,7 +5869,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5884,7 +5884,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("alerts/custom/validate-alerts-for-bookmark/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from validate_alerts_for_bookmark: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5910,7 +5910,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400/404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5922,7 +5922,7 @@ class MixpanelAPIClient:
         params: dict[str, str | list[str]] = {"name[]": names}
         result = self.app_request("GET", path, params=params)  # type: ignore[arg-type]
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_event_definitions: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -5947,7 +5947,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400) or not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -5961,7 +5961,7 @@ class MixpanelAPIClient:
         payload = {**body, "name": name}
         result = self.app_request("PATCH", path, json_body=payload)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_event_definition: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -5980,7 +5980,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Event not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6010,7 +6010,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6026,7 +6026,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from bulk_update_event_definitions: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6054,7 +6054,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400/404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6068,7 +6068,7 @@ class MixpanelAPIClient:
             params["resource_type"] = resource_type
         result = self.app_request("GET", path, params=params)  # type: ignore[arg-type]
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_property_definitions: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6093,7 +6093,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400) or not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6107,7 +6107,7 @@ class MixpanelAPIClient:
         payload = {**body, "name": name}
         result = self.app_request("PATCH", path, json_body=payload)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_property_definition: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6132,7 +6132,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6148,7 +6148,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/properties/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from bulk_update_property_definitions: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6167,7 +6167,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6178,7 +6178,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/tags/")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_lexicon_tags: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6200,7 +6200,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6211,7 +6211,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/tags/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_lexicon_tag: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6234,7 +6234,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Tag not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6245,7 +6245,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"data-definitions/tags/{tag_id}/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_lexicon_tag: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6264,7 +6264,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Tag not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6291,7 +6291,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Event not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6302,7 +6302,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/tracking-metadata/")
         result = self.app_request("GET", path, params={"event_name": event_name})
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_tracking_metadata: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6324,7 +6324,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Event not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6337,7 +6337,7 @@ class MixpanelAPIClient:
         )
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_event_history: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6362,7 +6362,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Property not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6375,7 +6375,7 @@ class MixpanelAPIClient:
         )
         result = self.app_request("GET", path, params={"entity_type": entity_type})
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_property_history: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6399,7 +6399,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6421,7 +6421,7 @@ class MixpanelAPIClient:
             # Async export — returns status message
             return {"status": "pending", "message": result}
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from export_lexicon: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6444,7 +6444,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6455,7 +6455,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/drop-filters/")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_drop_filters: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6477,7 +6477,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6490,7 +6490,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/drop-filters/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_drop_filter: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6512,7 +6512,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400) or not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6525,7 +6525,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/drop-filters/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_drop_filter: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6547,7 +6547,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Drop filter not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6558,7 +6558,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/drop-filters/")
         result = self.app_request("DELETE", path, json_body={"id": drop_filter_id})
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from delete_drop_filter: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6577,7 +6577,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6588,7 +6588,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/drop-filters/limits/")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_drop_filter_limits: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6611,7 +6611,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6622,7 +6622,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("custom_properties/")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_custom_properties: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6644,7 +6644,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6658,7 +6658,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("custom_properties/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_custom_property: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6680,7 +6680,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Property not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6691,7 +6691,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"custom_properties/{property_id}/")
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_custom_property: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6716,7 +6716,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Property not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6729,7 +6729,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path(f"custom_properties/{property_id}/")
         result = self.app_request("PUT", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_custom_property: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6748,7 +6748,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Property not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6775,7 +6775,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6789,7 +6789,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("custom_properties/validate/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from validate_custom_property: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -6817,7 +6817,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6831,7 +6831,7 @@ class MixpanelAPIClient:
             params["data-group-id"] = str(data_group_id)
         result = self.app_request("GET", path, params=params if params else None)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_lookup_tables: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -6853,7 +6853,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors or missing fields.
+            MixpanelHeadlessError: Network/connection errors or missing fields.
 
         Example:
             ```python
@@ -6865,13 +6865,13 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/lookup-tables/upload-url/")
         result = self.app_request("GET", path, params={"content-type": content_type})
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_lookup_upload_url: "
                 f"expected dict, got {type(result).__name__}",
             )
         for required_key in ("url", "path", "key"):
             if required_key not in result:
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"get_lookup_upload_url response missing required "
                     f"field '{required_key}': {result}",
                     code="MISSING_FIELD",
@@ -6891,7 +6891,7 @@ class MixpanelAPIClient:
             csv_bytes: Raw CSV content as bytes.
 
         Raises:
-            MixpanelDataError: Upload failed (non-2xx response).
+            MixpanelHeadlessError: Upload failed (non-2xx response).
 
         Example:
             ```python
@@ -6918,7 +6918,7 @@ class MixpanelAPIClient:
                 headers={"Content-Type": "text/csv"},
             )
         except httpx.HTTPError as e:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Upload to signed URL failed: {e}",
                 code="UPLOAD_ERROR",
                 details={"url": url},
@@ -6926,7 +6926,7 @@ class MixpanelAPIClient:
         finally:
             upload_client.close()
         if response.status_code >= 300:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Upload to signed URL failed with status "
                 f"{response.status_code}: {response.text[:500]}",
                 code="UPLOAD_ERROR",
@@ -6953,7 +6953,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -6987,7 +6987,7 @@ class MixpanelAPIClient:
         try:
             body: Any = response.json()
         except json.JSONDecodeError as e:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"register_lookup_table returned non-JSON response "
                 f"(status {response.status_code}): {response.text[:500]}",
                 code="INVALID_RESPONSE",
@@ -6995,7 +6995,7 @@ class MixpanelAPIClient:
         if isinstance(body, dict) and "results" in body:
             body = body["results"]
         if not isinstance(body, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from register_lookup_table: "
                 f"expected dict, got {type(body).__name__}",
             )
@@ -7018,7 +7018,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -7047,7 +7047,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Upload not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -7058,7 +7058,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/lookup-tables/upload-status/")
         result = self.app_request("GET", path, params={"upload-id": upload_id})
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_lookup_upload_status: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7083,7 +7083,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Table not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -7097,7 +7097,7 @@ class MixpanelAPIClient:
         payload = {**body, "data-group-id": data_group_id}
         result = self.app_request("PATCH", path, json_body=payload)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_lookup_table: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7116,7 +7116,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Table(s) not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -7151,7 +7151,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Table not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -7206,7 +7206,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Table not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -7225,14 +7225,14 @@ class MixpanelAPIClient:
             url = result.get("url") or result.get("download_url", "")
             if isinstance(url, str) and url:
                 return url
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "No download URL found in response",
                 code="MISSING_URL",
                 details={"response": result},
             )
         if isinstance(result, str):
             return result
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             f"Unexpected response from get_lookup_download_url: "
             f"expected dict or str, got {type(result).__name__}",
         )
@@ -7266,7 +7266,7 @@ class MixpanelAPIClient:
             QueryError: Validation error (400, 422) — for example, duplicate
                 custom event name or unknown underlying event.
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network failure or unexpected response shape.
+            MixpanelHeadlessError: Network failure or unexpected response shape.
 
         Example:
             ```python
@@ -7285,7 +7285,7 @@ class MixpanelAPIClient:
         if isinstance(payload, dict) and "custom_event" in payload:
             payload = payload["custom_event"]
         if not isinstance(payload, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_custom_event: "
                 f"expected dict, got {type(payload).__name__}",
             )
@@ -7304,7 +7304,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -7315,7 +7315,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/")
         result = self.app_request("GET", path, params={"custom_event": "true"})
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_custom_events: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -7348,7 +7348,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Event not found (404) or validation error (400, 422).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors, or the server
+            MixpanelHeadlessError: Network/connection errors, or the server
                 returned an entry with a different ``customEventId`` than
                 the one requested (``code="UPDATE_TARGET_MISMATCH"``) —
                 indicates the lexicon entry may have been created instead
@@ -7366,7 +7366,7 @@ class MixpanelAPIClient:
         payload = {**body, "customEventId": custom_event_id}
         result = self.app_request("PATCH", path, json_body=payload)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_custom_event: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7377,7 +7377,7 @@ class MixpanelAPIClient:
         # rather than silently returning an unrelated entity.
         returned_id = result.get("customEventId")
         if returned_id is not None and returned_id != custom_event_id:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"update_custom_event: server returned customEventId="
                 f"{returned_id!r} but {custom_event_id} was requested. "
                 f"The lexicon entry may have been created instead of "
@@ -7408,7 +7408,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Event not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors.
+            MixpanelHeadlessError: Network/connection errors.
 
         Example:
             ```python
@@ -7455,7 +7455,7 @@ class MixpanelAPIClient:
             params = {"fields": fields}
         result = self.app_request("GET", path, params=params)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_schema_enforcement: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7491,7 +7491,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/schema/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from init_schema_enforcement: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7527,7 +7527,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/schema/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_schema_enforcement: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7561,7 +7561,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/schema/")
         result = self.app_request("PUT", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from replace_schema_enforcement: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7588,7 +7588,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/schema/")
         result = self.app_request("DELETE", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from delete_schema_enforcement: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7625,14 +7625,14 @@ class MixpanelAPIClient:
         if isinstance(result, dict) and "results" in result:
             inner = result["results"]
             if not isinstance(inner, list):
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"Unexpected audit results type: expected list, "
                     f"got {type(inner).__name__}",
                 )
             return inner
         if isinstance(result, list):
             return result
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             f"Unexpected audit response format: {type(result).__name__}",
         )
 
@@ -7660,14 +7660,14 @@ class MixpanelAPIClient:
         if isinstance(result, dict) and "results" in result:
             inner = result["results"]
             if not isinstance(inner, list):
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"Unexpected audit results type: expected list, "
                     f"got {type(inner).__name__}",
                 )
             return inner
         if isinstance(result, list):
             return result
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             f"Unexpected audit response format: {type(result).__name__}",
         )
 
@@ -7711,14 +7711,14 @@ class MixpanelAPIClient:
             results = result.get("results", result)
             if isinstance(results, dict):
                 if "anomalies" not in results:
-                    raise MixpanelDataError(
+                    raise MixpanelHeadlessError(
                         "Unexpected response from list_data_volume_anomalies: "
                         "missing 'anomalies' key in results",
                     )
                 anomalies = results["anomalies"]
                 if isinstance(anomalies, list):
                     return anomalies
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             "Unexpected response format from list_data_volume_anomalies",
         )
 
@@ -7751,7 +7751,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/data-volume-anomalies/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from update_anomaly: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7787,7 +7787,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/data-volume-anomalies/bulk/")
         result = self.app_request("PATCH", path, json_body=body)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from bulk_update_anomalies: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -7817,7 +7817,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/deletion-requests/")
         result = self.app_request("GET", path)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from list_deletion_requests: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -7854,7 +7854,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/deletion-requests/")
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from create_deletion_request: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -7885,7 +7885,7 @@ class MixpanelAPIClient:
         path = self.maybe_scoped_path("data-definitions/events/deletion-requests/")
         result = self.app_request("DELETE", path, json_body={"id": request_id})
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from cancel_deletion_request: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -7924,7 +7924,7 @@ class MixpanelAPIClient:
         )
         result = self.app_request("POST", path, json_body=body)
         if not isinstance(result, list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from preview_deletion_filters: "
                 f"expected list, got {type(result).__name__}",
             )
@@ -7963,7 +7963,7 @@ class MixpanelAPIClient:
             QueryError: Caller lacks access to the project / organization
                 (403, 404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors or unexpected
+            MixpanelHeadlessError: Network/connection errors or unexpected
                 response shape.
 
         Example:
@@ -7984,7 +7984,7 @@ class MixpanelAPIClient:
             path = f"/projects/{self._session.project.id}/business-context"
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_business_context: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -8026,7 +8026,7 @@ class MixpanelAPIClient:
                 ``edit_project_info`` permission (403), or invalid JSON
                 body (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors or unexpected
+            MixpanelHeadlessError: Network/connection errors or unexpected
                 response shape.
 
         Example:
@@ -8042,7 +8042,7 @@ class MixpanelAPIClient:
             path = f"/projects/{self._session.project.id}/business-context"
         result = self.app_request("PUT", path, json_body={"content": content})
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from set_business_context: "
                 f"expected dict, got {type(result).__name__}",
             )
@@ -8066,7 +8066,7 @@ class MixpanelAPIClient:
             AuthenticationError: Invalid credentials (401).
             QueryError: Caller lacks project access (403, 404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Network/connection errors or unexpected
+            MixpanelHeadlessError: Network/connection errors or unexpected
                 response shape.
 
         Example:
@@ -8080,7 +8080,7 @@ class MixpanelAPIClient:
         path = f"/projects/{self._session.project.id}/business-context/chain"
         result = self.app_request("GET", path)
         if not isinstance(result, dict):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from get_business_context_chain: "
                 f"expected dict, got {type(result).__name__}",
             )

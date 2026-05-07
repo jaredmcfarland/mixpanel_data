@@ -129,11 +129,11 @@ class TestBookmarkValidationError:
     """Tests for the BookmarkValidationError exception."""
 
     def test_inherits_from_base(self) -> None:
-        """BookmarkValidationError is a MixpanelDataError."""
-        from mixpanel_headless.exceptions import MixpanelDataError
+        """BookmarkValidationError is a MixpanelHeadlessError."""
+        from mixpanel_headless.exceptions import MixpanelHeadlessError
 
         err = BookmarkValidationError([ValidationError(path="p", message="m")])
-        assert isinstance(err, MixpanelDataError)
+        assert isinstance(err, MixpanelHeadlessError)
 
     def test_error_count(self) -> None:
         """error_count counts severity='error' items."""

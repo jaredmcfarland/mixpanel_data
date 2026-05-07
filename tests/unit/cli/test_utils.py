@@ -26,7 +26,7 @@ from mixpanel_headless.exceptions import (
     DateRangeTooLargeError,
     EventNotFoundError,
     JQLSyntaxError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     QueryError,
     RateLimitError,
     ServerError,
@@ -144,11 +144,11 @@ class TestHandleErrors:
         assert exc.value.exit_code == ExitCode.GENERAL_ERROR
 
     def test_generic_mixpanel_error_exits_with_code_1(self) -> None:
-        """Test generic MixpanelDataError maps to exit code 1."""
+        """Test generic MixpanelHeadlessError maps to exit code 1."""
 
         @handle_errors
         def generic_fail() -> None:
-            raise MixpanelDataError("Something went wrong")
+            raise MixpanelHeadlessError("Something went wrong")
 
         with pytest.raises(click.exceptions.Exit) as exc:
             generic_fail()

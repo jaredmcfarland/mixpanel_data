@@ -18,7 +18,7 @@ Verifies:
 - Cold-cache chain leaves organization_id=None
 - Server-side 400 surfaces as QueryError
 - Missing ``content`` / ``org_context`` / ``project_context`` raises
-  MixpanelDataError instead of being silently treated as empty
+  MixpanelHeadlessError instead of being silently treated as empty
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from mixpanel_headless._internal.auth.session import Session
 from mixpanel_headless._internal.me import MeOrgInfo, MeProjectInfo, MeResponse
 from mixpanel_headless.exceptions import (
     BusinessContextValidationError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     QueryError,
     WorkspaceScopeError,
 )
@@ -209,7 +209,7 @@ class TestGetBusinessContextProject:
             ws.get_business_context(level="org")  # type: ignore[arg-type]
 
     def test_missing_content_raises_mixpanel_headless_error(self) -> None:
-        """API response without ``content`` field → MixpanelDataError."""
+        """API response without ``content`` field → MixpanelHeadlessError."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return a malformed response (no ``content`` field)."""
@@ -217,7 +217,7 @@ class TestGetBusinessContextProject:
             return _ok({"unexpected": "shape"})
 
         ws = _make_workspace(handler)
-        with pytest.raises(MixpanelDataError) as exc_info:
+        with pytest.raises(MixpanelHeadlessError) as exc_info:
             ws.get_business_context(level="project")
         assert "missing required field 'content'" in str(exc_info.value)
 
@@ -557,7 +557,7 @@ class TestGetBusinessContextChain:
         assert seen == ["GET /api/app/projects/12345/business-context/chain"]
 
     def test_chain_missing_org_context_raises(self) -> None:
-        """API response without ``org_context`` → MixpanelDataError."""
+        """API response without ``org_context`` → MixpanelHeadlessError."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return a malformed chain response."""
@@ -565,12 +565,12 @@ class TestGetBusinessContextChain:
             return _ok({"project_context": "# Project"})
 
         ws = _make_workspace(handler)
-        with pytest.raises(MixpanelDataError) as exc_info:
+        with pytest.raises(MixpanelHeadlessError) as exc_info:
             ws.get_business_context_chain()
         assert "missing required field 'org_context'" in str(exc_info.value)
 
     def test_chain_missing_project_context_raises(self) -> None:
-        """API response without ``project_context`` → MixpanelDataError."""
+        """API response without ``project_context`` → MixpanelHeadlessError."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return a malformed chain response."""
@@ -578,6 +578,6 @@ class TestGetBusinessContextChain:
             return _ok({"org_context": "# Org"})
 
         ws = _make_workspace(handler)
-        with pytest.raises(MixpanelDataError) as exc_info:
+        with pytest.raises(MixpanelHeadlessError) as exc_info:
             ws.get_business_context_chain()
         assert "missing required field 'project_context'" in str(exc_info.value)

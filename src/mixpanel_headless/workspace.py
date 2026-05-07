@@ -123,7 +123,7 @@ from mixpanel_headless.exceptions import (
     BookmarkValidationError,
     BusinessContextValidationError,
     ConfigError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     QueryError,
     RateLimitError,
     ServerError,
@@ -4555,7 +4555,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.create_dashboard(params.model_dump(exclude_none=True))
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for create_dashboard",
             )
         return Dashboard.model_validate(raw)
@@ -4584,7 +4584,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.get_dashboard(dashboard_id)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for get_dashboard",
             )
         return Dashboard.model_validate(raw)
@@ -4620,7 +4620,7 @@ class Workspace:
             dashboard_id, params.model_dump(exclude_none=True)
         )
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for update_dashboard",
             )
         return Dashboard.model_validate(raw)
@@ -4801,7 +4801,7 @@ class Workspace:
             AuthenticationError: Invalid credentials (401).
             QueryError: Dashboard or bookmark not found (404).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: If the API response is not a valid dashboard dict.
+            MixpanelHeadlessError: If the API response is not a valid dashboard dict.
 
         Example:
             ```python
@@ -4812,7 +4812,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.add_report_to_dashboard(dashboard_id, bookmark_id)
         if not isinstance(raw, dict) or "id" not in raw:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "Unexpected response from add_report_to_dashboard: "
                 f"expected dashboard dict with 'id', got {raw!r}",
             )
@@ -4868,7 +4868,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.create_blueprint(template_type)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for create_blueprint",
             )
         return Dashboard.model_validate(raw)
@@ -4897,7 +4897,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.get_blueprint_config(dashboard_id)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for get_blueprint_config",
             )
         return BlueprintConfig.model_validate(raw)
@@ -4953,7 +4953,7 @@ class Workspace:
         body = params.model_dump(exclude_none=True, by_alias=True)
         raw = client.finalize_blueprint(body)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for finalize_blueprint",
             )
         return Dashboard.model_validate(raw)
@@ -4988,7 +4988,7 @@ class Workspace:
         body = params.model_dump(exclude_none=True, by_alias=True)
         raw = client.create_rca_dashboard(body)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for create_rca_dashboard",
             )
         return Dashboard.model_validate(raw)
@@ -5219,7 +5219,7 @@ class Workspace:
             The newly created ``Bookmark``.
 
         Raises:
-            MixpanelDataError: If ``params.dashboard_id`` is ``None``
+            MixpanelHeadlessError: If ``params.dashboard_id`` is ``None``
                 (required by the Mixpanel v2 API).
             BookmarkValidationError: If ``params.params`` fails
                 client-side schema validation (mirrors Mixpanel's
@@ -5244,7 +5244,7 @@ class Workspace:
             ```
         """
         if params.dashboard_id is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "dashboard_id is required when creating a bookmark. "
                 "The Mixpanel v2 API requires every bookmark to be "
                 "associated with a dashboard. Create a dashboard first "
@@ -5272,7 +5272,7 @@ class Workspace:
             params.model_dump(by_alias=True, exclude_none=True)
         )
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for create_bookmark",
             )
         bookmark = Bookmark.model_validate(raw)
@@ -5309,7 +5309,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.get_bookmark(bookmark_id)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for get_bookmark",
             )
         return Bookmark.model_validate(raw)
@@ -5366,7 +5366,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.update_bookmark(bookmark_id, params.model_dump(exclude_none=True))
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for update_bookmark",
             )
         return Bookmark.model_validate(raw)
@@ -5559,7 +5559,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.get_cohort(cohort_id)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for get_cohort",
             )
         return Cohort.model_validate(raw)
@@ -5590,7 +5590,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.create_cohort(params.model_dump(exclude_none=True))
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for create_cohort",
             )
         return Cohort.model_validate(raw)
@@ -5622,7 +5622,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.update_cohort(cohort_id, params.model_dump(exclude_none=True))
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for update_cohort",
             )
         return Cohort.model_validate(raw)
@@ -5751,7 +5751,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.create_feature_flag(params.model_dump(exclude_none=True))
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for create_feature_flag",
             )
         return FeatureFlag.model_validate(raw)
@@ -5780,7 +5780,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.get_feature_flag(flag_id)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for get_feature_flag",
             )
         return FeatureFlag.model_validate(raw)
@@ -5818,7 +5818,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.update_feature_flag(flag_id, params.model_dump(exclude_none=True))
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for update_feature_flag",
             )
         return FeatureFlag.model_validate(raw)
@@ -6068,7 +6068,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.create_experiment(params.model_dump(exclude_none=True))
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for create_experiment",
             )
         return Experiment.model_validate(raw)
@@ -6097,7 +6097,7 @@ class Workspace:
         client = self._require_api_client()
         raw = client.get_experiment(experiment_id)
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for get_experiment",
             )
         return Experiment.model_validate(raw)
@@ -6133,7 +6133,7 @@ class Workspace:
             experiment_id, params.model_dump(exclude_none=True)
         )
         if raw is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "API returned empty response for update_experiment",
             )
         return Experiment.model_validate(raw)
@@ -7786,7 +7786,7 @@ class Workspace:
             QueryError: Validation error (400) or file not found.
             ServerError: Server-side errors (5xx).
             FileNotFoundError: If the CSV file does not exist.
-            MixpanelDataError: Async processing timed out or failed.
+            MixpanelHeadlessError: Async processing timed out or failed.
 
         Example:
             ```python
@@ -7859,7 +7859,7 @@ class Workspace:
             The result dictionary from the completed upload.
 
         Raises:
-            MixpanelDataError: If polling times out or the task fails.
+            MixpanelHeadlessError: If polling times out or the task fails.
         """
         logger = logging.getLogger(__name__)
         deadline = time.monotonic() + max_poll_seconds
@@ -7873,14 +7873,14 @@ class Workspace:
                 result = status.get("result")
                 if isinstance(result, dict):
                     return result
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"Lookup table upload succeeded but returned "
                     f"unexpected result: {status}",
                     code="INVALID_RESPONSE",
                 )
 
             if upload_status in ("FAILURE", "REVOKED"):
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"Lookup table upload failed with status "
                     f"'{upload_status}': {status}",
                     code="UPLOAD_FAILED",
@@ -7888,7 +7888,7 @@ class Workspace:
                 )
 
             if upload_status == "NOTFOUND":
-                raise MixpanelDataError(
+                raise MixpanelHeadlessError(
                     f"Lookup table upload not found (uploadId={upload_id}). "
                     f"The upload may have expired.",
                     code="UPLOAD_NOT_FOUND",
@@ -7901,7 +7901,7 @@ class Workspace:
                 upload_id,
             )
 
-        raise MixpanelDataError(
+        raise MixpanelHeadlessError(
             f"Lookup table upload timed out after {max_poll_seconds}s "
             f"(uploadId={upload_id}). Use get_lookup_upload_status() "
             f"to check progress manually.",
@@ -8213,7 +8213,7 @@ class Workspace:
             AuthenticationError: Invalid credentials (401).
             QueryError: Event not found (404) or validation error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: Server returned an entry with a different
+            MixpanelHeadlessError: Server returned an entry with a different
                 ``customEventId`` than requested
                 (``code="UPDATE_TARGET_MISMATCH"``).
 
@@ -8584,7 +8584,7 @@ class Workspace:
             AuthenticationError: Invalid credentials (401).
             QueryError: Invalid parameters (400).
             RateLimitError: Rate limit exceeded (429).
-            MixpanelDataError: If entity_name is provided without entity_type.
+            MixpanelHeadlessError: If entity_name is provided without entity_type.
 
         Example:
             ```python
@@ -8594,7 +8594,7 @@ class Workspace:
             ```
         """
         if entity_name is not None and entity_type is None:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 "entity_name requires entity_type: providing entity_name "
                 "without entity_type would delete all schemas",
             )
@@ -8777,7 +8777,7 @@ class Workspace:
         if not raw:
             return AuditResponse(violations=[], computed_at="")
         if not isinstance(raw[0], list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected audit response: expected list of violations, "
                 f"got {type(raw[0]).__name__}",
             )
@@ -8810,7 +8810,7 @@ class Workspace:
         if not raw:
             return AuditResponse(violations=[], computed_at="")
         if not isinstance(raw[0], list):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected audit response: expected list of violations, "
                 f"got {type(raw[0]).__name__}",
             )
@@ -10072,7 +10072,7 @@ class Workspace:
         """Read a required string field from an App API response.
 
         Treats a missing key as a server-contract violation (raises
-        ``MixpanelDataError``) rather than silently substituting the
+        ``MixpanelHeadlessError``) rather than silently substituting the
         empty string, which would mask renames or schema drift on the
         server side.
 
@@ -10086,17 +10086,17 @@ class Workspace:
             (unset business context returns ``""``).
 
         Raises:
-            MixpanelDataError: ``key`` is absent from ``raw`` or its
+            MixpanelHeadlessError: ``key`` is absent from ``raw`` or its
                 value is not a string.
         """
         if key not in raw:
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from {method}: missing required field {key!r}",
                 details={"missing_field": key, "response": raw},
             )
         value = raw[key]
         if not isinstance(value, str):
-            raise MixpanelDataError(
+            raise MixpanelHeadlessError(
                 f"Unexpected response from {method}: field {key!r} "
                 f"is {type(value).__name__}, expected str",
                 details={"field": key, "response": raw},
@@ -10141,7 +10141,7 @@ class Workspace:
             ServerError: Server-side errors (5xx).
             WorkspaceScopeError: ``level="organization"`` and the org
                 ID could not be auto-resolved.
-            MixpanelDataError: API response is missing the ``content``
+            MixpanelHeadlessError: API response is missing the ``content``
                 field.
 
         Example:
@@ -10220,7 +10220,7 @@ class Workspace:
             ServerError: Server-side errors (5xx).
             WorkspaceScopeError: ``level="organization"`` and the org
                 ID could not be auto-resolved.
-            MixpanelDataError: API response is missing the ``content``
+            MixpanelHeadlessError: API response is missing the ``content``
                 field.
 
         Example:
@@ -10336,7 +10336,7 @@ class Workspace:
             QueryError: Caller lacks project access (403, 404) or
                 other API error (400).
             ServerError: Server-side errors (5xx).
-            MixpanelDataError: API response is missing ``org_context``
+            MixpanelHeadlessError: API response is missing ``org_context``
                 or ``project_context``.
 
         Example:

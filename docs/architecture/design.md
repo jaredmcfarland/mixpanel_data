@@ -91,7 +91,7 @@ HTTP client with Mixpanel-specific features:
 
 ### Three-Axis Hierarchy
 
-The 0.4.0 redesign organizes auth around three independent axes:
+Auth is organized around three independent axes:
 
 - **Account** — *who* is authenticating. Three first-class types managed through one surface: `service_account` (Basic Auth), `oauth_browser` (PKCE flow, tokens auto-refreshed), `oauth_token` (static bearer for CI/agents).
 - **Project** — *which Mixpanel project* the calls run against. Lives on the active account as `default_project`; can be overridden per call.

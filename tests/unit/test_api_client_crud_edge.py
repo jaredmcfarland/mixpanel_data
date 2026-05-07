@@ -22,7 +22,7 @@ from mixpanel_headless._internal.api_client import MixpanelAPIClient
 from mixpanel_headless._internal.auth.session import Session
 from mixpanel_headless.exceptions import (
     AuthenticationError,
-    MixpanelDataError,
+    MixpanelHeadlessError,
     QueryError,
 )
 from tests.conftest import make_session
@@ -240,14 +240,14 @@ class TestListMethodResponseHandling:
         assert result[0]["title_key"] == "OK"
 
     def test_list_dashboards_non_list_raises(self, oauth_credentials: Session) -> None:
-        """list_dashboards() raises MixpanelDataError when response is not a list."""
+        """list_dashboards() raises MixpanelHeadlessError when response is not a list."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return a string instead of list to test type validation."""
             return httpx.Response(200, json={"status": "ok", "results": "unexpected"})
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError, match="expected list"):
+        with client, pytest.raises(MixpanelHeadlessError, match="expected list"):
             client.list_dashboards()
 
 
@@ -345,25 +345,25 @@ class TestResponseTypeValidation:
         assert result == [1, 2]
 
     def test_create_dashboard_non_dict_raises(self, oauth_credentials: Session) -> None:
-        """create_dashboard() raises MixpanelDataError when response is not a dict."""
+        """create_dashboard() raises MixpanelHeadlessError when response is not a dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return a list instead of dict to test type validation."""
             return httpx.Response(200, json={"status": "ok", "results": [1, 2]})
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError, match="expected dict"):
+        with client, pytest.raises(MixpanelHeadlessError, match="expected dict"):
             client.create_dashboard({"title": "X"})
 
     def test_get_bookmark_non_dict_raises(self, oauth_credentials: Session) -> None:
-        """get_bookmark() raises MixpanelDataError when response is not a dict."""
+        """get_bookmark() raises MixpanelHeadlessError when response is not a dict."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             """Return a list instead of dict to test type validation."""
             return httpx.Response(200, json={"status": "ok", "results": [1, 2]})
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError, match="expected dict"):
+        with client, pytest.raises(MixpanelHeadlessError, match="expected dict"):
             client.get_bookmark(42)
 
     def test_bookmark_linked_ids_non_list_raises(
@@ -376,7 +376,7 @@ class TestResponseTypeValidation:
             return httpx.Response(200, json={"status": "ok", "results": {"id": 1}})
 
         client = create_mock_client(oauth_credentials, handler)
-        with client, pytest.raises(MixpanelDataError, match="expected list"):
+        with client, pytest.raises(MixpanelHeadlessError, match="expected list"):
             client.bookmark_linked_dashboard_ids(42)
 
 
