@@ -38,9 +38,21 @@ These resolve via the priority chain `env > param > target > bridge > [active] >
 
 ## Command Groups
 
+### login — Frictionless Authentication
+
+`mp login` is the recommended starter command. It composes region probe, `/me` lookup, project picker, and account-name derivation into a single call:
+
+| Command | Description |
+|---------|-------------|
+| `mp login` | One-shot login (browser PKCE by default; auto-detects SA / static-bearer paths from env) |
+
+Useful flags: `--region {us\|eu\|in}` skips the probe, `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path, `--no-browser` prints the authorization URL instead of launching a browser, `--secret-stdin` reads the SA secret from stdin.
+
+The auth-type detection ladder (in priority order): explicit `--service-account` / `--token-env` flag → `MP_USERNAME` + `MP_SECRET` set → `MP_OAUTH_TOKEN` set → otherwise `oauth_browser`. See [Configuration → Quick Start](../getting-started/configuration.md#quick-start-mp-login) for examples.
+
 ### account — Account Management
 
-Manage configured accounts (service accounts, OAuth browser, OAuth token) and the active account.
+Manage configured accounts (service accounts, OAuth browser, OAuth token) and the active account. For first-time setup, prefer `mp login` above; the `account` group is for explicit registration, rotation, and lifecycle management.
 
 | Command | Description |
 |---------|-------------|
@@ -51,7 +63,7 @@ Manage configured accounts (service accounts, OAuth browser, OAuth token) and th
 | `mp account use` | Switch the active account (clears workspace) |
 | `mp account show` | Display account metadata (omit name for active) |
 | `mp account test` | Probe `/me`; returns `AccountTestResult` |
-| `mp account login` | Run the OAuth browser PKCE flow (oauth_browser only) |
+| `mp account login` | Run the OAuth browser PKCE flow (oauth_browser only) — `mp login --name NAME` is the unified equivalent |
 | `mp account logout` | Delete on-disk OAuth tokens (oauth_browser only) |
 | `mp account token` | Print the bearer token (for piping to curl etc.) |
 | `mp account export-bridge` | Write a v2 Cowork bridge file |
@@ -521,9 +533,8 @@ These resolve via `env > param > target > bridge > [active] > default_project` �
 ### Complete Workflow
 
 ```bash
-# 1. Set up credentials (prompts for secret securely)
-mp account add personal --type oauth_browser --region us
-mp account login personal       # opens browser for PKCE flow
+# 1. Authenticate (probes region, picks project, derives name from /me)
+mp login
 
 # 2. Explore schema
 mp inspect events
@@ -532,6 +543,8 @@ mp inspect properties --event Purchase
 # 3. Run live queries
 mp query segmentation --event Purchase --from 2025-01-01 --to 2025-01-31 --format table
 ```
+
+For explicit account names or non-browser flows, use `mp login --name personal --region us` or the two-step `mp account add` + `mp account login` (see [account — Account Management](#account-account-management) above).
 
 ### Piping and Scripting
 

@@ -69,33 +69,27 @@ python3 -m mixpanel_headless --version
 
 ## Part 2: Authenticate with Mixpanel
 
-You need to connect `mixpanel_headless` to your Mixpanel project. There are two ways to do this: **OAuth login** (interactive, opens your browser) or **service account** (for scripts and automation).
+You need to connect `mixpanel_headless` to your Mixpanel project. The recommended path is the one-shot `mp login`; service accounts and env-var setups are also supported.
 
-### Option A: OAuth Login (Recommended for Personal Use)
+### Option A: `mp login` (Recommended)
 
-Register an OAuth browser account, then run the PKCE login flow — the second command opens your browser so you can authenticate with Mixpanel:
-
-```bash
-mp account add personal --type oauth_browser --region us
-mp account login personal
-```
-
-After logging in, `mixpanel_headless` automatically backfills the account's `default_project` from the post-login `/me` probe. If you have multiple accessible projects and want to switch:
+Run one command and follow the prompts:
 
 ```bash
-mp project list                # See all your accessible projects
-mp project use YOUR_PROJECT_ID # Switch to a different project
+mp login
 ```
 
-You can also pin a specific project at registration time by passing `--project YOUR_PROJECT_ID` to `mp account add`.
+`mp login` probes your region (`us → eu → in`), opens your browser for the PKCE flow, derives the account name from your Mixpanel org, and pins a default project. If you have several accessible projects, it shows a numbered picker; if you have one, it auto-picks. Tokens land at `~/.mp/accounts/<name>/tokens.json` (mode `0o600`) and refresh automatically on expiry.
 
-**Region options:**
+The command also auto-detects your auth type from the environment:
 
-| Region | Flag | When to use |
-|--------|------|-------------|
-| United States | `--region us` | Most projects (default) |
-| Europe | `--region eu` | EU data residency |
-| India | `--region in` | India data residency |
+| Env vars present | Auth type used |
+|---|---|
+| `MP_USERNAME` + `MP_SECRET` | `service_account` (no browser) |
+| `MP_OAUTH_TOKEN` | `oauth_token` (no browser, no persistence) |
+| Neither | `oauth_browser` (PKCE flow) |
+
+Useful flags: `--region {us\|eu\|in}` skips the probe, `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path.
 
 Verify the connection:
 
@@ -107,14 +101,15 @@ mp session
 
 Service accounts are ideal for automation. You'll need a **service account username** and **secret** from your Mixpanel project settings (Settings > Service Accounts).
 
-Add the credentials (you'll be prompted for the secret securely):
+For a registered account on disk, set `MP_SECRET` and run:
 
 ```bash
+export MP_SECRET="your-service-account-secret"
 mp account add my-project --type service_account \
     --username YOUR_SA_USERNAME --project YOUR_PROJECT_ID --region us
 ```
 
-You'll see a hidden input prompt for the secret — paste it and press Enter. (For non-interactive use, prefer `export MP_SECRET=...` before the command, or pipe the secret via `--secret-stdin`.)
+(For non-interactive contexts, pipe the secret via `--secret-stdin` instead of exporting it.)
 
 Then verify the connection:
 
@@ -126,7 +121,7 @@ You should see a success message confirming the credentials work.
 
 ### Option C: Environment Variables (Quick Setup)
 
-For a quick, temporary setup (useful for trying things out), you can export environment variables:
+For a quick, temporary setup (useful for trying things out), you can export environment variables — the resolver picks them up directly without account registration:
 
 ```bash
 export MP_USERNAME="your-service-account-username"
@@ -139,7 +134,7 @@ These take effect immediately for any `mp` command or Python script in the same 
 
 ### Where Credentials Are Stored
 
-Account records and the active session live in `~/.mp/config.toml`. OAuth browser tokens are stored per-account at `~/.mp/accounts/<name>/tokens.json` (mode `0o600`) and refreshed automatically on expiry. These files are created automatically when you run `mp account add` or `mp account login` — you should never need to edit them by hand.
+Account records and the active session live in `~/.mp/config.toml`. OAuth browser tokens are stored per-account at `~/.mp/accounts/<name>/tokens.json` (mode `0o600`) and refreshed automatically on expiry. These files are created automatically when you run `mp login` (or the explicit `mp account add` + `mp account login`) — you should never need to edit them by hand.
 
 ---
 
@@ -379,7 +374,7 @@ If the setup skill reports that no credentials are found, use the `/mixpanel-hea
 /mixpanel-headless:auth account add my-project
 ```
 
-Claude will guide you through entering your service account username, project ID, and region. You'll be prompted to run a shell command that securely collects your secret. For OAuth, use `/mixpanel-headless:auth account add personal --type oauth_browser --region us` followed by `/mixpanel-headless:auth account login personal`.
+Claude will guide you through entering your service account username, project ID, and region. You'll be prompted to run a shell command that securely collects your secret. For OAuth, the simplest path is `! mp login` — it probes the region, opens the browser, derives the account name, and pins a project. Use `/mixpanel-headless:auth account add personal --type oauth_browser --region us` followed by `/mixpanel-headless:auth account login personal` if you need explicit control over the account name and region.
 
 ### Ask Analytics Questions
 
@@ -471,7 +466,7 @@ mp account remove-bridge --at /custom/path/auth.json
 
 ### OAuth Token Refresh
 
-If you authenticated with OAuth, the bridge file embeds your refresh token. The library automatically refreshes expired access tokens inside Cowork — no browser interaction needed. If the refresh token itself is rejected (e.g., revoked at the IdP), you'll need to re-authenticate on your local machine (`mp account login <name>`) and re-run `mp account export-bridge --to ~/.claude/mixpanel/auth.json` to pick up the fresh tokens.
+If you authenticated with OAuth, the bridge file embeds your refresh token. The library automatically refreshes expired access tokens inside Cowork — no browser interaction needed. If the refresh token itself is rejected (e.g., revoked at the IdP), you'll need to re-authenticate on your local machine (`mp login --name <name>` or the legacy `mp account login <name>`) and re-run `mp account export-bridge --to ~/.claude/mixpanel/auth.json` to pick up the fresh tokens.
 
 ---
 
@@ -481,8 +476,9 @@ If you authenticated with OAuth, the bridge file embeds your refresh token. The 
 
 | Command | What It Does |
 |---------|-------------|
-| `mp account add <name> --type oauth_browser --region us` | Register an OAuth browser account |
-| `mp account login <name>` | Run the PKCE browser flow for an OAuth account |
+| `mp login` | One-shot frictionless login (region probe + project picker + name derivation) |
+| `mp account add <name> --type oauth_browser --region us` | Register an OAuth browser account explicitly (advanced) |
+| `mp account login <name>` | Run the PKCE browser flow for an explicitly-registered account (advanced) |
 | `mp account add <name> --type service_account --username ... --project ... --region ...` | Register a service account |
 | `mp account test [name]` | Test credentials for an account (defaults to active) |
 | `mp session` | Show the resolved active session (account / project / workspace) |
@@ -576,20 +572,24 @@ If using `uv`, make sure the virtual environment is activated.
 Run one of:
 
 ```bash
-# OAuth browser (interactive PKCE flow)
-mp account add personal --type oauth_browser --region us
-mp account login personal
+# Frictionless one-shot login (covers PKCE, region probe, project picker)
+mp login
 
-# Service account
+# Service account (set MP_SECRET first, then register)
+export MP_SECRET="your-secret-here"
 mp account add my-project --type service_account \
     --username YOUR_USERNAME --project YOUR_PROJECT_ID --region us
+
+# Advanced: explicit OAuth browser two-step
+mp account add personal --type oauth_browser --region us
+mp account login personal
 ```
 
 ### OAuth Token Expired
 
 ```bash
 # Re-authenticate (refresh token revoked or expired)
-mp account login <name>
+mp login --name <name>            # or `mp account login <name>` (legacy)
 ```
 
 ### Plugin Not Working in Claude Code

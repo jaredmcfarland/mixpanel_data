@@ -17,70 +17,73 @@ You'll need:
 
 ## Step 1: Set Up Credentials
 
-### Option A: Environment Variables (Service Account)
+### Recommended: `mp login`
 
 ```bash
-export MP_USERNAME="sa_abc123..."
-export MP_SECRET="your-secret-here"
-export MP_PROJECT_ID="12345"
-export MP_REGION="us"
+mp login
+# Probing regions for /me access ...
+# ✓ us
+#
+# Found 2 project(s) across 1 organization(s):
+#   1) Acme · AI Demo            (id 3713224, mixpanel.com)
+#   2) Acme · E-Commerce         (id 3018488, mixpanel.com)
+# Which project? [1]: 1
+#
+# Logged in as jared@example.com → acme · AI Demo
 ```
 
-### Option B: Config File (Service Account)
+`mp login` is the one-shot path — it probes `us` → `eu` → `in` for the right region, hits `/me` to discover what you can access, derives the account name from your org, and pins a default project (auto-picks when you have one, prompts when you have several). Tokens land at `~/.mp/accounts/{name}/tokens.json` (mode `0o600`) and refresh automatically on expiry.
 
-```bash
-# Set the secret via env var (preferred)
-export MP_SECRET="your-secret-here"
-mp account add production --type service_account \
-    --username sa_abc123... \
-    --project 12345 \
-    --region us
-# Added account 'production' (service_account, us). Set as active.
-```
+The command also auto-detects your auth type from the environment:
 
-This stores credentials in `~/.mp/config.toml` and sets `production` as the active account.
+| Env vars set | Auth type used |
+|---|---|
+| `MP_USERNAME` + `MP_SECRET` | `service_account` (no browser) |
+| `MP_OAUTH_TOKEN` | `oauth_token` (no browser, no persistence) |
+| Neither | `oauth_browser` (PKCE flow) |
 
-For CI/CD environments where the secret lives in a shell variable, pipe it via stdin:
+Useful flags: `--region {us\|eu\|in}` skips the probe, `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path.
 
-```bash
-echo "$SECRET" | mp account add production --type service_account \
-    --username sa_abc123... --project 12345 --region us --secret-stdin
-```
+### Other auth paths
 
-### Option C: OAuth Login (Interactive)
+=== "Service-account env vars"
 
-For interactive use without managing service account credentials:
+    For unattended automation, set the four env vars and skip account registration entirely — the resolver picks them up directly:
 
-```bash
-# Register an OAuth account
-mp account add personal --type oauth_browser --region us
+    ```bash
+    export MP_USERNAME="sa_abc123..."
+    export MP_SECRET="your-secret-here"
+    export MP_PROJECT_ID="12345"
+    export MP_REGION="us"
+    ```
 
-# Run the PKCE browser flow
-mp account login personal
-# Opening browser...
-# ✓ Authenticated as jared@example.com
+=== "Raw OAuth bearer (CI / agents)"
 
-# Inspect resolved state
-mp session
-```
+    If a managed OAuth client hands you a pre-obtained access token, inject it via env vars (the library sends `Authorization: Bearer <token>`):
 
-OAuth tokens are stored at `~/.mp/accounts/personal/tokens.json` and automatically refreshed when expired. The active project is backfilled from the post-login `/me` probe. See [Configuration → OAuth (browser) — token storage](configuration.md#oauth-browser-token-storage) for details.
+    ```bash
+    export MP_OAUTH_TOKEN="<bearer-token>"
+    export MP_PROJECT_ID="12345"
+    export MP_REGION="us"  # or "eu", "in"
+    ```
 
-### Option D: Raw OAuth Bearer Token (CI / Agents)
+    Tokens injected this way are not persisted (no refresh — pass a fresh token when the previous one expires). The full service-account env-var set takes precedence when both sets are complete.
 
-If a managed OAuth client (e.g., a Claude Code plugin or CI pipeline) hands you a pre-obtained access token, inject it via env vars without going through the browser flow:
+=== "Advanced: explicit two-step add"
 
-```bash
-export MP_OAUTH_TOKEN="<bearer-token>"
-export MP_PROJECT_ID="12345"
-export MP_REGION="us"  # or "eu", "in"
-```
+    For full control over the account name and region at registration time:
 
-The library sends `Authorization: Bearer <token>` on every Mixpanel endpoint. Tokens injected this way are not persisted (no refresh — pass a fresh token when the previous one expires). See [Configuration → OAuth (static bearer / CI)](configuration.md#oauth-static-bearer-ci) and the precedence note under [Environment Variables](configuration.md#environment-variables).
+    ```bash
+    mp account add personal --type oauth_browser --region us
+    mp account login personal
+    # ✓ Authenticated as jared@example.com
+    ```
 
-## Step 2: Choose a Project
+    `mp login --name personal --region us` is the one-line equivalent. See [Configuration → OAuth (browser) — token storage](configuration.md#oauth-browser-token-storage) for the persistence details.
 
-After authenticating with a registered account (Options B or C above), select which Mixpanel project to query:
+## Step 2: Switch Projects (Optional)
+
+`mp login` already pinned the project shown in its success line. This step is for *changing* it later — pointing the same account at a different project, or swapping in-session.
 
 === "CLI"
 
@@ -90,8 +93,8 @@ After authenticating with a registered account (Options B or C above), select wh
     # 3713224   AI Demo           Acme      ✓
     # 3018488   E-Commerce Demo   Acme      ✓
 
-    mp project use 3713224
-    # Active project: AI Demo (3713224)
+    mp project use 3018488
+    # Active project: E-Commerce Demo (3018488)
     ```
 
 === "Python"
@@ -103,13 +106,13 @@ After authenticating with a registered account (Options B or C above), select wh
     for project in ws.projects():
         print(project.id, project.name)
 
-    ws.use(project="3713224", persist=True)
+    ws.use(project="3018488", persist=True)
     ```
 
 `mp project use` writes to the active account's `default_project`. To override per-call without persisting, pass `--project` / `-p` on the CLI or `Workspace(project="...")` in Python.
 
 !!! note "Env-only paths skip this step"
-    `mp project use` requires an active account in `~/.mp/config.toml`. If you set up via Option A (`MP_USERNAME`/`MP_SECRET`/...) or Option D (`MP_OAUTH_TOKEN`/...) without registering an account, set the project via `MP_PROJECT_ID` directly (already required by both env-only paths) or pass `--project` / `Workspace(project=...)` per call. Don't run `mp project use` — it errors with "No active account configured."
+    `mp project use` requires an active account in `~/.mp/config.toml`. If you set up via the service-account env quad or `MP_OAUTH_TOKEN` without registering an account, set the project via `MP_PROJECT_ID` directly (already required by both env-only paths) or pass `--project` / `Workspace(project=...)` per call. Don't run `mp project use` — it errors with "No active account configured."
 
 ## Step 3: Test Your Connection
 

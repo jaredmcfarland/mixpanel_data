@@ -24,16 +24,25 @@ On your **local machine** (not inside Cowork), install the `mp` command-line too
 pip install git+https://github.com/mixpanel/mixpanel-headless.git
 ```
 
-Then configure your Mixpanel credentials:
+Then configure your Mixpanel credentials. The recommended path is the one-shot `mp login`:
 
 ```bash
-# OAuth browser (PKCE flow — opens browser)
-mp account add personal --type oauth_browser --region us
-mp account login personal
+mp login
+# Probes us → eu → in, opens browser for PKCE, derives the
+# account name from /me, and pins your default project.
+```
 
-# OR service account (prompts for secret securely)
+For explicit control over the account name, type, or region, use the two-step add instead:
+
+```bash
+# Service account (set MP_SECRET first, then register)
+export MP_SECRET="your-secret-here"
 mp account add my-project --type service_account \
     --username YOUR_SA_USERNAME --project YOUR_PROJECT_ID --region us
+
+# Or explicit OAuth browser registration
+mp account add personal --type oauth_browser --region us
+mp account login personal
 ```
 
 Verify the credentials work:
@@ -159,7 +168,7 @@ If you authenticated with OAuth (rather than a service account), the bridge file
 
 ```bash
 # On your local machine
-mp account login personal
+mp login --name personal             # or `mp account login personal` (legacy)
 mp account export-bridge --to ~/.claude/mixpanel/auth.json
 ```
 
@@ -226,7 +235,7 @@ mp account export-bridge --to ~/.claude/mixpanel/auth.json   # re-export fresh c
 
 **Fix**: On your local machine:
 ```bash
-mp account login personal
+mp login --name personal             # or `mp account login personal` (legacy)
 mp account export-bridge --to ~/.claude/mixpanel/auth.json
 ```
 Then start a new Cowork session.
@@ -251,7 +260,7 @@ mp --version   # verify
 
 These commands require a browser or host terminal and **should be run on your local machine**, not inside Cowork:
 
-- `mp account login <name>` (needs a browser for the PKCE OAuth flow)
+- `mp login` and `mp account login <name>` (need a browser for the PKCE OAuth flow)
 - `mp account add` for `service_account` (prompts for secret interactively by default; `--secret-stdin` and `MP_SECRET` env var work non-interactively, but the credential bridge is the recommended approach for Cowork)
 - `mp account export-bridge --to <path>` (reads host credentials, writes the bridge file)
 - `mp account remove-bridge [--at <path>]` (removes the bridge file from the host)

@@ -113,11 +113,11 @@ try:
             print('⚠ No active account selected. Run: mp account use <name>')
     else:
         print('⚠ No accounts configured yet.')
-        print('  OAuth browser:    mp account add personal --type oauth_browser --region us && mp account login personal')
+        print('  Recommended:      mp login                                   # one-shot frictionless login')
         print('  Service account:  mp account add team --type service_account --username sa_xxx --project 12345 --region us')
 except Exception as e:
     print(f'⚠ Could not read ~/.mp/config.toml: {e}')
-    print('  Set env vars (service-account quad or OAuth triple) or run mp account add ...')
+    print('  Run `mp login`, set env vars (service-account quad or OAuth triple), or run mp account add ...')
 "
 
 # Cowork detection: check for bridge file

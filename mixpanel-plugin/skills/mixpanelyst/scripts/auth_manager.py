@@ -40,8 +40,8 @@ SCHEMA_VERSION = 1
 
 # fmt: off
 _ONBOARDING = [
-    {"command": "mp account add personal --type oauth_browser --region us", "label": "OAuth (recommended)"},  # noqa: E501
-    {"command": "mp account add team --type service_account --username '<service-account-username>' --region us", "label": "Service account"},  # noqa: E501
+    {"command": "mp login", "label": "Frictionless login (recommended)"},
+    {"command": "mp account add team --type service_account --username '<service-account-username>' --region us", "label": "Service account (explicit add)"},  # noqa: E501
     {"command": "export MP_OAUTH_TOKEN=<bearer> MP_REGION=us MP_PROJECT_ID=<id>", "label": "Static bearer (CI)"},  # noqa: E501
 ]
 _PROJECT_NEXT = [
