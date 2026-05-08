@@ -12,8 +12,11 @@ Design constraints (per ``contracts/python-api.md`` §2.1):
 - **No I/O of its own.** All HTTP work goes through ``client_factory``
   so tests can supply a ``MockTransport``-backed client without
   touching the real network.
-- **No environment access.** Region order, headers, and timeout are
-  parameters — never read from ``os.environ`` here.
+- **`probe_region` itself takes no environment access.** Region order,
+  headers, and timeout are parameters. The thin convenience wrapper
+  ``probe_region_for_credential`` does read ``os.environ[token_env]``
+  when wiring the ``oauth_token`` Authorization header — that single
+  read is the documented exception, scoped to the wrapper.
 - **No logging or stderr writes.** Progress narration is the caller's
   job; the function returns or raises with structured data.
 
@@ -24,6 +27,7 @@ from __future__ import annotations
 
 import base64
 import os
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -42,6 +46,13 @@ ClientFactory = Callable[[Region], httpx.Client]
 
 
 _ME_PATH = "/api/app/me"
+
+# Cap each captured response body so a misconfigured server returning
+# multi-MB HTML cannot bloat the in-memory ``RegionProbeError``
+# (`.attempts` and `.details["attempts"]`) or any downstream JSON
+# serialization. 4 KiB is enough room to keep a typical JSON error
+# envelope intact while bounding the worst case.
+_MAX_RESPONSE_BODY_CHARS = 4096
 
 
 @dataclass(frozen=True)
@@ -153,7 +164,13 @@ def probe_region(
                     (r, s) for r, s, _ in failure_attempts
                 ] + success_attempts
                 return RegionProbeResult(region=region, attempts=full_attempts)
-            failure_attempts.append((region, response.status_code, response.text))
+            failure_attempts.append(
+                (
+                    region,
+                    response.status_code,
+                    response.text[:_MAX_RESPONSE_BODY_CHARS],
+                )
+            )
         finally:
             client.close()
 
@@ -250,9 +267,14 @@ def probe_region_for_credential(
     def _factory(region: Region) -> httpx.Client:
         """Build a region-scoped ``httpx.Client`` bound to the API host."""
         app_url = ENDPOINTS[region]["app"]
-        # ENDPOINTS[*]["app"] is e.g. ``https://mixpanel.com/api/app`` —
-        # strip the suffix so probe_region can issue ``/api/app/me``.
-        base = app_url[: app_url.index("/api/app")]
+        # ``ENDPOINTS[*]["app"]`` is currently
+        # ``https://mixpanel.com/api/app`` — strip the path so
+        # ``probe_region`` can issue ``/api/app/me`` against the host
+        # root. ``urlsplit`` handles trailing slashes, future version
+        # segments, query strings, and fragments without a fragile
+        # substring search.
+        parts = urllib.parse.urlsplit(app_url)
+        base = urllib.parse.urlunsplit((parts.scheme, parts.netloc, "", "", ""))
         return httpx.Client(base_url=base)
 
     if narrate is not None:

@@ -33,6 +33,7 @@ from mixpanel_headless.exceptions import (
     ConfigError,
     DateRangeTooLargeError,
     EventNotFoundError,
+    InvalidArgumentError,
     JQLSyntaxError,
     MixpanelHeadlessError,
     OAuthError,
@@ -348,6 +349,13 @@ def handle_errors(func: F) -> F:
             if e.code:
                 err_console.print(f"  [dim]Code:[/dim] {rich_escape(e.code)}")
             raise typer.Exit(ExitCode.GENERAL_ERROR) from None
+        except InvalidArgumentError as e:
+            # Subclass of ConfigError — must be caught BEFORE the
+            # generic ConfigError handler so flag-misuse exits 3
+            # (INVALID_ARGS) instead of 1 (GENERAL_ERROR). Matches the
+            # 043 cli-commands.md §1.5 contract for `mp login`.
+            err_console.print(f"[red]ERROR:[/red] {rich_escape(e.message)}")
+            raise typer.Exit(ExitCode.INVALID_ARGS) from None
         except ConfigError as e:
             # Escape the message so block names like ``[accounts.NAME]`` are
             # rendered literally instead of being parsed as Rich markup.

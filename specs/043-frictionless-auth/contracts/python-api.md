@@ -21,6 +21,8 @@ def login_unified(
     no_browser: bool = False,
     secret_stdin: bool = False,
     token_env: str | None = None,
+    service_account: bool = False,
+    project_picker: ProjectPicker | None = None,
 ) -> AccountSummary:
     """Add and activate a Mixpanel account in one call.
 
@@ -75,8 +77,21 @@ def login_unified(
 
     Returns:
         ``AccountSummary`` for the newly added (or refreshed) account.
+        The returned summary's ``user_email`` / ``project_id`` /
+        ``project_name`` fields are populated from the ``/me``
+        round-trip (None on payloads where ``/me`` lacked the data).
 
     Raises:
+        InvalidArgumentError: For mutually-incompatible flag
+            combinations: ``service_account`` + ``token_env``;
+            ``no_browser`` against a non-browser auth type;
+            ``secret_stdin`` against a non-SA auth type. Carries a
+            ``violation`` discriminator (``"mutually_exclusive"`` /
+            ``"no_browser_misuse"`` / ``"secret_stdin_misuse"``) and
+            ``detected_auth_type`` in ``details`` so non-CLI callers
+            can dispatch programmatically. The CLI ``handle_errors``
+            decorator maps this subclass to exit code 3
+            (``INVALID_ARGS``).
         ConfigError: On project mismatch, region mismatch, type
             mismatch on re-login, missing required env vars, or
             non-interactive context with no project / org default.
@@ -89,12 +104,24 @@ def login_unified(
     """
 ```
 
+The new ``service_account`` keyword mirrors the CLI's
+``--service-account`` flag. Library callers that pass
+``account_type="service_account"`` directly can leave it ``False``;
+both spellings produce identical downstream behavior.
+
+The new ``project_picker`` keyword is the callable invoked when more
+than one project is visible in ``/me`` and no other project source
+resolved. Library callers that omit it get a hard-failing
+``ConfigError`` listing the accessible projects (E-8).
+
 **Side effects** (in addition to the documented return):
 - Writes / updates `~/.mp/accounts/{name}/tokens.json` (mode `0o600`) and `client.json` (mode `0o600`) for `oauth_browser`.
-- Writes `~/.mp/accounts/{name}/me.json` (the populated `MeCache`).
-- Writes / updates `~/.mp/config.toml` via `ConfigManager.add_account()` and promotes the account to `[active]`.
+- Writes `~/.mp/accounts/{name}/me.json` (the populated `MeCache`) on every code path — new browser, new credential, AND re-login. Failed cache writes inside the new-browser path are caught by the same `add()` rollback that handles config-write failures.
+- Writes / updates `~/.mp/config.toml` via `ConfigManager.add_account()` and promotes the account to `[active]` via `accounts.use()`. Activation runs unconditionally (not just on first-account creation), so library callers see the same "Add and activate" semantics the docstring promises.
 - For new-account creation (not re-login), creates `~/.mp/accounts/.tmp-{nonce}/` first and atomically renames after `/me` resolution. On failure, removes the placeholder.
 - Writes one stderr line on each of: region probe progress (one line per attempt), `MP_PROJECT_ID` fallthrough warning, and re-login `--project` ignored note.
+
+**Re-login storage-mode preservation**: when the named account already exists with `token_env=NAME` (env-reference storage) and the caller does NOT pass `token_env=`, the orchestrator preserves the env-reference mode rather than silently overwriting it with the inline `SecretStr(bearer)`. To switch storage modes, pass `token_env=NAME` (or a different env var name) explicitly.
 
 **Idempotency**: Re-running `login_unified(name="foo")` against an existing `foo` account preserves `default_project`. See data-model.md §4.
 
@@ -249,25 +276,41 @@ from mixpanel_headless.accounts import (  # existing
     # ... existing exports
     login_unified,  # NEW
 )
+from mixpanel_headless.exceptions import (
+    # ... existing exports
+    InvalidArgumentError,   # NEW (043 — login_unified flag-combination guard)
+    RegionProbeError,       # NEW (043 — region probe)
+    RegionProbeNetworkError,# NEW (043 — region probe network-failure subclass)
+)
 ```
 
 The two pure helpers (`region_probe.probe_region` and `naming.*`) live under `_internal/` and are NOT re-exported at the package root. They are still importable for internal callers and tests.
+
+`AccountSummary` (in `mixpanel_headless.types`) gains three optional fields populated by `login_unified()` from the `/me` round-trip:
+- `user_email: str | None` — authenticated user email
+- `project_id: str | None` — resolved project ID
+- `project_name: str | None` — human-readable project name from `/me`
+
+All three default to `None` so existing constructors (e.g. those used by `mp account add` paths that never touched `/me`) keep compiling unchanged.
 
 ---
 
 ## 5. Exception hierarchy
 
-`RegionProbeError` is added as a subclass of the existing `OAuthError` (which itself subclasses `MixpanelHeadlessError`). No change to the existing hierarchy structure; one new leaf node.
+`RegionProbeError` is added as a subclass of the existing `OAuthError` (which itself subclasses `MixpanelHeadlessError`). `InvalidArgumentError` is added as a subclass of `ConfigError` so the existing `except ConfigError` catch-all keeps working, while the CLI's `handle_errors` decorator dispatches the subclass to a different exit code.
 
 ```text
 MixpanelHeadlessError
-├── ConfigError              (existing — used for region mismatch, type mismatch, project not visible)
-├── OAuthError               (existing)
-│   └── RegionProbeError     (NEW — when no region returns 200)
+├── ConfigError                 (existing — region mismatch, type mismatch, project not visible)
+│   └── InvalidArgumentError    (NEW — flag-combination misuse, exit code 3)
+├── OAuthError                  (existing)
+│   └── RegionProbeError        (NEW — when no region returns 200)
 └── ...
 ```
 
-`RegionProbeError.to_dict()` includes the `attempts` list so that JSON-formatted error output preserves diagnostic detail.
+`RegionProbeError.to_dict()` includes the `attempts` list so that JSON-formatted error output preserves diagnostic detail. `RegionProbeError.attempts` truncates each probed region's `response.text` at 4 KiB so a misconfigured server returning multi-MB HTML cannot bloat the in-memory exception or downstream serialization.
+
+`InvalidArgumentError` carries the discriminator `violation` (one of `"mutually_exclusive"`, `"no_browser_misuse"`, `"secret_stdin_misuse"`) plus an optional `detected_auth_type` so non-CLI callers can dispatch programmatically without parsing the human-readable message.
 
 ---
 

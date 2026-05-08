@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import builtins
 import logging
+import os
 import shutil
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import SecretStr
 
@@ -40,6 +42,7 @@ from mixpanel_headless._internal.io_utils import atomic_write_bytes
 from mixpanel_headless.exceptions import (
     AccountExistsError,
     ConfigError,
+    InvalidArgumentError,
     MixpanelHeadlessError,
     OAuthError,
     ProjectNotFoundError,
@@ -50,6 +53,16 @@ from mixpanel_headless.types import (
     MeUserInfo,
     OAuthLoginResult,
 )
+
+if TYPE_CHECKING:
+    from mixpanel_headless._internal.me import MeProjectInfo, MeResponse
+
+# Picker callback contract. The CLI supplies a TTY-aware implementation;
+# library callers can supply their own or pass ``None`` to fail-fast in
+# non-interactive contexts (E-8).
+ProjectPicker = Callable[
+    ["MeResponse", builtins.list[tuple[str, "MeProjectInfo"]]], str
+]
 
 logger = logging.getLogger(__name__)
 
@@ -1007,6 +1020,7 @@ def login_unified(
     no_browser: bool = False,
     secret_stdin: bool = False,
     token_env: str | None = None,
+    service_account: bool = False,
     project_picker: ProjectPicker | None = None,
 ) -> AccountSummary:
     """Add and activate a Mixpanel account in one orchestrated call.
@@ -1063,10 +1077,23 @@ def login_unified(
         project: Explicit project ID. Must exist in ``/me``.
         account_type: Explicit auth-type override.
         no_browser: For oauth_browser, print the authorize URL instead
-            of launching the browser.
+            of launching the browser. Combined with a non-browser
+            ``account_type`` raises :class:`InvalidArgumentError`
+            (``violation="no_browser_misuse"``).
         secret_stdin: For service_account, read the secret from stdin.
+            Combined with a non-SA ``account_type`` raises
+            :class:`InvalidArgumentError`
+            (``violation="secret_stdin_misuse"``).
         token_env: For oauth_token, env-var name carrying the bearer.
             Defaults to ``MP_OAUTH_TOKEN`` when not set.
+        service_account: When ``True``, forces ``account_type =
+            "service_account"`` (mirrors the CLI ``--service-account``
+            flag). Combined with ``token_env`` raises
+            :class:`InvalidArgumentError`
+            (``violation="mutually_exclusive"``). Library callers can
+            instead pass ``account_type="service_account"`` directly;
+            this flag exists so the CLI can forward its raw arguments
+            without per-flag remapping.
         project_picker: Callable invoked with ``(MeResponse, sorted_projects)``
             when ``len(me.projects) > 1`` and no other project source
             resolves. Returns the chosen project ID. The CLI supplies a
@@ -1074,9 +1101,16 @@ def login_unified(
             leave it ``None`` to fail-fast non-interactively.
 
     Returns:
-        :class:`AccountSummary` for the newly added (or refreshed) account.
+        :class:`AccountSummary` for the newly added (or refreshed)
+        account, with ``user_email`` / ``project_id`` / ``project_name``
+        populated from the ``/me`` lookup.
 
     Raises:
+        InvalidArgumentError: Mutually-incompatible flag combinations
+            (``service_account`` + ``token_env``; ``no_browser`` against
+            non-browser; ``secret_stdin`` against non-SA). Carries a
+            ``violation`` discriminator and ``detected_auth_type`` in
+            ``details``. Maps to CLI exit 3.
         ConfigError: Project not visible (E-6), region mismatch (E-2 / E-3),
             type mismatch (E-4), missing required env (cred collection),
             or non-interactive context with no project / org default
@@ -1106,7 +1140,52 @@ def login_unified(
         result = login_unified(name="acme-corp")
         ```
     """
+    # Fold the CLI's --service-account flag into the explicit
+    # ``account_type`` parameter so flag-combination validation has a
+    # single source of truth. Library callers that pass
+    # ``account_type="service_account"`` directly can leave
+    # ``service_account=False``; both spellings produce identical
+    # downstream behavior.
+    if service_account:
+        if account_type is not None and account_type != "service_account":
+            # Two explicit but conflicting account-type signals — treat
+            # as mutually-exclusive misuse.
+            raise InvalidArgumentError(
+                f"--service-account conflicts with explicit account_type="
+                f"{account_type!r}.",
+                violation="mutually_exclusive",
+                detected_auth_type=account_type,
+            )
+        if token_env is not None:
+            raise InvalidArgumentError(
+                "--service-account and --token-env are mutually exclusive.\n\n"
+                "Pick one auth type:\n"
+                "    mp login --service-account\n"
+                "    mp login --token-env MY_OAUTH_TOKEN_VAR",
+                violation="mutually_exclusive",
+                detected_auth_type="service_account",
+            )
+        account_type = "service_account"
+
     detected_type = _detect_login_type(account_type, token_env)
+
+    # Per-flag misuse: --no-browser is meaningful only for oauth_browser;
+    # --secret-stdin is meaningful only for service_account. Surface these
+    # before any I/O so callers fail fast.
+    if no_browser and detected_type != "oauth_browser":
+        raise InvalidArgumentError(
+            f"--no-browser is only meaningful for the oauth_browser auth "
+            f"type.\n\nDetected auth type: {detected_type}.",
+            violation="no_browser_misuse",
+            detected_auth_type=detected_type,
+        )
+    if secret_stdin and detected_type != "service_account":
+        raise InvalidArgumentError(
+            f"--secret-stdin is only meaningful for the service_account "
+            f"auth type.\n\nDetected auth type: {detected_type}.",
+            violation="secret_stdin_misuse",
+            detected_auth_type=detected_type,
+        )
 
     # Re-login path: when name is explicit AND the account already exists,
     # refresh credentials and bail before the new-account machinery runs.
@@ -1117,7 +1196,7 @@ def login_unified(
         except ConfigError:
             existing = None
         if existing is not None:
-            return _login_unified_relogin(
+            summary = _login_unified_relogin(
                 cm,
                 existing=existing,
                 requested_type=detected_type,
@@ -1127,8 +1206,78 @@ def login_unified(
                 secret_stdin=secret_stdin,
                 token_env=token_env,
             )
+        else:
+            summary = _login_unified_new(
+                cm,
+                detected_type=detected_type,
+                name=name,
+                region=region,
+                project=project,
+                no_browser=no_browser,
+                secret_stdin=secret_stdin,
+                token_env=token_env,
+                project_picker=project_picker,
+            )
+    else:
+        summary = _login_unified_new(
+            cm,
+            detected_type=detected_type,
+            name=None,
+            region=region,
+            project=project,
+            no_browser=no_browser,
+            secret_stdin=secret_stdin,
+            token_env=token_env,
+            project_picker=project_picker,
+        )
 
-    # New-account flow.
+    # Activate the (new or refreshed) account so library callers — not
+    # just the CLI — see the documented "Add and activate" semantics.
+    # ``add()`` only auto-activates the FIRST account; subsequent adds
+    # and the relogin path leave ``[active].account`` untouched without
+    # this explicit promotion. A single ``_mutate()`` transaction keeps
+    # the next process from observing a half-swapped state.
+    use(summary.name)
+    return summary
+
+
+def _login_unified_new(
+    cm: ConfigManager,
+    *,
+    detected_type: AccountType,
+    name: str | None,
+    region: Region | None,
+    project: str | None,
+    no_browser: bool,
+    secret_stdin: bool,
+    token_env: str | None,
+    project_picker: ProjectPicker | None,
+) -> AccountSummary:
+    """Dispatch to the new-account browser or credential flow.
+
+    Thin router so :func:`login_unified` itself stays focused on the
+    re-login pre-check + post-activation. Both downstream helpers
+    populate the ``user_email`` / ``project_id`` / ``project_name``
+    fields on the returned :class:`AccountSummary` from ``/me``.
+
+    Args:
+        cm: Shared config manager.
+        detected_type: Resolved auth type (``oauth_browser`` /
+            ``service_account`` / ``oauth_token``).
+        name: Explicit ``--name`` override (``None`` to derive).
+        region: Explicit ``--region`` (``None`` for browser default
+            ``us`` / SA + token probe).
+        project: Explicit ``--project`` (``None`` for picker chain).
+        no_browser: Forwarded to oauth_browser flow only.
+        secret_stdin: Forwarded to SA flow only.
+        token_env: Forwarded to oauth_token flow only.
+        project_picker: TTY-gated picker callback.
+
+    Returns:
+        :class:`AccountSummary` populated with ``user_email`` /
+        ``project_id`` / ``project_name`` from the orchestrator's ``/me``
+        round-trip.
+    """
     if detected_type == "oauth_browser":
         return _login_unified_new_browser(
             cm,
@@ -1150,17 +1299,58 @@ def login_unified(
     )
 
 
-# Type aliases for the picker callbacks. The CLI supplies TTY-aware
-# implementations; library callers can supply their own.
-from collections.abc import Callable  # noqa: E402
-from typing import TYPE_CHECKING  # noqa: E402
+def _persist_me_cache(account_name: str, me_resp: MeResponse) -> None:
+    """Write ``me.json`` for the named account, honoring the storage root.
 
-if TYPE_CHECKING:
-    from mixpanel_headless._internal.me import MeProjectInfo, MeResponse
+    Wraps :class:`MeCache` so the orchestrator does not have to reason
+    about ``MP_OAUTH_STORAGE_DIR`` overrides — passes ``storage_dir=
+    account_dir(name)`` so the cache lands alongside ``tokens.json`` /
+    ``client.json`` in the same per-account directory.
 
-    ProjectPicker = Callable[
-        ["MeResponse", builtins.list[tuple[str, "MeProjectInfo"]]], str
-    ]
+    Args:
+        account_name: The account whose cache to populate.
+        me_resp: Parsed ``/me`` response (the same payload used to
+            resolve the project / derive the name).
+    """
+    from mixpanel_headless._internal.me import MeCache
+
+    cache = MeCache(account_name=account_name, storage_dir=account_dir(account_name))
+    cache.put(me_resp)
+
+
+def _summary_with_me(
+    summary: AccountSummary,
+    *,
+    me_resp: MeResponse,
+    project_id: str | None,
+) -> AccountSummary:
+    """Return a copy of ``summary`` with ``/me``-derived fields filled in.
+
+    The 043 contract requires the orchestrator's returned summary to
+    carry ``user_email``, ``project_id``, and ``project_name`` so the
+    CLI can render the structured success line without a second
+    ``ConfigManager`` round-trip. Existing :func:`show` doesn't see the
+    ``/me`` payload, so we bolt the fields on here.
+
+    Args:
+        summary: The base summary returned by :func:`add` / :func:`show`.
+        me_resp: Parsed ``/me`` response.
+        project_id: Resolved project ID (or ``None`` when no project is set).
+
+    Returns:
+        A new :class:`AccountSummary` with the three optional fields
+        populated when the data is available.
+    """
+    project_name: str | None = None
+    if project_id is not None and project_id in me_resp.projects:
+        project_name = me_resp.projects[project_id].name
+    return summary.model_copy(
+        update={
+            "user_email": me_resp.user_email,
+            "project_id": project_id,
+            "project_name": project_name,
+        }
+    )
 
 
 def _detect_login_type(
@@ -1176,8 +1366,6 @@ def _detect_login_type(
     Returns:
         The detected auth type, never ``None``.
     """
-    import os
-
     if account_type is not None:
         return account_type
     if token_env is not None:
@@ -1229,8 +1417,6 @@ def _login_unified_relogin(
             missing credentials in env / stdin on the SA / oauth_token
             re-login path.
     """
-    import os
-
     existing_account = existing
     name = existing_account.name
 
@@ -1299,7 +1485,22 @@ def _login_unified_relogin(
             )
         cm.update_account(name, username=username, secret=SecretStr(secret_raw))
     elif requested_type == "oauth_token":
-        env_name = token_env or "MP_OAUTH_TOKEN"
+        # When the caller did not pass --token-env, prefer the
+        # already-persisted env-var pointer so a re-login that just wants
+        # to refresh the bearer does not silently switch the storage
+        # mode from "env reference" to "inline string". The previous
+        # behavior overwrote ``token_env=MP_OAUTH_TOKEN`` with an inline
+        # ``SecretStr(bearer)`` on every re-login, which broke the next
+        # rotation of MP_OAUTH_TOKEN with no warning. Pass --token-env
+        # NAME explicitly to switch modes (or to point at a different
+        # env var).
+        existing_token_env = getattr(existing_account, "token_env", None)
+        if token_env is not None:
+            env_name = token_env
+        elif existing_token_env is not None:
+            env_name = existing_token_env
+        else:
+            env_name = "MP_OAUTH_TOKEN"
         bearer = os.environ.get(env_name)
         if not bearer:
             raise ConfigError(
@@ -1307,11 +1508,29 @@ def _login_unified_relogin(
                 f"the bearer in NAME, or set {env_name} in the environment."
             )
         if token_env is not None:
+            # Caller explicitly named the env var → persist the pointer.
             cm.update_account(name, token_env=token_env)
+        elif existing_token_env is not None:
+            # Existing storage was env-ref; preserve the mode by re-
+            # writing the same pointer (the value is read live from env
+            # at request time, no config rewrite would actually change
+            # behavior — but writing the same value keeps the relogin
+            # path idempotent for tests asserting on update_account).
+            cm.update_account(name, token_env=existing_token_env)
         else:
+            # Existing storage was inline; honor that and persist the
+            # rotated bearer inline too.
             cm.update_account(name, token=SecretStr(bearer))
 
-    return show(name)
+    # Fetch /me so the success line and cache reflect the refreshed
+    # session. Per python-api.md §1, login_unified() promises to write
+    # the /me cache as a side effect; the relogin path was previously
+    # the one branch that skipped it.
+    refreshed = cm.get_account(name)
+    me_resp = _fetch_me(refreshed)
+    _persist_me_cache(name, me_resp)
+    project_id = refreshed.default_project
+    return _summary_with_me(show(name), me_resp=me_resp, project_id=project_id)
 
 
 def _login_unified_new_browser(
@@ -1333,9 +1552,10 @@ def _login_unified_new_browser(
     before the rename removes the placeholder; failure inside ``add()``
     after the rename rolls ``final_dir`` back via ``_safe_rmtree_warn``.
 
-    The ``/me`` cache (``me.json`` under the account dir) is NOT
-    written by this flow — it stays empty until the next
-    ``Workspace.me()`` call writes through :class:`MeCache`.
+    Once the rename succeeds, the ``/me`` response is persisted to
+    ``me.json`` under the account dir (per python-api.md §1) so the
+    next :class:`MeService` call hits the warm cache. Cache write
+    failures fall through to the ``add()`` rollback above.
 
     Args:
         cm: The config manager.
@@ -1346,9 +1566,9 @@ def _login_unified_new_browser(
         project_picker: TTY-gated picker callback.
 
     Returns:
-        :class:`AccountSummary` for the new account.
+        :class:`AccountSummary` for the new account, with ``user_email``
+        / ``project_id`` / ``project_name`` populated from ``/me``.
     """
-    import os
     import secrets
 
     from mixpanel_headless._internal.auth.flow import OAuthFlow
@@ -1442,6 +1662,14 @@ def _login_unified_new_browser(
         os.rename(placeholder_dir, final_dir)
         placeholder_dir = final_dir
 
+        # IMPORTANT: only the inner add() + cache write are allowed
+        # between this rename and the inner try-except. Anything inserted
+        # here would silently lose rollback, because the outer except's
+        # ``startswith(".tmp-")`` guard no longer matches ``final_dir``
+        # (we just rebound ``placeholder_dir`` to it) — only the inner
+        # except's ``_safe_rmtree_warn(final_dir)`` covers post-rename
+        # failures. New post-rename steps must add their own rollback.
+
         # Persist the account record. If add() raises (a race added the
         # same name between list_accounts() and now, the TOML write
         # failed, etc.), roll back the on-disk publish so the user is
@@ -1449,12 +1677,18 @@ def _login_unified_new_browser(
         # [accounts.NAME] block — that combination breaks
         # `mp account remove` and blocks the next `mp login`.
         try:
-            return add(
+            summary = add(
                 final_name,
                 type="oauth_browser",
                 region=auth_region,
                 default_project=chosen_project,
             )
+            # Persist /me cache so the orchestrator's contract holds:
+            # the next MeService call returns instantly from disk
+            # instead of paying another /me round-trip. Inside the same
+            # try so a cache-write failure also rolls back the publish.
+            _persist_me_cache(final_name, me_resp)
+            return _summary_with_me(summary, me_resp=me_resp, project_id=chosen_project)
         except Exception:
             _safe_rmtree_warn(final_dir)
             raise
@@ -1493,10 +1727,9 @@ def _login_unified_new_credential(
         project_picker: TTY-gated picker callback.
 
     Returns:
-        :class:`AccountSummary` for the new account.
+        :class:`AccountSummary` for the new account, with ``user_email``
+        / ``project_id`` / ``project_name`` populated from ``/me``.
     """
-    import os
-
     # Credential collection.
     username: str | None = None
     secret: SecretStr | None = None
@@ -1608,7 +1841,7 @@ def _login_unified_new_credential(
     else:
         final_name = name
 
-    return add(
+    summary = add(
         final_name,
         type=detected_type,
         region=resolved_region,
@@ -1618,6 +1851,12 @@ def _login_unified_new_credential(
         token=token,
         token_env=resolved_token_env,
     )
+    # Persist /me cache so the next MeService call hits the warm cache
+    # (python-api.md §1 contract). Failures bubble — at this point the
+    # account record is already on disk, so a cache-write error doesn't
+    # need a tokens rollback (unlike the browser path's atomic publish).
+    _persist_me_cache(final_name, me_resp)
+    return _summary_with_me(summary, me_resp=me_resp, project_id=chosen_project)
 
 
 def _resolve_project(
@@ -1645,8 +1884,6 @@ def _resolve_project(
             or non-interactive multi-project context with no picker
             (E-8).
     """
-    import os
-
     projects = me_resp.projects
     project_keys = builtins.list(projects.keys())
 

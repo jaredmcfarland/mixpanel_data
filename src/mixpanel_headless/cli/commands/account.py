@@ -80,7 +80,7 @@ def _probe_region_for_credential(
 
     try:
         return probe_region_for_credential(
-            account_type=typing.cast("_AccountType", account_type),
+            account_type=typing.cast(_AccountType, account_type),
             username=username,
             secret=secret,
             token=token,

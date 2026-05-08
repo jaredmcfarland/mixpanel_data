@@ -981,3 +981,368 @@ class TestSummaryTableDynamicWidth:
         # Header still present, and the active marker line follows the row's name.
         first_data_line = rendered.splitlines()[1]
         assert first_data_line.startswith(long_name)
+
+
+class TestLoginUnifiedActivation:
+    """``login_unified`` activates the account directly — no CLI workaround.
+
+    Pre-fix bug (PR-153 Issue 1): the docstring said "Add and activate"
+    but the implementation only let ``add()`` auto-activate the FIRST
+    account. Subsequent adds and the relogin path left
+    ``[active].account`` untouched. The CLI papered over the gap with
+    a separate ``accounts.use(...)`` call after the orchestrator
+    returned, so library callers — and Cowork's ``auth_manager.py`` —
+    silently failed to switch active state. These tests pin the
+    library-level promise.
+    """
+
+    def _stub_me(
+        self, monkeypatch: pytest.MonkeyPatch, payload: dict[str, object]
+    ) -> None:
+        """Patch ``MixpanelAPIClient.me`` to return ``payload``."""
+        from mixpanel_headless._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            return payload
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+
+    def test_new_credential_promotes_to_active(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """First-account creation promotes via ``add()``; this test pins the
+        library-level guarantee remains stable even if ``add()``'s first-
+        account auto-promotion logic ever changes.
+        """
+        from mixpanel_headless import session as session_ns
+
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "svc@example.com",
+                "organizations": {"100": {"id": 100, "name": "Acme Corp"}},
+                "projects": {"42": {"name": "Demo", "organization_id": 100}},
+            },
+        )
+
+        summary = accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="newbie",
+        )
+        assert summary.name == "newbie"
+        assert session_ns.show().account == "newbie"
+
+    def test_second_credential_account_is_activated(
+        self, monkeypatch: pytest.MonkeyPatch, cm: ConfigManager
+    ) -> None:
+        """Adding a second account via ``login_unified`` activates IT.
+
+        ``add()`` only auto-activates the first account — so without the
+        explicit ``use(name)`` at the end of the orchestrator, this
+        second account would stay inactive even though the docstring
+        promised activation.
+        """
+        from mixpanel_headless import session as session_ns
+
+        # Pre-existing first account (auto-activated by ``add()``).
+        accounts_ns.add(
+            "first",
+            type="service_account",
+            region="us",
+            username="u1",
+            secret=SecretStr("s1"),
+        )
+        assert session_ns.show().account == "first"
+
+        # Second account via login_unified must flip [active].account.
+        monkeypatch.setenv("MP_USERNAME", "u2")
+        monkeypatch.setenv("MP_SECRET", "s2")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 2,
+                "user_email": "u2@example.com",
+                "organizations": {"200": {"id": 200, "name": "Beta"}},
+                "projects": {},
+            },
+        )
+        summary = accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="second",
+        )
+        assert summary.name == "second"
+        assert session_ns.show().account == "second", (
+            "login_unified() must activate the new account, not just add it."
+        )
+
+    def test_relogin_activates_account(
+        self, monkeypatch: pytest.MonkeyPatch, cm: ConfigManager
+    ) -> None:
+        """Re-login on a non-active account flips ``[active].account``.
+
+        Previously the relogin branch returned ``show(name)`` without
+        promoting; only the CLI's manual ``accounts_ns.use(...)``
+        observed the contract.
+        """
+        from mixpanel_headless import session as session_ns
+
+        accounts_ns.add(
+            "first",
+            type="service_account",
+            region="us",
+            username="u1",
+            secret=SecretStr("s1"),
+        )
+        accounts_ns.add(
+            "secondary",
+            type="service_account",
+            region="us",
+            username="u2",
+            secret=SecretStr("s2"),
+        )
+        # ``add()`` auto-activates only the first one; secondary is dormant.
+        assert session_ns.show().account == "first"
+
+        monkeypatch.setenv("MP_USERNAME", "u2")
+        monkeypatch.setenv("MP_SECRET", "rotated")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 2,
+                "user_email": "u2@example.com",
+                "organizations": {"200": {"id": 200, "name": "Beta"}},
+                "projects": {},
+            },
+        )
+        accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="secondary",
+        )
+        assert session_ns.show().account == "secondary"
+
+
+class TestLoginUnifiedMeCacheWrite:
+    """``login_unified`` persists the ``/me`` response to ``me.json``.
+
+    Pre-fix bug (PR-153 Issue 3): the orchestrator fetched ``/me``
+    in-process to resolve the project / derive the name and then
+    discarded the response. The python-api.md §1 contract said the
+    cache was written; the implementation explicitly did not. The next
+    ``MeService`` call paid a redundant network round-trip.
+    """
+
+    def _stub_me(
+        self, monkeypatch: pytest.MonkeyPatch, payload: dict[str, object]
+    ) -> None:
+        """Patch ``MixpanelAPIClient.me`` to return ``payload``."""
+        from mixpanel_headless._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            return payload
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+
+    def test_credential_path_writes_me_cache(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """SA login persists /me at ``~/.mp/accounts/{name}/me.json``."""
+        from mixpanel_headless._internal.auth.storage import account_dir
+        from mixpanel_headless._internal.me import MeCache
+
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 9,
+                "user_email": "svc@example.com",
+                "organizations": {"100": {"id": 100, "name": "Acme"}},
+                "projects": {"42": {"name": "Demo", "organization_id": 100}},
+            },
+        )
+
+        accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="acme-sa",
+        )
+        cache_path = account_dir("acme-sa") / "me.json"
+        assert cache_path.exists()
+        cached = MeCache(
+            account_name="acme-sa", storage_dir=account_dir("acme-sa")
+        ).get()
+        assert cached is not None
+        assert cached.user_email == "svc@example.com"
+
+    def test_relogin_writes_me_cache(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Relogin path also persists /me — pre-fix it skipped the write entirely."""
+        from mixpanel_headless._internal.auth.storage import account_dir
+        from mixpanel_headless._internal.me import MeCache
+
+        accounts_ns.add(
+            "team",
+            type="service_account",
+            region="us",
+            username="u-old",
+            secret=SecretStr("old-secret"),
+        )
+        # Pre-clear any cache the test fixture may have created.
+        cache_path = account_dir("team") / "me.json"
+        cache_path.unlink(missing_ok=True)
+
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 9,
+                "user_email": "team@example.com",
+                "organizations": {"100": {"id": 100, "name": "Team"}},
+                "projects": {},
+            },
+        )
+        monkeypatch.setenv("MP_USERNAME", "u-new")
+        monkeypatch.setenv("MP_SECRET", "new-secret")
+        accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="team",
+        )
+        assert cache_path.exists()
+        cached = MeCache(account_name="team", storage_dir=account_dir("team")).get()
+        assert cached is not None
+        assert cached.user_email == "team@example.com"
+
+
+class TestLoginUnifiedFlagValidation:
+    """``login_unified`` rejects mutually-incompatible flag combinations.
+
+    Pre-fix bug (PR-153 Issue 6): combination validation lived in the
+    CLI, which reached into ``accounts._detect_login_type`` (a private
+    helper) with a ``# noqa: SLF001`` to mirror the orchestrator's
+    detection. Library callers got no protection. The fix moves
+    validation into ``login_unified`` and surfaces structured
+    ``InvalidArgumentError`` so non-CLI callers can dispatch on
+    ``violation`` / ``detected_auth_type``.
+    """
+
+    def test_service_account_and_token_env_mutually_exclusive(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``service_account=True`` AND ``token_env=...`` raises on violation='mutually_exclusive'."""
+        from mixpanel_headless.exceptions import InvalidArgumentError
+
+        with pytest.raises(InvalidArgumentError) as exc_info:
+            accounts_ns.login_unified(service_account=True, token_env="MY_TOKEN")
+        assert exc_info.value.violation == "mutually_exclusive"
+        assert exc_info.value.detected_auth_type == "service_account"
+
+    def test_no_browser_with_service_account_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``no_browser=True`` against detected non-browser type raises."""
+        from mixpanel_headless.exceptions import InvalidArgumentError
+
+        with pytest.raises(InvalidArgumentError) as exc_info:
+            accounts_ns.login_unified(service_account=True, no_browser=True)
+        assert exc_info.value.violation == "no_browser_misuse"
+        assert exc_info.value.detected_auth_type == "service_account"
+
+    def test_secret_stdin_with_oauth_token_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``secret_stdin=True`` against detected non-SA type raises."""
+        from mixpanel_headless.exceptions import InvalidArgumentError
+
+        with pytest.raises(InvalidArgumentError) as exc_info:
+            accounts_ns.login_unified(token_env="MY_TOKEN", secret_stdin=True)
+        assert exc_info.value.violation == "secret_stdin_misuse"
+        assert exc_info.value.detected_auth_type == "oauth_token"
+
+    def test_explicit_account_type_conflict_with_service_account_flag(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``service_account=True`` while ``account_type="oauth_token"`` is mutually exclusive."""
+        from mixpanel_headless.exceptions import InvalidArgumentError
+
+        with pytest.raises(InvalidArgumentError) as exc_info:
+            accounts_ns.login_unified(service_account=True, account_type="oauth_token")
+        assert exc_info.value.violation == "mutually_exclusive"
+        assert exc_info.value.detected_auth_type == "oauth_token"
+
+
+class TestLoginUnifiedSummaryFields:
+    """``login_unified`` populates user_email / project_id / project_name on
+    the returned ``AccountSummary``.
+
+    Pre-fix bug (PR-153 Issues 2 + 12): the success line had to do a
+    second ``ConfigManager.get_account(name)`` round-trip just to read
+    ``default_project``, and even then the project_name and user_email
+    weren't available without yet another call. New optional fields
+    on ``AccountSummary`` make the orchestrator's /me data flow
+    cleanly to the printer.
+    """
+
+    def _stub_me(
+        self, monkeypatch: pytest.MonkeyPatch, payload: dict[str, object]
+    ) -> None:
+        """Patch ``MixpanelAPIClient.me`` to return ``payload``."""
+        from mixpanel_headless._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            return payload
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+
+    def test_summary_carries_me_derived_fields_on_credential_path(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SA login populates user_email + project_id + project_name from /me."""
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "svc@example.com",
+                "organizations": {"100": {"id": 100, "name": "Acme"}},
+                "projects": {"42": {"name": "Acme Demo", "organization_id": 100}},
+            },
+        )
+        summary = accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="prod",
+            project="42",
+        )
+        assert summary.user_email == "svc@example.com"
+        assert summary.project_id == "42"
+        assert summary.project_name == "Acme Demo"
+
+    def test_summary_project_name_none_when_no_project(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Empty /me.projects → ``project_id`` and ``project_name`` both ``None``."""
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "svc@example.com",
+                "organizations": {"100": {"id": 100, "name": "Empty"}},
+                "projects": {},
+            },
+        )
+        summary = accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="emptyacct",
+        )
+        assert summary.user_email == "svc@example.com"
+        assert summary.project_id is None
+        assert summary.project_name is None

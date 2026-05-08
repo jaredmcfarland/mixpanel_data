@@ -419,6 +419,18 @@ class TestMpLoginReloginCredentialUpdate:
             username="u-old",
             secret=SecretStr("old-secret"),
         )
+        # /me is now fetched on every relogin path (see PR-153 fix Issue 3
+        # — the orchestrator persists me.json as a side effect even when
+        # only credentials rotated).
+        _stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "team@example.com",
+                "organizations": {"100": {"id": 100, "name": "Team"}},
+                "projects": {},
+            },
+        )
         monkeypatch.setenv("MP_USERNAME", "u-new")
         monkeypatch.setenv("MP_SECRET", "new-secret")
         result = runner.invoke(
@@ -456,10 +468,18 @@ class TestMpLoginReloginCredentialUpdate:
         assert result.exit_code != 0, result.output
         assert "MP_USERNAME is not set" in result.output
 
-    def test_relogin_oauth_token_persists_new_inline_bearer(
-        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+    def test_relogin_oauth_token_inline_storage_keeps_inline_persist(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Re-login oauth_token with rotated MP_OAUTH_TOKEN writes inline bearer."""
+        """Existing inline storage stays inline; relogin persists rotated bearer.
+
+        Counterpart to ``...preserves_existing_env_ref``. When the
+        existing account stores the bearer inline (not via env reference),
+        re-running ``mp login --name ci`` honors that storage choice
+        and writes the rotated value inline as before.
+        """
         from mixpanel_headless import accounts as accounts_ns
         from mixpanel_headless._internal.auth.account import OAuthTokenAccount
 
@@ -469,16 +489,106 @@ class TestMpLoginReloginCredentialUpdate:
             region="us",
             token=SecretStr("old-bearer"),
         )
+        # /me must succeed so login_unified can persist the cache and
+        # populate the success-line fields.
+        _stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "ci@example.com",
+                "organizations": {"100": {"id": 100, "name": "CI Corp"}},
+                "projects": {},
+            },
+        )
         monkeypatch.setenv("MP_OAUTH_TOKEN", "new-bearer")
-        # No --token-env flag → detection picks oauth_token from MP_OAUTH_TOKEN,
-        # and the relogin path persists the inline bearer (mirrors the
-        # new-account branch in _login_unified_new_credential).
         result = runner.invoke(app, ["login", "--name", "ci"])
         assert result.exit_code == 0, result.output
         account = ConfigManager().get_account("ci")
         assert isinstance(account, OAuthTokenAccount)
         assert account.token is not None
         assert account.token.get_secret_value() == "new-bearer"
+        assert account.token_env is None
+
+    def test_relogin_oauth_token_preserves_existing_env_ref(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Re-login leaves ``token_env`` mode intact when no flag is passed.
+
+        Pre-fix bug: when the existing account stored
+        ``token_env=MP_OAUTH_TOKEN``, running ``mp login --name foo``
+        without re-passing ``--token-env`` silently flipped persistence
+        to inline ``SecretStr(bearer)``. The next rotation of
+        ``MP_OAUTH_TOKEN`` then went stale because the resolver read
+        the now-inline value, not the env. Issue #5 in the PR-153 fix
+        plan: preserve the storage mode unless the caller explicitly
+        opts into changing it.
+        """
+        from mixpanel_headless import accounts as accounts_ns
+        from mixpanel_headless._internal.auth.account import OAuthTokenAccount
+
+        accounts_ns.add(
+            "ci",
+            type="oauth_token",
+            region="us",
+            token_env="MP_OAUTH_TOKEN",
+        )
+        _stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "ci@example.com",
+                "organizations": {"100": {"id": 100, "name": "CI Corp"}},
+                "projects": {},
+            },
+        )
+        monkeypatch.setenv("MP_OAUTH_TOKEN", "rotated-bearer")
+        result = runner.invoke(app, ["login", "--name", "ci"])
+        assert result.exit_code == 0, result.output
+        account = ConfigManager().get_account("ci")
+        assert isinstance(account, OAuthTokenAccount)
+        # The mode invariant: token_env preserved, token still unset.
+        assert account.token_env == "MP_OAUTH_TOKEN"
+        assert account.token is None
+
+    def test_relogin_oauth_token_explicit_token_env_can_switch_modes(
+        self,
+        runner: CliRunner,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Explicit ``--token-env NEW_VAR`` re-points the persisted env-var pointer.
+
+        The escape hatch for the preservation rule above: passing
+        ``--token-env`` explicitly lets the caller change the env-var
+        target on a re-login (the original behavior, codified here so
+        future refactors don't accidentally break the opt-in path).
+        """
+        from mixpanel_headless import accounts as accounts_ns
+        from mixpanel_headless._internal.auth.account import OAuthTokenAccount
+
+        accounts_ns.add(
+            "ci",
+            type="oauth_token",
+            region="us",
+            token_env="OLD_VAR",
+        )
+        _stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "ci@example.com",
+                "organizations": {"100": {"id": 100, "name": "CI Corp"}},
+                "projects": {},
+            },
+        )
+        monkeypatch.setenv("NEW_VAR", "bearer-from-new-var")
+        result = runner.invoke(app, ["login", "--name", "ci", "--token-env", "NEW_VAR"])
+        assert result.exit_code == 0, result.output
+        account = ConfigManager().get_account("ci")
+        assert isinstance(account, OAuthTokenAccount)
+        assert account.token_env == "NEW_VAR"
+        assert account.token is None
 
     def test_relogin_oauth_token_persists_token_env_name(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
@@ -492,6 +602,15 @@ class TestMpLoginReloginCredentialUpdate:
             type="oauth_token",
             region="us",
             token_env="OLD_TOKEN_VAR",
+        )
+        _stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "agent@example.com",
+                "organizations": {"100": {"id": 100, "name": "Agents"}},
+                "projects": {},
+            },
         )
         monkeypatch.setenv("NEW_TOKEN_VAR", "bearer-from-new-var")
         result = runner.invoke(
@@ -787,6 +906,23 @@ class TestProjectPickerTTY:
         sorted_list = sorted(projects.items(), key=lambda kv: kv[1].name.lower())
         return me, sorted_list
 
+    def _stub_readline(self, monkeypatch: pytest.MonkeyPatch, lines: list[str]) -> None:
+        """Patch ``sys.stdin.readline`` to return ``lines`` in order.
+
+        Replaces the older ``builtins.input`` monkeypatch — the picker
+        now writes the prompt to stderr and reads via
+        ``sys.stdin.readline`` so stdout stays clean for
+        ``mp login | tee`` (PR-153 fix Issue 4). Tests call this helper
+        with a list of lines (each must end in ``\\n`` to mimic real
+        stdin); EOF is signalled by an empty string.
+
+        Args:
+            monkeypatch: pytest fixture for environment manipulation.
+            lines: Lines to return on successive ``readline`` calls.
+        """
+        iterator = iter(lines)
+        monkeypatch.setattr("sys.stdin.readline", lambda: next(iterator))
+
     def test_returns_default_on_empty_input(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -795,7 +931,7 @@ class TestProjectPickerTTY:
 
         me, sorted_projects = self._make_me_with_projects(3)
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        monkeypatch.setattr("builtins.input", lambda _prompt: "")
+        self._stub_readline(monkeypatch, ["\n"])
 
         result = _project_picker_tty(me, sorted_projects)
         assert result == sorted_projects[0][0]
@@ -806,7 +942,7 @@ class TestProjectPickerTTY:
 
         me, sorted_projects = self._make_me_with_projects(3)
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        monkeypatch.setattr("builtins.input", lambda _prompt: "2")
+        self._stub_readline(monkeypatch, ["2\n"])
 
         result = _project_picker_tty(me, sorted_projects)
         assert result == sorted_projects[1][0]
@@ -820,7 +956,7 @@ class TestProjectPickerTTY:
 
         me, sorted_projects = self._make_me_with_projects(3)
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-        monkeypatch.setattr("builtins.input", lambda _prompt: "garbage")
+        self._stub_readline(monkeypatch, ["garbage\n", "garbage\n", "garbage\n"])
 
         with pytest.raises(ConfigError) as exc_info:
             _project_picker_tty(me, sorted_projects)
@@ -848,18 +984,177 @@ class TestProjectPickerTTY:
     def test_eof_during_input_raises_config_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``input()`` raising ``EOFError`` is mapped to ConfigError, not a traceback."""
+        """``readline`` returning ``""`` (EOF) is mapped to ConfigError, not a traceback."""
         from mixpanel_headless.cli.commands.login import _project_picker_tty
         from mixpanel_headless.exceptions import ConfigError
 
         me, sorted_projects = self._make_me_with_projects(3)
         monkeypatch.setattr("sys.stdin.isatty", lambda: True)
-
-        def _raise_eof(_prompt: str) -> str:
-            raise EOFError("simulated stdin close")
-
-        monkeypatch.setattr("builtins.input", _raise_eof)
+        # ``sys.stdin.readline()`` returns "" (empty string) on EOF — no
+        # newline. The picker treats that as "stdin closed" and raises
+        # ConfigError so @handle_errors renders a structured exit
+        # instead of a bare Python traceback.
+        self._stub_readline(monkeypatch, [""])
 
         with pytest.raises(ConfigError) as exc_info:
             _project_picker_tty(me, sorted_projects)
         assert "stdin closed" in exc_info.value.message
+
+    def test_unicode_digit_treated_as_invalid(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Unicode digit '²' fails ``int()`` but must re-prompt, not crash.
+
+        Pre-fix bug (Issue 8): ``raw.isdigit()`` is True for Unicode
+        digits like ``²`` / ``٣``, but ``int(raw)`` then raises
+        ``ValueError``. The exception bubbled up through
+        ``@handle_errors`` as a generic Exception instead of triggering
+        the in-loop re-prompt path. Wrapping the int() conversion in a
+        try/except routes the unicode case through the normal
+        "Invalid input" loop.
+        """
+        from mixpanel_headless.cli.commands.login import _project_picker_tty
+        from mixpanel_headless.exceptions import ConfigError
+
+        me, sorted_projects = self._make_me_with_projects(3)
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        self._stub_readline(monkeypatch, ["²\n", "²\n", "²\n"])
+
+        # Three Unicode-digit attempts → ConfigError after 3 attempts,
+        # NOT a generic ValueError leaking from int().
+        with pytest.raises(ConfigError) as exc_info:
+            _project_picker_tty(me, sorted_projects)
+        assert "3 attempts" in exc_info.value.message
+
+    def test_unicode_digit_recovers_with_ascii_pick(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """First-attempt unicode digit, second-attempt valid ASCII → returns the pick.
+
+        Belt-and-suspenders for Issue 8: confirm the loop is genuinely
+        retrying rather than terminating early on the first ValueError.
+        """
+        from mixpanel_headless.cli.commands.login import _project_picker_tty
+
+        me, sorted_projects = self._make_me_with_projects(3)
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        self._stub_readline(monkeypatch, ["²\n", "2\n"])
+
+        result = _project_picker_tty(me, sorted_projects)
+        assert result == sorted_projects[1][0]
+
+    def test_prompt_writes_to_stderr_not_stdout(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Picker prompt lands on stderr; stdout stays clean for `mp login | tee`.
+
+        Pre-fix bug (Issue 4): ``input("Which project? ...")`` wrote
+        the prompt to stdout, breaking the cli-commands.md §1.4
+        contract that reserves stdout for the structured success line.
+        Switching to ``err_console.print`` + ``sys.stdin.readline``
+        routes prompts to stderr.
+        """
+        from mixpanel_headless.cli.commands.login import _project_picker_tty
+
+        me, sorted_projects = self._make_me_with_projects(3)
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        self._stub_readline(monkeypatch, ["1\n"])
+
+        _project_picker_tty(me, sorted_projects)
+        captured = capsys.readouterr()
+        assert "Which project?" in captured.err
+        assert "Which project?" not in captured.out
+
+
+class TestMpLoginSuccessLineContract:
+    """Stdout success line matches cli-commands.md §1.4 verbatim.
+
+    Pre-fix bug (PR-153 Issue 2): the CLI printed
+    ``Logged in → {name} · {project_id}`` — missing the ``as
+    {user_email}`` prefix and using the project ID where the contract
+    specified the project name. The legacy substring-only assertion
+    let the regression slip through. This test pins the exact format.
+    """
+
+    def test_format_is_logged_in_as_email_arrow_name_dot_project(
+        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Stdout: ``Logged in as {user_email} → {account_name} · {project_name}``."""
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        _stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "svc@example.com",
+                "organizations": {"100": {"id": 100, "name": "Acme Corp"}},
+                "projects": {
+                    "12345": {"name": "Acme Production", "organization_id": 100}
+                },
+            },
+        )
+        result = runner.invoke(
+            app,
+            [
+                "login",
+                "--service-account",
+                "--name",
+                "prod-sa",
+                "--region",
+                "us",
+                "--project",
+                "12345",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # The contract format. Exact string match (modulo trailing newline).
+        expected = "Logged in as svc@example.com → prod-sa · Acme Production"
+        # ``result.output`` aggregates stdout and stderr; the success line
+        # is the last non-empty line of stdout.
+        last_line = next(
+            (line for line in reversed(result.output.splitlines()) if line.strip()),
+            "",
+        )
+        assert last_line == expected, (
+            f"Success line mismatch.\n  got: {last_line!r}\n  want: {expected!r}"
+        )
+
+    def test_format_falls_back_when_me_lacks_email(
+        self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Missing ``/me.user_email`` falls back to ``(unknown user)`` placeholder.
+
+        Keeps the line shape parseable when the API returns a partial
+        payload. Better than printing ``None`` or crashing on a None
+        format-string.
+        """
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        _stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                # user_email intentionally absent.
+                "organizations": {"100": {"id": 100, "name": "Acme"}},
+                "projects": {"7": {"name": "P", "organization_id": 100}},
+            },
+        )
+        result = runner.invoke(
+            app,
+            [
+                "login",
+                "--service-account",
+                "--name",
+                "fb",
+                "--region",
+                "us",
+                "--project",
+                "7",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        last_line = next(
+            (line for line in reversed(result.output.splitlines()) if line.strip()),
+            "",
+        )
+        assert last_line == "Logged in as (unknown user) → fb · P"

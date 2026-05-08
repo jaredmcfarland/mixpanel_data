@@ -320,3 +320,167 @@ class TestProbeRegionSendsHeaders:
         )
         probe_region(factory, headers={})
         assert captured_paths == ["/api/app/me"]
+
+
+class TestProbeRegionResponseBodyCap:
+    """``RegionProbeError.attempts`` truncates oversized response bodies.
+
+    Pre-fix bug (PR-153 Issue 13): ``failure_attempts.append((region,
+    status, response.text))`` captured the full body verbatim. A
+    misconfigured server returning multi-MB HTML would land entirely in
+    the in-memory exception's ``.attempts`` and ``.details["attempts"]``
+    payload. Slicing at the source caps the worst case at 4 KiB while
+    preserving small JSON / text envelopes intact.
+    """
+
+    def test_oversized_response_body_truncated_to_4kib(self) -> None:
+        """A 100KB response body is sliced to ≤ 4096 chars in ``attempts``."""
+        big_body = "x" * 100_000  # 100 KB
+
+        def _big_body_handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, text=big_body)
+
+        # Every region returns the same oversized 401 — we just want to
+        # confirm what lands in attempts, not test ordering here.
+        factory = _factory_for(
+            {
+                "us": _big_body_handler,
+                "eu": _big_body_handler,
+                "in": _big_body_handler,
+            }
+        )
+        with pytest.raises(RegionProbeError) as exc_info:
+            probe_region(factory, headers={})
+        for _region, _status, body in exc_info.value.attempts:
+            assert len(body) <= 4096, (
+                f"Captured body length {len(body)} exceeds 4 KiB cap"
+            )
+
+    def test_small_response_body_preserved_verbatim(self) -> None:
+        """Bodies under 4 KiB land verbatim — no spurious truncation."""
+        small_body = '{"error": "credential rejected"}'
+
+        def _small_body_handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, text=small_body)
+
+        factory = _factory_for(
+            {
+                "us": _small_body_handler,
+                "eu": _small_body_handler,
+                "in": _small_body_handler,
+            }
+        )
+        with pytest.raises(RegionProbeError) as exc_info:
+            probe_region(factory, headers={})
+        for _region, _status, body in exc_info.value.attempts:
+            assert body == small_body
+
+
+class TestRegionProbeFactoryURLStripping:
+    """The ``probe_region_for_credential`` factory normalises ENDPOINTS app URLs.
+
+    Pre-fix bug (PR-153 Issue 15): ``app_url[: app_url.index("/api/app")]``
+    raised ``ValueError`` if the substring was absent and silently
+    produced a wrong base URL when ``ENDPOINTS`` shape shifted (trailing
+    slash, version prefix, etc.). Switching to ``urllib.parse.urlsplit``
+    drops the path component cleanly regardless of suffix shape.
+    """
+
+    def test_factory_drops_path_component_for_standard_endpoint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Standard ``https://mixpanel.com/api/app`` → ``https://mixpanel.com`` base."""
+        from pydantic import SecretStr
+
+        from mixpanel_headless._internal import api_client as api_client_mod
+        from mixpanel_headless._internal.auth.region_probe import (
+            probe_region_for_credential,
+        )
+
+        # Replace ENDPOINTS so the factory output is observable.
+        monkeypatch.setitem(
+            api_client_mod.ENDPOINTS,
+            "us",
+            {**api_client_mod.ENDPOINTS["us"], "app": "https://mixpanel.com/api/app"},
+        )
+
+        captured_base_urls: list[str] = []
+
+        # Wrap probe_region so we can grab the factory output without
+        # actually issuing HTTP. Returns a hard-coded successful probe.
+        from mixpanel_headless._internal.auth import region_probe as rp_mod
+
+        def _spy_probe(
+            client_factory: object,
+            headers: dict[str, str],
+            *,
+            timeout_seconds: float = 5.0,
+            order: tuple[Region, ...] = ("us", "eu", "in"),
+        ) -> rp_mod.RegionProbeResult:
+            client = client_factory("us")  # type: ignore[operator]
+            captured_base_urls.append(str(client.base_url))
+            client.close()
+            return rp_mod.RegionProbeResult(region="us", attempts=[("us", 200)])
+
+        monkeypatch.setattr(rp_mod, "probe_region", _spy_probe)
+
+        probe_region_for_credential(
+            account_type="service_account",
+            username="u",
+            secret=SecretStr("s"),
+            token=None,
+            token_env=None,
+        )
+        # httpx.Client.base_url normalises to trailing slash;
+        # ``str(URL("https://mixpanel.com"))`` → ``"https://mixpanel.com"``,
+        # but constructed via Client it can show as ``"https://mixpanel.com"``
+        # — accept either form.
+        assert captured_base_urls
+        observed = captured_base_urls[0].rstrip("/")
+        assert observed == "https://mixpanel.com"
+
+    def test_factory_handles_trailing_slash_endpoint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Future ``https://mixpanel.com/api/app/`` (trailing slash) still works."""
+        from pydantic import SecretStr
+
+        from mixpanel_headless._internal import api_client as api_client_mod
+        from mixpanel_headless._internal.auth.region_probe import (
+            probe_region_for_credential,
+        )
+
+        monkeypatch.setitem(
+            api_client_mod.ENDPOINTS,
+            "us",
+            {**api_client_mod.ENDPOINTS["us"], "app": "https://mixpanel.com/api/app/"},
+        )
+
+        captured_base_urls: list[str] = []
+
+        from mixpanel_headless._internal.auth import region_probe as rp_mod
+
+        def _spy_probe(
+            client_factory: object,
+            headers: dict[str, str],
+            *,
+            timeout_seconds: float = 5.0,
+            order: tuple[Region, ...] = ("us", "eu", "in"),
+        ) -> rp_mod.RegionProbeResult:
+            client = client_factory("us")  # type: ignore[operator]
+            captured_base_urls.append(str(client.base_url))
+            client.close()
+            return rp_mod.RegionProbeResult(region="us", attempts=[("us", 200)])
+
+        monkeypatch.setattr(rp_mod, "probe_region", _spy_probe)
+
+        probe_region_for_credential(
+            account_type="service_account",
+            username="u",
+            secret=SecretStr("s"),
+            token=None,
+            token_env=None,
+        )
+        assert captured_base_urls
+        observed = captured_base_urls[0].rstrip("/")
+        assert observed == "https://mixpanel.com"

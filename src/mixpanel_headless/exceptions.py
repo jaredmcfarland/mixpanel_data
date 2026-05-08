@@ -351,6 +351,82 @@ class AccountExistsError(ConfigError):
         return str(self._details.get("account_name", ""))
 
 
+class InvalidArgumentError(ConfigError):
+    """Raised when a public API call combines mutually incompatible arguments.
+
+    Carries a ``violation`` discriminator and the resolved
+    ``detected_auth_type`` so non-CLI callers (Cowork's ``auth_manager.py``,
+    JSON consumers) can dispatch programmatically without parsing the
+    human message. The CLI ``handle_errors`` decorator maps this subclass
+    to ``ExitCode.INVALID_ARGS`` (3) instead of the generic
+    ``GENERAL_ERROR`` (1) that ``ConfigError`` would otherwise produce.
+
+    Used by ``accounts.login_unified`` for the three documented
+    flag-combination rejections (043 contract, ``cli-commands.md`` §5):
+    ``--service-account`` + ``--token-env``, ``--no-browser`` against a
+    non-browser auth type, and ``--secret-stdin`` against a non-SA
+    auth type.
+
+    Example:
+        ```python
+        try:
+            accounts.login_unified(service_account=True, token_env="X")
+        except InvalidArgumentError as exc:
+            assert exc.violation == "mutually_exclusive"
+            assert exc.detected_auth_type == "service_account"
+        ```
+    """
+
+    _VALID_VIOLATIONS = (
+        "mutually_exclusive",
+        "no_browser_misuse",
+        "secret_stdin_misuse",
+    )
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        violation: Literal[
+            "mutually_exclusive", "no_browser_misuse", "secret_stdin_misuse"
+        ],
+        detected_auth_type: str | None = None,
+    ) -> None:
+        """Initialize InvalidArgumentError.
+
+        Args:
+            message: Human-readable error message.
+            violation: Discriminator for the kind of misuse. One of
+                ``"mutually_exclusive"``, ``"no_browser_misuse"``,
+                ``"secret_stdin_misuse"``.
+            detected_auth_type: The auth type the orchestrator resolved
+                from the supplied flags / env. ``None`` only when the
+                violation was caught BEFORE detection ran (currently
+                no such case, but kept optional for future-proofing).
+        """
+        if violation not in self._VALID_VIOLATIONS:
+            raise ValueError(
+                f"Invalid violation {violation!r}; must be one of "
+                f"{self._VALID_VIOLATIONS}."
+            )
+        details: dict[str, Any] = {"violation": violation}
+        if detected_auth_type is not None:
+            details["detected_auth_type"] = detected_auth_type
+        super().__init__(message, details=details)
+        self._code = "INVALID_ARGUMENT"
+
+    @property
+    def violation(self) -> str:
+        """The kind of misuse — see ``_VALID_VIOLATIONS``."""
+        return str(self._details.get("violation", ""))
+
+    @property
+    def detected_auth_type(self) -> str | None:
+        """The auth type the orchestrator resolved (or ``None`` if pre-detection)."""
+        value = self._details.get("detected_auth_type")
+        return str(value) if value is not None else None
+
+
 class AccountInUseError(ConfigError):
     """Account is referenced by one or more targets and cannot be removed.
 

@@ -25,7 +25,6 @@ from mixpanel_headless.cli.utils import (
 )
 
 if TYPE_CHECKING:
-    from mixpanel_headless._internal.auth.account import AccountType
     from mixpanel_headless._internal.me import MeProjectInfo, MeResponse
 
 
@@ -83,51 +82,39 @@ def _project_picker_tty(
         )
 
     for _attempt in range(3):
-        try:
-            raw = input("Which project? [1]: ").strip()
-        except EOFError:
-            # stdin closed between the isatty() check above and the read
-            # (e.g. shell redirected `< /dev/null` after the harness
-            # snapshotted isatty). Surface as ConfigError so
-            # @handle_errors renders a structured exit instead of a
-            # bare Python traceback.
+        # Route the prompt itself through err_console so stdout stays
+        # clean for `mp login | tee log.txt` (cli-commands.md §1.4).
+        # Bare ``input(prompt)`` would write the prompt to stdout. Use
+        # ``end=""`` so the cursor sits beside the prompt instead of
+        # dropping to the next line.
+        err_console.print("Which project? [1]: ", end="")
+        line = sys.stdin.readline()
+        if line == "":
+            # readline() returns "" only on EOF — preserves the original
+            # EOFError handling so callers redirecting `< /dev/null`
+            # after the isatty() snapshot still get a structured exit.
             raise ConfigError(
                 "stdin closed during project picker prompt. "
                 "Pass --project ID or set MP_PROJECT_ID and re-run."
-            ) from None
+            )
+        raw = line.rstrip("\n").strip()
         if not raw:
             return sorted_projects[0][0]
-        if raw.isdigit() and 1 <= int(raw) <= len(sorted_projects):
-            return sorted_projects[int(raw) - 1][0]
+        # ``str.isdigit`` is True for Unicode digits (²,٣) that
+        # ``int()`` rejects with ValueError. Wrap so a paste of an
+        # exotic codepoint re-prompts via the loop instead of bubbling
+        # up to ``@handle_errors`` as a generic Exception.
+        try:
+            choice = int(raw)
+        except ValueError:
+            choice = None
+        if choice is not None and 1 <= choice <= len(sorted_projects):
+            return sorted_projects[choice - 1][0]
         err_console.print(
             f"[red]Invalid input: {raw!r}.[/red] Enter a number from 1 to "
             f"{len(sorted_projects)} (or press Enter for the default)."
         )
     raise ConfigError("Could not pick a project after 3 attempts. Aborting.")
-
-
-def _flag_to_account_type(
-    service_account: bool, token_env: str | None
-) -> AccountType | None:
-    """Map ``mp login`` CLI flags to the explicit ``account_type`` literal.
-
-    Returns ``None`` when neither flag is set so the orchestrator falls
-    through to env-var detection. Used both by the argument-validation
-    step (to render E-12 / E-13 with the right ``Detected auth type``)
-    and by the call into ``login_unified``.
-
-    Args:
-        service_account: Value of the ``--service-account`` flag.
-        token_env: Value of the ``--token-env`` flag (``None`` if unset).
-
-    Returns:
-        ``"service_account"``, ``"oauth_token"``, or ``None``.
-    """
-    if service_account:
-        return "service_account"
-    if token_env is not None:
-        return "oauth_token"
-    return None
 
 
 @handle_errors
@@ -166,8 +153,9 @@ def login(
         typer.Option(
             "--token-env",
             help=(
-                "Force oauth_token auth from the named env var. Defaults to "
-                "MP_OAUTH_TOKEN when --token-env is passed without a value."
+                "Force oauth_token auth from the named env var "
+                "(e.g. --token-env MY_TOKEN). When omitted, MP_OAUTH_TOKEN "
+                "is consulted automatically."
             ),
         ),
     ] = None,
@@ -211,65 +199,38 @@ def login(
         no_browser: For oauth_browser, print the URL instead of launching.
         secret_stdin: For service_account, read the secret from stdin.
     """
-    # Argument validation (runs before any network I/O).
-    if service_account and token_env is not None:
-        err_console.print(
-            "[red]ERROR:[/red] --service-account and --token-env are "
-            "mutually exclusive.\n\n"
-            "Pick one auth type:\n"
-            "    mp login --service-account\n"
-            "    mp login --token-env MY_OAUTH_TOKEN_VAR"
-        )
-        raise typer.Exit(ExitCode.INVALID_ARGS)
-
-    # Detection runs through the orchestrator's own helper so the CLI's
-    # argument-validation messages stay aligned with what `login_unified`
-    # ultimately resolves. Two implementations would drift on the next
-    # priority-order tweak.
-    account_type = _flag_to_account_type(service_account, token_env)
-    detected = accounts_ns._detect_login_type(account_type, token_env)  # noqa: SLF001
-
-    if no_browser and detected != "oauth_browser":
-        err_console.print(
-            f"[red]ERROR:[/red] --no-browser is only meaningful for the "
-            f"oauth_browser auth type.\n\n"
-            f"Detected auth type: {detected}."
-        )
-        raise typer.Exit(ExitCode.INVALID_ARGS)
-
-    if secret_stdin and detected != "service_account":
-        err_console.print(
-            f"[red]ERROR:[/red] --secret-stdin is only meaningful for the "
-            f"service_account auth type.\n\n"
-            f"Detected auth type: {detected}."
-        )
-        raise typer.Exit(ExitCode.INVALID_ARGS)
-
-    # Region must be a valid Literal value when supplied.
+    # Region is the only flag the orchestrator can't validate (it
+    # accepts a Region literal, not an arbitrary string). Reject early
+    # so a typo never reaches the placeholder dir / probe loop.
     if region is not None and region not in ("us", "eu", "in"):
         err_console.print(
             f"[red]ERROR:[/red] Invalid --region: {region!r} (use us / eu / in)."
         )
         raise typer.Exit(ExitCode.INVALID_ARGS)
 
+    # All other flag-combination validation lives in
+    # ``accounts.login_unified`` and surfaces as
+    # ``InvalidArgumentError`` (subclass of ``ConfigError``) with a
+    # ``violation`` discriminator the @handle_errors decorator maps to
+    # exit 3. Keeping the rules in the orchestrator means non-CLI
+    # callers (Cowork, JSON consumers) get the same protection without
+    # having to re-implement the matrix.
     summary = accounts_ns.login_unified(
         name=name,
         region=region,  # type: ignore[arg-type]  # validated above
         project=project,
-        account_type=account_type,
         no_browser=no_browser,
         secret_stdin=secret_stdin,
         token_env=token_env,
+        service_account=service_account,
         project_picker=_project_picker_tty,
     )
 
-    # Activate the new (or refreshed) account so subsequent calls inherit it.
-    accounts_ns.use(summary.name)
-
     # Stdout success line (single line, structured for `mp login | tee log.txt`).
-    # AccountSummary doesn't carry default_project; pull it from the live Account.
-    from mixpanel_headless._internal.config import ConfigManager
-
-    account = ConfigManager().get_account(summary.name)
-    project_label = account.default_project or "(no project)"
-    console.print(f"Logged in → {summary.name} · {project_label}")
+    # cli-commands.md §1.4 fixes the format as
+    # ``Logged in as {user_email} → {account_name} · {project_name}``.
+    # Each /me-derived field falls back to a literal "(unknown ...)" when
+    # absent so the line stays parseable even on partial /me payloads.
+    user_email = summary.user_email or "(unknown user)"
+    project_label = summary.project_name or "(no project)"
+    console.print(f"Logged in as {user_email} → {summary.name} · {project_label}")
