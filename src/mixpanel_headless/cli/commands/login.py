@@ -22,6 +22,7 @@ from mixpanel_headless.cli.utils import (
     console,
     err_console,
     handle_errors,
+    status_spinner,
 )
 
 if TYPE_CHECKING:
@@ -119,6 +120,7 @@ def _project_picker_tty(
 
 @handle_errors
 def login(
+    ctx: typer.Context,
     name: Annotated[
         str | None,
         typer.Option(
@@ -191,6 +193,8 @@ def login(
         mp login --no-browser                       # headless oauth flow
 
     Args:
+        ctx: Typer context. Used to wire ``--quiet`` into the spinner
+            wrapped around the orchestrator's ``/me`` round-trip.
         name: Local account name. Wins over derived names.
         region: Forces a specific region.
         project: Project ID to bind to. Hard-fails if not visible to /me.
@@ -215,6 +219,12 @@ def login(
     # exit 3. Keeping the rules in the orchestrator means non-CLI
     # callers (Cowork, JSON consumers) get the same protection without
     # having to re-implement the matrix.
+    # Wrap the orchestrator's /me fetch in a Rich spinner. /me is the
+    # slowest single call in the login flow (multi-second when an
+    # account spans many projects across orgs); without this hook the
+    # terminal looks hung between region-probe narration and the
+    # project picker. ``status_spinner`` honors --quiet and falls back
+    # to a no-op in non-TTY contexts so piped invocations stay clean.
     summary = accounts_ns.login_unified(
         name=name,
         region=region,  # type: ignore[arg-type]  # validated above
@@ -224,6 +234,7 @@ def login(
         token_env=token_env,
         service_account=service_account,
         project_picker=_project_picker_tty,
+        progress=lambda msg: status_spinner(ctx, msg),
     )
 
     # Stdout success line (single line, structured for `mp login | tee log.txt`).

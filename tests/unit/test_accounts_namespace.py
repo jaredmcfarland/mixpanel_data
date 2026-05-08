@@ -12,7 +12,9 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 
 from __future__ import annotations
 
+import contextlib
 import json
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -20,6 +22,7 @@ from pydantic import SecretStr
 
 from mixpanel_headless import accounts as accounts_ns
 from mixpanel_headless._internal.config import ConfigManager
+from mixpanel_headless._internal.me import MeProjectInfo, MeResponse
 from mixpanel_headless.exceptions import (
     AccountInUseError,
     ConfigError,
@@ -1346,3 +1349,333 @@ class TestLoginUnifiedSummaryFields:
         assert summary.user_email == "svc@example.com"
         assert summary.project_id is None
         assert summary.project_name is None
+
+
+class TestLoginUnifiedProgressHook:
+    """``login_unified`` wraps the ``/me`` fetch in a caller-supplied CM.
+
+    The ``/me`` endpoint can take many seconds when an account spans
+    dozens of projects across multiple orgs. The CLI uses this hook to
+    show a Rich spinner so the terminal does not appear hung. Library
+    callers leave it ``None`` (default) and the orchestrator wraps the
+    call in :class:`contextlib.nullcontext`.
+    """
+
+    def _stub_me(
+        self, monkeypatch: pytest.MonkeyPatch, payload: dict[str, object]
+    ) -> None:
+        """Patch ``MixpanelAPIClient.me`` to return ``payload``."""
+        from mixpanel_headless._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            return payload
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+
+    def _make_tracking_progress(
+        self,
+    ) -> tuple[
+        list[str],
+        list[str],
+        Callable[[str], contextlib.AbstractContextManager[None]],
+    ]:
+        """Build a progress factory that records enter/exit ordering.
+
+        Returns:
+            Tuple of (messages, events, factory). ``messages`` lists the
+            strings the orchestrator passed; ``events`` records
+            ``"enter"`` / ``"exit"`` for each CM lifecycle step; the
+            factory is the callable to pass as ``progress=``.
+        """
+        messages: list[str] = []
+        events: list[str] = []
+
+        @contextlib.contextmanager
+        def _factory(msg: str) -> Iterator[None]:
+            """Capture ``msg`` then yield, recording enter/exit events."""
+            messages.append(msg)
+            events.append("enter")
+            try:
+                yield
+            finally:
+                events.append("exit")
+
+        return messages, events, _factory
+
+    def test_progress_wraps_me_on_credential_path(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SA login: progress CM is entered before /me and exited after.
+
+        Pins the ordering so a future refactor that hoists ``/me`` out
+        of the wrapped block (or stops calling progress at all) fails
+        loud instead of silently regressing the spinner UX.
+        """
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "svc@example.com",
+                "organizations": {"100": {"id": 100, "name": "Acme"}},
+                "projects": {"42": {"name": "Demo", "organization_id": 100}},
+            },
+        )
+        messages, events, tracker = self._make_tracking_progress()
+
+        # Spy on _fetch_me so we can assert the progress CM is open
+        # AT the moment _fetch_me runs, not just before / after the
+        # whole orchestrator. The closure-captured `events` list grows
+        # to ["enter", "fetch", "exit"] iff the wrap is correct.
+        from mixpanel_headless import accounts as accounts_mod
+
+        original_fetch = accounts_mod._fetch_me
+
+        def _spy_fetch(*args: object, **kwargs: object) -> object:
+            """Record the call between enter / exit so order can be asserted."""
+            events.append("fetch")
+            return original_fetch(*args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(accounts_mod, "_fetch_me", _spy_fetch)
+
+        accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="prod",
+            project="42",
+            progress=tracker,
+        )
+
+        assert events == ["enter", "fetch", "exit"], (
+            f"progress CM must wrap /me; got events={events!r}"
+        )
+        assert len(messages) == 1, messages
+        assert messages[0], "progress message must be non-empty"
+        # No numeric duration in the message; cli-feedback rule from
+        # 043 frictionless auth UX iteration.
+        assert not any(c.isdigit() for c in messages[0]), messages[0]
+
+    def test_progress_default_is_nullcontext(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``progress=None`` keeps the legacy silent behavior intact.
+
+        Library callers (Cowork, scripts) must not be forced to thread
+        a CM through every login_unified invocation. Default falls back
+        to nullcontext so the call still works with no progress UI.
+        """
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "svc@example.com",
+                "organizations": {"100": {"id": 100, "name": "Acme"}},
+                "projects": {"42": {"name": "Demo", "organization_id": 100}},
+            },
+        )
+        summary = accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="prod",
+            project="42",
+            # No progress= → must default to nullcontext, no exception.
+        )
+        assert summary.name == "prod"
+
+    def test_progress_wraps_me_on_relogin_path(
+        self, monkeypatch: pytest.MonkeyPatch, cm: ConfigManager
+    ) -> None:
+        """Re-login also pays the /me cost, so the spinner must wrap there too.
+
+        Without this guarantee, ``mp login --name existing`` would hang
+        silently while refreshing the cache.
+        """
+        # Pre-existing account so login_unified takes the relogin branch.
+        accounts_ns.add(
+            "prod",
+            type="service_account",
+            region="us",
+            username="u",
+            secret=SecretStr("s"),
+        )
+        monkeypatch.setenv("MP_USERNAME", "u")
+        monkeypatch.setenv("MP_SECRET", "s")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "u@example.com",
+                "organizations": {"100": {"id": 100, "name": "Acme"}},
+                "projects": {"42": {"name": "Demo", "organization_id": 100}},
+            },
+        )
+        messages, events, tracker = self._make_tracking_progress()
+
+        from mixpanel_headless import accounts as accounts_mod
+
+        original_fetch = accounts_mod._fetch_me
+
+        def _spy_fetch(*args: object, **kwargs: object) -> object:
+            events.append("fetch")
+            return original_fetch(*args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(accounts_mod, "_fetch_me", _spy_fetch)
+
+        accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="prod",
+            progress=tracker,
+        )
+
+        assert events == ["enter", "fetch", "exit"], (
+            f"relogin must wrap /me with progress CM; got events={events!r}"
+        )
+        assert messages and messages[0]
+
+
+class TestLoginUnifiedPickerSortOrder:
+    """``login_unified`` sorts the picker list by (org name, project name).
+
+    With dozens of projects spread across multiple orgs, the previous
+    project-name-only sort interleaved orgs (Acme · A, Beta · A, Acme ·
+    B, Beta · B, …), making it hard to scan for a known project. Group
+    by org first so each org's projects appear as a contiguous,
+    alphabetized block.
+    """
+
+    def _stub_me(
+        self, monkeypatch: pytest.MonkeyPatch, payload: dict[str, object]
+    ) -> None:
+        """Patch ``MixpanelAPIClient.me`` to return ``payload``."""
+        from mixpanel_headless._internal import api_client as api_client_mod
+
+        def _fake_me(self: object) -> dict[str, object]:
+            return payload
+
+        monkeypatch.setattr(api_client_mod.MixpanelAPIClient, "me", _fake_me)
+
+    def test_picker_receives_projects_grouped_by_org_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Multi-org /me yields a list ordered by (org, project) ascending.
+
+        Project names are deliberately interleaved across orgs so a
+        name-only sort would NOT match the org-first expected order:
+
+        Name-only sort would yield:
+            alpha (Beta), apple (Charlie), middle (Beta),
+            wolf (Acme), yak (Charlie), zebra (Acme)
+
+        Org-then-name sort must yield:
+            wolf (Acme), zebra (Acme),
+            alpha (Beta), middle (Beta),
+            apple (Charlie), yak (Charlie)
+        """
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "u@example.com",
+                "organizations": {
+                    "300": {"id": 300, "name": "Charlie"},
+                    "100": {"id": 100, "name": "Acme"},
+                    "200": {"id": 200, "name": "Beta"},
+                },
+                "projects": {
+                    "1": {"name": "zebra", "organization_id": 100},
+                    "2": {"name": "alpha", "organization_id": 200},
+                    "3": {"name": "yak", "organization_id": 300},
+                    "4": {"name": "wolf", "organization_id": 100},
+                    "5": {"name": "middle", "organization_id": 200},
+                    "6": {"name": "apple", "organization_id": 300},
+                },
+            },
+        )
+
+        captured: list[list[str]] = []
+
+        def _picker(
+            _me: MeResponse, sorted_projects: list[tuple[str, MeProjectInfo]]
+        ) -> str:
+            """Capture the names the orchestrator sorted; pick the first."""
+            captured.append([info.name for _pid, info in sorted_projects])
+            return sorted_projects[0][0]
+
+        accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="acct",
+            project_picker=_picker,
+        )
+
+        assert captured, "picker was not called"
+        assert captured[0] == [
+            "wolf",
+            "zebra",
+            "alpha",
+            "middle",
+            "apple",
+            "yak",
+        ], (
+            f"projects must be grouped by org then sorted by project; "
+            f"got {captured[0]!r}"
+        )
+
+    def test_picker_sort_is_case_insensitive(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``"acme"`` and ``"Acme"`` collate together; ditto project names.
+
+        Mixpanel users routinely have orgs and projects with mixed
+        casing ("Demo Projects", "demo team"). A case-sensitive sort
+        on the raw strings would put "Beta" before "acme" because
+        ``"B" (66) < "a" (97)``; lowercasing both keys keeps the
+        ordering intuitive.
+        """
+        monkeypatch.setenv("MP_USERNAME", "svc")
+        monkeypatch.setenv("MP_SECRET", "secret")
+        # Two orgs ("acme", "Beta") chosen so case-sensitive byte sort
+        # disagrees with case-insensitive sort on the org axis. One
+        # project per org so the assertion isolates the org-axis sort.
+        self._stub_me(
+            monkeypatch,
+            {
+                "user_id": 1,
+                "user_email": "u@example.com",
+                "organizations": {
+                    "100": {"id": 100, "name": "acme"},
+                    "200": {"id": 200, "name": "Beta"},
+                },
+                "projects": {
+                    "1": {"name": "betaproj", "organization_id": 200},
+                    "2": {"name": "acmeproj", "organization_id": 100},
+                },
+            },
+        )
+
+        captured: list[list[str]] = []
+
+        def _picker(
+            _me: MeResponse, sorted_projects: list[tuple[str, MeProjectInfo]]
+        ) -> str:
+            """Capture the names the orchestrator sorted; pick the first."""
+            captured.append([info.name for _pid, info in sorted_projects])
+            return sorted_projects[0][0]
+
+        accounts_ns.login_unified(
+            account_type="service_account",
+            region="us",
+            name="acct",
+            project_picker=_picker,
+        )
+
+        # Case-sensitive byte sort on org name: "Beta" < "acme" → Beta
+        # group first → ["betaproj", "acmeproj"]. Case-insensitive:
+        # "acme" < "beta" → ["acmeproj", "betaproj"].
+        assert captured[0] == ["acmeproj", "betaproj"], captured[0]

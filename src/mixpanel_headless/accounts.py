@@ -11,6 +11,7 @@ Reference: specs/042-auth-architecture-redesign/contracts/python-api.md §5.
 from __future__ import annotations
 
 import builtins
+import contextlib
 import logging
 import os
 import shutil
@@ -63,6 +64,21 @@ if TYPE_CHECKING:
 ProjectPicker = Callable[
     ["MeResponse", builtins.list[tuple[str, "MeProjectInfo"]]], str
 ]
+
+# Progress factory contract. ``mp login`` wraps the (slow) ``/me`` round-trip
+# in this CM so the CLI can render a Rich spinner. Library callers leave it
+# ``None`` and the orchestrator substitutes ``contextlib.nullcontext``.
+ProgressFactory = Callable[[str], "contextlib.AbstractContextManager[None]"]
+
+_FETCH_ME_PROGRESS_MESSAGE = "Fetching your projects from Mixpanel..."
+"""Shown by the CLI's spinner while the orchestrator awaits ``/me``.
+
+Kept module-level so a future copy tweak is one edit, not three (the
+relogin + new-browser + new-credential paths all share this string).
+Intentionally free of duration estimates — ``/me`` latency depends on
+how many projects + orgs the user can see, and we would rather under-
+promise than print a misleading "this may take 30s" line.
+"""
 
 logger = logging.getLogger(__name__)
 
@@ -1022,6 +1038,7 @@ def login_unified(
     token_env: str | None = None,
     service_account: bool = False,
     project_picker: ProjectPicker | None = None,
+    progress: ProgressFactory | None = None,
 ) -> AccountSummary:
     """Add and activate a Mixpanel account in one orchestrated call.
 
@@ -1099,6 +1116,11 @@ def login_unified(
             resolves. Returns the chosen project ID. The CLI supplies a
             TTY-aware picker; library callers can supply their own or
             leave it ``None`` to fail-fast non-interactively.
+        progress: Optional CM factory wrapped around the ``/me`` round-
+            trip. The CLI passes a Rich-spinner-backed factory so the
+            terminal does not appear hung while ``/me`` runs. Library
+            callers leave ``None`` and the orchestrator substitutes
+            :class:`contextlib.nullcontext`.
 
     Returns:
         :class:`AccountSummary` for the newly added (or refreshed)
@@ -1187,6 +1209,12 @@ def login_unified(
             detected_auth_type=detected_type,
         )
 
+    # Default progress to nullcontext so library callers (Cowork, scripts,
+    # tests) do not have to thread a CM through every invocation. The CLI
+    # passes a Rich-spinner factory; everyone else gets the no-op.
+    if progress is None:
+        progress = lambda _msg: contextlib.nullcontext()  # noqa: E731
+
     # Re-login path: when name is explicit AND the account already exists,
     # refresh credentials and bail before the new-account machinery runs.
     cm = _config()
@@ -1205,6 +1233,7 @@ def login_unified(
                 no_browser=no_browser,
                 secret_stdin=secret_stdin,
                 token_env=token_env,
+                progress=progress,
             )
         else:
             summary = _login_unified_new(
@@ -1217,6 +1246,7 @@ def login_unified(
                 secret_stdin=secret_stdin,
                 token_env=token_env,
                 project_picker=project_picker,
+                progress=progress,
             )
     else:
         summary = _login_unified_new(
@@ -1229,6 +1259,7 @@ def login_unified(
             secret_stdin=secret_stdin,
             token_env=token_env,
             project_picker=project_picker,
+            progress=progress,
         )
 
     # Activate the (new or refreshed) account so library callers — not
@@ -1252,6 +1283,7 @@ def _login_unified_new(
     secret_stdin: bool,
     token_env: str | None,
     project_picker: ProjectPicker | None,
+    progress: ProgressFactory,
 ) -> AccountSummary:
     """Dispatch to the new-account browser or credential flow.
 
@@ -1272,6 +1304,8 @@ def _login_unified_new(
         secret_stdin: Forwarded to SA flow only.
         token_env: Forwarded to oauth_token flow only.
         project_picker: TTY-gated picker callback.
+        progress: CM factory wrapped around the ``/me`` round-trip in
+            both downstream flows. Forwarded as-is.
 
     Returns:
         :class:`AccountSummary` populated with ``user_email`` /
@@ -1286,6 +1320,7 @@ def _login_unified_new(
             project=project,
             no_browser=no_browser,
             project_picker=project_picker,
+            progress=progress,
         )
     return _login_unified_new_credential(
         cm,
@@ -1296,6 +1331,7 @@ def _login_unified_new(
         secret_stdin=secret_stdin,
         token_env=token_env,
         project_picker=project_picker,
+        progress=progress,
     )
 
 
@@ -1387,6 +1423,7 @@ def _login_unified_relogin(
     no_browser: bool,
     secret_stdin: bool,
     token_env: str | None,
+    progress: ProgressFactory,
 ) -> AccountSummary:
     """Refresh an existing account's credentials per the re-login state machine.
 
@@ -1408,6 +1445,9 @@ def _login_unified_relogin(
         token_env: For oauth_token, env-var name carrying the new bearer.
             ``None`` falls back to ``MP_OAUTH_TOKEN`` and persists the
             value inline; explicit ``--token-env NAME`` persists the name.
+        progress: CM factory wrapped around the post-refresh ``/me``
+            round-trip so the CLI can render a spinner during the
+            slowest step of re-login.
 
     Returns:
         :class:`AccountSummary` for the refreshed account.
@@ -1527,7 +1567,8 @@ def _login_unified_relogin(
     # the /me cache as a side effect; the relogin path was previously
     # the one branch that skipped it.
     refreshed = cm.get_account(name)
-    me_resp = _fetch_me(refreshed)
+    with progress(_FETCH_ME_PROGRESS_MESSAGE):
+        me_resp = _fetch_me(refreshed)
     _persist_me_cache(name, me_resp)
     project_id = refreshed.default_project
     return _summary_with_me(show(name), me_resp=me_resp, project_id=project_id)
@@ -1541,6 +1582,7 @@ def _login_unified_new_browser(
     project: str | None,
     no_browser: bool,
     project_picker: ProjectPicker | None,
+    progress: ProgressFactory,
 ) -> AccountSummary:
     """Run the oauth_browser new-account flow with placeholder-then-rename.
 
@@ -1564,6 +1606,8 @@ def _login_unified_new_browser(
         project: Explicit project ID; ``None`` triggers the picker chain.
         no_browser: When ``True``, print the authorize URL.
         project_picker: TTY-gated picker callback.
+        progress: CM factory wrapped around the in-memory ``/me`` probe
+            so the CLI's spinner stays active during the slow step.
 
     Returns:
         :class:`AccountSummary` for the new account, with ``user_email``
@@ -1614,10 +1658,13 @@ def _login_unified_new_browser(
             region=auth_region,
             default_project=ProjectId("0"),
         )
-        me_resp = _fetch_me(
-            temp_account,
-            token_resolver=_FreshBrowserBearer(tokens.access_token.get_secret_value()),
-        )
+        with progress(_FETCH_ME_PROGRESS_MESSAGE):
+            me_resp = _fetch_me(
+                temp_account,
+                token_resolver=_FreshBrowserBearer(
+                    tokens.access_token.get_secret_value()
+                ),
+            )
 
         # Resolve the project (priority chain).
         chosen_project = _resolve_project(
@@ -1713,6 +1760,7 @@ def _login_unified_new_credential(
     secret_stdin: bool,
     token_env: str | None,
     project_picker: ProjectPicker | None,
+    progress: ProgressFactory,
 ) -> AccountSummary:
     """Run the SA / oauth_token new-account flow.
 
@@ -1725,6 +1773,8 @@ def _login_unified_new_credential(
         secret_stdin: SA-only: read secret from stdin.
         token_env: oauth_token-only: env-var name (default ``MP_OAUTH_TOKEN``).
         project_picker: TTY-gated picker callback.
+        progress: CM factory wrapped around the ``/me`` round-trip so the
+            CLI's spinner stays active during the slow step.
 
     Returns:
         :class:`AccountSummary` for the new account, with ``user_email``
@@ -1821,7 +1871,8 @@ def _login_unified_new_credential(
                 default_project=ProjectId("0"),
             )
 
-    me_resp = _fetch_me(temp_account)
+    with progress(_FETCH_ME_PROGRESS_MESSAGE):
+        me_resp = _fetch_me(temp_account)
 
     chosen_project = _resolve_project(
         me_resp=me_resp,
@@ -1938,7 +1989,25 @@ def _resolve_project(
             f"Accessible projects:\n{accessible_lines}\n\n"
             f"Pass --project ID to select one explicitly, or set MP_PROJECT_ID."
         )
-    sorted_projects = sorted(projects.items(), key=lambda kv: kv[1].name.lower())
+
+    # Group projects by org first, then alphabetize within. With many
+    # projects spread across multiple orgs, a name-only sort interleaves
+    # orgs and forces the user to scan the whole list. The (org, project)
+    # key produces contiguous per-org blocks. Both axes lowercased so
+    # mixed-case names ("Demo Projects" vs "demo team") collate
+    # intuitively instead of by raw byte order. Unknown org IDs (a
+    # project tied to an org missing from /me.organizations) fall back
+    # to a synthetic ``"~org {id}"`` key — the leading tilde sinks them
+    # to the bottom rather than the chaotic position they would land at
+    # if we used the raw integer-as-string.
+    def _sort_key(item: tuple[str, MeProjectInfo]) -> tuple[str, str]:
+        """Build (org_name, project_name) sort key, both case-folded."""
+        _pid, info = item
+        org = me_resp.organizations.get(str(info.organization_id))
+        org_name = org.name if org is not None else f"~org {info.organization_id}"
+        return (org_name.lower(), info.name.lower())
+
+    sorted_projects = sorted(projects.items(), key=_sort_key)
     return project_picker(me_resp, sorted_projects)
 
 
