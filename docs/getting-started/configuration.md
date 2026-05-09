@@ -13,6 +13,31 @@ In-session switching is a one-line operation: `Workspace.use(account=..., projec
 
     Ask questions about service accounts, OAuth, environment variables, or multi-account configuration.
 
+## Quick Start: `mp login`
+
+The fastest way to authenticate is the top-level `mp login` command. It runs the right auth flow for your environment, derives an account name from `/me`, and pins a default project — all in one call:
+
+```bash
+mp login
+# Logged in as jared@example.com → acme · AI Demo
+```
+
+Auth-type detection is env-driven:
+
+1. Explicit `--service-account` / `--token-env VAR` flag.
+2. `MP_USERNAME` + `MP_SECRET` set → `service_account`.
+3. `MP_OAUTH_TOKEN` set → `oauth_token`.
+4. Otherwise → `oauth_browser` (PKCE).
+
+Region behavior depends on the auth type:
+
+- `service_account` and `oauth_token`: probes `us → eu → in` against `/me` and uses the first 200.
+- `oauth_browser`: defaults to `us` when `--region` is not passed. EU and India users must pass `--region eu` or `--region in` explicitly (the PKCE flow commits to a single region before the post-login `/me` probe runs).
+
+Useful flags: `--region {us|eu|in}` sets the region explicitly, `--project ID` skips the picker, `--name NAME` overrides the derived name.
+
+The rest of this page covers the underlying account model, env-var precedence, and the explicit setup paths for users who want more control than `mp login` provides.
+
 ## Account Types
 
 | Type | Best For | Storage |
@@ -44,6 +69,9 @@ These map onto the [credential resolution chain](#credential-resolution-chain) b
 !!! note "Service-account env quad takes precedence over `MP_OAUTH_TOKEN`"
     If `MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION` are all set, the service-account quad wins even when `MP_OAUTH_TOKEN` is also present. This is safe to add to a shell that already exports the service-account vars.
 
+!!! note "`mp login` auth-type detection"
+    The same env presence drives `mp login`'s auth-type detection: `MP_USERNAME` + `MP_SECRET` set → `service_account`; `MP_OAUTH_TOKEN` set → `oauth_token`; otherwise the browser PKCE flow. Pass `--service-account` or `--token-env VAR` to force a non-browser path.
+
 ## Setting Up an Account
 
 ### Service account (Basic Auth)
@@ -74,6 +102,19 @@ mp account test team
 
 ### OAuth (browser, PKCE)
 
+The recommended path is `mp login` (see [Quick Start](#quick-start-mp-login) above), which derives a name from `/me`. The browser path defaults to `us`; pass `--region eu|in` for other clusters:
+
+```bash
+mp login --name personal
+# Logged in as jared@example.com → personal · AI Demo
+```
+
+Tokens land at `~/.mp/accounts/personal/tokens.json` (mode `0o600`) and refresh automatically before each call. The `default_project` is set from the post-login `/me` probe.
+
+<details><summary>Advanced: explicit account creation (two-step)</summary>
+
+For full control over the account name and region at registration time:
+
 ```bash
 mp account add personal --type oauth_browser --region us
 # Added account 'personal' (oauth_browser, us). Set as active.
@@ -83,7 +124,9 @@ mp account login personal
 # ✓ Authenticated as jared@example.com
 ```
 
-The PKCE flow opens your browser for Mixpanel authorization. Tokens land at `~/.mp/accounts/personal/tokens.json` (mode `0o600`) and refresh automatically before each call. The `default_project` field on the account is backfilled from the post-login `/me` probe.
+`mp account add` registers the account; `mp account login` runs the PKCE flow. `mp login --name personal --region us` collapses both into one call.
+
+</details>
 
 ### OAuth (static bearer / CI)
 
@@ -210,7 +253,7 @@ OAuth browser tokens are stored per account; OAuth client metadata (Dynamic Clie
     └── client_in.json
 ```
 
-Tokens auto-refresh on expiry. If the refresh token is rejected (e.g., revoked at the IdP), the next call raises `OAuthError(code="OAUTH_REFRESH_REVOKED")` — re-run `mp account login NAME` to recover.
+Tokens auto-refresh on expiry. If the refresh token is rejected (e.g., revoked at the IdP), the next call raises `OAuthError(code="OAUTH_REFRESH_REVOKED")` — re-run `mp login --name NAME` to recover (or the legacy `mp account login NAME`).
 
 ```bash
 mp account token personal                          # Print the active access token

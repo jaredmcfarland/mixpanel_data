@@ -154,8 +154,10 @@ class TestSessionSubcommand:
         assert payload["state"] == "needs_account"
         assert isinstance(payload.get("next"), list)
         assert payload["next"], "needs_account should suggest a next command"
-        # First suggestion must be a usable mp command per § 2.2.
-        assert payload["next"][0]["command"].startswith("mp account add")
+        # First suggestion must be a usable mp command per § 2.2. Post-043,
+        # ``mp login`` replaces the multi-step ``mp account add`` as the
+        # frictionless onboarding default.
+        assert payload["next"][0]["command"].startswith("mp login")
 
     def test_populated_config_returns_ok(self, populated_home: Path) -> None:
         """A configured account + default_project yields ``state="ok"``."""

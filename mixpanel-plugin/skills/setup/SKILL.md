@@ -39,29 +39,43 @@ Parse the JSON `state` field:
 
 If no credentials are configured, guide the user to one of these methods:
 
-### Recommended: Guided Setup
+### Recommended: `mp login`
 
-Tell the user to run `/mixpanel-headless:auth account add` for a step-by-step
-walkthrough that securely collects credentials. The slash command never
-prompts for secrets in conversation — it instructs the user to run
-`! mp account add ...` themselves so the secret is read with hidden input.
-
-### Alternative: OAuth Login
-
-For OAuth browser auth (laptops with a usable browser):
+The frictionless one-shot path. Tell the user to run:
 
 ```
-! mp account add personal --type oauth_browser --region us
-! mp account login personal     # opens browser for PKCE flow
+! mp login
 ```
 
-The first `mp account add` registers the account; `mp account login` runs
-the PKCE dance, persists tokens to `~/.mp/accounts/personal/tokens.json`,
-and backfills the account's default project from the post-login `/me` probe.
+`mp login` runs the right auth flow for the environment, derives the
+account name from `/me`, and pins a default project. For laptops with a
+usable browser, this opens the PKCE flow; for environments with
+`MP_USERNAME` + `MP_SECRET` set, it skips the browser and uses the
+service-account path; for `MP_OAUTH_TOKEN` set, it uses the static
+bearer.
+
+Region behavior:
+- `service_account` and `oauth_token` paths probe `us → eu → in` when
+  `--region` is omitted.
+- `oauth_browser` (the bare-`mp login` default) defaults to `us`. EU and
+  India browser users must pass `--region eu` or `--region in`.
+
+Useful flags: `--name NAME`, `--region us|eu|in`, `--project ID`,
+`--service-account`, `--token-env VAR`, `--no-browser`, `--secret-stdin`.
+
+### Alternative: Guided Setup (explicit account add)
+
+Tell the user to run `/mixpanel-headless:auth account add` for a
+step-by-step walkthrough. The slash command never prompts for secrets in
+conversation — it instructs the user to run `! mp account add ...`
+themselves so the secret is read with hidden input. Use this path when
+the user wants explicit control over the account name, region, and type
+at registration time.
 
 ### Alternative: Service-Account Environment Variables (temporary)
 
-For quick testing, set all four variables in the shell:
+For quick testing, set all four variables in the shell — the resolver
+picks them up directly without account registration:
 
 ```bash
 export MP_USERNAME="service-account-username"
@@ -118,7 +132,7 @@ token (no browser needed). If refresh fails:
 > Your OAuth session has expired and could not be refreshed.
 > On your host machine, run:
 > ```
-> mp account login personal           # re-authenticate
+> mp login --name personal             # re-authenticate (or `mp account login personal`)
 > mp account export-bridge --to ~/.claude/mixpanel/auth.json
 > ```
 > Then start a new Cowork session.

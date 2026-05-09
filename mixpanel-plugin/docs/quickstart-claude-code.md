@@ -64,12 +64,28 @@ Your secret is never visible in the conversation.
 
 ### Option B: OAuth Login (Browser-Based)
 
+The frictionless one-shot path:
+
+```
+! mp login
+```
+
+`mp login` opens a browser for the PKCE flow, derives the account name from your Mixpanel org, and pins a default project. The browser path defaults to the `us` region; EU and India users must pass `--region eu` or `--region in` (the SA / oauth_token paths probe `us → eu → in` automatically when env vars trigger them). If you have several accessible projects, you'll see a numbered picker. Override the derived name with `--name personal` or skip the picker with `--project 3018488`.
+
+<details><summary>Advanced: explicit two-step</summary>
+
+For full control over the account name and region at registration time:
+
 ```
 /mixpanel-headless:auth account add personal --type oauth_browser --region us
 /mixpanel-headless:auth account login personal
 ```
 
-The first command registers an OAuth browser account; the second opens a browser window where you log in with your Mixpanel credentials. After login, your default project is backfilled automatically from the post-login `/me` probe. Use `/mixpanel-headless:auth project list` then `/mixpanel-headless:auth project use <id>` to switch if you have multiple projects.
+The first command registers an OAuth browser account; the second opens a browser window where you log in. After login, the default project is backfilled from the post-login `/me` probe.
+
+</details>
+
+Use `/mixpanel-headless:auth project list` then `/mixpanel-headless:auth project use <id>` to switch if you have multiple projects.
 
 ### Option C: Raw OAuth Bearer Token (CI / Agents)
 
@@ -230,7 +246,7 @@ shell prefix inside Claude Code):
 
 ### "No credentials configured"
 
-Run `/mixpanel-headless:auth account add my-project` and follow the prompts, or `/mixpanel-headless:auth account add personal --type oauth_browser --region us` followed by `/mixpanel-headless:auth account login personal` for OAuth.
+Run `! mp login` for the one-shot frictionless path, or `/mixpanel-headless:auth account add my-project` and follow the prompts for the guided wizard.
 
 ### "Authentication failed"
 
@@ -241,7 +257,7 @@ Run `/mixpanel-headless:auth account add my-project` and follow the prompts, or 
 
 ### "OAuth token expired" or OAuth login stopped working
 
-Run `/mixpanel-headless:auth account login <name>` again to refresh your tokens. If you switch to a service account instead, run `/mixpanel-headless:auth account add <name> --type service_account ...` — service account credentials don't expire.
+Run `! mp login --name <name>` (or the legacy `/mixpanel-headless:auth account login <name>`) to refresh your tokens. If you switch to a service account instead, set `MP_USERNAME` + `MP_SECRET` and re-run `! mp login`, or use `/mixpanel-headless:auth account add <name> --type service_account ...` for explicit registration — service account credentials don't expire.
 
 ### Plugin not appearing
 

@@ -31,37 +31,51 @@ mp --version
 
 ### 1. Authenticate
 
-**Option A: OAuth Login (interactive, recommended)**
+**Recommended: `mp login`**
 
 ```bash
-mp account add personal --type oauth_browser --region us
-mp account login personal     # Opens browser for PKCE flow
+mp login
+# Opens browser for PKCE (default region: us).
+# Derives the account name from your /me org;
+# auto-picks your project (or shows a picker when you have several).
 mp session                    # Verify resolved state
 ```
 
-**Option B: Service Account (scripts, CI/CD)**
+`mp login` reads your environment first and picks the right auth path:
+
+- `MP_USERNAME` + `MP_SECRET` set → service account (no browser, region auto-probes us → eu → in).
+- `MP_OAUTH_TOKEN` set → static bearer (no browser, region auto-probes us → eu → in; the token is persisted inline to `~/.mp/config.toml`).
+- Neither → OAuth browser flow (region defaults to **us**; pass `--region eu|in` for other clusters).
+
+Pass `--region us|eu|in` to set the region explicitly, `--project ID` to skip the project picker, or `--name NAME` to override the derived account name.
+
+**Service Account (scripts, CI/CD)**
+
+For unattended automation, set the four env vars and run any `mp` command:
 
 ```bash
-# Set the secret via env var (preferred)
+export MP_USERNAME="sa_xxx"
 export MP_SECRET="your-secret-here"
-mp account add team --type service_account --username sa_xxx --project 12345 --region us
-# Added account 'team' (service_account, us). Set as active.
-
-mp account test team          # Verify connection
+export MP_PROJECT_ID="12345"
+export MP_REGION="us"
+mp inspect events
 ```
 
-For CI/CD environments where the secret lives in a shell variable, pipe it via stdin:
+Or persist the credentials to a named account so the secret lives on disk (mode `0o600`) instead of every shell:
 
 ```bash
-echo "$SECRET" | mp account add team --type service_account \
+export MP_USERNAME="sa_xxx"
+export MP_SECRET="your-secret-here"
+mp login --service-account --name team
+# `mp login --service-account` reads MP_USERNAME + MP_SECRET from env;
+# both must be set or it errors. For explicit control over the username:
+echo "$MP_SECRET" | mp account add team --type service_account \
     --username sa_xxx --project 12345 --region us --secret-stdin
 ```
 
-Or set all credentials as environment variables: `MP_USERNAME`, `MP_SECRET`, `MP_PROJECT_ID`, `MP_REGION`
+**Raw OAuth Bearer Token (CI / agents)**
 
-**Option C: Raw OAuth Bearer Token (CI / agents)**
-
-If a managed OAuth client (e.g., a Claude Code plugin or CI pipeline) already gave you an access token, inject it via env vars without going through the browser flow:
+If a managed OAuth client (a Claude Code plugin, CI pipeline) hands you a pre-obtained access token, inject it via env vars without going through the browser flow:
 
 ```bash
 export MP_OAUTH_TOKEN="<bearer-token>"
@@ -70,6 +84,20 @@ export MP_REGION="us"  # or "eu", "in"
 ```
 
 The full service-account env-var set (`MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION`) takes precedence when both sets are complete, so this is safe to add to a shell that already exports the service-account vars.
+
+<details><summary>Advanced: explicit account creation (two-step)</summary>
+
+For users who want full control over the account name, region, and type at registration time:
+
+```bash
+# Register first, then run the PKCE flow
+mp account add personal --type oauth_browser --region us
+mp account login personal
+```
+
+`mp login --name personal --region us` is the one-line equivalent.
+
+</details>
 
 ### 2. Explore Your Data
 

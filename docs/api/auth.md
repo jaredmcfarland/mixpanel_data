@@ -170,7 +170,7 @@ The auth surface exposes three module-level namespaces re-exported from `mixpane
 
 ### `mp.accounts`
 
-Account lifecycle: register, switch, probe, OAuth flows, bridge export.
+Account lifecycle: register, switch, probe, OAuth flows, bridge export. The `login_unified` orchestrator below collapses the explicit `add` + `login` pair into a single conversational call (the Python entry point behind `mp login`).
 
 ::: mixpanel_headless.accounts
     options:
@@ -185,10 +185,50 @@ Account lifecycle: register, switch, probe, OAuth flows, bridge export.
         - show
         - test
         - login
+        - login_unified
         - logout
         - token
         - export_bridge
         - remove_bridge
+
+#### Frictionless login (`login_unified`)
+
+Composes auth-type detection, region resolution, `/me` lookup, project picker, and account-name derivation into one call. Backs the CLI's `mp login` command.
+
+```python
+import mixpanel_headless as mp
+
+# Browser PKCE — derives region, name, project from /me.
+summary = mp.accounts.login_unified()
+print(summary.user_email, summary.project_id, summary.project_name)
+
+# Service account from env, region auto-probed (us → eu → in):
+import os
+os.environ["MP_USERNAME"] = "sa_xxx"
+os.environ["MP_SECRET"] = "..."
+summary = mp.accounts.login_unified()
+
+# Re-login: refresh tokens for an existing account.
+summary = mp.accounts.login_unified(name="acme-corp")
+
+# Multi-project — supply a picker callback for non-CLI contexts.
+def picker(me, sorted_projects):
+    """Return the project_id you want to bind."""
+    return sorted_projects[0][0]
+
+summary = mp.accounts.login_unified(project_picker=picker)
+```
+
+Auth-type detection ladder (priority order):
+
+1. Explicit `account_type=` (or the CLI's `--service-account` / `--token-env`).
+2. `MP_USERNAME` + `MP_SECRET` set → `service_account`.
+3. `MP_OAUTH_TOKEN` set → `oauth_token`.
+4. Otherwise → `oauth_browser` (PKCE).
+
+Region behavior is auth-type-specific. `service_account` and `oauth_token` paths probe `us → eu → in` against `/me` when `region=` is not passed, returning the first 200. `oauth_browser` commits to the supplied `region` (or defaults to `"us"`) before the PKCE redirect, then cross-checks the picked project's domain after the callback. EU and India browser users must pass `region="eu"` or `region="in"` explicitly.
+
+Raises `RegionProbeError` / `RegionProbeNetworkError` if no region accepts the credential (SA / token paths only), `InvalidArgumentError` for mutually-incompatible flag combinations, `ProjectNotFoundError` for an explicit `project=` not visible to `/me`, and `AccountExistsError` when the derived name collides on the browser path. See [Exceptions](exceptions.md#oauth-exceptions) for the full set.
 
 ### `mp.session`
 

@@ -15,6 +15,7 @@ MixpanelHeadlessError
 │   ├── AccountNotFoundError
 │   ├── AccountExistsError
 │   ├── AccountInUseError
+│   ├── InvalidArgumentError
 │   └── ProjectNotFoundError
 ├── APIError
 │   ├── AuthenticationError
@@ -23,6 +24,8 @@ MixpanelHeadlessError
 │   ├── ServerError
 │   └── JQLSyntaxError
 ├── OAuthError
+│   └── RegionProbeError
+│       └── RegionProbeNetworkError
 ├── WorkspaceScopeError
 └── BusinessContextValidationError
 ```
@@ -115,21 +118,69 @@ except mp.MixpanelHeadlessError as e:
       show_root_heading: true
       show_root_toc_entry: true
 
+### InvalidArgumentError
+
+Raised by `accounts.login_unified` (and the CLI's `mp login`) when a public-API call combines mutually incompatible arguments. Subclass of `ConfigError`. The CLI maps this to exit code 3 (`INVALID_ARGS`) instead of the generic 1.
+
+| `violation` | Raised When |
+|-------------|-------------|
+| `mutually_exclusive` | `--service-account` + `--token-env` (or equivalent kwargs) |
+| `no_browser_misuse` | `--no-browser` against a non-browser auth type |
+| `secret_stdin_misuse` | `--secret-stdin` against a non-SA auth type |
+
+The `details` dict carries `violation` and (when detection ran) `detected_auth_type`. Pattern-match by class so non-CLI callers (Cowork's `auth_manager.py`, JSON consumers) can dispatch without parsing the human message.
+
+::: mixpanel_headless.InvalidArgumentError
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
 ## OAuth Exceptions
 
-Raised during OAuth 2.0 PKCE authentication flows.
+Raised during OAuth 2.0 PKCE authentication flows and the `mp login` region probe.
 
 | Error Code | Raised When |
 |------------|-------------|
 | `OAUTH_TOKEN_ERROR` | Token exchange fails |
 | `OAUTH_REFRESH_ERROR` | Token refresh fails (transient) |
-| `OAUTH_REFRESH_REVOKED` | Refresh token rejected by IdP as `invalid_grant` (re-run `mp account login NAME`) |
+| `OAUTH_REFRESH_REVOKED` | Refresh token rejected by IdP as `invalid_grant` (re-run `mp login --name NAME`) |
 | `OAUTH_REGISTRATION_ERROR` | Dynamic client registration fails |
 | `OAUTH_TIMEOUT` | Callback server times out waiting for authorization |
 | `OAUTH_PORT_ERROR` | Cannot bind to a local port for the callback server |
 | `OAUTH_BROWSER_ERROR` | Cannot open the authorization URL in the browser |
+| `OAUTH_REGION_PROBE_FAILED` | `mp login` probed every region and none accepted the credential — see `RegionProbeError` below |
+| `OAUTH_NETWORK_UNREACHABLE` | Every region probe failed at the network layer (DNS / TLS / connect refused) — see `RegionProbeNetworkError` below |
 
 ::: mixpanel_headless.OAuthError
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+### RegionProbeError
+
+Raised by `mp login` (and `accounts.login_unified`) when the `us → eu → in` region probe fails for every region. Subclass of `OAuthError`. The `attempts` attribute carries the full `(region, status_code, error_body)` list; status `0` indicates a network-layer failure (DNS / TLS / connect refused) — those cases raise `RegionProbeNetworkError` (subclass) so the CLI can render a different remediation hint.
+
+```python
+import mixpanel_headless as mp
+
+try:
+    mp.accounts.login_unified()
+except mp.RegionProbeNetworkError as exc:
+    print("Could not reach any Mixpanel region. Check connectivity.")
+    for region, status, body in exc.attempts:
+        print(f"  {region}: {body}")
+except mp.RegionProbeError as exc:
+    print("Credential not valid in any region.")
+    for region, status, body in exc.attempts:
+        print(f"  {region}: {status} {body}")
+```
+
+::: mixpanel_headless.RegionProbeError
+    options:
+      show_root_heading: true
+      show_root_toc_entry: true
+
+::: mixpanel_headless.RegionProbeNetworkError
     options:
       show_root_heading: true
       show_root_toc_entry: true

@@ -1,7 +1,7 @@
 ---
 name: mixpanel-headless:auth
-description: Manage Mixpanel authentication — check session, list/add/use accounts, OAuth login, switch projects/workspaces, manage targets, check the Cowork bridge. Use with no arguments for a one-line session summary.
-argument-hint: [session|account|project|workspace|target|bridge] [...]
+description: Manage Mixpanel authentication — check session, list/add/use accounts, OAuth login (frictionless `mp login` or two-step), switch projects/workspaces, manage targets, check the Cowork bridge. Use with no arguments for a one-line session summary.
+argument-hint: [session|login|account|project|workspace|target|bridge] [...]
 ---
 
 # Mixpanel Authentication Management
@@ -27,6 +27,33 @@ stdout (exit 0) so you can `json.loads` unconditionally — no try/except needed
 Parse `$ARGUMENTS` and route to the appropriate subcommand. With no
 arguments, run `session`.
 
+### "login"
+
+For first-time setup, the frictionless one-shot path is `mp login`. It
+runs the right auth flow for the environment, derives the account name
+from `/me`, and pins a default project. Tell the user to run:
+
+```
+! mp login
+```
+
+Region behavior is auth-type-specific:
+- `service_account` and `oauth_token` paths: probes `us → eu → in` and
+  uses the first 200.
+- `oauth_browser` path (the bare-`mp login` default): commits to `us`
+  unless the user passes `--region eu` or `--region in`.
+
+Optional flags they may want:
+- `--name NAME` — override the derived account name
+- `--region us|eu|in` — set the region explicitly (required for EU / India browser users)
+- `--project ID` — skip the project picker
+- `--service-account` — force the SA path (requires `MP_USERNAME` + `MP_SECRET` in env)
+- `--token-env VAR` — force the static-bearer path (reads token from `$VAR`)
+- `--no-browser` — print the authorization URL instead of launching a browser
+
+After the user confirms they ran it, verify with `account test`:
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py account test`
+
 ### No arguments or "session"
 
 Run: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/mixpanelyst/scripts/auth_manager.py session`
@@ -37,10 +64,10 @@ Switch on `state`:
   `/mixpanel-headless:auth account list` and `/mixpanel-headless:auth project list`
   exist if the user wants to switch.
 - **`needs_account`** — no account configured. Show the first
-  `next[0].command` as the recommended onboarding step (OAuth browser flow);
-  list the alternatives in `next[1]` (service account) and `next[2]`
-  (`MP_OAUTH_TOKEN` env triple — best for non-interactive contexts like CI
-  or agents).
+  `next[0].command` as the recommended onboarding step (the frictionless
+  `mp login` orchestrator); list the alternatives in `next[1]` (explicit
+  account add) and `next[2]` (`MP_OAUTH_TOKEN` env triple — best for
+  non-interactive contexts like CI or agents).
 - **`needs_project`** — account configured but no project pinned. Tell the
   user to run `mp project list` then `mp project use <id>`.
 - **`error`** — show `error.message`. If `error.actionable` is true, the
@@ -76,7 +103,15 @@ Now run this command — it will prompt for your service account secret with hid
 ! mp account add <NAME> --type service_account --username <USERNAME> --project <PROJECT_ID> --region <REGION>
 ```
 
-For OAuth browser:
+For OAuth browser, prefer the one-shot `mp login` (covered by the "login"
+branch above):
+
+```
+! mp login --name <NAME> --region <REGION>
+```
+
+For full control over registration before the PKCE flow, the explicit
+two-step is still available:
 
 ```
 ! mp account add <NAME> --type oauth_browser --region <REGION>
