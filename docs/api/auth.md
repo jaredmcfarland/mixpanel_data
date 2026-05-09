@@ -193,7 +193,7 @@ Account lifecycle: register, switch, probe, OAuth flows, bridge export. The `log
 
 #### Frictionless login (`login_unified`)
 
-Composes region probe, `/me` lookup, project picker, and account-name derivation into one call. Backs the CLI's `mp login` command.
+Composes auth-type detection, region resolution, `/me` lookup, project picker, and account-name derivation into one call. Backs the CLI's `mp login` command.
 
 ```python
 import mixpanel_headless as mp
@@ -226,7 +226,9 @@ Auth-type detection ladder (priority order):
 3. `MP_OAUTH_TOKEN` set → `oauth_token`.
 4. Otherwise → `oauth_browser` (PKCE).
 
-Raises `RegionProbeError` / `RegionProbeNetworkError` if no region accepts the credential, `InvalidArgumentError` for mutually-incompatible flag combinations, `ProjectNotFoundError` for an explicit `--project` not visible to `/me`, and `AccountExistsError` when the derived name collides on the browser path. See [Exceptions](exceptions.md#oauth-exceptions) for the full set.
+Region behavior is auth-type-specific. `service_account` and `oauth_token` paths probe `us → eu → in` against `/me` when `region=` is not passed, returning the first 200. `oauth_browser` commits to the supplied `region` (or defaults to `"us"`) before the PKCE redirect, then cross-checks the picked project's domain after the callback. EU and India browser users must pass `region="eu"` or `region="in"` explicitly.
+
+Raises `RegionProbeError` / `RegionProbeNetworkError` if no region accepts the credential (SA / token paths only), `InvalidArgumentError` for mutually-incompatible flag combinations, `ProjectNotFoundError` for an explicit `project=` not visible to `/me`, and `AccountExistsError` when the derived name collides on the browser path. See [Exceptions](exceptions.md#oauth-exceptions) for the full set.
 
 ### `mp.session`
 

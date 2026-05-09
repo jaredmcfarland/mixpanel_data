@@ -191,7 +191,7 @@ just mutate-check        # Check score meets 80% threshold
 - **Streaming data access**: API returns iterators for memory-efficient processing of large datasets
 - **Account → Project → Workspace hierarchy** (042 redesign): every CLI verb and Python namespace maps to one of those three axes; `Workspace.use(account=, project=, workspace=)` is the single in-session switching method.
 - **Three first-class account types**: `service_account` (Basic Auth), `oauth_browser` (PKCE, tokens auto-refreshed), `oauth_token` (static bearer for CI/agents). All managed through one unified surface.
-- **Frictionless login** (043): `mp login` (CLI) and `accounts.login_unified()` (Python) collapse the old two-step `mp account add` + `mp account login` flow into one call. Auth-type detection is env-driven: `MP_USERNAME`+`MP_SECRET` → `service_account`; `MP_OAUTH_TOKEN` → `oauth_token`; otherwise `oauth_browser`. Region auto-probes `us → eu → in` when `--region` is not supplied. Project, account name, and default workspace derive from the post-login `/me` response.
+- **Frictionless login** (043): `mp login` (CLI) and `accounts.login_unified()` (Python) collapse the old two-step `mp account add` + `mp account login` flow into one call. Auth-type detection is env-driven: `MP_USERNAME`+`MP_SECRET` → `service_account`; `MP_OAUTH_TOKEN` → `oauth_token`; otherwise `oauth_browser`. Region behavior is auth-type-specific: SA and `oauth_token` paths probe `us → eu → in` when `--region` is omitted; `oauth_browser` defaults to `us` (PKCE commits to a region before the post-login `/me` probe runs, so EU / India users must pass `--region eu|in` explicitly). Project and account name derive from the post-login `/me` response; workspace stays lazy and resolves on first workspace-scoped call.
 - **Single resolver**: `resolve_session(...)` consults env → param → target → bridge → config in priority order; no silent cross-axis fallback.
 - **Connection-pool preservation**: `ws.use(account=...)` rebuilds the auth header but reuses the underlying `httpx.Client` (same Python instance — verified by `id()` equality in `tests/integration/test_cross_project_iteration.py`).
 - **Dependency injection**: Services accept dependencies as constructor arguments for testing.
@@ -204,7 +204,7 @@ just mutate-check        # Check score meets 80% threshold
 | `MP_SECRET` | Service account secret |
 | `MP_OAUTH_TOKEN` | Raw OAuth 2.0 bearer token (alternative to service account; requires `MP_PROJECT_ID` + `MP_REGION`; triggers `mp login` `oauth_token` detection when set; ignored only when the full service-account env-var set — `MP_USERNAME` + `MP_SECRET` + `MP_PROJECT_ID` + `MP_REGION` — is also present) |
 | `MP_PROJECT_ID` | Project ID |
-| `MP_REGION` | Data residency (us, eu, in); when unset, `mp login` probes us → eu → in |
+| `MP_REGION` | Data residency (us, eu, in); when unset, `mp login` probes us → eu → in for SA / oauth_token paths and defaults to us for the browser PKCE path |
 | `MP_WORKSPACE_ID` | Workspace ID for App API operations |
 | `MP_AUTH_FILE` | Override path to the v2 Cowork bridge file |
 | `MP_CONFIG_PATH` | Override config file location |

@@ -28,8 +28,9 @@ Then configure your Mixpanel credentials. The recommended path is the one-shot `
 
 ```bash
 mp login
-# Probes us → eu → in, opens browser for PKCE, derives the
-# account name from /me, and pins your default project.
+# Opens browser for PKCE (defaults to us; pass --region eu|in for other
+# clusters), derives the account name from /me, and pins your default
+# project.
 ```
 
 For explicit control over the account name, type, or region, use the two-step add instead:

@@ -70,7 +70,7 @@ The frictionless one-shot path:
 ! mp login
 ```
 
-`mp login` probes regions (`us → eu → in`), opens a browser for the PKCE flow, derives the account name from your Mixpanel org, and pins a default project. If you have several accessible projects, you'll see a numbered picker. Override the derived name with `--name personal`, skip the probe with `--region us`, or skip the picker with `--project 3018488`.
+`mp login` opens a browser for the PKCE flow, derives the account name from your Mixpanel org, and pins a default project. The browser path defaults to the `us` region; EU and India users must pass `--region eu` or `--region in` (the SA / oauth_token paths probe `us → eu → in` automatically when env vars trigger them). If you have several accessible projects, you'll see a numbered picker. Override the derived name with `--name personal` or skip the picker with `--project 3018488`.
 
 <details><summary>Advanced: explicit two-step</summary>
 

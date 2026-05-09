@@ -35,19 +35,19 @@ mp --version
 
 ```bash
 mp login
-# Probes us → eu → in for the right region.
-# Opens browser for PKCE; derives the account name from your /me org;
+# Opens browser for PKCE (default region: us).
+# Derives the account name from your /me org;
 # auto-picks your project (or shows a picker when you have several).
 mp session                    # Verify resolved state
 ```
 
 `mp login` reads your environment first and picks the right auth path:
 
-- `MP_USERNAME` + `MP_SECRET` set → service account (no browser).
-- `MP_OAUTH_TOKEN` set → static bearer (no browser, no persistence).
-- Neither → OAuth browser flow.
+- `MP_USERNAME` + `MP_SECRET` set → service account (no browser, region auto-probes us → eu → in).
+- `MP_OAUTH_TOKEN` set → static bearer (no browser, region auto-probes us → eu → in; the token is persisted inline to `~/.mp/config.toml`).
+- Neither → OAuth browser flow (region defaults to **us**; pass `--region eu|in` for other clusters).
 
-Pass `--region us|eu|in` to skip the probe, `--project ID` to skip the picker, or `--name NAME` to override the derived account name.
+Pass `--region us|eu|in` to set the region explicitly, `--project ID` to skip the project picker, or `--name NAME` to override the derived account name.
 
 **Service Account (scripts, CI/CD)**
 
@@ -64,9 +64,11 @@ mp inspect events
 Or persist the credentials to a named account so the secret lives on disk (mode `0o600`) instead of every shell:
 
 ```bash
+export MP_USERNAME="sa_xxx"
 export MP_SECRET="your-secret-here"
 mp login --service-account --name team
-# Or, for explicit control over the username:
+# `mp login --service-account` reads MP_USERNAME + MP_SECRET from env;
+# both must be set or it errors. For explicit control over the username:
 echo "$MP_SECRET" | mp account add team --type service_account \
     --username sa_xxx --project 12345 --region us --secret-stdin
 ```

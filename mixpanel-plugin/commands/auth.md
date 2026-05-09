@@ -30,17 +30,22 @@ arguments, run `session`.
 ### "login"
 
 For first-time setup, the frictionless one-shot path is `mp login`. It
-probes regions (`us → eu → in`), runs the right auth flow for the
-environment, derives the account name from `/me`, and pins a default
-project. Tell the user to run:
+runs the right auth flow for the environment, derives the account name
+from `/me`, and pins a default project. Tell the user to run:
 
 ```
 ! mp login
 ```
 
+Region behavior is auth-type-specific:
+- `service_account` and `oauth_token` paths: probes `us → eu → in` and
+  uses the first 200.
+- `oauth_browser` path (the bare-`mp login` default): commits to `us`
+  unless the user passes `--region eu` or `--region in`.
+
 Optional flags they may want:
 - `--name NAME` — override the derived account name
-- `--region us|eu|in` — skip the region probe
+- `--region us|eu|in` — set the region explicitly (required for EU / India browser users)
 - `--project ID` — skip the project picker
 - `--service-account` — force the SA path (requires `MP_USERNAME` + `MP_SECRET` in env)
 - `--token-env VAR` — force the static-bearer path (reads token from `$VAR`)

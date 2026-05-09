@@ -79,17 +79,19 @@ Run one command and follow the prompts:
 mp login
 ```
 
-`mp login` probes your region (`us → eu → in`), opens your browser for the PKCE flow, derives the account name from your Mixpanel org, and pins a default project. If you have several accessible projects, it shows a numbered picker; if you have one, it auto-picks. Tokens land at `~/.mp/accounts/<name>/tokens.json` (mode `0o600`) and refresh automatically on expiry.
+`mp login` opens your browser for the PKCE flow, derives the account name from your Mixpanel org, and pins a default project. If you have several accessible projects, it shows a numbered picker; if you have one, it auto-picks. Tokens land at `~/.mp/accounts/<name>/tokens.json` (mode `0o600`) and refresh automatically on expiry.
 
-The command also auto-detects your auth type from the environment:
+The command auto-detects your auth type from the environment:
 
-| Env vars present | Auth type used |
-|---|---|
-| `MP_USERNAME` + `MP_SECRET` | `service_account` (no browser) |
-| `MP_OAUTH_TOKEN` | `oauth_token` (no browser, no persistence) |
-| Neither | `oauth_browser` (PKCE flow) |
+| Env vars present | Auth type used | Region behavior | Persistence |
+|---|---|---|---|
+| `MP_USERNAME` + `MP_SECRET` | `service_account` | probes `us → eu → in` | username + secret saved to `~/.mp/config.toml` |
+| `MP_OAUTH_TOKEN` | `oauth_token` | probes `us → eu → in` | bearer saved inline to `~/.mp/config.toml` (use `--token-env VAR` to save a pointer instead) |
+| Neither | `oauth_browser` (PKCE) | defaults to `us` (pass `--region eu\|in` for other clusters) | refresh-capable tokens at `~/.mp/accounts/<name>/tokens.json` |
 
-Useful flags: `--region {us\|eu\|in}` skips the probe, `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path.
+For a truly non-persistent flow, set the env vars and skip `mp login` — see Option C below.
+
+Useful flags: `--region {us\|eu\|in}` sets the region explicitly (skips the probe for SA / token paths), `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path.
 
 Verify the connection:
 
@@ -374,7 +376,7 @@ If the setup skill reports that no credentials are found, use the `/mixpanel-hea
 /mixpanel-headless:auth account add my-project
 ```
 
-Claude will guide you through entering your service account username, project ID, and region. You'll be prompted to run a shell command that securely collects your secret. For OAuth, the simplest path is `! mp login` — it probes the region, opens the browser, derives the account name, and pins a project. Use `/mixpanel-headless:auth account add personal --type oauth_browser --region us` followed by `/mixpanel-headless:auth account login personal` if you need explicit control over the account name and region.
+Claude will guide you through entering your service account username, project ID, and region. You'll be prompted to run a shell command that securely collects your secret. For OAuth, the simplest path is `! mp login` — it opens the browser, derives the account name, and pins a project. The browser path defaults to the `us` region; EU and India users should pass `--region eu` or `--region in`. Use `/mixpanel-headless:auth account add personal --type oauth_browser --region us` followed by `/mixpanel-headless:auth account login personal` if you need explicit control over the account name at registration time.
 
 ### Ask Analytics Questions
 

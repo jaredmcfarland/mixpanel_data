@@ -47,12 +47,18 @@ The frictionless one-shot path. Tell the user to run:
 ! mp login
 ```
 
-`mp login` probes regions (`us → eu → in`), runs the right auth flow for
-the environment, derives the account name from `/me`, and pins a default
-project. For laptops with a usable browser, this opens the PKCE flow;
-for environments with `MP_USERNAME` + `MP_SECRET` set, it skips the
-browser and uses the service-account path; for `MP_OAUTH_TOKEN` set, it
-uses the static bearer.
+`mp login` runs the right auth flow for the environment, derives the
+account name from `/me`, and pins a default project. For laptops with a
+usable browser, this opens the PKCE flow; for environments with
+`MP_USERNAME` + `MP_SECRET` set, it skips the browser and uses the
+service-account path; for `MP_OAUTH_TOKEN` set, it uses the static
+bearer.
+
+Region behavior:
+- `service_account` and `oauth_token` paths probe `us → eu → in` when
+  `--region` is omitted.
+- `oauth_browser` (the bare-`mp login` default) defaults to `us`. EU and
+  India browser users must pass `--region eu` or `--region in`.
 
 Useful flags: `--name NAME`, `--region us|eu|in`, `--project ID`,
 `--service-account`, `--token-env VAR`, `--no-browser`, `--secret-stdin`.

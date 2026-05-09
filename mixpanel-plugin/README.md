@@ -132,9 +132,11 @@ All entity methods require a workspace ID. Use `ws.resolve_workspace_id()` to au
 Three account types — `service_account` (Basic Auth), `oauth_browser` (PKCE
 browser flow), and `oauth_token` (static bearer for CI / agents) — managed
 through a single Account → Project → Workspace hierarchy. The recommended
-starter command is `mp login`: it probes regions (`us → eu → in`), detects
-the right auth path from the environment, derives the account name from
-`/me`, and pins a default project in one call. Run `/mixpanel-headless:setup`
+starter command is `mp login`: it detects the right auth path from the
+environment, derives the account name from `/me`, and pins a default
+project in one call. SA and oauth_token paths probe `us → eu → in` for
+the region; the browser PKCE path defaults to `us` (pass `--region
+eu|in` for other clusters). Run `/mixpanel-headless:setup`
 for first-time configuration, or `/mixpanel-headless:auth` to switch
 accounts, projects, workspaces, or saved targets after initial setup.
 

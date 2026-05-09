@@ -40,15 +40,15 @@ These resolve via the priority chain `env > param > target > bridge > [active] >
 
 ### login — Frictionless Authentication
 
-`mp login` is the recommended starter command. It composes region probe, `/me` lookup, project picker, and account-name derivation into a single call:
+`mp login` is the recommended starter command. It composes auth-type detection, `/me` lookup, project picker, and account-name derivation into a single call:
 
 | Command | Description |
 |---------|-------------|
 | `mp login` | One-shot login (browser PKCE by default; auto-detects SA / static-bearer paths from env) |
 
-Useful flags: `--region {us\|eu\|in}` skips the probe, `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path, `--no-browser` prints the authorization URL instead of launching a browser, `--secret-stdin` reads the SA secret from stdin.
+Useful flags: `--region {us\|eu\|in}` sets the region (required for EU / India when using the browser path; SA and oauth_token paths probe automatically when `--region` is omitted), `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path, `--no-browser` prints the authorization URL instead of launching a browser, `--secret-stdin` reads the SA secret from stdin.
 
-The auth-type detection ladder (in priority order): explicit `--service-account` / `--token-env` flag → `MP_USERNAME` + `MP_SECRET` set → `MP_OAUTH_TOKEN` set → otherwise `oauth_browser`. See [Configuration → Quick Start](../getting-started/configuration.md#quick-start-mp-login) for examples.
+The auth-type detection ladder (in priority order): explicit `--service-account` / `--token-env` flag → `MP_USERNAME` + `MP_SECRET` set → `MP_OAUTH_TOKEN` set → otherwise `oauth_browser`. Region behavior: SA and oauth_token paths probe `us → eu → in` when `--region` is omitted; the browser path defaults to `us`. See [Configuration → Quick Start](../getting-started/configuration.md#quick-start-mp-login) for examples.
 
 ### account — Account Management
 
@@ -533,7 +533,7 @@ These resolve via `env > param > target > bridge > [active] > default_project` �
 ### Complete Workflow
 
 ```bash
-# 1. Authenticate (probes region, picks project, derives name from /me)
+# 1. Authenticate (browser PKCE; picks project, derives name from /me)
 mp login
 
 # 2. Explore schema

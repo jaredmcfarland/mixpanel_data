@@ -21,8 +21,8 @@ You'll need:
 
 ```bash
 mp login
-# Probing regions for /me access ...
-# ✓ us
+# Opens browser for PKCE...
+# Authenticated as jared@example.com
 #
 # Found 2 project(s) across 1 organization(s):
 #   1) Acme · AI Demo            (id 3713224, mixpanel.com)
@@ -32,17 +32,19 @@ mp login
 # Logged in as jared@example.com → acme · AI Demo
 ```
 
-`mp login` is the one-shot path — it probes `us` → `eu` → `in` for the right region, hits `/me` to discover what you can access, derives the account name from your org, and pins a default project (auto-picks when you have one, prompts when you have several). Tokens land at `~/.mp/accounts/{name}/tokens.json` (mode `0o600`) and refresh automatically on expiry.
+`mp login` is the one-shot path — it picks the right auth flow for your environment, hits `/me` to discover what you can access, derives the account name from your org, and pins a default project (auto-picks when you have one, prompts when you have several). For browser PKCE, tokens land at `~/.mp/accounts/{name}/tokens.json` (mode `0o600`) and refresh automatically on expiry.
 
-The command also auto-detects your auth type from the environment:
+The command auto-detects your auth type from the environment:
 
-| Env vars set | Auth type used |
-|---|---|
-| `MP_USERNAME` + `MP_SECRET` | `service_account` (no browser) |
-| `MP_OAUTH_TOKEN` | `oauth_token` (no browser, no persistence) |
-| Neither | `oauth_browser` (PKCE flow) |
+| Env vars set | Auth type used | Region behavior | Persistence |
+|---|---|---|---|
+| `MP_USERNAME` + `MP_SECRET` | `service_account` | probes `us → eu → in` | username + secret persisted to `~/.mp/config.toml` |
+| `MP_OAUTH_TOKEN` | `oauth_token` | probes `us → eu → in` | bearer persisted inline to `~/.mp/config.toml` (use `--token-env VAR` to persist a pointer instead) |
+| Neither | `oauth_browser` (PKCE) | defaults to `us` (pass `--region eu\|in` for other clusters) | refresh-capable tokens at `~/.mp/accounts/{name}/tokens.json` |
 
-Useful flags: `--region {us\|eu\|in}` skips the probe, `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path.
+For a truly non-persistent path (env-only with no account record), set the env vars and skip `mp login` entirely — the resolver picks them up directly. See the "Other auth paths" tabs below.
+
+Useful flags: `--region {us\|eu\|in}` sets the region explicitly (skips the probe for SA / token paths), `--project ID` skips the picker, `--name NAME` overrides the derived account name, `--service-account` / `--token-env VAR` force a non-browser path.
 
 ### Other auth paths
 

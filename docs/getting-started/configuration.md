@@ -15,21 +15,26 @@ In-session switching is a one-line operation: `Workspace.use(account=..., projec
 
 ## Quick Start: `mp login`
 
-The fastest way to authenticate is the top-level `mp login` command. It probes regions, runs the right auth flow for your environment, derives an account name from `/me`, and pins a default project — all in one call:
+The fastest way to authenticate is the top-level `mp login` command. It runs the right auth flow for your environment, derives an account name from `/me`, and pins a default project — all in one call:
 
 ```bash
 mp login
 # Logged in as jared@example.com → acme · AI Demo
 ```
 
-Auth-type detection is env-driven (`accounts.py:_detect_login_type`):
+Auth-type detection is env-driven:
 
 1. Explicit `--service-account` / `--token-env VAR` flag.
 2. `MP_USERNAME` + `MP_SECRET` set → `service_account`.
 3. `MP_OAUTH_TOKEN` set → `oauth_token`.
 4. Otherwise → `oauth_browser` (PKCE).
 
-Useful flags: `--region {us|eu|in}` skips the probe, `--project ID` skips the picker, `--name NAME` overrides the derived name.
+Region behavior depends on the auth type:
+
+- `service_account` and `oauth_token`: probes `us → eu → in` against `/me` and uses the first 200.
+- `oauth_browser`: defaults to `us` when `--region` is not passed. EU and India users must pass `--region eu` or `--region in` explicitly (the PKCE flow commits to a single region before the post-login `/me` probe runs).
+
+Useful flags: `--region {us|eu|in}` sets the region explicitly, `--project ID` skips the picker, `--name NAME` overrides the derived name.
 
 The rest of this page covers the underlying account model, env-var precedence, and the explicit setup paths for users who want more control than `mp login` provides.
 
@@ -97,7 +102,7 @@ mp account test team
 
 ### OAuth (browser, PKCE)
 
-The recommended path is `mp login` (see [Quick Start](#quick-start-mp-login) above), which probes the region for you and derives a name from `/me`:
+The recommended path is `mp login` (see [Quick Start](#quick-start-mp-login) above), which derives a name from `/me`. The browser path defaults to `us`; pass `--region eu|in` for other clusters:
 
 ```bash
 mp login --name personal
